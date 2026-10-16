@@ -583,14 +583,14 @@ module Lich
         nil
       end
 
-      # Picks the +required: Lich X.Y.Z+ floor out of header lines (last match wins).
+      # Picks the +required:+ (or +requires:+) +Lich X.Y.Z+ floor out of header lines (last match wins).
       #
       # @param lines [Array<String>] header comment lines
       # @return [String, nil] the declared minimum version, or nil when none is declared
       def Script.__required_lich_from_lines(lines)
         required = nil
         lines.each do |line|
-          required = $1.strip if line =~ /^[\s\t#]*required:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
+          required = $1.strip if line =~ /^[\s\t#]*require[sd]:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
         end
         required
       end

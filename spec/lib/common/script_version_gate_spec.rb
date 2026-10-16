@@ -122,6 +122,12 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       expect(script_class.required_lich_version('gtonly')).to eq('5.0.1')
     end
 
+    it 'also reads the "requires: Lich" spelling' do
+      add_script('plural', header('requires: Lich >= 5.22.0'))
+
+      expect(script_class.required_lich_version('plural')).to eq('5.22.0')
+    end
+
     it 'reads a no-operator "required: Lich X.Y.Z" declaration' do
       add_script('noop', header('required: Lich 4.3.12'))
 
