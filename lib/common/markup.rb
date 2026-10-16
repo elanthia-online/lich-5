@@ -186,6 +186,14 @@ module Lich
         # combat damage line, keeps its bold. Run it before strip_game_links,
         # which removes the link it keys on.
         #
+        # It tells a listing from an action line only by that doubling, which
+        # every captured listing has (0 single pairs in room objs). If the game
+        # ever sends a listing with single bold, this strips it too, in all
+        # three places a listing reaches it: the room objs component, the
+        # <room> block's <exists>, and the roomDesc line RoomBlock builds from
+        # it. The parser already accepts single bold there; this would then
+        # need to skip those spans by structure.
+        #
         # @param line [String] one server string on its way to the client
         # @return [String] the line, or the same object when it has no such bold
         def strip_link_bold(line)
