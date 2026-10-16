@@ -1177,8 +1177,7 @@ module Lich
           room_number_after_ready = @room_number_after_ready
           outputs.each do |output|
             @room_number_after_ready = room_number_after_ready
-            line = finish_client_line(output[:line])
-            output[:clients].each { |client| client.write(line) if client.alive? }
+            send_to_client(finish_client_line(output[:line]), output[:clients])
           end
         end
 
@@ -1265,9 +1264,11 @@ module Lich
           end
         end
 
-        # Writes the same string to every client that receives game output.
-        def send_to_client(alt_string)
-          client_write_targets.each { |client| client.write(alt_string) if client.alive? }
+        # Writes one string to each live client in clients.
+        # @param alt_string [String] the finished bytes
+        # @param clients [Array] defaults to every client that receives game output
+        def send_to_client(alt_string, clients = client_write_targets)
+          clients.each { |client| client.write(alt_string) if client.alive? }
         end
 
         # The clients that receive game output: every attached detachable
