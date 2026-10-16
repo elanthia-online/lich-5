@@ -79,8 +79,9 @@ module Lich
         end.join
       end
 
-      # The same compass, byte for byte, the <room> rewrite sends after a view
-      # of the current room.
+      # The same compass, byte for byte, the <room> rewrite sends after a room
+      # view. At attach it shows the character's room, from the room exits
+      # component (XMLData.room_exits), even if the last view was a Locate.
       def self.compass
         Lich::Common::RoomBlock.compass(XMLData.room_exits)
       end
