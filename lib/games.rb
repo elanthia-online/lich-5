@@ -387,16 +387,6 @@ module Lich
       # records or blocking the socket reader would both make recovery unsafe.
       SERVER_QUEUE_CAPACITY = 4_096
 
-      # A Saga-identity <room> block opening a room line, after the prefixes
-      # process_room_information allows. Only such a string starts a hold of a
-      # block split across server strings (see hold_split_room_block).
-      SPLIT_ROOM_BLOCK_START = %r{^(?:<pushStream id="familiar" ifClosedStyle="watching"/>)?(?:<resource picture="\d+"/>|<popBold/>)?<room>}.freeze
-
-      # Server strings held, counting the first, before a split <room> block
-      # that never closes is written out as received. A prompt ends the hold
-      # sooner; this bounds it if no prompt comes.
-      SPLIT_ROOM_BLOCK_MAX_STRINGS = 20
-
       class << self
         attr_reader :thread, :reader_thread, :server_queue, :buffer, :_buffer, :game_instance
 
@@ -440,7 +430,6 @@ module Lich
           @@settings_init_needed = false
           @cli_scripts = false
           @room_number_after_ready = false
-          @held_room_block = nil
           @last_id_shown_room_window = 0
           @game_instance = nil
           # strip_xml's multiline carry is a process-global; clear it here so a
@@ -1147,110 +1136,42 @@ module Lich
         end
 
         def process_downstream_hooks(server_string)
-          return unless (alt_string = DownstreamHook.run(server_string))
-
-          # The Saga-identity stream's inline <room> block reaches only front
-          # ends that render it (Saga); every other front end gets the legacy
-          # roomName/roomDesc layout it already handles. Rewritten before the
-          # Wizard conversion (sf_to_wiz), which keys on that layout; the
-          # room-number display (process_room_information) handles either.
-          # Downstream hooks run first and see the block as the server sent it.
-          if (@held_room_block || alt_string.include?('<room>')) && !Frontend.supports_room_element?
-            hold_split_room_block(alt_string).each do |string|
-              send_downstream(Lich::Common::RoomBlock.legacy_shape(string))
+          if (alt_string = DownstreamHook.run(server_string))
+            # The Saga-identity stream's inline <room> block reaches only front
+            # ends that render it (Saga); every other front end gets the legacy
+            # roomName/roomDesc layout it already handles. Rewritten before the
+            # Wizard conversion (sf_to_wiz), which keys on that layout; the
+            # room-number display (process_room_information) handles either.
+            if alt_string.include?('<room>') && !Frontend.supports_room_element?
+              alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string)
             end
-          else
-            send_downstream(alt_string)
-          end
-        end
+            process_room_information(alt_string)
 
-        # Applies the room-number display, the front-end conversions and the
-        # origin sentinel to one string, and sends it to the client.
-        #
-        # @param alt_string [String] the string after the downstream hooks
-        # @return [void]
-        def send_downstream(alt_string)
-          process_room_information(alt_string)
-
-          # Handle frontend-specific modifications
-          if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-            alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-          end
-
-          if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-            alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-          end
-
-          # Handle room number display
-          if @room_number_after_ready && alt_string =~ /<prompt /
-            alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
-            @room_number_after_ready = false
-          end
-
-          # Handle frontend-specific conversions
-          if Frontend.supports_gsl?
-            alt_string = sf_to_wiz(alt_string)
-          end
-          # Handle prefix origin sentinel if FE supports it
-          alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
-
-          # Send to client
-          send_to_client(alt_string)
-        end
-
-        # A <room> block can arrive across more than one server string.
-        # RoomBlock.legacy_shape only rewrites a complete block, so for a front
-        # end without :room_element the parts are held back and joined
-        # (keeping the server's line breaks) until </room> arrives, then go on
-        # as one string. If the block never closes (a prompt or a new room line
-        # comes first, or SPLIT_ROOM_BLOCK_MAX_STRINGS strings pass), the held
-        # strings go on one by one as received, so nothing is lost, reordered
-        # or joined to a string that was not part of the block.
-        #
-        # @param alt_string [String] the string after the downstream hooks
-        # @return [Array<String>] the strings to send on, in order: none while
-        #   a split block is being held, the joined block once it closes
-        def hold_split_room_block(alt_string)
-          if @held_room_block
-            # A new room line means the held block was cut off; release it and
-            # treat the new line like any other.
-            return release_held_room_block + hold_split_room_block(alt_string) if split_room_block_start?(alt_string)
-
-            @held_room_block << alt_string
-            joined = @held_room_block.join
-            unless open_room_block?(joined)
-              @held_room_block = nil
-              return [joined]
+            # Handle frontend-specific modifications
+            if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
-            return [] unless alt_string.include?('<prompt') || @held_room_block.size >= SPLIT_ROOM_BLOCK_MAX_STRINGS
 
-            return release_held_room_block
+            if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            # Handle room number display
+            if @room_number_after_ready && alt_string =~ /<prompt /
+              alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
+              @room_number_after_ready = false
+            end
+
+            # Handle frontend-specific conversions
+            if Frontend.supports_gsl?
+              alt_string = sf_to_wiz(alt_string)
+            end
+            # Handle prefix origin sentinel if FE supports it
+            alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
+
+            # Send to client
+            send_to_client(alt_string)
           end
-          return [alt_string] unless alt_string.include?('<room>') && open_room_block?(alt_string) && split_room_block_start?(alt_string)
-
-          @held_room_block = [alt_string.dup]
-          []
-        end
-
-        # Ends a hold whose block never closed.
-        #
-        # @return [Array<String>] the held strings, as received
-        def release_held_room_block
-          held = @held_room_block
-          @held_room_block = nil
-          Lich.log "warning: <room> block never closed; sending #{held.size} held strings as received: #{held.join.inspect}"
-          held
-        end
-
-        # Whether the string opens a room line with a <room> block.
-        def split_room_block_start?(string)
-          string.include?('<room>') && SPLIT_ROOM_BLOCK_START.match?(string)
-        end
-
-        # Whether the last <room> in the string has no </room> after it.
-        def open_room_block?(string)
-          start = string.rindex('<room>')
-          !start.nil? && !string.index('</room>', start)
         end
 
         def process_room_information(alt_string)
