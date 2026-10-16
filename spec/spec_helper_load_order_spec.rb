@@ -52,7 +52,10 @@ RSpec.describe 'spec_helper reset hook load order' do
     end
   RUBY
 
-  # One child run serves every example below.
+  # One child run serves every example below, so whichever example runs first
+  # pays for one child RSpec boot plus a spec_helper load (a few tenths of a
+  # second today). That cost grows with whatever spec_helper loads; if it ever
+  # nears the slow-example warning threshold, tag the group :slow.
   cached_result = nil
   define_method(:probe_result) do
     cached_result ||= Dir.mktmpdir('load-order-probe') do |dir|
