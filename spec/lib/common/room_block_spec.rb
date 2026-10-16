@@ -235,6 +235,17 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
         expect(out).not_to include('<compass>')
       end
     end
+
+    # XMLParser pushes the text of every <d> in the room exits component,
+    # attributed or not, into XMLData.room_exits.
+    it 'compares the text of an attributed <d> exit with the current room exits' do
+      exits = 'Obvious paths: <d>north</d>, <d cmd="go gate">gate</d>.'
+      name = '[Bosque Deriel, Burial Ground]'
+      out = described_class.legacy_shape_with_compass(block.call(exits, name: name), room_id: 230_007, room_exits: %w[north gate])
+      expect(out.lines.last(2)).to eq(["#{exits}\r\n", %(<compass><dir value="n"/></compass>\r\n)])
+      out = described_class.legacy_shape_with_compass(block.call(exits, name: name), room_id: 230_007, room_exits: %w[north])
+      expect(out).not_to include('<compass>')
+    end
   end
 
   it 'gives each block in a multi-block string its own decision' do
