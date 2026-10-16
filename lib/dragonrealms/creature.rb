@@ -17,7 +17,10 @@
 #     with no `exist` id (consumed separately by DRRoom; not used here).
 #   * the `assess` combat stream (`<d cmd='look #NNN'>A jeol moradu</d>
 #     (1: ...) is behind you at melee range`) - the only feed that ties an
-#     `exist` id to a name, plus assess number, relation and range.
+#     `exist` id to a name, plus assess number, relation and range. The
+#     Saga-identity stream also links the name inside the `<d>` tag
+#     (`<d cmd='look #NNN'><pushBold/>A <a exist="NNN" noun="moradu">jeol
+#     moradu</a><popBold/></d>`), which supplies the server's noun.
 #
 # So {CreatureInstance}s are created id-first from `<crtrStatus>` (flags, no
 # name) and have their name/position/range backfilled from `assess` via
@@ -45,8 +48,9 @@ module Lich
 
       # @return [Integer] server creature id.
       attr_reader :id
-      # @return [String, nil] attack noun (the trailing word of the name),
-      #   derived whenever a name is set; nil until then.
+      # @return [String, nil] attack noun: the server's noun (a link's `noun=`)
+      #   when the stream supplies one, otherwise the trailing word of the name;
+      #   set whenever a name is set, nil until then.
       attr_reader :noun
       # @return [String, nil] display name; nil until a room-objs backfill or an
       #   `assess` tie-in supplies one.
@@ -117,14 +121,18 @@ module Lich
       # DragonRealms learns which name/relation/range belongs to that id. The
       # `assess` feed capitalizes the subject ("A jeol moradu"); the name is
       # downcased to match the room-objs vocabulary DragonRealms scripts expect.
+      # The noun is the entry's `:noun` (the server noun from the subject's
+      # `<a exist>` link, Saga-identity stream) when present, so a long name
+      # such as "a sleek golden panther with enigmatic violet eyes" keeps noun
+      # "panther"; link-less (legacy) entries derive it from the name.
       #
       # @param entry [Hash] an entry from `XMLData.parse_assess_line`, with keys
-      #   `:name`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
+      #   `:name`, `:noun`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
       # @return [void]
       def feed_assess(entry)
         if entry[:name]
           @name = entry[:name].to_s.downcase
-          @noun = derive_noun(@name)
+          @noun = resolve_noun(entry[:noun], @name)
           # Authoritative from here on: subsequent room-objs backfills no-op.
           @name_from_assess = true
         end
@@ -162,9 +170,8 @@ module Lich
       def apply_room_name(name, noun = nil)
         return if name.nil? || @name_from_assess
 
-        noun = noun&.strip
         @name = name
-        @noun = noun.nil? || noun.empty? ? derive_noun(name) : noun
+        @noun = resolve_noun(noun, name)
       end
 
       # Whether this creature should be considered attackable.
@@ -266,6 +273,17 @@ module Lich
                               .reject { |w| w.empty? || w == 'and' }
                               .reject { |w| Lich::Common::CreatureBase::ALL_CRTR_FLAGS.key?(w) }
         [balance, conditions]
+      end
+
+      # The server's noun when one is supplied (a link's `noun=`), trimmed;
+      # otherwise the noun derived from the name (legacy, link-less streams).
+      #
+      # @param noun [String, nil] the server noun; nil or blank means none.
+      # @param name [String, nil] the display name to derive from.
+      # @return [String, nil]
+      def resolve_noun(noun, name)
+        noun = noun&.strip
+        noun.nil? || noun.empty? ? derive_noun(name) : noun
       end
 
       # Extracts the attack noun (trailing word) from a display name, matching
