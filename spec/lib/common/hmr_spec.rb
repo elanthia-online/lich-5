@@ -62,13 +62,20 @@ end
 
 RSpec.describe HMR, "#reload error handling" do
   let(:messages) { [] }
+  let(:written) { [] }
 
   before do
     allow(Lich::Common::HMR).to receive(:msg) { |m| messages << m }
   end
 
+  after do
+    written.each { |file| FileUtils.rm_f(file) }
+    HMR.send(:remove_const, :TestAfterFailure) if HMR.const_defined?(:TestAfterFailure, false)
+  end
+
   def loaded_file(suffix, body)
     filename = HMR::Helpers.unique_filename(suffix)
+    written << filename
     File.write(filename, body)
     require(filename)
     filename
