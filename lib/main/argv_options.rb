@@ -112,6 +112,9 @@ module Lich
               @argv_options[:pipe] = true
             when /^--sentinel$/i
               @argv_options[:sentinel] = true
+            when /^--keep-fe-string$/i
+              # Kill switch for Frontend.proxy_handshake: forward the front end's own /FE: line.
+              @argv_options[:keep_fe_string] = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i

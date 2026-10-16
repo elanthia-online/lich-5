@@ -701,6 +701,93 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  # --- proxy_handshake ----------------------------------------
+
+  describe '.proxy_handshake' do
+    let(:lich_string) { '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML' }
+
+    # Each front end's handshake line exactly as it reaches Lich's proxy:
+    # Genie4 Core/Game.cs GameSocket_EventConnected (no slash, LF),
+    # Frostbite gui/tcpclient.cpp connectToLichListener + writeCommand (<c>, CRLF),
+    # Warlock3 wrayth/.../WraythClient.kt connect (LF).
+    {
+      'Genie4'    => ["FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n", "\n", 'genie'],
+      'Frostbite' => ["<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", "\r\n", nil, '<c>'],
+      'Warlock3'  => ["/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n", "\n", nil]
+    }.each do |name, (line, eol, fe, prefix)|
+      it "replaces #{name}'s handshake with Lich's, keeping its prefix and line ending" do
+        expect(frontend.proxy_handshake(line, frontend: fe)).to eq("#{prefix}#{lich_string}#{eol}")
+      end
+    end
+
+    it 'puts the --fe-version value into the replacement' do
+      expect(frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n", version: 'genie-4.5', frontend: 'genie'))
+        .to eq("/FE:WRAYTH /VERSION:genie-4.5 /P:SAGA /XML\n")
+    end
+
+    it 'adds no line ending when the front end sent none' do
+      expect(frontend.proxy_handshake('FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML', frontend: 'genie')).to eq(lich_string)
+    end
+
+    it 'defaults the front end to the current client and leaves $frontend alone' do
+      allow(frontend).to receive(:client).and_return('genie')
+      frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n")
+      expect(frontend).to have_received(:client).at_least(:once)
+      expect(frontend.supports_game_links?('genie')).to be(false)
+    end
+
+    it "uses a front end's registry :client_string" do
+      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n", frontend: 'saga'))
+        .to eq("/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML\n")
+    end
+
+    # Saga in Lich mode sends its own key and handshake (saga-archive
+    # src/main/index.js: `/FE:${name} /VERSION:saga-${version} /P:SAGA /XML\r\n`).
+    it "forwards Saga's own handshake so its real /VERSION: reaches the game" do
+      saga = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"
+      expect(frontend.proxy_handshake(saga, frontend: 'saga')).to equal(saga)
+      expect(frontend.proxy_handshake(saga, version: 'saga-9', frontend: 'saga')).to equal(saga)
+      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("/FE:WRAYTH /VERSION:x /p:saga /XML\n")
+    end
+
+    it 'forwards the front end handshake unchanged when keep is set, and logs it' do
+      line = "FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n"
+      allow(Lich).to receive(:log)
+      expect(frontend.proxy_handshake(line, keep: true, frontend: 'genie')).to equal(line)
+      expect(Lich).to have_received(:log).with("info: forwarding the front end's client string: FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML")
+    end
+
+    it 'logs the replacement without the line ending' do
+      allow(Lich).to receive(:log)
+      frontend.proxy_handshake("<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", frontend: nil)
+      expect(Lich).to have_received(:log).with(
+        "info: replacing the front end's client string <c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML with #{lich_string}"
+      )
+    end
+
+    {
+      'nil'                         => nil,
+      'a login key'                 => "0123456789abcdef0123456789abcdef\n",
+      'a <c>-prefixed key'          => "<c>0123456789abcdef\r\n",
+      'a ready line'                => "<c>\r\n",
+      'an empty line'               => "\n",
+      'a handshake without /XML'    => "/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN\n",
+      'an /XML that is not a token' => "/FE:WRAYTH /VERSION:1 /P:WIN_UNKNOWN /XMLX\n",
+      'FE: after other text'        => "say FE:WRAYTH /VERSION:1 /XML\n",
+      'FE: after a space'           => " /FE:WRAYTH /VERSION:1 /XML\n",
+      'a doubled <c> prefix'        => "<c><c>/FE:WRAYTH /VERSION:1 /XML\n",
+      "Profanity's PID line"        => "SET_FRONTEND_PID 4242\r\n",
+      'a bare CR ending'            => "/FE:WRAYTH /VERSION:1 /XML\r",
+      'two lines'                   => "/FE:WRAYTH /VERSION:1 /XML\nlook\n"
+    }.each do |label, line|
+      it "forwards #{label} unchanged" do
+        allow(Lich).to receive(:log)
+        expect(frontend.proxy_handshake(line, frontend: 'genie')).to equal(line)
+        expect(Lich).not_to have_received(:log)
+      end
+    end
+  end
+
   # --- send_handshake ----------------------------------------
 
   describe '.send_handshake' do

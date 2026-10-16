@@ -147,6 +147,7 @@ module Lich
   @@display_expgains     = nil # boolean (DragonRealms only)
   @@display_roomid_location = nil # string (DragonRealms only): "title" | "line" | "both"
   @@hide_uid_flag        = nil # boolean
+  @@keep_fe_string       = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
@@ -836,6 +837,41 @@ module Lich
     @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('hide_uid_flag',?);", [@@hide_uid_flag.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether Lich's proxy forwards a front end's own /FE: handshake instead of
+  # replacing it with Lich's client string (Frontend.proxy_handshake). The
+  # kill switch for that replacement; the --keep-fe-string flag does the same
+  # for one launch. Persisted in the lich_settings table, shared across
+  # characters, read at the handshake. Default false, also when the read fails.
+  # @return [Boolean]
+  def Lich.keep_fe_string
+    if @@keep_fe_string.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='keep_fe_string';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      @@keep_fe_string = val.to_s.strip.match?(/\A(?:on|true|yes)\z/i)
+    end
+    @@keep_fe_string
+  rescue StandardError => e
+    # Read on the login path: a settings failure must not stop the handshake.
+    Lich.log "warning: could not read keep_fe_string, replacing the client string: #{e}"
+    false
+  end
+
+  # Sets and persists the handshake kill switch; takes effect at the next login.
+  # @param val [Boolean, String] true, or any of on/true/yes
+  def Lich.keep_fe_string=(val)
+    @@keep_fe_string = val.to_s.strip.match?(/\A(?:on|true|yes)\z/i)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('keep_fe_string',?);", [@@keep_fe_string.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
