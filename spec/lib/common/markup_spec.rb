@@ -295,6 +295,8 @@ RSpec.describe Lich::Common::Markup, 'legacy line shape' do
 
     it 'leaves other elements whose name starts with a alone' do
       expect(described_class.strip_game_links(%(<abbr exist="1">x</abbr> <a exist="1" noun="x">x</a>))).to eq(%(<abbr exist="1">x</abbr> x))
+      # Inside a link too: the link's </a> still closes the link.
+      expect(described_class.strip_game_links(%(<a exist="1" noun="x"><abbr>x</abbr></a>))).to eq(%(<abbr>x</abbr>))
     end
 
     it 'returns a string without a game link unchanged, as the same object' do
