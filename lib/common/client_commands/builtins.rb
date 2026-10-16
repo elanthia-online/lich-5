@@ -276,6 +276,12 @@ module Lich
                   "To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
         end
 
+        command(/^display descflag(?: (true|false))?/i, game: :dr) do |m|
+          new_value = ClientCommands.toggle_value(Lich.follow_description_flag, m[1])
+          respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
+          Lich.follow_description_flag = new_value
+        end
+
         # The uniform six, in the positions the chain had them. ;display roomid
         # (DR) is registered between uid and exits to keep its original place.
         DISPLAY_TOGGLES.each_with_index do |(word, accessor, description), index|

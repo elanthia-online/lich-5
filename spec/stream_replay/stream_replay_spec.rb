@@ -102,3 +102,62 @@ RSpec.describe 'stream replay: DragonRealms links and doubled bold per front end
     end
   end
 end
+
+# DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity stream's
+# <room> block (a game bug). With ;display descflag on, each block for the
+# character's room the game sends while the flag is off reaches the client
+# without its description, in the legacy layout and the raw block alike; the
+# rest is unchanged, and scripts still see every description (the per-prompt
+# snapshots equal the run with the setting off). The fixture answers OFF, ON
+# and OFF again; its first block comes before any <nav>, so Lich has no room
+# number for it yet and leaves its description alone.
+RSpec.describe 'stream replay: room descriptions with FLAG DESCRIPTION OFF', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_group_bank.xml', __dir__))
+  # Each block's description and whether the filter hides it: the flag is off
+  # and the block is the room of the last <nav>.
+  blocks = []
+  off = false
+  nav = nil
+  fixture.body_lines.each do |line|
+    off = true if line.start_with?('You will no longer see room descriptions.')
+    off = false if line.start_with?('You will now see room descriptions.')
+    nav = line[/<nav rm='(\d+)'/, 1] || nav
+    next unless (room = line[%r{<room><name>[^<]*\((\d+)\)</name><description>(.*?)</description>}, 0])
+
+    uid, desc = room.match(%r{\((\d+)\)</name><description>(.*?)</description>}).captures
+    blocks << { desc: desc, hidden: off && uid == nav }
+  end
+  results = {}
+  replay = lambda do |frontend, setting|
+    results[[frontend, setting]] ||= StreamReplay::Driver.new(fixture, frontend: frontend, settings: { 'follow_description_flag' => setting }).run
+  end
+
+  it 'replays a fixture with blocks while the flag is off and on' do
+    expect(blocks.size).to eq(19)
+    expect(blocks.count { |b| b[:hidden] }).to eq(16)
+  end
+
+  { 'genie' => ->(desc) { "<preset id='roomDesc'>#{desc}</preset>" }, 'saga' => ->(desc) { "<description>#{desc}</description>" } }.each do |frontend, shown|
+    context "for #{frontend}" do
+      it 'delivers the description of exactly the blocks sent while descriptions were off for that room' do
+        result = replay.call(frontend, 'true')
+        expect(result.warnings).to be_empty
+        blocks.group_by { |b| b[:desc] }.each do |desc, same|
+          expect(result.stdout.scan(shown.call(desc)).size).to eq(same.count { |b| !b[:hidden] }), desc[0, 60]
+        end
+        expect(result.stdout.scan(frontend == 'saga' ? '<description></description>' : %(<style id=""/>  )).size).to eq(16)
+      end
+
+      it 'delivers every description with the setting off' do
+        result = replay.call(frontend, 'false')
+        blocks.group_by { |b| b[:desc] }.each do |desc, same|
+          expect(result.stdout.scan(shown.call(desc)).size).to eq(same.size), desc[0, 60]
+        end
+      end
+
+      it "leaves the scripts' view alone" do
+        expect(replay.call(frontend, 'true').snapshots).to eq(replay.call(frontend, 'false').snapshots)
+      end
+    end
+  end
+end

@@ -99,6 +99,38 @@ module Lich
         end
       end
 
+      # Empties the description of every block for the character's own room,
+      # keeping the rest of the block as sent:
+      #
+      #   <room><name>[Area, Title] (230008)</name><description></description><exists>...
+      #
+      # legacy_shape then sends that room's description line without the
+      # roomDesc preset, as the legacy stream does while FLAG DESCRIPTION is
+      # OFF. A block for another room (a Moon Mage's Locate) keeps its
+      # description; the character's room is told apart as for the compass in
+      # legacy_shape_with_compass.
+      #
+      # Only for the client (RoomDescriptionFilter): scripts, reget and the
+      # parser keep the description.
+      #
+      # @param server_string [String]
+      # @param room_id [Integer] the character's room number
+      # @param room_exits [Array<String>] the character's room's exit names
+      # @return [String] the string, or the same object when no description was emptied
+      def without_description(server_string, room_id:, room_exits:)
+        return server_string unless server_string.include?('<room>')
+
+        emptied = false
+        out = server_string.gsub(BLOCK) do |block|
+          body = Regexp.last_match(:body)
+          next block unless current_room?(body, exit_names(body), room_id, room_exits)
+
+          emptied = true
+          block.sub(%r{<description>.*?</description>}m, '<description></description>')
+        end
+        emptied ? out : server_string
+      end
+
       def legacy_lines(body, compass: nil)
         name = part(body, 'name')
         exists = part(body, 'exists')

@@ -5,6 +5,7 @@ require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
 require_relative 'common/room_block'
 require_relative 'common/markup'
+require_relative 'common/room_description_filter'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -1137,7 +1138,20 @@ module Lich
         end
 
         def process_downstream_hooks(server_string)
+          dragonrealms = XMLData.game =~ /^DR/
+          # Followed before the hooks, so a hook that squelches the game's
+          # reply to FLAG DESCRIPTION does not hide it from the filter, and
+          # whatever the setting, so turning it on applies at once.
+          Lich::Common::RoomDescriptionFilter.observe(server_string) if dragonrealms
           if (alt_string = DownstreamHook.run(server_string))
+            # DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity
+            # stream's <room> block (a game bug). Opted in, the client gets the
+            # character's room without its description, before the legacy
+            # rewrite so both layouts come out as the legacy stream sends them.
+            if dragonrealms && Lich::Common::RoomDescriptionFilter.descriptions_off? &&
+               alt_string.include?('<room>') && Lich.follow_description_flag
+              alt_string = Lich::Common::RoomDescriptionFilter.apply(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
+            end
             # The Saga-identity stream's inline <room> block reaches only front
             # ends that render it (Saga); every other front end gets the legacy
             # roomName/roomDesc layout it already handles. Rewritten before the

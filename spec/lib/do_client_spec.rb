@@ -674,6 +674,18 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('SET both')
     end
 
+    it 'toggles and sets display descflag' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:follow_description_flag) { false }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| puts "SET \#{v}" }
+        do_client(';display descflag')
+        do_client(';display descflag false')
+      RUBY
+      expect(out).to include('SET true')
+      expect(out).to include('SET false')
+      expect(out).to include('R:Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to true')
+    end
+
     it 'routes the banks variants' do
       out = probe(<<~RUBY, game: 'DR')
         module Lich; module DragonRealms; module DRBanking
