@@ -59,8 +59,16 @@ RSpec.describe 'Lich::Common::XMLParser GemStone Creature guard' do
     before do
       # Production resolution: the bare name is the GemStone module.
       stub_const('Creature', Lich::Gemstone::Creature)
+      @saved_config = Lich::Gemstone::Creature.stats.slice(:max_size, :auto_register, :cleanup_max_age)
       Lich::Gemstone::Creature.clear
       Lich::Gemstone::Creature.configure
+    end
+
+    # Leave the shared registry as we found it: no ids registered here leak
+    # into later specs, and any configuration another spec set is restored.
+    after do
+      Lich::Gemstone::Creature.clear
+      Lich::Gemstone::Creature.configure(**@saved_config)
     end
 
     it 'registers the crtrStatus creature and the targeted creature, but not the loot' do
