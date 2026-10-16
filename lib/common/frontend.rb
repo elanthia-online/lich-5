@@ -561,9 +561,11 @@ module Lich
         has_capability?(fe, :game_links)
       end
 
-      # Whether the front end handles the doubled <pushBold/><pushBold/>
-      # DragonRealms puts around linked creatures. Others get one pair
-      # (Markup.collapse_double_bold).
+      # Whether the front end handles DragonRealms' creature bold: the doubled
+      # <pushBold/><pushBold/> around linked creatures in room-object listings
+      # and the single pair around them in action and assess lines. Others get
+      # the legacy line: one pair in the listings (Markup.collapse_double_bold)
+      # and none elsewhere (Markup.strip_link_bold).
       def self.supports_double_bold?(fe = $frontend)
         has_capability?(fe, :double_bold)
       end
