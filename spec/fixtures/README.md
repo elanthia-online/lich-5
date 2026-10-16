@@ -90,6 +90,25 @@ Until automation is in place, maintainers should periodically check for
 upstream changes, especially after major GemStone IV updates that add new
 spells or modify existing ones.
 
+
+## creature/dr_saga_room_objs_shapes.xml
+
+### What is it?
+
+Lines captured verbatim from DragonRealms Saga-dialect `;logxml streams`
+sessions, one per room-objects shape the XMLParser creature path branches on.
+Only the per-line timestamp is removed; a line that named a player would be
+pseudonymised (see `spec/fixtures/streams/MANIFEST.md` for the corpus labels).
+
+| Shape | Source | Used by |
+|---|---|---|
+| `room objs` with a corpse `</a><popBold/><popBold/> which appears dead,`, caged creatures `that is caught in …`, plain creatures and the ` and some junk.` tail after the last creature | C7, `2026-10-16_01-57-21`, line 13664 | `xmlparser_dr_creature_spec.rb` ("reads every status on a captured Saga room objs line") |
+
+Shapes #1705 also handles that no fetched capture holds yet, so they are
+specced with synthetic lines only: a link whose `noun=` differs from the text's
+last word (a long-named pet), a padded `noun=" moth"`, a `the <a …>` named NPC,
+an article-less NPC, and a creature-behind-creature assess subject.
+
 ## flag/dr_saga_flag_listing.xml
 
 The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
