@@ -1890,14 +1890,16 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
   # without the other.
   it 'strips only the links for a front end that handles doubled bold' do
     $frontend = 'genie'
-    allow(Lich::Common::Frontend).to receive(:supports_double_bold?).and_return(true)
+    allow(Lich::Common::Frontend).to receive(:has_capability?).and_call_original
+    allow(Lich::Common::Frontend).to receive(:has_capability?).with('genie', :double_bold).and_return(true)
     described_class.send(:process_downstream_hooks, +objs)
     eventually { expect(@raw_socket).to have_received(:write).with(Lich::Common::Markup.strip_game_links(objs)) }
   end
 
   it 'collapses only the bold for a front end that handles links' do
     $frontend = 'genie'
-    allow(Lich::Common::Frontend).to receive(:supports_game_links?).and_return(true)
+    allow(Lich::Common::Frontend).to receive(:has_capability?).and_call_original
+    allow(Lich::Common::Frontend).to receive(:has_capability?).with('genie', :game_links).and_return(true)
     described_class.send(:process_downstream_hooks, +objs)
     eventually { expect(@raw_socket).to have_received(:write).with(Lich::Common::Markup.collapse_double_bold(objs)) }
   end
