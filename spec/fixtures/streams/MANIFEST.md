@@ -14,9 +14,9 @@ All fixtures come from `;logxml streams` captures and were produced with
 
 Character names below are the pseudonyms used inside the fixture.
 
-There are two dialects:
-- **legacy** is the stream sent to a front end that identifies as Wrayth 1.0.1.28. This is the default before #1700, and still what Genie, Profanity, Warlock and Wrayth get.
-- **saga** is the stream sent for the `/VERSION:saga-… /P:SAGA` identity. This is the default after #1700 for Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`.
+DragonRealms has two dialects:
+- **legacy** is the stream sent to a front end that identifies as Wrayth 1.0.1.28. This is the default before #1700, and still what Genie, Warlock and Wrayth get.
+- **saga** is the stream sent for the `/VERSION:saga-… /P:SAGA` identity. This is the default after #1700 for Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`, which includes Profanity (it runs Lich with `--without-frontend`).
 
 | Fixture | Dialect | Captured | Prompts | Covers |
 |---|---|---|---|---|
@@ -31,7 +31,7 @@ There are two dialects:
 | `dr_saga_group_bank.xml` | saga | 2026-10-15 16:37 | 79 | group join/list/leave with another leader, bank balance with linked name |
 | `dr_saga_containers_speech.xml` | saga | 2026-10-15 17:49 | 100 | open/close/look in/rummage, bank deposit/withdraw, hide/unhide, linked speech preset |
 
-`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` is the only committed GemStone stream and serves as the GS replay oracle for shared-path changes.
+`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` is the only committed GemStone stream and serves as the GS replay oracle for shared-path changes. GemStone has one dialect, the rich stream with `<a exist>` links and no `<room>` block, whichever identity Lich sends (see E11 in `docs/saga-stream-deferred.md`).
 
 ## Regenerating
 
