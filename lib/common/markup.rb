@@ -197,9 +197,11 @@ module Lich
           line = Lich::Common::XmlEntities.decode(line)
           # The legacy stream sends each room line as its own string, so a
           # whitespace-only one (<style id=""/> and two spaces, for a room
-          # without a description or objects) is dropped by the check below.
-          # Drop the rewritten block's whitespace-only lines the same way.
-          line = line.gsub(/^[ \t]+(?:\r\n|\z)/, '') if room_block
+          # without a description or objects) or an empty one (a <crtrStatus>
+          # batch with no players or exits line to lead) is dropped by the
+          # check below. In a string that carried a block, drop every empty or
+          # whitespace-only line the same way, including any outside the block.
+          line = line.gsub(/^[ \t]*(?:\r\n|\z)/, '') if room_block
 
           return nil if line.match?(/\A\s*\z/)
 
