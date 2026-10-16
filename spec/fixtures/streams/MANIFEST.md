@@ -112,6 +112,13 @@ Each PR in the series records its own rows under its heading.
 
 ### #1707
 
+| Absent or counted | Corpus |
+|---|---|
+| `<room>` block shape, 53,663 blocks: 0 opening tags with attributes; 0 not preceded by `<resource picture="0"/>` at line start; 0 lines with two blocks; 0 out-of-order, repeated or self-closed children; 0 elements other than `<crtrStatus>` between parts (0 to 17 tags, in 2,616 blocks); 0 `<name>` without `[…]`; 0 `<name>` with `(**)`; 0 empty `<exits>`; 0 non-empty `<extra>`; 0 lines with content after `</room>` (6 with trailing whitespace) | DR-16 Saga; the `<room>` blocks in the `dr_saga_*` fixtures |
+| Legacy `roomName` text: 11,035 of 11,035 bracketed | GS-15 (11,002), DR-16 legacy, FIX |
+| `<room>` split across lines: 0 of 53,663 blocks. 0 of 53,666 lines with `<room>` over DR-16, GS-15 and DR-extra (the 3 extra are DR-extra's). 0 `<room>` without `</room>` on the same line, and 0 the other way | DR-16 Saga; DR-16 + GS-15 + DR-extra |
+| `<description>` empty or self-closing: 0 of 53,663, including every block sent while FLAG DESCRIPTION was OFF (48,826 to 48,937 such blocks, depending on the report). `dr_saga_locate_descflag.xml` shows the description still sent while OFF | DR-16 Saga; DR-extra |
+
 ### #1709
 
 ### #1711
