@@ -1248,6 +1248,11 @@ $ORDINALS ||= %w[first second third fourth fifth sixth seventh eighth ninth tent
 
 # Reader and writer for each global above that a spec must not reassign, used
 # by the leak check in RSpec.configure. Add an entry when adding a global.
+# The check compares object identity, not value. Restoring by assigning a
+# literal (`$frontend = 'stormfront'`) only passes when the spec file has the
+# frozen_string_literal magic comment, as this file does, because only then is
+# it the same interned string; without the comment it fails. Save the original
+# object and assign it back instead.
 SPEC_HELPER_GLOBALS = {
   '$_SERVERBUFFER_'      => [-> { $_SERVERBUFFER_ }, ->(value) { $_SERVERBUFFER_ = value }],
   '$_CLIENTBUFFER_'      => [-> { $_CLIENTBUFFER_ }, ->(value) { $_CLIENTBUFFER_ = value }],
