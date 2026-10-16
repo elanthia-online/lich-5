@@ -19,8 +19,18 @@ module Lich
     #   You will no longer see room descriptions.
     #   You will now see room descriptions.
     #
-    # and, while the flag is off, empties the description of each block for
-    # the character's own room (RoomBlock.without_description). The legacy
+    # and the Description row of the bare FLAG listing, which the
+    # Saga-identity stream links (the first row of the table leads with
+    # <popBold/>; a stream without links sends the bare name):
+    #
+    #   <d cmd="flag Description off">Description</d>        ON   Display room descriptions.
+    #
+    # The state is the Status column; the link's cmd is the toggle, the
+    # opposite of it. A front end that clicks the link sends FLAG DESCRIPTION
+    # and gets the same reply as a typed command.
+    #
+    # While the flag is off, the filter empties the description of each block
+    # for the character's own room (RoomBlock.without_description). The legacy
     # rewrite then sends the legacy stream's line, and a front end that
     # renders <room> gets an empty <description>. A block for another room (a
     # Moon Mage's Locate) keeps its description. The room desc component is
@@ -28,25 +38,34 @@ module Lich
     #
     # Opt-in (Lich.follow_description_flag, ";display descflag"), and only on
     # the way to the client: scripts, XMLParser and the downstream hooks keep
-    # the description. Until the game has answered the flag in this session
-    # its state is unknown, and descriptions are shown.
+    # the description. Until the game has answered the flag or listed it in
+    # this session its state is unknown, and descriptions are shown.
     module RoomDescriptionFilter
-      REPLY = /^You will (no longer|now) see room descriptions\.\r?$/.freeze
+      REPLY = /^You will (?<reply>no longer|now) see room descriptions\.\r?$/.freeze
       REPLY_TEXT = ' see room descriptions.'
+      # The listing's Description row, linked or bare, read up to the Status
+      # column; the text after it is not read.
+      LISTING_ROW = %r{^(?:<popBold/>)?  (?:<d cmd="[^"]*">Description</d>|Description) +(?<status>ON|OFF)(?: |\r?$)}.freeze
+      LISTING_TEXT = 'Description'
+      STATE = Regexp.union(REPLY, LISTING_ROW).freeze
 
       @descriptions_off = false
 
       class << self
-        # Follows the game's reply to FLAG DESCRIPTION in a server string. A
-        # reply quoted inside another line (speech) does not count.
+        # Follows the game's reply to FLAG DESCRIPTION, or the Description row
+        # of the FLAG listing, in a server string; the later one wins. Each
+        # must start a line, so one quoted inside another line (speech) does
+        # not count.
         #
         # @param server_string [String]
         # @return [void]
         def observe(server_string)
-          return unless server_string.include?(REPLY_TEXT)
+          return unless server_string.include?(REPLY_TEXT) || server_string.include?(LISTING_TEXT)
 
-          last = server_string.scan(REPLY).last
-          @descriptions_off = (last.first == 'no longer') if last
+          server_string.scan(STATE) do
+            match = Regexp.last_match
+            @descriptions_off = match[:reply] ? match[:reply] == 'no longer' : match[:status] == 'OFF'
+          end
         end
 
         # @return [Boolean] whether the game last said descriptions are off

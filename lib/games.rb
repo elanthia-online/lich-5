@@ -1150,8 +1150,9 @@ module Lich
         def process_downstream_hooks(server_string)
           dragonrealms = XMLData.game =~ /^DR/
           # Followed before the hooks, so a hook that squelches the game's
-          # reply to FLAG DESCRIPTION does not hide it from the filter, and
-          # whatever the setting, so turning it on applies at once.
+          # reply to FLAG DESCRIPTION or the FLAG listing (DRInfomon's quiet
+          # startup query) does not hide it from the filter, and whatever the
+          # setting, so turning it on applies at once.
           Lich::Common::RoomDescriptionFilter.observe(server_string) if dragonrealms
           if (alt_string = DownstreamHook.run(server_string))
             # DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity

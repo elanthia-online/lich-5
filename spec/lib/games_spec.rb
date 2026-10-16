@@ -2356,6 +2356,34 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with room descri
     DownstreamHook.remove('spec_desc_off_squelch')
   end
 
+  # The bare FLAG listing's Description row (the real Saga-identity row from
+  # spec/fixtures/flag/, with the Status column and toggle swapped for OFF).
+  # DRInfomon's startup issues FLAG quietly, which squelches the listing in
+  # a downstream hook.
+  context 'with the bare FLAG listing' do
+    listing = File.readlines(File.expand_path('../fixtures/flag/dr_saga_flag_listing.xml', __dir__), chomp: true)
+    listing_on = "#{listing.find { |line| line.include?('>Description</d>') }}\r\n"
+    listing_off = listing_on.sub('flag Description off', 'flag Description on').sub('</d>        ON ', '</d>        OFF')
+
+    before { $frontend = 'frostbite' }
+
+    it 'follows a listing row that says OFF, then one that says ON' do
+      deliver(listing_off, shacks, listing_on, shacks)
+      eventually { expect(written.size).to eq(4) }
+      expect(written[1]).to eq(legacy_view.call(description: nil))
+      expect(written[3]).to eq(legacy_view.call(description: shacks_desc))
+    end
+
+    it 'follows a listing a downstream hook squelches' do
+      DownstreamHook.add('spec_desc_off_listing', proc { |line| line.include?('Description') ? nil : line })
+      deliver(listing_off, shacks)
+      eventually { expect(written.size).to eq(1) }
+      expect(written.first).to eq(legacy_view.call(description: nil))
+    ensure
+      DownstreamHook.remove('spec_desc_off_listing')
+    end
+  end
+
   # GemStone follows its own setting and sends no <room> block.
   it 'leaves GemStone alone' do
     XMLData.game = 'GS'
