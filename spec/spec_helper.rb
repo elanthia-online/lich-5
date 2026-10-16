@@ -1964,6 +1964,12 @@ end
 # =============================================================================
 # Game interaction methods that are available at top level in scripts.
 # These are idempotent - safe to call multiple times.
+#
+# Spec files must not stub these with a top-level `def`. A top-level `def`
+# is a private method owned by Object; once loaded it shadows the Kernel stub
+# for the rest of the process and can break allow_any_instance_of(Object)
+# stubs in other files (see global_defs_spec). Stub the receiver with
+# allow(...) instead, or add the method here.
 
 module Kernel
   def pause(_seconds = nil); end unless method_defined?(:pause)
