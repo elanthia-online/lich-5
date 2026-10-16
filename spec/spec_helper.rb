@@ -117,10 +117,16 @@ RSpec.configure do |config|
 
   # A config-level around hook runs outside every group's own around hooks and
   # before/after(:example) hooks, so it sees the value after they restored it.
-  # (For a top-level group defined before this file loads, RSpec adds it inside
-  # that group's own around hooks instead; the context check below still
-  # catches anything those leave behind.)
+  # A top-level group defined before this file loads (a spec file that does
+  # not require spec_helper, loaded first in a worker) is the exception: RSpec
+  # adds the hook inside that group's own around hooks, where it would fail an
+  # example whose change the group's around hook is about to put back. Those
+  # groups are left to the context check below, which runs after all of
+  # their hooks.
+  groups_defined_earlier = RSpec::Core::ExampleGroup.subclasses
   config.around do |example|
+    next example.run if groups_defined_earlier.any? { |group| example.example_group <= group }
+
     before = snapshot_globals.call
     example.run
     check_globals.call(before, example.location)
