@@ -103,6 +103,7 @@ Each PR in the series records its own rows under its heading.
 | Saga room objs: 63,702 components with 337,203 linked creatures. Articles: a 336,525, an 611, the 28, none 39; 0 "some", 0 capitalised. 0 single-bold components; 0 bold text outside a link except a bare article; 0 `a <pushBold/><a` (article outside the bold) | DR-16 Saga |
 | GemStone room objs: 0 "which appears dead" in 13,869 components (GS says "that is/appears …"). DragonRealms: 205 "which appears dead", 26 of them followed by ` and some junk.`; one is committed as `spec/fixtures/creature/dr_saga_room_objs_shapes.xml` | GS-15; DR-16 Saga |
 | Assess (4,069 pushes, 2,829 linked subjects): the subject's `exist` equals the `look #` id in 2,829 of 2,829; 0 links outside `<d>`; 0 `<d>` without a link; 0 first links that are not the subject; 0 subjects whose `noun=` (trimmed) differs from the text's last word. GS-15: 0 assess streams. DR-16 legacy: 0 assess lines (FIX has 14, in `dr_legacy_hunt.xml`) | DR-16 + DR-extra |
+| Room objs link `noun=` differing from the text's last word: 0 of the 125 "white-tailed leopard" links in C8 `2026-10-17_00-00-00`, all `noun="leopard"`. The shape #1705 handles for long-named pets is still not captured. A padded noun is: C1 `2026-10-17_03-49-51` sends `noun=" moth"` (committed in `spec/fixtures/creature/dr_saga_room_objs_shapes.xml`) | 2 user-named 2026-10-17 captures (not in the corpus table) |
 
 ### #1706
 
