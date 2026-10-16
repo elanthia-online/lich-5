@@ -1,0 +1,3 @@
+<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)
+<style id=""/><preset id='roomDesc'>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</preset>  
+Obvious paths: <d>north</d>, <d>southeast</d>.

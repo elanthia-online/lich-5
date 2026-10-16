@@ -109,6 +109,19 @@ specced with synthetic lines only: a link whose `noun=` differs from the text's
 last word (a long-named pet), a padded `noun=" moth"`, a `the <a …>` named NPC,
 an article-less NPC, and a creature-behind-creature assess subject.
 
+## room_block/dr_legacy_desc_no_objects.xml
+
+### What is it?
+
+A legacy-dialect DragonRealms room view captured verbatim (per-line
+timestamps removed): the `roomName` line, the description line and the exits
+line for a room with no objects, so the description line ends
+`…</preset>  ` with nothing after the two spaces.
+
+| Shape | Source | Used by |
+|---|---|---|
+| legacy `<style id=""/><preset id='roomDesc'>…</preset>  ` with no objects | C2, `2026-10-07_13-38-12`, lines 35–37 | `room_block_spec.rb` ("rewrites a captured Saga block into the captured legacy lines for the same room"), against the Saga `<room>` for the same room in `streams/dr_saga_locate_descflag.xml` |
+
 ## flag/dr_saga_flag_listing.xml
 
 The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
