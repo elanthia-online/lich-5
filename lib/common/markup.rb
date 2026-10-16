@@ -42,6 +42,10 @@ module Lich
       GAME_LINK          = /<a\s[^>]*\bexist=/.freeze
       DOUBLE_PUSH_BOLD   = '<pushBold/><pushBold/>'
       DOUBLE_POP_BOLD    = '<popBold/><popBold/>'
+      # A single bold pair around nothing but an optional article and one
+      # game link, not part of a doubled pair: the creature names in action
+      # and assess lines.
+      LINK_BOLD          = %r{(?<!<pushBold/>)<pushBold/>((?:(?:[Aa]n?|[Tt]he) )?<a\s[^>]*\bexist=[^>]*>[^<]*</a>)<popBold/>(?!<popBold/>)}.freeze
 
       class << self
         # Normalize a line arriving from the client.
@@ -164,6 +168,30 @@ module Lich
               game_link ? '' : tag
             end
           end
+        end
+
+        # Removes the single bold the game puts around a linked creature
+        # outside room-object listings, so a front end that predates it gets
+        # DragonRealms' legacy line, where those names are plain:
+        #
+        #   The <pushBold/><a exist="1" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+        #   The <a exist="1" noun="moradu">jeol moradu</a> moves into a position to parry.
+        #   <d cmd='look #1'><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/></d>
+        #   <d cmd='look #1'>a <a exist="1" noun="moradu">jeol moradu</a></d>
+        #
+        # Only a pair around nothing but an optional article (a, an, the) and
+        # one game link goes. Room-object listings double their bold
+        # (collapse_double_bold keeps one pair there, as the legacy stream
+        # did), and a bold line or phrase with more text in it, such as a
+        # combat damage line, keeps its bold. Run it before strip_game_links,
+        # which removes the link it keys on.
+        #
+        # @param line [String] one server string on its way to the client
+        # @return [String] the line, or the same object when it has no such bold
+        def strip_link_bold(line)
+          return line unless line.include?('<pushBold/>') && line.match?(LINK_BOLD)
+
+          line.gsub(LINK_BOLD, '\\1')
         end
 
         # Collapses the doubled bold the game puts around a linked creature
