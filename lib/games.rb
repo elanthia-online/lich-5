@@ -1166,9 +1166,11 @@ module Lich
           if (alt_string = DownstreamHook.run(server_string))
             # The Saga-identity stream's inline <room> block reaches only front
             # ends that render it (Saga); every other front end gets the legacy
-            # roomName/roomDesc layout it already handles. Rewritten before the
-            # Wizard conversion (sf_to_wiz), which keys on that layout; the
-            # room-number display (process_room_information) handles either.
+            # roomName/roomDesc layout it already handles. Rewritten after
+            # DownstreamHook.run, so script hooks see the block as the server
+            # sent it, and before the Wizard conversion (sf_to_wiz), which keys
+            # on that layout; the room-number display (process_room_information)
+            # handles either.
             if alt_string.include?('<room>') && !Frontend.supports_room_element?
               alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string)
             end
