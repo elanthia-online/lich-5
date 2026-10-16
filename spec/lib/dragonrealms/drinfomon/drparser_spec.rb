@@ -709,7 +709,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
 
       # The doubled bold is a current server quirk; a single-bold linked line
-      # (the GemStone shape) must still lose its links and keep its one bold.
+      # (the shape DR already sends in combat lines) must still lose its links
+      # and keep its one bold.
       it 'strips links from a single-bold linked line and leaves the bold alone' do
         line = '<pushBold/>a <a exist="1" noun="leopard">white-tailed leopard</a><popBold/>'
         expect(described_class.match_line(line)).to eq('<pushBold/>a white-tailed leopard<popBold/>')
