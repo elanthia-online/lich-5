@@ -40,15 +40,34 @@ RSpec.describe 'spec_helper global leak guard' do
       end
     end
 
+    # The example's change is put back by the group's after(:context) hook,
+    # too late for the next example in the group.
+    RSpec.describe 'early group restoring in after(:context)' do
+      before(:context) { @saved = $frontend }
+      after(:context) { $frontend = @saved }
+
+      it('changes a global in the example') { $frontend = 'wizard' }
+      it('sees the original value after it') { expect($frontend).to equal(ORIGINAL_FRONTEND) }
+    end
+
     require ENV.fetch('GUARD_SPEC_HELPER')
     RSpec.configure { |config| config.example_status_persistence_file_path = nil }
     ORIGINAL_CLIENT = $_CLIENT_
+    ORIGINAL_FRONTEND = $frontend
 
     RSpec.describe 'after the early group' do
       it('sees the original prefix, send character and client') do
         expect([$cmd_prefix, $SEND_CHARACTER]).to eq(['', '>'])
         expect($_CLIENT_).to equal(ORIGINAL_CLIENT)
       end
+    end
+
+    RSpec.describe 'restoring in after(:context)' do
+      before(:context) { @saved = $frontend }
+      after(:context) { $frontend = @saved }
+
+      it('changes a global in the example') { $frontend = 'wizard' }
+      it('sees the original value after it') { expect($frontend).to equal(ORIGINAL_FRONTEND) }
     end
 
     RSpec.describe 'in place' do
@@ -119,6 +138,12 @@ RSpec.describe 'spec_helper global leak guard' do
     end
   RUBY
 
+  # Line of the first probe example with this description (the early group's,
+  # when a later group reuses it), as the guard's messages name it.
+  probe_line = lambda do |description|
+    probe_source.lines.index { |line| line.include?("it('#{description}')") } + 1
+  end
+
   # One child run serves every example below.
   cached_result = nil
   define_method(:probe_result) do
@@ -165,7 +190,7 @@ RSpec.describe 'spec_helper global leak guard' do
 
   it 'reports a global reassigned in a before(:context) or after(:context) hook and restores it' do
     messages = Array(probe_result['messages']).join("\n")
-    expect(probe_result['summary']['errors_outside_of_examples_count']).to eq(4)
+    expect(probe_result['summary']['errors_outside_of_examples_count']).to eq(5)
     expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$cmd_prefix holding a different object/)
     expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$SEND_CHARACTER holding a different object/)
     expect(status_of('after the before context leak sees the original prefix').first).to eq('passed')
@@ -182,5 +207,16 @@ RSpec.describe 'spec_helper global leak guard' do
     expect(status_of('early group with an around nested changes a global the outer around restores').first).to eq('passed')
     expect(status_of('early group with an around leaks a global').first).to eq('passed')
     expect(Array(probe_result['messages']).join("\n")).to match(/guard_probe_spec\.rb:\d+.*left \$_CLIENT_ holding a different object/)
+  end
+
+  it 'checks each example of a group defined before spec_helper loaded, as it does for later groups' do
+    line = probe_line.call('changes a global in the example')
+    expect(Array(probe_result['messages']).join("\n")).to include("guard_probe_spec.rb:#{line} left $frontend holding a different object")
+    expect(status_of('early group restoring in after(:context) sees the original value after it').first).to eq('passed')
+
+    status, message = status_of('restoring in after(:context) changes a global in the example')
+    expect(status).to eq('failed')
+    expect(message).to include('left $frontend holding a different object')
+    expect(status_of('restoring in after(:context) sees the original value after it').first).to eq('passed')
   end
 end

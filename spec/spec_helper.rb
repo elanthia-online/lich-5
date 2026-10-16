@@ -104,15 +104,17 @@ RSpec.configure do |config|
   # $_LASTUPSTREAM_ is left out because the before hook below resets it to nil
   # for every example.
   snapshot_globals = -> { SPEC_HELPER_GLOBALS.transform_values { |(read, _write)| read.call } }
-  check_globals = lambda do |before, where|
+  # Put back every global that no longer holds the object it held in `before`,
+  # so one leak fails on its own instead of taking every later example in the
+  # process down with it. Returns the names put back.
+  restore_globals = lambda do |before|
     leaked = SPEC_HELPER_GLOBALS.reject { |name, (read, _write)| read.call.equal?(before[name]) }
-    return if leaked.empty?
-
-    # Put the originals back first, so one leak fails on its own instead of
-    # taking every later example in the process down with it.
     leaked.each { |name, (_read, write)| write.call(before[name]) }
-    raise "#{where} left #{leaked.keys.join(', ')} holding a different object; " \
-          'save and restore spec_helper globals instead of reassigning them'
+    leaked.keys
+  end
+  leak_message = lambda do |where, names|
+    "#{where} left #{names.join(', ')} holding a different object; " \
+      'save and restore spec_helper globals instead of reassigning them'
   end
 
   # A config-level around hook runs outside every group's own around hooks and
@@ -121,22 +123,47 @@ RSpec.configure do |config|
   # not require spec_helper, loaded first in a worker) is the exception: RSpec
   # adds the hook inside that group's own around hooks, where it would fail an
   # example whose change the group's around hook is about to put back. Those
-  # groups are left to the context check below, which runs after all of
-  # their hooks.
+  # groups are checked by the reporter listener below instead.
   groups_defined_earlier = RSpec::Core::ExampleGroup.subclasses
+  defined_earlier = ->(example) { groups_defined_earlier.any? { |group| example.example_group <= group } }
   config.around do |example|
-    next example.run if groups_defined_earlier.any? { |group| example.example_group <= group }
+    next example.run if defined_earlier.call(example)
 
     before = snapshot_globals.call
     example.run
-    check_globals.call(before, example.location)
+    leaked = restore_globals.call(before)
+    raise leak_message.call(example.location, leaked) unless leaked.empty?
   end
+
+  # The reporter's example_started and example_finished notifications come
+  # before and after all of an example's hooks, so they make the same check
+  # for each example of a group defined before this file loads. They cannot
+  # fail the example: the leak is put back there and reported by the context
+  # check below when the top-level group finishes. The listener is registered
+  # when the suite starts, so it is on the reporter that runs the examples even
+  # if the reporter is replaced after this file loads (`--bisect` calls
+  # reset_reporter).
+  early_leaks = []
+  early_before = nil
+  early_listener = Object.new
+  early_listener.define_singleton_method(:example_started) do |notification|
+    early_before = defined_earlier.call(notification.example) ? snapshot_globals.call : nil
+  end
+  early_listener.define_singleton_method(:example_finished) do |notification|
+    return unless early_before
+
+    leaked = restore_globals.call(early_before)
+    early_before = nil
+    early_leaks << leak_message.call(notification.example.location, leaked) unless leaked.empty?
+  end
+  config.before(:suite) { config.reporter.register_listener(early_listener, :example_started, :example_finished) }
 
   # before/after(:context) hooks run outside the around hook above. Config-level
   # context hooks run once per top-level group, before the group's own
   # before(:context) hooks and after its own after(:context) hooks, so these
   # catch a leak from any context hook in the group or its nested groups. The
-  # failure is reported as an error outside the examples.
+  # failure is reported as an error outside the examples, together with any
+  # example leak the listener above recorded for the group.
   # prepend_before/append_after keep that order for groups defined before this
   # file loads (a spec file that does not require spec_helper, loaded first in
   # a worker): plain before/after would add these after those groups' own
@@ -146,7 +173,11 @@ RSpec.configure do |config|
   config.append_after(:context) do
     before = context_before
     context_before = nil
-    check_globals.call(before, "#{self.class.metadata[:location]} (a before/after(:context) hook)") if before
+    messages = early_leaks.dup
+    early_leaks.clear
+    leaked = before ? restore_globals.call(before) : []
+    messages << leak_message.call("#{self.class.metadata[:location]} (a before/after(:context) hook)", leaked) unless leaked.empty?
+    raise messages.join("\n") unless messages.empty?
   end
 
   # Reset shared state before each example to ensure test isolation.
