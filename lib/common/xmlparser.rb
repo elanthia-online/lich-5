@@ -266,6 +266,7 @@ module Lich
         @assess = []
         @assess_buffer = nil
         @assess_ids = []
+        @assess_link_nouns = {}
 
         # Stream dialect capabilities observed this session (see #stream_feature?).
         @stream_features = Set.new
@@ -399,8 +400,15 @@ module Lich
       # Parse a single reconstructed line from the 'assess' (combat situation) stream
       # into a structured entry. `ids` is the ordered list of look-target ids pulled
       # from the line's <d cmd='look #id'> tags (subject first, then target).
+      # `link_nouns` maps each `<a exist>` id on the line to its `noun=`: the
+      # Saga-identity stream links every look target inside its <d> tag
+      # (`<d cmd='look #ID'><pushBold/>A <a exist="ID" noun="moradu">jeol
+      # moradu</a><popBold/></d>`), while the legacy stream has no links. The
+      # entry's `:noun` is the server noun of the link whose exist is the
+      # subject id (trimmed; the stream sometimes pads it), or nil when the
+      # subject has no link (legacy lines, self lines).
       # Returns a Hash, or nil for the header / unparseable lines.
-      def parse_assess_line(text, ids)
+      def parse_assess_line(text, ids, link_nouns = {})
         text = text.to_s.strip
         return nil if text.empty?
         return nil if text =~ /assess your combat situation/i
@@ -443,9 +451,11 @@ module Lich
           target_id  = (target && target =~ /^you$/i) ? nil : ids[1]
         end
         is_pc = subject_id.to_s.start_with?('-')
+        noun = subject_id && link_nouns[subject_id]&.strip
+        noun = nil if noun&.empty?
 
         {
-          name: name, id: subject_id, number: number, status: status,
+          name: name, id: subject_id, noun: noun, number: number, status: status,
           relation: relation, target: target, target_id: target_id,
           target_number: target_number, range: range, self: is_self, pc: is_pc
         }
@@ -805,6 +815,7 @@ module Lich
             if attributes['id'].to_s == 'assess'
               @assess_buffer = String.new
               @assess_ids = []
+              @assess_link_nouns = {}
             end
             if XMLData.game =~ /^GS/
               if attributes['id'].to_s == 'inv'
@@ -834,9 +845,15 @@ module Lich
           if name == 'd' && @current_stream == 'assess'
             @assess_ids << $1 if attributes['cmd'].to_s =~ /look #(-?\d+)/
           end
+          # Saga-identity assess lines link each look target; keep each link's
+          # server noun by its exist id so the subject keeps it (see
+          # #parse_assess_line).
+          if name == 'a' && @current_stream == 'assess' && attributes['exist']
+            @assess_link_nouns[attributes['exist']] = attributes['noun']
+          end
           if name == 'popStream'
             if @current_stream == 'assess' && @assess_buffer
-              entry = parse_assess_line(@assess_buffer, @assess_ids)
+              entry = parse_assess_line(@assess_buffer, @assess_ids, @assess_link_nouns)
               if entry
                 @assess << entry
                 # The assess stream is DragonRealms' only tie between an exist id
