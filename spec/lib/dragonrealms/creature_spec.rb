@@ -114,6 +114,23 @@ RSpec.describe Lich::DragonRealms::Creature do
   end
 
   describe '.feed_assess (the id-to-name tie-in)' do
+    it 'keeps the server noun an assess entry carries (Saga link), trimmed' do
+      described_class.feed_assess(
+        name: 'A grizzled hound with a notched ear', id: '4003', noun: ' hound ', number: 1,
+        status: 'solidly balanced', relation: 'facing', range: :melee, self: false, pc: false
+      )
+
+      expect(described_class[4003].noun).to eq('hound')
+    end
+
+    it 'derives the noun when the assess entry carries none or a blank one' do
+      described_class.feed_assess(name: 'A jeol moradu', id: '4001', noun: nil, self: false, pc: false)
+      described_class.feed_assess(name: 'A jeol moradu', id: '4002', noun: ' ', self: false, pc: false)
+
+      expect(described_class[4001].noun).to eq('moradu')
+      expect(described_class[4002].noun).to eq('moradu')
+    end
+
     it 'backfills name, assess number, relation and range onto a synced id' do
       described_class.sync('99353095', 'hostile' => '1', 'immobile' => '1')
 

@@ -221,6 +221,64 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
     end
   end
 
+  # The Saga-identity assess stream wraps each look target's name in a link
+  # inside the <d cmd='look #id'> tag (verbatim shape, names pseudonymised):
+  #   <d cmd='look #ID'><pushBold/>A <a exist="ID" noun="moradu">jeol moradu</a><popBold/></d> (1: ...) is facing you ...
+  # The link's exist always equals the look id, and its noun= is the server's
+  # noun, so the assess backfill keeps that noun instead of re-deriving the
+  # last word of the name.
+  describe 'Saga dialect: the linked assess stream' do
+    def saga_assess(id, noun, text, tail = 'is facing you at melee range.')
+      %(<pushStream id="assess"/><d cmd='look ##{id}'><pushBold/>A <a exist="#{id}" noun="#{noun}">#{text}</a><popBold/></d> ) +
+        %((1: solidly balanced) #{tail}  | <d cmd='face ##{id}'>F</d><popStream/>)
+    end
+
+    it 'keeps the link noun when it is not the last word of the name (room objs first)' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>' \
+           '<crtrStatus exist="4003" hostile="1"/><prompt time="1785273999">R&gt;</prompt>')
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+
+      c = Lich::DragonRealms::Creature[4003]
+      expect(c.name).to eq('a grizzled hound with a notched ear')
+      expect(c.noun).to eq('hound')
+      expect(c.assess_number).to eq(1)
+    end
+
+    it 'takes the link noun for a creature first seen in assess' do
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+    end
+
+    it 'trims a padded link noun (noun=" moth")' do
+      feed(saga_assess(4004, ' moth', 'void-black umbral moth'))
+
+      expect(Lich::DragonRealms::Creature[4004].noun).to eq('moth')
+    end
+
+    # A PC subject's target link names a creature; the noun belongs to the
+    # subject (looked up by its exist id), never to whichever link came first
+    # or last on the line.
+    it 'takes the noun from the subject\'s own link, not the target\'s' do
+      feed(%(<pushStream id="assess"/><d cmd='look #4003'><pushBold/>A <a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/></d> ) +
+           %((2: solidly balanced) is behind <d cmd='look #4007'><pushBold/>a <a exist="4007" noun="moradu">jeol moradu</a><popBold/></d> (1) at melee range.  | ) +
+           %(<d cmd='face #4003'>F</d> | <d cmd='face #4007'>F</d><popStream/>))
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+      expect(Lich::DragonRealms::Creature[4007]).to be_nil
+    end
+
+    it 'does not carry a previous line\'s link noun onto a link-less (legacy) line' do
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+      feed(%(<pushStream id="assess"/><d cmd='look #4003'>A grizzled hound with a notched ear</d> ) +
+           %((1: solidly balanced) is facing you at melee range.  | <d cmd='face #4003'>F</d><popStream/>))
+
+      # Legacy shape: no link, so the noun is derived from the name as before.
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('ear')
+    end
+  end
+
   describe 'Saga dialect: linked room-objs creatures' do
     # No earlier linked line primes the session here, so this also covers the
     # very first linked room-objs line of a session.
