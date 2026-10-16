@@ -96,26 +96,44 @@ RSpec.configure do |config|
     end
   end
 
-  # Fail any example that leaves one of the globals set up below (see "Global
-  # Variables") holding a different object than it started with. Under
-  # parallel_rspec, a spec that nils or replaces one of these in an `after`
-  # breaks whichever unrelated file happens to run next in the same process.
-  # Mutate the object in place, or save it and restore it. This is a
-  # config-level around hook, so it runs outside every group's own
-  # around/after hooks and sees the value after they have restored it.
+  # Fail any example or top-level group that leaves one of the globals set up
+  # below (see "Global Variables") holding a different object than it started
+  # with. Under parallel_rspec, a spec that nils or replaces one of these in an
+  # `after` breaks whichever unrelated file happens to run next in the same
+  # process. Mutate the object in place, or save it and restore it.
   # $_LASTUPSTREAM_ is left out because the before hook below resets it to nil
   # for every example.
-  config.around do |example|
-    before = SPEC_HELPER_GLOBALS.transform_values { |(read, _write)| read.call }
-    example.run
+  snapshot_globals = -> { SPEC_HELPER_GLOBALS.transform_values { |(read, _write)| read.call } }
+  check_globals = lambda do |before, where|
     leaked = SPEC_HELPER_GLOBALS.reject { |name, (read, _write)| read.call.equal?(before[name]) }
-    unless leaked.empty?
-      # Put the originals back first, so one leaking example fails on its own
-      # instead of taking every later example in the process down with it.
-      leaked.each { |name, (_read, write)| write.call(before[name]) }
-      raise "#{example.location} left #{leaked.keys.join(', ')} holding a different object; " \
-            'save and restore spec_helper globals instead of reassigning them'
-    end
+    return if leaked.empty?
+
+    # Put the originals back first, so one leak fails on its own instead of
+    # taking every later example in the process down with it.
+    leaked.each { |name, (_read, write)| write.call(before[name]) }
+    raise "#{where} left #{leaked.keys.join(', ')} holding a different object; " \
+          'save and restore spec_helper globals instead of reassigning them'
+  end
+
+  # A config-level around hook runs outside every group's own around hooks and
+  # before/after(:example) hooks, so it sees the value after they restored it.
+  config.around do |example|
+    before = snapshot_globals.call
+    example.run
+    check_globals.call(before, example.location)
+  end
+
+  # before/after(:context) hooks run outside the around hook above. Config-level
+  # context hooks run once per top-level group, before the group's own
+  # before(:context) hooks and after its own after(:context) hooks, so these
+  # catch a leak from any context hook in the group or its nested groups. The
+  # failure is reported as an error outside the examples.
+  context_before = nil
+  config.before(:context) { context_before = snapshot_globals.call }
+  config.after(:context) do
+    before = context_before
+    context_before = nil
+    check_globals.call(before, "#{self.class.metadata[:location]} (a before/after(:context) hook)") if before
   end
 
   # Reset shared state before each example to ensure test isolation.
