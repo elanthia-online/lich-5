@@ -31,7 +31,7 @@ DragonRealms has two dialects:
 | `dr_saga_group_bank.xml` | saga | 2026-10-15 16:37 | 79 | group join/list/leave with another leader, bank balance with linked name |
 | `dr_saga_containers_speech.xml` | saga | 2026-10-15 17:49 | 100 | open/close/look in/rummage, bank deposit/withdraw, hide/unhide, linked speech preset |
 
-`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` is the only committed GemStone stream and serves as the GS replay oracle for shared-path changes. GemStone has one dialect, the rich stream with `<a exist>` links and no `<room>` block, whichever identity Lich sends (see E11 in `docs/saga-stream-deferred.md`).
+`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` is the only committed GemStone stream (captured under the legacy identity, `client="1.0.1.26"`) and serves as the GS replay oracle for shared-path changes. GemStone has one dialect, the rich stream with `<a exist>` links and no `<room>` block, whichever identity Lich sends (see E11 in `docs/saga-stream-deferred.md`).
 
 ## Regenerating
 
