@@ -1156,7 +1156,10 @@ module Lich
 
           # Every result starts the finishing steps from the same room-number
           # state; they make the same decision for each, since no rewrite adds
-          # or removes the room-name start or the prompt they look for.
+          # or removes the room-name start or the prompt they look for. So with
+          # N distinct results on a prompt line, process_room_display runs N
+          # times: its Map.current lookups and any StringProc timeto in
+          # room_stringproc_entries are evaluated once per result.
           room_number_after_ready = @room_number_after_ready
           outputs.each do |output|
             @room_number_after_ready = room_number_after_ready
