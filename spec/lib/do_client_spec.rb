@@ -618,13 +618,13 @@ RSpec.describe 'do_client command dispatch' do
   # UPSTREAM marker is printed by Script.new_upstream, do_client's last
   # step), rather than raising out of the command handler.
   describe 'user-supplied patterns that are not valid regexes' do
-    def bad_pattern_probe(command, running: [], binary: false)
+    def bad_pattern_probe(command, running: [], hidden: [], binary: false)
       probe(<<~RUBY)
         #{fake_script_helper}
         Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)
         HMR.define_singleton_method(:reload) { |rx| puts "RELOAD \#{rx.inspect}" }
         Script.define_singleton_method(:running) { #{running.inspect}.map { |n| fake_script(n) } }
-        Script.define_singleton_method(:hidden) { [] }
+        Script.define_singleton_method(:hidden) { #{hidden.inspect}.map { |n| fake_script(n) } }
         Script.define_singleton_method(:new_upstream) { |line| puts "UPSTREAM \#{line}" }
         Lich.define_singleton_method(:log) { |msg| puts "LOG \#{msg}" }
         do_client(#{command.inspect}#{'.b' if binary})
@@ -653,12 +653,19 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('R:--- Lich: error: invalid pattern "lib\\users": invalid Unicode escape')
       expect(out).to include('R:--- Lich: \\u is unicode escape, did you mean to use a / instead?')
       expect(out).not_to include('RELOAD')
+
+      # As on main, only a bare \u gets the hint, not a bad \u{...} list.
+      out = bad_pattern_probe(';hmr lib\\u{zz}')
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\u{zz}": invalid Unicode list')
+      expect(out).not_to include('did you mean')
     end
 
     it 'reports an invalid ;kill/;pause/;unpause name pattern and touches no script' do
       out = bad_pattern_probe(';kill (', running: ['alpha'])
       expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
       expect(out).not_to include('KILL')
+      # One line: the handler stops there, with no "not running" after it.
+      expect(out).not_to include('does not appear to be running')
       expect(out).to include('UPSTREAM ;kill (')
 
       out = bad_pattern_probe(';pause [', running: ['alpha'])
@@ -670,6 +677,27 @@ RSpec.describe 'do_client command dispatch' do
       out = bad_pattern_probe(';kill (', running: ['(', 'alpha'])
       expect(out).to include('KILL (')
       expect(out).not_to include('invalid pattern')
+
+      out = bad_pattern_probe(';kill (', running: ['alpha'], hidden: ['('])
+      expect(out).to include('KILL (')
+      expect(out).not_to include('invalid pattern')
+    end
+
+    it 'still sends to an exact name that is not a valid regex' do
+      out = bad_pattern_probe(';send to ( hello', running: ['(', 'alpha'])
+      expect(out).to include("R:--- sent to '(': hello")
+      expect(out).not_to include('invalid pattern')
+    end
+
+    # The fallback the helper now builds must stay what /^name/i was:
+    # anchored at the start, case-insensitive, running scripts then hidden.
+    it 'keeps the ;kill and ;send to name fallback an anchored, case-insensitive prefix match' do
+      out = bad_pattern_probe(';kill ALP', running: ['xalpha'], hidden: ['alphabet'])
+      expect(out).to include('KILL alphabet')
+      expect(out).not_to include('KILL xalpha')
+
+      out = bad_pattern_probe(';send to ALP hello', running: ['xalpha'], hidden: ['alphabet'])
+      expect(out).to include("R:--- sent to 'alphabet': hello")
     end
 
     # Lines read from the client socket are BINARY, so a non-ASCII pattern
@@ -685,6 +713,7 @@ RSpec.describe 'do_client command dispatch' do
       out = bad_pattern_probe(';send to ( hello', running: ['alpha'])
       expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
       expect(out).not_to include('sent to')
+      expect(out).not_to include('does not match any active script')
       expect(out).to include('UPSTREAM ;send to ( hello')
     end
   end
