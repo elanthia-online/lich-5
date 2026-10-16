@@ -4,12 +4,14 @@
 # extract.rb - turn a ;logxml capture into a stream-replay fixture.
 #
 #   ruby spec/support/stream_replay/extract.rb LOG OUT --game DR --char NAME \
-#        [--from N] [--to N] [--keep NAME,...]
+#        [--from N] [--to N] [--keep NAME,...] [--scrub-names FILE] \
+#        [--real-login] [--drop-settings-body] [--end-prompt]
 #
 # Cleaning, in order:
 #   1. drop everything up to logxml's "full logging now active" marker (reget
 #      replay is out of order and partial), plus logxml's own date header and
-#      trailing timestamp lines;
+#      trailing timestamp lines. A log with no marker (one that starts at a
+#      login, or a window already cut from a longer log) is kept whole;
 #   2. strip the per-line "YYYY-MM-DD HH:MM:SS TZ: " prefix;
 #   3. drop "<!-- CLIENT -->...<!-- ENDCLIENT -->" lines (upstream echoes, not
 #      server output);
@@ -25,6 +27,19 @@
 # The fixture gets a synthetic login header (settingsInfo/app char) so Lich
 # identifies the game and character and autostarts the replay probe.
 #
+# Options for a window that starts at a real login:
+#   --real-login          keep the login's own lines instead of the synthetic
+#                         header. The header then ends one line after the
+#                         login's <app char=...> line (Lich starts the probe on
+#                         the line after it); a window without one gets a
+#                         synthetic <app> line right after <settingsInfo>.
+#   --drop-settings-body  reduce <settings ...>...</settings> (the stored
+#                         front-end settings: highlights, presets, macros) to
+#                         its empty element. No parser code reads it.
+#   --end-prompt          append the driver's warm-up prompt when the window
+#                         ends without a prompt (a window that runs to the end
+#                         of a partial log), so its last lines get a snapshot.
+#
 # NOTE: logxml records strings after GameInstance#clean_serverstring, so a
 # fixture is post-clean input. Re-cleaning is idempotent for the transforms
 # clean_serverstring applies today; keep that in mind when changing them.
@@ -39,19 +54,25 @@ module StreamReplay
     LOG_TRAILER = /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d:\d\d\s*\z/
     CLIENT_ECHO = /<!-- CLIENT -->/
     MARKER = '### stream-replay:body-below ###'
+    END_PROMPT = '<prompt time="0">&gt;</prompt>'
+    SETTINGS_BODY = %r{(<settings\b[^>]*>).*?</settings>}
     PSEUDONYMS = %w[
       Aldric Brenna Corwin Delphine Edric Fiora Gareth Helsa Ivor Jessamy Kael Liora
       Maddoc Nerys Orrin Perrin Quenna Rhosyn Sabine Tamsin Ulric Vesna Wystan Yselde
       Zarek Anwen Bastian Calla Dorian Elowen Faelan Gwyn Haldor Isolde Jory Kerrin
     ].freeze
 
-    def initialize(game:, char:, from: nil, to: nil, keep: [], scrub: [])
+    def initialize(game:, char:, from: nil, to: nil, keep: [], scrub: [],
+                   real_login: false, drop_settings_body: false, end_prompt: false)
       @game = game
       @char = char
       @from = from
       @to = to
       @keep = keep
       @scrub = scrub
+      @real_login = real_login
+      @drop_settings_body = drop_settings_body
+      @end_prompt = end_prompt
     end
 
     def call(raw)
@@ -66,6 +87,10 @@ module StreamReplay
       map = names.each_with_index.to_h { |n, i| [n, PSEUDONYMS.fetch(i) { "Player#{i + 1}" }] }
       char_alias = map.fetch(@char, @char)
       body = lines.map { |l| scrub(l, map) }
+      body.map! { |l| l.sub(SETTINGS_BODY, '\1</settings>') } if @drop_settings_body
+      body << "#{END_PROMPT}\n" if @end_prompt && !body.last.to_s.include?('<prompt')
+      return split_real_login(body, char_alias) if @real_login
+
       header(char_alias) + "#{MARKER}\n" + body.join
     end
 
@@ -132,14 +157,36 @@ module StreamReplay
       line.gsub(/\b(#{map.keys.map { |n| Regexp.escape(n) }.join('|')})\b/) { map[Regexp.last_match(1)] }
     end
 
+    # The header is sent before the probe starts, so it has to run one line
+    # past the login's <app char=...> line: Lich starts --start-scripts on the
+    # first line after the one that names the character.
+    #
+    # @raise [ArgumentError] if the window has no <settingsInfo>, or nothing
+    #   follows the <app> line
+    def split_real_login(body, char)
+      info = body.index { |l| l.include?('<settingsInfo') }
+      raise ArgumentError, '--real-login: the window has no <settingsInfo>' unless info
+
+      lines = body.dup
+      lines.insert(info + 1, "#{app_line(char)}\n") unless lines.any? { |l| l.include?('<app char=') }
+      last = lines.index { |l| l.include?('<app char=') } + 1
+      raise ArgumentError, '--real-login: nothing follows the <app> line' if last >= lines.length
+
+      lines[0..last].join + "#{MARKER}\n" + lines[(last + 1)..].join
+    end
+
+    def app_line(char)
+      title = @game == 'DR' ? "[DR: #{char}]" : "GemStone IV: #{char}"
+      %(<app char="#{char}" game="#{@game}" title="#{title}"/>)
+    end
+
     def header(char)
       instance = @game == 'DR' ? 'DR' : 'GS4'
-      title = @game == 'DR' ? "[DR: #{char}]" : "GemStone IV: #{char}"
       <<~XML
         <mode id="GAME"/>
         <playerID id='700001'/>
         <settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='#{instance}'/>
-        <app char="#{char}" game="#{@game}" title="#{title}"/>
+        #{app_line(char)}
         <streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
         <endSetup/>
       XML
@@ -150,7 +197,8 @@ end
 if $PROGRAM_NAME == __FILE__
   opts = { keep: [] }
   OptionParser.new do |o|
-    o.banner = 'Usage: extract.rb LOG OUT --game DR|GS --char NAME [--from N] [--to N] [--keep A,B]'
+    o.banner = 'Usage: extract.rb LOG OUT --game DR|GS --char NAME [--from N] [--to N] [--keep A,B] ' \
+               '[--scrub-names FILE] [--real-login] [--drop-settings-body] [--end-prompt]'
     o.on('--game G') { |v| opts[:game] = v }
     o.on('--char C') { |v| opts[:char] = v }
     o.on('--from N', Integer) { |v| opts[:from] = v }
@@ -159,6 +207,9 @@ if $PROGRAM_NAME == __FILE__
     # One name per line; always pseudonymized when present. Keep this file out
     # of the repo: it exists so real character names never get committed.
     o.on('--scrub-names FILE') { |v| opts[:scrub] = File.readlines(v, chomp: true).reject(&:empty?) }
+    o.on('--real-login') { opts[:real_login] = true }
+    o.on('--drop-settings-body') { opts[:drop_settings_body] = true }
+    o.on('--end-prompt') { opts[:end_prompt] = true }
   end.parse!
   log, out = ARGV
   abort 'LOG and OUT are required' unless log && out && opts[:game] && opts[:char]
