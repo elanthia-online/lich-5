@@ -103,8 +103,13 @@ pseudonymised (see `spec/fixtures/streams/MANIFEST.md` for the corpus labels).
 | Shape | Source | Used by |
 |---|---|---|
 | `room objs` with a corpse `</a><popBold/><popBold/> which appears dead,`, caged creatures `that is caught in …`, plain creatures and the ` and some junk.` tail after the last creature | C7, `2026-10-16_01-57-21`, line 13664 | `xmlparser_dr_creature_spec.rb` ("reads every status on a captured Saga room objs line") |
+| `room objs` whose first creature link is padded, `noun=" moth"`, beside four unpadded `noun="moth"` siblings, one `(immobile)`; the ` and some junk.` tail follows a non-creature item | C1, `2026-10-17_03-49-51`, line 22331 (the same line repeats at 22335) | `xmlparser_dr_creature_spec.rb` ("trims the padded noun … for the DR roster …") |
 
 Shapes #1705 also handles that no fetched capture holds yet, so they are
 specced with synthetic lines only: a link whose `noun=` differs from the text's
-last word (a long-named pet), a padded `noun=" moth"`, a `the <a …>` named NPC,
-an article-less NPC, and a creature-behind-creature assess subject.
+last word (a long-named pet), a padded `noun=" moth"` in assess (the room objs
+form is captured above), a `the <a …>` named NPC, an article-less NPC, and a
+creature-behind-creature assess subject. A long-named creature checked for the
+first shape, the "white-tailed leopard" of C8 `2026-10-17_00-00-00`, does not
+supply it: all 125 of its links in that capture send `noun="leopard"`, the
+text's last word.
