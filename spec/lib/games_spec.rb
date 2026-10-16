@@ -277,6 +277,18 @@ RSpec.describe Lich::GameBase::GameInstance do
       expect(dr.adapt_for_frontend(line, [])).to eq(%(<pushBold/>a rat<popBold/>\r\n))
       expect(line).to eq(%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n))
     end
+
+    # Both the base and DragonRealms default the set to nil, the session's set.
+    it 'applies the session capability set when DragonRealms is handed none or nil' do
+      line = +%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n)
+      dr = Lich::DragonRealms::GameInstance.new
+      allow(Lich::Common::ClientCapabilities).to receive(:session_default).and_return([:double_bold])
+      expect(dr.adapt_for_frontend(line, nil)).to eq(%(<pushBold/><pushBold/>a rat<popBold/><popBold/>\r\n))
+      expect(dr.adapt_for_frontend(line)).to eq(%(<pushBold/><pushBold/>a rat<popBold/><popBold/>\r\n))
+      allow(Lich::Common::ClientCapabilities).to receive(:session_default).and_return(%i[game_links double_bold])
+      expect(dr.adapt_for_frontend(line, nil)).to equal(line)
+      expect(Lich::Gemstone::GameInstance.new.adapt_for_frontend(line, nil)).to equal(line)
+    end
   end
 end
 

@@ -219,7 +219,8 @@ module Lich
         # unless the game overrides it.
         # @param alt_string [String] the server string on its way to the client
         # @param _capabilities [Array<Symbol>, nil] the client's rich-stream
-        #   capabilities (Lich::Common::ClientCapabilities)
+        #   capabilities (Lich::Common::ClientCapabilities); nil means the
+        #   session's set (ClientCapabilities.session_default)
         # @return [String] the string to send
         def adapt_for_frontend(alt_string, _capabilities = nil)
           alt_string
@@ -1704,11 +1705,12 @@ module Lich
       # under the Saga identity; whether it depends on the identity is not
       # known. Never modifies alt_string.
       # @param alt_string [String] the server string on its way to the client
-      # @param capabilities [Array<Symbol>] the client's rich-stream
-      #   capabilities; defaults to the session's set
+      # @param capabilities [Array<Symbol>, nil] the client's rich-stream
+      #   capabilities; nil means the session's set
       # @return [String] the string to send
       # @see Lich::GameBase::GameInstance::Base#adapt_for_frontend
-      def adapt_for_frontend(alt_string, capabilities = Lich::Common::ClientCapabilities.session_default)
+      def adapt_for_frontend(alt_string, capabilities = nil)
+        capabilities ||= Lich::Common::ClientCapabilities.session_default
         alt_string = Lich::Common::Markup.strip_link_bold(alt_string) unless capabilities.include?(:double_bold)
         alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless capabilities.include?(:game_links)
         alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless capabilities.include?(:double_bold)
