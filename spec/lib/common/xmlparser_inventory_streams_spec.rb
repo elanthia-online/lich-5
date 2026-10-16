@@ -167,6 +167,82 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
     end
   end
 
+  # spec/fixtures/stow/dr_saga_handover.xml: four lines (each with the prompt
+  # that followed it) captured from one 2026-10-17 DR Saga session, see
+  # spec/fixtures/README.md: the character's own stow burst (header: its pack
+  # 200981348), "You accept ...'s offer and are now holding a <pack 200708744>",
+  # the next stow burst, whose header names the handed-over pack, and the next
+  # own burst after that pack was given back. The capture's login (and its
+  # <container id='stow'>) is not in the fixture.
+  describe 'stow feed for a handed-over pack (captured)' do
+    own_pack = '200981348'
+    other_pack = '200708744'
+
+    let(:lines) do
+      File.readlines(File.expand_path('../../fixtures/stow/dr_saga_handover.xml', __dir__), chomp: true)
+    end
+    let(:own_burst) { lines[0..1] }
+    let(:accept) { lines[2..3] }
+    let(:other_burst) { lines[4..5] }
+    let(:next_own_burst) { lines[6..7] }
+
+    it 'holds the captured shapes' do
+      expect(accept.first).to include(%(are now holding a <a exist="#{other_pack}" noun="pack">))
+      expect(other_burst.first).to start_with(%(<clearContainer id="stow"/><inv id='stow'>In the <a exist="#{other_pack}" noun="pack">pack</a>:</inv>))
+      expect(next_own_burst.first).to start_with(%(<clearContainer id="stow"/><inv id='stow'>In the <a exist="#{own_pack}" noun="pack">pack</a>:</inv>))
+    end
+
+    shared_examples 'the handed-over pack' do
+      it "files the other pack's burst under that pack, not the stow container, which keeps its contents" do
+        feed(*own_burst)
+        expect(contents(own_pack)).to eq(%w[key dagesse jasper tin bolts skippet])
+
+        feed(*accept, *other_burst)
+        expect(contents(other_pack).size).to eq(71)
+        expect(contents(other_pack).first(3)).to eq(%w[almanac nugget nugget])
+        expect(contents(other_pack).last).to eq('rope')
+        expect(contents(own_pack)).to eq(%w[key dagesse jasper tin bolts skippet])
+        expect(gameobj.containers[own_pack].map(&:id)).not_to include(other_pack)
+        expect(worn).to be_empty
+      end
+
+      it "refreshes the stow container's contents from the next own burst" do
+        feed(*own_burst, *accept, *other_burst, *next_own_burst)
+
+        expect(parser.stow_container_id).to eq(own_pack)
+        expect(contents(own_pack)).to eq(%w[dagesse jasper tin bolts skippet]) # the key was taken out
+        expect(contents(other_pack).size).to eq(71) # still its last listing
+        expect(worn).to be_empty
+      end
+    end
+
+    context "after a login's <container id='stow'>" do
+      # The tag's shape is the one dr_saga_login.xml captured; its target is
+      # this capture's pack, whose login was not fetched.
+      before { feed(%(<container id='stow' title="My Pack" target='##{own_pack}' location='right' save='' resident='true'/>)) }
+
+      include_examples 'the handed-over pack'
+
+      it 'keeps the tagged stow container throughout' do
+        feed(*own_burst, *accept, *other_burst)
+        expect(parser.stow_container_id).to eq(own_pack)
+      end
+    end
+
+    context 'with no <container id=stow> seen (the fixture alone)' do
+      include_examples 'the handed-over pack'
+
+      it "follows the other pack's header, then the own pack's again" do
+        feed(*own_burst)
+        expect(parser.stow_container_id).to eq(own_pack)
+        feed(*accept, *other_burst)
+        expect(parser.stow_container_id).to eq(other_pack)
+        feed(*next_own_burst)
+        expect(parser.stow_container_id).to eq(own_pack)
+      end
+    end
+  end
+
   describe 'worn items list' do
     it 'replaces worn inventory on each linked list (an item removed is gone)' do
       feed(*worn_list(%w[195648608 helm helm], %w[195648607 mask mask]))
