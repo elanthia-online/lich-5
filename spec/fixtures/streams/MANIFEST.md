@@ -141,7 +141,7 @@ Each PR in the series records its own rows under its heading.
 
 | Absent or counted | Corpus |
 |---|---|
-| dr-scripts inputs listed in E12: 0 `(You are\|He is\|She is) wearing` lines and 0 LOOK item lists | DR-16 |
+| dr-scripts inputs listed in E12, counted with sorter's own triggers: 0 `(You are\|He is\|She is) wearing` lines and 0 LOOK item lists (`You take a moment to look for all the items in the area`) | DR-16 |
 
 ### #1721
 
