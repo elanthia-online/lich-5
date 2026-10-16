@@ -134,7 +134,7 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | Absent or counted | Corpus |
 |---|---|
 | DR Saga sends 0 `<dir>`: its only compass is the empty `<compass></compass>` inside the `room exits` component (51,706 of them). GemStone keeps `<dir>` (27,725). The legacy FIX streams have 102 `<dir>` in 39 top-level compasses, one after every exits line | DR-16 Saga; GS-15; FIX |
-| Exits in `<room>` blocks: 935 blocks have no `<d>` (913 or 916 "Obvious paths: none.", depending on the report, plus 22 hidden by fog); 0 exit names outside the 11 compass directions. One "none." block is committed as `spec/fixtures/room_block/dr_saga_no_exits.xml`; no fog block is | DR-16 Saga |
+| Exits in `<room>` blocks: 935 blocks have no `<d>` (913 "none.", that is 772 "Obvious paths: none." and 141 "Obvious exits: none.", plus 22 hidden by fog); 0 exit names outside the 11 compass directions. One "none." block is committed as `spec/fixtures/room_block/dr_saga_no_exits.xml`; no fog block is | DR-16 Saga |
 | The `room exits` component precedes `<room>` in 51,595 arrivals, follows it in 0 and is missing in 1 (committed as `spec/fixtures/room_block/dr_saga_arrival_without_exits_component.xml`) | DR-16 Saga |
 
 ### #1722
