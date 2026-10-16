@@ -2382,14 +2382,16 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with room descri
     DownstreamHook.remove('spec_desc_off_squelch')
   end
 
-  # The bare FLAG listing's Description row (the real Saga-identity row from
-  # spec/fixtures/flag/, with the Status column and toggle swapped for OFF).
-  # DRInfomon's startup issues FLAG quietly, which squelches the listing in
-  # a downstream hook.
+  # The bare FLAG listing's Description row (the real Saga-identity rows from
+  # the ON and OFF listings in spec/fixtures/flag/). DRInfomon's startup
+  # issues FLAG quietly, which squelches the listing in a downstream hook.
   context 'with the bare FLAG listing' do
-    listing = File.readlines(File.expand_path('../fixtures/flag/dr_saga_flag_listing.xml', __dir__), chomp: true)
-    listing_on = "#{listing.find { |line| line.include?('>Description</d>') }}\r\n"
-    listing_off = listing_on.sub('flag Description off', 'flag Description on').sub('</d>        ON ', '</d>        OFF')
+    description_row = lambda do |name|
+      lines = File.readlines(File.expand_path("../fixtures/flag/#{name}", __dir__), chomp: true)
+      "#{lines.find { |line| line.include?('>Description</d>') }}\r\n"
+    end
+    listing_on = description_row.call('dr_saga_flag_listing.xml')
+    listing_off = description_row.call('dr_saga_flag_listing_description_off.xml')
 
     before { $frontend = 'frostbite' }
 
