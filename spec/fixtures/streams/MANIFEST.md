@@ -104,6 +104,11 @@ Each PR in the series records its own rows under its heading.
 
 ### #1706
 
+| Absent or counted | Corpus |
+|---|---|
+| GemStone `<crtrStatus>`, 22,903 tags: 11,694 inside `room objs`, each before its creature's link (0 after). 11,209 standalone: 11,200 for a creature in the current room roster, 3 known only to the registry, 6 never linked (11,203 if counted as "linked earlier in the log"). 0 tags without `health`/`maxhealth`; 0 flags `="0"`; 0 ids recycled inside a room between refreshes. `gs_saga_hunt.xml` carries a room-objs tag before its link and standalone tags before a `room objs` component. These rows back #1716 too | GS-15 |
+| DragonRealms sends 0 `<crtrStatus>` inside a `room objs` component; the batch follows the component | DR-16; the `dr_saga_*` and `dr_legacy_hunt.xml` fixtures |
+
 ### #1707
 
 ### #1709
