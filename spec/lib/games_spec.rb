@@ -1899,6 +1899,17 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     end
   end
 
+  # The same room captured in both dialects (see room_block_spec): a legacy
+  # front end gets, byte for byte, the lines the legacy stream sent for it.
+  it 'gives a legacy front end the captured legacy lines for a captured Saga block' do
+    fixtures = File.expand_path('../fixtures', __dir__)
+    legacy_view = File.read(File.join(fixtures, 'room_block/dr_legacy_desc_no_objects.xml')).lines.map(&:chomp)
+    saga_block = File.foreach(File.join(fixtures, 'streams/dr_saga_locate_descflag.xml')).find { |l| l.include?('(230007)</name>') }
+    $frontend = 'wrayth'
+    described_class.send(:process_downstream_hooks, +"#{saga_block.chomp}\r\n")
+    eventually { expect(@raw_socket).to have_received(:write).with(legacy_view.map { |l| "#{l}\r\n" }.join) }
+  end
+
   it 'still arms the room display after rewriting' do
     $frontend = 'wrayth'
     described_class.send(:process_downstream_hooks, +saga_room)
