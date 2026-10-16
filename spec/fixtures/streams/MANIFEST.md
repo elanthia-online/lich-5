@@ -62,6 +62,8 @@ No legacy-identity GemStone capture exists apart from `benchmark/fixtures/gs_sam
 The front end that recorded each `dr_legacy_*` fixture was not noted when it was captured.
 
 Each PR in the series records its own rows under its heading.
+The headings are listed in advance on purpose, so that carrying one PR's rows up the stack never touches another PR's lines.
+A heading with no rows belongs to a PR that hasn't merged yet; its rows are on that PR's branch.
 
 ### #1701
 
