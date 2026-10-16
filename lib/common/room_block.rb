@@ -165,11 +165,18 @@ module Lich
       end
       private_class_method :current_room?
 
+      # The legacy stream's top-level compass for a room's exit names, in their
+      # order: <compass><dir value="n"/><dir value="se"/></compass>. Names
+      # without a compass value are left out; no exits give an empty compass.
+      # Also what a detachable client gets for the current room when it
+      # attaches, so every compass a front end gets has the same bytes.
+      #
+      # @param exits [Array<String>] exit names as the game lists them
+      # @return [String]
       def compass(exits)
         dirs = exits.filter_map { |exit| %(<dir value="#{COMPASS_DIRS[exit]}"/>) if COMPASS_DIRS.key?(exit) }
         "<compass>#{dirs.join}</compass>"
       end
-      private_class_method :compass
 
       def part(body, tag)
         body[%r{<#{tag}>(.*?)</#{tag}>}m, 1].to_s
