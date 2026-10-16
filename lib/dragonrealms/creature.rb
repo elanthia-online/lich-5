@@ -124,6 +124,10 @@ module Lich
       # `<a exist>` link, Saga-identity stream) when present, so a long name
       # such as "a sleek golden panther with enigmatic violet eyes" keeps noun
       # "panther"; link-less (legacy) entries derive it from the name.
+      # A server noun keeps the server's case and is not downcased with the
+      # name, so it matches the noun the linked room-objs path stores (a link
+      # `noun="Warden"` stays "Warden"); a derived noun comes from the
+      # downcased name and is lowercase.
       #
       # @param entry [Hash] an entry from `XMLData.parse_assess_line`, with keys
       #   `:name`, `:noun`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
