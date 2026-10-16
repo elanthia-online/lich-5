@@ -417,6 +417,22 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
 
         expect(npc_status('4007')).to eq('dead')
       end
+
+      # spec/fixtures/creature/dr_saga_room_objs_shapes.xml holds a room objs line
+      # captured verbatim from a 2026-10-16 Saga session (see
+      # spec/fixtures/README.md): one corpse "which appears dead", caged
+      # creatures "that is caught in ...", plain ones, and the " and some junk."
+      # tail after the last creature's own run.
+      it 'reads every status on a captured Saga room objs line' do
+        path = File.expand_path('../../fixtures/creature/dr_saga_room_objs_shapes.xml', __dir__)
+        feed(File.read(path).lines.grep(/which appears dead/).first.chomp)
+
+        expect(npc_status('197119614')).to eq('dead')
+        expect(npc_status('197119654')).to eq('caught in a cage of swirling darkness')
+        expect(npc_status('197115095')).to be_nil
+        expect(npc_status('197122645')).to be_nil
+        expect(Lich::Common::GameObj.npcs.size).to eq(14)
+      end
     end
   end
 end
