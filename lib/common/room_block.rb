@@ -19,6 +19,17 @@ module Lich
       # off before </room> cannot swallow the next one in a multi-line string.
       BLOCK = %r{<room>(?<body>(?:(?!<room>).)*?)</room>}m.freeze
 
+      # The legacy stream's <compass> value for each exit name the game lists
+      # in "Obvious paths:", in the exits line's order.
+      COMPASS_DIRS = {
+        'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
+        'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
+        'up' => 'up', 'down' => 'down', 'out' => 'out'
+      }.freeze
+
+      # The room number the game ends a room name with: "[Area, Title] (230008)".
+      NAME_UID = /\((\d+)\)\s*\z/.freeze
+
       module_function
 
       # Rewrites a <room> block into the legacy stream's layout, so code written
@@ -48,7 +59,47 @@ module Lich
         server_string.gsub(BLOCK) { legacy_lines(Regexp.last_match(:body)) }
       end
 
-      def legacy_lines(body)
+      # The legacy layout for a front end, which also gets the line the
+      # Saga-identity stream no longer sends: after a view of the character's
+      # own room, the legacy stream followed the exits line with a top-level
+      # compass built from those exits,
+      #
+      #   Obvious paths: <d>north</d>, <d>southeast</d>.
+      #   <compass><dir value="n"/><dir value="se"/></compass>
+      #
+      # and front ends update their compass (and Frostbite its map) only from
+      # that line. Here it ends a line of its own, as the game starts a new
+      # line after </room>.
+      # Exit names without a compass value are left out; a room without exits
+      # gets an empty compass, which clears the last room's.
+      #
+      # The game also sends a <room> block for a room the character is not in
+      # (a Moon Mage's Locate shows the target's room). The compass shows
+      # where the character stands, so such a block gets none. A block is the
+      # character's room when the room number its name ends with is room_id
+      # (XMLData.room_id, from <nav>). A name without one (ShowRoomID off, or
+      # "(**)" for a room without a number) counts when its exits are
+      # room_exits (XMLData.room_exits, from the room exits component), so the
+      # compass is never lit with any exits but the current room's.
+      #
+      # Only for the client: scripts, reget and the parser use legacy_shape
+      # and never see the compass line.
+      #
+      # @param server_string [String]
+      # @param room_id [Integer] the character's room number
+      # @param room_exits [Array<String>] the character's room's exit names
+      # @return [String]
+      def legacy_shape_with_compass(server_string, room_id:, room_exits:)
+        return server_string unless server_string.include?('<room>')
+
+        server_string.gsub(BLOCK) do
+          body = Regexp.last_match(:body)
+          exits = exit_names(body)
+          legacy_lines(body, compass: (compass(exits) if current_room?(body, exits, room_id, room_exits)))
+        end
+      end
+
+      def legacy_lines(body, compass: nil)
         name = part(body, 'name')
         exists = part(body, 'exists')
         players = part(body, 'players')
@@ -65,10 +116,28 @@ module Lich
         exits = part(body, 'exits')
         exits = "#{between}#{exits}" if players.empty?
         lines << exits unless exits.empty?
+        lines << compass if compass
         lines << extra unless extra.empty?
         lines.join("\r\n")
       end
       private_class_method :legacy_lines
+
+      def exit_names(body)
+        part(body, 'exits').scan(%r{<d(?:\s[^>]*)?>(.*?)</d>}m).flatten
+      end
+      private_class_method :exit_names
+
+      def current_room?(body, exits, room_id, room_exits)
+        uid = part(body, 'name')[NAME_UID, 1]
+        uid ? uid.to_i == room_id : exits == room_exits
+      end
+      private_class_method :current_room?
+
+      def compass(exits)
+        dirs = exits.filter_map { |exit| %(<dir value="#{COMPASS_DIRS[exit]}"/>) if COMPASS_DIRS.key?(exit) }
+        "<compass>#{dirs.join}</compass>"
+      end
+      private_class_method :compass
 
       def part(body, tag)
         body[%r{<#{tag}>(.*?)</#{tag}>}m, 1].to_s

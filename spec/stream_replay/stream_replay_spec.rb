@@ -55,15 +55,19 @@ end
 # What reaches the client for the Saga-identity <room> block, per front end:
 # only Saga (:room_element) gets the raw block; every other front end gets the
 # legacy roomName layout it already renders, and Wizard its GSL room codes.
+# The legacy layout carries the legacy compass after each view of the room the
+# character is in: every block but the first, a LOOK sent before the capture's
+# first <nav> gave Lich a room number.
 RSpec.describe 'stream replay: <room> block per front end', :slow do
   fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
   rooms = 34 # <room> blocks in the fixture
+  compass = '<compass><dir value='
 
   {
-    nil      => { '<room>' => 0, '<style id="roomName"' => rooms },
-    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms },
-    'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0 },
-    'wizard' => { '<room>' => 0, "\034GSo" => rooms }
+    nil      => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms - 1 },
+    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms - 1 },
+    'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0, compass => 0 },
+    'wizard' => { '<room>' => 0, "\034GSo" => rooms, compass => 0 }
   }.each do |frontend, expected|
     it "delivers #{expected.map { |k, v| "#{v} x #{k.inspect}" }.join(', ')} to #{frontend || 'a headless pipe'}" do
       result = StreamReplay::Driver.new(fixture, frontend: frontend).run

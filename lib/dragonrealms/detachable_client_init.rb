@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../common/room_block'
+
 module Lich
   module DragonRealms
     # Builds the one-time state push a newly attached detachable-client
@@ -26,11 +28,8 @@ module Lich
       # [progressBar id, text label]. The game labels stamina as "fatigue".
       VITALS = [%w[health health], %w[mana mana], %w[stamina fatigue], %w[spirit spirit], %w[concentration concentration]].freeze
 
-      SHORT_DIRS = {
-        'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
-        'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
-        'up' => 'up', 'down' => 'down', 'out' => 'out'
-      }.freeze
+      # The same compass values the <room> rewrite sends after a room view.
+      SHORT_DIRS = Lich::Common::RoomBlock::COMPASS_DIRS
 
       # Whether enough of the login feed has been parsed to build the push. In
       # the DragonRealms login feed the first <prompt> follows everything the
