@@ -1195,12 +1195,11 @@ module Lich
         # GSL codes and would see the line as a blank one.
         #
         # Then the game's own rewrites (GameInstance#adapt_for_frontend):
-        # DragonRealms' links and doubled bold go only to front ends that
+        # DragonRealms' links and creature bold go only to front ends that
         # handle them (:game_links, :double_bold); the rest get the legacy
         # line. After the <room> rewrite, which keeps the parts' markup, and
-        # before sf_to_wiz, which turns each bold into a GSL code. GemStone has
-        # always sent both, and its front ends expect them, so it keeps the
-        # base no-op.
+        # before sf_to_wiz, which turns each bold into a GSL code. GemStone
+        # keeps the base no-op.
         #
         # Never modifies alt_string: the other capability sets start from it.
         #

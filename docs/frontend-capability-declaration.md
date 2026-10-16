@@ -6,11 +6,11 @@ Lich identifies to the game as Saga, so DragonRealms sends it the Saga-identity 
 
 | Capability | The client renders | Without it, Lich sends |
 |---|---|---|
-| `room_element` | the inline `<room>` block (`<name>`, `<description>`, `<exists>`, `<players>`, `<exits>`, `<extra>`) | the legacy `roomName` / `roomDesc` lines, plus the legacy `<compass>` line after a view of the character's own room |
+| `room_element` | the inline `<room>` block (`<name>`, `<description>`, `<exists>`, `<players>`, `<exits>`, `<extra>`) | the legacy `roomName` / `roomDesc` lines, plus the legacy `<compass>` line built from that view's exits (a Locate view of another room gets that room's compass, as in the legacy stream) |
 | `game_links` | `<a exist="…" noun="…">…</a>` object links | the link text without the `<a>` tags (a script's own `<a href>` stays) |
-| `double_bold` | the doubled `<pushBold/><pushBold/>…<popBold/><popBold/>` around linked creatures | one `<pushBold/>…<popBold/>` pair |
+| `double_bold` | the creature bold: the doubled `<pushBold/><pushBold/>…<popBold/><popBold/>` around linked creatures in room-object listings, and the single pair around a linked creature in action and assess lines | one `<pushBold/>…<popBold/>` pair in room-object listings, and the creature name without bold elsewhere, as the legacy stream sends them |
 
-`game_links` and `double_bold` apply only to DragonRealms. GemStone has always sent links and doubled bold, and its front ends expect them, so Lich leaves GemStone lines alone whatever the client declares. `room_element` matters only where the game sends `<room>`, which today means DragonRealms.
+`game_links` and `double_bold` apply only to DragonRealms; Lich leaves GemStone lines alone whatever the client declares. GemStone sends links under both client identities. Doubled bold appears only in GemStone captures recorded under the Saga identity (2,293 doubled against 33,775 single in 15 sessions); the legacy-identity `benchmark/fixtures/gs_sample.xml` has none, and whether it depends on the identity is not known. `room_element` matters only where the game sends `<room>`, which today means DragonRealms.
 
 ## The line
 
