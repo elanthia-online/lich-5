@@ -1860,17 +1860,22 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     stub_const('Frontend', Lich::Common::Frontend)
     # spec_helper sets these globals once per process; save them so the after
     # hook restores them rather than leaving nil for later specs.
-    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend]
+    # $sftowiz_multiline is the Wizard conversion's split-element buffer,
+    # which another file's examples can leave holding an unbalanced line;
+    # start from an empty buffer so the Wizard output does not depend on
+    # spec order.
+    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline]
     @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
     $_DETACHABLE_CLIENT_REGISTRY_ = nil
     $_DETACHABLE_CLIENT_ = nil
+    $sftowiz_multiline = nil
     $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
     described_class.instance_variable_set(:@room_number_after_ready, false)
   end
 
   after do
     $_CLIENT_.close rescue nil
-    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend = @saved_globals
+    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline = @saved_globals
     described_class.instance_variable_set(:@room_number_after_ready, false)
   end
 
