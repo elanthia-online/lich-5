@@ -49,9 +49,10 @@ RSpec.describe 'Lich::Common::XMLParser GemStone-only module guards' do
   end
 
   context 'with the modules loaded' do
-    # Stand-ins on the bare names, which is how the parser looks them up.
-    let(:active_spell) { stub_const('ActiveSpell', Module.new) }
-    let(:gift) { stub_const('Gift', Module.new) }
+    # Stand-ins on the bare names, which is how the parser looks them up. let!
+    # installs them before every example, whether or not anything references them.
+    let!(:active_spell) { stub_const('ActiveSpell', Module.new) }
+    let!(:gift) { stub_const('Gift', Module.new) }
 
     before do
       allow(active_spell).to receive(:request_update)
