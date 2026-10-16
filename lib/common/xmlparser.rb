@@ -512,11 +512,11 @@ module Lich
       # Lich presents: the Saga identity (Frontend::CLIENT_STRING since #1700)
       # gets object links and the <room> block, while front ends that send their
       # own Wrayth handshake get the legacy stream, which has neither. GemStone's
-      # stream (Wrayth identity) also has object links, but no <room> block, so
-      # a feature says what this session's stream contains, not which game or
-      # identity it is: :links alone does not mean Saga. Parser paths that
-      # depend on stream shape, not game semantics, branch on these instead of
-      # on the game:
+      # stream (the rich stream it has always sent) also has object links, but
+      # no <room> block, so a feature says what this session's stream contains,
+      # not which game or identity it is: :links alone does not mean Saga.
+      # Parser paths that depend on stream shape, not game semantics, branch on
+      # these instead of on the game:
       #
       # - :links              an <a exist=...> object link has been seen
       # - :room_element       a <room> block has been seen. Not every room
