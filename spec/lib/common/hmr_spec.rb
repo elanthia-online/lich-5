@@ -271,6 +271,34 @@ RSpec.describe HMR, "#reload path comparison" do
     expect(Lich::Common::HMR).not_to have_received(:load)
   end
 
+  # RbConfig's strings are BINARY. Under a home directory with a non-ASCII
+  # name (rbenv/asdf/rvm keep Ruby there), comparing such a root with a
+  # UTF-8 feature path that is non-ASCII too raised
+  # Encoding::CompatibilityError out of reload, so no ;hmr worked at all.
+  context "when Ruby and the loaded file live under a non-ASCII directory" do
+    let(:home) { File.join(tmp, "jos#{0xE9.chr(Encoding::UTF_8)}") }
+
+    before do
+      rubylib = FileUtils.mkdir_p(File.join(home, "ruby", "lib")).first.b
+      allow(RbConfig::CONFIG).to receive(:[]).and_call_original
+      allow(RbConfig::CONFIG).to receive(:[]).with("rubylibdir").and_return(rubylib)
+    end
+
+    it "reloads a file outside Ruby's directories" do
+      file = required_file(File.join(home, "lich", "hmr-nonascii-#{SecureRandom.hex(4)}.rb"))
+
+      expect { reload_basename(file) }.not_to raise_error
+      expect(Lich::Common::HMR).to have_received(:load).with(file)
+    end
+
+    it "skips a file inside Ruby's library directory" do
+      file = required_file(File.join(home, "ruby", "lib", "hmr-nonascii-lib-#{SecureRandom.hex(4)}.rb"))
+
+      expect { reload_basename(file) }.not_to raise_error
+      expect(Lich::Common::HMR).not_to have_received(:load)
+    end
+  end
+
   # A loaded file deleted since has no realpath. It is not a gem file, so it
   # goes to load, whose LoadError the per-file rescue reports.
   it "does not raise for a loaded file that has since been deleted" do

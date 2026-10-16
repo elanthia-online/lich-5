@@ -35,6 +35,11 @@ module Lich
 
       # Directories holding Ruby's standard library and installed gems,
       # resolved through symlinks so they compare with resolved file paths.
+      # Returned as bytes (BINARY): RbConfig's strings are BINARY and feature
+      # paths are UTF-8. Once both hold a non-ASCII character (Ruby and Lich
+      # both under a home directory whose name is not ASCII),
+      # String#start_with? raises Encoding::CompatibilityError instead of
+      # comparing them.
       #
       # @return [Array<String>] each ending in a path separator
       def self.foreign_roots
@@ -42,7 +47,7 @@ module Lich
         dirs.concat(Gem.path)
         dirs.concat(Gem.loaded_specs.values.map(&:full_gem_path))
         dirs.compact.reject(&:empty?).filter_map do |dir|
-          File.join(File.realpath(dir), '')
+          File.join(File.realpath(dir), '').b
         rescue SystemCallError
           nil
         end.uniq
@@ -65,7 +70,7 @@ module Lich
           File.realpath(path)
         rescue SystemCallError
           path
-        end
+        end.b
         roots.any? { |root| real.start_with?(root) }
       end
 
