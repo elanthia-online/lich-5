@@ -618,7 +618,7 @@ RSpec.describe 'do_client command dispatch' do
   # UPSTREAM marker is printed by Script.new_upstream, do_client's last
   # step), rather than raising out of the command handler.
   describe 'user-supplied patterns that are not valid regexes' do
-    def bad_pattern_probe(command, running: [])
+    def bad_pattern_probe(command, running: [], binary: false)
       probe(<<~RUBY)
         #{fake_script_helper}
         Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)
@@ -627,7 +627,7 @@ RSpec.describe 'do_client command dispatch' do
         Script.define_singleton_method(:hidden) { [] }
         Script.define_singleton_method(:new_upstream) { |line| puts "UPSTREAM \#{line}" }
         Lich.define_singleton_method(:log) { |msg| puts "LOG \#{msg}" }
-        do_client(#{command.inspect})
+        do_client(#{command.inspect}#{'.b' if binary})
       RUBY
     end
 
@@ -640,7 +640,8 @@ RSpec.describe 'do_client command dispatch' do
 
     it 'reports a ;hmr pattern Ruby rejects as a bad escape without a backtrace' do
       out = bad_pattern_probe(';hmr lib\\')
-      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\\\": too short escape sequence')
+      # Shown as typed: one backslash, not the doubled String#inspect form.
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\": too short escape sequence')
       expect(out).not_to include("\t")
       expect(out).not_to include('LOG')
       expect(out).to include('UPSTREAM')
@@ -648,7 +649,8 @@ RSpec.describe 'do_client command dispatch' do
 
     it 'keeps the forward-slash hint for a ;hmr pattern with a \\u escape' do
       out = bad_pattern_probe(';hmr lib\\users')
-      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\\\users": invalid Unicode escape')
+      # The hint names \u, so the pattern must show \u too, not \\u.
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\users": invalid Unicode escape')
       expect(out).to include('R:--- Lich: \\u is unicode escape, did you mean to use a / instead?')
       expect(out).not_to include('RELOAD')
     end
@@ -668,6 +670,15 @@ RSpec.describe 'do_client command dispatch' do
       out = bad_pattern_probe(';kill (', running: ['(', 'alpha'])
       expect(out).to include('KILL (')
       expect(out).not_to include('invalid pattern')
+    end
+
+    # Lines read from the client socket are BINARY, so a non-ASCII pattern
+    # arrives as raw bytes. They go back out as typed, not as \xC3\xA9.
+    it 'shows a non-ASCII pattern from the client socket as typed' do
+      e_acute = [0xC3, 0xA9].pack('C*').force_encoding(Encoding::UTF_8) # U+00E9
+      out = bad_pattern_probe(";kill #{e_acute}(", running: ['alpha'], binary: true)
+      expect(out).to include("R:--- Lich: error: invalid pattern \"#{e_acute}(\": end pattern with unmatched parenthesis")
+      expect(out).not_to include('\\x')
     end
 
     it 'reports an invalid ;send to name pattern and sends nothing' do

@@ -331,9 +331,11 @@ module Lich
           Regexp.new("#{prefix}#{text}", options)
         rescue RegexpError => e
           # The message ends with ": /<compiled source>/<flags>"; drop it so
-          # the user sees their own text, not the prefix and flags.
+          # the user sees their own text, not the prefix and flags. The text
+          # is quoted as typed, not with String#inspect, which would double
+          # every backslash, and a bad escape is the usual reason it failed.
           reason = e.message.sub(%r{: /.*\z}m, '')
-          respond "--- Lich: error: invalid pattern #{text.inspect}: #{reason}"
+          respond "--- Lich: error: invalid pattern \"#{text}\": #{reason}"
           respond '--- Lich: \\u is unicode escape, did you mean to use a / instead?' if reason == 'invalid Unicode escape'
           nil
         end
