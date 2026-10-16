@@ -106,6 +106,32 @@ RSpec.describe Lich::Common::XMLParser do
       )
     end
 
+    it 'has no noun for a link-less (legacy) line' do
+      entry = parser.parse_assess_line(
+        'A jeol moradu (4: nimbly balanced) is facing you at melee range.  | F', ['89513914']
+      )
+      expect(entry).to include(noun: nil)
+    end
+
+    it 'takes the subject noun from the link whose exist is the subject id' do
+      nouns = { '-10592168' => 'Tenuk', '89511387' => 'moradu' }
+      pc = parser.parse_assess_line(
+        'Tenuk (incredibly balanced) is facing a jeol moradu (2) at melee range.  | F',
+        ['-10592168', '89511387'], nouns
+      )
+      me = parser.parse_assess_line(
+        'You (adeptly balanced) are facing a jeol moradu (2) at melee range.', ['89511387'], nouns
+      )
+      expect(pc).to include(noun: 'Tenuk')
+      expect(me).to include(noun: nil)
+    end
+
+    it 'trims the link noun and treats a blank one as absent' do
+      line = 'A void-black umbral moth (1: solidly balanced) is facing you at melee range.  | F'
+      expect(parser.parse_assess_line(line, ['7'], { '7' => ' moth' })).to include(noun: 'moth')
+      expect(parser.parse_assess_line(line, ['7'], { '7' => '  ' })).to include(noun: nil)
+    end
+
     it 'maps missile range' do
       entry = parser.parse_assess_line(
         'Byd (hidden and incredibly balanced) is moving to flank a jeol moradu (1) at missile range.  | F',
