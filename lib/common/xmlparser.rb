@@ -604,8 +604,11 @@ module Lich
             # text path ever consumes a stash from there (opening room objs
             # clears it), so a standalone tag for a creature already in the
             # current room roster is applied at once. Registration and
-            # room-marking stay on the link path; any other standalone tag is
-            # stashed as before.
+            # room-marking stay on the link path. Any other standalone tag (an
+            # id the current room has not linked) still lands in the stash, but
+            # nothing reads it from there: the stash is only consumed inside
+            # room objs, and opening room objs (like <nav> and reset) clears it
+            # first. In effect such a tag is dropped.
             #
             # DragonRealms differs: its room-objs carry no per-creature <a exist>
             # tag, so there is no text() path to defer to. Its <crtrStatus> tags
