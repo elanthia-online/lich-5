@@ -212,6 +212,19 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #process_room_display"
         end
 
+        # Rewrites a client-bound line for front ends that predate parts of
+        # this game's stream. Runs on the client path only, once per distinct
+        # client capability set, after the downstream hooks and the <room>
+        # rewrite and before the Wizard conversion (sf_to_wiz). No change
+        # unless the game overrides it.
+        # @param alt_string [String] the server string on its way to the client
+        # @param _capabilities [Array<Symbol>, nil] the client's rich-stream
+        #   capabilities (Lich::Common::ClientCapabilities)
+        # @return [String] the string to send
+        def adapt_for_frontend(alt_string, _capabilities = nil)
+          alt_string
+        end
+
         def combat_count
           @combat_count
         end
@@ -1181,11 +1194,13 @@ module Lich
         # dropped, except Wizard/Avalon (GSL), which get exits from XMLParser's
         # GSL codes and would see the line as a blank one.
         #
+        # Then the game's own rewrites (GameInstance#adapt_for_frontend):
         # DragonRealms' links and doubled bold go only to front ends that
         # handle them (:game_links, :double_bold); the rest get the legacy
         # line. After the <room> rewrite, which keeps the parts' markup, and
         # before sf_to_wiz, which turns each bold into a GSL code. GemStone has
-        # always sent both, and its front ends expect them, so it is left alone.
+        # always sent both, and its front ends expect them, so it keeps the
+        # base no-op.
         #
         # Never modifies alt_string: the other capability sets start from it.
         #
@@ -1200,10 +1215,7 @@ module Lich
                            Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
                          end
           end
-          if XMLData.game =~ /^DR/
-            alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless capabilities.include?(:game_links)
-            alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless capabilities.include?(:double_bold)
-          end
+          alt_string = @game_instance.adapt_for_frontend(alt_string, capabilities) if @game_instance
           alt_string
         end
 
@@ -1680,6 +1692,21 @@ module Lich
           end
         end
 
+        alt_string
+      end
+
+      # DragonRealms' links and doubled bold go only to clients whose
+      # capabilities include them (:game_links, :double_bold); the rest get
+      # the legacy line. GemStone has always sent both, and its front ends
+      # expect them, so it keeps the base no-op. Never modifies alt_string.
+      # @param alt_string [String] the server string on its way to the client
+      # @param capabilities [Array<Symbol>] the client's rich-stream
+      #   capabilities; defaults to the session's set
+      # @return [String] the string to send
+      # @see Lich::GameBase::GameInstance::Base#adapt_for_frontend
+      def adapt_for_frontend(alt_string, capabilities = Lich::Common::ClientCapabilities.session_default)
+        alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless capabilities.include?(:game_links)
+        alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless capabilities.include?(:double_bold)
         alt_string
       end
 

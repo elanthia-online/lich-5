@@ -258,6 +258,25 @@ RSpec.describe Lich::GameBase::GameInstance do
       expect { game_instance.modify_room_display("test") }.to raise_error(NotImplementedError)
       expect { game_instance.process_room_display("test") }.to raise_error(NotImplementedError)
     end
+
+    # GemStone and an unknown game send the client line as it is.
+    it 'returns the client line itself from adapt_for_frontend' do
+      line = +%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n)
+      expect(game_instance.adapt_for_frontend(line)).to equal(line)
+      expect(Lich::Gemstone::GameInstance.new.adapt_for_frontend(line)).to equal(line)
+      expect(Lich::Gemstone::GameInstance.new.adapt_for_frontend(line, [])).to equal(line)
+    end
+
+    # DragonRealms rewrites by the capability set it is handed, never in place.
+    it 'applies only the DragonRealms rewrites the capability set lacks' do
+      line = +%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n)
+      dr = Lich::DragonRealms::GameInstance.new
+      expect(dr.adapt_for_frontend(line, %i[game_links double_bold])).to equal(line)
+      expect(dr.adapt_for_frontend(line, [:game_links])).to eq(%(<pushBold/>a <a exist="1" noun="rat">rat</a><popBold/>\r\n))
+      expect(dr.adapt_for_frontend(line, [:double_bold])).to eq(%(<pushBold/><pushBold/>a rat<popBold/><popBold/>\r\n))
+      expect(dr.adapt_for_frontend(line, [])).to eq(%(<pushBold/>a rat<popBold/>\r\n))
+      expect(line).to eq(%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n))
+    end
   end
 end
 
@@ -1857,6 +1876,8 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
     $sftowiz_multiline = nil
     $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
     described_class.instance_variable_set(:@room_number_after_ready, false)
+    @saved_game_instance = described_class.instance_variable_get(:@game_instance)
+    described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
     XMLData.game = 'DR'
   end
 
@@ -1864,6 +1885,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
     $_CLIENT_.close rescue nil
     $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline = @saved_globals
     described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, @saved_game_instance)
   end
 
   %w[wrayth genie profanity frostbite].each do |fe|
@@ -1907,6 +1929,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
   # GemStone has always sent links and doubled bold, and its front ends use them.
   it 'leaves a GemStone line alone' do
     XMLData.game = 'GS'
+    described_class.instance_variable_set(:@game_instance, Lich::Gemstone::GameInstance.new)
     $frontend = 'genie'
     line = %(Also here: <pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>.\r\n)
     described_class.send(:process_downstream_hooks, +line)
@@ -1941,6 +1964,14 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
         %(<compass><dir value="up"/></compass>\r\n)
       )
     end
+  end
+
+  # Before the game is known there is no game instance to ask.
+  it 'leaves the line alone before a game instance is set' do
+    described_class.instance_variable_set(:@game_instance, nil)
+    $frontend = 'genie'
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with(objs) }
   end
 
   # Scripts see what the server sent: the hooks run first.
@@ -2209,6 +2240,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with per-client 
     $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@primary_raw)
     $sftowiz_multiline = nil
     described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
     XMLData.game = 'DR'
     XMLData.room_id = 230_007
     XMLData.room_exits = ['north']
@@ -2341,7 +2373,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with per-client 
   # each client's version of that prompt line must get it.
   it 'gives every distinct version of a prompt line the room display' do
     $frontend = 'genie'
-    game_instance = double('game_instance')
+    game_instance = Lich::DragonRealms::GameInstance.new
     allow(game_instance).to receive(:process_room_display) { |line| "Room Number: 7\r\n#{line}" }
     described_class.instance_variable_set(:@game_instance, game_instance)
     described_class.instance_variable_set(:@room_number_after_ready, true)
