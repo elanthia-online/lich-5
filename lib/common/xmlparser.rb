@@ -512,6 +512,13 @@ module Lich
       # - :room_element       a <room> block has been seen. Not every room
       #                       arrives as one: a Saga session also gets some
       #                       moves as the legacy room components.
+      # - :stow_container_tag a <container id='stow' target=...> has been seen.
+      #                       GemStone and the DR Saga stream send it at login.
+      #                       Not the same as {#stow_container_id} being set:
+      #                       without the tag, #learn_stow_container takes
+      #                       that id from a stow feed's header, and this
+      #                       flag tells a tag-sourced id (kept) from a
+      #                       header-learned one (follows the next header).
       #
       # Cleared at login (<settingsInfo>); a mid-stream {#reset} keeps them,
       # since a desync does not change the dialect.
@@ -536,6 +543,8 @@ module Lich
           @stream_features << :links if attributes['exist']
         when 'room'
           @stream_features << :room_element
+        when 'container'
+          @stream_features << :stow_container_tag if attributes['id'] == 'stow'
         when 'settingsInfo'
           @stream_features.clear # a new login: the dialect is re-learned
         end
