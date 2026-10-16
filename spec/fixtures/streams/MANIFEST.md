@@ -40,3 +40,55 @@ DragonRealms has two dialects:
 - **A fixture:** run `extract.rb` against the source log with the same `--from`/`--to`, and pass `--scrub-names` a local, uncommitted list of names that must never appear in the repo.
 - **Goldens:** `UPDATE_STREAM_GOLDENS=1 bundle exec rspec spec/stream_replay`. Review every golden diff in the PR; a changed golden is a behavior change.
 
+## Negative evidence
+
+Absences can't be fixtures. Each row records the corpus that was searched and what was counted.
+The corpora are `;logxml streams` captures that are not committed. Characters are pseudonymised as C1–C8.
+The counts come from the reviews of each PR in the Saga-stream series and were not recounted for this file; where two reviews counted differently, the row gives both values.
+
+| Corpus | What it is |
+|---|---|
+| DR-16 | 116 DragonRealms captures, 2026-10-16, 8 characters (C1–C8), about 3.30M lines. C6 ran Profanity. (Other reports count 107 to 131 DR files, depending on what they included; this file uses 116 DR + 15 GS + 1 extra) |
+| DR-16 Saga | 108 of them (C1–C7, and C8 from 09:00), 3,087,133 lines. 89 contain `<room>`, with 53,663 blocks |
+| DR-16 legacy | C8's 8 captures from 00:00 to 08:48, 214,898 lines. The character stood in one room: 8 moves, no login |
+| DR-extra | 1 DragonRealms capture, 2026-10-16 14:26, C2, 227 lines (FLAG DESCRIPTION OFF/ON and a Locate) |
+| GS-15 | 15 GemStone (Shattered) captures, 2026-10-15, about 414,000 lines, 41,384 prompts, 2 with a login. Recorded while Lich sent the Saga client string (per the user; the stream itself can't show the handshake) |
+| FIX | the committed fixtures in this directory and `benchmark/fixtures/` |
+
+No legacy-identity GemStone capture exists apart from `benchmark/fixtures/gs_sample.xml`, committed 2026-06-28 before #1700.
+The front end that recorded each `dr_legacy_*` fixture was not noted when it was captured.
+
+Each PR in the series records its own rows under its heading.
+
+### #1701
+
+| Absent or counted | Corpus |
+|---|---|
+| DR legacy dialect: 0 `<a exist>` links, 0 `<pushBold/><pushBold/>`, 0 `<room>` blocks | DR-16 legacy (214,898 lines); the 5 `dr_legacy_*` fixtures and `dr_sample.xml` |
+| DR Saga sends 0 `<style id="roomName"/>` and 0 `<preset id='roomDesc'>` (the legacy FIX streams have 39 and 15) | DR-16 Saga (89 captures with `<room>`); the 5 `dr_saga_*` fixtures |
+| GemStone sends 0 `<room>` blocks; it sends `<roommeta>` and the `roomName` style instead (11,002 of each) | GS-15; `gs_sample.xml`, `gs_saga_login.xml`, `gs_saga_hunt.xml` |
+| GemStone doubled bold: 2,293 `<pushBold/><pushBold/>` against 33,775 single. `gs_sample.xml` has 0 doubled. In the committed captures the doubled bold sits in the main-text room view (`roomDesc` … `You also see <crtrStatus/><pushBold/><pushBold/>a <a …>`), a shape `gs_sample` doesn't contain, while `room objs` components use `<b> <pushBold/>…<popBold/></b>` in both identities. Whether doubled bold depends on the identity is not known: no legacy-identity GS capture of a room view exists | GS-15 (Saga identity); `gs_sample.xml` (legacy identity), `gs_saga_hunt.xml` |
+
+### #1702
+
+### #1703
+
+### #1704
+
+### #1705
+
+### #1706
+
+### #1707
+
+### #1709
+
+### #1711
+
+### #1713
+
+### #1721
+
+### #1722
+
+### #1725
