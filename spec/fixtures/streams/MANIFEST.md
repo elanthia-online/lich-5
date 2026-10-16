@@ -135,4 +135,8 @@ Each PR in the series records its own rows under its heading.
 
 ### #1722
 
+| Absent or counted | Corpus |
+|---|---|
+| Creature bold outside room-object listings. Legacy: of the 327 `moradu` mentions in `dr_legacy_hunt.xml` outside `room objs`, assess and `You also see` lines, 0 have a bold pair of their own; the 3 in bold are inside whole bold combat damage lines. All 14 legacy assess lines that name a creature (from `dr_legacy_hunt.xml:135`) name it plain. Saga: 217 single bold pairs hold a creature link, each around nothing but an optional article and the link, all in action or assess lines, 0 in `room objs` (room-object listings double their bold, see #1702) | FIX |
+
 ### #1725
