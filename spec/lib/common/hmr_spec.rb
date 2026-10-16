@@ -99,6 +99,41 @@ RSpec.describe HMR, "#reload error handling" do
     expect(messages.join("\n")).to include("stack level too deep")
   end
 
+  # A stack overflow's backtrace repeats the recursing frame ~10,000 times.
+  # Printing all of it floods the frontend with hundreds of KB of one line.
+  it "caps the backtrace it prints for a SystemStackError" do
+    filename = loaded_file("stack-cap", HMR::Helpers::First)
+    File.write(filename, <<~RUBY)
+      module HMR
+        def self.hmr_spec_recurse_cap(depth) = hmr_spec_recurse_cap(depth + 1)
+        hmr_spec_recurse_cap(0)
+      end
+    RUBY
+
+    Lich::Common::HMR.reload(filename)
+
+    printed = messages.join("\n").lines
+    expect(printed.size).to be < 50
+    expect(printed.last).to match(/\d+ more backtrace lines/)
+  end
+
+  it "still prints the failing file's own frame first" do
+    filename = loaded_file("short-trace", HMR::Helpers::First)
+    File.write(filename, "module HMR\n  raise ArgumentError, 'hmr spec boom'\nend\n")
+
+    Lich::Common::HMR.reload(filename)
+
+    expect(messages).to include("hmr spec boom")
+    expect(messages[messages.index("hmr spec boom") + 1].lines.first).to start_with("#{filename}:2")
+  end
+
+  it "prints a backtrace within the cap in full" do
+    trace = Array.new(Lich::Common::HMR::BACKTRACE_LINES) { |i| "frame#{i}.rb:1" }
+
+    expect(Lich::Common::HMR.format_backtrace(trace)).to eq(trace.join("\n"))
+    expect(Lich::Common::HMR.format_backtrace(nil)).to eq("")
+  end
+
   it "keeps reloading the remaining files after one fails" do
     bad = loaded_file("bad-first", HMR::Helpers::First)
     good = loaded_file("good-second", "module HMR\n  TestAfterFailure = 1\nend\n")

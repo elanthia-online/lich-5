@@ -11,6 +11,11 @@ module Lich
       # used to escape into the client thread and stop it reading input.
       RELOAD_ERRORS = [StandardError, ScriptError, SystemStackError].freeze
 
+      # Most backtrace lines printed for a failed reload. A stack overflow's
+      # backtrace repeats one frame about 10,000 times; printing it all would
+      # flood the frontend.
+      BACKTRACE_LINES = 25
+
       # RbConfig keys for Ruby's own library directories.
       RUBY_LIB_DIR_KEYS = %w[rubylibdir rubyarchdir sitelibdir sitearchdir vendorlibdir vendorarchdir].freeze
 
@@ -64,6 +69,16 @@ module Lich
         roots.any? { |root| real.start_with?(root) }
       end
 
+      # @param backtrace [Array<String>, nil]
+      # @return [String] at most {BACKTRACE_LINES} lines, then a count of the rest
+      def self.format_backtrace(backtrace)
+        lines = Array(backtrace)
+        shown = lines.first(BACKTRACE_LINES)
+        hidden = lines.size - shown.size
+        shown << "... #{hidden} more backtrace lines" if hidden.positive?
+        shown.join("\n")
+      end
+
       def self.reload(pattern)
         self.clear_cache
         matched = self.loaded.grep(pattern)
@@ -79,7 +94,7 @@ module Lich
               self.msg "<b>[lich.hmr] reloaded %s</b>" % file
             rescue *RELOAD_ERRORS => exception
               self.msg exception.message
-              self.msg exception.backtrace.join("\n")
+              self.msg self.format_backtrace(exception.backtrace)
             end
           }
         else
