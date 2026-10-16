@@ -107,18 +107,26 @@ RSpec.describe 'spec_helper global leak guard' do
     cached_result ||= Dir.mktmpdir('guard-probe') do |dir|
       file = File.join(dir, 'guard_probe_spec.rb')
       File.write(file, probe_source)
+      result = File.join(dir, 'result.json')
+      # An empty options file stands in for ~/.rspec, .rspec and .rspec-local,
+      # and SPEC_OPTS is cleared, so a developer's --fail-fast or extra
+      # formatter cannot change what the probe runs or reports.
+      options = File.join(dir, 'options')
+      File.write(options, '')
       root = File.expand_path('..', __dir__)
-      env = { 'GUARD_SPEC_HELPER' => File.expand_path('spec_helper.rb', __dir__) }
+      env = { 'GUARD_SPEC_HELPER' => File.expand_path('spec_helper.rb', __dir__), 'SPEC_OPTS' => nil }
       runner = 'require "rspec/core"; exit RSpec::Core::Runner.run(ARGV)'
-      stdout, _stderr, _status = Open3.capture3(env, RbConfig.ruby, '-e', runner, '--', file,
-                                                '--format', 'json', '--order', 'defined', chdir: root)
-      JSON.parse(stdout[stdout.index('{')..])
+      stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-e', runner, '--', file, '--options', options,
+                                              '--format', 'json', '--out', result, '--order', 'defined', chdir: root)
+      raise "guard probe wrote no results (#{status}):\n#{stdout}\n#{stderr}" unless File.exist?(result)
+
+      JSON.parse(File.read(result))
     end
   end
 
   def status_of(full_description)
     example = probe_result['examples'].find { |e| e['full_description'] == full_description }
-    raise "no probe example #{full_description.inspect}" unless example
+    raise "no probe example #{full_description.inspect}: #{Array(probe_result['messages']).join}" unless example
 
     [example['status'], example.dig('exception', 'message')]
   end
