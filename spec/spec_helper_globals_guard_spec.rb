@@ -14,9 +14,24 @@ RSpec.describe 'spec_helper global leak guard' do
   probe_source = <<~'RUBY'
     # frozen_string_literal: true
 
+    # Defined before spec_helper loads, as a spec file that does not require
+    # spec_helper is when parallel_rspec loads it first in a worker.
+    RSpec.describe 'early group' do
+      before(:context) { $cmd_prefix = '<early>' }
+      after(:context) { $SEND_CHARACTER = '?' }
+
+      it('runs') { nil }
+    end
+
     require ENV.fetch('GUARD_SPEC_HELPER')
     RSpec.configure { |config| config.example_status_persistence_file_path = nil }
     ORIGINAL_CLIENT = $_CLIENT_
+
+    RSpec.describe 'after the early group' do
+      it('sees the original prefix and send character') do
+        expect([$cmd_prefix, $SEND_CHARACTER]).to eq(['', '>'])
+      end
+    end
 
     RSpec.describe 'in place' do
       it('mutates the buffers in place') do
@@ -124,10 +139,16 @@ RSpec.describe 'spec_helper global leak guard' do
 
   it 'reports a global reassigned in a before(:context) or after(:context) hook and restores it' do
     messages = Array(probe_result['messages']).join("\n")
-    expect(probe_result['summary']['errors_outside_of_examples_count']).to eq(2)
+    expect(probe_result['summary']['errors_outside_of_examples_count']).to eq(3)
     expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$cmd_prefix holding a different object/)
     expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$SEND_CHARACTER holding a different object/)
     expect(status_of('after the before context leak sees the original prefix').first).to eq('passed')
     expect(status_of('after the after context leak sees the original send character').first).to eq('passed')
+  end
+
+  it 'checks the context hooks of a group defined before spec_helper loaded' do
+    messages = Array(probe_result['messages']).join("\n")
+    expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$SEND_CHARACTER, \$cmd_prefix holding a different object/)
+    expect(status_of('after the early group sees the original prefix and send character').first).to eq('passed')
   end
 end

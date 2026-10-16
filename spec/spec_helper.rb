@@ -117,6 +117,9 @@ RSpec.configure do |config|
 
   # A config-level around hook runs outside every group's own around hooks and
   # before/after(:example) hooks, so it sees the value after they restored it.
+  # (For a top-level group defined before this file loads, RSpec adds it inside
+  # that group's own around hooks instead; the context check below still
+  # catches anything those leave behind.)
   config.around do |example|
     before = snapshot_globals.call
     example.run
@@ -128,9 +131,13 @@ RSpec.configure do |config|
   # before(:context) hooks and after its own after(:context) hooks, so these
   # catch a leak from any context hook in the group or its nested groups. The
   # failure is reported as an error outside the examples.
+  # prepend_before/append_after keep that order for groups defined before this
+  # file loads (a spec file that does not require spec_helper, loaded first in
+  # a worker): plain before/after would add these after those groups' own
+  # before(:context) hooks and ahead of their own after(:context) hooks.
   context_before = nil
-  config.before(:context) { context_before = snapshot_globals.call }
-  config.after(:context) do
+  config.prepend_before(:context) { context_before = snapshot_globals.call }
+  config.append_after(:context) do
     before = context_before
     context_before = nil
     check_globals.call(before, "#{self.class.metadata[:location]} (a before/after(:context) hook)") if before
