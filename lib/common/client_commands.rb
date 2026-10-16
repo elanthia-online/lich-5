@@ -310,6 +310,33 @@ module Lich
           else !current
           end
         end
+
+        # Compiles a pattern the user typed after a ;command, or tells them
+        # it is not a valid regex.
+        #
+        # An unbalanced "(" or "[", or a stray backslash, is an easy typo, and
+        # building the Regexp inline let it escape the handler: a RegexpError
+        # skipped the rest of do_client and surfaced as a client_thread error
+        # with a backtrace line, and an ArgumentError from an interpolated
+        # literal (/#{text}/ raises that, not RegexpError, for bad escapes)
+        # printed a backtrace too. Regexp.new raises RegexpError for every
+        # one of those cases, so a single rescue covers them.
+        #
+        # @param text [String] what the user typed
+        # @param prefix [String] regex source put in front of +text+, such as
+        #   "^" for a prefix match; not shown to the user
+        # @param options [Integer] Regexp option flags
+        # @return [Regexp, nil] nil after the error has been reported
+        def user_regexp(text, prefix: '', options: 0)
+          Regexp.new("#{prefix}#{text}", options)
+        rescue RegexpError => e
+          # The message ends with ": /<compiled source>/<flags>"; drop it so
+          # the user sees their own text, not the prefix and flags.
+          reason = e.message.sub(%r{: /.*\z}m, '')
+          respond "--- Lich: error: invalid pattern #{text.inspect}: #{reason}"
+          respond '--- Lich: \\u is unicode escape, did you mean to use a / instead?' if reason == 'invalid Unicode escape'
+          nil
+        end
       end
     end
   end

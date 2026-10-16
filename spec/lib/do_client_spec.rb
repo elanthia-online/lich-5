@@ -612,6 +612,72 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
+  # ;hmr, ;kill/;pause/;unpause <name> and ;send to <name> compile what the
+  # user typed into a Regexp. A typo that is not a valid regex must come back
+  # as one plain "invalid pattern" line and let do_client finish (the
+  # UPSTREAM marker is printed by Script.new_upstream, do_client's last
+  # step), rather than raising out of the command handler.
+  describe 'user-supplied patterns that are not valid regexes' do
+    def bad_pattern_probe(command, running: [])
+      probe(<<~RUBY)
+        #{fake_script_helper}
+        Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)
+        HMR.define_singleton_method(:reload) { |rx| puts "RELOAD \#{rx.inspect}" }
+        Script.define_singleton_method(:running) { #{running.inspect}.map { |n| fake_script(n) } }
+        Script.define_singleton_method(:hidden) { [] }
+        Script.define_singleton_method(:new_upstream) { |line| puts "UPSTREAM \#{line}" }
+        Lich.define_singleton_method(:log) { |msg| puts "LOG \#{msg}" }
+        do_client(#{command.inspect})
+      RUBY
+    end
+
+    it 'reports an unbalanced ;hmr pattern instead of raising' do
+      out = bad_pattern_probe(';hmr (')
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('RELOAD')
+      expect(out).to include('UPSTREAM ;hmr (')
+    end
+
+    it 'reports a ;hmr pattern Ruby rejects as a bad escape without a backtrace' do
+      out = bad_pattern_probe(';hmr lib\\')
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\\\": too short escape sequence')
+      expect(out).not_to include("\t")
+      expect(out).not_to include('LOG')
+      expect(out).to include('UPSTREAM')
+    end
+
+    it 'keeps the forward-slash hint for a ;hmr pattern with a \\u escape' do
+      out = bad_pattern_probe(';hmr lib\\users')
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\\\users": invalid Unicode escape')
+      expect(out).to include('R:--- Lich: \\u is unicode escape, did you mean to use a / instead?')
+      expect(out).not_to include('RELOAD')
+    end
+
+    it 'reports an invalid ;kill/;pause/;unpause name pattern and touches no script' do
+      out = bad_pattern_probe(';kill (', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('KILL')
+      expect(out).to include('UPSTREAM ;kill (')
+
+      out = bad_pattern_probe(';pause [', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "[": premature end of char-class')
+      expect(out).not_to include('PAUSE')
+    end
+
+    it 'still kills an exact name that is not a valid regex' do
+      out = bad_pattern_probe(';kill (', running: ['(', 'alpha'])
+      expect(out).to include('KILL (')
+      expect(out).not_to include('invalid pattern')
+    end
+
+    it 'reports an invalid ;send to name pattern and sends nothing' do
+      out = bad_pattern_probe(';send to ( hello', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('sent to')
+      expect(out).to include('UPSTREAM ;send to ( hello')
+    end
+  end
+
   describe 'infomon and sk (GemStone)' do
     it 'routes the infomon subcommands' do
       out = probe(<<~RUBY, game: 'GSIV')
