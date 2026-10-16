@@ -87,6 +87,11 @@ Each PR in the series records its own rows under its heading.
 
 ### #1704
 
+| Absent or counted | Corpus |
+|---|---|
+| GemStone main subtitles: 11,004 of 11,004 have no brackets (` - Area, Title - N`); 0 without a number; 0 shorter than 3 characters. `gs_saga_login.xml` and `gs_saga_hunt.xml` carry the shape | GS-15 |
+| DragonRealms main subtitles: 0 of 51,722 without a room marker (a number or `(**)`); 10 with `(**)`, all `[The Heavens]` (`dr_saga_no_room_heavens.xml` carries two) | DR-16 |
+
 ### #1705
 
 ### #1706
