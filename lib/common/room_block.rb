@@ -10,9 +10,9 @@ module Lich
     #   <exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>
     #
     # where the legacy stream (front ends sending their own Wrayth handshake)
-    # sends the roomName style, the roomDesc preset and one line per part. Saga
-    # itself renders the block by re-emitting each child as styled story text,
-    # i.e. the legacy layout. The room components (room desc/objs/players/exits)
+    # sends the roomName style, the roomDesc preset and one line per part. The
+    # rewrite targets that legacy layout; how the Saga client itself draws the
+    # block was not checked. The room components (room desc/objs/players/exits)
     # are sent in both dialects and stay the parser's source of room state.
     module RoomBlock
       # A complete block; the body never spans another <room>, so a block cut
