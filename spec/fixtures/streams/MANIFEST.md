@@ -71,6 +71,11 @@ Each PR in the series records its own rows under its heading.
 
 ### #1702
 
+| Absent or counted | Corpus |
+|---|---|
+| 0 room components spanning lines; 0 `<a>` unbalanced, nested or split across lines. Every DR `<a>` is `<a exist="…" noun="…">`: 0 `href`, 0 other attributes (the DR link total is 2,047,948 to 2,087,191 depending on the report). 0 GS `room objs` outside the main stream | DR-16 + GS-15 (about 3.7M lines); the 5 `dr_saga_*` fixtures (2,386 links, all `exist`/`noun`) |
+| DR doubled bold: 345,655 doubled pushes and 345,655 doubled pops, in 54,632 lines; every line with a doubled push has the doubled pop; 0 triples; 0 doubled spans without a link inside. Doubled bold occurs only in room-object listings (`room objs`, `<exists>`). The 510 lines with unbalanced bold are single-bold spans split across lines (0 doubled) | DR-16 Saga; the 5 `dr_saga_*` fixtures (39 doubled-bold lines, all balanced, all in `room objs` or `<exists>`) |
+
 ### #1703
 
 ### #1704
