@@ -41,6 +41,8 @@ This file tracks what the Saga-dialect work has **not** verified or fixed yet. I
 | P6 | Legacy DR players splitter keeps a trailing period on the last name (`Chieftain X.`) | XMLParser DR players branch | Pre-existing legacy behavior; changing it alters legacy goldens | Separate `fix(dr)` with deliberate golden update |
 | P7 | Legacy DR players carry no status in `GameObj.pcs` (`who is ...` / `(...)` is parsed but dropped) | GameObj pc status is keyed by id; legacy players have none | Pre-existing; the Saga dialect's linked players do carry status | Separate `fix(dr)` if a consumer needs it |
 
+**Fixed above this PR, pinned until then:** the Saga goldens recorded before #1705 hold a bogus `gameobj.pcs` entry, `{"id":null,"noun":null,"name":".","status":null}`, while `drroom.pcs` is correct (`dr_saga_containers_speech` prompt 82, `dr_saga_hunt` 10, `dr_saga_inventory` 9, `dr_saga_login` 1, `dr_saga_no_room_heavens` 5). The XMLParser DR players branch runs its legacy splitter on every text run between the `<a>` links. Each run calls `GameObj.begin_room_players`, which drops the linked pcs already added, and the closing `.` becomes a pc named `.`. It is what the parser does before #1705, not expected behavior, so no consumer should rely on it. #1705 sends linked DR players down the GemStone link path, and its goldens drop the entry.
+
 ## Corrections recorded during planning
 
 These claims were made during planning and turned out to be false. They are recorded so they aren't re-raised.
