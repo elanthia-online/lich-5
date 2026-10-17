@@ -17,7 +17,7 @@ module Lich
   module Common
     module Frontend
       PLATFORM_KEYS = %i[darwin linux windows unsupported].freeze
-      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel].freeze
+      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element game_links double_bold].freeze
       BUILT_IN_DEFINITION_FILES = [
         %w[stormfront wrayth],
         %w[profanity profanity],
@@ -511,8 +511,8 @@ module Lich
                                      .dig(:metadata, :launch_plans, :linux, :environment)
 
       # --- Client String -----------------------------------------
-      # Default client string (Wrayth identity) sent during handshake
-      CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML"
+      # Default client string (Saga identity) sent during handshake
+      CLIENT_STRING = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML"
 
       # --- Backward-Compatible Constants -------------------------
       # These frozen arrays preserve the built-in capability membership exposed
@@ -546,6 +546,31 @@ module Lich
 
       def self.supports_room_window?(fe = $frontend)
         has_capability?(fe, :room_window)
+      end
+
+      # Whether the front end renders the Saga-identity stream's inline <room>
+      # block itself. Others get it rewritten to the legacy roomName/roomDesc
+      # layout (see Lich::Common::RoomBlock).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
+      def self.supports_room_element?(fe = $frontend)
+        has_capability?(fe, :room_element)
+      end
+
+      # Whether the front end handles DragonRealms' <a exist> object links.
+      # Others get them stripped to the legacy text (Markup.strip_game_links).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
+      def self.supports_game_links?(fe = $frontend)
+        has_capability?(fe, :game_links)
+      end
+
+      # Whether the front end handles DragonRealms' creature bold: the doubled
+      # <pushBold/><pushBold/> around linked creatures in room-object listings
+      # and the single pair around them in action and assess lines. Others get
+      # the legacy line: one pair in the listings (Markup.collapse_double_bold)
+      # and none elsewhere (Markup.strip_link_bold).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
+      def self.supports_double_bold?(fe = $frontend)
+        has_capability?(fe, :double_bold)
       end
 
       # The running session also gets the sentinel when --sentinel asked for
@@ -604,6 +629,54 @@ module Lich
 
         base.sub(%r{/VERSION:\S+}) { "/VERSION:#{version}" }
       end
+
+      # A front end's own handshake line, as it reaches Lich's proxy: an
+      # optional <c> prefix (Frostbite), an optional leading slash (Genie sends
+      # "FE:WRAYTH ..."), FE:<name>, and a /XML token. The line ending is kept.
+      PROXY_HANDSHAKE_LINE = %r{\A(?<prefix>(?:<c>)?)/?FE:\S+[^\r\n]*?[ \t]/XML(?=[ \t\r\n]|\z)[^\r\n]*(?<eol>\r?\n)?\z}i
+
+      # The handshake to forward for the line a proxied front end sent (the line
+      # after the login key). A front end's own handshake is replaced with
+      # client_string(version, frontend:), so every proxied session asks the game
+      # for the stream Lich sends Wizard, Frostbite and --without-frontend, and
+      # Lich's adapters (RoomBlock, Markup) reshape it for the front end. $frontend
+      # is not touched: it comes from the launch arguments, so capability
+      # lookups still answer for the real front end.
+      #
+      # Forwarded unchanged:
+      # - a line that is not an /XML handshake (a key, a command, a plain-text client);
+      # - a handshake that already names the same /P: platform as the replacement,
+      #   so Saga keeps its own /VERSION:;
+      # - any handshake when keep is true (--keep-fe-string or Lich.keep_fe_string).
+      #
+      # @param line [String, nil] the line as read from the front end
+      # @param version [String, nil] the --fe-version value
+      # @param keep [Boolean] forward the front end's own handshake
+      # @param frontend [String, nil] the front end, for its registry :client_string
+      # @return [String, nil] the line to forward
+      def self.proxy_handshake(line, version: nil, keep: false, frontend: client)
+        match = PROXY_HANDSHAKE_LINE.match(line.to_s)
+        return line unless match
+
+        if keep
+          Lich.log "info: forwarding the front end's client string: #{line.strip}"
+          return line
+        end
+
+        replacement = client_string(version, frontend: frontend)
+        return line if handshake_platform(line)&.casecmp?(handshake_platform(replacement).to_s)
+
+        Lich.log "info: replacing the front end's client string #{line.strip} with #{replacement}"
+        "#{match[:prefix]}#{replacement}#{match[:eol]}"
+      end
+
+      # The /P: value of a handshake line, or nil.
+      # @param line [String]
+      # @return [String, nil]
+      def self.handshake_platform(line)
+        line[%r{[ \t]/P:(\S+)}i, 1]
+      end
+      private_class_method :handshake_platform
 
       # Send version string, ready signals, and setup commands to the game server.
       # Used during login handshake for wizard/avalon/frostbite frontends.

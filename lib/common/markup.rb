@@ -1,18 +1,21 @@
 # frozen_string_literal: true
 
 require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+require File.join(LIB_DIR, 'common', 'room_block.rb')
 
 module Lich
   module Common
     # Frontend markup translation for the server stream.
     #
-    # Four concerns, all string-in/string-out:
+    # Five concerns, all string-in/string-out:
     #
     #   * +fb_to_sf+  - normalizes a client line on the way upstream
     #   * +sf_to_wiz+ - rewrites a StormFront/XML line into the GSL escape
     #                   vocabulary an old Wizard frontend understands
     #   * +strip_xml+ - removes markup entirely, for scripts that want text
     #   * +monsterbold_*+ - the emphasis pair for whatever frontend is attached
+    #   * +strip_game_links+ / +collapse_double_bold+ - give a front end that
+    #                   predates them DragonRealms' legacy line shape
     #
     # Lifted out of global_defs.rb, where it could not be unit-tested: that
     # file cannot be required from a spec without redefining the whole
@@ -34,6 +37,15 @@ module Lich
       # Paired elements carrying data for the status bars, not prose.
       DATA_ELEMENTS      = /<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m.freeze
       ANY_TAG            = /<[^>]+>/.freeze
+      # An <a> start tag or end tag, and the start tag of a game object link.
+      LINK_TAG           = %r{<a(?:\s[^>]*)?>|</a>}.freeze
+      GAME_LINK          = /<a\s[^>]*\bexist=/.freeze
+      DOUBLE_PUSH_BOLD   = '<pushBold/><pushBold/>'
+      DOUBLE_POP_BOLD    = '<popBold/><popBold/>'
+      # A single bold pair around nothing but an optional article and one
+      # game link, not part of a doubled pair: the creature names in action
+      # and assess lines.
+      LINK_BOLD          = %r{(?<!<pushBold/>)<pushBold/>((?:(?:[Aa]n?|[Tt]he) )?<a\s[^>]*\bexist=[^>]*>[^<]*</a>)<popBold/>(?!<popBold/>)}.freeze
 
       class << self
         # Normalize a line arriving from the client.
@@ -129,16 +141,108 @@ module Lich
           end
         end
 
+        # Removes the game's object links, keeping their text, so a front end
+        # that predates them gets DragonRealms' legacy line:
+        #
+        #   Also here: Universalist <a exist="-10700003" noun="Corwin">Corwin</a>.
+        #   Also here: Universalist Corwin.
+        #
+        # Only <a> elements with an exist attribute are game links; any other
+        # <a> (a script's <a href> from a downstream hook) and its </a> stay.
+        # Each </a> closes the innermost <a> still open in the string. A </a>
+        # with none open is kept; the game sends every link whole within one
+        # string (none of the 2 million links in a day of DR logs spans two).
+        #
+        # @param line [String] one server string on its way to the client
+        # @return [String] the line, or the same object when it has no link
+        def strip_game_links(line)
+          return line unless line.include?('<a') && line.match?(GAME_LINK)
+
+          open_links = []
+          line.gsub(LINK_TAG) do |tag|
+            if tag == '</a>'
+              open_links.pop ? '' : tag
+            else
+              game_link = tag.match?(GAME_LINK)
+              open_links << game_link
+              game_link ? '' : tag
+            end
+          end
+        end
+
+        # Removes the single bold the game puts around a linked creature
+        # outside room-object listings, so a front end that predates it gets
+        # DragonRealms' legacy line, where those names are plain:
+        #
+        #   The <pushBold/><a exist="1" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+        #   The <a exist="1" noun="moradu">jeol moradu</a> moves into a position to parry.
+        #   <d cmd='look #1'><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/></d>
+        #   <d cmd='look #1'>a <a exist="1" noun="moradu">jeol moradu</a></d>
+        #
+        # Only a pair around nothing but an optional article (a, an, the) and
+        # one game link goes. Room-object listings double their bold
+        # (collapse_double_bold keeps one pair there, as the legacy stream
+        # did), and a bold line or phrase with more text in it, such as a
+        # combat damage line, keeps its bold. Run it before strip_game_links,
+        # which removes the link it keys on.
+        #
+        # It tells a listing from an action line only by that doubling, which
+        # every captured listing has (0 single pairs in room objs). If the game
+        # ever sends a listing with single bold, this strips it too, in all
+        # three places a listing reaches it: the room objs component, the
+        # <room> block's <exists>, and the roomDesc line RoomBlock builds from
+        # it. The parser already accepts single bold there; this would then
+        # need to skip those spans by structure.
+        #
+        # @param line [String] one server string on its way to the client
+        # @return [String] the line, or the same object when it has no such bold
+        def strip_link_bold(line)
+          return line unless line.include?('<pushBold/>') && line.match?(LINK_BOLD)
+
+          line.gsub(LINK_BOLD, '\\1')
+        end
+
+        # Collapses the doubled bold the game puts around a linked creature
+        # (<pushBold/><pushBold/>a <a ...>moradu</a><popBold/><popBold/>) to
+        # the single pair of DragonRealms' legacy line. Front ends that keep
+        # bold as a flag, or match creatures with one pushBold/popBold pair
+        # (Genie's monster count, Frostbite's bold creature list), need it.
+        #
+        # It runs after the downstream hooks and collapses pushes and pops
+        # separately, so it trusts a hook that adds bold not to make a new
+        # double: a hook <pushBold/> right before a single game <pushBold/>,
+        # with its <popBold/> elsewhere, leaves one push and two pops.
+        #
+        # @param line [String] one server string on its way to the client
+        # @return [String] the line, or the same object when it has no doubled bold
+        def collapse_double_bold(line)
+          return line unless line.include?(DOUBLE_PUSH_BOLD) || line.include?(DOUBLE_POP_BOLD)
+
+          line.gsub(DOUBLE_PUSH_BOLD, '<pushBold/>').gsub(DOUBLE_POP_BOLD, '<popBold/>')
+        end
+
         private
 
         def strip_simple(line)
           return nil if line == "\r\n" # short-circuit empty links
 
-          line = line.gsub(SUPPRESSED_STREAMS, '')
+          # The Saga-identity <room> block becomes the legacy layout first, so
+          # scripts get the same room lines (title, description + objects,
+          # players, exits) in both stream dialects.
+          shaped = RoomBlock.legacy_shape(line)
+          room_block = shaped != line
+          line = shaped.gsub(SUPPRESSED_STREAMS, '')
           line = line.gsub(SPELLS_STREAM, '')
           line = line.gsub(DATA_ELEMENTS, '')
           line = line.gsub(ANY_TAG, '')
           line = Lich::Common::XmlEntities.decode(line)
+          # The legacy stream sends each room line as its own string, so a
+          # whitespace-only one (<style id=""/> and two spaces, for a room
+          # without a description or objects) or an empty one (a <crtrStatus>
+          # batch with no players or exits line to lead) is dropped by the
+          # check below. In a string that carried a block, drop every empty or
+          # whitespace-only line the same way, including any outside the block.
+          line = line.gsub(/^[ \t]*(?:\r\n|\z)/, '') if room_block
 
           return nil if line.match?(/\A\s*\z/)
 

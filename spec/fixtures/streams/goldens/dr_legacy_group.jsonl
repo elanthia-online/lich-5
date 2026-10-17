@@ -1,0 +1,32 @@
+{"prompt":1,"changes":{"dr_creatures":[],"drroom.dead_npcs":[],"drroom.group_members":[],"drroom.npcs":[],"drroom.pcs":["Brenna","Corwin","Delphine"],"drroom.pcs_prone":[],"drroom.pcs_sitting":[],"drroom.room_objs":[],"drspells.active_spells":{},"gameobj.containers":{},"gameobj.inv":[],"gameobj.left_hand":null,"gameobj.loot":[],"gameobj.npcs":[],"gameobj.pcs":[{"id":null,"noun":"Brenna","name":"Brenna","status":"hiding"},{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":"hiding"},{"id":null,"noun":"Delphine","name":"Delphine","status":"hiding"}],"gameobj.right_hand":null,"gameobj.room_desc":[],"stripped":["Brenna roots around the area for a moment.","Brenna forages around the area."],"xmldata.dr_active_spells":{},"xmldata.indicator":{},"xmldata.injuries":{"abdomen":{"scar":0,"wound":0},"back":{"scar":0,"wound":0},"chest":{"scar":0,"wound":0},"head":{"scar":0,"wound":0},"leftArm":{"scar":0,"wound":0},"leftEye":{"scar":0,"wound":0},"leftFoot":{"scar":0,"wound":0},"leftHand":{"scar":0,"wound":0},"leftLeg":{"scar":0,"wound":0},"neck":{"scar":0,"wound":0},"nsys":{"scar":0,"wound":0},"rightArm":{"scar":0,"wound":0},"rightEye":{"scar":0,"wound":0},"rightFoot":{"scar":0,"wound":0},"rightHand":{"scar":0,"wound":0},"rightLeg":{"scar":0,"wound":0}},"xmldata.injury_mode":0,"xmldata.prepared_spell":"None","xmldata.room_count":0,"xmldata.room_description":"","xmldata.room_exits":[],"xmldata.room_exits_string":"","xmldata.room_id":0,"xmldata.room_name":"","xmldata.room_title":"","xmldata.room_window_disabled":false,"xmldata.show_room_id":false,"xmldata.stow_container_id":null,"xmldata.stream_features":[],"xmldata.vitals":{"health":0,"mana":0,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":2,"changes":{"drspells.active_spells":{"Regenerate":1000},"stripped":["Regenerate  (Indefinite)"],"xmldata.dr_active_spells":{"Regenerate":1000}}}
+{"prompt":3,"changes":{"gameobj.pcs":[{"id":null,"noun":"Brenna","name":"Brenna","status":null},{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":null},{"id":null,"noun":"Delphine","name":"Delphine","status":null}],"stripped":["Delphine reveals herself.","Delphine gestures.","The air around Delphine shimmers with a slight yellow flicker.  The scintillating light writhes and twists, abruptly coalescing into a translucent field before blinking out of sight."]}}
+{"prompt":4,"changes":{"stripped":["Regenerate  (Indefinite)"]}}
+{"prompt":5,"changes":{"stripped":["You feel fully attuned to the mana streams again."],"xmldata.vitals":{"health":0,"mana":100,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":6,"changes":{"stripped":["Brenna roots around the area for a moment.","Brenna forages around the area."]}}
+{"prompt":7,"changes":{"stripped":[],"xmldata.vitals":{"health":0,"mana":98,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":8,"changes":{"stripped":["Delphine raises her arm skyward, chanting.","You recognize the familiar mnemonics of the Gauge Flow spell."]}}
+{"prompt":9,"changes":{"gameobj.pcs":[{"id":null,"noun":"Brenna","name":"Brenna","status":"hiding"},{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":"hiding"},{"id":null,"noun":"Delphine","name":"Delphine","status":"hiding"}],"stripped":["You notice Delphine slip into a hiding place."]}}
+{"prompt":10,"changes":{"stripped":["You notice Delphine trying to slip in behind you."]}}
+{"prompt":11,"changes":{"stripped":["You feel fully attuned to the mana streams again."],"xmldata.vitals":{"health":0,"mana":100,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":12,"changes":{"drroom.group_members":["Delphine"],"stripped":["Members of your group:","  Delphine: Healthy.","  You (Leader): Healthy.","There are 2 members in your group."],"xmldata.indicator":{"IconJOINED":"n"}}}
+{"prompt":13,"changes":{"stripped":["Regenerate  (Indefinite)"]}}
+{"prompt":14,"changes":{"drroom.group_members":[],"stripped":["Members of your group:","  You (Leader): Healthy.","There is 1 member in your group."]}}
+{"prompt":15,"changes":{"stripped":[]}}
+{"prompt":16,"changes":{"stripped":["Brenna gets some blunt-tipped arrows with maroon stripes from inside his suede quiver."]}}
+{"prompt":17,"changes":{"stripped":["Brenna gets some crossbow bolts from inside his suede quiver."]}}
+{"prompt":18,"changes":{"drroom.pcs":["Corwin","Delphine"],"gameobj.pcs":[{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":"hiding"},{"id":null,"noun":"Delphine","name":"Delphine","status":"hiding"}],"stripped":["Brenna goes south."]}}
+{"prompt":19,"changes":{"stripped":[],"xmldata.vitals":{"health":0,"mana":98,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":20,"changes":{"stripped":["Regenerate  (Indefinite)"]}}
+{"prompt":21,"changes":{"gameobj.pcs":[{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":null},{"id":null,"noun":"Delphine","name":"Delphine","status":null}],"stripped":["Delphine reveals herself.","Delphine gestures."]}}
+{"prompt":22,"changes":{"stripped":["Delphine raises her arm skyward, chanting.","You recognize the familiar mnemonics of the Manifest Force spell."]}}
+{"prompt":23,"changes":{"stripped":["Regenerate  (Indefinite)"]}}
+{"prompt":24,"changes":{"stripped":[],"xmldata.vitals":{"health":0,"mana":97,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":25,"changes":{"stripped":["You continue to instruct your student on Scholarship.","Delphine listens, enraptured and enthralled by your teachings."]}}
+{"prompt":26,"changes":{"stripped":["Regenerate  (Indefinite)"]}}
+{"prompt":27,"changes":{"stripped":[],"xmldata.vitals":{"health":0,"mana":99,"stamina":0,"spirit":0,"concentration":0}}}
+{"prompt":28,"changes":{"drroom.pcs":["Brenna","Corwin","Delphine"],"gameobj.pcs":[{"id":null,"noun":"Brenna","name":"Brenna","status":null},{"id":null,"noun":"Corwin","name":"Universalist Corwin","status":null},{"id":null,"noun":"Delphine","name":"Delphine","status":null}],"stripped":["Brenna just arrived."]}}
+{"prompt":29,"changes":{"stripped":["Your body feels at full strength. (100%)","Your spirit feels full of life. (100%)","You have no significant injuries. "]}}
+{"prompt":30,"changes":{"stripped":["Brenna puts his arrows in his suede quiver."]}}
+{"prompt":31,"changes":{"stripped":["Brenna puts his bolts in his suede quiver."]}}
+{"prompt":32,"changes":{"stripped":["Brenna is already listening to you.  He needs to STOP LISTENING before you can teach him."]}}

@@ -55,6 +55,11 @@ RSpec.describe '--fe-version' do
       expect(parse("--fe-version=#{value}")[:fe_version]).to eq(value)
     end
 
+    it 'stores --keep-fe-string, the proxy handshake kill switch' do
+      expect(parse('--keep-fe-string', '--genie')[:keep_fe_string]).to be(true)
+      expect(parse('--genie')).not_to have_key(:keep_fe_string)
+    end
+
     it 'leaves fe_version nil when the flag is absent' do
       expect(parse('--saga', '--without-frontend')[:fe_version]).to be_nil
     end
@@ -126,8 +131,18 @@ RSpec.describe '--fe-version' do
       game.define_singleton_method(:sent) { @sent ||= [] }
       game.define_singleton_method(:_puts) { |str| sent << str }
       stub_const('Game', game)
-      $_CLIENTBUFFER_ = []
       ARGV.replace(['--without-frontend'])
+    end
+
+    # run_handshake appends to $_CLIENTBUFFER_. Swap in a fresh array, then
+    # restore the original object: spec_helper owns it when it is loaded, and
+    # this file can also run on its own, where the global starts out nil.
+    around do |example|
+      saved_clientbuffer = $_CLIENTBUFFER_
+      $_CLIENTBUFFER_ = []
+      example.run
+    ensure
+      $_CLIENTBUFFER_ = saved_clientbuffer
     end
 
     def run(argv_options)
@@ -141,7 +156,7 @@ RSpec.describe '--fe-version' do
     it 'sends the version-substituted client string when --fe-version is set' do
       $frontend = 'wrayth'
       run(fe_version: 'genie-5.1')
-      expected = '/FE:WRAYTH /VERSION:genie-5.1 /P:WIN_UNKNOWN /XML'
+      expected = '/FE:WRAYTH /VERSION:genie-5.1 /P:SAGA /XML'
       expect(Game.sent).to eq(['KEY', expected, '<c>', '<c>'])
       expect($_CLIENTBUFFER_).to eq([expected, "<c>\r\n", "<c>\r\n"])
     end
@@ -149,7 +164,7 @@ RSpec.describe '--fe-version' do
     it 'sends the default client string byte-for-byte when --fe-version is absent' do
       $frontend = 'wrayth'
       run({})
-      expected = '/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'
+      expected = '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML'
       expect(Game.sent[1].bytes).to eq(expected.bytes)
       expect($_CLIENTBUFFER_.first.bytes).to eq(expected.bytes)
     end

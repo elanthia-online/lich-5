@@ -798,5 +798,25 @@ RSpec.describe Lich::Gemstone::Creature, 'facade delegation and cleanup_old (F4)
       expect(stats[:auto_register]).to be true
       expect(stats).to have_key(:templates)
     end
+
+    # Every facade method that forwards to CreatureInstance must forward to a
+    # method that exists. A delegate to a removed method only fails when a
+    # script calls it, so read each facade method's own source and check the
+    # target is really there. The shared methods come from
+    # Lich::Common::CreatureFacade and forward through instance_class.
+    it 'forwards only to CreatureInstance class methods that exist' do
+      delegations = described_class.singleton_methods.flat_map do |name|
+        file, line = described_class.method(name).source_location
+        lines = File.readlines(file)[(line - 1)..]
+        indent = lines.first[/\A\s*/]
+        body = lines.take_while.with_index { |l, i| i.zero? || !l.start_with?("#{indent}end") }
+        body.join.scan(/\b(?:CreatureInstance|instance_class)\.(\w+[?!]?)/).flatten.map { |target| [name, target] }
+      end
+      dangling = delegations.reject { |_name, target| instance_class.respond_to?(target) }
+                            .map { |name, target| "Creature.#{name} -> CreatureInstance.#{target}" }
+
+      expect(delegations.map(&:last)).to include('targets', 'cleanup_old', 'forget')
+      expect(dangling).to be_empty
+    end
   end
 end

@@ -18,6 +18,9 @@ require 'ox'
 require 'dragonrealms/creature'
 require 'common/gameobj'
 require 'common/xmlparser'
+# GameLoader loads the DragonRealms parser delta in production; its
+# apply_crtr_status is what applies <crtrStatus> id-first.
+require 'dragonrealms/xml_delta'
 
 # The room-objs component followed by the standalone <crtrStatus> batch, verbatim
 # shape from the live stream (five jeol moradu, the first immobile, the last
@@ -37,10 +40,12 @@ DR_ASSESS = <<~XML.delete("\n")
   <prompt time="1785273425">R&gt;</prompt>
 XML
 
-# Future-proofing fixture: DragonRealms room-objs using GemStone's inline
-# <a exist noun> creature shape (does not occur today), plus the crtrStatus batch.
-DR_ROOM_WITH_A_TAGS = <<~XML.delete("\n")
-  <component id='room objs'>You also see <pushBold/><a exist="4001" noun="moradu">a jeol moradu</a><popBold/>, <pushBold/><a exist="4002" noun="kobold">a kobold</a><popBold/> and some junk.</component>
+# Saga-identity DR stream (Frontend::CLIENT_STRING since #1700), verbatim shape
+# with ids kept: creatures are linked GemStone-style, but the article sits
+# outside the link inside the bold (currently sent doubled), and the crtrStatus
+# batch follows the component (GemStone sends it before each link).
+DR_SAGA_ROOM_OBJS = <<~XML.delete("\n")
+  <component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="4001" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), a <a exist="31028" noun="register">deed register</a>, <pushBold/><pushBold/>an <a exist="4002" noun="kobold">old kobold</a><popBold/><popBold/> and some junk.</component>
   <crtrStatus exist="4001" hostile="1" immobile="1"/><crtrStatus exist="4002" hostile="1"/><prompt time="1785273999">R&gt;</prompt>
 XML
 
@@ -54,8 +59,9 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
     allow(XMLData).to receive(:current_target_ids).and_return([])
     # The parser refers to GameObj unqualified, which resolves to
     # Lich::Common::GameObj (its lexical scope), so it must be stubbed there.
-    # DragonRealms room-objs carry no <a> tag, so GameObj is only touched for
-    # clear_* housekeeping and the status-annotation path (npcs&.last&.status=).
+    # Legacy-dialect DR room-objs carry no <a> tag, so GameObj is only touched
+    # for clear_* housekeeping and the status-annotation path; the Saga-dialect
+    # examples' new_npc/new_loot calls land on these stubs too.
     %i[clear_loot clear_npcs clear_pcs clear_room_desc new_npc new_loot].each do |m|
       allow(Lich::Common::GameObj).to receive(m)
     end
@@ -215,14 +221,69 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
     end
   end
 
-  describe 'future-proofing: GemStone-style <a exist noun> room-objs in DR' do
-    # If DragonRealms ever emits creatures with GemStone's inline <a exist noun>
-    # tag (the shape we already handle for GS), the DR path must register id-first
-    # from the inline name/noun -- and must not touch the unqualified Gemstone
-    # Creature (not loaded in DR). The stream-order capture branch is skipped when
-    # an <a> is present, so it degrades cleanly. Fixture: DR_ROOM_WITH_A_TAGS.
-    it 'registers id + name + noun + flags from the inline tag without raising' do
-      expect { feed(DR_ROOM_WITH_A_TAGS) }.not_to raise_error
+  # The Saga-identity assess stream wraps each look target's name in a link
+  # inside the <d cmd='look #id'> tag (verbatim shape, names pseudonymised):
+  #   <d cmd='look #ID'><pushBold/>A <a exist="ID" noun="moradu">jeol moradu</a><popBold/></d> (1: ...) is facing you ...
+  # The link's exist always equals the look id, and its noun= is the server's
+  # noun, so the assess backfill keeps that noun instead of re-deriving the
+  # last word of the name.
+  describe 'Saga dialect: the linked assess stream' do
+    def saga_assess(id, noun, text, tail = 'is facing you at melee range.')
+      %(<pushStream id="assess"/><d cmd='look ##{id}'><pushBold/>A <a exist="#{id}" noun="#{noun}">#{text}</a><popBold/></d> ) +
+        %((1: solidly balanced) #{tail}  | <d cmd='face ##{id}'>F</d><popStream/>)
+    end
+
+    it 'keeps the link noun when it is not the last word of the name (room objs first)' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>' \
+           '<crtrStatus exist="4003" hostile="1"/><prompt time="1785273999">R&gt;</prompt>')
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+
+      c = Lich::DragonRealms::Creature[4003]
+      expect(c.name).to eq('a grizzled hound with a notched ear')
+      expect(c.noun).to eq('hound')
+      expect(c.assess_number).to eq(1)
+    end
+
+    it 'takes the link noun for a creature first seen in assess' do
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+    end
+
+    it 'trims a padded link noun (noun=" moth")' do
+      feed(saga_assess(4004, ' moth', 'void-black umbral moth'))
+
+      expect(Lich::DragonRealms::Creature[4004].noun).to eq('moth')
+    end
+
+    # A PC subject's target link names a creature; the noun belongs to the
+    # subject (looked up by its exist id), never to whichever link came first
+    # or last on the line.
+    it 'takes the noun from the subject\'s own link, not the target\'s' do
+      feed(%(<pushStream id="assess"/><d cmd='look #4003'><pushBold/>A <a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/></d> ) +
+           %((2: solidly balanced) is behind <d cmd='look #4007'><pushBold/>a <a exist="4007" noun="moradu">jeol moradu</a><popBold/></d> (1) at melee range.  | ) +
+           %(<d cmd='face #4003'>F</d> | <d cmd='face #4007'>F</d><popStream/>))
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+      expect(Lich::DragonRealms::Creature[4007]).to be_nil
+    end
+
+    it 'does not carry a previous line\'s link noun onto a link-less (legacy) line' do
+      feed(saga_assess(4003, 'hound', 'grizzled hound with a notched ear'))
+      feed(%(<pushStream id="assess"/><d cmd='look #4003'>A grizzled hound with a notched ear</d> ) +
+           %((1: solidly balanced) is facing you at melee range.  | <d cmd='face #4003'>F</d><popStream/>))
+
+      # Legacy shape: no link, so the noun is derived from the name as before.
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('ear')
+    end
+  end
+
+  describe 'Saga dialect: linked room-objs creatures' do
+    # No earlier linked line primes the session here, so this also covers the
+    # very first linked room-objs line of a session.
+    it 'registers id + noun + flags and keeps the article in the name, as the legacy stream does' do
+      expect { feed(DR_SAGA_ROOM_OBJS) }.not_to raise_error
 
       c1 = Lich::DragonRealms::Creature[4001]
       expect(c1.name).to eq('a jeol moradu')
@@ -230,14 +291,177 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(c1.has_status?('immobilized')).to be true
 
       c2 = Lich::DragonRealms::Creature[4002]
-      expect(c2.name).to eq('a kobold')
+      expect(c2.name).to eq('an old kobold')
+      expect(c2.noun).to eq('kobold')
       expect(c2.crtr_flag?(:hostile)).to be true
     end
 
+    it 'never renames a creature to the bare article at the prompt' do
+      feed(DR_SAGA_ROOM_OBJS)
+
+      names = Lich::DragonRealms::Creature.all.map(&:name)
+      expect(names).not_to include('a ', 'an ')
+      expect(Lich::DragonRealms::Creature.all.map(&:noun)).not_to include('a', 'an')
+    end
+
+    it 'keeps the article-prefixed names on a later refresh, once the session is known to be linked' do
+      # The first feed is the session's first linked line (decided by shape);
+      # the second runs with stream_feature?(:links) already set.
+      feed(DR_SAGA_ROOM_OBJS)
+      feed(DR_SAGA_ROOM_OBJS)
+
+      expect(Lich::DragonRealms::Creature[4001].name).to eq('a jeol moradu')
+      expect(Lich::DragonRealms::Creature[4002].name).to eq('an old kobold')
+      expect(Lich::DragonRealms::Creature[4002].noun).to eq('kobold')
+    end
+
     it 'ties both creatures into the room roster' do
-      feed(DR_ROOM_WITH_A_TAGS)
+      feed(DR_SAGA_ROOM_OBJS)
 
       expect(Lich::DragonRealms::Creature.targets.map(&:id)).to contain_exactly(4001, 4002)
+    end
+
+    # The link's noun= is the server's noun and need not be the last word of
+    # the link text: the live stream sends long descriptive names such as
+    # "a <a noun=\"panther\">sleek golden panther with enigmatic violet eyes</a>".
+    it 'keeps the link noun when it is not the last word of the name, across a refresh' do
+      line = "<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>' \
+             '<crtrStatus exist="4003" hostile="1"/><prompt time="1785273999">R&gt;</prompt>'
+      feed(line)
+      feed(line)
+
+      c = Lich::DragonRealms::Creature[4003]
+      expect(c.name).to eq('a grizzled hound with a notched ear')
+      expect(c.noun).to eq('hound')
+    end
+
+    it 'takes the link noun for a creature crtrStatus registered first, with no noun' do
+      feed('<crtrStatus exist="4003" hostile="1"/><prompt time="1785273998">R&gt;</prompt>')
+      expect(Lich::DragonRealms::Creature[4003].noun).to be_nil
+
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>')
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+    end
+
+    # The live stream occasionally pads the attribute (noun=" moth").
+    it 'trims whitespace around the link noun' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4004" noun=" moth">void-black umbral moth</a><popBold/><popBold/>.</component>')
+
+      expect(Lich::DragonRealms::Creature[4004].noun).to eq('moth')
+    end
+
+    it 'keeps a "the" article (named NPCs: "the Sentinel X")' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>the " \
+           '<a exist="4005" noun="Varnel">Sentinel Varnel</a><popBold/><popBold/>, a ' \
+           '<a exist="-28812" noun="ladder">ladder to the top of the wall</a>.</component>')
+
+      c = Lich::DragonRealms::Creature[4005]
+      expect(c.name).to eq('the Sentinel Varnel')
+      expect(c.noun).to eq('Varnel')
+    end
+
+    it 'names an article-less linked NPC without carrying the previous room\'s article' do
+      feed(DR_SAGA_ROOM_OBJS)
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>" \
+           '<a exist="4006" noun="Orlan">Mastersmith Orlan</a><popBold/><popBold/> and a ' \
+           '<a exist="31029" noun="sign">large sign</a>.</component>')
+
+      c = Lich::DragonRealms::Creature[4006]
+      expect(c.name).to eq('Mastersmith Orlan')
+      expect(c.noun).to eq('Orlan')
+    end
+
+    # The stream currently doubles the bold; a single bold must work the same.
+    it 'handles the single-bold form of the same line' do
+      feed(DR_SAGA_ROOM_OBJS.gsub('<pushBold/><pushBold/>', '<pushBold/>').gsub('<popBold/><popBold/>', '<popBold/>'))
+
+      expect(Lich::DragonRealms::Creature[4001].name).to eq('a jeol moradu')
+      expect(Lich::DragonRealms::Creature[4002].name).to eq('an old kobold')
+      expect(Lich::DragonRealms::Creature.all.map(&:name)).not_to include('a ', 'an ')
+    end
+
+    context 'GameObj npc status (real GameObj)' do
+      before do
+        %i[clear_npcs clear_loot new_npc new_loot npcs].each do |m|
+          allow(Lich::Common::GameObj).to receive(m).and_call_original
+        end
+        Lich::Common::GameObj.clear_npcs
+        Lich::Common::GameObj.clear_loot
+      end
+
+      after do
+        Lich::Common::GameObj.clear_npcs
+        Lich::Common::GameObj.clear_loot
+      end
+
+      def npc_status(id)
+        Lich::Common::GameObj.npcs.find { |npc| npc.id == id }&.status
+      end
+
+      # DR words a corpse two ways in room objs: "(dead)" and "which appears dead".
+      it 'marks a linked creature dead from either DR wording' do
+        feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4007" noun="cougar">cougar</a><popBold/><popBold/> which appears dead, ' \
+             '<pushBold/><pushBold/>a <a exist="4008" noun="cougar">cougar</a><popBold/><popBold/> (dead) and ' \
+             '<pushBold/><pushBold/>a <a exist="4009" noun="cougar">cougar</a><popBold/><popBold/>.</component>')
+
+        expect(npc_status('4007')).to eq('dead')
+        expect(npc_status('4008')).to eq('dead')
+        expect(npc_status('4009')).to be_nil
+      end
+
+      it 'stops the status at "and" when the room-objs tail follows in the same run' do
+        feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4007" noun="cougar">cougar</a><popBold/><popBold/> which appears dead and some junk.</component>')
+
+        expect(npc_status('4007')).to eq('dead')
+      end
+
+      # spec/fixtures/creature/dr_saga_room_objs_shapes.xml holds a room objs line
+      # captured verbatim from a 2026-10-16 Saga session (see
+      # spec/fixtures/README.md): one corpse "which appears dead", caged
+      # creatures "that is caught in ...", plain ones, and the " and some junk."
+      # tail after the last creature's own run.
+      it 'reads every status on a captured Saga room objs line' do
+        path = File.expand_path('../../fixtures/creature/dr_saga_room_objs_shapes.xml', __dir__)
+        feed(File.read(path).lines.grep(/which appears dead/).first.chomp)
+
+        expect(npc_status('197119614')).to eq('dead')
+        expect(npc_status('197119654')).to eq('caught in a cage of swirling darkness')
+        expect(npc_status('197115095')).to be_nil
+        expect(npc_status('197122645')).to be_nil
+        expect(Lich::Common::GameObj.npcs.size).to eq(14)
+      end
+
+      # The fixture's second line is a room objs line captured verbatim from a
+      # 2026-10-17 Saga session (see spec/fixtures/README.md) whose first moth
+      # link is padded, noun=" moth", while its four siblings send noun="moth".
+      # The DR Creature roster gets the trimmed noun, as for the unpadded
+      # siblings. GameObj.new_npc is handed the attribute as sent; whether
+      # GameObj trims it is #1730's change, so this only checks that the
+      # GameObj npc's noun is "moth" once stripped, which holds either way.
+      it 'trims the padded noun=" moth" for the DR roster; the GameObj npc noun strips to moth' do
+        path = File.expand_path('../../fixtures/creature/dr_saga_room_objs_shapes.xml', __dir__)
+        line = File.read(path).lines.grep(/noun=" moth"/).first.chomp
+        expect(line).to include('<a exist="201844186" noun=" moth">void-black umbral moth</a>')
+        feed(line)
+
+        padded = Lich::DragonRealms::Creature[201844186]
+        expect(padded.name).to eq('a void-black umbral moth')
+        expect(padded.noun).to eq('moth')
+        expect(Lich::DragonRealms::Creature[201782502].noun).to eq('moth')
+
+        npcs = Lich::Common::GameObj.npcs
+        expect(npcs.map(&:id)).to eq(%w[201844186 201782502 201786219 201799029 201834532])
+        expect(npcs.find { |npc| npc.id == '201844186' }.noun.strip).to eq('moth')
+        expect(npcs.find { |npc| npc.id == '201782502' }.noun).to eq('moth')
+        expect(npc_status('201799029')).to eq('immobile')
+        expect(npc_status('201834532')).to be_nil
+      end
     end
   end
 end

@@ -845,6 +845,15 @@ reconnect_if_wanted = proc {
           client_string = $_CLIENT_.gets
           Game._puts(client_string)
           client_string = $_CLIENT_.gets
+          # Ask for the same stream every other front end gets: the front end's
+          # own /FE: handshake is replaced with Lich's (Frontend.proxy_handshake)
+          # unless --keep-fe-string or Lich.keep_fe_string says to forward it.
+          # Mudlet's handshake was already sent above.
+          unless launcher_cmd.to_s =~ /mudlet/
+            client_string = Frontend.proxy_handshake(client_string,
+                                                     version: @argv_options[:fe_version],
+                                                     keep: @argv_options[:keep_fe_string] || Lich.keep_fe_string)
+          end
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
         end
@@ -860,6 +869,10 @@ reconnect_if_wanted = proc {
 
       begin
         while (client_string = $_CLIENT_.gets)
+          # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles
+          # itself (docs/frontend-capability-declaration.md). Never sent to the game.
+          next if Lich::Common::ClientCapabilities.declare($_CLIENT_, client_string)
+
           if Frontend.supports_gsl?
             client_string = "#{$cmd_prefix}#{client_string}"
           elsif Frontend.client.eql?('frostbite')

@@ -256,12 +256,12 @@ RSpec.describe Lich::Common::Frontend do
       expect(frontend::CLIENT_STRING).to include('/FE:WRAYTH')
     end
 
-    it 'includes version 1.0.1.28' do
-      expect(frontend::CLIENT_STRING).to include('/VERSION:1.0.1.28')
+    it 'includes version saga-0.10.4' do
+      expect(frontend::CLIENT_STRING).to include('/VERSION:saga-0.10.4')
     end
 
-    it 'uses WIN_UNKNOWN as platform' do
-      expect(frontend::CLIENT_STRING).to include('/P:WIN_UNKNOWN')
+    it 'uses SAGA as platform' do
+      expect(frontend::CLIENT_STRING).to include('/P:SAGA')
     end
 
     it 'requests XML protocol' do
@@ -269,8 +269,8 @@ RSpec.describe Lich::Common::Frontend do
     end
 
     it 'does not leak RUBY_PLATFORM' do
-      # Wrayth masquerades as a Windows client regardless of actual platform
-      expect(frontend::CLIENT_STRING).not_to include(RUBY_PLATFORM) unless RUBY_PLATFORM == 'WIN_UNKNOWN'
+      # The platform token is fixed (/P:SAGA) regardless of actual platform
+      expect(frontend::CLIENT_STRING).not_to include(RUBY_PLATFORM)
     end
   end
 
@@ -660,7 +660,7 @@ RSpec.describe Lich::Common::Frontend do
   # --- client_string ------------------------------------------
 
   describe '.client_string' do
-    let(:default_string) { '/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML' }
+    let(:default_string) { '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML' }
 
     it 'is byte-identical to CLIENT_STRING for a frontend without an override' do
       expect(frontend.client_string(frontend: 'wrayth')).to eq(frontend::CLIENT_STRING)
@@ -673,7 +673,7 @@ RSpec.describe Lich::Common::Frontend do
     end
 
     it 'replaces only the /VERSION: value when a version is given' do
-      expect(frontend.client_string('genie-5.1', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:genie-5.1 /P:WIN_UNKNOWN /XML')
+      expect(frontend.client_string('genie-5.1', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:genie-5.1 /P:SAGA /XML')
     end
 
     it 'identifies Saga with /P:SAGA and saga-unknown when no version is given' do
@@ -697,7 +697,109 @@ RSpec.describe Lich::Common::Frontend do
     end
 
     it 'treats the version literally (no regex backreference expansion)' do
-      expect(frontend.client_string('1\\0', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:1\\0 /P:WIN_UNKNOWN /XML')
+      expect(frontend.client_string('1\\0', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:1\\0 /P:SAGA /XML')
+    end
+  end
+
+  # --- proxy_handshake ----------------------------------------
+
+  describe '.proxy_handshake' do
+    let(:lich_string) { '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML' }
+
+    # Each front end's handshake line exactly as it reaches Lich's proxy:
+    # Genie4 Core/Game.cs GameSocket_EventConnected (no slash, LF),
+    # Frostbite gui/tcpclient.cpp connectToLichListener + writeCommand (<c>, CRLF),
+    # Warlock3 wrayth/.../WraythClient.kt connect (LF).
+    {
+      'Genie4'    => ["FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n", "\n", 'genie'],
+      'Frostbite' => ["<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", "\r\n", nil, '<c>'],
+      'Warlock3'  => ["/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n", "\n", nil]
+    }.each do |name, (line, eol, fe, prefix)|
+      it "replaces #{name}'s handshake with Lich's, keeping its prefix and line ending" do
+        expect(frontend.proxy_handshake(line, frontend: fe)).to eq("#{prefix}#{lich_string}#{eol}")
+      end
+    end
+
+    it 'puts the --fe-version value into the replacement' do
+      expect(frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n", version: 'genie-4.5', frontend: 'genie'))
+        .to eq("/FE:WRAYTH /VERSION:genie-4.5 /P:SAGA /XML\n")
+    end
+
+    it 'adds no line ending when the front end sent none' do
+      expect(frontend.proxy_handshake('FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML', frontend: 'genie')).to eq(lich_string)
+    end
+
+    context 'with $frontend global (default argument)' do
+      around do |example|
+        original = $frontend
+        example.run
+      ensure
+        $frontend = original
+      end
+
+      it 'defaults the front end to the current client' do
+        $frontend = 'saga'
+        expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n"))
+          .to eq("/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML\n")
+      end
+
+      it 'leaves $frontend alone, so capability lookups still answer for the real front end' do
+        $frontend = 'genie'
+        expect(frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n")).to eq("#{lich_string}\n")
+        expect($frontend).to eq('genie')
+        expect(frontend.supports_game_links?).to be(false)
+      end
+    end
+
+    it "uses a front end's registry :client_string" do
+      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n", frontend: 'saga'))
+        .to eq("/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML\n")
+    end
+
+    # Saga in Lich mode sends its own key and handshake (saga-archive
+    # src/main/index.js: `/FE:${name} /VERSION:saga-${version} /P:SAGA /XML\r\n`).
+    it "forwards Saga's own handshake so its real /VERSION: reaches the game" do
+      saga = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"
+      expect(frontend.proxy_handshake(saga, frontend: 'saga')).to equal(saga)
+      expect(frontend.proxy_handshake(saga, version: 'saga-9', frontend: 'saga')).to equal(saga)
+      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("/FE:WRAYTH /VERSION:x /p:saga /XML\n")
+    end
+
+    it 'forwards the front end handshake unchanged when keep is set, and logs it' do
+      line = "FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n"
+      allow(Lich).to receive(:log)
+      expect(frontend.proxy_handshake(line, keep: true, frontend: 'genie')).to equal(line)
+      expect(Lich).to have_received(:log).with("info: forwarding the front end's client string: FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML")
+    end
+
+    it 'logs the replacement without the line ending' do
+      allow(Lich).to receive(:log)
+      frontend.proxy_handshake("<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", frontend: nil)
+      expect(Lich).to have_received(:log).with(
+        "info: replacing the front end's client string <c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML with #{lich_string}"
+      )
+    end
+
+    {
+      'nil'                         => nil,
+      'a login key'                 => "0123456789abcdef0123456789abcdef\n",
+      'a <c>-prefixed key'          => "<c>0123456789abcdef\r\n",
+      'a ready line'                => "<c>\r\n",
+      'an empty line'               => "\n",
+      'a handshake without /XML'    => "/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN\n",
+      'an /XML that is not a token' => "/FE:WRAYTH /VERSION:1 /P:WIN_UNKNOWN /XMLX\n",
+      'FE: after other text'        => "say FE:WRAYTH /VERSION:1 /XML\n",
+      'FE: after a space'           => " /FE:WRAYTH /VERSION:1 /XML\n",
+      'a doubled <c> prefix'        => "<c><c>/FE:WRAYTH /VERSION:1 /XML\n",
+      "Profanity's PID line"        => "SET_FRONTEND_PID 4242\r\n",
+      'a bare CR ending'            => "/FE:WRAYTH /VERSION:1 /XML\r",
+      'two lines'                   => "/FE:WRAYTH /VERSION:1 /XML\nlook\n"
+    }.each do |label, line|
+      it "forwards #{label} unchanged" do
+        allow(Lich).to receive(:log)
+        expect(frontend.proxy_handshake(line, frontend: 'genie')).to equal(line)
+        expect(Lich).not_to have_received(:log)
+      end
     end
   end
 
@@ -833,6 +935,30 @@ RSpec.describe Lich::Common::Frontend do
 
       expect(refreshed).not_to equal(cached)
       expect(refreshed).to eq(cached)
+    end
+  end
+
+  describe '.supports_room_element?' do
+    it 'is true only for Saga, the front end that renders the inline <room> block' do
+      expect(frontend.supports_room_element?('saga')).to be true
+      %w[wrayth stormfront genie profanity frostbite wizard avalon suks unknown].each do |fe|
+        expect(frontend.supports_room_element?(fe)).to be(false), fe
+      end
+    end
+  end
+
+  describe '.supports_game_links? / .supports_double_bold?' do
+    it 'is true only for Saga, the front end that handles DragonRealms links and doubled bold' do
+      expect(frontend.supports_game_links?('saga')).to be true
+      expect(frontend.supports_double_bold?('saga')).to be true
+      %w[wrayth stormfront genie profanity frostbite wizard avalon suks unknown].each do |fe|
+        expect(frontend.supports_game_links?(fe)).to be(false), fe
+        expect(frontend.supports_double_bold?(fe)).to be(false), fe
+      end
+    end
+
+    it 'lets a custom front end declare them' do
+      expect(frontend.capability_vocabulary).to include(:game_links, :double_bold)
     end
   end
 

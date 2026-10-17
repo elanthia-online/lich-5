@@ -1446,6 +1446,9 @@ def reget(*lines, core: false)
     history = $_SERVERBUFFER_.dup.join("\n")
   end
   unless script&.want_downstream_xml || core.eql?(true)
+    # Saga-identity <room> blocks get the legacy layout first, as in strip_xml,
+    # so reget returns the same room lines in both stream dialects.
+    history = Lich::Common::RoomBlock.legacy_shape(history)
     history.gsub!(/<pushStream id=["'](?:spellfront|inv|bounty|society)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     history.gsub!(/<stream id="Spells">.*?<\/stream>/m, '')
     history.gsub!(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
@@ -2020,6 +2023,7 @@ $link_highlight_end = ''
 $speech_highlight_start = ''
 $speech_highlight_end = ''
 
+require File.join(LIB_DIR, 'common', 'room_block.rb')
 require File.join(LIB_DIR, 'common', 'markup.rb')
 
 # Frontend markup translation lives in Lich::Common::Markup. These six names
@@ -2174,17 +2178,29 @@ rescue StandardError => e
   Lich.log "error: detachable_client_send_player_id: #{e}\n\t#{e.backtrace.first}"
 end
 
+# Whether the attaching detachable client is the named frontend: the literal
+# --NAME flag, or, in --without-frontend mode, the frontend main.rb resolved
+# from any form (e.g. --frontend=saga) via resolve_headless_frontend.
+def detachable_client_frontend?(name)
+  return true if ARGV.any? { |argument| argument.casecmp?("--#{name}") }
+
+  ARGV.include?('--without-frontend') && Frontend.client == name
+end
+
 def handle_detachable_client(client)
-  unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
+  unless detachable_client_frontend?('genie') || detachable_client_frontend?('saga')
     Thread.new { detachable_client_send_init(client) }
   end
-  Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
+  Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
 
   while (client_string = client.gets)
     if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
       Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
       next
     end
+    # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles itself
+    # (docs/frontend-capability-declaration.md). Never sent to the game.
+    next if Lich::Common::ClientCapabilities.declare(client, client_string)
 
     # Detachable exits run script shutdown inline, so the watchdog must be armed
     # before that potentially blocking path. Route through the shared dispatch so

@@ -1,0 +1,46 @@
+You wander north.
+<nav rm='230008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</component>
+<component id='room objs'></component>
+<component id='room players'>Also here: Exsanguinator Brenna, Death's Messenger Corwin, Delphine and Druid Edric.</component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Bosque Deriel, Hermit's Shacks] (230008)
+<style id=""/><preset id='roomDesc'>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</preset>  
+Also here: Exsanguinator Brenna, Death's Messenger Corwin, Delphine and Druid Edric.
+Obvious paths: <d>north</d>, <d>south</d>.
+<compass><dir value="n"/><dir value="s"/></compass><component id='room players'>Also here: Exsanguinator Brenna, Death's Messenger Corwin, Delphine and Druid Edric.</component>
+<prompt time="1791333493">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Clear Vision  (6 roisaen)
+Shadowling  (82 roisaen)
+Aura Sight  (23 roisaen)
+<popStream/><prompt time="1791333493">&gt;</prompt>
+You wander south.
+<nav rm='230007'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Burial Ground] (230007)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Burial Ground] (230007)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)
+<style id=""/><preset id='roomDesc'>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</preset>  
+Obvious paths: <d>north</d>, <d>southeast</d>.
+<compass><dir value="n"/><dir value="se"/></compass><component id='room players'></component>
+<prompt time="1791333494">&gt;</prompt>
+<spell exist='spell'>Locate</spell><castTime value='1791333517'/>
+You raise your palms skyward, chanting the equation of the Locate spell.
+<spell>None</spell>You gesture.
+<resource picture="0"/><style id="roomName" />[Bosque Deriel, Hermit's Shacks] (230008)
+<style id=""/><preset id='roomDesc'>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</preset>  
+Also here: Exsanguinator Brenna, Death's Messenger Corwin, Delphine and Druid Edric.
+Obvious paths: <d>north</d>, <d>south</d>.
+<compass><dir value="n"/><dir value="s"/></compass><pushStream id="percWindow"/>Clear Vision  (6 roisaen)
+Shadowling  (82 roisaen)
+Aura Sight  (22 roisaen)
+<popStream/><castTime value='1791333517'/>
+<prompt time="1791333517">&gt;</prompt>

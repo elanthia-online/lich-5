@@ -1,0 +1,109 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+Brenna roots around the area for a moment.
+Brenna forages around the area.
+<component id='room objs'></component>
+<component id='room players'>Also here: Brenna, Universalist Corwin and Delphine (hiding).</component>
+<prompt time="1791327426">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327426">&gt;</prompt>
+Delphine reveals herself.
+Delphine gestures.
+The air around Delphine shimmers with a slight yellow flicker.  The scintillating light writhes and twists, abruptly coalescing into a translucent field before blinking out of sight.
+<component id='room players'>Also here: Brenna, Universalist Corwin and Delphine.</component>
+<prompt time="1791327436">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327436">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1791327436">&gt;</prompt>
+Brenna roots around the area for a moment.
+Brenna forages around the area.
+<component id='room objs'></component>
+<prompt time="1791327438">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1791327438">&gt;</prompt>
+Delphine raises her arm skyward, chanting.
+You recognize the familiar mnemonics of the Gauge Flow spell.
+<prompt time="1791327439">&gt;</prompt>
+You notice Delphine slip into a hiding place.
+<component id='room players'>Also here: Brenna, Universalist Corwin and Delphine (hiding).</component>
+<prompt time="1791327440">&gt;</prompt>
+You notice Delphine trying to slip in behind you.
+<prompt time="1791327442">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1791327442">&gt;</prompt>
+<indicator id="IconJOINED" visible="n"/>
+<clearStream id='group'/>
+<pushStream id="group"/>Members of your group:
+<popStream/><pushStream id="group"/>  Delphine: Healthy.
+<popStream/><pushStream id="group"/>  You (Leader): Healthy.
+<popStream/><pushStream id="group"/>There are 2 members in your group.
+<popStream/><prompt time="1791327443">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327446">&gt;</prompt>
+<indicator id="IconJOINED" visible="n"/>
+<clearStream id='group'/>
+<pushStream id="group"/>Members of your group:
+<popStream/><pushStream id="group"/>  You (Leader): Healthy.
+<popStream/><pushStream id="group"/>There is 1 member in your group.
+<popStream/><prompt time="1791327448">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1791327448">&gt;</prompt>
+Brenna gets some blunt-tipped arrows with maroon stripes from inside his suede quiver.
+<prompt time="1791327451">&gt;</prompt>
+Brenna gets some crossbow bolts from inside his suede quiver.
+<prompt time="1791327451">&gt;</prompt>
+Brenna goes south.
+<component id='room players'>Also here: Universalist Corwin and Delphine (hiding).</component>
+<prompt time="1791327452">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1791327453">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327456">&gt;</prompt>
+Delphine reveals herself.
+Delphine gestures.
+<component id='room players'>Also here: Universalist Corwin and Delphine.</component>
+<prompt time="1791327459">&gt;</prompt>
+Delphine raises her arm skyward, chanting.
+You recognize the familiar mnemonics of the Manifest Force spell.
+<prompt time="1791327462">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327466">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1791327468">&gt;</prompt>
+You continue to instruct your student on Scholarship.
+Delphine listens, enraptured and enthralled by your teachings.
+<prompt time="1791327473">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Regenerate  (Indefinite)
+<popStream/><prompt time="1791327476">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='99' text='mana 99%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1791327476">&gt;</prompt>
+Brenna just arrived.
+<component id='room players'>Also here: Brenna, Universalist Corwin and Delphine.</component>
+<prompt time="1791327479">&gt;</prompt>
+<output class="mono"/>
+Your body feels at full strength. (100%)
+Your spirit feels full of life. (100%)
+You have no significant injuries. 
+
+<output class=""/>
+<prompt time="1791327480">&gt;</prompt>
+Brenna puts his arrows in his suede quiver.
+<prompt time="1791327480">&gt;</prompt>
+Brenna puts his bolts in his suede quiver.
+<prompt time="1791327480">&gt;</prompt>
+Brenna is already listening to you.  He needs to STOP LISTENING before you can teach him.
+<prompt time="1791327480">&gt;</prompt>
