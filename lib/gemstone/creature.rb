@@ -3,6 +3,7 @@
 require 'singleton'
 require 'ostruct'
 require_relative '../common/creature/creature_base'
+require_relative '../common/creature/creature_facade'
 
 module Lich
   module Gemstone
@@ -710,49 +711,18 @@ module Lich
 
     # Public Creature API for GemStone runtime creature tracking.
     #
-    # A thin facade: every call delegates to {CreatureInstance}, which mixes in
-    # the shared id-keyed registry, room roster and `targets`/`in_room` query
-    # methods from {Lich::Common::CreatureBase}.
+    # A thin facade: the surface shared with `Lich::DragonRealms::Creature`
+    # comes from {Lich::Common::CreatureFacade}, delegating to {CreatureInstance},
+    # which mixes in the shared id-keyed registry, room roster and
+    # `targets`/`in_room` query methods from {Lich::Common::CreatureBase}.
+    # GemStone adds recycled-id handling on register and template counts in
+    # stats.
     module Creature
-      # Toggles live echo of status, flag, and registration changes.
-      #
-      # @param level [Boolean, Symbol] false disables debug output; true or
-      #   `:changes` reports changes only; `:all` reports every <crtrStatus>
-      #   flag; `:active` reports only active <crtrStatus> flags.
-      # @return [Boolean, Symbol] the configured debug value.
-      def self.debug_on(level = :changes)
-        $creature_debug = level
-      end
+      extend Lich::Common::CreatureFacade
 
-      # Lookup creature instance by ID
-      def self.[](id)
-        CreatureInstance[id]
-      end
-
-      # Returns attackable hostile creatures currently in the room, including
-      # once-hostile creatures now `sympathetic` (Sympathy 1120). Pass
-      # `:not_sympathetic` to exclude those.
-      #
-      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
-      # @return [Array<CreatureInstance>]
-      def self.targets(*filters)
-        CreatureInstance.targets(*filters)
-      end
-
-      # Returns all tracked creatures currently in the room.
-      #
-      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
-      # @return [Array<CreatureInstance>]
-      def self.in_room(*filters)
-        CreatureInstance.in_room(*filters)
-      end
-
-      # Empties the current room roster.
-      #
-      # @return [void]
-      def self.clear_room
-        CreatureInstance.clear_room
-      end
+      # @return [Class] the registry class the shared facade delegates to.
+      def self.instance_class = CreatureInstance
+      private_class_method :instance_class
 
       # Register a new creature
       #
@@ -771,47 +741,12 @@ module Lich
         if existing && name && existing.name && existing.name != name && CreatureInstance.auto_register?
           CreatureInstance.forget(id)
         end
-        CreatureInstance.register(name, id, noun)
+        super
       end
 
-      # Configure the system
-      def self.configure(**options)
-        CreatureInstance.configure(**options)
-      end
-
-      # Get registry stats
+      # Get registry stats (the shared stats plus the bestiary template count).
       def self.stats
-        {
-          instances: CreatureInstance.size,
-          templates: CreatureTemplate.all.size,
-          max_size: CreatureInstance.max_size,
-          auto_register: CreatureInstance.auto_register?,
-          cleanup_max_age: CreatureInstance.cleanup_max_age
-        }
-      end
-
-      # Clear all instances
-      def self.clear
-        CreatureInstance.clear
-      end
-
-      # Removes creatures unseen for longer than the given age (in seconds).
-      #
-      # Positional to match {CreatureInstance#cleanup_old} (supplied by
-      # {Lich::Common::CreatureBase}). The registry sweeps itself on a
-      # wall-clock throttle from {CreatureInstance#register}; this is for
-      # scripts that want an immediate sweep at a chosen cutoff.
-      #
-      # @param max_age_seconds [Integer] age cutoff in seconds; defaults to
-      #   the configured cleanup_max_age.
-      # @return [Integer] number of instances removed.
-      def self.cleanup_old(max_age_seconds = CreatureInstance.cleanup_max_age)
-        CreatureInstance.cleanup_old(max_age_seconds)
-      end
-
-      # Get all creature instances
-      def self.all
-        CreatureInstance.all
+        { instances: CreatureInstance.size, templates: CreatureTemplate.all.size }.merge(super)
       end
     end
 
