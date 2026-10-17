@@ -1839,3 +1839,109 @@ RSpec.describe Lich::GameBase::Game, '.process_room_information' do
     expect(described_class.instance_variable_get(:@room_number_after_ready)).to be false
   end
 end
+
+# The Saga-identity stream's inline <room> block reaches only front ends that
+# render it (:room_element, Saga); every other front end gets the legacy layout.
+RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> block' do
+  saga_room = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n)
+
+  def eventually(timeout: 1)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        return yield
+      rescue RSpec::Expectations::ExpectationNotMetError
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.005
+      end
+    end
+  end
+
+  # The Kernel-level sf_to_wiz lives in global_defs.rb, which specs do not
+  # load; route it to the real converter it delegates to.
+  def stub_wizard_conversion
+    require_relative '../../lib/common/markup'
+    allow(described_class).to receive(:sf_to_wiz) { |line| Lich::Common::Markup.sf_to_wiz(line) }
+  end
+
+  before do
+    allow(Lich).to receive(:log)
+    allow(Lich).to receive(:display_lichid).and_return(false)
+    allow(Lich).to receive(:display_uid).and_return(false)
+    allow(Lich).to receive(:hide_uid_flag).and_return(false)
+    stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+    stub_const('Frontend', Lich::Common::Frontend)
+    # spec_helper sets these globals once per process; save them so the after
+    # hook restores them rather than leaving nil for later specs.
+    # $sftowiz_multiline is the Wizard conversion's split-element buffer,
+    # which another file's examples can leave holding an unbalanced line;
+    # start from an empty buffer so the Wizard output does not depend on
+    # spec order.
+    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline]
+    @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
+    $_DETACHABLE_CLIENT_REGISTRY_ = nil
+    $_DETACHABLE_CLIENT_ = nil
+    $sftowiz_multiline = nil
+    $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+  end
+
+  after do
+    $_CLIENT_.close rescue nil
+    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline = @saved_globals
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+  end
+
+  it 'passes the block through unchanged to Saga (behind its origin sentinel)' do
+    $frontend = 'saga'
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{saga_room}") }
+  end
+
+  %w[wrayth genie profanity frostbite].each do |fe|
+    it "rewrites the block to the legacy roomName/roomDesc layout for #{fe}" do
+      $frontend = fe
+      described_class.send(:process_downstream_hooks, +saga_room)
+      eventually do
+        expect(@raw_socket).to have_received(:write).with(
+          %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
+          %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
+          %(Obvious paths: <d>north</d>.\r\n)
+        )
+      end
+    end
+  end
+
+  # The same room captured in both dialects (see room_block_spec): a legacy
+  # front end gets, byte for byte, the lines the legacy stream sent for it.
+  it 'gives a legacy front end the captured legacy lines for a captured Saga block' do
+    fixtures = File.expand_path('../fixtures', __dir__)
+    legacy_view = File.read(File.join(fixtures, 'room_block/dr_legacy_desc_no_objects.xml')).lines.map(&:chomp)
+    saga_block = File.foreach(File.join(fixtures, 'streams/dr_saga_locate_descflag.xml')).find { |l| l.include?('(230007)</name>') }
+    $frontend = 'wrayth'
+    described_class.send(:process_downstream_hooks, +"#{saga_block.chomp}\r\n")
+    eventually { expect(@raw_socket).to have_received(:write).with(legacy_view.map { |l| "#{l}\r\n" }.join) }
+  end
+
+  it 'still arms the room display after rewriting' do
+    $frontend = 'wrayth'
+    described_class.send(:process_downstream_hooks, +saga_room)
+    expect(described_class.instance_variable_get(:@room_number_after_ready)).to be true
+  end
+
+  # Pins the ordering at unit level: sf_to_wiz keys on the legacy layout, so
+  # the rewrite must run before it. (The DR description is the roomDesc
+  # preset, which translate_room leaves as text, as for the DR legacy stream.)
+  it 'gives Wizard its GSL room-name codes' do
+    $frontend = 'wizard'
+    stub_wizard_conversion
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
+        "An Elven burial ground.  \r\nObvious paths: north.\r\n"
+      )
+    end
+  end
+end
