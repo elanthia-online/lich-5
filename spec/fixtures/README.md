@@ -134,7 +134,7 @@ line for a room with no objects, so the description line ends
 Four lines from one DragonRealms Saga-dialect `;logxml streams` session, each
 followed by the prompt that came after it, cut with
 `spec/support/stream_replay/extract.rb` (timestamps removed, the other
-character's name pseudonymised). Between them the session holds other output
+character's name pseudonymised and player id remapped). Between them the session holds other output
 that the parser does not need here.
 
 | Line | Shape | Source (C8, `2026-10-17_00-00-00`) |
