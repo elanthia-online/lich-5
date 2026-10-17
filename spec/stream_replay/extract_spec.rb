@@ -107,12 +107,82 @@ RSpec.describe StreamReplay::Extract do
     expect(out).to start_with('<prompt time="0">')
   end
 
+  # A player's link id is "-1" plus the 7-digit zero-padded <playerID>
+  # (playerID 123456 is exist="-10123456"). Both identify a real character, so
+  # they are remapped to synthetic ids: the logging character gets the 700001
+  # the synthetic header uses, everyone else 700002, 700003, ... in order of
+  # first appearance in the window.
+  describe 'player ids' do
+    let(:ids_log) do
+      <<~LOG
+        <playerID id='1234567'/>
+        <!-- Above contents from reget; full logging now active -->
+        <component id='room players'>Also here: <a exist="-10052001" noun="Zed">Zed</a> and <a exist="-10612345" noun="Gareth">Gareth</a>.</component>
+        <prompt time="1">&gt;</prompt>
+        <a exist="-10612345" noun="Gareth">Gareth</a> nods to <a exist="-11234567" noun="Hero">Hero</a>. <d cmd='look #-10052001'>Zed</d> waves.
+        You also see a <a exist="-477668" noun="assistant">clerk</a> and a <a exist="195652888" noun="moradu">moradu</a>, and <a exist="-198765432" noun="x">x</a>.
+        <prompt time="2">&gt;</prompt>
+      LOG
+    end
+
+    def ids_out(**opts)
+      body(described_class.new(game: 'DR', char: 'Hero', **opts).call(ids_log))
+    end
+
+    it 'maps every player link to a synthetic id, the logging character to 700001, keeping -1 plus 7 digits' do
+      out = ids_out
+      expect(out).to include('Also here: <a exist="-10700002" noun="Brenna">Brenna</a> and <a exist="-10700003" noun="Corwin">Corwin</a>.')
+      expect(out).to include('<a exist="-10700003" noun="Corwin">Corwin</a> nods to <a exist="-10700001" noun="Aldric">Aldric</a>.')
+    end
+
+    it 'remaps look #id references with the same mapping as the links' do
+      expect(ids_out).to include(%(<d cmd='look #-10700002'>Brenna</d> waves.))
+    end
+
+    it 'leaves creature, object and NPC ids alone' do
+      expect(ids_out).to include('<a exist="-477668" noun="assistant">', '<a exist="195652888" noun="moradu">', '<a exist="-198765432" noun="x">')
+    end
+
+    it 'leaves no real player id behind, raw or padded' do
+      expect(ids_out).not_to match(/1234567|0052001|0612345/)
+    end
+
+    it "takes the logging character from the log's <playerID> when no link names it (GemStone exit and spell links)" do
+      gs = ids_log.sub('noun="Hero">Hero</a>', 'noun="north">north</a>')
+      out = body(described_class.new(game: 'GS', char: 'Hero').call(gs))
+      expect(out).to include('<a exist="-10700001" noun="north">north</a>')
+    end
+
+    it 'takes the logging character from a link that names it when the log has no <playerID>' do
+      out = body(described_class.new(game: 'DR', char: 'Hero').call(ids_log.lines.drop(1).join))
+      expect(out).to include('nods to <a exist="-10700001" noun="Aldric">Aldric</a>')
+    end
+
+    it "remaps a real login's own <playerID> to the logging character's 700001" do
+      login = "<playerID id='1234567'/>\n<settingsInfo  client=\"1.0.1.26\" major=\"9\" crc='1' instance='DR'/>\n" \
+              "<app char=\"Hero\" game=\"DR\" title=\"[DR: Hero]\"/>\n<mode id=\"GAME\"/>\n" +
+              ids_log.lines.drop(2).join
+      out = described_class.new(game: 'DR', char: 'Hero', real_login: true).call(login)
+      expect(out).to start_with("<playerID id='700001'/>\n")
+      expect(out).to include('nods to <a exist="-10700001" noun="Aldric">Aldric</a>')
+      expect(out).not_to include('1234567')
+    end
+
+    # The committed fixtures were remapped in place with these two methods, so
+    # re-running them over a fixture must change nothing.
+    it 'is a no-op when re-applied to its own output with the logging character as 700001' do
+      out = ids_out
+      map = described_class.player_id_map(out, self_ids: [700_001])
+      expect(described_class.remap_player_ids(out, map)).to eq(out)
+    end
+  end
+
   describe 'a window that starts at a real login' do
     let(:login) do
       <<~LOG
         2026-10-16 9:00am
         <mode id="GAME"/><settings client="1.0.1.26" major="1"><presets><p id='roomName'/></presets><vars><v name='x' value='Hero'/></vars></settings>
-        <playerID id='614301'/>
+        <playerID id='123456'/>
         <settingsInfo  client="1.0.1.26" major="9" crc='1' instance='DR'/>
         <app char="Hero" game="DR" title="[DR: Hero] Wrayth"/>
         <streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
@@ -134,7 +204,7 @@ RSpec.describe StreamReplay::Extract do
       expect(header).to include("<settingsInfo  client=\"1.0.1.26\" major=\"9\" crc='1' instance='DR'/>")
       expect(header.lines.last(2)).to eq([%(<app char="Aldric" game="DR" title="[DR: Aldric] Wrayth"/>\n),
                                           %(<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>\n)])
-      expect(header).not_to include('1.0.1.28', '700001')
+      expect(header).not_to include('1.0.1.28')
       expect(rest).to start_with('<prompt time="1">')
     end
 
