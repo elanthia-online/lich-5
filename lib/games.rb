@@ -388,13 +388,17 @@ module Lich
     #
     # Ox also fires the callback for Simu's routine almost-XML -- bare text and
     # multiple top-level elements ('text not terminated', 'multiple top level
-    # elements'), nested quotes ('no attribute value'), unescaped ampersands
-    # ('Invalid special character sequence'), missing </d> end tags ('Start End
-    # Mismatch: ... not closed') -- none of which match these patterns, so they
-    # stay tolerated. The message prefix matters: 'Unexpected Character: element
-    # not closed' (a start tag that never got its '>') is truncation, while the
-    # similarly worded 'Start End Mismatch: element ... not closed' (an element
-    # missing its end tag) is routine.
+    # elements'), unescaped ampersands ('Invalid special character sequence'),
+    # missing </d> end tags ('Start End Mismatch: ... not closed') -- none of
+    # which match these patterns, so they stay tolerated. Nested quotes are the
+    # exception: alongside 'no attribute value' they can also report 'document
+    # not terminated' and 'element not closed' on a complete line, which is why
+    # process_xml_data repairs them before checking.
+    #
+    # The message prefix matters: 'Unexpected Character: element not closed' (a
+    # start tag that never got its '>') is truncation, while the similarly
+    # worded 'Start End Mismatch: element ... not closed' (an element missing
+    # its end tag) is routine.
     #
     # 'attribute value not in quotes' is intentionally NOT here: it fires on a
     # *complete* unquoted-attribute line (<a x=y>), so matching it false-resets a
@@ -1099,14 +1103,24 @@ module Lich
             # ASCII for this (high-byte-scrubbed) stream, so retagging to
             # Windows-1252 was a divergence and caused entity corruption.
             Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
+            # Repair first: a nested quote can also make Ox report desync-class
+            # errors ("document not terminated", "element not closed" -- e.g. an
+            # inventoryManager long value of a sleek black book titled "Style: Do
+            # you have it?"), so the desync check judges the repaired parse,
+            # never the junk one.
+            unrepaired = repair_malformed_attributes_and_reparse(server_string)
             check_stream_desync!(XMLData.sax_parse_errors)
-            repair_malformed_attributes_and_reparse(server_string)
           rescue GameStreamDesyncError => e
             # A truncated/desynced fragment. Ox never raises on malformed stream
             # content -- it reports via the error callback, and check_stream_desync!
             # promotes truncation-class errors to this exception. Log and reset
-            # rather than killing the server thread.
-            Lich.log "warning: stream desync (#{e.message}); resetting XMLData: #{server_string.inspect}"
+            # rather than killing the server thread. A repair didn't save the
+            # line, so undo it: the log, Inventory.observe and the clients get
+            # the fragment as the server sent it. Say so, since the repair has
+            # already logged a "fixed to" line for the edit being undone.
+            server_string.replace(unrepaired) if unrepaired
+            undone = unrepaired ? ' (repair logged above undone)' : ''
+            Lich.log "warning: stream desync (#{e.message}); resetting XMLData#{undone}: #{server_string.inspect}"
             XMLData.reset
             return
           end
@@ -1147,9 +1161,15 @@ module Lich
         # repaired in the rescue; Ox tolerates them, so drive the repair off its
         # error report -- only the rare flagged line pays the cost. Apply the
         # repairs; if any changed the line, drop the junk the first parse committed
-        # and parse once more, ignoring any errors on that pass so we never loop.
+        # and parse once more (never again, so it can't loop). The repair runs
+        # before the desync check, which then judges this second parse's errors:
+        # a line the repair fixes is kept, a truncated one still resets (and
+        # process_xml_data restores it from the returned original).
         # Escaped &apos;/&quot; round-trip back to the literal char via
         # XmlEntities.decode and the front-end's own entity decoding.
+        #
+        # @param server_string [String] the line, repaired in place
+        # @return [String, nil] the line as received when a repair changed it, else nil
         def repair_malformed_attributes_and_reparse(server_string)
           return unless XMLData.sax_parse_errors.any? { |message| NO_ATTRIBUTE_VALUE_ERROR.match?(message) }
 
@@ -1161,6 +1181,7 @@ module Lich
           XMLData.reset
           XMLData.sax_parse_errors.clear
           Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
+          before
         end
 
         # The server sends a malformed <settingsInfo ... space not found .../> (an
