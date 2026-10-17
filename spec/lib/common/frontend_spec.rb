@@ -952,7 +952,7 @@ RSpec.describe Lich::Common::Frontend do
         frontend.send_handshake(frontend::CLIENT_STRING)
 
         expect(Game.sent.first).to eq(frontend::CLIENT_STRING)
-        expect(logged).to eq(["info: client string sent to game: #{frontend::CLIENT_STRING}"])
+        expect(logged).to eq(["info: client string sent to game: #{frontend::CLIENT_STRING} (Lich's, in place of the front end's)"])
       end
     end
   end
