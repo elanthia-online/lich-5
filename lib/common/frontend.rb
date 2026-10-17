@@ -551,12 +551,14 @@ module Lich
       # Whether the front end renders the Saga-identity stream's inline <room>
       # block itself. Others get it rewritten to the legacy roomName/roomDesc
       # layout (see Lich::Common::RoomBlock).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
       def self.supports_room_element?(fe = $frontend)
         has_capability?(fe, :room_element)
       end
 
       # Whether the front end handles DragonRealms' <a exist> object links.
       # Others get them stripped to the legacy text (Markup.strip_game_links).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
       def self.supports_game_links?(fe = $frontend)
         has_capability?(fe, :game_links)
       end
@@ -566,6 +568,7 @@ module Lich
       # and the single pair around them in action and assess lines. Others get
       # the legacy line: one pair in the listings (Markup.collapse_double_bold)
       # and none elsewhere (Markup.strip_link_bold).
+      # Reads the front end's table only; each client's set comes from ClientCapabilities.
       def self.supports_double_bold?(fe = $frontend)
         has_capability?(fe, :double_bold)
       end

@@ -126,9 +126,25 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1709
 
+| Absent or counted | Corpus |
+|---|---|
+| `<container id='stow'>`: 1 in DR-16, at C8's login (line 35, committed in `dr_saga_login.xml`), and 0 before any of the 1,657 linked mid-session stow feeds. 0 changes of the stow container. 0 legacy DR logins in the corpus, so the legacy login shape is unknown. GemStone sends 22 tags in 10 captures: 2 at the 2 logins and 20 mid-session in 8 captures, always the same target | DR-16; GS-15 |
+| Stow feed (DR: 2,126 bursts, 1,657 linked and 469 plain; GS: 3,043 bursts and 3,044 headers, in the same count; the one-header difference was not traced): each burst has exactly 1 `clearContainer` and 1 header; every header has exactly 1 link (0 with two or more); 0 headers other than `In the …:` (`On`/`Under`/`Behind` never occur); 0 legacy headers with a link; 0 GS headers naming a container other than the tag's; 0 stow items outside a burst; 0 `<inv>` split across lines; 0 empty refreshes; 0 `… is closed.` headers | DR-16; GS-15 |
+| Worn list: 15,951 lists opened, 15,927 closed by `<popStream/>` (Saga 14,675, all linked; legacy 1,252, all plain). The other 24 are cut off by a log-file rotation. Every list holds only item lines (624,413 linked, 25,040 plain); 0 empty lists; 0 mixed lists | DR-16 |
+| Handed-over containers in the stow feed, as seen once each: after `You accept …'s offer and are now holding a` lootsack (line 39), the next two bursts still name the own pack (lines 87, 229); after the same line for a pack (line 575), the next burst names that pack (line 617, committed in `spec/fixtures/stow/dr_saga_handover.xml`) and the next own burst names the own pack again (line 1402). What makes the feed list a held container is not known | C8 `2026-10-17_00-00-00` (user-named; not in the corpus table) |
+
 ### #1711
 
+| Absent or counted | Corpus |
+|---|---|
+| DragonRealms sends 0 `nextLvlPB` and 0 Active Spells/Buffs/Debuffs/Cooldowns `dialogData`; the DR dialog ids seen are `minivitals` and `injuries` | DR-16; the `dr_*` fixtures (`minivitals` 189, `injuries` 19) |
+| In GS-15 the `nextLvlPB` text never changes mid-session; every bar in all 15 captures is full (`value='100'`, text `<n> experience`). This is what the corpus shows, not a claim about GemStone in general. GemStone sends 0 combat, atmospherics or familiar streams (this also backs #1710) | GS-15; `gs_sample.xml`, `gs_saga_login.xml`, `gs_saga_hunt.xml` |
+
 ### #1713
+
+| Absent or counted | Corpus |
+|---|---|
+| dr-scripts inputs listed in E12, counted with sorter's own triggers: 0 `(You are\|He is\|She is) wearing` lines and 0 LOOK item lists (`You take a moment to look for all the items in the area`) | DR-16 |
 
 ### #1721
 
@@ -146,3 +162,10 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | Creature bold outside room-object listings. Legacy: of the 327 `moradu` mentions in `dr_legacy_hunt.xml` outside `room objs`, assess and `You also see` lines, 0 have a bold pair of their own; the 3 in bold are inside whole bold combat damage lines. All 14 legacy assess lines that name a creature (from `dr_legacy_hunt.xml:135`) name it plain. Saga: 217 single bold pairs hold a creature link, each around nothing but an optional article and the link, all in action or assess lines, 0 in `room objs` (room-object listings double their bold, see #1702) | FIX |
 
 ### #1725
+
+| Absent or counted | Corpus |
+|---|---|
+| FLAG DESCRIPTION replies: exactly `You will no longer see room descriptions.` and `You will now see room descriptions.`, each on a whole line. 968 and 756 (960 and 747 in Saga captures); 0 other wordings | DR-16 + DR-extra |
+| Locate: 1 Saga Locate view (`dr_saga_locate_descflag.xml`; a second attempt fizzled). 0 legacy Locate views taken with descriptions off; the one legacy Locate capture (`spec/fixtures/room_block/dr_legacy_locate.xml`, outside DR-16) has them on | DR-16 + DR-extra |
+| FLAG listing with descriptions OFF: committed as `spec/fixtures/flag/dr_saga_flag_listing_description_off.xml`. In the 286-line window it comes from, the replies have the same two wordings (2 ON, 1 OFF), 3 of the 4 bare `FLAG` listings show the Description row OFF, and the `<room>` sent after the OFF reply still has its description | C8 `2026-10-17_11-02-10`, lines 27050–27335 (outside DR-16) |
+| GemStone: 0 FLAG DESCRIPTION replies and 0 `<room>` blocks. That GemStone follows the flag in its own room view is the maintainer's word, not a capture. DR Saga sessions with RoomBrief or RoomNames off: 0 | GS-15; DR-16 |

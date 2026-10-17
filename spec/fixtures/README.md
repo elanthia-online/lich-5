@@ -201,3 +201,86 @@ legacy-dialect PEER.
 | Shape | Source | Used by |
 |---|---|---|
 | a PEER view: "You peer south/north and see ..." and a bare `<room>` of the room peered into; the own room's `<room>` after LOOK | C8, `2026-10-17_13-24-35`, lines 14–19, 39–44 and 74–77 | `room_block_spec.rb` ("gives each PEER view the compass of the room peered into …"; "sends after the PEER view of 230007 the exits line and compass the legacy stream sent in 230007"), `games_spec.rb` ("sends the compass of the room peered into after a captured PEER view") |
+
+## flag/dr_saga_flag_listing.xml
+
+The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
+captured from C6's session on 2026-10-17 at 07:27 (corpus labels in
+`spec/fixtures/streams/MANIFEST.md`): the usage help, then the table in a mono
+block. Each row links the flag name with a `<d>` whose `cmd` is the toggle
+(the opposite of the Status column), and the first row leads with
+`<popBold/>`. Log timestamps were stripped; it holds no character names.
+
+Used by `room_description_filter_spec` and `games_spec`, which read the
+Description row from it. The listing was taken with descriptions ON; the OFF
+listing is the next fixture.
+
+## flag/dr_saga_flag_listing_description_off.xml
+
+The same `FLAG` listing taken with descriptions OFF, then the game's replies to
+FLAG DESCRIPTION ON and OFF, from C8's Saga-identity session on 2026-10-17 at
+12:12 (`2026-10-17_11-02-10`). The Description row is
+`  <d cmd="flag Description on">Description</d>        OFF  Do not display room descriptions.`:
+the `cmd` is the ON command, the opposite of the Status column. The command
+echoes and log timestamps were stripped; it holds no character names.
+
+| Shape | Source | Used by |
+|---|---|---|
+| the listing (usage help and table) with the Description row OFF, and its prompt | C8, `2026-10-17_11-02-10`, lines 27148–27200 | `room_description_filter_spec` (".observe with the bare FLAG listing"), `games_spec` ("with the bare FLAG listing") |
+| `You will now see room descriptions.` and its prompt | same capture, lines 27202–27203 | `room_description_filter_spec` (the listing, reply, listing sequence) |
+| `You will no longer see room descriptions.` and its prompt | same capture, lines 27282–27283 | `room_description_filter_spec` (the listing, reply, listing sequence) |
+
+In the capture, the next listing (after the ON reply) is the ON table of the
+previous fixture apart from the Avoid* and NoHarnessShare rows, and the one
+after the OFF reply starts as this table does, Description row OFF included.
+
+## stow/dr_saga_handover.xml
+
+### What is it?
+
+Four lines from one DragonRealms Saga-dialect `;logxml streams` session, each
+followed by the prompt that came after it, cut with
+`spec/support/stream_replay/extract.rb` (timestamps removed, the other
+character's name pseudonymised and player id remapped). Between them the session holds other output
+that the parser does not need here.
+
+| Line | Shape | Source (C8, `2026-10-17_00-00-00`) |
+|---|---|---|
+| 1 | own stow burst: `clearContainer`, header `In the <a exist="200981348" noun="pack">pack</a>:`, 6 items, then the PUT echo on the same line | line 229 |
+| 3 | `You accept <a …>Brenna</a>'s offer and are now holding a <a exist="200708744" noun="pack">scuffed traveler's pack</a>.` | line 575 |
+| 5 | stow burst whose header names the handed-over pack (`In the <a exist="200708744" …>`), 71 items | line 617 |
+| 7 | the next own stow burst (header 200981348 again, 5 items), after the pack was given back | line 1402 |
+
+Used by `xmlparser_inventory_streams_spec.rb` ("stow feed for a handed-over
+pack (captured)"), with and without a login `<container id='stow'>`. The
+capture's login is not in the fixture, so the tagged examples feed a tag of
+the shape `streams/dr_saga_login.xml` captured, naming this capture's pack.
+
+## crtr_status/gs_saga_crtr_status.xml
+
+Six verbatim server lines from a GemStone Shattered `;logxml` capture of
+2026-10-15 15:08, one of the 15 GemStone captures recorded that day while Lich
+sent the Saga client string. Lines 1-3 are capture lines 11, 18 and 29; lines
+4-6 are capture lines 569, 576 and 598.
+
+| Line | Shape |
+|---|---|
+| 1 | `<nav>` and the room window: a room-objs `compDef` with `<crtrStatus>` just before the creature's `<a exist>` link |
+| 2 | the main-text room description: `You also see <crtrStatus …/>` inline, then a doubled-bold link |
+| 3 | combat: two standalone tags for the same creature on one line (the second `dead`/`prone`), then a room-objs refresh |
+| 4-5 | the same pair as lines 1-2, for a second creature in the next room |
+| 6 | a room-objs `component`: the tag after a non-creature link and just before the creature's link |
+
+Every tag here carries `health`/`maxhealth` and no flag is `="0"`, as in all
+22,903 tags of the 15 captures. The older fragments in
+`xmlparser_crtr_status_spec.rb`, which its comments describe as live GST
+captures, include tags without `health` and with `hostile="0"`; the spec
+covers both. The fetched window holds no tag just before a `room players`
+component (the third standalone position, seen in the 15-log scan), so that
+shape has no fixture yet.
+
+Exist ids, room numbers and creature names are as captured. The one player
+name (a disk owner's) was replaced with a pseudonym. Line endings were
+normalised to LF.
+
+Used by `spec/lib/common/xmlparser_crtr_status_spec.rb`.

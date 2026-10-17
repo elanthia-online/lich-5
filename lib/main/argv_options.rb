@@ -115,6 +115,8 @@ module Lich
             when /^--keep-fe-string$/i
               # Kill switch for Frontend.proxy_handshake: forward the front end's own /FE: line.
               @argv_options[:keep_fe_string] = true
+            when /^--frontend-caps=(.*)$/i
+              @argv_options[:frontend_caps] = $1
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i
@@ -164,6 +166,7 @@ module Lich
           handle_bind_address(argv_options)
           handle_detachable_client(argv_options)
           handle_sentinel(argv_options)
+          handle_frontend_caps(argv_options)
           handle_sal_launch(argv_options)
           argv_options
         end
@@ -172,6 +175,19 @@ module Lich
         # frontend it identifies as.
         def self.handle_sentinel(argv_options)
           Lich::Common::Frontend.sentinel_requested = true if argv_options[:sentinel]
+        end
+
+        # --frontend-caps=LIST: the rich-stream capabilities every client gets
+        # unless it declares its own with SET_FRONTEND_CAPS, in place of the
+        # catalog's for the frontend (see Lich::Common::ClientCapabilities).
+        # An empty LIST (or one with no known name) gives every client the
+        # legacy rewrites.
+        def self.handle_frontend_caps(argv_options)
+          return unless argv_options.key?(:frontend_caps)
+
+          capabilities, unknown = Lich::Common::ClientCapabilities.parse(argv_options[:frontend_caps])
+          announce('warning', "--frontend-caps: ignoring unknown capabilities: #{unknown.join(', ')}") unless unknown.empty?
+          Lich::Common::ClientCapabilities.launch_capabilities = capabilities
         end
 
         # Surface a message on both channels every bind handler uses.

@@ -152,6 +152,7 @@ module Lich
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
   @@track_persistent_launcher_mode = nil # boolean
+  @@follow_description_flag = nil # boolean (DragonRealms only)
   @@debug_messaging = nil # boolean
   @@max_debug_logs  = nil # integer
 
@@ -837,6 +838,37 @@ module Lich
     @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('hide_uid_flag',?);", [@@hide_uid_flag.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether the client gets the character's room view without its
+  # description while DragonRealms' FLAG DESCRIPTION is OFF (";display
+  # descflag"). Works around the Saga-identity stream ignoring the flag; see
+  # Lich::Common::RoomDescriptionFilter. Off by default.
+  # @return [Boolean, nil] nil until a game is identified and no value is stored
+  def Lich.follow_description_flag
+    if @@follow_description_flag.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='follow_description_flag';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil? and XMLData.game != ""; # default false
+      @@follow_description_flag = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
+    end
+    return @@follow_description_flag
+  end
+
+  # Sets and persists the room description filter toggle.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  def Lich.follow_description_flag=(val)
+    @@follow_description_flag = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('follow_description_flag',?);", [@@follow_description_flag.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry

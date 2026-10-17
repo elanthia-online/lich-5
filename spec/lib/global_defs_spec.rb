@@ -749,6 +749,74 @@ RSpec.describe '#handle_detachable_client' do
   end
 end
 
+# A client may send SET_FRONTEND_CAPS at any time to name the rich-stream
+# rewrites it handles itself (docs/frontend-capability-declaration.md). The
+# real handler runs in a subprocess, as above; the client's lines are scripted
+# and every line that reaches dispatch is recorded.
+RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
+  def run_handler(lines)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require 'common/class_exts/synchronizedsocket'
+      require 'common/client_capabilities'
+      require './lib/global_defs'
+      require 'common/shutdown_log'
+
+      ARGV.replace(%w[--without-frontend --detachable-client=8000])
+      Frontend.define_singleton_method(:client) { 'genie' }
+      Object.send(:define_method, :detachable_client_send_init) { |_client| nil }
+      Object.send(:define_method, :detachable_client_send_player_id) { |_client| nil }
+      $dispatched = []
+      Object.send(:define_method, :dispatch_client_input) { |line| $dispatched << line }
+      module Lich
+        module Main
+          module UserExitDispatch
+            def self.dispatch_detachable_client(*) = false
+          end
+        end
+      end
+      $cmd_prefix = '<c>'
+
+      raw = Object.new
+      lines = #{lines.inspect}
+      raw.define_singleton_method(:gets) { lines.shift }
+      raw.define_singleton_method(:closed?) { false }
+      raw.define_singleton_method(:close) { nil }
+      client = Lich::Common::SynchronizedSocket.new(raw, role: :detachable)
+      before = Thread.list
+      handle_detachable_client(client)
+      (Thread.list - before).each { |thread| thread.join(5) }
+      puts "DISPATCHED=\#{$dispatched.inspect}"
+      puts "DECLARED=\#{client.declared_capabilities.inspect}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    # Bundler's notes about gems built for another Ruby are not errors.
+    expect(stderr.lines.reject { |line| line.include?('Bundler::StubSpecification') }.join).to be_empty
+    expect(status).to be_success
+    [stdout[/^DISPATCHED=(.*)$/, 1], stdout[/^DECLARED=(.*)$/, 1]]
+  end
+
+  it 'records the declaration on that client and never sends it to the game' do
+    dispatched, declared = run_handler(["SET_FRONTEND_CAPS room_element game_links double_bold\n", "look\n"])
+    expect(dispatched).to eq('["<c>look\\n"]')
+    expect(declared).to eq('[:room_element, :game_links, :double_bold]')
+  end
+
+  it 'takes a later declaration over an earlier one' do
+    dispatched, declared = run_handler(["SET_FRONTEND_CAPS game_links\n", "look\n", "SET_FRONTEND_CAPS\n"])
+    expect(dispatched).to eq('["<c>look\\n"]')
+    expect(declared).to eq('[]')
+  end
+
+  it 'leaves a client that never declares undeclared' do
+    dispatched, declared = run_handler(["look\n"])
+    expect(dispatched).to eq('["<c>look\\n"]')
+    expect(declared).to eq('nil')
+  end
+end
+
 RSpec.describe '#detachable_client_send_init' do
   # Only the shared part lives in global_defs.rb: waiting until the running
   # game's module reports the login feed is ready, then sending its push. What

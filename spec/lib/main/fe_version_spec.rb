@@ -131,8 +131,18 @@ RSpec.describe '--fe-version' do
       game.define_singleton_method(:sent) { @sent ||= [] }
       game.define_singleton_method(:_puts) { |str| sent << str }
       stub_const('Game', game)
-      $_CLIENTBUFFER_ = []
       ARGV.replace(['--without-frontend'])
+    end
+
+    # run_handshake appends to $_CLIENTBUFFER_. Swap in a fresh array, then
+    # restore the original object: spec_helper owns it when it is loaded, and
+    # this file can also run on its own, where the global starts out nil.
+    around do |example|
+      saved_clientbuffer = $_CLIENTBUFFER_
+      $_CLIENTBUFFER_ = []
+      example.run
+    ensure
+      $_CLIENTBUFFER_ = saved_clientbuffer
     end
 
     def run(argv_options)
