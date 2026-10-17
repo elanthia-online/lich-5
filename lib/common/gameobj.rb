@@ -1478,6 +1478,10 @@ module Lich
       # Normalizes the noun for a new instance. See the class-level
       # +normalize_noun+, which the identity index also uses for its keys.
       #
+      # The +__send__+ is deliberate: the class method is private to keep it
+      # off the public API, and Ruby has no other way for an instance to call
+      # a private singleton method. Do not make the class method public.
+      #
       # @param noun [String, nil]
       # @param name [String, nil]
       # @return [String, nil]
@@ -1536,9 +1540,12 @@ module Lich
         # link noun (e.g. +noun=" moth"+), which would otherwise defeat every
         # +obj.noun == 'moth'+ comparison and noun lookup. A nil noun stays nil.
         #
-        # Idempotent. +find_or_create+ and +index_or_create+ build the
-        # +@@index+ key from this value, so a padded and an unpadded sighting of
-        # the same id/name (or +lapis lazuli+ vs +lapis+) share one instance.
+        # Must stay idempotent: +find_or_create+ and +index_or_create+ build the
+        # +@@index+ key from this value and then pass it to +GameObj.new+, which
+        # normalizes it again. A special case whose output is itself remapped
+        # would store a different noun than the one keyed. Keying on it means a
+        # padded and an unpadded sighting of the same id/name (or +lapis lazuli+
+        # vs +lapis+) share one instance.
         #
         # @param noun [String, nil]
         # @param name [String, nil]

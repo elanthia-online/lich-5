@@ -942,6 +942,26 @@ RSpec.describe Lich::Common::GameObj do
         it 'strips a padded noun on a frozen string without raising' do
           expect(described_class.new('1', ' moth'.freeze, 'void-black umbral moth').noun).to eq('moth')
         end
+
+        # The factories normalize once for the index key and GameObj.new
+        # normalizes again, so every mapping must be a fixed point.
+        it 'is idempotent for every special case' do
+          [
+            [' moth ', 'void-black umbral moth'],
+            ['lapis lazuli', 'blue lapis lazuli'],
+            ['Hammer of Kai', 'some hammer'],
+            ['ball and chain', 'iron ball'],
+            ['pearl', 'a mother-of-pearl button'],
+            ['pearl', 'a black pearl'],
+            [nil, 'something'],
+            ['   ', 'something']
+          ].each do |raw, name|
+            once = described_class.new('1', raw, name).noun
+            twice = described_class.new('1', once, name).noun
+
+            expect(twice).to eq(once), "#{raw.inspect} -> #{once.inspect} -> #{twice.inspect}"
+          end
+        end
       end
     end
 
