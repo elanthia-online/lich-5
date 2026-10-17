@@ -193,7 +193,7 @@ the one arrival without a `room exits` component in the Saga logs.
 A Saga-dialect DragonRealms capture cut with extract.rb (per-line timestamps
 and the command echoes removed, player names pseudonymised and player ids
 remapped; the synthetic header dropped): from room 230008, PEER SOUTH and PEER
-NORTH, each answered by "You peer <dir> and see ..." and a bare `<room>` block
+NORTH, each answered by `You peer <dir> and see ...` and a bare `<room>` block
 of the room peered into (230007, 230009) with no `<nav>`, subtitle or room
 components, then LOOK and the `<room>` block of 230008. No capture has a
 legacy-dialect PEER.
