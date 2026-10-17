@@ -137,6 +137,7 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | DR Saga sends 0 `<dir>`: its only compass is the empty `<compass></compass>` inside the `room exits` component (51,706 of them). GemStone keeps `<dir>` (27,725). The legacy FIX streams have 102 `<dir>` in 39 top-level compasses, one after every exits line | DR-16 Saga; GS-15; FIX |
 | Exits in `<room>` blocks: 935 blocks have no `<d>` (913 "none.", that is 772 "Obvious paths: none." and 141 "Obvious exits: none.", plus 22 hidden by fog); 0 exit names outside the 11 compass directions. One "none." block is committed as `spec/fixtures/room_block/dr_saga_no_exits.xml`; no fog block is | DR-16 Saga |
 | The `room exits` component precedes `<room>` in 51,595 arrivals, follows it in 0 and is missing in 1 (committed as `spec/fixtures/room_block/dr_saga_arrival_without_exits_component.xml`) | DR-16 Saga |
+| PEER into a neighbouring room: both PEERs in the capture are answered by "You peer <dir> and see ..." and a bare `<room>` block of the room peered into, with 0 `<nav>`, subtitles or room components for that room (committed as `spec/fixtures/room_block/dr_saga_peer.xml`). 0 legacy-dialect PEERs were fetched, so whether the legacy stream sent a compass after one is not known | C8 `2026-10-17_13-24-35`, a user-named capture (not in the corpus table) |
 
 ### #1722
 
