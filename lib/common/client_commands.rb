@@ -310,6 +310,30 @@ module Lich
           else !current
           end
         end
+
+        # Compiles a pattern the user typed after a ;command, or tells them
+        # it is not a valid regex.
+        #
+        # Regexp.new raises RegexpError for bad escapes too, unlike an
+        # interpolated literal (/#{text}/), which raises ArgumentError.
+        #
+        # @param text [String] what the user typed
+        # @param prefix [String] regex source put in front of +text+, such as
+        #   "^" for a prefix match; not shown to the user
+        # @param options [Integer] Regexp option flags
+        # @return [Regexp, nil] nil after the error has been reported
+        def user_regexp(text, prefix: '', options: 0)
+          Regexp.new("#{prefix}#{text}", options)
+        rescue RegexpError => e
+          # The message ends with ": /<compiled source>/<flags>"; drop it so
+          # the user sees their own text, not the prefix and flags. The text
+          # is quoted as typed, not with String#inspect, which would double
+          # every backslash, and a bad escape is the usual reason it failed.
+          reason = e.message.sub(%r{: /.*\z}m, '')
+          respond "--- Lich: error: invalid pattern \"#{text}\": #{reason}"
+          respond '--- Lich: \\u is unicode escape, did you mean to use a / instead?' if reason == 'invalid Unicode escape'
+          nil
+        end
       end
     end
   end
