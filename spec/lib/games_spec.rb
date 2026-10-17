@@ -2162,6 +2162,23 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     end
   end
 
+  # PEER NORTH from 230008 returns a bare <room> block of 230009
+  # (spec/fixtures/room_block/dr_saga_peer.xml); like a Locate view, it gets
+  # the compass of the room peered into.
+  it 'sends the compass of the room peered into after a captured PEER view' do
+    peer_block = File.foreach(File.expand_path('../fixtures/room_block/dr_saga_peer.xml', __dir__)).find { |l| l.include?('(230009)</name>') }
+    XMLData.room_id = 230_008
+    XMLData.room_exits = %w[north south]
+    $frontend = 'genie'
+    described_class.send(:process_downstream_hooks, +"#{peer_block.chomp}\r\n")
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        a_string_ending_with(%(Obvious paths: <d>south</d>, <d>northwest</d>.\r\n<compass><dir value="s"/><dir value="nw"/></compass>\r\n))
+          .and(start_with(%(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Dense Woods] (230009)\r\n)))
+      )
+    end
+  end
+
   # With ShowRoomID off the name carries no room number; the compass still
   # comes from the block's own exits.
   it 'sends the compass for a block without a room number' do
