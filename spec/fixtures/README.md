@@ -186,6 +186,22 @@ the one arrival without a `room exits` component in the Saga logs.
 |---|---|---|
 | an arrival whose `<room>` (with a room number) has no `room exits` component before it | C7, `2026-10-16_01-57-21`, lines 14731–14752 | `room_block_spec.rb` ("sends the compass of the block, not the exits XMLParser kept from the last room") |
 
+## room_block/dr_saga_peer.xml
+
+### What is it?
+
+A Saga-dialect DragonRealms capture cut with extract.rb (per-line timestamps
+and the command echoes removed, player names pseudonymised and player ids
+remapped; the synthetic header dropped): from room 230008, PEER SOUTH and PEER
+NORTH, each answered by "You peer <dir> and see ..." and a bare `<room>` block
+of the room peered into (230007, 230009) with no `<nav>`, subtitle or room
+components, then LOOK and the `<room>` block of 230008. No capture has a
+legacy-dialect PEER.
+
+| Shape | Source | Used by |
+|---|---|---|
+| a PEER view: "You peer south/north and see ..." and a bare `<room>` of the room peered into; the own room's `<room>` after LOOK | C8, `2026-10-17_13-24-35`, lines 14–19, 39–44 and 74–77 | `room_block_spec.rb` ("gives each PEER view the compass of the room peered into …"; "sends after the PEER view of 230007 the exits line and compass the legacy stream sent in 230007"), `games_spec.rb` ("sends the compass of the room peered into after a captured PEER view") |
+
 ## flag/dr_saga_flag_listing.xml
 
 The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
