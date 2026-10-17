@@ -22,7 +22,15 @@
 #      stream, and any name listed in --scrub-names) is replaced by a stable fake
 #      name, word-bounded, everywhere; account names are replaced by ACCOUNT.
 #      Names are collected from the whole cleaned log, not just the window.
-#      Names in --keep are left alone unless also listed in --scrub-names.
+#      Names in --keep are left alone unless also listed in --scrub-names;
+#   6. remap player ids: a <playerID id='N'/> and a player's link id, which is
+#      "-1" plus the 7-digit zero-padded playerID (exist="-1NNNNNNN", and
+#      "look #-1NNNNNNN" references), identify a real character. The logging
+#      character (the log's own <playerID>, or the link whose noun is --char)
+#      becomes 700001, the id the synthetic header uses; every other player
+#      becomes 700002, 700003, ... in order of first appearance in the window,
+#      so <playerID> and the links still agree. Creature, object and NPC ids
+#      are left alone.
 #
 # The fixture gets a synthetic login header (settingsInfo/app char) so Lich
 # identifies the game and character and autostarts the replay probe.
@@ -56,6 +64,10 @@ module StreamReplay
     MARKER = '### stream-replay:body-below ###'
     END_PROMPT = '<prompt time="0">&gt;</prompt>'
     SETTINGS_BODY = %r{(<settings\b[^>]*>).*?</settings>}
+    SELF_PLAYER_ID = 700_001
+    PLAYER_ID_TAG = %r{<playerID id='(\d+)'/>}
+    # A <playerID> tag, or a player link id ("-1" + the 7-digit padded id).
+    PLAYER_ID = /#{PLAYER_ID_TAG}|(?<![\w-])-1(\d{7})(?!\d)/
     PSEUDONYMS = %w[
       Aldric Brenna Corwin Delphine Edric Fiora Gareth Helsa Ivor Jessamy Kael Liora
       Maddoc Nerys Orrin Perrin Quenna Rhosyn Sabine Tamsin Ulric Vesna Wystan Yselde
@@ -86,7 +98,8 @@ module StreamReplay
       names = (collect_names(lines) | collect_names(cleaned)) - (@keep - @scrub)
       map = names.each_with_index.to_h { |n, i| [n, PSEUDONYMS.fetch(i) { "Player#{i + 1}" }] }
       char_alias = map.fetch(@char, @char)
-      body = lines.map { |l| scrub(l, map) }
+      ids = self.class.player_id_map(lines.join, self_ids: self_ids(raw, cleaned))
+      body = lines.map { |l| self.class.remap_player_ids(scrub(l, map), ids) }
       body.map! { |l| l.sub(SETTINGS_BODY, '\1</settings>') } if @drop_settings_body
       body << "#{END_PROMPT}\n" if @end_prompt && !body.last.to_s.include?('<prompt')
       return split_real_login(body, char_alias) if @real_login
@@ -94,7 +107,46 @@ module StreamReplay
       header(char_alias) + "#{MARKER}\n" + body.join
     end
 
+    # Maps each player id in text (a <playerID> or a "-1NNNNNNN" link id) to a
+    # synthetic one: every id in self_ids to SELF_PLAYER_ID, the rest to
+    # SELF_PLAYER_ID + 1, + 2, ... in order of first appearance.
+    #
+    # @param text [String]
+    # @param self_ids [Array<Integer>] the logging character's real id(s)
+    # @return [Hash{Integer => Integer}]
+    def self.player_id_map(text, self_ids: [])
+      others = text.scan(PLAYER_ID).flatten.compact.map(&:to_i).uniq - self_ids
+      map = self_ids.to_h { |id| [id, SELF_PLAYER_ID] }
+      others.each_with_index { |id, i| map[id] = SELF_PLAYER_ID + 1 + i }
+      map
+    end
+
+    # Rewrites every player id in text through map (see {.player_id_map}),
+    # keeping a link id's "-1" + 7-digit form. Nothing else in text changes,
+    # line endings included.
+    #
+    # @param text [String]
+    # @param map [Hash{Integer => Integer}]
+    # @return [String]
+    def self.remap_player_ids(text, map)
+      text.gsub(PLAYER_ID) do
+        if (tag = Regexp.last_match(1))
+          "<playerID id='#{map.fetch(tag.to_i)}'/>"
+        else
+          format('-1%07d', map.fetch(Regexp.last_match(2).to_i))
+        end
+      end
+    end
+
     private
+
+    # The logging character's real id: the log's own <playerID> (it can sit
+    # before the reget marker), and the link that names --char.
+    def self_ids(raw, cleaned)
+      tag = raw[PLAYER_ID_TAG, 1]
+      link = cleaned.join[/<a exist="-1(\d{7})" noun="#{Regexp.escape(@char)}"/, 1]
+      [tag, link].compact.map(&:to_i).uniq
+    end
 
     # Snaps --from/--to outward to prompt boundaries: the window starts just
     # after the prompt preceding --from and ends on the first prompt at or after
