@@ -988,6 +988,115 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
+    # The same creature id can arrive padded (noun=" moth") in one room objs
+    # component and unpadded (noun="moth") in the next. The reuse key must be
+    # built from the normalized noun, or the index hands back a second object.
+    describe 'reuse key built from the normalized noun' do
+      let(:index) { described_class.class_variable_get(:@@index) }
+      let(:name)  { 'void-black umbral moth' }
+
+      # Index keys for the given ids only (the hand slots are pre-seeded).
+      def keys_for(*ids)
+        index.keys.select { |key| ids.include?(key.split('|', 2).first) }
+      end
+
+      [[' moth', 'moth'], ['moth', ' moth'], ['moth ', " \tmoth\n"]].each do |first, second|
+        it "find_or_create returns the same object for #{first.inspect} then #{second.inspect}" do
+          a = described_class.new_npc('201844186', first, name)
+          b = described_class.new_npc('201844186', second, name)
+
+          expect(b).to equal(a)
+          expect(described_class.npcs.size).to eq(1)
+          expect(keys_for('201844186')).to eq(["201844186|moth|#{name}"])
+        end
+
+        it "index_or_create returns the same object for #{first.inspect} then #{second.inspect}" do
+          a = described_class.index_or_create('55', first, name)
+          b = described_class.index_or_create('55', second, name)
+
+          expect(b).to equal(a)
+          expect(keys_for('55')).to eq(["55|moth|#{name}"])
+        end
+      end
+
+      it 'keeps one npc entry across room objs refreshes that alternate padding' do
+        objs = [' moth', 'moth', ' moth'].map do |noun|
+          described_class.begin_room_objs
+          obj = described_class.new_npc('201844186', noun, name, 'dead')
+          described_class.commit_room_objs
+          expect(described_class.npcs).to eq([obj])
+          obj
+        end
+
+        expect(objs.uniq(&:object_id).size).to eq(1)
+        expect(described_class.npcs.first.status).to eq('dead')
+      end
+
+      it 'keeps one npc entry when both forms arrive inside a single room objs refresh' do
+        described_class.begin_room_objs
+        a = described_class.new_npc('201844186', ' moth', name)
+        b = described_class.new_npc('201844186', 'moth', name)
+        described_class.commit_room_objs
+
+        expect(b).to equal(a)
+        expect(described_class.npcs.size).to eq(1)
+      end
+
+      it 'shares the object between a hand slot and the registries regardless of padding' do
+        held = described_class.new_right_hand('6', ' sword', 'a steel sword')
+
+        expect(described_class.new_inv('6', 'sword', 'a steel sword')).to equal(held)
+      end
+
+      it 'shares one key between a special-case noun and its normalized form (same id and name)' do
+        a = described_class.new_loot('7', 'lapis lazuli', 'a blue lapis lazuli')
+        b = described_class.new_loot('7', ' lapis', 'a blue lapis lazuli')
+
+        expect(b).to equal(a)
+        expect(a.noun).to eq('lapis')
+        expect(keys_for('7')).to eq(['7|lapis|a blue lapis lazuli'])
+      end
+
+      it 'keys a pearl by its name-dependent normalized noun' do
+        button = described_class.new_loot('8', ' pearl', 'a mother-of-pearl button')
+        same   = described_class.new_loot('8', 'mother-of-pearl', 'a mother-of-pearl button')
+        plain  = described_class.new_loot('9', 'pearl ', 'a black pearl')
+
+        expect(same).to equal(button)
+        expect(keys_for('8', '9')).to contain_exactly('8|mother-of-pearl|a mother-of-pearl button', '9|pearl|a black pearl')
+        expect(plain.noun).to eq('pearl')
+      end
+
+      it 'still keeps distinct objects when the normalized noun differs' do
+        a = described_class.new_npc('10', ' moth', name)
+        b = described_class.new_npc('10', 'moths', name)
+
+        expect(b).not_to equal(a)
+      end
+
+      it 'still keeps distinct objects when the name differs' do
+        a = described_class.new_npc('11', ' moth', name)
+        b = described_class.new_npc('11', 'moth', 'dead void-black umbral moth')
+
+        expect(b).not_to equal(a)
+      end
+
+      it 'keeps the nil-noun key shape (empty segment)' do
+        described_class.new_inv('12', nil, 'soft gem pouch')
+        described_class.index_or_create('13', nil, 'other pouch')
+
+        expect(keys_for('12', '13')).to contain_exactly('12||soft gem pouch', '13||other pouch')
+      end
+
+      it 'reduces an all-whitespace noun to the empty key segment, shared with nil' do
+        a = described_class.new_inv('14', '   ', 'thing')
+        b = described_class.new_inv('14', nil, 'thing')
+
+        expect(b).to equal(a)
+        expect(keys_for('14')).to eq(['14||thing'])
+      end
+    end
+
     describe '#full_name' do
       it 'returns name when before_name and after_name are nil' do
         obj = described_class.new('123', 'gem', 'ruby')

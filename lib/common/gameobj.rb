@@ -622,6 +622,7 @@ module Lich
       # @api private Internal identity-index plumbing. No compatibility guarantee.
       def self.index_or_create(id, noun, name, before = nil, after = nil)
         str_id = id.is_a?(Integer) ? id.to_s : id
+        noun   = normalize_noun(noun, name) # key on the normalized noun (see normalize_noun)
         key    = "#{str_id}|#{noun}|#{name}"
         now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
@@ -1474,26 +1475,14 @@ module Lich
 
       # ---------------------------------------------------------------------------
 
-      # Normalizes irregular noun values that the game provides inconsistently.
-      #
-      # Leading/trailing whitespace is stripped first: the server can pad a
-      # link noun (e.g. +noun=" moth"+), which would otherwise defeat every
-      # +obj.noun == 'moth'+ comparison and noun lookup. A nil noun stays nil.
+      # Normalizes the noun for a new instance. See the class-level
+      # +normalize_noun+, which the identity index also uses for its keys.
       #
       # @param noun [String, nil]
       # @param name [String, nil]
       # @return [String, nil]
       def normalize_noun(noun, name)
-        noun = noun&.strip
-        case noun
-        when 'lapis lazuli'   then 'lapis'
-        when 'Hammer of Kai'  then 'hammer'
-        when 'ball and chain' then 'ball'
-        when 'pearl'
-          (name =~ /mother\-of\-pearl/) ? 'mother-of-pearl' : noun
-        else
-          noun
-        end
+        GameObj.__send__(:normalize_noun, noun, name)
       end
 
       # Returns the keys from +data_hash+ whose +:name+, +:noun+, or +:full_name+
@@ -1540,6 +1529,32 @@ module Lich
 
       class << self
         private
+
+        # Normalizes irregular noun values that the game provides inconsistently.
+        #
+        # Leading/trailing whitespace is stripped first: the server can pad a
+        # link noun (e.g. +noun=" moth"+), which would otherwise defeat every
+        # +obj.noun == 'moth'+ comparison and noun lookup. A nil noun stays nil.
+        #
+        # Idempotent. +find_or_create+ and +index_or_create+ build the
+        # +@@index+ key from this value, so a padded and an unpadded sighting of
+        # the same id/name (or +lapis lazuli+ vs +lapis+) share one instance.
+        #
+        # @param noun [String, nil]
+        # @param name [String, nil]
+        # @return [String, nil]
+        def normalize_noun(noun, name)
+          noun = noun&.strip
+          case noun
+          when 'lapis lazuli'   then 'lapis'
+          when 'Hammer of Kai'  then 'hammer'
+          when 'ball and chain' then 'ball'
+          when 'pearl'
+            (name =~ /mother\-of\-pearl/) ? 'mother-of-pearl' : noun
+          else
+            noun
+          end
+        end
 
         # All ordered search registries for +[]+, hands wrapped in an array to
         # use the same +#find+ interface.
@@ -1602,6 +1617,7 @@ module Lich
         # @return [GameObj]
         def find_or_create(registry, id, noun, name, before = nil, after = nil, defer_to: nil)
           str_id = id.is_a?(Integer) ? id.to_s : id
+          noun   = normalize_noun(noun, name) # key on the normalized noun (see normalize_noun)
           key    = "#{str_id}|#{noun}|#{name}"
           now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
