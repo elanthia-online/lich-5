@@ -267,6 +267,37 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
     expect(out.last(2)).to eq([legacy_exits, legacy_compass])
   end
 
+  # PEER into a neighbouring room gets the same answer as a Locate: "You peer
+  # <dir> and see ..." and a bare <room> block of that room
+  # (room_block/dr_saga_peer.xml: from 230008, PEER SOUTH shows 230007 and
+  # PEER NORTH 230009, then LOOK shows 230008).
+  describe 'on a captured PEER' do
+    peer = File.readlines(File.join(fixtures, 'room_block/dr_saga_peer.xml'), chomp: true)
+    blocks = peer.select { |l| l.include?('<room>') }
+
+    it 'gives each PEER view the compass of the room peered into, and the own room view its own' do
+      expect(blocks.map { |b| b[%r{\((\d+)\)</name>}, 1] }).to eq(%w[230007 230009 230008])
+      expect(peer[peer.index(blocks[0]) - 2]).to eq('You peer south and see ...')
+      expect(peer[peer.index(blocks[1]) - 2]).to eq('You peer north and see ...')
+      compasses = [
+        %(<compass><dir value="n"/><dir value="se"/></compass>),
+        %(<compass><dir value="s"/><dir value="nw"/></compass>),
+        %(<compass><dir value="n"/><dir value="s"/></compass>)
+      ]
+      expect(blocks.map { |b| described_class.legacy_shape_with_compass(b).lines.last }).to eq(compasses)
+    end
+
+    # No capture has a legacy PEER, so the comparison is with the legacy view
+    # of the same room from inside it (230007 in dr_legacy_locate.xml).
+    it 'sends after the PEER view of 230007 the exits line and compass the legacy stream sent in 230007' do
+      legacy = File.readlines(File.join(fixtures, 'room_block/dr_legacy_locate.xml'), chomp: true)
+      arrival = legacy.index("<nav rm='230007'/>")
+      exits_at = legacy.each_index.find { |i| i > arrival && legacy[i].start_with?('Obvious paths:') }
+      out = described_class.legacy_shape_with_compass(blocks[0]).split("\r\n")
+      expect(out.last(2)).to eq([legacy[exits_at], legacy[exits_at + 1][%r{\A<compass>.*?</compass>}]])
+    end
+  end
+
   it 'gives each block in a multi-block string the compass of its own exits' do
     here = block.call(two_exits)
     there = block.call('Obvious paths: <d>west</d>.', name: '[Bosque Deriel, Dense Woods] (230010)')
