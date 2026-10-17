@@ -10,7 +10,8 @@ All fixtures come from `;logxml streams` captures and were produced with
 - timestamps, client echoes and reget content stripped;
 - windows snapped to prompt boundaries;
 - a synthetic login header added, or, for a window that starts at a real login, the login's own lines kept (`--real-login`, with the stored `<settings>` blob emptied by `--drop-settings-body`);
-- every player name pseudonymized and account names replaced.
+- every player name pseudonymized and account names replaced;
+- every player id remapped to a synthetic one: a `<playerID id='N'/>` and a player's link id (`-1` plus the 7-digit zero-padded playerID, as `exist="-1NNNNNNN"` and `look #-1NNNNNNN`) become 700001 for the logging character, the id the synthetic header uses, and 700002, 700003, … for the other players in order of first appearance, so `<playerID>` and the links still agree. Creature, object and NPC ids are kept. The fixtures committed before extract.rb did this were remapped in place with its `player_id_map`/`remap_player_ids`; only id strings changed.
 
 Character names below are the pseudonyms used inside the fixture.
 
