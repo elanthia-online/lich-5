@@ -257,6 +257,13 @@ RSpec.describe Lich::GameBase::GameInstance do
       expect { game_instance.modify_room_display("test") }.to raise_error(NotImplementedError)
       expect { game_instance.process_room_display("test") }.to raise_error(NotImplementedError)
     end
+
+    # GemStone and an unknown game send the client line as it is.
+    it 'returns the client line itself from adapt_for_frontend' do
+      line = +%(<pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>\r\n)
+      expect(game_instance.adapt_for_frontend(line)).to equal(line)
+      expect(Lich::Gemstone::GameInstance.new.adapt_for_frontend(line)).to equal(line)
+    end
   end
 end
 
@@ -1842,6 +1849,193 @@ end
 
 # The Saga-identity stream's inline <room> block reaches only front ends that
 # render it (:room_element, Saga); every other front end gets the legacy layout.
+# DragonRealms' links and doubled bold reach only front ends that handle them
+# (:game_links, :double_bold; Saga); every other front end gets the legacy line.
+RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealms links and doubled bold' do
+  objs = %(<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="1" noun="sword">ice-edged sword</a>.</component>\r\n)
+  legacy_objs = %(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a ice-edged sword.</component>\r\n)
+
+  def eventually(timeout: 1)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        return yield
+      rescue RSpec::Expectations::ExpectationNotMetError
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.005
+      end
+    end
+  end
+
+  before do
+    allow(Lich).to receive(:log)
+    allow(Lich).to receive(:display_lichid).and_return(false)
+    allow(Lich).to receive(:display_uid).and_return(false)
+    allow(Lich).to receive(:hide_uid_flag).and_return(false)
+    stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+    stub_const('Frontend', Lich::Common::Frontend)
+    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline]
+    @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
+    $_DETACHABLE_CLIENT_REGISTRY_ = nil
+    $_DETACHABLE_CLIENT_ = nil
+    $sftowiz_multiline = nil
+    $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    @saved_game_instance = described_class.instance_variable_get(:@game_instance)
+    described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
+    XMLData.game = 'DR'
+  end
+
+  after do
+    $_CLIENT_.close rescue nil
+    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline = @saved_globals
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, @saved_game_instance)
+  end
+
+  %w[wrayth genie profanity frostbite].each do |fe|
+    it "gives #{fe} the legacy line: no links, one bold pair" do
+      $frontend = fe
+      described_class.send(:process_downstream_hooks, +objs)
+      eventually { expect(@raw_socket).to have_received(:write).with(legacy_objs) }
+    end
+  end
+
+  # The legacy stream sends creature names in assess and action lines plain
+  # (dr_legacy_hunt.xml:135-137); the Saga stream bolds them once.
+  assess = %(<popStream/><pushStream id="assess"/><d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: cursed and nimbly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>\r\n)
+  action = %(The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.\r\n)
+
+  %w[genie frostbite].each do |fe|
+    it "gives #{fe} assess and action lines with the creature names plain" do
+      $frontend = fe
+      described_class.send(:process_downstream_hooks, +assess)
+      described_class.send(:process_downstream_hooks, +action)
+      eventually do
+        expect(@raw_socket).to have_received(:write).with(
+          %(<popStream/><pushStream id="assess"/><d cmd='look #195758165'>A jeol moradu</d> (1: cursed and nimbly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>\r\n)
+        )
+        expect(@raw_socket).to have_received(:write).with("The jeol moradu moves into a position to parry.\r\n")
+      end
+    end
+  end
+
+  it 'keeps the creature bold for a front end that handles doubled bold' do
+    $frontend = 'genie'
+    allow(Lich::Common::Frontend).to receive(:supports_double_bold?).and_return(true)
+    described_class.send(:process_downstream_hooks, +action)
+    eventually { expect(@raw_socket).to have_received(:write).with("The <pushBold/>jeol moradu<popBold/> moves into a position to parry.\r\n") }
+  end
+
+  it 'keeps a whole bold combat line' do
+    $frontend = 'genie'
+    line = %(<pushStream id="combat" /><pushBold/>Corwin's fingers lands a hard hit to the moradu's head.  <popBold/>\r\n)
+    described_class.send(:process_downstream_hooks, +line)
+    eventually { expect(@raw_socket).to have_received(:write).with(line) }
+  end
+
+  it 'gives a front end Lich does not know the legacy line' do
+    $frontend = 'unknown'
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with(legacy_objs) }
+  end
+
+  it 'passes the line through unchanged to Saga (behind its origin sentinel)' do
+    $frontend = 'saga'
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{objs}") }
+  end
+
+  # Each capability gates only its own transform: a front end can declare one
+  # without the other.
+  it 'strips only the links for a front end that handles doubled bold' do
+    $frontend = 'genie'
+    allow(Lich::Common::Frontend).to receive(:supports_double_bold?).and_return(true)
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with(Lich::Common::Markup.strip_game_links(objs)) }
+  end
+
+  it 'collapses only the bold for a front end that handles links' do
+    $frontend = 'genie'
+    allow(Lich::Common::Frontend).to receive(:supports_game_links?).and_return(true)
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with(Lich::Common::Markup.collapse_double_bold(objs)) }
+  end
+
+  # GemStone sends links under both client identities; its front ends get its
+  # bold unchanged too.
+  it 'leaves a GemStone line alone' do
+    XMLData.game = 'GS'
+    described_class.instance_variable_set(:@game_instance, Lich::Gemstone::GameInstance.new)
+    $frontend = 'genie'
+    line = %(Also here: <pushBold/><pushBold/>a <a exist="1" noun="rat">rat</a><popBold/><popBold/>.\r\n)
+    described_class.send(:process_downstream_hooks, +line)
+    eventually { expect(@raw_socket).to have_received(:write).with(line) }
+  end
+
+  # The Wizard conversion turns each bold into a GSL code, so a doubled bold
+  # would reach Wizard as doubled codes.
+  it 'gives Wizard one GSL bold code pair per creature' do
+    $frontend = 'wizard'
+    require_relative '../../lib/common/markup'
+    allow(described_class).to receive(:sf_to_wiz) { |line| Lich::Common::Markup.sf_to_wiz(line) }
+    line = %(<pushBold/><pushBold/>A <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/> gestures.\r\n)
+    described_class.send(:process_downstream_hooks, +line)
+    eventually { expect(@raw_socket).to have_received(:write).with("\034GSL\r\nA jeol moradu\034GSM\r\n gestures.\r\n") }
+  end
+
+  it 'gives the rewritten <room> block the legacy lines: no links, one bold pair, the compass' do
+    $frontend = 'frostbite'
+    XMLData.room_id = 4_227_080
+    room = %(<resource picture="0"/><room><name>[Cragstone Vale, Tunnel] (4227080)</name><description>Rising steeply.</description>) +
+           %(<exists>You also see <pushBold/><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/>.</exists>) +
+           %(<players>Also here: Universalist <a exist="-10700003" noun="Corwin">Corwin</a>.</players>) +
+           %(<exits>Obvious paths: <d>up</d>.</exits><extra></extra></room>\r\n)
+    described_class.send(:process_downstream_hooks, +room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        %(<resource picture="0"/><style id="roomName" />[Cragstone Vale, Tunnel] (4227080)\r\n) +
+        %(<style id=""/><preset id='roomDesc'>Rising steeply.</preset>  You also see <pushBold/>a jeol moradu<popBold/>.\r\n) +
+        %(Also here: Universalist Corwin.\r\n) +
+        %(Obvious paths: <d>up</d>.\r\n) +
+        %(<compass><dir value="up"/></compass>\r\n)
+      )
+    end
+  end
+
+  # Before the game is known there is no game instance to ask.
+  it 'leaves the line alone before a game instance is set' do
+    described_class.instance_variable_set(:@game_instance, nil)
+    $frontend = 'genie'
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually { expect(@raw_socket).to have_received(:write).with(objs) }
+  end
+
+  # Scripts see what the server sent: the hooks run first.
+  it 'hands downstream hooks the line as the server sent it' do
+    $frontend = 'genie'
+    seen = []
+    DownstreamHook.add('spec_game_links_hook', proc { |line| seen << line.dup; line })
+    described_class.send(:process_downstream_hooks, +objs)
+    expect(seen).to eq([objs])
+  ensure
+    DownstreamHook.remove('spec_game_links_hook')
+  end
+
+  # dr-scripts' textsubs injects <a href> from a downstream hook.
+  it "keeps a downstream hook's own <a href> link" do
+    $frontend = 'genie'
+    DownstreamHook.add('spec_href_hook', proc { |line| line.sub('jeol moradu', '<a href="https://example.test">jeol moradu</a>') })
+    described_class.send(:process_downstream_hooks, +objs)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(legacy_objs.sub('jeol moradu', '<a href="https://example.test">jeol moradu</a>'))
+    end
+  ensure
+    DownstreamHook.remove('spec_href_hook')
+  end
+end
+
 RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> block' do
   saga_room = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n)
 

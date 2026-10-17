@@ -4,6 +4,7 @@ require 'openssl'
 require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
 require_relative 'common/room_block'
+require_relative 'common/markup'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -208,6 +209,16 @@ module Lich
 
         def process_room_display(alt_string)
           raise NotImplementedError, "#{self.class} must implement #process_room_display"
+        end
+
+        # Rewrites a client-bound line for front ends that predate parts of
+        # this game's stream. Runs on the client path only, after the
+        # downstream hooks and the <room> rewrite and before the Wizard
+        # conversion (sf_to_wiz). No change unless the game overrides it.
+        # @param alt_string [String] the server string on its way to the client
+        # @return [String] the string to send
+        def adapt_for_frontend(alt_string)
+          alt_string
         end
 
         def combat_count
@@ -1154,6 +1165,11 @@ module Lich
                              Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string)
                            end
             end
+            # Game-specific rewrites for front ends that predate parts of the
+            # stream (DragonRealms' links and doubled bold). After the <room>
+            # rewrite, which keeps the parts' markup, and before sf_to_wiz,
+            # which turns each bold into a GSL code.
+            alt_string = @game_instance.adapt_for_frontend(alt_string) if @game_instance
             process_room_information(alt_string)
 
             # Handle frontend-specific modifications
@@ -1614,6 +1630,24 @@ module Lich
           end
         end
 
+        alt_string
+      end
+
+      # DragonRealms' links and bold go only to front ends that handle them;
+      # the rest get the legacy line. Without :double_bold a front end also
+      # loses the single bold around a creature in action and assess lines,
+      # which the legacy stream sent plain; it runs first, while the link it
+      # keys on is still there. GemStone sends links under both client
+      # identities, so it keeps the base no-op. Doubled bold appears only in
+      # the GemStone captures recorded under the Saga identity; whether it
+      # depends on the identity is not known.
+      # @param alt_string [String] the server string on its way to the client
+      # @return [String] the string to send
+      # @see Lich::GameBase::GameInstance::Base#adapt_for_frontend
+      def adapt_for_frontend(alt_string)
+        alt_string = Lich::Common::Markup.strip_link_bold(alt_string) unless Frontend.supports_double_bold?
+        alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless Frontend.supports_game_links?
+        alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless Frontend.supports_double_bold?
         alt_string
       end
 

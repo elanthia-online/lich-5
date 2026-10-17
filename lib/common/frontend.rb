@@ -17,7 +17,7 @@ module Lich
   module Common
     module Frontend
       PLATFORM_KEYS = %i[darwin linux windows unsupported].freeze
-      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element].freeze
+      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element game_links double_bold].freeze
       BUILT_IN_DEFINITION_FILES = [
         %w[stormfront wrayth],
         %w[profanity profanity],
@@ -553,6 +553,21 @@ module Lich
       # layout (see Lich::Common::RoomBlock).
       def self.supports_room_element?(fe = $frontend)
         has_capability?(fe, :room_element)
+      end
+
+      # Whether the front end handles DragonRealms' <a exist> object links.
+      # Others get them stripped to the legacy text (Markup.strip_game_links).
+      def self.supports_game_links?(fe = $frontend)
+        has_capability?(fe, :game_links)
+      end
+
+      # Whether the front end handles DragonRealms' creature bold: the doubled
+      # <pushBold/><pushBold/> around linked creatures in room-object listings
+      # and the single pair around them in action and assess lines. Others get
+      # the legacy line: one pair in the listings (Markup.collapse_double_bold)
+      # and none elsewhere (Markup.strip_link_bold).
+      def self.supports_double_bold?(fe = $frontend)
+        has_capability?(fe, :double_bold)
       end
 
       # The running session also gets the sentinel when --sentinel asked for
