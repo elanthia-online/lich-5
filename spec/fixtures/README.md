@@ -98,7 +98,7 @@ spells or modify existing ones.
 Lines captured verbatim from DragonRealms Saga-dialect `;logxml streams`
 sessions, one per room-objects shape the XMLParser creature path branches on.
 Only the per-line timestamp is removed; a line that named a player would be
-pseudonymised (see `spec/fixtures/streams/MANIFEST.md` for the corpus labels).
+pseudonymised and its player id remapped (see `spec/fixtures/streams/MANIFEST.md` for the corpus labels).
 
 | Shape | Source | Used by |
 |---|---|---|
