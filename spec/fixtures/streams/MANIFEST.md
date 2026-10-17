@@ -31,6 +31,8 @@ DragonRealms has two dialects:
 | `dr_saga_stow.xml` | saga | 2026-10-15 16:15 | 10 | linked stow container feed (`<inv id='stow'>` with links, no `<container>`) |
 | `dr_saga_group_bank.xml` | saga | 2026-10-15 16:37 | 79 | group join/list/leave with another leader, bank balance with linked name |
 | `dr_saga_containers_speech.xml` | saga | 2026-10-15 17:49 | 100 | open/close/look in/rummage, bank deposit/withdraw, hide/unhide, linked speech preset |
+| `dr_saga_login.xml` | saga | 2026-10-16 09:00 | 2 | C8 capture `2026-10-16_09-00-23`, lines 2–228, cut with `--real-login --drop-settings-body`, then `<playerID>` set by hand to the synthetic `700001` the other fixtures use and the other player ids remapped in place like the rest (no golden field reads the playerID). Real Saga login: the stored `<settings>` record (emptied), `<settingsInfo instance='DR'>` at line 5, `<app char>`, a linked worn list before any other link, `<exposeContainer>`/`<container id='stow' target>` + `clearContainer` + the first stow header on one line (line 35), the stream-window and injury declarations, `<endSetup/>`, `<nav>`, the room components and then the first `<room>` block |
+| `dr_saga_no_room_heavens.xml` | saga | 2026-10-16 09:18 | 9 | C8 capture `2026-10-16_09-00-23`, lines 10717–10725 and 10803–10839, joined at a prompt boundary (`sed -n` of both ranges, then extract.rb with no window). A `<room>` block from LOOK, then a `[The Heavens]` view with a bare `<nav/>` and ` - [The Heavens] (**)` subtitles, and the return to the room, both sent as legacy room components with no `<room>` |
 | `gs_saga_login.xml` | GS, Saga identity | 2026-10-15 11:29 | 1 | GS-15 capture `2026-10-15_11-29-55`, lines 1–80, cut with `--real-login --end-prompt` (the window ends mid-login, so the closing prompt is the driver's synthetic one). Real login: `<settingsInfo instance='GSF'>` at line 5, then bracketless main/room subtitles (` - Shattered Nexus - 7199`), `compDef` room parts, a linked worn list, and `<exposeContainer>`/`<container id='stow' target>` + `clearContainer` + the first stow header on one line; no `<room>`. GS sends no `<app char>` in these 80 lines, so extract.rb adds one |
 | `gs_saga_hunt.xml` | GS, Saga identity | 2026-10-15 15:08 | 14 | GS-15 capture `2026-10-15_15-08-37`, lines 2–130 (synthetic header). A move with `<nav>`, bracketless subtitles, `compDef` room parts, `<roommeta>`, the `roomName`/`roomDesc` styles and a `<dir>` compass; the main-text room view with `<crtrStatus>` before a doubled-bold (`<pushBold/><pushBold/>`) creature link; standalone `<crtrStatus>` tags before a `room objs` component whose own tag precedes a single-bold `<b> <pushBold/>…<popBold/></b>` link; linked combat lines in single bold |
 
@@ -81,6 +83,11 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | Saga exp components: 0 of 4,171 `<component id='exp …'>` lines carry an `<a exist>` link. The same captures carry links elsewhere, and the Lich that recorded them rewrites inline exp on the line as sent, links kept, so a link from the server would have been logged. The game also refuses `toggle expbrief` under the Saga identity ("This toggle is not available for characters using a Front End other than Wrayth.", seen by the user on 2026-10-17). The linked exp lines in `drparser_spec.rb` are synthetic | C8's 11 Saga-stream captures of 2026-10-17 (not in the corpus table) |
 
 ### #1703
+
+| Absent or counted | Corpus |
+|---|---|
+| `<settingsInfo>`: 3 occurrences, each at line 5 of a real login (C8 09:00; GS 11:29 and 12:38). 0 mid-session; 0 on the same line as a main `streamWindow` subtitle; 0 creature tags before it in any of the 3 logins; 0 captures that start at a login without one. `dr_saga_login.xml` and `gs_saga_login.xml` are two of the three logins | DR-16 + GS-15 (131 captures) |
+| 0 links with `exist=""` | DR-16 + GS-15; FIX |
 
 ### #1704
 

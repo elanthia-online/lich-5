@@ -1,0 +1,53 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+Brenna drums his fingers on his bucket rhythmically.
+<prompt time="1792095489">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Monster <a exist="-10700002" noun="Brenna">Brenna</a>, Soul Annihilator <a exist="-10700003" noun="Corwin">Corwin</a> and <a exist="-10700004" noun="Delphine">Delphine</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792095489">&gt;</prompt>
+Brenna drums his fingers on his bucket rhythmically.
+After a moment, a dull *THUD* echoes from within the bucket.
+<prompt time="1792095490">&gt;</prompt>
+<a exist="-10700002" noun="Brenna">Brenna</a> narrows <a exist="-10700002" noun="Brenna">his</a> eyes, focused within <a exist="-10700002" noun="Brenna">his</a> fury.
+<prompt time="1792095490">&gt;</prompt>
+<a exist="-10700004" noun="Delphine">Delphine</a> glances up at the sky.
+After a few moments <a exist="-10700004" noun="Delphine">she</a> lowers <a exist="-10700004" noun="Delphine">her</a> gaze.
+<component id='room objs'></component>
+<component id='room players'>Also here: <a exist="-10700004" noun="Delphine">Delphine</a>, Monster <a exist="-10700002" noun="Brenna">Brenna</a> and Soul Annihilator <a exist="-10700003" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792095496">&gt;</prompt>
+<roundTime value='1792095516'/><nav/>
+<streamWindow id='main' title='Story' subtitle=" - [The Heavens] (**)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [The Heavens] (**)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'></component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'></component>
+<component id='room extra'></component>
+<nav rm='230008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</component>
+<component id='room objs'></component>
+<component id='room players'>Also here: <a exist="-10700004" noun="Delphine">Delphine</a>, Monster <a exist="-10700002" noun="Brenna">Brenna</a> and Soul Annihilator <a exist="-10700003" noun="Corwin">Corwin</a>.</component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+You scan the skies for a few moments.
+Xibar is unobscured by clouds.
+The <a exist="-11032" noun="Xibar">blue moon Xibar</a> has waned to a narrow crescent of light.
+It is fairly close and is shining brightly.
+
+You see nothing else of note.
+Roundtime: 20 sec.
+<component id='room objs'></component>
+<component id='room players'>Also here: <a exist="-10700004" noun="Delphine">Delphine</a>, Monster <a exist="-10700002" noun="Brenna">Brenna</a> and Soul Annihilator <a exist="-10700003" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792095496">R&gt;</prompt>
+<a exist="-10700003" noun="Corwin">Corwin</a> gets a <a exist="198582900" noun="box">sturdy deobar box</a> from inside <a exist="-10700003" noun="Corwin">his</a> <a exist="196503075" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792095496">R&gt;</prompt>
+<a exist="-10700002" noun="Brenna">Brenna</a> gets a <a exist="198535450" noun="box">plain pine box</a> from inside <a exist="-10700002" noun="Brenna">his</a> <a exist="196506445" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792095496">R&gt;</prompt>
+Corwin drops a sturdy deobar box into a portable silversteel bucket with a flared rim.  He glances inside and draws back quickly from the sight.
+<prompt time="1792095497">R&gt;</prompt>
