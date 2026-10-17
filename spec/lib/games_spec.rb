@@ -1999,7 +1999,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
     XMLData.room_id = 4_227_080
     room = %(<resource picture="0"/><room><name>[Cragstone Vale, Tunnel] (4227080)</name><description>Rising steeply.</description>) +
            %(<exists>You also see <pushBold/><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/>.</exists>) +
-           %(<players>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</players>) +
+           %(<players>Also here: Universalist <a exist="-10700003" noun="Corwin">Corwin</a>.</players>) +
            %(<exits>Obvious paths: <d>up</d>.</exits><extra></extra></room>\r\n)
     described_class.send(:process_downstream_hooks, +room)
     eventually do
