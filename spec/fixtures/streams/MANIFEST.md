@@ -144,6 +144,24 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1721
 
+| Absent or counted | Corpus |
+|---|---|
+| DR Saga sends 0 `<dir>`: its only compass is the empty `<compass></compass>` inside the `room exits` component (51,706 of them). GemStone keeps `<dir>` (27,725). The legacy FIX streams have 102 `<dir>` in 39 top-level compasses, one after every exits line | DR-16 Saga; GS-15; FIX |
+| Exits in `<room>` blocks: 935 blocks have no `<d>` (913 "none.", that is 772 "Obvious paths: none." and 141 "Obvious exits: none.", plus 22 hidden by fog); 0 exit names outside the 11 compass directions. One "none." block is committed as `spec/fixtures/room_block/dr_saga_no_exits.xml`; no fog block is | DR-16 Saga |
+| The `room exits` component precedes `<room>` in 51,595 arrivals, follows it in 0 and is missing in 1 (committed as `spec/fixtures/room_block/dr_saga_arrival_without_exits_component.xml`) | DR-16 Saga |
+| PEER into a neighbouring room: both PEERs in the capture are answered by `You peer <dir> and see ...` and a bare `<room>` block of the room peered into, with 0 `<nav>`, subtitles or room components for that room (committed as `spec/fixtures/room_block/dr_saga_peer.xml`). 0 legacy-dialect PEERs were fetched, so whether the legacy stream sent a compass after one is not known | C8 `2026-10-17_13-24-35`, a user-named capture (not in the corpus table) |
+
 ### #1722
 
+| Absent or counted | Corpus |
+|---|---|
+| Creature bold outside room-object listings. Legacy: of the 327 `moradu` mentions in `dr_legacy_hunt.xml` outside `room objs`, assess and `You also see` lines, 0 have a bold pair of their own; the 3 in bold are inside whole bold combat damage lines. All 14 legacy assess lines that name a creature (from `dr_legacy_hunt.xml:135`) name it plain. Saga: 217 single bold pairs hold a creature link, each around nothing but an optional article and the link, all in action or assess lines, 0 in `room objs` (room-object listings double their bold, see #1702) | FIX |
+
 ### #1725
+
+| Absent or counted | Corpus |
+|---|---|
+| FLAG DESCRIPTION replies: exactly `You will no longer see room descriptions.` and `You will now see room descriptions.`, each on a whole line. 968 and 756 (960 and 747 in Saga captures); 0 other wordings | DR-16 + DR-extra |
+| Locate: 1 Saga Locate view (`dr_saga_locate_descflag.xml`; a second attempt fizzled). 0 legacy Locate views taken with descriptions off; the one legacy Locate capture (`spec/fixtures/room_block/dr_legacy_locate.xml`, outside DR-16) has them on | DR-16 + DR-extra |
+| FLAG listing with descriptions OFF: committed as `spec/fixtures/flag/dr_saga_flag_listing_description_off.xml`. In the 286-line window it comes from, the replies have the same two wordings (2 ON, 1 OFF), 3 of the 4 bare `FLAG` listings show the Description row OFF, and the `<room>` sent after the OFF reply still has its description | C8 `2026-10-17_11-02-10`, lines 27050–27335 (outside DR-16) |
+| GemStone: 0 FLAG DESCRIPTION replies and 0 `<room>` blocks. That GemStone follows the flag in its own room view is the maintainer's word, not a capture. DR Saga sessions with RoomBrief or RoomNames off: 0 | GS-15; DR-16 |

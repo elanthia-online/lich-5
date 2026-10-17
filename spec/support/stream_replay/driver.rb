@@ -32,13 +32,19 @@ module StreamReplay
     READY_TIMEOUT = 60
     PROMPT_TIMEOUT = 10
 
-    Result = Struct.new(:snapshots, :stdout, :warnings, keyword_init: true)
+    Result = Struct.new(:snapshots, :stdout, :warnings, :game_input, keyword_init: true)
 
     # @param fixture [StreamReplay::Fixture] the stream to replay
     # @param frontend [String, nil] value for --frontend= (nil: pipe default)
-    def initialize(fixture, frontend: nil)
+    # @param settings [Hash{String=>String}] lich_settings rows the child
+    #   starts with (e.g. a ;display toggle), seeded into its lich.db3
+    # @param client_lines [Array<String>] lines the client sends Lich after
+    #   its handshake, before the stream starts (e.g. SET_FRONTEND_CAPS)
+    def initialize(fixture, frontend: nil, settings: {}, client_lines: [])
       @fixture = fixture
       @frontend = frontend
+      @settings = settings
+      @client_lines = client_lines
       @warnings = []
     end
 
@@ -47,9 +53,11 @@ module StreamReplay
       Dir.mktmpdir('lich_replay') do |tmp|
         %w[data scripts logs maps backup temp].each { |d| FileUtils.mkdir_p(File.join(tmp, d)) }
         FileUtils.cp(PROBE, File.join(tmp, 'scripts', 'replay_probe.lic'))
+        seed_settings(File.join(tmp, 'data', 'lich.db3')) unless @settings.empty?
         snapshot_path = File.join(tmp, 'snapshots.jsonl')
         server = TCPServer.new('127.0.0.1', 0)
         stdout = +''
+        game_input = +''
         begin
           Open3.popen2e(child_env(snapshot_path), *child_args(tmp, server.addr[1]), chdir: REPO) do |stdin, out, wait_thr|
             reader = Thread.new do
@@ -59,12 +67,13 @@ module StreamReplay
             end
             stdin.puts('LICH_REPLAY_KEY')
             stdin.puts('/FE:STORMFRONT /VERSION:1.0 /P:REPLAY /XML')
+            @client_lines.each { |line| stdin.puts(line) }
             stdin.flush
             conn = Timeout.timeout(30) { server.accept }
             conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
             conn.gets # login key
             drain = Thread.new do
-              loop { break unless conn.readpartial(4096) }
+              loop { game_input << conn.readpartial(4096) }
             rescue StandardError
               nil
             end
@@ -79,11 +88,22 @@ module StreamReplay
         ensure
           server.close rescue nil
         end
-        Result.new(snapshots: read_snapshots(snapshot_path), stdout: stdout, warnings: @warnings)
+        Result.new(snapshots: read_snapshots(snapshot_path), stdout: stdout, warnings: @warnings, game_input: game_input)
       end
     end
 
     private
+
+    # Lich creates its tables only if they are missing, so a row seeded here
+    # is what the child reads, as a setting a player had stored.
+    def seed_settings(db_path)
+      require 'sqlite3'
+      db = SQLite3::Database.new(db_path)
+      db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
+      @settings.each { |name, value| db.execute('INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);', [name.to_s, value.to_s]) }
+    ensure
+      db&.close
+    end
 
     def child_env(snapshot_path)
       { 'BUNDLE_WITHOUT' => 'gtk:vscode:profanity', 'LICH_REPLAY_SNAPSHOTS' => snapshot_path }

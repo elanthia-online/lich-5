@@ -50,6 +50,29 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
+  # declared_capabilities -- the client's SET_FRONTEND_CAPS set
+  # ===========================================================================
+  describe '#declared_capabilities' do
+    it 'starts undeclared' do
+      expect(socket.declared_capabilities).to be_nil
+    end
+
+    it 'keeps a frozen copy, so the caller cannot change it later' do
+      capabilities = [:game_links]
+      socket.declared_capabilities = capabilities
+      capabilities << :room_element
+      expect(socket.declared_capabilities).to eq([:game_links])
+      expect(socket.declared_capabilities).to be_frozen
+    end
+
+    it 'can be cleared' do
+      socket.declared_capabilities = [:game_links]
+      socket.declared_capabilities = nil
+      expect(socket.declared_capabilities).to be_nil
+    end
+  end
+
+  # ===========================================================================
   # alive? -- liveness semantics and edge cases
   # ===========================================================================
   describe '#alive?' do

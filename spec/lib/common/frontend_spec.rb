@@ -845,6 +845,21 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.supports_game_links? / .supports_double_bold?' do
+    it 'is true only for Saga, the front end that handles DragonRealms links and doubled bold' do
+      expect(frontend.supports_game_links?('saga')).to be true
+      expect(frontend.supports_double_bold?('saga')).to be true
+      %w[wrayth stormfront genie profanity frostbite wizard avalon suks unknown].each do |fe|
+        expect(frontend.supports_game_links?(fe)).to be(false), fe
+        expect(frontend.supports_double_bold?(fe)).to be(false), fe
+      end
+    end
+
+    it 'lets a custom front end declare them' do
+      expect(frontend.capability_vocabulary).to include(:game_links, :double_bold)
+    end
+  end
+
   describe '.has_capability?' do
     it 'returns true for registered capabilities' do
       expect(frontend.has_capability?('wrayth', :xml)).to be true
