@@ -1,6 +1,6 @@
 <mode id="GAME"/>
 Please wait for connection to game server.
-<playerID id='1223064'/>
+<playerID id='700001'/>
 <settingsInfo  client="1.0.1.28" major="15" crc='617664094' instance='GSF'/>
 <app char="Aldric" game="GS" title="GemStone IV: Aldric"/>
 <mode id="GAME"/>
@@ -56,27 +56,27 @@ All Rights Reserved
 <openDialog type='dynamic' id='stance' title='Stance' location='right' height='50' width='190' resident='true'><dialogData id='stance'><progressBar id='pbarStance' value='100' text='defensive (100%)' top='5' left='-5' height='16' width='160' align='n' tooltip='Percent of stance contributing to defense'/></dialogData></openDialog>
 <streamWindow id="Spells" title="Spells" ifClosed="" resident="true" scroll="manual"/>
 <clearStream id="Spells"/>
-<stream id="Spells"><a exist="-11223064" coord="2524,1871" noun="">Minor Elemental</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1870" noun="">Major Elemental</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1877" noun="">Ranger Base</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1879" noun="">Sorcerer Base</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1884" noun="">Wizard Base</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1869" noun="">Empath Base</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,1886" noun="">Minor Mental</a></stream>
-<stream id="Spells"><a exist="-11223064" coord="2524,2615" noun="">Arcane</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1871" noun="">Minor Elemental</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1870" noun="">Major Elemental</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1877" noun="">Ranger Base</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1879" noun="">Sorcerer Base</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1884" noun="">Wizard Base</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1869" noun="">Empath Base</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,1886" noun="">Minor Mental</a></stream>
+<stream id="Spells"><a exist="-10700001" coord="2524,2615" noun="">Arcane</a></stream>
 <stream id="Spells"> </stream>
 <stream id="Spells">Minor Elemental:</stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="401">Elemental Defense I</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="402">Presence</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="403">Lock Pick Enhancement</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="404">Disarm Enhancement</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="405">Elemental Detection</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="406">Elemental Defense II</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="407">Unlock</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="408">Disarm</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="409">Elemental Blast</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="410">Elemental Wave</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="411">Elemental Blade</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="412">Weapon Deflection</a></stream>
-<stream id="Spells">  <a exist="-11223064" coord="2524,1865" noun="413">Elemental Saturation</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="401">Elemental Defense I</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="402">Presence</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="403">Lock Pick Enhancement</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="404">Disarm Enhancement</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="405">Elemental Detection</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="406">Elemental Defense II</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="407">Unlock</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="408">Disarm</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="409">Elemental Blast</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="410">Elemental Wave</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="411">Elemental Blade</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="412">Weapon Deflection</a></stream>
+<stream id="Spells">  <a exist="-10700001" coord="2524,1865" noun="413">Elemental Saturation</a></stream>
 <prompt time="0">&gt;</prompt>
