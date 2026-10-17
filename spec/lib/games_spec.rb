@@ -1841,9 +1841,16 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
       allow(Lich).to receive(:log)
       allow(parser).to receive(:reset).and_call_original
       allow(Lich::GameBase::Game).to receive(:strip_xml)
-      Lich::GameBase::Game.process_xml_data(+"<openDialog id='quux' title='Tsetem's Items'/><a exist=\"123\" noun=\"swo")
+      received = "<openDialog id='quux' title='Tsetem's Items'/><a exist=\"123\" noun=\"swo"
+      server_string = +received
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(Lich).to have_received(:log).with(/nested single quotes XML tags fixed to/) # the repair ran
       expect(Lich).to have_received(:log).with(/stream desync/)
       expect(Lich::GameBase::Game).not_to have_received(:strip_xml) # returned before downstream processing
+      # The repair didn't save it, so it is undone: the desync log, and the
+      # caller's Inventory.observe and clients, get the fragment as received.
+      expect(server_string).to eq(received)
+      expect(Lich).to have_received(:log).with(/stream desync.*#{Regexp.escape(received.inspect)}/)
     end
 
     it 'repairs a malformed settingsInfo via the retry path and flags an init re-seed' do
