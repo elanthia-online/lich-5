@@ -127,6 +127,28 @@ line for a room with no objects, so the description line ends
 |---|---|---|
 | legacy `<style id=""/><preset id='roomDesc'>…</preset>  ` with no objects | C2, `2026-10-07_13-38-12`, lines 35–37 | `room_block_spec.rb` ("rewrites a captured Saga block into the captured legacy lines for the same room"), against the Saga `<room>` for the same room in `streams/dr_saga_locate_descflag.xml` |
 
+## stow/dr_saga_handover.xml
+
+### What is it?
+
+Four lines from one DragonRealms Saga-dialect `;logxml streams` session, each
+followed by the prompt that came after it, cut with
+`spec/support/stream_replay/extract.rb` (timestamps removed, the other
+character's name pseudonymised and player id remapped). Between them the session holds other output
+that the parser does not need here.
+
+| Line | Shape | Source (C8, `2026-10-17_00-00-00`) |
+|---|---|---|
+| 1 | own stow burst: `clearContainer`, header `In the <a exist="200981348" noun="pack">pack</a>:`, 6 items, then the PUT echo on the same line | line 229 |
+| 3 | `You accept <a …>Brenna</a>'s offer and are now holding a <a exist="200708744" noun="pack">scuffed traveler's pack</a>.` | line 575 |
+| 5 | stow burst whose header names the handed-over pack (`In the <a exist="200708744" …>`), 71 items | line 617 |
+| 7 | the next own stow burst (header 200981348 again, 5 items), after the pack was given back | line 1402 |
+
+Used by `xmlparser_inventory_streams_spec.rb` ("stow feed for a handed-over
+pack (captured)"), with and without a login `<container id='stow'>`. The
+capture's login is not in the fixture, so the tagged examples feed a tag of
+the shape `streams/dr_saga_login.xml` captured, naming this capture's pack.
+
 ## crtr_status/gs_saga_crtr_status.xml
 
 Six verbatim server lines from a GemStone Shattered `;logxml` capture of

@@ -126,6 +126,13 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1709
 
+| Absent or counted | Corpus |
+|---|---|
+| `<container id='stow'>`: 1 in DR-16, at C8's login (line 35, committed in `dr_saga_login.xml`), and 0 before any of the 1,657 linked mid-session stow feeds. 0 changes of the stow container. 0 legacy DR logins in the corpus, so the legacy login shape is unknown. GemStone sends 22 tags in 10 captures: 2 at the 2 logins and 20 mid-session in 8 captures, always the same target | DR-16; GS-15 |
+| Stow feed (DR: 2,126 bursts, 1,657 linked and 469 plain; GS: 3,043 bursts and 3,044 headers, in the same count; the one-header difference was not traced): each burst has exactly 1 `clearContainer` and 1 header; every header has exactly 1 link (0 with two or more); 0 headers other than `In the …:` (`On`/`Under`/`Behind` never occur); 0 legacy headers with a link; 0 GS headers naming a container other than the tag's; 0 stow items outside a burst; 0 `<inv>` split across lines; 0 empty refreshes; 0 `… is closed.` headers | DR-16; GS-15 |
+| Worn list: 15,951 lists opened, 15,927 closed by `<popStream/>` (Saga 14,675, all linked; legacy 1,252, all plain). The other 24 are cut off by a log-file rotation. Every list holds only item lines (624,413 linked, 25,040 plain); 0 empty lists; 0 mixed lists | DR-16 |
+| Handed-over containers in the stow feed, as seen once each: after `You accept …'s offer and are now holding a` lootsack (line 39), the next two bursts still name the own pack (lines 87, 229); after the same line for a pack (line 575), the next burst names that pack (line 617, committed in `spec/fixtures/stow/dr_saga_handover.xml`) and the next own burst names the own pack again (line 1402). What makes the feed list a held container is not known | C8 `2026-10-17_00-00-00` (user-named; not in the corpus table) |
+
 ### #1711
 
 ### #1713

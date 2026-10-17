@@ -96,6 +96,8 @@ module Lich
       # Saga dialect's first fragment ("Also here: " or "Also here: Monster ")
       # always ends in whitespace because a player link follows it.
       DR_LEGACY_PLAYERS_RUN = /\AAlso here: .*\S\z/m.freeze
+      # Text before the container link on a stow container's header line.
+      STOW_HEADER = /\A(?:In|On|Under|Behind) the\z/.freeze
       # The room number after a room title, in the legacy roomName style or a
       # Saga <room><name>: " (230008)", or " (**)" for a room without one.
       ROOM_NUMBER_SUFFIX = /\s*\((?:\d+|\*\*)\)\s*\z/.freeze
@@ -111,6 +113,20 @@ module Lich
         @current_stream = String.new
         @current_style = String.new
         @stow_container_id = nil
+        # A stow clearContainer seen this burst (see the stow header learning in
+        # tag_start); cleared at the prompt that ends the burst.
+        @stow_clear_pending = false
+        # The container the current stow feed's header named, when that is not
+        # the stow container (see #learn_stow_container); cleared when the next
+        # feed starts (clearContainer).
+        @stow_feed_id = nil
+        # Whether the parser itself opened the worn-inventory staging for the
+        # current pushStream id='inv' (so it commits only its own refresh).
+        @inv_stream_staging = false
+        # A DR worn list opened before the stream's first link was seen: its
+        # refresh opens at the list's first link instead (see
+        # #open_pending_inv_refresh). Only read while that list's stream is open.
+        @inv_stream_pending = false
         @obj_location = nil
         @obj_exist = nil
         @obj_noun = nil
@@ -303,6 +319,11 @@ module Lich
         # authoritative by the next <prompt>, so drop the in-flight buffers and
         # keep the previously published snapshot visible instead.
         GameObj.discard_staged_refreshes
+        # Those buffers included any worn-list or stow refresh this parser had
+        # opened, so it no longer owns one.
+        @inv_stream_staging = false
+        @stow_clear_pending = false
+        @stow_feed_id = nil
         # A <crtrStatus> tag can be fully parsed and cached here while the
         # matching bold <a> text is still in an as-yet-unparsed remainder of
         # the fragment. If a malformed/truncated fragment forces a reset in
@@ -501,6 +522,13 @@ module Lich
       # - :room_element       a <room> block has been seen. Not every room
       #                       arrives as one: a Saga session also gets some
       #                       moves as the legacy room components.
+      # - :stow_container_tag a <container id='stow' target=...> has been seen.
+      #                       GemStone and the DR Saga stream send it at login.
+      #                       Not the same as {#stow_container_id} being set:
+      #                       without the tag, #learn_stow_container takes
+      #                       that id from a stow feed's header, and this
+      #                       flag tells a tag-sourced id (kept) from a
+      #                       header-learned one (follows the next header).
       #
       # Cleared at login (<settingsInfo>); a mid-stream {#reset} keeps them,
       # since a desync does not change the dialect.
@@ -525,11 +553,67 @@ module Lich
           @stream_features << :links if attributes['exist']
         when 'room'
           @stream_features << :room_element
+        when 'container'
+          @stream_features << :stow_container_tag if attributes['id'] == 'stow'
         when 'settingsInfo'
           @stream_features.clear # a new login: the dialect is re-learned
         end
       end
       private :observe_stream_feature
+
+      # The stow feed's header line names the container it lists:
+      # <inv id='stow'>In the <a exist="195648378" noun="pack">pack</a>:</inv>.
+      # GemStone and the DragonRealms Saga-identity stream send <container
+      # id='stow' target=...> at login, and that tag stays the authoritative
+      # stow container id. When none has been seen (a parser that missed the
+      # login, such as a replay with a synthetic login), the stow container id
+      # is taken from the header instead. (The DR legacy feed is plain text and
+      # names no container.)
+      #
+      # Either way the header is skipped as the container itself and the items
+      # after it land in its contents rather than in worn inventory. On
+      # DragonRealms the feed can also list a container that is not the stow
+      # container (a pack handed over by another character), so there the
+      # items go under the container the header names even when the tag is
+      # known, and the stow container keeps its published contents. GemStone
+      # files them under the tag's container, as before.
+      #
+      # A stow clearContainer seen this burst opens its refresh here when the
+      # id was not yet known; a refresh it opened under another container is
+      # abandoned (that container keeps its published contents) and reopened
+      # under the named one.
+      def learn_stow_container(exist)
+        return if exist.nil?
+        return unless @active_tags.include?('inv') && @active_ids.include?('stow')
+        return unless @obj_before_name.to_s.match?(STOW_HEADER)
+
+        tagged = stream_feature?(:stow_container_tag)
+        return if tagged && XMLData.game !~ /^DR/
+
+        previous = @stow_container_id
+        @stow_container_id = exist unless tagged
+        @stow_feed_id = exist == @stow_container_id ? nil : exist
+        @obj_location = exist
+        return unless @stow_clear_pending && previous != exist
+
+        GameObj.abort_container(previous) if previous
+        GameObj.begin_container(exist)
+      end
+      private :learn_stow_container
+
+      # Opens the worn refresh a DR worn list deferred at its pushStream (see
+      # @inv_stream_pending), at the list's first linked item. Every item of the
+      # list follows, so the refresh is still complete.
+      def open_pending_inv_refresh
+        return unless @inv_stream_pending && @current_stream == 'inv'
+
+        @inv_stream_pending = false
+        return if GameObj.inv_refresh_open?
+
+        GameObj.begin_inv
+        @inv_stream_staging = true
+      end
+      private :open_pending_inv_refresh
 
       def error(message, line, column)
         @sax_parse_errors << "#{message} (line #{line}, column #{column})"
@@ -661,6 +745,10 @@ module Lich
           if name =~ /^(?:a|right|left)$/
             @obj_exist = attributes['exist']
             @obj_noun = attributes['noun']
+            if name == 'a'
+              learn_stow_container(@obj_exist)
+              open_pending_inv_refresh if @obj_exist
+            end
           end
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
@@ -695,7 +783,7 @@ module Lich
           end
           if name == 'inv'
             if attributes['id'] == 'stow'
-              @obj_location = @stow_container_id
+              @obj_location = @stow_feed_id || @stow_container_id
             else
               @obj_location = attributes['id']
             end
@@ -733,8 +821,27 @@ module Lich
               @assess_link_nouns = {}
             end
             if XMLData.game =~ /^GS/
-              GameObj.begin_inv if attributes['id'].to_s == 'inv'
+              if attributes['id'].to_s == 'inv'
+                GameObj.begin_inv
+                @inv_stream_staging = true
+              end
               GameObj.begin_reserve if attributes['id'].to_s == 'reserve'
+            elsif attributes['id'].to_s == 'inv'
+              # The linked worn-items list is a complete refresh, as on GemStone.
+              # An open INV LIST scrape already owns the worn staging, so none
+              # opens here then. The legacy list is plain text (no GameObj
+              # entries). Until the stream's first link has been seen (a login's
+              # first list arrives before it) the dialect is unknown, so the
+              # refresh waits for the list's first link; a legacy list has none.
+              @inv_stream_pending = false
+              unless GameObj.inv_refresh_open?
+                if stream_feature?(:links)
+                  GameObj.begin_inv
+                  @inv_stream_staging = true
+                else
+                  @inv_stream_pending = true
+                end
+              end
             end
           end
 
@@ -769,8 +876,13 @@ module Lich
             end
             @in_stream = false
             # @current_stream still names the closing stream here; commit_* is a
-            # no-op when the matching refresh was never opened (e.g. in DR).
-            GameObj.commit_inv      if @current_stream == 'inv'
+            # no-op when the matching refresh was never opened. The worn list
+            # commits only a refresh this parser opened, never another writer's
+            # (an INV LIST scrape in flight).
+            if @current_stream == 'inv' && @inv_stream_staging
+              GameObj.commit_inv
+              @inv_stream_staging = false
+            end
             GameObj.commit_reserve  if @current_stream == 'reserve'
             GameObj.commit_familiar if @current_stream == 'familiar'
             if attributes['id'] == 'bounty'
@@ -831,6 +943,7 @@ module Lich
             # signal for clearContainer/inv container fills, which have no
             # closing tag of their own. No-op when no container refresh is open.
             GameObj.commit_all_containers
+            @stow_clear_pending = false
 
             if @dr_active_spell_tracking
               @dr_active_spell_tracking = false
@@ -862,7 +975,12 @@ module Lich
 
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
-              GameObj.begin_container(@stow_container_id)
+              # Until the stow container's id is known (no <container
+              # id='stow'> seen yet), the refresh opens when its header line
+              # names the container; see #learn_stow_container.
+              @stow_clear_pending = true
+              @stow_feed_id = nil
+              GameObj.begin_container(@stow_container_id) if @stow_container_id
             else
               GameObj.begin_container(attributes['id'])
             end
