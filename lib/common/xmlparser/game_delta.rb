@@ -62,19 +62,22 @@ module Lich
 
         # Applies a <crtrStatus> immediately, if this game can.
         #
-        # Returns true when applied. The parser then collects the id, but only
-        # the DragonRealms prompt handler drains that list (pairing ids to
-        # legacy-stream bold names), so another game returning true gets no
-        # pairing. Returns false to have the parser stash the flags for the
-        # creature's next room-objs <a exist> link, which registers it and
-        # applies them. Opening room objs or <nav> clears the stash, so a
-        # stashed tag whose link has already passed (GemStone's standalone
-        # combat updates) is never applied.
+        # Returns true when applied and the id should be collected: only the
+        # DragonRealms prompt handler drains that list (pairing ids to
+        # legacy-stream bold names). Returns :applied when applied with no
+        # pairing and nothing to stash (GemStone's standalone tags for a
+        # creature already in the current room). Returns false to have the
+        # parser stash the flags for the creature's next room-objs <a exist>
+        # link, which registers it and applies them. Opening room objs or <nav>
+        # clears the stash, so a stashed tag whose link has already passed is
+        # never applied.
         #
         # @param id [String] the exist id
         # @param flags [Hash{String=>String}] the tag's other attributes
-        # @return [Boolean]
-        def apply_crtr_status(_id, _flags)
+        # @param in_room_objs [Boolean] the tag arrived inside a room objs
+        #   component
+        # @return [Boolean, Symbol] true, :applied or false
+        def apply_crtr_status(_id, _flags, in_room_objs: false) # rubocop:disable Lint/UnusedMethodArgument
           false
         end
       end

@@ -809,16 +809,6 @@ module Lich
         CreatureInstance.cleanup_old(max_age_seconds)
       end
 
-      # Generate damage report for HP analysis
-      def self.damage_report(**options)
-        CreatureInstance.damage_report(**options)
-      end
-
-      # Print formatted damage report
-      def self.print_damage_report(**options)
-        CreatureInstance.print_damage_report(**options)
-      end
-
       # Get all creature instances
       def self.all
         CreatureInstance.all
