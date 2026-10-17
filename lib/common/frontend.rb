@@ -717,15 +717,16 @@ module Lich
       end
 
       # A client string as log_client_string writes it: the first line only,
-      # without its line ending, control characters shown as ?, capped at
-      # CLIENT_STRING_LOG_LIMIT characters; "(none)" for nil, and only the
-      # length of a line that is not shaped like a handshake.
+      # without its line ending, control characters and invalid UTF-8 shown
+      # as ?, capped at CLIENT_STRING_LOG_LIMIT characters; "(none)" for nil,
+      # and only the length of a line that is not shaped like a handshake.
       # @param line [String, nil]
       # @return [String]
       def self.loggable_client_string(line)
         return '(none)' if line.nil?
 
-        text = line.to_s.scrub('?')
+        # Sockets read BINARY, where scrub is a no-op; read the bytes as UTF-8.
+        text = line.to_s.dup.force_encoding(Encoding::UTF_8).scrub('?')
         first = text[/\A[^\r\n]*/]
         after = text[first.length..].delete("\r\n").length
         return "(withheld: not a client string, #{first.length + after} characters)" unless first.match?(LOGGABLE_CLIENT_STRING)

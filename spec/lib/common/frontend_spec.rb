@@ -892,6 +892,29 @@ RSpec.describe Lich::Common::Frontend do
     it 'logs a line with invalid UTF-8 instead of raising' do
       expect(log_line("/FE:WRAYTH /VERSION:#{255.chr} /XML\n".dup.force_encoding('UTF-8'))).to eq('info: client string from front end: /FE:WRAYTH /VERSION:? /XML')
     end
+
+    # A socket's gets returns BINARY, where String#scrub does nothing.
+    it 'shows invalid UTF-8 as ? in a BINARY line, as a socket reads it' do
+      expect(log_line("/FE:WRAYTH /VERSION:#{255.chr} /XML\n".b)).to eq('info: client string from front end: /FE:WRAYTH /VERSION:? /XML')
+    end
+
+    it 'shows C1 control characters in a BINARY line as ?' do
+      expect(log_line("/FE:WRAYTH #{[0xC2, 0x9B].pack('C*')}31m /XML\n".b)).to eq('info: client string from front end: /FE:WRAYTH ?31m /XML')
+    end
+
+    it 'counts and caps a BINARY line by characters, never splitting one' do
+      limit = frontend::CLIENT_STRING_LOG_LIMIT
+      e_acute = [0xC3, 0xA9].pack('C*') # e-acute, two bytes in UTF-8
+      line = "/FE:#{e_acute * limit}".b
+      expected = line.dup.force_encoding(Encoding::UTF_8)[0, limit]
+      expect(log_line(line)).to eq("info: client string from front end: #{expected}... (4 more characters)")
+    end
+
+    it 'leaves the caller\'s BINARY line untouched' do
+      line = "/FE:WRAYTH /XML\n".b
+      log_line(line)
+      expect(line.encoding).to eq(Encoding::BINARY)
+    end
   end
 
   # --- send_handshake ----------------------------------------
