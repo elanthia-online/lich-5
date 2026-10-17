@@ -189,12 +189,39 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #clean_serverstring"
         end
 
+        # Shared by both games; override in a subclass only if a game's stream handling diverges.
         def handle_combat_tags(server_string)
-          raise NotImplementedError, "#{self.class} must implement #handle_combat_tags"
+          if @combat_count > 0
+            @end_combat_tags.each do |tag|
+              if server_string.include?(tag)
+                server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
+                @combat_count -= 1
+              end
+              if server_string.include?("<pushStream id=\"combat\" />")
+                server_string = server_string.gsub("<pushStream id=\"combat\" />", "")
+              end
+            end
+          end
+
+          increment_combat_count(server_string)
+          server_string
         end
 
         def handle_atmospherics(server_string)
-          raise NotImplementedError, "#{self.class} must implement #handle_atmospherics"
+          if @atmospherics
+            @atmospherics = false
+            server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
+          end
+
+          if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
+            server_string.sub!('<pushStream id="familiar" />', '')
+          elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
+            server_string.sub!('<pushStream id="atmospherics" />', '')
+          elsif (server_string =~ /<pushStream id="atmospherics" \/>/)
+            @atmospherics = true
+          end
+
+          server_string
         end
 
         def get_documentation_url
@@ -1470,40 +1497,6 @@ module Lich
         server_string
       end
 
-      def handle_combat_tags(server_string)
-        if @combat_count > 0
-          @end_combat_tags.each do |tag|
-            if server_string.include?(tag)
-              server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
-              @combat_count -= 1
-            end
-            if server_string.include?("<pushStream id=\"combat\" />")
-              server_string = server_string.gsub("<pushStream id=\"combat\" />", "")
-            end
-          end
-        end
-
-        increment_combat_count(server_string)
-        server_string
-      end
-
-      def handle_atmospherics(server_string)
-        if @atmospherics
-          @atmospherics = false
-          server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
-        end
-
-        if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
-          server_string.sub!('<pushStream id="familiar" />', '')
-        elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
-          server_string.sub!('<pushStream id="atmospherics" />', '')
-        elsif (server_string =~ /<pushStream id="atmospherics" \/>/)
-          @atmospherics = true
-        end
-
-        server_string
-      end
-
       def get_documentation_url
         "https://gswiki.play.net/Lich:Software/Installation"
       end
@@ -1600,40 +1593,6 @@ module Lich
         # Handle combat and atmospherics
         server_string = handle_combat_tags(server_string)
         server_string = handle_atmospherics(server_string)
-
-        server_string
-      end
-
-      def handle_combat_tags(server_string)
-        if @combat_count > 0
-          @end_combat_tags.each do |tag|
-            if server_string.include?(tag)
-              server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
-              @combat_count -= 1
-            end
-            if server_string.include?("<pushStream id=\"combat\" />")
-              server_string = server_string.gsub("<pushStream id=\"combat\" />", "")
-            end
-          end
-        end
-
-        increment_combat_count(server_string)
-        server_string
-      end
-
-      def handle_atmospherics(server_string)
-        if @atmospherics
-          @atmospherics = false
-          server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
-        end
-
-        if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
-          server_string.sub!('<pushStream id="familiar" />', '')
-        elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
-          server_string.sub!('<pushStream id="atmospherics" />', '')
-        elsif (server_string =~ /<pushStream id="atmospherics" \/>/)
-          @atmospherics = true
-        end
 
         server_string
       end

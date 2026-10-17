@@ -251,12 +251,17 @@ RSpec.describe Lich::GameBase::GameInstance do
 
     it 'raises NotImplementedError for abstract methods' do
       expect { game_instance.clean_serverstring("test") }.to raise_error(NotImplementedError)
-      expect { game_instance.handle_combat_tags("test") }.to raise_error(NotImplementedError)
-      expect { game_instance.handle_atmospherics("test") }.to raise_error(NotImplementedError)
       expect { game_instance.get_documentation_url }.to raise_error(NotImplementedError)
       expect { game_instance.process_game_specific_data("test") }.to raise_error(NotImplementedError)
       expect { game_instance.modify_room_display("test") }.to raise_error(NotImplementedError)
       expect { game_instance.process_room_display("test") }.to raise_error(NotImplementedError)
+    end
+
+    it 'shares one combat/atmospherics stream-tag implementation across both games' do
+      [Lich::Gemstone::GameInstance, Lich::DragonRealms::GameInstance].each do |klass|
+        expect(klass.instance_method(:handle_combat_tags).owner).to be(described_class)
+        expect(klass.instance_method(:handle_atmospherics).owner).to be(described_class)
+      end
     end
 
     # GemStone and an unknown game send the client line as it is.
