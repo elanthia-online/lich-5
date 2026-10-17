@@ -1099,8 +1099,12 @@ module Lich
             # ASCII for this (high-byte-scrubbed) stream, so retagging to
             # Windows-1252 was a divergence and caused entity corruption.
             Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
-            check_stream_desync!(XMLData.sax_parse_errors)
+            # Repair first: a nested quote can also make Ox report a desync-class
+            # error ("document not terminated" -- e.g. an inventoryManager long
+            # value of a sleek black book titled "Style: Do you have it?"), so the
+            # desync check judges the repaired parse, never the junk one.
             repair_malformed_attributes_and_reparse(server_string)
+            check_stream_desync!(XMLData.sax_parse_errors)
           rescue GameStreamDesyncError => e
             # A truncated/desynced fragment. Ox never raises on malformed stream
             # content -- it reports via the error callback, and check_stream_desync!
@@ -1147,7 +1151,9 @@ module Lich
         # repaired in the rescue; Ox tolerates them, so drive the repair off its
         # error report -- only the rare flagged line pays the cost. Apply the
         # repairs; if any changed the line, drop the junk the first parse committed
-        # and parse once more, ignoring any errors on that pass so we never loop.
+        # and parse once more (never again, so it can't loop). The repair runs
+        # before the desync check, which then judges this second parse's errors:
+        # a line the repair fixes is kept, a truncated one still resets.
         # Escaped &apos;/&quot; round-trip back to the literal char via
         # XmlEntities.decode and the front-end's own entity decoding.
         def repair_malformed_attributes_and_reparse(server_string)

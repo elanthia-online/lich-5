@@ -1800,6 +1800,52 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
       expect(parser).not_to have_received(:reset)
     end
 
+    # A DragonRealms inventoryManager response (real items, trimmed) whose
+    # double-quoted name/long values carry the game's unescaped inner quotes.
+    # The book's makes Ox report "document not terminated", a desync-class
+    # error, alongside the repairable "no attribute value" ones.
+    let(:inventory_with_quoted_names) do
+      +("<inventoryManager id='imc6d07c8a1018d537e' room='230008'>" \
+        "<i id='204804792' loc='in,204445392' name=\"a small,gift,bag\" weight='20' in_max='2000'/>" \
+        "<i id='204804793' loc='in,204804792' name=\"a sleek,black,book\" " \
+        "long=\"a sleek black book titled \"Style: Do you have it?\"\" weight='5' in_max='150'/>" \
+        "<i id='204804838' loc='in,204804834' name=\"a,green,tapestry\" " \
+        "long=\"a green tapestry embroidered with the words \"Herb Today, Tarragon Tomorrow\"\" weight='15'/>" \
+        "<i id='204445198' loc='in,204445163' name=\"\"a,trinket,box\" " \
+        "long=\"a smooth wooden trinket box with a penguin carved into the lid\" weight='5' in_max='1500'/>" \
+        "<i id='204445106' loc='worn,player' name=\"some,storm grey,boots\" weight='20'/>" \
+        "</inventoryManager>\r\n")
+    end
+
+    it 'repairs nested double quotes before judging desync, so an inventoryManager line is not reset' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich).to receive(:log)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      server_string = inventory_with_quoted_names
+      expect { check!(server_string.dup) }.to raise_error(Lich::GameBase::GameStreamDesyncError) # unrepaired
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(Lich).not_to have_received(:log).with(/stream desync/)
+      expect(server_string).to include('long="a sleek black book titled &quot;Style: Do you have it?&quot;"')
+      expect(server_string).to include('long="a green tapestry embroidered with the words ' \
+                                       '&quot;Herb Today, Tarragon Tomorrow&quot;"')
+      expect(server_string).to include('name="&quot;a,trinket,box"')
+      # The caller hands this same (repaired-in-place) string on to
+      # Inventory.observe, which rejects a response with any parse error.
+      expect(parse_errors(quiet_parser_class.new, server_string)).to be_empty
+    end
+
+    it 'still resets a truncated fragment that also has a repairable nested quote' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich).to receive(:log)
+      allow(parser).to receive(:reset).and_call_original
+      allow(Lich::GameBase::Game).to receive(:strip_xml)
+      Lich::GameBase::Game.process_xml_data(+"<openDialog id='quux' title='Tsetem's Items'/><a exist=\"123\" noun=\"swo")
+      expect(Lich).to have_received(:log).with(/stream desync/)
+      expect(Lich::GameBase::Game).not_to have_received(:strip_xml) # returned before downstream processing
+    end
+
     it 'repairs a malformed settingsInfo via the retry path and flags an init re-seed' do
       parser = quiet_parser_class.new
       stub_const('XMLData', parser)
