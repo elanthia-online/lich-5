@@ -797,7 +797,8 @@ module Lich
             @dialogs[attributes["id"]] ||= {}
             @dialogs[attributes["id"]].clear
             # detect a clear board request for effects, and send to activespell
-            ActiveSpell.request_update
+            # (GemStone-only module; the shared parser must not raise without it)
+            ActiveSpell.request_update if defined?(ActiveSpell)
           end
           if name == 'resource'
             nil
@@ -1038,7 +1039,7 @@ module Lich
               @last_spirit = @spirit unless @last_spirit
               $_CLIENT_.puts "\034GSV#{sprintf('%010d%010d%010d%010d%010d%010d%010d%010d', @max_health.to_i, @health.to_i, @max_spirit.to_i, @spirit.to_i, @max_mana.to_i, @mana.to_i, @wound_gsl, @scar_gsl)}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'nextLvlPB'
-              Gift.pulse unless @next_level_text == attributes['text']
+              Gift.pulse if defined?(Gift) && @next_level_text != attributes['text'] # GemStone-only module
               @next_level_value = attributes['value'].to_i
               @next_level_text = attributes['text']
             elsif attributes['id'] == 'encumlevel'
@@ -1050,7 +1051,7 @@ module Lich
               # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
               self.parse_psm3_progressbar(@active_ids[-2], attributes)
               # since we received an updated spell duration, let's signal infomon to update
-              ActiveSpell.request_update
+              ActiveSpell.request_update if defined?(ActiveSpell)
             end
           end
           if name == 'roundTime'

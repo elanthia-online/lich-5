@@ -135,6 +135,11 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1711
 
+| Absent or counted | Corpus |
+|---|---|
+| DragonRealms sends 0 `nextLvlPB` and 0 Active Spells/Buffs/Debuffs/Cooldowns `dialogData`; the DR dialog ids seen are `minivitals` and `injuries` | DR-16; the `dr_*` fixtures (`minivitals` 189, `injuries` 19) |
+| In GS-15 the `nextLvlPB` text never changes mid-session; every bar in all 15 captures is full (`value='100'`, text `<n> experience`). This is what the corpus shows, not a claim about GemStone in general. GemStone sends 0 combat, atmospherics or familiar streams (this also backs #1710) | GS-15; `gs_sample.xml`, `gs_saga_login.xml`, `gs_saga_hunt.xml` |
+
 ### #1713
 
 ### #1721
