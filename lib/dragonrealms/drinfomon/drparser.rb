@@ -103,7 +103,7 @@ module Lich
       @@shutdown_at = nil
 
       # The Saga-identity stream wraps names in object links
-      # (<a exist="-10514490" noun="Gorkus">Gorkus</a>) and currently sends the
+      # (<a exist="-10700002" noun="Aldric">Aldric</a>) and currently sends the
       # bold around linked creatures doubled (<pushBold/><pushBold/>a <a ...>
       # leopard</a><popBold/><popBold/>); a single bold works too. The legacy
       # stream sends neither, so every DRParser pattern, every drdefs room helper
