@@ -1,0 +1,16 @@
+<a exist="-10700002" noun="Brenna">Brenna</a> gets a <a exist="203917602" noun="casket">mildewy deobar casket</a> from inside <a exist="-10700002" noun="Brenna">his</a> <a exist="200818980" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792196676">&gt;</prompt>
+You peer south and see ...
+
+<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<prompt time="1792196677">&gt;</prompt>
+Brenna drops a misshaped ironwood caddy into a portable silversteel bucket with a flared rim.  He glances inside and draws back quickly from the sight.
+<prompt time="1792196680">&gt;</prompt>
+You peer north and see ...
+
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230009)</name><description>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</description><exists></exists><players></players><exits>Obvious paths: <d>south</d>, <d>northwest</d>.</exits><extra></extra></room>
+<prompt time="1792196681">&gt;</prompt>
+<component id='room objs'>You also see <a exist="202921763" noun="pins">some straight iron pins</a>.</component>
+<prompt time="1792196685">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists>You also see <a exist="202921763" noun="pins">some straight iron pins</a>.</exists><players>Also here: Soul Annihilator <a exist="-10700002" noun="Brenna">Brenna</a> who is emanating a benevolent holy aura and <a exist="-10700003" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792196685">&gt;</prompt>
