@@ -134,12 +134,12 @@ Roundtime: 4 sec.
 
 <popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195631629'>a jeol moradu</d> (1) at melee range.
 <popStream/><pushStream id="assess"/><d cmd='look #195631629'>A jeol moradu</d> (1: immobile and slightly off balance) is facing you at melee range.  | <d cmd='face #195631629'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #195632782'>A jeol moradu</d> (2: solidly balanced) is moving to flank <d cmd='look #-10557931'>Brenna</d> at pole weapon range.  | <d cmd='face #195632782'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #195632826'>A jeol moradu</d> (3: solidly balanced) is moving to flank <d cmd='look #-10609868'>Corwin</d> at pole weapon range.  | <d cmd='face #195632826'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #195632842'>A jeol moradu</d> (4: solidly balanced) is moving behind <d cmd='look #-10609868'>Corwin</d> at pole weapon range.  | <d cmd='face #195632842'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #195632870'>A jeol moradu</d> (5: solidly balanced) is moving behind <d cmd='look #-10609868'>Corwin</d> at pole weapon range.  | <d cmd='face #195632870'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #-10557931'>Brenna</d> (incredibly balanced) is moving behind <d cmd='look #195631629'>a jeol moradu</d> (1) at pole weapon range.  | <d cmd='face #195631629'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #-10609868'>Corwin</d> (adeptly balanced) is flanking <d cmd='look #195631629'>a jeol moradu</d> (1) at melee range.  | <d cmd='face #195631629'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632782'>A jeol moradu</d> (2: solidly balanced) is moving to flank <d cmd='look #-10700002'>Brenna</d> at pole weapon range.  | <d cmd='face #195632782'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632826'>A jeol moradu</d> (3: solidly balanced) is moving to flank <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632826'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632842'>A jeol moradu</d> (4: solidly balanced) is moving behind <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632842'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632870'>A jeol moradu</d> (5: solidly balanced) is moving behind <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632870'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10700002'>Brenna</d> (incredibly balanced) is moving behind <d cmd='look #195631629'>a jeol moradu</d> (1) at pole weapon range.  | <d cmd='face #195631629'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10700003'>Corwin</d> (adeptly balanced) is flanking <d cmd='look #195631629'>a jeol moradu</d> (1) at melee range.  | <d cmd='face #195631629'>F</d>
 <popStream/><prompt time="1792031725">R&gt;</prompt>
 <dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
 <dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
@@ -1238,7 +1238,7 @@ Roundtime: 1 sec.
 
 <popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195635271'>a jeol moradu</d> (3) at melee range.
 <popStream/><pushStream id="assess"/><d cmd='look #195635227'>A jeol moradu</d> (1: cursed and solidly balanced) is flanking you at melee range.  | <d cmd='face #195635227'>F</d>
-<popStream/><pushStream id="assess"/><d cmd='look #195635239'>A jeol moradu</d> (2: cursed and badly balanced) is behind <d cmd='look #-10609868'>Corwin</d> at melee range.  | <d cmd='face #195635239'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195635239'>A jeol moradu</d> (2: cursed and badly balanced) is behind <d cmd='look #-10700003'>Corwin</d> at melee range.  | <d cmd='face #195635239'>F</d>
 <popStream/><pushStream id="assess"/><d cmd='look #195635271'>A jeol moradu</d> (3: cursed and off balance) is facing you at melee range.  | <d cmd='face #195635271'>F</d>
 <popStream/><pushStream id="assess"/>
 (You are also defending against a jeol moradu.)
