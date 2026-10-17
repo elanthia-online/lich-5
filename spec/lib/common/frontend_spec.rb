@@ -765,19 +765,50 @@ RSpec.describe Lich::Common::Frontend do
       expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("/FE:WRAYTH /VERSION:x /p:saga /XML\n")
     end
 
-    it 'forwards the front end handshake unchanged when keep is set, and logs it' do
-      line = "FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n"
-      allow(Lich).to receive(:log)
-      expect(frontend.proxy_handshake(line, keep: true, frontend: 'genie')).to equal(line)
-      expect(Lich).to have_received(:log).with("info: forwarding the front end's client string: FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML")
-    end
+    describe 'logging' do
+      let(:logged) { [] }
 
-    it 'logs the replacement without the line ending' do
-      allow(Lich).to receive(:log)
-      frontend.proxy_handshake("<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", frontend: nil)
-      expect(Lich).to have_received(:log).with(
-        "info: replacing the front end's client string <c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML with #{lich_string}"
-      )
+      before { allow(Lich).to receive(:log) { |msg| logged << msg } }
+
+      it 'logs both client strings when it replaces the front end handshake' do
+        frontend.proxy_handshake("<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", frontend: nil)
+        expect(logged).to eq([
+                               'info: client string from front end: <c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML',
+                               "info: client string sent to game: <c>#{lich_string} (Lich's, in place of the front end's)"
+                             ])
+      end
+
+      it "logs both client strings when it keeps Saga's own /P:SAGA handshake" do
+        frontend.proxy_handshake("/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n", frontend: 'saga')
+        expect(logged).to eq([
+                               'info: client string from front end: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML',
+                               "info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)"
+                             ])
+      end
+
+      it 'logs both client strings when keep is set (the kill switch)' do
+        line = "FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n"
+        expect(frontend.proxy_handshake(line, keep: true, frontend: 'genie')).to equal(line)
+        expect(logged).to eq([
+                               'info: client string from front end: FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML',
+                               "info: client string sent to game: FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML (the front end's own: --keep-fe-string or Lich.keep_fe_string)"
+                             ])
+      end
+
+      it 'logs a line that is not a handshake by length only' do
+        frontend.proxy_handshake("SET_FRONTEND_PID 4242\r\n", frontend: 'genie')
+        expect(logged).to eq([
+                               'info: client string from front end: (withheld: not a client string, 21 characters)',
+                               'info: client string sent to game: (withheld: not a client string, 21 characters) (forwarded unchanged: not a client string)'
+                             ])
+      end
+
+      it 'never logs a login key that arrives where the handshake was expected' do
+        key = 'SECRETKEY0123456789abcdef0123456'
+        frontend.proxy_handshake("<c>#{key}\r\n", frontend: 'genie')
+        expect(logged.size).to eq(2)
+        expect(logged.join("\n")).not_to include('SECRETKEY')
+      end
     end
 
     {
@@ -796,10 +827,70 @@ RSpec.describe Lich::Common::Frontend do
       'two lines'                   => "/FE:WRAYTH /VERSION:1 /XML\nlook\n"
     }.each do |label, line|
       it "forwards #{label} unchanged" do
-        allow(Lich).to receive(:log)
         expect(frontend.proxy_handshake(line, frontend: 'genie')).to equal(line)
-        expect(Lich).not_to have_received(:log)
       end
+    end
+  end
+
+  # --- log_client_string -------------------------------------
+
+  describe '.log_client_string' do
+    let(:logged) { [] }
+
+    before { allow(Lich).to receive(:log) { |msg| logged << msg } }
+
+    def log_line(line, source: :frontend, note: nil)
+      frontend.log_client_string(source, line, note: note)
+      logged.last
+    end
+
+    it 'labels the two sides and strips the line ending' do
+      expect(log_line("/FE:WRAYTH /VERSION:1 /P:SAGA /XML\r\n")).to eq('info: client string from front end: /FE:WRAYTH /VERSION:1 /P:SAGA /XML')
+      expect(log_line("/FE:WRAYTH /VERSION:1 /P:SAGA /XML\n", source: :game)).to eq('info: client string sent to game: /FE:WRAYTH /VERSION:1 /P:SAGA /XML')
+      expect(log_line("/FE:WRAYTH /XML\r", source: :game)).to eq('info: client string sent to game: /FE:WRAYTH /XML')
+    end
+
+    it 'appends the note in parentheses' do
+      expect(log_line('/FE:WRAYTH /XML', source: :game, note: 'why')).to eq('info: client string sent to game: /FE:WRAYTH /XML (why)')
+    end
+
+    it 'logs nil (front end gone before it sent a line) as (none)' do
+      expect(log_line(nil)).to eq('info: client string from front end: (none)')
+    end
+
+    it 'accepts a frozen line' do
+      expect(log_line(frontend::CLIENT_STRING, source: :game)).to eq("info: client string sent to game: #{frontend::CLIENT_STRING}")
+    end
+
+    it 'rejects an unknown source rather than logging an unlabelled line' do
+      expect { frontend.log_client_string(:client, '/FE:X /XML') }.to raise_error(KeyError)
+      expect(logged).to be_empty
+    end
+
+    it 'caps the logged string at CLIENT_STRING_LOG_LIMIT characters' do
+      limit = frontend::CLIENT_STRING_LOG_LIMIT
+      at_limit = "/FE:#{'x' * (limit - 4)}"
+      expect(log_line("#{at_limit}\n")).to end_with(": #{at_limit}")
+      expect(log_line("#{at_limit}yz\n")).to end_with(": #{at_limit}... (2 more characters)")
+    end
+
+    it 'withholds a line that is not shaped like a handshake, logging only its length' do
+      expect(log_line("0123456789abcdef0123456789abcdef\r\n")).to eq('info: client string from front end: (withheld: not a client string, 32 characters)')
+      expect(log_line("<c>\r\n")).to eq('info: client string from front end: (withheld: not a client string, 3 characters)')
+      expect(log_line("say FE:WRAYTH /XML\n")).to include('(withheld: not a client string, 18 characters)')
+    end
+
+    it 'withholds anything after an embedded line break' do
+      expect(log_line("/FE:WRAYTH /XML\nSECRETKEY\n")).to eq('info: client string from front end: /FE:WRAYTH /XML (9 characters after a line break withheld)')
+      expect(log_line("/FE:WRAYTH /XML\rSECRET")).not_to include('SECRET')
+    end
+
+    it 'shows control characters as ?' do
+      expect(log_line("/FE:WRAYTH\e[31m /XML\0\n")).to eq('info: client string from front end: /FE:WRAYTH?[31m /XML?')
+    end
+
+    it 'logs a line with invalid UTF-8 instead of raising' do
+      expect(log_line("/FE:WRAYTH /VERSION:#{255.chr} /XML\n".dup.force_encoding('UTF-8'))).to eq('info: client string from front end: /FE:WRAYTH /VERSION:? /XML')
     end
   end
 
@@ -812,6 +903,34 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'accepts one argument (version_string)' do
       expect(frontend.method(:send_handshake).arity).to eq(1)
+    end
+
+    context 'when sending' do
+      around do |example|
+        saved_buffer = $_CLIENTBUFFER_
+        saved_prefix = $cmd_prefix
+        $_CLIENTBUFFER_ = []
+        $cmd_prefix = '<c>'
+        example.run
+      ensure
+        $_CLIENTBUFFER_ = saved_buffer
+        $cmd_prefix = saved_prefix
+      end
+
+      it 'logs the client string it sends to the game, and only that' do
+        game = Module.new
+        game.define_singleton_method(:sent) { @sent ||= [] }
+        game.define_singleton_method(:_puts) { |str| sent << str }
+        stub_const('Game', game)
+        allow(frontend).to receive(:sleep)
+        logged = []
+        allow(Lich).to receive(:log) { |msg| logged << msg }
+
+        frontend.send_handshake(frontend::CLIENT_STRING)
+
+        expect(Game.sent.first).to eq(frontend::CLIENT_STRING)
+        expect(logged).to eq(["info: client string sent to game: #{frontend::CLIENT_STRING}"])
+      end
     end
   end
 
