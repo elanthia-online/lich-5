@@ -1116,9 +1116,11 @@ module Lich
             # promotes truncation-class errors to this exception. Log and reset
             # rather than killing the server thread. A repair didn't save the
             # line, so undo it: the log, Inventory.observe and the clients get
-            # the fragment as the server sent it.
+            # the fragment as the server sent it. Say so, since the repair has
+            # already logged a "fixed to" line for the edit being undone.
             server_string.replace(unrepaired) if unrepaired
-            Lich.log "warning: stream desync (#{e.message}); resetting XMLData: #{server_string.inspect}"
+            undone = unrepaired ? ' (repair logged above undone)' : ''
+            Lich.log "warning: stream desync (#{e.message}); resetting XMLData#{undone}: #{server_string.inspect}"
             XMLData.reset
             return
           end
