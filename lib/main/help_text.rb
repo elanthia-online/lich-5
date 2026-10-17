@@ -242,6 +242,7 @@ module Lich
             --detachable-client=PORT|auto|HOST:PORT
             --pipe
             --sentinel
+            --frontend-caps=LIST
             --frontend=NAME
             --frontend-command=CMD
             --fe-version=VALUE
@@ -262,6 +263,10 @@ module Lich
             without one the frontend is unknown and script output is not XML-escaped.
             --sentinel prefixes each line forwarded from the game with the origin marker
             (0x1F) for a client that strips it, whichever frontend it identifies as.
+            --frontend-caps=LIST names the DragonRealms rich-stream features every attached
+            client renders itself (room_element, game_links, double_bold; comma-separated),
+            in place of the frontend's defaults. Lich rewrites the rest to the legacy
+            stream. A client's own SET_FRONTEND_CAPS line takes precedence.
             --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1.

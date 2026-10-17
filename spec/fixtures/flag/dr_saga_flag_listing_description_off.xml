@@ -1,0 +1,57 @@
+<output class="mono"/>
+
+Usage
+  FLAG {flag_name} {on|off}
+
+Flag names may be abbreviated.
+
+Example
+  FLAG LOGON ON
+  FLAG LOGON OFF
+
+<output class=""/>
+<output class="mono"/>
+<pushBold/>  Flag            Status  Behavior for this setting
+<popBold/>  <d cmd="flag LogOn on">LogOn</d>              OFF  Do not show logon messages.
+  <d cmd="flag LogOff on">LogOff</d>             OFF  Do not show logoff messages.
+  <d cmd="flag Disconnect on">Disconnect</d>         OFF  Do not show disconnection messages.
+  <d cmd="flag ShowDeaths off">ShowDeaths</d>         ON   Show death messages when someone dies.
+  <d cmd="flag RoomNames off">RoomNames</d>          ON   Display the name of the room in which you are located.
+  <d cmd="flag Description on">Description</d>        OFF  Do not display room descriptions.
+  <d cmd="flag RoomBrief on">RoomBrief</d>          OFF  Display the full text of the room description.
+  <d cmd="flag BattleBrief off">BattleBrief</d>        ON   Display shortened battle descriptions.
+  <d cmd="flag CombatBrief off">CombatBrief</d>        ON   Display your battle messages in full while shortening those of others.
+  <d cmd="flag MonsterBold off">MonsterBold</d>        ON   Highlight monster names.
+  <d cmd="flag Inactivity on">Inactivity</d>         OFF  Do not increase time before disconnected when inactive.
+  <d cmd="flag Portrait on">Portrait</d>           OFF  Do not view character portraits.
+  <d cmd="flag StatusPrompt off">StatusPrompt</d>       ON   Display status information in front of the prompt.
+  <d cmd="flag AvoidJoiners on">AvoidJoiners</d>       OFF  Allow people to join your group.
+  <d cmd="flag AvoidHolders on">AvoidHolders</d>       OFF  Allow people to hold your hand and adding you to their group.
+  <d cmd="flag AvoidDancers on">AvoidDancers</d>       OFF  Allow people to dance with you, and add you to their group.
+  <d cmd="flag AvoidWhispers on">AvoidWhispers</d>      OFF  Allow people to whisper to you.
+  <d cmd="flag AvoidDraggers on">AvoidDraggers</d>      OFF  Allow people to drag your body.
+  <d cmd="flag AvoidTeachers on">AvoidTeachers</d>      OFF  Allow people to teach you.
+  <d cmd="flag AvoidSinging on">AvoidSinging</d>       OFF  Allow yourself to sing.
+  <d cmd="flag NoHarnessShare on">NoHarnessShare</d>     OFF  Allow the sharing of harness with your group.
+  <d cmd="flag HarnessWarning off">HarnessWarning</d>     ON   Receive notifications about harness limitations.
+  <d cmd="flag HarnessVerbose off">HarnessVerbose</d>     ON   Receive detailed notifications about harness limitations.
+  <d cmd="flag AutoSneak on">AutoSneak</d>          OFF  Do not automatically sneak from room to room when in hiding.
+  <d cmd="flag ConciseThoughts off">ConciseThoughts</d>    ON   Gweth messages will be shorter.
+  <d cmd="flag HideLogin off">HideLogin</d>          ON   Your login, logoff, and disconnect announcements are hidden from other players.
+  <d cmd="flag DeathLocation on">DeathLocation</d>      OFF  Does not reveal the room you died in when alerting other players of your demise.
+  <d cmd="flag HidePreStrings on">HidePreStrings</d>     OFF  Displays OTHER players' titles in room LOOKs and the room window.
+  <d cmd="flag HidePostStrings on">HidePostStrings</d>    OFF  Provides more elaborate LOOK and room window output from other players and creatures.
+  <d cmd="flag HideMyCusLogin on">HideMyCusLogin</d>     OFF  Your custom login/out (if any) is enabled and displayed to others.
+  <d cmd="flag HideOtCusLogin on">HideOtCusLogin</d>     OFF  Other players' custom login/logout messages are enabled in the login window.
+  <d cmd="flag HideTrivia off">HideTrivia</d>         ON   You will not see trivia from the response reward system.
+  <d cmd="flag SkinKills on">SkinKills</d>          OFF  You are not attempting to skin creatures you kill automatically.
+  <d cmd="flag LootKills off">LootKills</d>          ON   You are attempting to loot creatures you kill automatically.
+  <d cmd="flag ShowRoomID off">ShowRoomID</d>         ON   You are seeing approved room IDs when LOOKing.
+<output class=""/>
+
+For other setting options, see AVOID, SET, and TOGGLE.
+<prompt time="1792192331">R&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792192334">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792192356">&gt;</prompt>

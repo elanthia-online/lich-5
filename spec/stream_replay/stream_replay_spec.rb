@@ -55,20 +55,182 @@ end
 # What reaches the client for the Saga-identity <room> block, per front end:
 # only Saga (:room_element) gets the raw block; every other front end gets the
 # legacy roomName layout it already renders, and Wizard its GSL room codes.
+# The legacy layout carries the legacy compass after every view, as the legacy
+# stream did.
 RSpec.describe 'stream replay: <room> block per front end', :slow do
   fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
   rooms = 34 # <room> blocks in the fixture
+  compass = '<compass><dir value='
 
   {
-    nil      => { '<room>' => 0, '<style id="roomName"' => rooms },
-    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms },
-    'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0 },
-    'wizard' => { '<room>' => 0, "\034GSo" => rooms }
+    nil      => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms },
+    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms },
+    'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0, compass => 0 },
+    'wizard' => { '<room>' => 0, "\034GSo" => rooms, compass => 0 }
   }.each do |frontend, expected|
     it "delivers #{expected.map { |k, v| "#{v} x #{k.inspect}" }.join(', ')} to #{frontend || 'a headless pipe'}" do
       result = StreamReplay::Driver.new(fixture, frontend: frontend).run
       expect(result.warnings).to be_empty
       expected.each { |marker, count| expect(result.stdout.scan(marker).size).to eq(count), marker.inspect }
     end
+  end
+end
+
+# DragonRealms' links and doubled bold reach only Saga (:game_links,
+# :double_bold); every other front end gets the legacy line. Scripts see the
+# same stream whatever the front end: the parsed state and script lines
+# (the per-prompt snapshots) do not depend on it.
+RSpec.describe 'stream replay: DragonRealms links and doubled bold per front end', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_hunt.xml', __dir__))
+  links = fixture.body_lines.sum { |l| l.scan('<a exist').size }
+  doubled = fixture.body_lines.sum { |l| l.scan('<pushBold/><pushBold/>').size }
+  results = {}
+  replay = ->(frontend) { results[frontend] ||= StreamReplay::Driver.new(fixture, frontend: frontend).run }
+
+  it 'replays a fixture that has both' do
+    expect([links, doubled]).to all(be > 100)
+  end
+
+  { nil => [0, 0], 'genie' => [0, 0], 'saga' => [links, doubled] }.each do |frontend, (want_links, want_doubled)|
+    it "delivers #{want_links} links and #{want_doubled} doubled bolds to #{frontend || 'a headless pipe'}, with Saga's snapshots" do
+      result = replay.call(frontend)
+      expect(result.warnings).to be_empty
+      expect(result.stdout.scan('<a exist').size).to eq(want_links)
+      expect(result.stdout.scan('<pushBold/><pushBold/>').size).to eq(want_doubled)
+      expect(result.snapshots).to eq(replay.call('saga').snapshots)
+    end
+  end
+end
+
+# A client's SET_FRONTEND_CAPS declaration, sent on the primary (pipe) client
+# after its handshake, replaces its frontend's rich-stream rewrites: a Genie
+# session's client that declares all three gets the server's <room> blocks,
+# links and doubled bold. Lich consumes the line (the game never sees it), and
+# scripts see the same stream either way.
+RSpec.describe 'stream replay: a client that declares its capabilities', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
+  rooms = 34 # <room> blocks in the fixture
+  results = {}
+  replay = lambda do |frontend, client_lines = []|
+    results[[frontend, client_lines]] ||= StreamReplay::Driver.new(fixture, frontend: frontend, client_lines: client_lines).run
+  end
+
+  # The links Saga gets: the ones the game sends, less those in lines Lich
+  # does not forward (the inventory window feed, for one).
+  saga_links = -> { replay.call('saga').stdout.scan('<a exist').size }
+
+  it 'replays a fixture whose links reach Saga' do
+    expect(saga_links.call).to be > 100
+  end
+
+  it 'gives a genie client that declared all three the rich stream, with the same snapshots' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS room_element game_links double_bold'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(rooms)
+    expect(declared.stdout.scan('<style id="roomName"').size).to eq(0)
+    expect(declared.stdout.scan('<compass><dir value=').size).to eq(0)
+    expect(declared.stdout.scan('<a exist').size).to eq(saga_links.call)
+    expect(declared.snapshots).to eq(replay.call('genie').snapshots)
+  end
+
+  it 'never forwards the declaration to the game' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS room_element game_links double_bold'])
+    # The client's handshake line does reach the game, so the recording works.
+    expect(declared.game_input).to include('/FE:')
+    expect(declared.game_input).not_to include('SET_FRONTEND_CAPS')
+  end
+
+  it 'gives a genie client that declared only game_links the legacy room with links kept' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS game_links'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(0)
+    expect(declared.stdout.scan('<style id="roomName"').size).to eq(rooms)
+    expect(declared.stdout.scan('<a exist').size).to eq(saga_links.call)
+  end
+
+  it 'gives a saga client that declared nothing it handles the legacy stream' do
+    declared = replay.call('saga', ['SET_FRONTEND_CAPS'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(0)
+    expect(declared.stdout.scan('<a exist').size).to eq(0)
+    expect(declared.snapshots).to eq(replay.call('saga').snapshots)
+  end
+end
+
+# DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity stream's
+# <room> block (a game bug). With ;display descflag on, each block for the
+# character's room the game sends while the flag is off reaches the client
+# without its description, in the legacy layout and the raw block alike; the
+# rest is unchanged, and scripts still see every description (the per-prompt
+# snapshots equal the run with the setting off). The fixture answers OFF, ON
+# and OFF again; its first block comes before any <nav>, so Lich has no room
+# number for it yet and leaves its description alone.
+RSpec.describe 'stream replay: room descriptions with FLAG DESCRIPTION OFF', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_group_bank.xml', __dir__))
+  # Each block's description and whether the filter hides it: the flag is off
+  # and the block is the room of the last <nav>.
+  blocks = []
+  off = false
+  nav = nil
+  fixture.body_lines.each do |line|
+    off = true if line.start_with?('You will no longer see room descriptions.')
+    off = false if line.start_with?('You will now see room descriptions.')
+    nav = line[/<nav rm='(\d+)'/, 1] || nav
+    next unless (room = line[%r{<room><name>[^<]*\((\d+)\)</name><description>(.*?)</description>}, 0])
+
+    uid, desc = room.match(%r{\((\d+)\)</name><description>(.*?)</description>}).captures
+    blocks << { desc: desc, hidden: off && uid == nav }
+  end
+  results = {}
+  replay = lambda do |frontend, setting|
+    results[[frontend, setting]] ||= StreamReplay::Driver.new(fixture, frontend: frontend, settings: { 'follow_description_flag' => setting }).run
+  end
+
+  it 'replays a fixture with blocks while the flag is off and on' do
+    expect(blocks.size).to eq(19)
+    expect(blocks.count { |b| b[:hidden] }).to eq(16)
+  end
+
+  { 'genie' => ->(desc) { "<preset id='roomDesc'>#{desc}</preset>" }, 'saga' => ->(desc) { "<description>#{desc}</description>" } }.each do |frontend, shown|
+    context "for #{frontend}" do
+      it 'delivers the description of exactly the blocks sent while descriptions were off for that room' do
+        result = replay.call(frontend, 'true')
+        expect(result.warnings).to be_empty
+        blocks.group_by { |b| b[:desc] }.each do |desc, same|
+          expect(result.stdout.scan(shown.call(desc)).size).to eq(same.count { |b| !b[:hidden] }), desc[0, 60]
+        end
+        expect(result.stdout.scan(frontend == 'saga' ? '<description></description>' : %(<style id=""/>  )).size).to eq(16)
+      end
+
+      it 'delivers every description with the setting off' do
+        result = replay.call(frontend, 'false')
+        blocks.group_by { |b| b[:desc] }.each do |desc, same|
+          expect(result.stdout.scan(shown.call(desc)).size).to eq(same.size), desc[0, 60]
+        end
+      end
+
+      it "leaves the scripts' view alone" do
+        expect(replay.call(frontend, 'true').snapshots).to eq(replay.call(frontend, 'false').snapshots)
+      end
+    end
+  end
+end
+
+# A Locate view of another room (230008) while the character stands in
+# 230007: the legacy stream followed it with 230008's compass
+# (spec/fixtures/room_block/dr_legacy_locate.xml), and so does the rewrite.
+RSpec.describe 'stream replay: Locate view per front end', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_locate_descflag.xml', __dir__))
+  own = %(Obvious paths: <d>north</d>, <d>southeast</d>.\r\n<compass><dir value="n"/><dir value="se"/></compass>\r\n)
+  located = %(Obvious paths: <d>north</d>, <d>south</d>.\r\n<compass><dir value="n"/><dir value="s"/></compass>\r\n)
+
+  it 'gives a legacy front end the located room\'s compass after the Locate view, between two own-room views' do
+    result = StreamReplay::Driver.new(fixture, frontend: 'genie').run
+    expect(result.warnings).to be_empty
+    out = result.stdout
+    expect(out.scan(own).size).to eq(2)
+    expect(out.scan(located).size).to eq(1)
+    expect(out.index(own)).to be < out.index(located)
+    expect(out.index(located)).to be < out.rindex(own)
   end
 end

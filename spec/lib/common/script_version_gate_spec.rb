@@ -87,6 +87,16 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
     instance_double(script_class, name: name, file_name: file_name)
   end
 
+  describe '.required_lich_version_in' do
+    it 'parses the requirement from raw source that is not on disk' do
+      expect(script_class.required_lich_version_in(header('required: Lich >= 5.16.0'))).to eq('5.16.0')
+    end
+
+    it 'returns nil when the source declares no requirement' do
+      expect(script_class.required_lich_version_in("echo 'hi'\n")).to be_nil
+    end
+  end
+
   describe '.required_lich_version' do
     it 'parses a "required: Lich >= X.Y.Z" line from a =begin/=end header' do
       add_script('demo', header('  author: someone', '  required: Lich >= 5.15.0', '  version: 1.2.3'))
@@ -110,6 +120,12 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       add_script('gtonly', header('required: Lich > 5.0.1'))
 
       expect(script_class.required_lich_version('gtonly')).to eq('5.0.1')
+    end
+
+    it 'also reads the "requires: Lich" spelling' do
+      add_script('plural', header('requires: Lich >= 5.22.0'))
+
+      expect(script_class.required_lich_version('plural')).to eq('5.22.0')
     end
 
     it 'reads a no-operator "required: Lich X.Y.Z" declaration' do
@@ -235,6 +251,12 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
     it 'is true when LICH_VERSION exactly equals the minimum (boundary)' do
       stub_const('LICH_VERSION', '5.15.0')
       expect(script_class.lich_version_satisfied?('5.15.0')).to be true
+    end
+
+    it 'treats a beta build as the release it leads up to' do
+      stub_const('LICH_VERSION', '5.23.0-beta.1')
+      expect(script_class.lich_version_satisfied?('5.23.0')).to be true
+      expect(script_class.lich_version_satisfied?('5.23.1')).to be false
     end
 
     it 'is false when LICH_VERSION is below the minimum' do
