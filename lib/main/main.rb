@@ -710,7 +710,7 @@ reconnect_if_wanted = proc {
       # send version string
       #
       client_string = Frontend.client_string(@argv_options[:fe_version])
-      Lich.log "info: sending client string: #{client_string}"
+      Frontend.log_client_string(:game, client_string)
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #
@@ -760,9 +760,10 @@ reconnect_if_wanted = proc {
         client_string = $_CLIENT_.gets
         Game._puts(client_string)
         #
-        # take the version string from the client, ignore it, and ask the server for xml
+        # take the version string from the client, log it, ignore it, and ask
+        # the server for xml (send_handshake logs what it sends)
         #
-        $_CLIENT_.gets
+        Frontend.log_client_string(:frontend, $_CLIENT_.gets)
         Frontend.send_handshake(Frontend::CLIENT_STRING)
         #
         # client wants to send "GOOD", xml server won't recognize it
@@ -777,9 +778,10 @@ reconnect_if_wanted = proc {
         client_string = fb_to_sf(client_string)
         Game._puts(client_string)
         #
-        # take the version string from the client, ignore it, and ask the server for xml
+        # take the version string from the client, log it, ignore it, and ask
+        # the server for xml (send_handshake logs what it sends)
         #
-        $_CLIENT_.gets
+        Frontend.log_client_string(:frontend, $_CLIENT_.gets)
         Frontend.send_handshake(Frontend::CLIENT_STRING)
       else
         if launcher_cmd.to_s =~ /mudlet/
@@ -787,6 +789,7 @@ reconnect_if_wanted = proc {
           game_key = nil
 
           client_string = Frontend::CLIENT_STRING
+          Frontend.log_client_string(:game, client_string)
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
 
@@ -846,7 +849,8 @@ reconnect_if_wanted = proc {
           client_string = $_CLIENT_.gets
           # Ask for the same stream every other front end gets: the front end's
           # own /FE: handshake is replaced with Lich's (Frontend.proxy_handshake)
-          # unless --keep-fe-string or Lich.keep_fe_string says to forward it.
+          # unless --keep-fe-string or Lich.keep_fe_string says to forward it, and
+          # both lines are logged.
           # Mudlet's handshake was already sent above.
           unless launcher_cmd.to_s =~ /mudlet/
             client_string = Frontend.proxy_handshake(client_string,
