@@ -18,6 +18,9 @@ require 'ox'
 require 'dragonrealms/creature'
 require 'common/gameobj'
 require 'common/xmlparser'
+# GameLoader loads the DragonRealms parser delta in production; its
+# apply_crtr_status is what applies <crtrStatus> id-first.
+require 'dragonrealms/xml_delta'
 
 # The room-objs component followed by the standalone <crtrStatus> batch, verbatim
 # shape from the live stream (five jeol moradu, the first immobile, the last

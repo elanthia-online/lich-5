@@ -672,41 +672,21 @@ module Lich
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
             #
-            # GemStone also sends the tag outside room objs: combat updates
-            # (one per hit), the main-text "You also see" listing, and just
-            # before a room players component. No room-objs text path ever
-            # consumes a stash from there (opening room objs clears it), so a
-            # standalone tag for a creature already in the current room roster
-            # is applied at once. Registration and room-marking stay on the
-            # link path. Any other standalone tag (an id the current room has
-            # not linked) still lands in the stash, but nothing reads it from
-            # there: the stash is only consumed inside room objs, and opening
-            # room objs (like <nav> and reset) clears it first. In effect such
-            # a tag is dropped.
-            #
-            # DragonRealms differs: its <crtrStatus> tags arrive batched after
-            # the room-objs component and carry their own id, so there is no
-            # later text() path to defer to and flags are applied immediately,
-            # id-first. The name comes from room-objs: in the Saga-identity
-            # dialect from the linked <a exist noun> creature, registered by the
-            # text() path before this batch arrives; in the legacy dialect (no
-            # <a> tag) from the stream-order pairing (bold room-objs names zipped
-            # to this batch's ids at the next <prompt>, gated on equal counts).
-            # Either way the assess stream later names it authoritatively (see
-            # lib/dragonrealms/creature.rb).
+            # A game whose delta can apply the tag at once (DragonRealms: id-first
+            # Creature.sync, see Lich::DragonRealms::XMLDelta.apply_crtr_status)
+            # does so; the id is then collected in arrival order so the prompt
+            # handler can pair it to a legacy-stream bold name when the counts
+            # match for this refresh.
+            # GemStone applies a standalone tag (outside room objs) for a
+            # creature already in the current room roster at once and stashes
+            # nothing (:applied, see Lich::Gemstone::XMLDelta.apply_crtr_status).
             crtr_id = attributes['exist']
             if crtr_id
               crtr_flags = attributes.reject { |k, _| k == 'exist' }
-              if XMLData.game =~ /^DR/
-                # Apply flags now (id-first, name-less); collect the id in arrival
-                # order so the prompt handler can pair it to a bold name only if
-                # the counts match for this refresh.
-                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
-                @dr_crtr_ids << crtr_id
-              elsif !@active_ids.include?('room objs') && (room_creature = gs_room_creature(crtr_id))
-                room_creature.sync_crtr_status(crtr_flags)
-              else
-                @pending_crtr_status[crtr_id] = crtr_flags
+              case XMLParserDelta.for(XMLData.game).apply_crtr_status(crtr_id, crtr_flags, in_room_objs: @active_ids.include?('room objs'))
+              when true then @dr_crtr_ids << crtr_id
+              when :applied then nil
+              else @pending_crtr_status[crtr_id] = crtr_flags
               end
             end
           end
@@ -1570,21 +1550,6 @@ module Lich
           respond "--- warning: #{script_name} is using deprecated method XMLData.spellfront; this method will be removed in a future version of Lich"
         end
         @active_spells.keys
-      end
-
-      private
-
-      # The GemStone creature a standalone `<crtrStatus>` may update: one already
-      # registered and in the current room roster. Ids only enter the roster
-      # from a room-objs link, so a recycled or never-linked id is never touched.
-      #
-      # @param crtr_id [String] the tag's `exist` id.
-      # @return [Lich::Gemstone::CreatureInstance, nil]
-      def gs_room_creature(crtr_id)
-        return nil unless defined?(Lich::Gemstone::CreatureInstance)
-        return nil unless Lich::Gemstone::CreatureInstance.current_room_ids.include?(crtr_id.to_i)
-
-        Lich::Gemstone::CreatureInstance[crtr_id]
       end
     end
   end

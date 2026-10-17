@@ -9,6 +9,7 @@ require_relative '../../spec_helper'
 require 'ox'
 require 'gemstone/creature'
 require 'common/xmlparser'
+require 'gemstone/xml_delta'
 require 'common/gameobj'
 
 # Bare `Creature`/`GameObj` references inside XMLParser resolve through this,
