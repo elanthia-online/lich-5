@@ -127,6 +127,81 @@ line for a room with no objects, so the description line ends
 |---|---|---|
 | legacy `<style id=""/><preset id='roomDesc'>…</preset>  ` with no objects | C2, `2026-10-07_13-38-12`, lines 35–37 | `room_block_spec.rb` ("rewrites a captured Saga block into the captured legacy lines for the same room"), against the Saga `<room>` for the same room in `streams/dr_saga_locate_descflag.xml` |
 
+## room_block/dr_legacy_locate.xml
+
+### What is it?
+
+A legacy-dialect DragonRealms capture (per-line timestamps and the
+command echoes removed, player names pseudonymised): two moves, each with its
+room view and the top-level `<compass>` after the exits line, then a Locate
+whose view of another room (230008, while the character stands in 230007) is
+followed by that room's compass, `<compass><dir value="n"/><dir value="s"/></compass>`.
+
+| Shape | Source | Used by |
+|---|---|---|
+| legacy own-room views with their compasses; a Locate view of another room followed by the located room's compass | C2, `2026-10-07_13-38-12`, lines 5–39, 45–46 and 77–86 | `room_block_spec.rb` ("rebuilds the compass the legacy stream sent after every exits line in the legacy captures"; "sends after a captured Saga Locate view the exits line and compass the legacy stream sent after its Locate view") |
+
+## room_block/dr_legacy_no_exits.xml
+
+### What is it?
+
+The room-exits lines of a legacy-dialect DragonRealms view of a room without
+exits: the `room exits` component, `Obvious paths: none.` and the top-level
+empty `<compass></compass>` the legacy stream sent after it. Copied from
+ProfanityFE's public fixture `spec/fixtures/room_pipeline/dr_cut_short_objs.xml`
+(main, 3dae6f2), lines 5, 10 and 11; line 11 is cut after `</compass>`, because
+the `room players` component that shared the line names players. Only these
+lines are copied. The capture is from 2026-08-27; the character is not
+recorded.
+
+| Shape | Source | Used by |
+|---|---|---|
+| legacy `Obvious paths: none.` followed by `<compass></compass>` | ProfanityFE `dr_cut_short_objs.xml:5,10-11` | `room_block_spec.rb` ("rebuilds the compass …"; "gives a captured Saga room without exits the legacy view's exits line and empty compass") |
+
+## room_block/dr_saga_no_exits.xml
+
+### What is it?
+
+Two Saga-dialect DragonRealms lines captured verbatim (per-line timestamps
+removed) for a room without exits: the `room exits` component and the `<room>`
+block, whose `<exits>` is `Obvious paths: none.` with no `<d>`.
+
+| Shape | Source | Used by |
+|---|---|---|
+| Saga `<room>` with `<exits>Obvious paths: none.</exits>` | C7, `2026-10-16_01-57-21`, lines 16015 and 16017 | `room_block_spec.rb` ("gives a captured Saga room without exits …") |
+
+A Saga `<room>` whose exits are hidden by fog is not in any fetched capture,
+so its wording in `room_block_spec.rb` is synthetic.
+
+## room_block/dr_saga_arrival_without_exits_component.xml
+
+### What is it?
+
+Two Saga-dialect DragonRealms arrivals captured verbatim (per-line timestamps
+removed): the first with every room component, the second (room 2108013) with
+no `room exits` or `room players` component before its `<room>` block. It is
+the one arrival without a `room exits` component in the Saga logs.
+
+| Shape | Source | Used by |
+|---|---|---|
+| an arrival whose `<room>` (with a room number) has no `room exits` component before it | C7, `2026-10-16_01-57-21`, lines 14731–14752 | `room_block_spec.rb` ("sends the compass of the block, not the exits XMLParser kept from the last room") |
+
+## room_block/dr_saga_peer.xml
+
+### What is it?
+
+A Saga-dialect DragonRealms capture cut with extract.rb (per-line timestamps
+and the command echoes removed, player names pseudonymised and player ids
+remapped; the synthetic header dropped): from room 230008, PEER SOUTH and PEER
+NORTH, each answered by `You peer <dir> and see ...` and a bare `<room>` block
+of the room peered into (230007, 230009) with no `<nav>`, subtitle or room
+components, then LOOK and the `<room>` block of 230008. No capture has a
+legacy-dialect PEER.
+
+| Shape | Source | Used by |
+|---|---|---|
+| a PEER view: "You peer south/north and see ..." and a bare `<room>` of the room peered into; the own room's `<room>` after LOOK | C8, `2026-10-17_13-24-35`, lines 14–19, 39–44 and 74–77 | `room_block_spec.rb` ("gives each PEER view the compass of the room peered into …"; "sends after the PEER view of 230007 the exits line and compass the legacy stream sent in 230007"), `games_spec.rb` ("sends the compass of the room peered into after a captured PEER view") |
+
 ## stow/dr_saga_handover.xml
 
 ### What is it?

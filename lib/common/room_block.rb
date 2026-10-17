@@ -19,6 +19,14 @@ module Lich
       # off before </room> cannot swallow the next one in a multi-line string.
       BLOCK = %r{<room>(?<body>(?:(?!<room>).)*?)</room>}m.freeze
 
+      # The legacy stream's <compass> value for each exit name the game lists
+      # in "Obvious paths:", in the exits line's order.
+      COMPASS_DIRS = {
+        'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
+        'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
+        'up' => 'up', 'down' => 'down', 'out' => 'out'
+      }.freeze
+
       module_function
 
       # Rewrites a <room> block into the legacy stream's layout, so code written
@@ -48,7 +56,41 @@ module Lich
         server_string.gsub(BLOCK) { legacy_lines(Regexp.last_match(:body)) }
       end
 
-      def legacy_lines(body)
+      # The legacy layout for a front end, which also gets the line the
+      # Saga-identity stream no longer sends: the legacy stream followed the
+      # exits line of every room view with a top-level compass built from
+      # those exits,
+      #
+      #   Obvious paths: <d>north</d>, <d>southeast</d>.
+      #   <compass><dir value="n"/><dir value="se"/></compass>
+      #
+      # and front ends update their compass (and Frostbite its map) only from
+      # that line. Here it ends a line of its own, as the game starts a new
+      # line after </room>.
+      # Exit names without a compass value are left out; a room without exits
+      # gets an empty compass, which clears the last room's.
+      #
+      # The game also sends a <room> block for a room the character is not in
+      # (a Moon Mage's Locate shows the target's room; PEER shows the next
+      # room). The legacy stream sent the located room's compass after a
+      # Locate view, so every block gets the compass of its own exits,
+      # whatever room the character is in.
+      #
+      # Only for the client: scripts, reget and the parser use legacy_shape
+      # and never see the compass line.
+      #
+      # @param server_string [String]
+      # @return [String]
+      def legacy_shape_with_compass(server_string)
+        return server_string unless server_string.include?('<room>')
+
+        server_string.gsub(BLOCK) do
+          body = Regexp.last_match(:body)
+          legacy_lines(body, compass: compass(exit_names(body)))
+        end
+      end
+
+      def legacy_lines(body, compass: nil)
         name = part(body, 'name')
         exists = part(body, 'exists')
         players = part(body, 'players')
@@ -65,10 +107,29 @@ module Lich
         exits = part(body, 'exits')
         exits = "#{between}#{exits}" if players.empty?
         lines << exits unless exits.empty?
+        lines << compass if compass
         lines << extra unless extra.empty?
         lines.join("\r\n")
       end
       private_class_method :legacy_lines
+
+      def exit_names(body)
+        part(body, 'exits').scan(%r{<d(?:\s[^>]*)?>(.*?)</d>}m).flatten
+      end
+      private_class_method :exit_names
+
+      # The legacy stream's top-level compass for a room's exit names, in their
+      # order: <compass><dir value="n"/><dir value="se"/></compass>. Names
+      # without a compass value are left out; no exits give an empty compass.
+      # Also what a detachable client gets for the current room when it
+      # attaches, so every compass a front end gets has the same bytes.
+      #
+      # @param exits [Array<String>] exit names as the game lists them
+      # @return [String]
+      def compass(exits)
+        dirs = exits.filter_map { |exit| %(<dir value="#{COMPASS_DIRS[exit]}"/>) if COMPASS_DIRS.key?(exit) }
+        "<compass>#{dirs.join}</compass>"
+      end
 
       def part(body, tag)
         body[%r{<#{tag}>(.*?)</#{tag}>}m, 1].to_s

@@ -1144,8 +1144,15 @@ module Lich
             # sent it, and before the Wizard conversion (sf_to_wiz), which keys
             # on that layout; the room-number display (process_room_information)
             # handles either.
+            # They also get the legacy <compass> line the Saga-identity stream
+            # dropped, except Wizard/Avalon (GSL), which get exits from
+            # XMLParser's GSL codes and would see the line as a blank one.
             if alt_string.include?('<room>') && !Frontend.supports_room_element?
-              alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string)
+              alt_string = if Frontend.supports_gsl?
+                             Lich::Common::RoomBlock.legacy_shape(alt_string)
+                           else
+                             Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string)
+                           end
             end
             process_room_information(alt_string)
 

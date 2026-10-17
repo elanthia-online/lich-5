@@ -1899,17 +1899,98 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{saga_room}") }
   end
 
+  # The legacy stream followed the exits line of every room view with a
+  # top-level compass; the Saga-identity stream sends none.
   %w[wrayth genie profanity frostbite].each do |fe|
-    it "rewrites the block to the legacy roomName/roomDesc layout for #{fe}" do
+    it "rewrites the block to the legacy roomName/roomDesc layout and compass for #{fe}" do
       $frontend = fe
       described_class.send(:process_downstream_hooks, +saga_room)
       eventually do
         expect(@raw_socket).to have_received(:write).with(
           %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
           %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
-          %(Obvious paths: <d>north</d>.\r\n)
+          %(Obvious paths: <d>north</d>.\r\n) +
+          %(<compass><dir value="n"/></compass>\r\n)
         )
       end
+    end
+  end
+
+  # Wizard gets exits from XMLParser's GSL code; a compass line would only
+  # strip to a blank line.
+  it 'gives Wizard no compass and no blank line' do
+    $frontend = 'wizard'
+    stub_wizard_conversion
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
+        "An Elven burial ground.  \r\nObvious paths: north.\r\n"
+      )
+    end
+  end
+
+  # Scripts see what the server sent: downstream hooks run before the
+  # rewrite, and the compass is added only on the way to the client.
+  it 'hands downstream hooks the block as the server sent it' do
+    $frontend = 'genie'
+    seen = []
+    DownstreamHook.add('spec_room_compass_hook', proc { |line| seen << line.dup; line })
+    described_class.send(:process_downstream_hooks, +saga_room)
+    expect(seen).to eq([saga_room])
+  ensure
+    DownstreamHook.remove('spec_room_compass_hook')
+  end
+  # A Moon Mage's Locate shows the target's room as a bare <room> block; the
+  # legacy stream followed it with that room's compass
+  # (spec/fixtures/room_block/dr_legacy_locate.xml).
+  it 'sends the compass of a block of a room the character is not in' do
+    XMLData.room_id = 230_008
+    XMLData.room_exits = %w[north south]
+    $frontend = 'frostbite'
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
+        %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
+        %(Obvious paths: <d>north</d>.\r\n) +
+        %(<compass><dir value="n"/></compass>\r\n)
+      )
+    end
+  end
+
+  # PEER NORTH from 230008 returns a bare <room> block of 230009
+  # (spec/fixtures/room_block/dr_saga_peer.xml); like a Locate view, it gets
+  # the compass of the room peered into.
+  it 'sends the compass of the room peered into after a captured PEER view' do
+    peer_block = File.foreach(File.expand_path('../fixtures/room_block/dr_saga_peer.xml', __dir__)).find { |l| l.include?('(230009)</name>') }
+    XMLData.room_id = 230_008
+    XMLData.room_exits = %w[north south]
+    $frontend = 'genie'
+    described_class.send(:process_downstream_hooks, +"#{peer_block.chomp}\r\n")
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        a_string_ending_with(%(Obvious paths: <d>south</d>, <d>northwest</d>.\r\n<compass><dir value="s"/><dir value="nw"/></compass>\r\n))
+          .and(start_with(%(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Dense Woods] (230009)\r\n)))
+      )
+    end
+  end
+
+  # With ShowRoomID off the name carries no room number; the compass still
+  # comes from the block's own exits.
+  it 'sends the compass for a block without a room number' do
+    XMLData.room_id = 230_008
+    XMLData.room_exits = %w[west]
+    $frontend = 'genie'
+    unnumbered = saga_room.sub(' (230007)', '')
+    described_class.send(:process_downstream_hooks, +unnumbered)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground]\r\n) +
+        %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
+        %(Obvious paths: <d>north</d>.\r\n) +
+        %(<compass><dir value="n"/></compass>\r\n)
+      )
     end
   end
 
@@ -1919,9 +2000,14 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     fixtures = File.expand_path('../fixtures', __dir__)
     legacy_view = File.read(File.join(fixtures, 'room_block/dr_legacy_desc_no_objects.xml')).lines.map(&:chomp)
     saga_block = File.foreach(File.join(fixtures, 'streams/dr_saga_locate_descflag.xml')).find { |l| l.include?('(230007)</name>') }
+    # The legacy stream followed these lines with this compass, the next
+    # element sharing its line.
+    compass = %(<compass><dir value="n"/><dir value="se"/></compass>)
+    XMLData.room_id = 230_007
+    XMLData.room_exits = %w[north southeast]
     $frontend = 'wrayth'
     described_class.send(:process_downstream_hooks, +"#{saga_block.chomp}\r\n")
-    eventually { expect(@raw_socket).to have_received(:write).with(legacy_view.map { |l| "#{l}\r\n" }.join) }
+    eventually { expect(@raw_socket).to have_received(:write).with(legacy_view.map { |l| "#{l}\r\n" }.join + "#{compass}\r\n") }
   end
 
   it 'still arms the room display after rewriting' do
