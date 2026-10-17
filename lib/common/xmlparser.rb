@@ -1250,8 +1250,12 @@ module Lich
                     end
                   else
                     creature = nil
-                    if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider
-                      creature = Creature.register(text_string, @obj_exist, @obj_noun)
+                    # GemStone's Creature is loaded by GameLoader (via the combat
+                    # tracker) only once the game is known; before that, skip it
+                    # rather than raise and reset the parser mid-fragment.
+                    if defined?(Lich::Gemstone::Creature) &&
+                       (XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider)
+                      creature = Lich::Gemstone::Creature.register(text_string, @obj_exist, @obj_noun)
                       if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
                         creature.sync_crtr_status(pending_flags)
                       end
