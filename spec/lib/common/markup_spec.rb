@@ -9,13 +9,25 @@ require 'common/markup'
 # spec/lib/global_defs_spec.rb). Extracting the module is what makes them
 # reachable.
 RSpec.describe Lich::Common::Markup do
-  before do
+  # Markup keeps its state in process-wide globals. Each example gets a clean
+  # set, and whatever was there before is put back afterwards: other files in
+  # the same process read these, and an example can leave a half-buffered
+  # element behind in $sftowiz_multiline.
+  around do |example|
+    saved = [$sftowiz_multiline, $strip_xml_multiline,
+             $link_highlight_start, $link_highlight_end,
+             $speech_highlight_start, $speech_highlight_end]
     $sftowiz_multiline = nil
     $strip_xml_multiline = {}
     $link_highlight_start = ''
     $link_highlight_end = ''
     $speech_highlight_start = ''
     $speech_highlight_end = ''
+    example.run
+  ensure
+    $sftowiz_multiline, $strip_xml_multiline,
+      $link_highlight_start, $link_highlight_end,
+      $speech_highlight_start, $speech_highlight_end = saved
   end
 
   describe '.fb_to_sf' do

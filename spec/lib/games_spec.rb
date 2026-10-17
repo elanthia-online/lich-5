@@ -1426,6 +1426,10 @@ RSpec.describe Lich::GameBase::Game do
       before do
         allow(raw_socket).to receive(:close)
         allow(second_raw_socket).to receive(:close)
+        # Save the globals this group swaps out; spec_helper (or an earlier
+        # file) owns them, and nil is not necessarily what they held.
+        @saved_registry = $_DETACHABLE_CLIENT_REGISTRY_
+        @saved_detachable = $_DETACHABLE_CLIENT_
         $_DETACHABLE_CLIENT_REGISTRY_ = Lich::Common::DetachableClientRegistry.new
         $_DETACHABLE_CLIENT_REGISTRY_.register(mock_detachable)
         $_DETACHABLE_CLIENT_REGISTRY_.register(second_detachable)
@@ -1436,8 +1440,8 @@ RSpec.describe Lich::GameBase::Game do
       after do
         mock_detachable.close rescue nil
         second_detachable.close rescue nil
-        $_DETACHABLE_CLIENT_REGISTRY_ = nil
-        $_DETACHABLE_CLIENT_ = nil
+        $_DETACHABLE_CLIENT_REGISTRY_ = @saved_registry
+        $_DETACHABLE_CLIENT_ = @saved_detachable
         Lich::Common::ShutdownCoordinator.reset!
       end
 
@@ -1466,6 +1470,9 @@ RSpec.describe Lich::GameBase::Game do
 
       before do
         allow(raw_socket).to receive(:close)
+        @saved_registry = $_DETACHABLE_CLIENT_REGISTRY_
+        @saved_detachable = $_DETACHABLE_CLIENT_
+        @saved_client = $_CLIENT_
         $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
         $_CLIENT_ = mock_client
@@ -1473,7 +1480,11 @@ RSpec.describe Lich::GameBase::Game do
 
       after do
         mock_client.close rescue nil
-        $_CLIENT_ = nil
+        # Restore spec_helper's stub client rather than leaving nil for the
+        # next file sharing this process.
+        $_CLIENT_ = @saved_client
+        $_DETACHABLE_CLIENT_ = @saved_detachable
+        $_DETACHABLE_CLIENT_REGISTRY_ = @saved_registry
       end
 
       it 'writes to the client' do
@@ -1538,6 +1549,10 @@ RSpec.describe Lich::GameBase::Game do
       stub_const('Frontend', Lich::Common::Frontend)
 
       @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
+      @saved_registry = $_DETACHABLE_CLIENT_REGISTRY_
+      @saved_detachable = $_DETACHABLE_CLIENT_
+      @saved_client = $_CLIENT_
+      @saved_frontend = $frontend
       $_DETACHABLE_CLIENT_REGISTRY_ = nil
       $_DETACHABLE_CLIENT_ = nil
       $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
@@ -1546,8 +1561,12 @@ RSpec.describe Lich::GameBase::Game do
 
     after do
       $_CLIENT_.close rescue nil
-      $_CLIENT_ = nil
-      $frontend = nil
+      # Restore what spec_helper set up: a nil $_CLIENT_ or $frontend leaks
+      # into every later file in the same parallel_rspec process.
+      $_CLIENT_ = @saved_client
+      $frontend = @saved_frontend
+      $_DETACHABLE_CLIENT_ = @saved_detachable
+      $_DETACHABLE_CLIENT_REGISTRY_ = @saved_registry
       Frontend.sentinel_requested = false
       DownstreamHook.remove('spec_quiet_hook')
     end
