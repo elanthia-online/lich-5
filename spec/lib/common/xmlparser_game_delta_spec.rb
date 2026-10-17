@@ -6,6 +6,8 @@ require 'common/gameobj'
 require 'common/xmlparser'
 require 'gemstone/xml_delta'
 require 'dragonrealms/xml_delta'
+require 'dragonrealms/creature'
+require 'gemstone/creature'
 
 RSpec.describe Lich::Common::XMLParserDelta do
   describe '.for' do
@@ -101,18 +103,16 @@ RSpec.describe Lich::Common::XMLParserDelta do
   describe '#apply_crtr_status' do
     it 'defers (stashes) by default and on GemStone, whose room-objs <crtrStatus> precedes the creature link' do
       expect(described_class::Default.apply_crtr_status('1', { 'hostile' => '1' })).to be false
-      expect(Lich::Gemstone::XMLDelta.apply_crtr_status('1', { 'hostile' => '1' })).to be false
+      expect(Lich::Gemstone::XMLDelta.apply_crtr_status('1', { 'hostile' => '1' }, in_room_objs: true)).to be false
     end
 
     it 'applies id-first on DragonRealms' do
-      require 'dragonrealms/creature'
       Lich::DragonRealms::Creature.clear
       expect(Lich::DragonRealms::XMLDelta.apply_crtr_status('4001', { 'hostile' => '1', 'immobile' => '1' })).to be true
       expect(Lich::DragonRealms::Creature[4001].crtr_flag?(:hostile)).to be true
     end
 
     it 'applies id-first on DragonRealms inside room objs too (its batch carries no link to defer to)' do
-      require 'dragonrealms/creature'
       Lich::DragonRealms::Creature.clear
       expect(Lich::DragonRealms::XMLDelta.apply_crtr_status('4002', { 'hostile' => '1' }, in_room_objs: true)).to be true
     end
@@ -121,7 +121,6 @@ RSpec.describe Lich::Common::XMLParserDelta do
       let(:creature) { double('CreatureInstance', sync_crtr_status: nil) }
 
       before do
-        require 'gemstone/creature'
         allow(Lich::Gemstone::CreatureInstance).to receive(:current_room_ids).and_return([5001])
         allow(Lich::Gemstone::CreatureInstance).to receive(:[]).with('5001').and_return(creature)
       end
