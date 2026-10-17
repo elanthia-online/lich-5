@@ -2199,7 +2199,7 @@ def handle_detachable_client(client)
       next
     end
     # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles itself
-    # (docs/frontend-capability-declaration.md). Never sent to the game.
+    # (docs/frontends/capability-declaration.md). Never sent to the game.
     next if Lich::Common::ClientCapabilities.declare(client, client_string)
 
     # Detachable exits run script shutdown inline, so the watchdog must be armed

@@ -39,7 +39,7 @@ module Lich
         # Distinguishes a normal, expected credential rejection from an
         # unrecognized/empty/malformed response, which points at a different
         # class of problem (relay or backend divergence) -- see
-        # docs/eaccess-failure-diagnostics.md.
+        # docs/connection/eaccess-failure-diagnostics.md.
         KNOWN_REJECTION_TOKENS = %w[REJECT NORECORD INVALID PASSWORD].freeze
 
         # @param error [StandardError] the error raised by the a_response stage
@@ -58,7 +58,7 @@ module Lich
         # Wraps a step of the connect/handshake/protocol exchange so a
         # failure is logged with which stage it happened in, how long that
         # stage ran before failing, and a probable-cause hint -- see
-        # docs/eaccess-failure-diagnostics.md for the full taxonomy. Never
+        # docs/connection/eaccess-failure-diagnostics.md for the full taxonomy. Never
         # logs raw protocol response bodies, the account password, or the
         # session key: only the stage name, exception class/message, and the
         # derived probable-cause classification.
@@ -67,7 +67,7 @@ module Lich
         # auth_with_timeout can report which stage was in flight if the
         # overall watchdog has to kill a hung attempt.
         #
-        # @param name [String] stage identifier (see docs/eaccess-failure-diagnostics.md)
+        # @param name [String] stage identifier (see docs/connection/eaccess-failure-diagnostics.md)
         # @param probable_cause [String, Proc] a fixed hint, or a callable receiving the raised
         #   error and returning a hint -- used when the classification depends on what failed
         #   (e.g. a_response's recognized-rejection-vs-divergence split)
@@ -128,7 +128,7 @@ module Lich
             # Ambiguous by design: a legitimate Simutronics cert rotation and
             # a MITM presenting a different certificate look identical here.
             # Flagged as its own stage (cert_pin_mismatch) rather than folded
-            # into a generic warning -- see docs/eaccess-failure-diagnostics.md.
+            # into a generic warning -- see docs/connection/eaccess-failure-diagnostics.md.
             # The certificate itself is public data, not a secret, so it's
             # safe to log in full for diagnosis.
             Lich.log "warn: EAccess stage 'cert_pin_mismatch' -- peer certificate differs from the " \
@@ -382,7 +382,7 @@ module Lich
             # where the exchange hangs with no exception at all (a stalled
             # connect or a read that never returns) otherwise leaves zero
             # indication of which step it was stuck in. See
-            # docs/eaccess-failure-diagnostics.md.
+            # docs/connection/eaccess-failure-diagnostics.md.
             stalled_stage = auth_thread[:eaccess_stage] || "connect (pre-stage)"
             auth_thread.kill rescue nil
             Lich.log "warn: EAccess timed out after #{timeout}s while in stage '#{stalled_stage}'"

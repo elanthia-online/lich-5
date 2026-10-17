@@ -4,7 +4,7 @@
 # Web login fallback in isolation, stubbing Net::HTTP so no real network
 # calls are made. The request/response fixtures below (paths, form bodies,
 # HTML markup, redirect chains) are taken verbatim from a live capture
-# against play.net -- see docs/web-login-protocol-analysis.md. The module
+# against play.net -- see docs/connection/web-login-protocol-analysis.md. The module
 # itself has also been exercised live end-to-end (DR/DRT/GS3->GS4/GST, plus
 # a bad-password failure) as part of building it; these specs are regression
 # coverage for that already-verified behavior, not a substitute for it.
