@@ -8,14 +8,15 @@ require 'common/room_description_filter'
 # keeps it (a game bug). The filter follows the game's replies to the flag and
 # empties the description of a block for the character's own room.
 # Shapes are real lines (spec/fixtures/streams/dr_saga_group_bank.xml and a
-# 2026-10-16 Locate capture), names pseudonymized, descriptions shortened.
+# 2026-10-16 Locate capture), names pseudonymized, player ids synthetic
+# (as in the remapped fixtures), descriptions shortened.
 RSpec.describe Lich::Common::RoomDescriptionFilter do
   off_reply = "You will no longer see room descriptions.\r\n"
   on_reply = "You will now see room descriptions.\r\n"
   shacks = %(<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route ) +
            %(between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.</description><exists></exists>) +
-           %(<players>Also here: Paintress <a exist="-10614513" noun="Brenna">Brenna</a>, <a exist="-10623441" noun="Delphine">Delphine</a> ) +
-           %(and Druid <a exist="-10614301" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits>) +
+           %(<players>Also here: Paintress <a exist="-10700002" noun="Brenna">Brenna</a>, <a exist="-10700004" noun="Delphine">Delphine</a> ) +
+           %(and Druid <a exist="-10700003" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits>) +
            %(<extra></extra></room>\r\n)
   shacks_without = shacks.sub(%r{<description>.*?</description>}, '<description></description>')
   burial_ground = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>You come upon an ) +
