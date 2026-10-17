@@ -98,6 +98,15 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1705
 
+| Absent or counted | Corpus |
+|---|---|
+| Players lists: the 24,589 linked lists contain 0 unlinked players, and 0 link-free lists occur in a capture that has links. The 1,106 link-free lists are each one tag-free run on one line | 107 DR-16 Saga captures; DR-16 legacy; the legacy FIX streams |
+| Legacy bold runs that are only an article: 0 of 187 room-objs bold runs in `dr_legacy_hunt.xml` (0 of 253 bold runs in all the legacy FIX streams). DR-16 legacy has almost no room objects (the character stood still), so FIX is the corpus | FIX |
+| Saga room objs: 63,702 components with 337,203 linked creatures. Articles: a 336,525, an 611, the 28, none 39; 0 "some", 0 capitalised. 0 single-bold components; 0 bold text outside a link except a bare article; 0 `a <pushBold/><a` (article outside the bold) | DR-16 Saga |
+| GemStone room objs: 0 "which appears dead" in 13,869 components (GS says "that is/appears …"). DragonRealms: 205 "which appears dead", 26 of them followed by ` and some junk.`; one is committed as `spec/fixtures/creature/dr_saga_room_objs_shapes.xml` | GS-15; DR-16 Saga |
+| Assess (4,069 pushes, 2,829 linked subjects): the subject's `exist` equals the `look #` id in 2,829 of 2,829; 0 links outside `<d>`; 0 `<d>` without a link; 0 first links that are not the subject; 0 subjects whose `noun=` (trimmed) differs from the text's last word. GS-15: 0 assess streams. DR-16 legacy: 0 assess lines (FIX has 14, in `dr_legacy_hunt.xml`) | DR-16 + DR-extra |
+| Room objs link `noun=` differing from the text's last word: 0 of the 125 "white-tailed leopard" links in C8 `2026-10-17_00-00-00`, all `noun="leopard"`, so no committed fixture holds the shape #1705 handles for long-named pets (the PR's replay of the session logs reports 103 such snapshots; none was fetched). The padded noun is committed: C1 `2026-10-17_03-49-51` sends `noun=" moth"`, in `spec/fixtures/creature/dr_saga_room_objs_shapes.xml` | 2 user-named 2026-10-17 captures (not in the corpus table) |
+
 ### #1706
 
 ### #1707

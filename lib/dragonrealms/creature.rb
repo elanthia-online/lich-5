@@ -17,7 +17,10 @@
 #     with no `exist` id (consumed separately by DRRoom; not used here).
 #   * the `assess` combat stream (`<d cmd='look #NNN'>A jeol moradu</d>
 #     (1: ...) is behind you at melee range`) - the only feed that ties an
-#     `exist` id to a name, plus assess number, relation and range.
+#     `exist` id to a name, plus assess number, relation and range. The
+#     Saga-identity stream also links the name inside the `<d>` tag
+#     (`<d cmd='look #NNN'><pushBold/>A <a exist="NNN" noun="moradu">jeol
+#     moradu</a><popBold/></d>`), which supplies the server's noun.
 #
 # So {CreatureInstance}s are created id-first from `<crtrStatus>` (flags, no
 # name) and have their name/position/range backfilled from `assess` via
@@ -44,8 +47,9 @@ module Lich
 
       # @return [Integer] server creature id.
       attr_reader :id
-      # @return [String, nil] attack noun (the trailing word of the name),
-      #   derived whenever a name is set; nil until then.
+      # @return [String, nil] attack noun: the server's noun (a link's `noun=`)
+      #   when the stream supplies one, otherwise the trailing word of the name;
+      #   set whenever a name is set, nil until then.
       attr_reader :noun
       # @return [String, nil] display name; nil until a room-objs backfill or an
       #   `assess` tie-in supplies one.
@@ -116,14 +120,22 @@ module Lich
       # DragonRealms learns which name/relation/range belongs to that id. The
       # `assess` feed capitalizes the subject ("A jeol moradu"); the name is
       # downcased to match the room-objs vocabulary DragonRealms scripts expect.
+      # The noun is the entry's `:noun` (the server noun from the subject's
+      # `<a exist>` link, Saga-identity stream) when present, so a long name
+      # such as "a sleek golden panther with enigmatic violet eyes" keeps noun
+      # "panther"; link-less (legacy) entries derive it from the name.
+      # A server noun keeps the server's case and is not downcased with the
+      # name, so it matches the noun the linked room-objs path stores (a link
+      # `noun="Warden"` stays "Warden"); a derived noun comes from the
+      # downcased name and is lowercase.
       #
       # @param entry [Hash] an entry from `XMLData.parse_assess_line`, with keys
-      #   `:name`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
+      #   `:name`, `:noun`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
       # @return [void]
       def feed_assess(entry)
         if entry[:name]
           @name = entry[:name].to_s.downcase
-          @noun = derive_noun(@name)
+          @noun = resolve_noun(entry[:noun], @name)
           # Authoritative from here on: subsequent room-objs backfills no-op.
           @name_from_assess = true
         end
@@ -138,25 +150,31 @@ module Lich
         @enriched_at = Time.now
       end
 
-      # Applies a name learned from the room-objs stream, and derives the attack
-      # noun from it.
+      # Applies a name learned from the room-objs stream, with its attack noun.
       #
       # Two producers call this, both via the XML parser: the stream-order
       # backfill that pairs the Nth bold room-objs name with the Nth
-      # `<crtrStatus>` id, and (future-proofing) a GemStone-style
-      # `<a exist noun>` room-objs tag if DragonRealms ever emits one. The
+      # `<crtrStatus>` id (legacy dialect), and the linked room-objs creature
+      # (`<a exist noun>`) of the Saga-identity dialect, named with the article
+      # that precedes the link ("a jeol moradu"). The linked creature passes the
+      # link's `noun=`, which is the server's noun and wins: it need not be the
+      # last word of the name ("a sleek golden panther with enigmatic violet
+      # eyes" has noun "panther"). Without one (legacy) the noun is derived from
+      # the name's last word. The
       # `assess` stream is the authoritative id<->name tie, so once #feed_assess
       # has named the creature this is a no-op. A nil name (e.g. an out-of-range
       # positional lookup, the count-guard) is ignored, leaving any existing name
       # intact.
       #
       # @param name [String, nil] display name from the room-objs stream.
+      # @param noun [String, nil] the server's noun (the link's `noun=`); nil or
+      #   blank derives it from the name. Surrounding whitespace is trimmed.
       # @return [void]
-      def apply_room_name(name)
+      def apply_room_name(name, noun = nil)
         return if name.nil? || @name_from_assess
 
         @name = name
-        @noun = derive_noun(name)
+        @noun = resolve_noun(noun, name)
       end
 
       # Whether this creature should be considered attackable.
@@ -260,6 +278,17 @@ module Lich
         [balance, conditions]
       end
 
+      # The server's noun when one is supplied (a link's `noun=`), trimmed;
+      # otherwise the noun derived from the name (legacy, link-less streams).
+      #
+      # @param noun [String, nil] the server noun; nil or blank means none.
+      # @param name [String, nil] the display name to derive from.
+      # @return [String, nil]
+      def resolve_noun(noun, name)
+        noun = noun&.strip
+        noun.nil? || noun.empty? ? derive_noun(name) : noun
+      end
+
       # Extracts the attack noun (trailing word) from a display name, matching
       # DragonRealms' end-anchored creature-name convention (see
       # DRDefsPattern::CREATURE_NAME) so `noun` is a drop-in for `attack <noun>`
@@ -297,10 +326,12 @@ module Lich
       # This is the automatic, name-less DragonRealms feed: it produces an
       # id-keyed hostile roster with flags before any `assess` has run.
       #
-      # Name-less on purpose: the stream-order room-objs name is applied
-      # separately via {CreatureInstance#apply_room_name}, batched at the prompt
-      # once the parser has confirmed the bold-name and crtrStatus counts match
-      # (see lib/common/xmlparser.rb). assess later backfills authoritatively.
+      # Name-less on purpose: the room-objs name is applied separately via
+      # {CreatureInstance#apply_room_name}, either from the linked creature
+      # (Saga-identity dialect, registered before this batch arrives) or, in the
+      # legacy dialect, batched at the prompt once the parser has confirmed the
+      # bold-name and crtrStatus counts match (see lib/common/xmlparser.rb).
+      # assess later backfills authoritatively.
       #
       # @param id [Integer, String] server creature id (the tag's `exist`).
       # @param flags [Hash{String=>String}] tag attributes excluding `exist`.

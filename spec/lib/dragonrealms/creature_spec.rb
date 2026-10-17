@@ -65,6 +65,23 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class[99353095].noun).to eq('moradu')
     end
 
+    it 'keeps a given server noun instead of the name\'s last word' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a grizzled hound with a notched ear', 'hound')
+
+      expect(creature.name).to eq('a grizzled hound with a notched ear')
+      expect(creature.noun).to eq('hound')
+    end
+
+    it 'trims a padded server noun and derives from the name when it is blank' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a void-black umbral moth', ' moth ')
+      expect(creature.noun).to eq('moth')
+
+      creature.apply_room_name('a jeol moradu', '  ')
+      expect(creature.noun).to eq('moradu')
+    end
+
     it 'leaves name and noun nil when no room name is applied' do
       described_class.sync('99353095', 'hostile' => '1')
 
@@ -97,6 +114,36 @@ RSpec.describe Lich::DragonRealms::Creature do
   end
 
   describe '.feed_assess (the id-to-name tie-in)' do
+    it 'keeps the server noun an assess entry carries (Saga link), trimmed' do
+      described_class.feed_assess(
+        name: 'A grizzled hound with a notched ear', id: '4003', noun: ' hound ', number: 1,
+        status: 'solidly balanced', relation: 'facing', range: :melee, self: false, pc: false
+      )
+
+      expect(described_class[4003].noun).to eq('hound')
+    end
+
+    it 'keeps the server noun\'s case while it downcases the name' do
+      creature = described_class.sync('34361', 'hostile' => '1')
+      creature.apply_room_name('an Elven Warden', 'Warden')
+      expect(creature.noun).to eq('Warden')
+
+      described_class.feed_assess(name: 'An Elven Warden', id: '34361', noun: 'Warden', self: false, pc: false)
+      described_class.feed_assess(name: 'An Elven Warden', id: '34362', noun: nil, self: false, pc: false)
+
+      expect(described_class[34361].name).to eq('an elven warden')
+      expect(described_class[34361].noun).to eq('Warden')
+      expect(described_class[34362].noun).to eq('warden')
+    end
+
+    it 'derives the noun when the assess entry carries none or a blank one' do
+      described_class.feed_assess(name: 'A jeol moradu', id: '4001', noun: nil, self: false, pc: false)
+      described_class.feed_assess(name: 'A jeol moradu', id: '4002', noun: ' ', self: false, pc: false)
+
+      expect(described_class[4001].noun).to eq('moradu')
+      expect(described_class[4002].noun).to eq('moradu')
+    end
+
     it 'backfills name, assess number, relation and range onto a synced id' do
       described_class.sync('99353095', 'hostile' => '1', 'immobile' => '1')
 
