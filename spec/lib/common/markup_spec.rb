@@ -263,7 +263,7 @@ end
 RSpec.describe Lich::Common::Markup, 'legacy line shape' do
   describe '.strip_game_links' do
     it 'removes an object link, keeping its text' do
-      expect(described_class.strip_game_links(%(Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.\r\n)))
+      expect(described_class.strip_game_links(%(Also here: Universalist <a exist="-10700003" noun="Corwin">Corwin</a>.\r\n)))
         .to eq("Also here: Universalist Corwin.\r\n")
     end
 
