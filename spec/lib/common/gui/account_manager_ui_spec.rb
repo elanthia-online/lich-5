@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require 'tmpdir'
+require 'yaml'
+require 'fileutils'
+
 require_relative '../../../spec_helper'
 require_relative '../../../login_spec_helper'
 
@@ -127,5 +131,72 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
     expect(rabki_row[3]).to eq('Custom')
     expect(calvix_row[described_class::FRONTEND_ID_COLUMN]).to eq('velvet-web')
     expect(rabki_row[described_class::FRONTEND_ID_COLUMN]).to eq('velvet-web')
+  end
+
+  describe 'Refresh Characters' do
+    let(:data_dir) { Dir.mktmpdir }
+    let(:yaml_file) { File.join(data_dir, 'entry.yaml') }
+    let(:manager) { described_class.new(data_dir) }
+    let(:messages) { [] }
+    let(:server_rows) do
+      [
+        { char_name: 'Known', game_code: 'DR', game_name: 'DragonRealms' },
+        { char_name: 'Fresh', game_code: 'DR', game_name: 'DragonRealms' }
+      ]
+    end
+
+    before do
+      File.write(yaml_file, {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => { 'MYACCOUNT' => { 'password' => 'secret', 'characters' => [
+          { 'char_name' => 'Known', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+        ] } }
+      }.to_yaml)
+      allow(manager).to receive(:show_message_dialog) { |message| messages << message }
+      allow(manager).to receive(:refresh_accounts_display)
+      allow(manager).to receive(:notify_data_changed)
+    end
+
+    after { FileUtils.rm_rf(data_dir) }
+
+    def stored_names
+      YAML.safe_load_file(yaml_file, permitted_classes: [Symbol]).dig('accounts', 'MYACCOUNT', 'characters').map { |c| c['char_name'] }
+    end
+
+    it "stores new characters with the account's usual frontend and refreshes the launcher" do
+      expect(Lich::Common::Authentication).to receive(:authenticate)
+        .with(account: 'MYACCOUNT', password: 'secret', legacy: true).and_return(server_rows)
+
+      manager.send(:refresh_account_characters, 'MYACCOUNT')
+
+      expect(stored_names).to contain_exactly('Known', 'Fresh')
+      fresh = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+                  .dig('accounts', 'MYACCOUNT', 'characters').find { |c| c['char_name'] == 'Fresh' }
+      expect(fresh['frontend']).to eq('wizard')
+      expect(manager).to have_received(:refresh_accounts_display)
+      expect(manager).to have_received(:notify_data_changed).with(:character_added, { account: 'MYACCOUNT', added: 1 })
+      expect(messages).to eq(['Added 1 new character(s) to MYACCOUNT (2 found), using Wizard.'])
+    end
+
+    it 'reports nothing new without touching entry.yaml or the other tabs' do
+      allow(Lich::Common::Authentication).to receive(:authenticate).and_return(server_rows.take(1))
+      before = File.read(yaml_file)
+
+      manager.send(:refresh_account_characters, 'MYACCOUNT')
+
+      expect(File.read(yaml_file)).to eq(before)
+      expect(manager).not_to have_received(:notify_data_changed)
+      expect(messages).to eq(['No new characters for MYACCOUNT (1 found).'])
+    end
+
+    it 'shows authentication failures instead of raising out of the click handler' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_raise(Lich::Common::Authentication::FatalAuthError, 'Error(PASSWORD)')
+
+      expect { manager.send(:refresh_account_characters, 'MYACCOUNT') }.not_to raise_error
+
+      expect(messages).to eq(['Could not refresh characters for MYACCOUNT: Error(PASSWORD)'])
+      expect(stored_names).to eq(['Known'])
+    end
   end
 end

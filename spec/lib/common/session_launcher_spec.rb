@@ -134,6 +134,38 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  context 'when the launch enters the character generator' do
+    let(:generator_launch_data) { ['KEY=test', 'GAME=STORM', 'GAMECODE=GST'] }
+
+    it 'spawns the child with --login NEW and the account, never a character name' do
+      result = described_class.launch(
+        generator_launch_data + ['CHARACTER=Ghost'],
+        launch_context: { generator: true, user_id: 'MYACCOUNT', char_name: 'NEW', game_code: 'GST', frontend: 'saga' }
+      )
+
+      expect(result).to eq({ ok: true, pid: 1234 })
+      expect(described_class).to have_received(:spawn).with(
+        '/usr/bin/ruby',
+        File.expand_path($PROGRAM_NAME),
+        '--login', 'NEW',
+        '--account=MYACCOUNT',
+        '--GST',
+        '--saga',
+        hash_including(chdir: anything)
+      )
+    end
+
+    it 'refuses to spawn without an account' do
+      result = described_class.launch(
+        generator_launch_data,
+        launch_context: { generator: true, game_code: 'GST', frontend: 'stormfront' }
+      )
+
+      expect(result).to eq({ ok: false, error: 'missing account for generator launcher spawn' })
+      expect(described_class).not_to have_received(:spawn)
+    end
+  end
+
   it 'returns structured error details when launch_data is invalid' do
     result = described_class.launch([])
     expect(result).to eq({ ok: false, error: 'launch_data must be a non-empty Array' })

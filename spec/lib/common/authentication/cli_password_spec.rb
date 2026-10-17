@@ -679,6 +679,19 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       )
     end
 
+    it 'follows the shared default frontend rather than its own literal' do
+      File.write(yaml_file, YAML.dump('encryption_mode' => 'plaintext', 'accounts' => { 'DOUG' => { 'password' => 'password' } }))
+      stub_const('Lich::Common::Authentication::AccountCharacters::DEFAULT_FRONTEND', 'genie')
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(frontend: 'genie')
+      )
+    end
+
     it 'returns 0 on success' do
       allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })

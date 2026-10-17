@@ -398,6 +398,46 @@ RSpec.describe Lich::Common, "#gui_login" do
       expect(window).not_to have_received(:destroy)
     end
 
+    context "when Account Management's Create Character launches the generator" do
+      let(:generator_context) do
+        { user_id: 'MYACCOUNT', password: 'secret', char_name: 'NEW', game_code: 'DR',
+          frontend: 'stormfront', generator: true, saved_entry: true }
+      end
+
+      def wired_play_callback
+        play_callback = nil
+        allow(account_manager_ui).to receive(:set_data_change_callback)
+        allow(account_manager_ui).to receive(:register_for_notifications)
+        allow(account_manager_ui).to receive(:set_play_callback) { |callback| play_callback = callback }
+        test_instance.instance_variable_set(:@tab_communicator, double('TabCommunicator', register_data_change_callback: nil))
+        test_instance.send(:setup_cross_tab_communication)
+        play_callback
+      end
+
+      it "spawns a persistent child that carries the generator intent and account" do
+        stub_const("Lich::Common::SessionLauncher", Module.new)
+        allow(Lich::Common::SessionLauncher).to receive(:launch).and_return({ ok: true, pid: 1234 })
+        test_instance.instance_variable_set(:@persistent_launcher_mode, true)
+
+        wired_play_callback.call(launch_data, generator_context)
+
+        expect(Lich::Common::SessionLauncher).to have_received(:launch).with(
+          launch_data,
+          launch_context: hash_including(generator: true, user_id: 'MYACCOUNT', game_code: 'DR')
+        )
+        expect(window).not_to have_received(:destroy)
+      end
+
+      it "hands the launch data back and closes when persistent mode is off" do
+        test_instance.instance_variable_set(:@persistent_launcher_mode, false)
+
+        wired_play_callback.call(launch_data, generator_context)
+
+        expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
+        expect(window).to have_received(:destroy)
+      end
+    end
+
     it "closes after a completed Saga launch when persistent mode is disabled" do
       stub_const("Lich::Common::SessionLauncher", Module.new)
       allow(Lich::Common::SessionLauncher).to receive(:launch)
