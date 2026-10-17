@@ -21,6 +21,10 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require_relative '../../../lib/common/gameobj'
 require_relative '../../../lib/common/xmlparser'
+# GameLoader requires the current game's parser delta in production (alongside
+# its map delta); these examples stub XMLData.game, so load both here.
+require 'gemstone/xml_delta'
+require 'dragonrealms/xml_delta'
 
 RSpec.describe Lich::Common::XMLParser do
   subject(:parser) { described_class.new }
