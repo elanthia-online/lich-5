@@ -9,13 +9,13 @@ require 'ostruct'
 # 1. Sentinel constants (CORE_GET_SETTINGS, CORE_SCRIPT_LOADER) are defined
 # 2. start_scripts_if_available behavior (the non-trivial function)
 #
-# Designed to run both standalone and as part of the full suite alongside
-# spec_helper-based specs.
-
-# Minimal stubs for runtime dependencies used by the extracted function
-class Script; end unless defined?(Script)
-def start_script(*_args); end unless defined?(start_script)
-def pause(_seconds = 0); end unless respond_to?(:pause)
+# The extracted function calls Script, start_script and pause; the shared
+# stubs in spec_helper provide them (Kernel#start_script, Kernel#pause).
+# Do not define top-level stubs here: a top-level `def` is a private method
+# owned by Object, and in the same process it shadows the Kernel stubs and
+# breaks allow_any_instance_of(Object) overrides in other files (for example
+# common_moonmage_spec's check_moonwatch examples).
+require_relative '../../spec_helper'
 
 # Load the sentinel constants and start_scripts_if_available from global_defs.rb
 dep_path = File.join(File.dirname(__FILE__), '..', '..', '..', 'lib', 'global_defs.rb')

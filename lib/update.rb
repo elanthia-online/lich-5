@@ -59,6 +59,7 @@ module Lich
           tracking_mode: :explicit,
           script_pattern: /^scripts\/[^\/]+\.lic$/,
           script_prefix: 'scripts',
+          check_lich_requirement: true,
           game_filter: nil,
           default_tracked: %w[
             alias.lic autostart.lic go2.lic jinx.lic log.lic
@@ -73,6 +74,7 @@ module Lich
           tracking_mode: :explicit,
           script_pattern: /^scripts\/[^\/]+\.lic$/,
           script_prefix: 'scripts',
+          check_lich_requirement: true,
           game_filter: /^GS/,
           default_tracked: %w[
             ewaggle.lic
