@@ -11,7 +11,7 @@ RSpec.describe Lich::Common::RoomBlock do
          '<description>Here on the route between the sacred sites is a semi-circular clearing.</description>' \
          '<exists>You also see <pushBold/><pushBold/>a <a exist="191009754" noun="leopard">white-tailed leopard</a><popBold/><popBold/>.</exists>' \
          '<crtrStatus exist="191009754" disengaged="1"/>' \
-         '<players>Also here: Monster <a exist="-10514490" noun="Aldric">Aldric</a> and Druid <a exist="-10614301" noun="Delphine">Delphine</a>.</players>' \
+         '<players>Also here: Monster <a exist="-10700002" noun="Aldric">Aldric</a> and Druid <a exist="-10700005" noun="Delphine">Delphine</a>.</players>' \
          "<exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>\r\n"
 
   describe '.legacy_shape' do
@@ -20,7 +20,7 @@ RSpec.describe Lich::Common::RoomBlock do
         '<resource picture="0"/><style id="roomName" />[Bosque Deriel, Hermit\'s Shacks] (230008)' + "\r\n" \
         '<style id=""/><preset id=\'roomDesc\'>Here on the route between the sacred sites is a semi-circular clearing.</preset>' \
         '  You also see <pushBold/><pushBold/>a <a exist="191009754" noun="leopard">white-tailed leopard</a><popBold/><popBold/>.' + "\r\n" \
-        '<crtrStatus exist="191009754" disengaged="1"/>Also here: Monster <a exist="-10514490" noun="Aldric">Aldric</a> and Druid <a exist="-10614301" noun="Delphine">Delphine</a>.' + "\r\n" \
+        '<crtrStatus exist="191009754" disengaged="1"/>Also here: Monster <a exist="-10700002" noun="Aldric">Aldric</a> and Druid <a exist="-10700005" noun="Delphine">Delphine</a>.' + "\r\n" \
         "Obvious paths: <d>north</d>, <d>south</d>.\r\n"
       )
     end
