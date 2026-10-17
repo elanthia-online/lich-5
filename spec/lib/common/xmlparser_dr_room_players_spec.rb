@@ -13,9 +13,9 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
   subject(:parser) { Lich::Common::XMLParser.new }
 
   legacy = "<component id='room players'>Also here: Monster Aldric, Daydreamer Brenna who is surrounded by a pale electrical sphere, Corwin and Druid Delphine.</component>"
-  saga = "<component id='room players'>Also here: Monster <a exist=\"-10514490\" noun=\"Aldric\">Aldric</a>, " \
-         "Daydreamer <a exist=\"-10604318\" noun=\"Brenna\">Brenna</a> who is surrounded by a pale electrical sphere, " \
-         "<a exist=\"-10623441\" noun=\"Corwin\">Corwin</a> and Druid <a exist=\"-10614301\" noun=\"Delphine\">Delphine</a>.</component>"
+  saga = "<component id='room players'>Also here: Monster <a exist=\"-10700002\" noun=\"Aldric\">Aldric</a>, " \
+         "Daydreamer <a exist=\"-10700003\" noun=\"Brenna\">Brenna</a> who is surrounded by a pale electrical sphere, " \
+         "<a exist=\"-10700004\" noun=\"Corwin\">Corwin</a> and Druid <a exist=\"-10700005\" noun=\"Delphine\">Delphine</a>.</component>"
 
   before do
     allow(XMLData).to receive(:game).and_return('DR')
@@ -49,7 +49,7 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
     # one stray <a exist> elsewhere in the stream cannot stop every later
     # link-free list from splitting until the next login.
     it 'still splits a complete list after a link elsewhere in the stream' do
-      feed('<a exist="-10514490" noun="Aldric">Aldric</a> waves.')
+      feed('<a exist="-10700002" noun="Aldric">Aldric</a> waves.')
       expect(parser.stream_feature?(:links)).to be true
 
       feed(legacy)
@@ -63,7 +63,7 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
     it 'registers every linked player with its id, title and status and no junk entries' do
       feed(saga)
 
-      expect(pcs.map(&:first)).to eq(%w[-10514490 -10604318 -10623441 -10614301])
+      expect(pcs.map(&:first)).to eq(%w[-10700002 -10700003 -10700004 -10700005])
       expect(pcs.map { |pc| pc[1] }).to eq(%w[Aldric Brenna Corwin Delphine])
       expect(pcs[0][2]).to eq('Monster Aldric')
       expect(pcs[1][2]).to eq('Daydreamer Brenna')
@@ -74,9 +74,9 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
 
     it 'replaces the previous room\'s players on the next refresh' do
       feed(saga)
-      feed("<component id='room players'>Also here: <a exist=\"-10623441\" noun=\"Corwin\">Corwin</a>.</component>")
+      feed("<component id='room players'>Also here: <a exist=\"-10700004\" noun=\"Corwin\">Corwin</a>.</component>")
 
-      expect(pcs.map(&:first)).to eq(%w[-10623441])
+      expect(pcs.map(&:first)).to eq(%w[-10700004])
     end
 
     # Shared with GemStone and parked until a GemStone capture exists
