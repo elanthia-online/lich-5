@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../common/room_block'
+
 module Lich
   module DragonRealms
     # Builds the one-time state push a newly attached detachable-client
@@ -26,11 +28,9 @@ module Lich
       # [progressBar id, text label]. The game labels stamina as "fatigue".
       VITALS = [%w[health health], %w[mana mana], %w[stamina fatigue], %w[spirit spirit], %w[concentration concentration]].freeze
 
-      SHORT_DIRS = {
-        'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
-        'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
-        'up' => 'up', 'down' => 'down', 'out' => 'out'
-      }.freeze
+      # The compass values of RoomBlock::COMPASS_DIRS, kept for callers; the
+      # compass itself comes from RoomBlock.compass.
+      SHORT_DIRS = Lich::Common::RoomBlock::COMPASS_DIRS
 
       # Whether enough of the login feed has been parsed to build the push. In
       # the DragonRealms login feed the first <prompt> follows everything the
@@ -79,9 +79,11 @@ module Lich
         end.join
       end
 
+      # The same compass, byte for byte, the <room> rewrite sends after a room
+      # view. At attach it shows the character's room, from the room exits
+      # component (XMLData.room_exits), even if the last view was a Locate.
       def self.compass
-        dirs = XMLData.room_exits.filter_map { |direction| "<dir value='#{SHORT_DIRS[direction]}'/>" if SHORT_DIRS.key?(direction) }
-        "<compass>#{dirs.join}</compass>"
+        Lich::Common::RoomBlock.compass(XMLData.room_exits)
       end
 
       def self.encode(value)

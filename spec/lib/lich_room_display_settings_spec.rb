@@ -105,6 +105,25 @@ RSpec.describe 'Lich.display_room_* real getters (lib/lich.rb)' do
     `#{Shellwords.escape(RbConfig.ruby)} -e #{Shellwords.escape(script)}`
   end
 
+  describe '.follow_description_flag' do
+    it 'defaults off' do
+      expect(real_getter_value(:follow_description_flag, 'DR')).to be false
+    end
+
+    it 'stays unresolved (nil) until a game is identified' do
+      expect(real_getter_value(:follow_description_flag, '')).to be_nil
+    end
+
+    it 'returns the persisted value from the settings table' do
+      expect(run_real_lich(game: 'DR', db_value: 'true', body: 'print Lich.follow_description_flag.inspect')).to eq('true')
+    end
+
+    it 'normalizes an assigned value to a boolean' do
+      body = 'Lich.follow_description_flag = "on"; print Lich.follow_description_flag.inspect'
+      expect(run_real_lich(game: 'DR', body: body)).to eq('true')
+    end
+  end
+
   describe '.display_roomid_location' do
     it 'defaults to "line" (the historical below-room line) for DragonRealms' do
       expect(run_real_lich(game: 'DR', body: 'print Lich.display_roomid_location.inspect')).to eq('"line"')

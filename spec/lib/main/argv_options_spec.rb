@@ -114,3 +114,79 @@ RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.handle_sentinel' do
     expect(File.read(source_path)).to match(/^[ \t]*when \/\^--sentinel\$\/i\r?\n[ \t]*@argv_options\[:sentinel\] = true/)
   end
 end
+
+require_relative '../../../lib/common/client_capabilities'
+
+# announce logs as well as printing; run alone, this file has no Lich.log.
+module Lich
+  def self.log(_msg); end
+end unless Lich.respond_to?(:log)
+
+RSpec.describe 'Lich::Main::ArgvOptions --frontend-caps' do
+  source_path = File.expand_path('../../../lib/main/argv_options.rb', __dir__)
+  source = File.read(source_path)
+
+  harness_class = Class.new do
+    %w[handle_frontend_caps announce].each do |name|
+      method_body = source[/^(?<ind>[ \t]*)def self\.#{name}\(.*?^\k<ind>end$/m]
+      raise "could not extract #{name} from argv_options.rb" unless method_body
+
+      module_eval(method_body.sub("def self.#{name}", "def #{name}"))
+    end
+  end
+
+  parser = Module.new do
+    body = source[/^(?<ind>[ \t]*)module OptionParser\n(?<body>.*?)^\k<ind>end$/m, :body]
+    raise 'could not extract OptionParser from argv_options.rb' unless body
+
+    module_eval(body)
+  end
+
+  let(:harness) { harness_class.new }
+  let(:capabilities) { Lich::Common::ClientCapabilities }
+
+  around do |example|
+    saved = [ARGV.dup, capabilities.launch_capabilities, $frontend]
+    begin
+      example.run
+    ensure
+      ARGV.replace(saved[0])
+      capabilities.launch_capabilities = saved[1]
+      $frontend = saved[2]
+    end
+  end
+
+  before { allow(Lich).to receive(:log) }
+
+  it 'parses the flag into the option the side effect reads' do
+    ARGV.replace(['--frontend-caps=game_links,double_bold'])
+    expect(parser.execute[:frontend_caps]).to eq('game_links,double_bold')
+  end
+
+  it 'parses an empty list too' do
+    ARGV.replace(['--frontend-caps='])
+    expect(parser.execute[:frontend_caps]).to eq('')
+  end
+
+  it 'sets the launch set every undeclared client gets' do
+    harness.handle_frontend_caps({ frontend_caps: 'double_bold,room_element' })
+    expect(capabilities.launch_capabilities).to eq(%i[room_element double_bold])
+  end
+
+  it 'sets the empty set for an empty list' do
+    harness.handle_frontend_caps({ frontend_caps: '' })
+    expect(capabilities.launch_capabilities).to eq([])
+  end
+
+  it 'warns about names it does not know and keeps the rest' do
+    expect { harness.handle_frontend_caps({ frontend_caps: 'game_links,sparkles' }) }
+      .to output(/warning: --frontend-caps: ignoring unknown capabilities: sparkles/).to_stdout
+    expect(capabilities.launch_capabilities).to eq([:game_links])
+  end
+
+  it 'leaves the catalog default in place without the flag' do
+    capabilities.launch_capabilities = nil
+    harness.handle_frontend_caps({})
+    expect(capabilities.launch_capabilities).to be_nil
+  end
+end

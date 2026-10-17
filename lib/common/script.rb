@@ -566,14 +566,35 @@ module Lich
           elsif (file_path = Script.current&.file_name)
             __read_header_comments(file_path)
           end
-        return nil if lines.nil?
+        lines && __required_lich_from_lines(lines)
+      end
 
+      # Reads the minimum Lich version declared in raw script source.
+      #
+      # Same parsing as {Script.required_lich_version}, but for content that is
+      # not (yet) on disk, e.g. a script the updater has just downloaded.
+      # Unparseable source fails open (nil), like every other header read.
+      #
+      # @param source [String] the full text of a script
+      # @return [String, nil] the declared minimum version, or nil when none is declared
+      def Script.required_lich_version_in(source)
+        __required_lich_from_lines(__extract_header_comments(source.to_s))
+      rescue ArgumentError
+        nil
+      end
+
+      # Picks the +required:+ (or +requires:+) +Lich X.Y.Z+ floor out of header lines (last match wins).
+      #
+      # @param lines [Array<String>] header comment lines
+      # @return [String, nil] the declared minimum version, or nil when none is declared
+      def Script.__required_lich_from_lines(lines)
         required = nil
         lines.each do |line|
-          required = $1.strip if line =~ /^[\s\t#]*required:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
+          required = $1.strip if line =~ /^[\s\t#]*require[sd]:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
         end
         required
       end
+      private_class_method :__required_lich_from_lines
 
       # Safely parses a version string into a Gem::Version.
       #
@@ -596,12 +617,15 @@ module Lich
       # A missing, blank, or unparseable minimum is treated as "no requirement"
       # and passes, so a malformed +required:+ header can never block a script.
       #
+      # A prerelease build counts as the release it leads up to (5.23.0-beta.1
+      # satisfies 5.23.0), so beta testers can run scripts bumped for that release.
+      #
       # @param minimum [String, nil] the minimum version to require; defaults to the calling script's declared +required:+ floor
       # @return [Boolean] true if +LICH_VERSION+ is at least +minimum+, or if no usable minimum is declared/given
       def Script.lich_version_satisfied?(minimum = required_lich_version)
         required = __to_gem_version(minimum)
         return true if required.nil?
-        Gem::Version.new(LICH_VERSION) >= required
+        Gem::Version.new(LICH_VERSION).release >= required
       end
 
       # Enforces a script's minimum Lich version, terminating it if unmet.
