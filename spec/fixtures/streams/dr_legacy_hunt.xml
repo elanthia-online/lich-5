@@ -1,0 +1,1719 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031730'/>
+<prompt time="1792031715">&gt;</prompt>
+<roundTime value='1792031718'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031715">R&gt;</prompt>
+<pushStream id="combat" />Another stream of lava erupts from the fountain of magma flowing up from the ground.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+The ethereal lava barely splashes a jeol moradu's back, producing a minor burn.
+The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195630226" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631589" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631613" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631629" hostile="1"/><prompt time="1792031715">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031715">R&gt;</prompt>
+Icy blue frost crackles up a jeol moradu's arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu sidesteps and bashes at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031716">R&gt;</prompt>
+Brenna comes out of hiding.
+Brenna gets a curving bloodwood branch from inside his shadowsilk cloak.
+<component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031716">R&gt;</prompt>
+Brenna taps a curving bloodwood branch that he is holding.
+<prompt time="1792031717">R&gt;</prompt>
+Brenna puts his branch in his shadowsilk cloak.
+<prompt time="1792031717">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031717">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195630226" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631613" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631629" hostile="1"/><prompt time="1792031718">&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195630226" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195631629" hostile="1"/><prompt time="1792031718">&gt;</prompt>
+I could not find what you were referring to.
+<prompt time="1792031718">&gt;</prompt>
+<roundTime value='1792031722'/>You turn to face a jeol moradu.
+<pushStream id="combat" />You fake a jeol moradu, first moving one way and then another, leaving it off balance.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031718">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031718">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031718">R&gt;</prompt>
+<prompt time="1792031718">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195631629" hostile="1"/><prompt time="1792031719">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='99' text='concentration 99%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031719">R&gt;</prompt>
+<component id='room objs'>You also see a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (immobile) and some junk.</component>
+<crtrStatus exist="195631629" hostile="1" immobile="1"/><prompt time="1792031719">R&gt;</prompt>
+Brenna takes a full step back and plants his feet firmly.
+<prompt time="1792031720">R&gt;</prompt>
+Corwin closes to pole weapon range on a jeol moradu.
+<prompt time="1792031721">R&gt;</prompt>
+<roundTime value='1792031725'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 3 sec.
+<popStream id="combat" /><prompt time="1792031722">R&gt;</prompt>
+Brenna closes to pole weapon range on a jeol moradu.
+<prompt time="1792031722">R&gt;</prompt>
+<pushStream id="atmospherics"/>The dwalgim on Brenna's crown pulses with a soft light.
+<popStream/><prompt time="1792031722">R&gt;</prompt>
+Brenna takes a step back and hefts his pernach behind him.
+<prompt time="1792031723">R&gt;</prompt>
+Corwin opens his soft gem pouch and quickly fills it with gems from his cloth lootsack, closing it quickly.
+<prompt time="1792031723">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands a heavy strike that scratches the right bicep (But another battle scar for the moradu's collection!).  <popBold/>
+<popStream id="combat" /><prompt time="1792031724">R&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031724">R&gt;</prompt>
+<pushStream id="atmospherics"/>The studs on Corwin's jaguar-pelt wristcuff flicker briefly. 
+<popStream/><prompt time="1792031724">R&gt;</prompt>
+Corwin closes to melee range on a jeol moradu.
+<prompt time="1792031724">R&gt;</prompt>
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195631629" hostile="1" immobile="1"/><crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031725">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031725">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031725">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031725">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031725">&gt;</prompt>
+<roundTime value='1792031729'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='97' text='fatigue 97%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You weave back and forth in a dance-like motion, drawing your opponent's attention away from the fight.
+[You're winded (97%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031725">R&gt;</prompt>
+...wait 4 seconds.
+<prompt time="1792031725">R&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195631629'>a jeol moradu</d> (1) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195631629'>A jeol moradu</d> (1: immobile and slightly off balance) is facing you at melee range.  | <d cmd='face #195631629'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632782'>A jeol moradu</d> (2: solidly balanced) is moving to flank <d cmd='look #-10700002'>Brenna</d> at pole weapon range.  | <d cmd='face #195632782'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632826'>A jeol moradu</d> (3: solidly balanced) is moving to flank <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632826'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632842'>A jeol moradu</d> (4: solidly balanced) is moving behind <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632842'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195632870'>A jeol moradu</d> (5: solidly balanced) is moving behind <d cmd='look #-10700003'>Corwin</d> at pole weapon range.  | <d cmd='face #195632870'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10700002'>Brenna</d> (incredibly balanced) is moving behind <d cmd='look #195631629'>a jeol moradu</d> (1) at pole weapon range.  | <d cmd='face #195631629'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10700003'>Corwin</d> (adeptly balanced) is flanking <d cmd='look #195631629'>a jeol moradu</d> (1) at melee range.  | <d cmd='face #195631629'>F</d>
+<popStream/><prompt time="1792031725">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031725">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031725">R&gt;</prompt>
+Brenna closes to melee range on a jeol moradu.
+<prompt time="1792031725">R&gt;</prompt>
+Brenna lowers his shoulders and steadies his weapon.
+Brenna makes an agile leap towards a jeol moradu, powering forward in an attempt to crash through it!
+
+Brenna's light pernach lands a strong hit to a jeol moradu's left leg!
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+Brenna manages to remain upright!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu howls in encouragement!
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195631629" hostile="1" immobile="1" prone="1"/><crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031726">R&gt;</prompt>
+Corwin steps forward and spins, his greatsword striking out at anything unfortunate enough to be within reach.
+<pushStream id="combat" />
+Corwin's greatsword lands a very heavy hit to a jeol moradu's right arm!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu breathes his last.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />
+Corwin's greatsword lands a solid hit to a jeol moradu's right leg!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's right arm!
+
+Corwin's greatsword lands a solid hit to a jeol moradu's right leg!
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195631629" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031726">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+<popStream id="combat" /><prompt time="1792031726">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031728">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031728">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031728">R&gt;</prompt>
+The jeol moradu closes to melee range on Brenna.
+<prompt time="1792031728">R&gt;</prompt>
+<pushStream id="atmospherics"/>The chakrel dust upon the surface of Corwin's manacle glows for a moment, emanating fiery motes that float upward to swirl about his head as he deeply breathes them in.
+<popStream/><prompt time="1792031728">R&gt;</prompt>
+<pushStream id="atmospherics"/>The chakrel dust upon the surface of Corwin's manacle glows for a moment, emanating fiery motes that float upward to swirl about his head as he deeply breathes them in.
+<popStream/><prompt time="1792031728">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031729">&gt;</prompt>
+<roundTime value='1792031730'/>The watersilk bag pulses with Holy energy.  You reach for its center and forge a magical link to it, readying all of its energy for your use.
+Roundtime: 1 sec.
+<prompt time="1792031729">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792031732'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='95' text='concentration 95%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You strike your heel against the ground.
+Your watersilk bag emits a loud *snap* as it discharges all its power to aid your spell.
+<pushStream id="combat" />Geysers of fiery silver-grey magma erupt from the floor, which seems miraculously undamaged.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen is blistered and seared as the rivulet of silver-grey lava rolls over it.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's abdomen.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's right leg is blistered and seared as the rivulet of silver-grey lava rolls over it.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's back is blistered and seared as the rivulet of silver-grey lava rolls over it.
+<popStream id="combat" /><pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><castTime value='1792031730'/>
+Roundtime: 2 sec.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031730">R&gt;</prompt>
+With dance-like steps, Corwin positions his greatsword and then spins until he is a devastating tornado of body and weapon.
+<pushStream id="combat" />
+Corwin's greatsword lands a good strike to a jeol moradu's abdomen!
+
+Corwin's greatsword lands a solid hit to a jeol moradu's right arm!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's right arm!
+<popStream id="combat" /><prompt time="1792031731">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='99' text='mana 99%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+<prompt time="1792031731">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031731">R&gt;</prompt>
+You turn to face a jeol moradu.
+You must be closer to use tactical abilities on your opponent.
+<prompt time="1792031732">&gt;</prompt>
+<spell exist='spell'>Fire of Ushnish</spell>That won't affect your current attunement very much.
+You begin chanting a psalm to invoke the Fire of Ushnish spell.
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031747'/>
+<prompt time="1792031732">&gt;</prompt>
+<roundTime value='1792031735'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031732">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031733">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031733">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031733">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031733">R&gt;</prompt>
+<pushStream id="atmospherics"/>The eyes of Brenna's monk pendant flash white for a moment.
+<popStream/><prompt time="1792031733">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031733">R&gt;</prompt>
+Corwin visibly churns with an inner rage!
+<prompt time="1792031733">R&gt;</prompt>
+Corwin grows healthier before your eyes!
+<prompt time="1792031734">R&gt;</prompt>
+Corwin narrows his eyes, focused within his fury.
+<prompt time="1792031734">R&gt;</prompt>
+<pushStream id="combat" />Veins of liquid fire spill across the ground with serpentine grace.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+The ethereal lava barely splashes a jeol moradu's back, producing a minor burn.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's back.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen is blistered and seared as the rivulet of silver-grey lava rolls over it.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+The stream of liquid silver-grey fire washes over a jeol moradu's left leg, badly charring it.
+The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031734">R&gt;</prompt>
+<roundTime value='1792031739'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031735">R&gt;</prompt>
+Corwin steps back, then quickly steps forward spinning like a dervish, his greatsword lashing out at everything within reach!
+<pushStream id="combat" />
+Corwin's greatsword lands a good strike to a jeol moradu's right arm!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a solid hit to a jeol moradu's right leg!
+<popStream id="combat" /><prompt time="1792031735">R&gt;</prompt>
+...wait 4 seconds.
+<prompt time="1792031735">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031735">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031735">R&gt;</prompt>
+<pushStream id="atmospherics"/>The eyes of Brenna's monk pendant flash white for a moment.
+<popStream/><prompt time="1792031735">R&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031736">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031737">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='99' text='concentration 99%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031737">R&gt;</prompt>
+<pushStream id="combat" />Corwin bull-rushes at a jeol moradu.  Passing by, he backhands the jeol moradu to the ground.
+Corwin bull-rushes at a jeol moradu, colliding with it head-on and knocking it down.
+Corwin bull-rushes at a jeol moradu, colliding with it head-on and knocking it down.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> (prone) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" prone="1"/><prompt time="1792031737">R&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031738">R&gt;</prompt>
+A jeol moradu slowly clambers to his feet.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> (prone) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" prone="1"/><prompt time="1792031738">R&gt;</prompt>
+A jeol moradu slowly clambers to his feet.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" prone="1"/><prompt time="1792031738">R&gt;</prompt>
+A jeol moradu slowly clambers to his feet.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1"/><prompt time="1792031738">R&gt;</prompt>
+<pushStream id="combat" />Brenna reveals a moderate weakness in a jeol moradu's defense.
+<popStream id="combat" /><prompt time="1792031739">&gt;</prompt>
+You must be closer to use tactical abilities on your opponent.
+<prompt time="1792031739">&gt;</prompt>
+With a quick two step motion Corwin readies his greatsword at shoulder level.  Suddenly, he launches into a turn that renders him as a shade of dissolution.
+<pushStream id="combat" />
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's right leg!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />
+Corwin's greatsword lands a hard hit to a jeol moradu's abdomen!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu howls in encouragement!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" /><popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031739">&gt;</prompt>
+You must be closer to use tactical abilities on your opponent.
+<prompt time="1792031739">&gt;</prompt>
+You begin to advance on a jeol moradu.
+<prompt time="1792031739">&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031739">&gt;</prompt>
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" immobile="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632842" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031739">&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" immobile="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><crtrStatus exist="195632870" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031740">&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" immobile="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><prompt time="1792031740">&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031740">&gt;</prompt>
+Brenna leaps from hiding and ambushes a jeol moradu!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a demolishing hit that vaporizes the skull into a fine scarlet mist (Mom would not be pleased!).  <popBold/>
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+Brenna manages to remain upright!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu howls in encouragement!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />Brenna bends over the moradu's corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see a large covellite nugget, <pushBold/>a jeol moradu<popBold/> (dead), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031740">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031740">&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031741">&gt;</prompt>
+A gentle feeling of pressure subsides.
+<prompt time="1792031741">&gt;</prompt>
+You stare into the egg, seeking out the spiraling red light within it.
+A soft ruddy light envelops the area briefly.  As it fades, a gentle feeling of pressure remains.
+<prompt time="1792031742">&gt;</prompt>
+[Brenna is summoning the janitor to this room.  It will arrive shortly.  To stop the janitor type DUMP REJECT now.]
+<prompt time="1792031742">&gt;</prompt>
+The jeol moradu has already been searched for that!
+<prompt time="1792031742">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031742">&gt;</prompt>
+Brenna picks up a large covellite nugget.
+Brenna puts his nugget in his traveler's pack.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632782" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195632826" hostile="1" disengaged="1"/><prompt time="1792031742">&gt;</prompt>
+Stow what?  Type 'STOW HELP' for details.
+<prompt time="1792031743">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031743">&gt;</prompt>
+Corwin visibly churns with an inner rage!
+<prompt time="1792031743">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands a very heavy hit that cleaves off the tips of several of the moradu's fingers.  <popBold/>
+<popStream id="combat" /><prompt time="1792031744">&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031744">&gt;</prompt>
+<roundTime value='1792031748'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You turn to face a jeol moradu.
+You stop advancing.
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031744">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (89%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031745">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195632826" hostile="1" disengaged="1"/><prompt time="1792031746">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands a massive strike that blasts the foe in the lower back with a sickening crunch (bending it in a way you didn't think possible!).  <popBold/>
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />Corwin bends over the moradu's corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see a medium pewter bar, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195632826" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031746">R&gt;</prompt>
+<pushStream id="atmospherics"/>The studs on Corwin's jaguar-pelt wristcuff flicker briefly. 
+<popStream/><prompt time="1792031746">R&gt;</prompt>
+Brenna comes out of hiding.
+<component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031746">R&gt;</prompt>
+Your target pattern has finished forming around the area.
+<prompt time="1792031747">R&gt;</prompt>
+With a crack, a medium pewter bar shatters apart.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195632826" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031747">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card and some junk.</component>
+<prompt time="1792031748">&gt;</prompt>
+<roundTime value='1792031749'/>The watersilk bag pulses with Holy energy.  You reach for its center and forge a magical link to it, readying all of its energy for your use.
+Roundtime: 1 sec.
+<prompt time="1792031748">R&gt;</prompt>
+Brenna begins to lecture you on the proper usage of the Bows skill.
+To learn from him, you must LISTEN TO Brenna.
+  (LISTEN HELP for more options)
+<prompt time="1792031748">R&gt;</prompt>
+Brenna begins to lecture Corwin on the proper use of the Bows skill.
+<prompt time="1792031748">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031748">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792031751'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='95' text='concentration 95%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You strike your heel against the ground.
+Your watersilk bag emits a loud *snap* as it discharges all its power to aid your spell.
+<pushStream id="combat" />Geysers of fiery silver-grey magma erupt from the floor, which seems miraculously undamaged.
+<popStream id="combat" /><pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (89%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><castTime value='1792031749'/>
+Roundtime: 2 sec.
+<prompt time="1792031749">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031749">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+You feel fully attuned to the mana streams again.
+<prompt time="1792031749">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031750">R&gt;</prompt>
+<roundTime value='1792031753'/><roundTime value='1792031754'/><clearStream id="percWindow"/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='96' text='concentration 96%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You tap into the mana from fifty of the surrounding streams and attempt to keep it channeling in a stream around you.
+Roundtime: 1 sec.
+You concentrate intently, attempting to infuse a vast amount of your harnessed mana into your active Osrel Meraud spell pattern.
+Roundtime: 1 sec.
+You sense that you were able to channel most of your infusion's power into a brilliant orb of rippling cerulean light.  A faint tugging sensation emanates from the orb, as if it hungers for more.
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (96%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031752">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031753">R&gt;</prompt>
+<pushStream id="combat" />Another stream of lava erupts from the fountain of magma flowing up from the ground.
+The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><prompt time="1792031753">R&gt;</prompt>
+<pushStream id="combat" />Corwin visibly quakes with an inner fury!
+<popStream id="combat" /><prompt time="1792031753">R&gt;</prompt>
+<roundTime value='1792031755'/><roundTime value='1792031756'/><clearStream id="percWindow"/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='94' text='mana 94%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='94' text='concentration 94%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You tap into the mana from fifty of the surrounding streams and attempt to keep it channeling in a stream around you.
+Roundtime: 1 sec.
+You concentrate intently, attempting to infuse a vast amount of your harnessed mana into your active Osrel Meraud spell pattern.
+Roundtime: 1 sec.
+You sense that you were able to channel most of your infusion's power into a brilliant orb of rippling cerulean light.  A faint tingle washes through you as some of the energy is diffused, the orb having reached its full capacity.
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031754">R&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><prompt time="1792031754">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='93' text='mana 93%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031754">R&gt;</prompt>
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634072" hostile="1" disengaged="1"/><crtrStatus exist="195634084" hostile="1" disengaged="1"/><crtrStatus exist="195634100" hostile="1" disengaged="1"/><prompt time="1792031755">R&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031755">R&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on you!
+The jeol moradu advances from nearby and is closing steadily.
+<prompt time="1792031755">R&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031755">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='96' text='concentration 96%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+<prompt time="1792031755">R&gt;</prompt>
+Corwin steps back, then quickly steps forward spinning like a dervish, his greatsword lashing out at everything within reach!
+<prompt time="1792031756">&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031756">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031756">&gt;</prompt>
+<spell exist='spell'>Fire of Ushnish</spell>That won't affect your current attunement very much.
+You begin chanting a psalm to invoke the Fire of Ushnish spell.
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031772'/>
+<prompt time="1792031757">&gt;</prompt>
+<roundTime value='1792031760'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='95' text='mana 95%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031757">R&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="Injury1" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1792031757">R&gt;</prompt>
+The jeol moradu closes to melee range on you!
+<prompt time="1792031758">R&gt;</prompt>
+Appearing to have lost sight of its target, a jeol moradu stops advancing.
+<prompt time="1792031758">R&gt;</prompt>
+Appearing to have lost sight of its target, a jeol moradu stops advancing.
+<prompt time="1792031758">R&gt;</prompt>
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634072" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195634084" hostile="1"/><crtrStatus exist="195634100" hostile="1" disengaged="1"/><prompt time="1792031759">R&gt;</prompt>
+<roundTime value='1792031763'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='97' text='fatigue 97%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You weave back and forth in a dance-like motion, drawing your opponent's attention away from the fight.
+[You're winded (97%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 3 sec.
+<popStream id="combat" /><prompt time="1792031760">R&gt;</prompt>
+The fury of Everild's Rage burns in Corwin's eyes, and his roar is filled with that fury.  His expression is one of overwhelming strength and determination to conquer all.
+<prompt time="1792031761">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='98' text='concentration 98%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031761">R&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu sidesteps and bashes at you.  You dodge.  
+[You're winded (98%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031763">&gt;</prompt>
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031763">&gt;</prompt>
+<roundTime value='1792031765'/><pushStream id="combat" />You reveal a moderate weakness in a jeol moradu's defense.
+Balance reduction can be inflicted upon the enemy by landing a punch and a kick.
+Roundtime: 2 sec.
+<popStream id="combat" /><prompt time="1792031763">R&gt;</prompt>
+Corwin takes a full step back and plants his feet firmly.
+Corwin swiftly attempts to cleave through a jeol moradu!
+
+Corwin's greatsword lands a strong hit to a jeol moradu's right leg!
+<prompt time="1792031763">R&gt;</prompt>
+...wait 2 seconds.
+<prompt time="1792031763">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031763">R&gt;</prompt>
+<pushStream id="combat" />Brenna reveals a moderate weakness in a jeol moradu's defense.
+<popStream id="combat" /><prompt time="1792031763">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031764">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031764">R&gt;</prompt>
+Brenna leaps from hiding and ambushes a jeol moradu!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a very heavy hit that pricks the moradu's back (Get your needle work out!).  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031765">&gt;</prompt>
+<roundTime value='1792031768'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (99%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 3 sec.
+<popStream id="combat" /><prompt time="1792031765">R&gt;</prompt>
+...wait 3 seconds.
+<prompt time="1792031765">R&gt;</prompt>
+Corwin steps back, then quickly steps forward spinning like a dervish, his greatsword lashing out at everything within reach!
+<pushStream id="combat" />
+Corwin's greatsword lands a strong hit to a jeol moradu's abdomen!
+<popStream id="combat" /><prompt time="1792031765">R&gt;</prompt>
+...wait 3 seconds.
+<prompt time="1792031765">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031766">R&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031767">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+You feel fully attuned to the mana streams again.
+<prompt time="1792031767">R&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031768">&gt;</prompt>
+<roundTime value='1792031769'/>The watersilk bag pulses with Holy energy.  You reach for its center and forge a magical link to it, readying all of its energy for your use.
+Roundtime: 1 sec.
+<prompt time="1792031768">R&gt;</prompt>
+Your watersilk bag thrums softly as it discharges as much power as necessary, leaving a fair amount left for future use.
+<pushStream id="combat" />A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+<popStream id="combat" /><prompt time="1792031768">R&gt;</prompt>
+Brenna leaps from hiding and ambushes a jeol moradu!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a powerful strike that drives the ribcage clean through the heart in a great display of bone-snapping and spurting blood.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031769">&gt;</prompt>
+Corwin steps forward and spins, his greatsword striking out at anything unfortunate enough to be within reach.
+<pushStream id="combat" />
+Corwin's greatsword lands a hard hit to a jeol moradu's right arm!
+<popStream id="combat" /><prompt time="1792031769">&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792031771'/><clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a diacan lamellar helm sculpted with the visage of a Saendalen shark
+  a silversteel light plate mask brushed with black gold filigree
+  a cobra-engraved anlora-avtoma amulet suspended on a burnished chain
+  a mystic topaz charm inscribed with a thirteen-pointed star
+  a pilgrim's badge
+  a dark watersilk bag bearing a detailed cambrinth medallion
+  a soft white thigh quiver of snow leopard fur artfully wrapped with silver thread
+  a cabochon yellow diamond pin with a dark animite setting
+  a swirling eddy of incandescent light bound by a gold-striated coralite frame
+  a vermillion woodlouse hunter with massive chelicerae
+  an argent sanowret crystal set within a palladium blade spider
+  a silversteel biomechanical harvester spider
+  an achromatic tyrium brooch graced with a witchclaw flying dragon
+  a gold-speckled coralite yiamura with sharkstone spines
+  a shimmering outfit
+  some dark encompassing shadows of twilight dreamweave
+  a jet-black nightsilk haversack clasped with a series of polished white fangs
+  a battered black duffel bag
+  a scuffed traveler's pack
+  a bespoke chocolate-brown khaddar jacket lined with teal paisley silk
+  a densely forged ka'hurst mail hauberk richly padded with electroweave
+  a berrybomb bast devotional armband dangling a cluster of jelly opals
+  a small morgawr leather shield embedded with yellowed fangs
+  a gold cowbell with a sinuous dragon handle
+  a small steel skinning knife with a leather-wrapped hilt
+  a Dwarven iron bracer studded with kertig spikes
+  some burgundy leather gloves trimmed with raven feathers
+  an ornate alerce ring
+  a tiny taupe pouch with light yellow embroidery
+  a slender onyx-hide tailor's toolbelt plentifully bestrewn with jaspe ties
+  a soft gem pouch
+  a portable silversteel bucket with a flared rim
+  a lockpick ring
+  a pale kirmiko pocket with reinforced seams
+  a heavy Imperial weave cloth lootsack
+  a leaf-green leather harness with a smooth brass clasp
+<popStream/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You strike your heel against the ground.
+Your watersilk bag emits a loud *snap* as it discharges all its power to aid your spell.
+<pushStream id="combat" />Streams of fiery silver-grey magma boil up from the floor, which seems miraculously undamaged.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Blackened embers and flakes of ash swirl away from a jeol moradu's back as it is incinerated by the silver-grey lava, leaving behind naught but a smoking ruin.
+<popStream id="combat" />A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+Brenna manages to remain upright!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />You search the jeol moradu.
+The moradu was carrying a small red chrysoberyl and a medium lilac agate!
+You gather up the loot you're interested in and stuff it in your cloth lootsack.
+<pushStream id="combat" />A jeol moradu blocks the eruption with its meaty flesh and avoids the lava flow.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Blackened embers and flakes of ash swirl away from a jeol moradu's back as it is incinerated by the silver-grey lava, leaving behind naught but a smoking ruin.
+<popStream id="combat" />A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+Brenna manages to remain upright!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />You search the jeol moradu.
+The moradu was carrying a medium chestnut spinel!
+You gather up the loot you're interested in and stuff it in your cloth lootsack.
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><castTime value='1792031769'/>
+Roundtime: 2 sec.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195634072" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195634084" hostile="1"/><crtrStatus exist="195634100" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031769">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031769">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031770">R&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195634084'>a jeol moradu</d> (2) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195634084'>A jeol moradu</d> (2: cursed and solidly balanced) is facing you at melee range.  | <d cmd='face #195634084'>F</d>
+<popStream/><prompt time="1792031770">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031770">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195634084" hostile="1"/><crtrStatus exist="195634100" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031771">&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634084" hostile="1"/><prompt time="1792031771">&gt;</prompt>
+You open your soft gem pouch and quickly fill it with 9 gems from your cloth lootsack, closing it quickly.
+<prompt time="1792031771">&gt;</prompt>
+The soft gem pouch has already been tied off.
+<prompt time="1792031771">&gt;</prompt>
+<roundTime value='1792031774'/><pushStream id="combat" />You fake a jeol moradu, first moving one way and then another, leaving it off balance.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 3 sec.
+<popStream id="combat" /><prompt time="1792031771">R&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031772">R&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031772">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='99' text='concentration 99%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031773">R&gt;</prompt>
+<pushStream id="combat" />The river of lava forks into smaller rivulets, curling across the ground.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+The ethereal lava barely splashes a jeol moradu's back, producing a minor burn.
+The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634084" hostile="1"/><prompt time="1792031773">R&gt;</prompt>
+Corwin visibly churns with an inner rage!
+<prompt time="1792031773">R&gt;</prompt>
+<spell exist='spell'>Fire of Ushnish</spell>That won't affect your current attunement very much.
+You begin chanting a psalm to invoke the Fire of Ushnish spell.
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031789'/>
+<prompt time="1792031774">&gt;</prompt>
+<roundTime value='1792031777'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031774">R&gt;</prompt>
+Corwin begins to advance on a jeol moradu.
+<prompt time="1792031774">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031774">R&gt;</prompt>
+Icy blue frost crackles up a jeol moradu's arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu feints high at you.  You repulse nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031776">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031776">R&gt;</prompt>
+<roundTime value='1792031781'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031777">R&gt;</prompt>
+<pushStream id="combat" />Corwin visibly quakes with an inner fury!
+<popStream id="combat" /><prompt time="1792031777">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031778">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031779">R&gt;</prompt>
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (immobile) and some junk.</component>
+<crtrStatus exist="195634084" hostile="1" immobile="1"/><prompt time="1792031779">R&gt;</prompt>
+A jeol moradu appears less distracted.
+<prompt time="1792031779">R&gt;</prompt>
+<roundTime value='1792031785'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='97' text='fatigue 97%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You weave back and forth in a dance-like motion, drawing your opponent's attention away from the fight.
+[You're winded (97%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031781">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031781">R&gt;</prompt>
+Corwin closes to pole weapon range on a jeol moradu.
+<prompt time="1792031781">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031782">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands a very heavy hit that staggers it with a bruising drive between the shoulders.  <popBold/>
+<popStream id="combat" /><prompt time="1792031783">R&gt;</prompt>
+Corwin closes to melee range on a jeol moradu.
+<prompt time="1792031784">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031784">R&gt;</prompt>
+<pushStream id="atmospherics"/>The studs on Corwin's jaguar-pelt wristcuff flicker briefly. 
+<popStream/><prompt time="1792031784">R&gt;</prompt>
+A soft ruddy light pulses through the area and immediately fades.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634084" hostile="1" immobile="1"/><crtrStatus exist="195635171" hostile="1" disengaged="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1" disengaged="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1" disengaged="1"/><prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on you!
+The jeol moradu advances from nearby and is closing steadily.
+<prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031785">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on you!
+The jeol moradu advances from nearby and is closing steadily.
+<prompt time="1792031785">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031785">&gt;</prompt>
+<roundTime value='1792031786'/>The watersilk bag pulses with Holy energy.  You reach for its center and forge a magical link to it, readying all of its energy for your use.
+Roundtime: 1 sec.
+<prompt time="1792031785">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031785">R&gt;</prompt>
+<prompt time="1792031786">&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792031788'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='95' text='concentration 95%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You strike your heel against the ground.
+Your watersilk bag emits a loud *snap* as it discharges all its power to aid your spell.
+<pushStream id="combat" />Geysers of fiery silver-grey magma erupt from the floor, which seems miraculously undamaged.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's back is blistered and seared as the rivulet of silver-grey lava rolls over it.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's abdomen.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen is blistered and seared as the rivulet of silver-grey lava rolls over it.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's abdomen.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's abdomen.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen is blistered and seared as the rivulet of silver-grey lava rolls over it.
+<popStream id="combat" /><pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><castTime value='1792031786'/>
+Roundtime: 2 sec.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634084" hostile="1" immobile="1"/><crtrStatus exist="195635171" hostile="1" disengaged="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031786">R&gt;</prompt>
+Corwin steps forward and spins, his greatsword striking out at anything unfortunate enough to be within reach.
+<pushStream id="combat" />
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a strong hit to a jeol moradu's left arm!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a solid hit to a jeol moradu's chest!
+<popStream id="combat" /><prompt time="1792031787">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031787">R&gt;</prompt>
+<roundTime value='1792031789'/><pushStream id="combat" />Your analysis reveals a substantial opening already being exploited in a jeol moradu's defenses.
+Balance reduction can be inflicted by landing a punch and a kick.
+Roundtime: 1 sec.
+<popStream id="combat" /><prompt time="1792031788">R&gt;</prompt>
+Brenna leaps from hiding and ambushes a jeol moradu!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands an apocalyptic strike (So that's what it felt like when Grazhir shattered!) that blasts the foe in the lower back with a sickening crunch (bending it in a way you didn't think possible!).  <popBold/>
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+Brenna manages to remain upright!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu howls in encouragement!
+A jeol moradu howls in encouragement!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />Brenna bends over the moradu's corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195634084" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635171" hostile="1" disengaged="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on you!
+<prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on you!
+<prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031788">R&gt;</prompt>
+<pushStream id="atmospherics"/>The chakrel dust upon the surface of Corwin's manacle glows for a moment, emanating fiery motes that float upward to swirl about his head as he deeply breathes them in.
+<popStream/><prompt time="1792031788">R&gt;</prompt>
+The jeol moradu closes to melee range on Corwin.
+<prompt time="1792031788">R&gt;</prompt>
+<pushStream id="atmospherics"/>The chakrel dust upon the surface of Corwin's manacle glows for a moment, emanating fiery motes that float upward to swirl about his head as he deeply breathes them in.
+<popStream/><prompt time="1792031788">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635171" hostile="1" disengaged="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031789">&gt;</prompt>
+<spell exist='spell'>Fire of Ushnish</spell>That won't affect your current attunement very much.
+You begin chanting a psalm to invoke the Fire of Ushnish spell.
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031804'/>
+<prompt time="1792031789">&gt;</prompt>
+<roundTime value='1792031792'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='95' text='mana 95%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031789">R&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031789">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031789">R&gt;</prompt>
+<pushStream id="combat" />An arm of the fire river lashes along the ground with a sulfurous hiss.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's back.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Burning smoke rises from a jeol moradu, its back nearly molten by the onslaught of ethereal silver-grey magma.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's right leg.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's back.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen hisses and smokes as it is liberally spattered by the bubbling stream of silver-grey lava.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+A faint sizzling sound fills the air as the stream of silver-grey magma grazes a jeol moradu's back.
+The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635171" hostile="1" disengaged="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031790">R&gt;</prompt>
+<component id='room players'>Also here: Chieftain Corwin.</component>
+<prompt time="1792031791">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='99' text='mana 99%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+<prompt time="1792031791">R&gt;</prompt>
+<roundTime value='1792031796'/><pushStream id="combat" />You fake a jeol moradu, first moving one way and then another, leaving it off balance.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031792">R&gt;</prompt>
+Corwin's body tenses and then suddenly spins into a whirl of destruction.
+<pushStream id="combat" />
+Corwin's greatsword lands a strong hit to a jeol moradu's abdomen!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+
+Corwin's greatsword lands a strong hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's chest!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's right arm!
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (dead), a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635171" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031792">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635187" hostile="1" disengaged="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031793">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031793">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031793">R&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu feints low at you.  You deflect most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031793">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792031793">R&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu feints high at you.  You turn aside most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031793">R&gt;</prompt>
+Brenna stops trying to teach Bow to Corwin.
+<prompt time="1792031793">R&gt;</prompt>
+Brenna stops trying to teach Bow to you.
+<prompt time="1792031793">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031794">R&gt;</prompt>
+<pushStream id="combat" />Corwin bull-rushes at a jeol moradu, colliding with it head-on and knocking it down.
+Corwin bull-rushes at a jeol moradu, flattening it with a weighty shoulder strike.
+Corwin bull-rushes at a jeol moradu, colliding with it head-on and knocking it down.
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635187" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031794">R&gt;</prompt>
+<roundTime value='1792031800'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You bob suddenly, lowering yourself into a smaller target.
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031796">R&gt;</prompt>
+Corwin steps forward and spins, his greatsword striking out at anything unfortunate enough to be within reach.
+<pushStream id="combat" />
+Corwin's greatsword lands a strong hit to a jeol moradu's left leg!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu breathes his last.
+
+Corwin's greatsword lands a hard hit to a jeol moradu's right arm!
+
+Corwin's greatsword lands a hard hit to a jeol moradu's left arm!
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635187" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635195" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031796">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+A cage of shadowy tendrils coalesces around a jeol moradu.
+<popStream id="combat" /><prompt time="1792031796">R&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031797">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='99' text='concentration 99%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031797">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635195" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031798">R&gt;</prompt>
+A jeol moradu slowly clambers to his feet.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (prone), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031798">R&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031798">R&gt;</prompt>
+A jeol moradu slowly clambers to his feet.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635195" hostile="1" disengaged="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031798">R&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031798">R&gt;</prompt>
+Corwin swings his greatsword with wild abandon, weaving it through the air in a flurry of blows that are nearly impossible to count.
+<pushStream id="combat" />
+Corwin's greatsword lands a solid hit to a jeol moradu's left leg!
+Corwin bends over the moradu's corpse briefly.
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />
+Corwin's greatsword lands a good strike to a jeol moradu's left arm!
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635195" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031798">R&gt;</prompt>
+Corwin whirls about in a bold, flashy manner!
+<prompt time="1792031799">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031800">&gt;</prompt>
+A jeol moradu gestures.
+A faint breeze surrounds it.
+<prompt time="1792031800">&gt;</prompt>
+<roundTime value='1792031801'/>The watersilk bag pulses with Holy energy.  You reach for its center and forge a magical link to it, readying all of its energy for your use.
+Roundtime: 1 sec.
+<prompt time="1792031800">R&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195635271'>a jeol moradu</d> (3) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195635227'>A jeol moradu</d> (1: cursed and solidly balanced) is flanking you at melee range.  | <d cmd='face #195635227'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195635239'>A jeol moradu</d> (2: cursed and badly balanced) is behind <d cmd='look #-10700003'>Corwin</d> at melee range.  | <d cmd='face #195635239'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195635271'>A jeol moradu</d> (3: cursed and off balance) is facing you at melee range.  | <d cmd='face #195635271'>F</d>
+<popStream/><pushStream id="assess"/>
+(You are also defending against a jeol moradu.)
+<popStream/><prompt time="1792031800">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792031803'/><clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a diacan lamellar helm sculpted with the visage of a Saendalen shark
+  a silversteel light plate mask brushed with black gold filigree
+  a cobra-engraved anlora-avtoma amulet suspended on a burnished chain
+  a mystic topaz charm inscribed with a thirteen-pointed star
+  a pilgrim's badge
+  a dark watersilk bag bearing a detailed cambrinth medallion
+  a soft white thigh quiver of snow leopard fur artfully wrapped with silver thread
+  a cabochon yellow diamond pin with a dark animite setting
+  a swirling eddy of incandescent light bound by a gold-striated coralite frame
+  a vermillion woodlouse hunter with massive chelicerae
+  an argent sanowret crystal set within a palladium blade spider
+  a silversteel biomechanical harvester spider
+  an achromatic tyrium brooch graced with a witchclaw flying dragon
+  a gold-speckled coralite yiamura with sharkstone spines
+  a shimmering outfit
+  some dark encompassing shadows of twilight dreamweave
+  a jet-black nightsilk haversack clasped with a series of polished white fangs
+  a battered black duffel bag
+  a scuffed traveler's pack
+  a bespoke chocolate-brown khaddar jacket lined with teal paisley silk
+  a densely forged ka'hurst mail hauberk richly padded with electroweave
+  a berrybomb bast devotional armband dangling a cluster of jelly opals
+  a small morgawr leather shield embedded with yellowed fangs
+  a gold cowbell with a sinuous dragon handle
+  a small steel skinning knife with a leather-wrapped hilt
+  a Dwarven iron bracer studded with kertig spikes
+  some burgundy leather gloves trimmed with raven feathers
+  an ornate alerce ring
+  a tiny taupe pouch with light yellow embroidery
+  a slender onyx-hide tailor's toolbelt plentifully bestrewn with jaspe ties
+  a soft gem pouch
+  a portable silversteel bucket with a flared rim
+  a lockpick ring
+  a pale kirmiko pocket with reinforced seams
+  a heavy Imperial weave cloth lootsack
+  a leaf-green leather harness with a smooth brass clasp
+<popStream/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='95' text='concentration 95%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You strike your heel against the ground.
+Your watersilk bag emits a loud *snap* as it discharges all its power to aid your spell.
+<pushStream id="combat" />Geysers of fiery silver-grey magma erupt from the floor, which seems miraculously undamaged.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Burning smoke rises from a jeol moradu, its back nearly molten by the onslaught of ethereal silver-grey magma.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Blackened embers and flakes of ash swirl away from a jeol moradu's abdomen as it is incinerated by the silver-grey lava, leaving behind naught but a smoking ruin.
+<popStream id="combat" />A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />You search the jeol moradu.
+The moradu was carrying a medium peach andalusite, 5 copper coins (Dokoras), 3 bronze coins (Lirums), 2 silver coins (Lirums), and 1 gold coin (Dokora)!
+You quickly pocket the coins.  Anything else of interest was added to the cloth lootsack.
+<pushStream id="combat" />A jeol moradu blocks some of the eruption with its meaty flesh.
+A jeol moradu's abdomen hisses and smokes as it is liberally spattered by the bubbling stream of silver-grey lava.
+<popStream id="combat" /><pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><castTime value='1792031801'/>
+Roundtime: 2 sec.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635271" hostile="1"/><prompt time="1792031801">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031802">R&gt;</prompt>
+The jeol moradu has already been searched for that!
+<prompt time="1792031803">&gt;</prompt>
+<roundTime value='1792031807'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='97' text='fatigue 97%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />You weave back and forth in a dance-like motion, drawing your opponent's attention away from the fight.
+[You're winded (97%), mighty (100%), incredibly balanced and overwhelming opponent.]
+Roundtime: 4 sec.
+<popStream id="combat" /><prompt time="1792031803">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+You feel fully attuned to the mana streams again.
+<prompt time="1792031803">R&gt;</prompt>
+Corwin begins to advance on a jeol moradu.
+<prompt time="1792031804">R&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Hydra Hex  (Indefinite)
+Osrel Meraud  (98%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031804">R&gt;</prompt>
+A thunderous din peals from the northwest as the earth shudders.
+<prompt time="1792031805">R&gt;</prompt>
+Corwin visibly churns with an inner rage!
+<prompt time="1792031805">R&gt;</prompt>
+<pushStream id="combat" />The river of lava forks into smaller rivulets, curling across the ground.
+A jeol moradu blocks the eruption with its meaty flesh and avoids the lava flow.
+A jeol moradu blocks some of the eruption with its meaty flesh.
+Blackened embers and flakes of ash swirl away from a jeol moradu's abdomen as it is incinerated by the silver-grey lava, leaving behind naught but a smoking ruin.
+<popStream id="combat" />A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />You search the jeol moradu.
+The moradu was carrying a small brown zircon and a medium purple tanzanite!
+You gather up the loot you're interested in and stuff it in your cloth lootsack.
+<pushStream id="combat" />The trickles of silver-grey magma cool, forming ashy cinders which quickly disperse.
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195635271" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031805">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>
+<crtrStatus exist="195635227" hostile="1"/><crtrStatus exist="195635239" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031806">R&gt;</prompt>
+Icy blue frost crackles up a jeol moradu's arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu sidesteps and bashes at you.  You counter nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792031806">R&gt;</prompt>
+<pushStream id="atmospherics"/>The studs on Corwin's jaguar-pelt wristcuff flicker briefly. 
+<popStream/><prompt time="1792031806">R&gt;</prompt>
+<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a diacan lamellar helm sculpted with the visage of a Saendalen shark
+  a silversteel light plate mask brushed with black gold filigree
+  a cobra-engraved anlora-avtoma amulet suspended on a burnished chain
+  a mystic topaz charm inscribed with a thirteen-pointed star
+  a pilgrim's badge
+  a dark watersilk bag bearing a detailed cambrinth medallion
+  a soft white thigh quiver of snow leopard fur artfully wrapped with silver thread
+  a cabochon yellow diamond pin with a dark animite setting
+  a swirling eddy of incandescent light bound by a gold-striated coralite frame
+  a vermillion woodlouse hunter with massive chelicerae
+  an argent sanowret crystal set within a palladium blade spider
+  a silversteel biomechanical harvester spider
+  an achromatic tyrium brooch graced with a witchclaw flying dragon
+  a gold-speckled coralite yiamura with sharkstone spines
+  a shimmering outfit
+  some dark encompassing shadows of twilight dreamweave
+  a jet-black nightsilk haversack clasped with a series of polished white fangs
+  a battered black duffel bag
+  a scuffed traveler's pack
+  a bespoke chocolate-brown khaddar jacket lined with teal paisley silk
+  a densely forged ka'hurst mail hauberk richly padded with electroweave
+  a berrybomb bast devotional armband dangling a cluster of jelly opals
+  a small morgawr leather shield embedded with yellowed fangs
+  a gold cowbell with a sinuous dragon handle
+  a small steel skinning knife with a leather-wrapped hilt
+  a Dwarven iron bracer studded with kertig spikes
+  some burgundy leather gloves trimmed with raven feathers
+  an ornate alerce ring
+  a tiny taupe pouch with light yellow embroidery
+  a slender onyx-hide tailor's toolbelt plentifully bestrewn with jaspe ties
+  a soft gem pouch
+  a portable silversteel bucket with a flared rim
+  a lockpick ring
+  a pale kirmiko pocket with reinforced seams
+  a heavy Imperial weave cloth lootsack
+  a leaf-green leather harness with a smooth brass clasp
+<popStream/>
+<spell exist='spell'>Fire of Ushnish</spell>That won't affect your current attunement very much.
+You begin chanting a psalm to invoke the Fire of Ushnish spell.
+You begin to weave mana lines into a targeting pattern centered around yourself, seeking out anything obviously hostile around you.
+<castTime value='1792031822'/>
+<prompt time="1792031807">&gt;</prompt>
+<roundTime value='1792031810'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You harness a large amount of energy and attempt to channel it into your watersilk bag.
+You are able to channel all the energy into the bag.
+The watersilk bag absorbs all of the energy.
+Roundtime: 3 sec.
+<prompt time="1792031807">R&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792031807">R&gt;</prompt>
+A jeol moradu melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> that is caught in a cage of swirling darkness and some junk.</component>
+<crtrStatus exist="195635227" hostile="1"/><prompt time="1792031808">R&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/><preset id='roomDesc'>Shifting beams of light filter through a partially obstructed opening that splits the pinnacle of the ceiling, causing the surrounding walls to glisten like a freshly cut diamond.  Snow-dusted icicles hang between rough patches of stone that protrude from the foot of the gap, stretching down the faceted walls to just above the floor.</preset>  You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> that is caught in a cage of swirling darkness and some junk.
+<crtrStatus exist="195635227" hostile="1"/>Also here: Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031808">R&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792031808">R&gt;</prompt>
+<output class="mono"/>
+
+Circle: 200
+Showing all skills with field experience.
+
+          SKILL: Rank/Percent towards next rank/Amount learning/Mindstate Fraction
+     Plate Armor:   1747 31% dabbling       (1/34)       Athletics:   1552 43% enthralled    (32/34)
+        Thievery:   1749 68% enthralled    (32/34) Outdoorsmanship:   1252 98% understanding (14/34)
+        Skinning:   1654 16% engrossed     (27/34)         Forging:   1149 82% captivated    (26/34)
+      Outfitting:   1093 21% intrigued     (16/34)         Alchemy:    939 38% concentrating  (9/34)
+      Enchanting:   1033 22% interested    (12/34)       Appraisal:   1524 82% absorbing     (15/34)
+
+Total Ranks Displayed: 13692
+Time Development Points: 3984  Favors: 82  Deaths: 1099  Departs: 412
+Rested EXP Stored: 4 hours  Usable This Cycle: 3:59 hours  Cycle Refreshes: 15:41 hours
+Overall state of mind: clear
+
+You are relaxed and your mind has entered a deep state of rest.  To wake up and start learning again, type: AWAKEN.
+EXP HELP for more information
+<output class=""/>
+<prompt time="1792031808">R&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/><preset id='roomDesc'>Shifting beams of light filter through a partially obstructed opening that splits the pinnacle of the ceiling, causing the surrounding walls to glisten like a freshly cut diamond.  Snow-dusted icicles hang between rough patches of stone that protrude from the foot of the gap, stretching down the faceted walls to just above the floor.</preset>  You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> that is caught in a cage of swirling darkness and some junk.
+<crtrStatus exist="195635227" hostile="1"/>Also here: Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031809">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='99' text='concentration 99%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792031809">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031809">R&gt;</prompt>
+<component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> that appears immobilized and some junk.</component>
+<crtrStatus exist="195635227" hostile="1" immobile="1"/><prompt time="1792031809">R&gt;</prompt>
+Analyze what?
+<prompt time="1792031810">&gt;</prompt>
+The deadening murk around you subsides.
+<prompt time="1792031810">&gt;</prompt>
+You retreat back to pole range.
+<prompt time="1792031811">&gt;</prompt>
+You retreat from combat.
+<prompt time="1792031811">&gt;</prompt>
+A thunderous din peals from the north as the earth shudders.
+<prompt time="1792031811">&gt;</prompt>
+Corwin closes to pole weapon range on a jeol moradu.
+<prompt time="1792031811">&gt;</prompt>
+Release what?
+[Check RELEASE HELP for more information.]
+<prompt time="1792031811">&gt;</prompt>
+<spell>None</spell>You let your concentration lapse and feel the spell's energies dissipate.
+<castTime value='1792031812'/>
+<prompt time="1792031812">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands an extremely heavy hit that rips into the right calf.  <popBold/>
+<popStream id="combat" /><prompt time="1792031812">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792031812">&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/><preset id='roomDesc'>Shifting beams of light filter through a partially obstructed opening that splits the pinnacle of the ceiling, causing the surrounding walls to glisten like a freshly cut diamond.  Snow-dusted icicles hang between rough patches of stone that protrude from the foot of the gap, stretching down the faceted walls to just above the floor.</preset>  You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> that appears immobilized and some junk.
+<crtrStatus exist="195635227" hostile="1" immobile="1"/>Also here: Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031813">&gt;</prompt>
+You are already as far away as you can get!
+<prompt time="1792031813">&gt;</prompt>
+Stow what?  Type 'STOW HELP' for details.
+<prompt time="1792031813">&gt;</prompt>
+Release what?
+[Check RELEASE HELP for more information.]
+<prompt time="1792031813">&gt;</prompt>
+<prompt time="1792031813">&gt;</prompt>
+All of your items worn attached to the belt:
+
+  a soft gem pouch (closed)
+  a lockpick ring
+  a pale kirmiko pocket with reinforced seams
+  a heavy Imperial weave cloth lootsack
+
+[Use <d cmd='inventory help'>INVENTORY HELP</d> for more options.]
+<prompt time="1792031814">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's greatsword lands a massive strike that tears flesh and cartilage as the right leg is ripped clean below the knee (Better order that peg leg!).  <popBold/>
+A jeol moradu comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+You manage to remain upright!
+Corwin manages to remain upright!
+A jeol moradu breathes his last, and the ground finally stops heaving.
+The swirling confines of malevolent darkness wane from about a jeol moradu.
+<popStream id="combat" />Corwin bends over the moradu's corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/> which appears dead and some junk.</component>
+<crtrStatus exist="195635227" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><prompt time="1792031814">&gt;</prompt>
+You open your soft gem pouch and quickly fill it with 3 gems from your cloth lootsack, closing it quickly.
+<prompt time="1792031814">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Persistence of Mana  (OM)
+Osrel Meraud  (98%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+<popStream/><prompt time="1792031814">&gt;</prompt>
+Corwin stops advancing since a jeol moradu is dead.
+<prompt time="1792031814">&gt;</prompt>
+The soft gem pouch has already been tied off.
+<prompt time="1792031814">&gt;</prompt>
+Brenna comes out of hiding.
+Brenna slices open the corpse of the jeol moradu, scrutinizing the remains a moment before nodding in satisfaction.
+<component id='room players'>Also here: Mountaineer Brenna and Chieftain Corwin.</component>
+<prompt time="1792031814">&gt;</prompt>
+A soft ruddy light pulses through the area and immediately fades.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+The ground shakes as a jeol moradu thunders in with a blast of frigid air.
+<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> which appears dead, <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635227" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636718" hostile="1" disengaged="1"/><crtrStatus exist="195636726" hostile="1" disengaged="1"/><crtrStatus exist="195636754" hostile="1" disengaged="1"/><crtrStatus exist="195636774" hostile="1" disengaged="1"/><crtrStatus exist="195636786" hostile="1" disengaged="1"/><crtrStatus exist="195636798" hostile="1" disengaged="1"/><crtrStatus exist="195636814" hostile="1" disengaged="1"/><crtrStatus exist="195636818" hostile="1" disengaged="1"/><prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Brenna.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on you!
+The jeol moradu advances from nearby and is closing steadily.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031815">&gt;</prompt>
+A jeol moradu growls out a spell in a thunderous voice.
+
+The jeol moradu begins to advance on Corwin.
+<prompt time="1792031815">&gt;</prompt>
+There aren't any gems in the traveler's pack.
+<prompt time="1792031815">&gt;</prompt>
+The soft gem pouch has already been tied off.
+<prompt time="1792031815">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792031815">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792031816">&gt;</prompt>
+You are engaged to a jeol moradu at pole weapon range!
+<prompt time="1792031816">&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/>  You also see <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.
+<crtrStatus exist="195635227" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636718" hostile="1" disengaged="1"/><crtrStatus exist="195636726" hostile="1" disengaged="1"/><crtrStatus exist="195636754" hostile="1" disengaged="1"/><crtrStatus exist="195636774" hostile="1" disengaged="1"/><crtrStatus exist="195636786" hostile="1"/><crtrStatus exist="195636798" hostile="1" disengaged="1"/><crtrStatus exist="195636814" hostile="1" disengaged="1"/><crtrStatus exist="195636818" hostile="1" disengaged="1"/>Also here: Mountaineer Brenna and Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031816">&gt;</prompt>
+With a quick two step motion Corwin readies his greatsword at shoulder level.  Suddenly, he launches into a turn that renders him as a shade of dissolution.
+<pushStream id="combat" />
+Corwin's greatsword lands a hard hit to a jeol moradu's back!
+
+Corwin's greatsword lands a solid hit to a jeol moradu's right arm!
+
+Corwin's greatsword lands a good strike to a jeol moradu's abdomen!
+<popStream id="combat" /><prompt time="1792031816">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792031816">&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/><preset id='roomDesc'>Shifting beams of light filter through a partially obstructed opening that splits the pinnacle of the ceiling, causing the surrounding walls to glisten like a freshly cut diamond.  Snow-dusted icicles hang between rough patches of stone that protrude from the foot of the gap, stretching down the faceted walls to just above the floor.</preset>  You also see <pushBold/>a jeol moradu<popBold/> which appears dead, <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.
+<crtrStatus exist="195635227" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636718" hostile="1" disengaged="1"/><crtrStatus exist="195636726" hostile="1" disengaged="1"/><crtrStatus exist="195636754" hostile="1" disengaged="1"/><crtrStatus exist="195636774" hostile="1" disengaged="1"/><crtrStatus exist="195636786" hostile="1"/><crtrStatus exist="195636798" hostile="1" disengaged="1"/><crtrStatus exist="195636814" hostile="1" disengaged="1"/><crtrStatus exist="195636818" hostile="1" disengaged="1"/>Also here: Mountaineer Brenna and Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031816">&gt;</prompt>
+You retreat from combat.
+<prompt time="1792031816">&gt;</prompt>
+<pushStream id="atmospherics"/>The ka'hurst rivets on Brenna's thighband shimmer with a strikingly green sheen.
+<popStream/><prompt time="1792031816">&gt;</prompt>
+Brenna stops advancing since a jeol moradu is dead.
+<prompt time="1792031816">&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217404)
+<style id=""/><preset id='roomDesc'>Shifting beams of light filter through a partially obstructed opening that splits the pinnacle of the ceiling, causing the surrounding walls to glisten like a freshly cut diamond.  Snow-dusted icicles hang between rough patches of stone that protrude from the foot of the gap, stretching down the faceted walls to just above the floor.</preset>  You also see <pushBold/>a jeol moradu<popBold/> which appears dead, <pushBold/>a jeol moradu<popBold/>, a grimy bar of soap, an ice-edged sword, a Guildleader Innu card, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.
+<crtrStatus exist="195635227" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636718" hostile="1" disengaged="1"/><crtrStatus exist="195636726" hostile="1" disengaged="1"/><crtrStatus exist="195636754" hostile="1" disengaged="1"/><crtrStatus exist="195636774" hostile="1" disengaged="1"/><crtrStatus exist="195636786" hostile="1"/><crtrStatus exist="195636798" hostile="1" disengaged="1"/><crtrStatus exist="195636814" hostile="1" disengaged="1"/><crtrStatus exist="195636818" hostile="1" disengaged="1"/>Also here: Mountaineer Brenna and Chieftain Corwin.
+Obvious exits: <d>north</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031816">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792031817">&gt;</prompt>
+<closeDialog id='AimTimerDialog'/>
+You stroll west.
+<nav rm='4217405'/>
+<streamWindow id='main' title='Story' subtitle=" - [Jeol'gelvmoraen, Ice Grottos] (4217405)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Jeol'gelvmoraen, Ice Grottos] (4217405)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Lined in an immense layer of ice, the cavern expands outward into chamber after endless chamber.  Stalactites, nearly three times the height of a mature Gor'Tog, stretch from ceiling to floor like glassy assassin's daggers, threatening to fall at a moment's notice.  Along the northeastern wall, a curving stone passage rises upward at a steep angle, partially bathed in a pale illumination cast from some unknown source.</component>
+<component id='room objs'>You also see a massive brass bar, <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, an Immortal Glythtide card, a huge bronze bar, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component>
+<crtrStatus exist="195635243" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195635255" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636722" hostile="1" disengaged="1"/><crtrStatus exist="195636742" hostile="1" disengaged="1"/><crtrStatus exist="195636790" hostile="1" disengaged="1"/><crtrStatus exist="195636802" hostile="1" disengaged="1"/><component id='room players'>Also here: True to Life Delphine and Universalist Edric.</component>
+<component id='room exits'>Obvious exits: <d>north</d>, <d>northeast</d>, <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217405)
+<style id=""/>  You also see a massive brass bar, <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, an Immortal Glythtide card, a huge bronze bar, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.
+<crtrStatus exist="195635243" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195635255" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636722" hostile="1" disengaged="1"/><crtrStatus exist="195636742" hostile="1" disengaged="1"/><crtrStatus exist="195636790" hostile="1" disengaged="1"/><crtrStatus exist="195636802" hostile="1" disengaged="1"/>Also here: True to Life Delphine and Universalist Edric.
+Obvious exits: <d>north</d>, <d>northeast</d>, <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="ne"/><dir value="e"/><dir value="sw"/><dir value="w"/><dir value="nw"/></compass><component id='room players'>Also here: True to Life Delphine and Universalist Edric.</component>
+<prompt time="1792031817">&gt;</prompt>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Ice Grottos] (4217405)
+<style id=""/>  You also see a massive brass bar, <pushBold/>a jeol moradu<popBold/> (immobile), <pushBold/>a jeol moradu<popBold/> (dead), <pushBold/>a jeol moradu<popBold/>, an Immortal Glythtide card, a huge bronze bar, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.
+<crtrStatus exist="195635243" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195635255" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195636722" hostile="1" disengaged="1"/><crtrStatus exist="195636742" hostile="1" disengaged="1"/><crtrStatus exist="195636790" hostile="1" disengaged="1"/><crtrStatus exist="195636802" hostile="1" disengaged="1"/>Also here: True to Life Delphine and Universalist Edric.
+Obvious exits: <d>north</d>, <d>northeast</d>, <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.
+<compass><dir value="n"/><dir value="ne"/><dir value="e"/><dir value="sw"/><dir value="w"/><dir value="nw"/></compass><prompt time="1792031817">&gt;</prompt>
+<closeDialog id='AimTimerDialog'/>
+You stroll northwest.
+<nav rm='4217320'/>
+<streamWindow id='main' title='Story' subtitle=" - [Jeol'gelvmoraen, Frozen Tunnel] (4217320)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Jeol'gelvmoraen, Frozen Tunnel] (4217320)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Carved into the icy stone, an expansive cavern winds its way downward into glimmering shadows far below.  Broken bones are casually stacked against the slanted walls, the space between each pile cutting a narrow pathway down the midline of the dank chamber.  The craggy fissure that splits the southern wall offers an obstructed view of the mountains beyond, the pristine snow catching the light, its pale blanket smoothing the harsh lines of the mountain's visage.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>southeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Jeol'gelvmoraen, Frozen Tunnel] (4217320)
+<style id=""/>  
+Obvious exits: <d>southeast</d>.
+<compass><dir value="se"/></compass><component id='room players'></component>
+<prompt time="1792031817">&gt;</prompt>
+<closeDialog id='AimTimerDialog'/>
+<nav rm='4217142'/>
+<streamWindow id='main' title='Story' subtitle=" - [Seord'Kerwaith, A Cave Entrance] (4217142)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Seord'Kerwaith, A Cave Entrance] (4217142)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Imposing rock walls rise into the night sky, their suffocating closeness heightening the effects of nightfall.  Spreading tendrils of darkness creep across the bottom of the chasm devouring the last remnants of day.  A forbidding dark fissure, almost lost in the inky blackness, mars the rock face and plunges deep into the cold heart of the mountain.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Seord'Kerwaith, A Cave Entrance] (4217142)
+<style id=""/>  
+Obvious paths: <d>south</d>.
+<compass><dir value="s"/></compass><component id='room players'></component>
+<prompt time="1792031817">&gt;</prompt>
+<closeDialog id='AimTimerDialog'/>
+You stroll south.
+<nav rm='4217141'/>
+<streamWindow id='main' title='Story' subtitle=" - [Seord Kerwaith, Mountainside] (4217141)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Seord Kerwaith, Mountainside] (4217141)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Crushed between the sheer walls of the chasm, the winding mountain trail twists and turns without reason amidst piles of snow-covered boulders.  Visibility, hampered by blinding clouds of wind-blown snow, leaves much to be desired.  As soon as one massive drift of snow is conquered, another awaits around the next bend.  The bitter cold of the gorge offers little warmth and comfort and the stone mountains glare icily down upon travelers.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Seord Kerwaith, Mountainside] (4217141)
+<style id=""/>  
+Obvious paths: <d>north</d>, <d>southwest</d>.
+<compass><dir value="n"/><dir value="sw"/></compass><component id='room players'></component>
+<prompt time="1792031817">&gt;</prompt>
+<closeDialog id='AimTimerDialog'/>
+You stroll southwest.
+<nav rm='4217140'/>
+<streamWindow id='main' title='Story' subtitle=" - [Seord Kerwaith, Mountainside] (4217140)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Seord Kerwaith, Mountainside] (4217140)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Night covers the narrow gorge with an impenetrable veil of darkness.  The inky blackness devours the remotest hint of shape or shadow, and nothing is distinguishable in the black void at the bottom of the chasm.  Fragments of lose rock and ice dislodged by the winds plunge unseen into deep snow drifts with thunderous crashes.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Seord Kerwaith, Mountainside] (4217140)
+<style id=""/>  
+Obvious paths: <d>northeast</d>, <d>southwest</d>, <d>northwest</d>.
+<compass><dir value="ne"/><dir value="sw"/><dir value="nw"/></compass><component id='room players'></component>
+<prompt time="1792031817">&gt;</prompt>
