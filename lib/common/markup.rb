@@ -144,7 +144,7 @@ module Lich
         # Removes the game's object links, keeping their text, so a front end
         # that predates them gets DragonRealms' legacy line:
         #
-        #   Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.
+        #   Also here: Universalist <a exist="-10700003" noun="Corwin">Corwin</a>.
         #   Also here: Universalist Corwin.
         #
         # Only <a> elements with an exist attribute are game links; any other
