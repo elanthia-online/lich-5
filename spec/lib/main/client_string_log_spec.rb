@@ -145,11 +145,11 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
   end
 
   # These branches discard whatever the front end sends, and the log echoes it.
-  # The Wizard and Frostbite version lines are as captured live (see the
-  # replays below); the Avalon line is illustrative, as no capture exists yet.
+  # The version lines are as captured live (see the replays below); Avalon
+  # introduces itself as Wizard.
   {
     'Wizard'    => ['wizard', "/FE:WIZARD /VERSION:2.04 /P:WIN32\r\n", "GOOD\r\n"],
-    'Avalon'    => ['avalon', "/FE:AVALON /VERSION:4.3 /P:MAC\r\n", "GOOD\r\n\r\n"],
+    'Avalon'    => ['avalon', "/FE:WIZARD /VERSION:2.02 /P:WIN32\r\n", "GOOD\r\n\r\n"],
     'Frostbite' => ['frostbite', "<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", '']
   }.each do |name, (frontend, version_line, rest)|
     context "with #{name}" do
@@ -245,7 +245,7 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
   # anonymised). Each capture's front-end line is replayed through its real
   # login path, as BINARY as a socket reads it; the log must echo it as the
   # live session did, and Lich must send what it sent then. The captures
-  # predate the note on the Wizard and Frostbite paths, so the note is checked
+  # predate the note on the Wizard, Avalon and Frostbite paths, so the note is checked
   # on its own: every captured front end got Lich's string.
   context 'replaying live session logs' do
     fixture_dir = File.expand_path('../../fixtures/client_string_log', __dir__)
@@ -257,6 +257,7 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
     # replacement string, so the id does not change what is sent.
     {
       'wizard_gs.log'    => ['wizard', :run_gsl_frostbite, "GOOD\r\n"],
+      'avalon_gs.log'    => ['avalon', :run_gsl_frostbite, "GOOD\r\n\r\n"],
       'frostbite_dr.log' => ['frostbite', :run_gsl_frostbite, ''],
       'genie_dr.log'     => ['genie', :run_forward, ''],
       'warlock_dr.log'   => ['stormfront', :run_forward, ''],
