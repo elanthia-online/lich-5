@@ -38,7 +38,7 @@ fly64.ico
 # Ignore markdown everywhere, then re-include the docs we track.
 doc/yard/
 *.md
-!docs/*.md
+!docs/**/*.md
 !spec/README.md
 !spec/fixtures/README.md
 !spec/fixtures/streams/MANIFEST.md
