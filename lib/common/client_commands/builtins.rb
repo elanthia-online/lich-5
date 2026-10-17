@@ -71,9 +71,12 @@ module Lich
           action = m[1]
           target = m[2]
           script = Script.running.find { |s| s.name == target } ||
-                   Script.hidden.find { |s| s.name == target } ||
-                   Script.running.find { |s| s.name =~ /^#{target}/i } ||
-                   Script.hidden.find { |s| s.name =~ /^#{target}/i }
+                   Script.hidden.find { |s| s.name == target }
+          if script.nil?
+            prefix = user_regexp(target, prefix: '^', options: Regexp::IGNORECASE) or next
+            script = Script.running.find { |s| s.name =~ prefix } ||
+                     Script.hidden.find { |s| s.name =~ prefix }
+          end
           if script.nil?
             respond "--- Lich: #{target} does not appear to be running! " \
                     "Use '#{$clean_lich_char}list' or '#{$clean_lich_char}listall' to see what's active."
@@ -116,7 +119,11 @@ module Lich
           if cmd.split[1] == 'to'
             name = cmd.split[2].chomp.strip
             pool = Script.running + Script.hidden
-            script = pool.find { |scr| scr.name == name } || pool.find { |scr| scr.name =~ /^#{name}/i }
+            script = pool.find { |scr| scr.name == name }
+            if script.nil?
+              prefix = user_regexp(name, prefix: '^', options: Regexp::IGNORECASE) or next
+              script = pool.find { |scr| scr.name =~ prefix }
+            end
             if script
               msg = cmd.split[3..-1].join(' ').chomp
               if script.want_downstream
@@ -219,17 +226,12 @@ module Lich
           respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
         end
 
-        command(/^hmr\s+(?<pattern>.*)/i) do |m, cmd|
-          HMR.reload(/#{m[:pattern]}/)
+        command(/^hmr\s+(?<pattern>.*)/i) do |m|
+          pattern = user_regexp(m[:pattern]) or next
+          HMR.reload(pattern)
         rescue ArgumentError
-          if $!.to_s == 'invalid Unicode escape'
-            respond '--- Lich: error: invalid Unicode escape'
-            respond "--- Lich:   cmd: #{cmd}"
-            respond '--- Lich: \\u is unicode escape, did you mean to use a / instead?'
-          else
-            respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-            Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         end
 
         # ---- infomon (GemStone) -----------------------------------------

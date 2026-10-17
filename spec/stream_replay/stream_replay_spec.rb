@@ -102,6 +102,61 @@ RSpec.describe 'stream replay: DragonRealms links and doubled bold per front end
   end
 end
 
+# A client's SET_FRONTEND_CAPS declaration, sent on the primary (pipe) client
+# after its handshake, replaces its frontend's rich-stream rewrites: a Genie
+# session's client that declares all three gets the server's <room> blocks,
+# links and doubled bold. Lich consumes the line (the game never sees it), and
+# scripts see the same stream either way.
+RSpec.describe 'stream replay: a client that declares its capabilities', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
+  rooms = 34 # <room> blocks in the fixture
+  results = {}
+  replay = lambda do |frontend, client_lines = []|
+    results[[frontend, client_lines]] ||= StreamReplay::Driver.new(fixture, frontend: frontend, client_lines: client_lines).run
+  end
+
+  # The links Saga gets: the ones the game sends, less those in lines Lich
+  # does not forward (the inventory window feed, for one).
+  saga_links = -> { replay.call('saga').stdout.scan('<a exist').size }
+
+  it 'replays a fixture whose links reach Saga' do
+    expect(saga_links.call).to be > 100
+  end
+
+  it 'gives a genie client that declared all three the rich stream, with the same snapshots' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS room_element game_links double_bold'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(rooms)
+    expect(declared.stdout.scan('<style id="roomName"').size).to eq(0)
+    expect(declared.stdout.scan('<compass><dir value=').size).to eq(0)
+    expect(declared.stdout.scan('<a exist').size).to eq(saga_links.call)
+    expect(declared.snapshots).to eq(replay.call('genie').snapshots)
+  end
+
+  it 'never forwards the declaration to the game' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS room_element game_links double_bold'])
+    # The client's handshake line does reach the game, so the recording works.
+    expect(declared.game_input).to include('/FE:')
+    expect(declared.game_input).not_to include('SET_FRONTEND_CAPS')
+  end
+
+  it 'gives a genie client that declared only game_links the legacy room with links kept' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS game_links'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(0)
+    expect(declared.stdout.scan('<style id="roomName"').size).to eq(rooms)
+    expect(declared.stdout.scan('<a exist').size).to eq(saga_links.call)
+  end
+
+  it 'gives a saga client that declared nothing it handles the legacy stream' do
+    declared = replay.call('saga', ['SET_FRONTEND_CAPS'])
+    expect(declared.warnings).to be_empty
+    expect(declared.stdout.scan('<room>').size).to eq(0)
+    expect(declared.stdout.scan('<a exist').size).to eq(0)
+    expect(declared.snapshots).to eq(replay.call('saga').snapshots)
+  end
+end
+
 # DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity stream's
 # <room> block (a game bug). With ;display descflag on, each block for the
 # character's room the game sends while the flag is off reaches the client
