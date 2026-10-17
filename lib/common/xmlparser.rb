@@ -665,12 +665,12 @@ module Lich
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
             # no surrounding-tag context, unlike the bolded <a> name path below.
-            # Always stash rather than applying directly even when the
-            # creature is already known: Creature.register (and the room-in
-            # marking it does) only ever runs from the <a> text path below, so
-            # syncing here and skipping that path would update the instance's
-            # flags correctly while silently leaving it out of the room
-            # roster after the next clear_room - it would sync but never
+            # Inside room objs, always stash rather than applying directly even
+            # when the creature is already known: Creature.register (and the
+            # room-in marking it does) only ever runs from the <a> text path
+            # below, so syncing here and skipping that path would update the
+            # instance's flags correctly while silently leaving it out of the
+            # room roster after the next clear_room - it would sync but never
             # reappear in Creature.targets/.in_room. Deferring to the text()
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
@@ -680,13 +680,16 @@ module Lich
             # does so; the id is then collected in arrival order so the prompt
             # handler can pair it to a legacy-stream bold name when the counts
             # match for this refresh.
+            # GemStone applies a standalone tag (outside room objs) for a
+            # creature already in the current room roster at once and stashes
+            # nothing (:applied, see Lich::Gemstone::XMLDelta.apply_crtr_status).
             crtr_id = attributes['exist']
             if crtr_id
               crtr_flags = attributes.reject { |k, _| k == 'exist' }
-              if XMLParserDelta.for(XMLData.game).apply_crtr_status(crtr_id, crtr_flags)
-                @dr_crtr_ids << crtr_id
-              else
-                @pending_crtr_status[crtr_id] = crtr_flags
+              case XMLParserDelta.for(XMLData.game).apply_crtr_status(crtr_id, crtr_flags, in_room_objs: @active_ids.include?('room objs'))
+              when true then @dr_crtr_ids << crtr_id
+              when :applied then nil
+              else @pending_crtr_status[crtr_id] = crtr_flags
               end
             end
           end
@@ -1261,8 +1264,12 @@ module Lich
                     @dr_link_article = nil
                   else
                     creature = nil
-                    if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider
-                      creature = Creature.register(text_string, @obj_exist, @obj_noun)
+                    # GemStone's Creature is loaded by GameLoader (via the combat
+                    # tracker) only once the game is known; before that, skip it
+                    # rather than raise and reset the parser mid-fragment.
+                    if defined?(Lich::Gemstone::Creature) &&
+                       (XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider)
+                      creature = Lich::Gemstone::Creature.register(text_string, @obj_exist, @obj_noun)
                       if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
                         creature.sync_crtr_status(pending_flags)
                       end

@@ -126,3 +126,32 @@ line for a room with no objects, so the description line ends
 | Shape | Source | Used by |
 |---|---|---|
 | legacy `<style id=""/><preset id='roomDesc'>…</preset>  ` with no objects | C2, `2026-10-07_13-38-12`, lines 35–37 | `room_block_spec.rb` ("rewrites a captured Saga block into the captured legacy lines for the same room"), against the Saga `<room>` for the same room in `streams/dr_saga_locate_descflag.xml` |
+
+## crtr_status/gs_saga_crtr_status.xml
+
+Six verbatim server lines from a GemStone Shattered `;logxml` capture of
+2026-10-15 15:08, one of the 15 GemStone captures recorded that day while Lich
+sent the Saga client string. Lines 1-3 are capture lines 11, 18 and 29; lines
+4-6 are capture lines 569, 576 and 598.
+
+| Line | Shape |
+|---|---|
+| 1 | `<nav>` and the room window: a room-objs `compDef` with `<crtrStatus>` just before the creature's `<a exist>` link |
+| 2 | the main-text room description: `You also see <crtrStatus …/>` inline, then a doubled-bold link |
+| 3 | combat: two standalone tags for the same creature on one line (the second `dead`/`prone`), then a room-objs refresh |
+| 4-5 | the same pair as lines 1-2, for a second creature in the next room |
+| 6 | a room-objs `component`: the tag after a non-creature link and just before the creature's link |
+
+Every tag here carries `health`/`maxhealth` and no flag is `="0"`, as in all
+22,903 tags of the 15 captures. The older fragments in
+`xmlparser_crtr_status_spec.rb`, which its comments describe as live GST
+captures, include tags without `health` and with `hostile="0"`; the spec
+covers both. The fetched window holds no tag just before a `room players`
+component (the third standalone position, seen in the 15-log scan), so that
+shape has no fixture yet.
+
+Exist ids, room numbers and creature names are as captured. The one player
+name (a disk owner's) was replaced with a pseudonym. Line endings were
+normalised to LF.
+
+Used by `spec/lib/common/xmlparser_crtr_status_spec.rb`.
