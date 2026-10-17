@@ -102,6 +102,30 @@ module Lich
       # from a shutdown announcement. nil when no shutdown is pending.
       @@shutdown_at = nil
 
+      # The Saga-identity stream wraps names in object links
+      # (<a exist="-10700002" noun="Aldric">Aldric</a>) and currently sends the
+      # bold around linked creatures doubled (<pushBold/><pushBold/>a <a ...>
+      # leopard</a><popBold/><popBold/>); a single bold works too. The legacy
+      # stream sends neither, so every DRParser pattern, every drdefs room helper
+      # and every script Flag was written against link-free, single-bold text.
+      # {.match_line} restores that shape.
+      LINK_TAG = %r{</?a\b[^>]*>}.freeze
+      PUSH_BOLD_RUN = %r{(?:<pushBold/>){2,}}.freeze
+      POP_BOLD_RUN = %r{(?:<popBold/>){2,}}.freeze
+
+      # Returns the line in the shape DRParser patterns and Flags expect: object
+      # links removed (their inner text kept) and doubled bold collapsed. A line
+      # with neither (the whole legacy stream) is returned unchanged, as the same
+      # object.
+      #
+      # @param line [String] one server string
+      # @return [String]
+      def self.match_line(line)
+        return line unless line.include?('</a>') || line.include?('<pushBold/><pushBold/>')
+
+        line.gsub(LINK_TAG, '').gsub(PUSH_BOLD_RUN, '<pushBold/>').gsub(POP_BOLD_RUN, '<popBold/>')
+      end
+
       # Checks server output against registered Flag matchers.
       # Updates Flags.flags hash when a pattern matches.
       # @param server_string [String] A line of server output to check
@@ -539,9 +563,12 @@ module Lich
 
       # Main parser entry point. Processes a line of server output
       # and updates various game state objects (DRStats, DRRoom, DRSkill, etc.).
-      # @param line [String] A line of server output to parse
+      # Patterns and Flags are matched against {.match_line}; only the inline
+      # exp display rewrites +server_line+ itself (it is what reaches the client).
+      # @param server_line [String] A line of server output to parse
       # @return [void]
-      def self.parse(line)
+      def self.parse(server_line)
+        line = match_line(server_line)
         check_events(line)
         begin
           check_game_shutdown(line)
@@ -611,14 +638,19 @@ module Lich
             percent  = match[:percent]
             DRSkill.update(skill, rank, rate, percent)
 
-            # Inline display of cumulative gained experience (from DRExpMonitor)
+            # Inline display of cumulative gained experience (from DRExpMonitor).
+            # The formatters edit server_line, the string the client receives,
+            # not the normalized copy. No captured exp component, in either
+            # dialect, carries a link or doubled bold, so match_line returns
+            # server_line itself for them; editing server_line keeps the client's
+            # line right if one ever did.
             if DRExpMonitor.inline_display?
               if rate_raw.to_i > 0
                 # BRIEFEXP ON format (rate is numeric)
-                line.replace(DRExpMonitor.format_briefexp_on(line, skill))
+                server_line.replace(DRExpMonitor.format_briefexp_on(server_line, skill))
               else
                 # BRIEFEXP OFF format (rate is word like "learning", "pondering")
-                line.replace(DRExpMonitor.format_briefexp_off(line, skill, rate_raw.strip))
+                server_line.replace(DRExpMonitor.format_briefexp_off(server_line, skill, rate_raw.strip))
               end
             end
           elsif (match = line.match(Pattern::ExpClearMindstate))
@@ -714,10 +746,15 @@ module Lich
           # Parse bank transactions passively
           Lich::DragonRealms::DRBanking.parse(line)
         rescue StandardError => e
+          # Report the line as the server sent it (Saga markup is the likeliest
+          # cause), plus the copy the patterns saw when normalization changed it.
+          normalized = line.equal?(server_line) ? nil : line
           Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
-          Lich::Messaging.msg("bold", "DRParser: line: #{line}")
+          Lich::Messaging.msg("bold", "DRParser: line: #{server_line}")
+          Lich::Messaging.msg("bold", "DRParser: matched as: #{normalized}") if normalized
           Lich.log "error: DRParser.parse: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
-          Lich.log "error: line: #{line}\n\t"
+          Lich.log "error: line: #{server_line}\n\t"
+          Lich.log "error: matched as: #{normalized}\n\t" if normalized
         end
       end
     end

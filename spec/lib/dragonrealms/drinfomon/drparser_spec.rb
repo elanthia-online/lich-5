@@ -4,8 +4,11 @@ require_relative '../../../spec_helper'
 require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lich.rbw in production)
 
 # Load dependencies
+require_relative '../../../../lib/dragonrealms/drinfomon/drdefs'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# The inline exp examples run the real DRExpMonitor formatters.
+require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 # The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
 # so it observes the actual container contents. spec_helper installs a
 # lightweight GameObj double; requiring the production file reopens it with the
@@ -659,6 +662,230 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
       described_class.check_events('this is a test pattern here')
       expect(flags[:test_flag]).to be_truthy
+    end
+  end
+
+  # The Saga-identity stream wraps names in <a exist noun> links and (currently) doubles the
+  # bold around linked creatures; the legacy stream does neither. Lines below are
+  # verbatim Saga shapes (names pseudonymized) next to their legacy equivalents.
+  describe 'Saga dialect object links' do
+    saga_objs = "<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist=\"195652828\" noun=\"moradu\">jeol moradu</a><popBold/><popBold/> (immobile), a <a exist=\"195649758\" noun=\"pouch\">pouch of lead pellets</a>, an <a exist=\"195634669\" noun=\"card\">Immortal Glythtide card</a>, <pushBold/><pushBold/>a <a exist=\"195652888\" noun=\"moradu\">jeol moradu</a><popBold/><popBold/> (dead) and some junk.</component>"
+    legacy_objs = "<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a pouch of lead pellets, an Immortal Glythtide card, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>"
+    saga_players = "<component id='room players'>Also here: Monster <a exist=\"-10700002\" noun=\"Aldric\">Aldric</a>, Daydreamer <a exist=\"-10700003\" noun=\"Brenna\">Brenna</a> who is surrounded by a pale electrical sphere, <a exist=\"-10700004\" noun=\"Corwin\">Corwin</a> and Druid <a exist=\"-10700005\" noun=\"Delphine\">Delphine</a>.</component>"
+    legacy_players = "<component id='room players'>Also here: Monster Aldric, Daydreamer Brenna who is surrounded by a pale electrical sphere, Corwin and Druid Delphine.</component>"
+
+    # The shared 'DRParser stubs' context stubs DRRoom's setters, so capture what
+    # parse assigns instead of reading DRRoom back.
+    let(:assigned) { {} }
+
+    before do
+      %i[npcs dead_npcs room_objs pcs].each do |field|
+        allow(drroom_class).to receive(:"#{field}=") { |value| assigned[field] = value }
+      end
+      # parse calls the drdefs room helpers unqualified; production reaches them
+      # because main.rb includes Lich::DragonRealms into Object. Route them to the
+      # real implementations here without including the module globally.
+      drdefs = Object.new.extend(Lich::DragonRealms)
+      %i[find_npcs find_dead_npcs find_objects find_pcs find_pcs_prone find_pcs_sitting].each do |helper|
+        allow(described_class).to receive(helper) { |arg| drdefs.send(helper, arg) }
+      end
+    end
+
+    def parse_room(line)
+      assigned.clear
+      described_class.parse(+line)
+      assigned.dup
+    end
+
+    describe '.match_line' do
+      it 'removes object links but keeps their text' do
+        line = 'The clerk says, "<a exist="-10700006" noun="Edric">Edric</a>, it looks like your current balance is 5 platinum Kronars."'
+        expect(described_class.match_line(line)).to eq('The clerk says, "Edric, it looks like your current balance is 5 platinum Kronars."')
+      end
+
+      it 'collapses doubled bold to the single bold the legacy stream sends' do
+        line = '<pushBold/><pushBold/>a <a exist="1" noun="leopard">white-tailed leopard</a><popBold/><popBold/>'
+        expect(described_class.match_line(line)).to eq('<pushBold/>a white-tailed leopard<popBold/>')
+      end
+
+      # The doubled bold is a current server quirk; a single-bold linked line
+      # (the shape DR already sends in combat lines) must still lose its links
+      # and keep its one bold.
+      it 'strips links from a single-bold linked line and leaves the bold alone' do
+        line = '<pushBold/>a <a exist="1" noun="leopard">white-tailed leopard</a><popBold/>'
+        expect(described_class.match_line(line)).to eq('<pushBold/>a white-tailed leopard<popBold/>')
+      end
+
+      it 'returns a link-free line unchanged, as the same object' do
+        line = +"<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>.</component>"
+        expect(described_class.match_line(line)).to equal(line)
+      end
+
+      it 'leaves <d cmd> links (INV LIST items, exits) alone' do
+        line = "  <d cmd='remove #195648608'>a diacan lamellar helm</d>"
+        expect(described_class.match_line(line)).to equal(line)
+      end
+    end
+
+    describe '.parse room components' do
+      it 'derives the same DRRoom npcs/dead_npcs/room_objs from a Saga room objs line as from its legacy equivalent' do
+        legacy = parse_room(legacy_objs)
+        saga = parse_room(saga_objs)
+
+        expect(saga).to eq(legacy)
+        expect(saga[:npcs]).to eq(['moradu'])
+        expect(saga[:dead_npcs]).to eq(['moradu'])
+        expect(saga[:room_objs]).to include('pouch of lead pellets', 'junk')
+        expect(saga[:room_objs].join).not_to include('<a ')
+      end
+
+      it 'derives the same DRRoom fields from a single-bold Saga room objs line as from its legacy equivalent' do
+        single_bold = saga_objs.gsub('<pushBold/><pushBold/>', '<pushBold/>').gsub('<popBold/><popBold/>', '<popBold/>')
+
+        expect(parse_room(single_bold)).to eq(parse_room(legacy_objs))
+        expect(parse_room(single_bold)[:dead_npcs]).to eq(['moradu'])
+      end
+
+      it 'does not report a doubled-bold dead creature as alive' do
+        expect(parse_room(saga_objs)[:npcs]).not_to include('second moradu')
+      end
+
+      it 'derives the same DRRoom.pcs from a Saga room players line as from its legacy equivalent' do
+        legacy = parse_room(legacy_players)
+        saga = parse_room(saga_players)
+
+        expect(saga).to eq(legacy)
+        expect(saga[:pcs]).to eq(%w[Aldric Brenna Corwin Delphine])
+      end
+    end
+
+    describe 'Flags on linked lines' do
+      it 'fires a name-anchored Flag when the name is an object link' do
+        flags = {}
+        allow(Flags).to receive(:flags).and_return(flags)
+        allow(Flags).to receive(:matchers).and_return({ drums: [/^Brenna drums (?:his|her) fingers/] })
+
+        described_class.parse(+'<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
+        expect(flags[:drums]).to be_truthy
+      end
+
+      it 'fires a speech Flag when the speaker is linked inside the speech preset' do
+        flags = {}
+        allow(Flags).to receive(:flags).and_return(flags)
+        allow(Flags).to receive(:matchers).and_return({ hello: [/<preset id='speech'>Delphine politely says<\/preset>, "Hello\."/] })
+
+        described_class.parse(+%(<preset id='speech'><a exist="-10700005" noun="Delphine">Delphine</a> politely says</preset>, "Hello."))
+        expect(flags[:hello]).to be_truthy
+      end
+    end
+
+    describe 'parse error log' do
+      let(:messages) { [] }
+      let(:logs) { [] }
+
+      before do
+        allow(Lich::Messaging).to receive(:msg) { |_type, message| messages << message }
+        allow(Lich).to receive(:log) { |message| logs << message }
+        allow(described_class).to receive(:check_game_shutdown).and_raise(StandardError, 'boom')
+      end
+
+      it 'reports the line as the server sent it, links included, and the matched copy' do
+        server_line = +'<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.'
+        described_class.parse(server_line)
+
+        expect(messages).to include('DRParser: line: <a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.')
+        expect(messages).to include('DRParser: matched as: Brenna drums his fingers.')
+        expect(logs.join).to include('<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.', 'matched as: Brenna drums his fingers.')
+      end
+
+      it 'reports a link-free (legacy) line once, as before' do
+        described_class.parse(+'Brenna drums his fingers.')
+
+        expect(messages).to eq(['DRParser: error in parse: boom', 'DRParser: line: Brenna drums his fingers.'])
+        expect(logs.join).not_to include('matched as')
+      end
+    end
+
+    describe 'inline exp display' do
+      it 'still rewrites the server string the client receives' do
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:format_briefexp_off).and_return('REWRITTEN')
+        server_line = +"<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>"
+
+        described_class.parse(server_line)
+        expect(server_line).to eq('REWRITTEN')
+      end
+
+      # The example above uses a link-free line, which match_line returns as the
+      # same object, so it passes whether the rewrite targets server_line or the
+      # normalized copy. Real exp components carry no links (none in the
+      # captures, either dialect), so this input is synthetic: the link only
+      # makes match_line return a new string, so that only a rewrite of the
+      # client-bound server_line passes.
+      it 'rewrites the server string, not the normalized copy (synthetic linked input)' do
+        received = nil
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)
+        # Copy the argument at call time: the formatter is handed server_line
+        # itself, which parse then replaces with the formatter's result.
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:format_briefexp_off) do |line, skill, rate|
+          received = [line.dup, skill, rate]
+          'REWRITTEN'
+        end
+        server_line = +%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>)
+
+        described_class.parse(server_line)
+        expect(server_line).to eq('REWRITTEN')
+        # The formatter edits the line as sent (links kept); skill and rate come
+        # from the normalized copy.
+        expect(received).to eq([%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>), 'Athletics', 'enthralled'])
+      end
+
+      # These run the real DRExpMonitor formatters. The linked and doubled-bold
+      # lines are synthetic: no captured exp component carries a link or
+      # doubled bold, in either dialect. They guard that the formatter edits
+      # the client-bound string (server_line), so whatever markup it holds
+      # survives the rewrite, and that only the skill and rate come from the
+      # normalized copy.
+      describe 'with the real formatters' do
+        before do
+          described_class.class_variable_set(:@@parsing_exp_mods_output, false)
+          allow(drexpmonitor_class).to receive(:inline_display?).and_return(true)
+          allow(drexpmonitor_class).to receive(:format_briefexp_on).and_call_original
+          allow(drexpmonitor_class).to receive(:format_briefexp_off).and_call_original
+          # The formatters read the class variable directly; spec_helper's
+          # DRExpMonitor.reset! clears it after each example.
+          drexpmonitor_class.class_variable_set(:@@inline_display, true)
+          allow(drskill_class).to receive(:gained_exp).and_return(1.5)
+        end
+
+        it 'edits the client-bound string of a BRIEFEXP OFF line (synthetic links and doubled bold kept)' do
+          server_line = +%(<component id='exp Athletics'><pushBold/><pushBold/>       <a exist="1" noun="Athletics">Athletics</a>: 1552 43% enthralled    0.00   <popBold/><popBold/></component>)
+          normalized = described_class.match_line(server_line).dup
+
+          described_class.parse(server_line)
+          expect(server_line).to include('<a exist="1" noun="Athletics">Athletics</a>', '<pushBold/><pushBold/>', '<popBold/><popBold/>')
+          expect(server_line).to include(' 1.50')
+          expect(described_class.match_line(server_line)).to eq(drexpmonitor_class.format_briefexp_off(normalized, 'Athletics', 'enthralled'))
+        end
+
+        it 'edits the client-bound string of a BRIEFEXP ON line (synthetic links kept)' do
+          server_line = +%(<component id='exp Athletics'><d cmd='skill Athletics'><a exist="1" noun="Athletics">Athletics</a></d>:  1552 43%  [ 2/34]</component>)
+          normalized = described_class.match_line(server_line).dup
+
+          described_class.parse(server_line)
+          expect(server_line).to include('<a exist="1" noun="Athletics">Athletics</a>', '[ 2/34] 1.50')
+          expect(described_class.match_line(server_line)).to eq(drexpmonitor_class.format_briefexp_on(normalized, 'Athletics'))
+        end
+
+        it 'rewrites a link-free (legacy) line exactly as before' do
+          server_line = +"<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>"
+          expected = drexpmonitor_class.format_briefexp_off(server_line.dup, 'Athletics', 'enthralled')
+
+          described_class.parse(server_line)
+          expect(server_line).to eq(expected)
+          expect(server_line).not_to eq("<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>")
+        end
+      end
     end
   end
 
