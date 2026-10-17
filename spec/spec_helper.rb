@@ -96,6 +96,94 @@ RSpec.configure do |config|
     end
   end
 
+  # Fail any example or top-level group that leaves one of the globals set up
+  # below (see "Global Variables") holding a different object than it started
+  # with. Under parallel_rspec, a spec that nils or replaces one of these in an
+  # `after` breaks whichever unrelated file happens to run next in the same
+  # process. Mutate the object in place, or save it and restore it.
+  # $_LASTUPSTREAM_ is left out because the before hook below resets it to nil
+  # for every example.
+  snapshot_globals = -> { SPEC_HELPER_GLOBALS.transform_values { |(read, _write)| read.call } }
+  # Put back every global that no longer holds the object it held in `before`,
+  # so one leak fails on its own instead of taking every later example in the
+  # process down with it. Returns the names put back.
+  restore_globals = lambda do |before|
+    leaked = SPEC_HELPER_GLOBALS.reject { |name, (read, _write)| read.call.equal?(before[name]) }
+    leaked.each { |name, (_read, write)| write.call(before[name]) }
+    leaked.keys
+  end
+  # The check compares snapshots, so it cannot tell who made the change: a
+  # thread started earlier that reassigns a global later is reported against
+  # whatever was running when it did.
+  leak_message = lambda do |names, during|
+    "#{names.join(', ')} changed to a different object #{during} " \
+      '(possibly from a background thread started earlier); ' \
+      'save and restore spec_helper globals instead of reassigning them'
+  end
+
+  # A config-level around hook runs outside every group's own around hooks and
+  # before/after(:example) hooks, so it sees the value after they restored it.
+  # A top-level group defined before this file loads (a spec file that does
+  # not require spec_helper, loaded first in a worker) is the exception: RSpec
+  # adds the hook inside that group's own around hooks, where it would fail an
+  # example whose change the group's around hook is about to put back. Those
+  # groups are checked by the reporter listener below instead.
+  groups_defined_earlier = RSpec::Core::ExampleGroup.subclasses
+  defined_earlier = ->(example) { groups_defined_earlier.any? { |group| example.example_group <= group } }
+  config.around do |example|
+    next example.run if defined_earlier.call(example)
+
+    before = snapshot_globals.call
+    example.run
+    leaked = restore_globals.call(before)
+    raise leak_message.call(leaked, "during the example at #{example.location}") unless leaked.empty?
+  end
+
+  # The reporter's example_started and example_finished notifications come
+  # before and after all of an example's hooks, so they make the same check
+  # for each example of a group defined before this file loads. They cannot
+  # fail the example: the leak is put back there and reported by the context
+  # check below when the top-level group finishes. The listener is registered
+  # when the suite starts, so it is on the reporter that runs the examples even
+  # if the reporter is replaced after this file loads (`--bisect` calls
+  # reset_reporter).
+  early_leaks = []
+  early_before = nil
+  early_listener = Object.new
+  early_listener.define_singleton_method(:example_started) do |notification|
+    early_before = defined_earlier.call(notification.example) ? snapshot_globals.call : nil
+  end
+  early_listener.define_singleton_method(:example_finished) do |notification|
+    return unless early_before
+
+    leaked = restore_globals.call(early_before)
+    early_before = nil
+    early_leaks << leak_message.call(leaked, "during the example at #{notification.example.location}") unless leaked.empty?
+  end
+  config.before(:suite) { config.reporter.register_listener(early_listener, :example_started, :example_finished) }
+
+  # before/after(:context) hooks run outside the around hook above. Config-level
+  # context hooks run once per top-level group, before the group's own
+  # before(:context) hooks and after its own after(:context) hooks, so these
+  # catch a leak from any context hook in the group or its nested groups. The
+  # failure is reported as an error outside the examples, together with any
+  # example leak the listener above recorded for the group.
+  # prepend_before/append_after keep that order for groups defined before this
+  # file loads (a spec file that does not require spec_helper, loaded first in
+  # a worker): plain before/after would add these after those groups' own
+  # before(:context) hooks and ahead of their own after(:context) hooks.
+  context_before = nil
+  config.prepend_before(:context) { context_before = snapshot_globals.call }
+  config.append_after(:context) do
+    before = context_before
+    context_before = nil
+    messages = early_leaks.dup
+    early_leaks.clear
+    leaked = before ? restore_globals.call(before) : []
+    messages << leak_message.call(leaked, "in a before/after(:context) hook of the group at #{self.class.metadata[:location]}") unless leaked.empty?
+    raise messages.join("\n") unless messages.empty?
+  end
+
   # Reset shared state before each example to ensure test isolation.
   # This prevents state leakage between tests and allows random ordering.
   #
@@ -1169,6 +1257,27 @@ $safe_pause_lock ||= Mutex.new
 # Same 20 words as Lich::DragonRealms::ORDINALS (drvariables.rb), so specs see
 # production behaviour whether or not drvariables has been loaded first.
 $ORDINALS ||= %w[first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth].freeze
+
+# Reader and writer for each global above that a spec must not reassign, used
+# by the leak check in RSpec.configure. Add an entry when adding a global.
+# The check compares object identity, not value. Restoring by assigning a
+# literal (`$frontend = 'stormfront'`) only passes when the spec file has the
+# frozen_string_literal magic comment, as this file does, because only then is
+# it the same interned string; without the comment it fails. Save the original
+# object and assign it back instead.
+SPEC_HELPER_GLOBALS = {
+  '$_SERVERBUFFER_'      => [-> { $_SERVERBUFFER_ }, ->(value) { $_SERVERBUFFER_ = value }],
+  '$_CLIENTBUFFER_'      => [-> { $_CLIENTBUFFER_ }, ->(value) { $_CLIENTBUFFER_ = value }],
+  '$SEND_CHARACTER'      => [-> { $SEND_CHARACTER }, ->(value) { $SEND_CHARACTER = value }],
+  '$cmd_prefix'          => [-> { $cmd_prefix }, ->(value) { $cmd_prefix = value }],
+  '$frontend'            => [-> { $frontend }, ->(value) { $frontend = value }],
+  '$fake_stormfront'     => [-> { $fake_stormfront }, ->(value) { $fake_stormfront = value }],
+  '$_CLIENT_'            => [-> { $_CLIENT_ }, ->(value) { $_CLIENT_ = value }],
+  '$_DETACHABLE_CLIENT_' => [-> { $_DETACHABLE_CLIENT_ }, ->(value) { $_DETACHABLE_CLIENT_ = value }],
+  '$pause_all_lock'      => [-> { $pause_all_lock }, ->(value) { $pause_all_lock = value }],
+  '$safe_pause_lock'     => [-> { $safe_pause_lock }, ->(value) { $safe_pause_lock = value }],
+  '$ORDINALS'            => [-> { $ORDINALS }, ->(value) { $ORDINALS = value }]
+}.freeze unless defined?(SPEC_HELPER_GLOBALS)
 
 # =============================================================================
 # Spell Data Loading
