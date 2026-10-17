@@ -142,6 +142,10 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 
 ### #1713
 
+| Absent or counted | Corpus |
+|---|---|
+| dr-scripts inputs listed in E12, counted with sorter's own triggers: 0 `(You are\|He is\|She is) wearing` lines and 0 LOOK item lists (`You take a moment to look for all the items in the area`) | DR-16 |
+
 ### #1721
 
 | Absent or counted | Corpus |
