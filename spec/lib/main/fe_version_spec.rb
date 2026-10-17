@@ -55,6 +55,11 @@ RSpec.describe '--fe-version' do
       expect(parse("--fe-version=#{value}")[:fe_version]).to eq(value)
     end
 
+    it 'stores --keep-fe-string, the proxy handshake kill switch' do
+      expect(parse('--keep-fe-string', '--genie')[:keep_fe_string]).to be(true)
+      expect(parse('--genie')).not_to have_key(:keep_fe_string)
+    end
+
     it 'leaves fe_version nil when the flag is absent' do
       expect(parse('--saga', '--without-frontend')[:fe_version]).to be_nil
     end

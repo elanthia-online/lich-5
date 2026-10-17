@@ -246,6 +246,7 @@ module Lich
             --frontend=NAME
             --frontend-command=CMD
             --fe-version=VALUE
+            --keep-fe-string
             --game=HOST:PORT
             --bind-address=HOST
 
@@ -254,10 +255,19 @@ module Lich
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
             --fe-version=VALUE reports the frontend version (e.g. saga-0.10.2) in the
-            /VERSION: field of the game handshake. Only affects --without-frontend;
-            ignored otherwise. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
+            /VERSION: field of the game handshake Lich builds: --without-frontend, and
+            the handshake that replaces a proxied frontend's own (below). Wizard, Avalon
+            and Frostbite always send the default. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
             With --saga, the handshake also identifies as /P:SAGA, and reports
             /VERSION:saga-unknown when --fe-version is not given.
+            A frontend that connects through Lich and sends its own /FE: ... /XML
+            handshake (Genie, Warlock, Wrayth, Frostbite without --frostbite) has it
+            replaced with Lich's, so every session gets the same game stream; Lich
+            reshapes that stream for the frontend. A handshake that already says
+            /P:SAGA is forwarded as sent.
+            --keep-fe-string forwards the frontend's own handshake instead, for that
+            launch. To keep it for every launch: ;e Lich.keep_fe_string = true
+            (;e Lich.keep_fe_string = false undoes it).
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
             With -g HOST:PORT, name the client reading it with a frontend flag (--frontend=NAME, --stormfront);
             without one the frontend is unknown and script output is not XML-escaped.

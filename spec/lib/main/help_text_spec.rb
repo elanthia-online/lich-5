@@ -77,6 +77,15 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('commands from all attached frontends are processed serially')
     end
 
+    it 'documents the proxy handshake replacement and both of its kill switches' do
+      output = described_class.render('advanced')
+
+      expect(output).to match(/^  --keep-fe-string$/)
+      expect(output).to include("has it\n  replaced with Lich's, so every session gets the same game stream")
+      expect(output).to include('--keep-fe-string forwards the frontend\'s own handshake instead')
+      expect(output).to include(';e Lich.keep_fe_string = true')
+    end
+
     it 'lists every supported path option' do
       output = described_class.render('paths')
 
