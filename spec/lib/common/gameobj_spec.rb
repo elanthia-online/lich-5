@@ -879,6 +879,113 @@ RSpec.describe Lich::Common::GameObj do
 
         expect(obj.noun).to eq('ball')
       end
+
+      it 'converts pearl to mother-of-pearl when the name says mother-of-pearl' do
+        obj = described_class.new('123', 'pearl', 'a mother-of-pearl button')
+
+        expect(obj.noun).to eq('mother-of-pearl')
+      end
+
+      it 'keeps a plain pearl noun as pearl' do
+        obj = described_class.new('123', 'pearl', 'a black pearl')
+
+        expect(obj.noun).to eq('pearl')
+      end
+
+      # The server can pad a link noun, e.g. the DR stream's
+      # <a exist="201844186" noun=" moth">void-black umbral moth</a>.
+      context 'when the server pads the noun with whitespace' do
+        it 'strips a leading space' do
+          expect(described_class.new('1', ' moth', 'void-black umbral moth').noun).to eq('moth')
+        end
+
+        it 'strips a trailing space' do
+          expect(described_class.new('1', 'moth ', 'void-black umbral moth').noun).to eq('moth')
+        end
+
+        it 'strips leading and trailing whitespace, including tabs and newlines' do
+          expect(described_class.new('1', " \tmoth\n ", 'void-black umbral moth').noun).to eq('moth')
+        end
+
+        it 'keeps an unpadded noun unchanged' do
+          expect(described_class.new('1', 'moth', 'void-black umbral moth').noun).to eq('moth')
+        end
+
+        it 'keeps inner spaces of a multi-word noun' do
+          expect(described_class.new('1', ' ball and chain ', 'iron ball').noun).to eq('ball')
+          expect(described_class.new('1', ' mother of pearl ', 'shell').noun).to eq('mother of pearl')
+        end
+
+        it 'still applies the special cases after stripping' do
+          expect(described_class.new('1', ' lapis lazuli', 'blue lapis lazuli').noun).to eq('lapis')
+          expect(described_class.new('1', 'Hammer of Kai ', 'some hammer').noun).to eq('hammer')
+          expect(described_class.new('1', ' pearl ', 'a mother-of-pearl button').noun).to eq('mother-of-pearl')
+          expect(described_class.new('1', ' pearl ', 'a black pearl').noun).to eq('pearl')
+        end
+
+        it 'keeps a nil noun nil' do
+          expect(described_class.new('1', nil, 'something').noun).to be_nil
+        end
+
+        it 'keeps an empty noun empty, and reduces an all-whitespace noun to empty' do
+          expect(described_class.new('1', '', 'something').noun).to eq('')
+          expect(described_class.new('1', '   ', 'something').noun).to eq('')
+        end
+
+        it 'does not mutate the caller string' do
+          raw = +' moth'
+          described_class.new('1', raw, 'void-black umbral moth')
+
+          expect(raw).to eq(' moth')
+        end
+
+        it 'strips a padded noun on a frozen string without raising' do
+          expect(described_class.new('1', ' moth'.freeze, 'void-black umbral moth').noun).to eq('moth')
+        end
+      end
+    end
+
+    describe 'padded server nouns through the registry factories' do
+      it 'new_npc stores the stripped noun and finds it by noun' do
+        described_class.new_npc('201844186', ' moth', 'void-black umbral moth')
+
+        expect(described_class.npcs.map(&:noun)).to eq(['moth'])
+        expect(described_class.npcs.find { |npc| npc.noun == 'moth' }).not_to be_nil
+        expect(described_class['moth']&.id).to eq('201844186')
+      end
+
+      it 'new_loot stores the stripped noun' do
+        expect(described_class.new_loot('2', 'coin ', 'a silver coin').noun).to eq('coin')
+      end
+
+      it 'new_pc stores the stripped noun' do
+        expect(described_class.new_pc('3', ' Someone', 'Someone').noun).to eq('Someone')
+      end
+
+      it 'new_inv stores the stripped noun, in and out of a container' do
+        expect(described_class.new_inv('4', ' pouch', 'a gem pouch').noun).to eq('pouch')
+        expect(described_class.new_inv('5', ' gem ', 'a ruby', 'container1').noun).to eq('gem')
+      end
+
+      it 'new_right_hand and new_left_hand store the stripped noun' do
+        described_class.new_right_hand('6', ' sword', 'a steel sword')
+        described_class.new_left_hand('7', 'shield ', 'a wooden shield')
+
+        expect(described_class.right_hand.noun).to eq('sword')
+        expect(described_class.left_hand.noun).to eq('shield')
+      end
+
+      it 'targets still filters an appendage whose noun arrives padded' do
+        described_class.new_npc('8', ' tentacle', 'a slimy tentacle')
+        described_class.new_npc('9', ' moth', 'void-black umbral moth')
+        XMLData.current_target_ids = %w[8 9]
+
+        expect(described_class.targets.map(&:id)).to eq(['9'])
+      end
+
+      it 'leaves an unpadded noun (the GemStone shape) unchanged' do
+        expect(described_class.new_npc('10', 'kobold', 'a kobold').noun).to eq('kobold')
+      end
     end
 
     describe '#full_name' do

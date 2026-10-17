@@ -1476,10 +1476,15 @@ module Lich
 
       # Normalizes irregular noun values that the game provides inconsistently.
       #
+      # Leading/trailing whitespace is stripped first: the server can pad a
+      # link noun (e.g. +noun=" moth"+), which would otherwise defeat every
+      # +obj.noun == 'moth'+ comparison and noun lookup. A nil noun stays nil.
+      #
       # @param noun [String, nil]
       # @param name [String, nil]
       # @return [String, nil]
       def normalize_noun(noun, name)
+        noun = noun&.strip
         case noun
         when 'lapis lazuli'   then 'lapis'
         when 'Hammer of Kai'  then 'hammer'
