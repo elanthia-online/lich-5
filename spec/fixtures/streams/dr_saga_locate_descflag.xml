@@ -1,0 +1,97 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114000">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792114004">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<prompt time="1792114004">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Righteous Wrath  (10 roisaen)
+Manifest Force  (19 roisaen)
+Glythtide's Gift  (35 roisaen)
+Aura Sight  (1 roisan)
+Telekinetic Shield  (35 roisaen)
+Clear Vision  (23 roisaen)
+Piercing Gaze  (15 roisaen)
+Seer's Sense  (9 roisaen)
+Shadowling  (37 roisaen)
+<popStream/><prompt time="1792114004">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114005">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114006">&gt;</prompt>
+You aren't harnessing any mana.
+<prompt time="1792114008">&gt;</prompt>
+<spell exist='spell'>Locate</spell><castTime value='1792114028'/>
+You raise your palms skyward, chanting the equation of the Locate spell.
+<prompt time="1792114008">&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><prompt time="1792114010">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114012">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Righteous Wrath  (10 roisaen)
+Manifest Force  (19 roisaen)
+Glythtide's Gift  (34 roisaen)
+Aura Sight  (Fading)
+Telekinetic Shield  (35 roisaen)
+Clear Vision  (23 roisaen)
+Piercing Gaze  (15 roisaen)
+Seer's Sense  (9 roisaen)
+Shadowling  (37 roisaen)
+<popStream/><prompt time="1792114014">&gt;</prompt>
+You pause for a moment as the details of the Resolve symbiosis fade from your mind.
+<prompt time="1792114017">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114018">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Righteous Wrath  (10 roisaen)
+Manifest Force  (19 roisaen)
+Glythtide's Gift  (34 roisaen)
+Aura Sight  (Fading)
+Telekinetic Shield  (35 roisaen)
+Clear Vision  (23 roisaen)
+Piercing Gaze  (15 roisaen)
+Seer's Sense  (9 roisaen)
+Shadowling  (37 roisaen)
+<popStream/><prompt time="1792114024">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114024">&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><prompt time="1792114025">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792114025">&gt;</prompt>
+<clearStream id="percWindow"/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='89' text='mana 89%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='95' text='concentration 95%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You gesture.
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists>You also see a <a exist="199715456" noun="vessel">floating vessel of flaring crimson light</a>.</exists><players>Also here: Soul Annihilator <a exist="-10700002" noun="Brenna">Brenna</a>, Druid <a exist="-10700003" noun="Corwin">Corwin</a> and <a exist="-10700004" noun="Delphine">Delphine</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<pushStream id="percWindow"/>Righteous Wrath  (10 roisaen)
+Manifest Force  (19 roisaen)
+Glythtide's Gift  (34 roisaen)
+Aura Sight  (Fading)
+Telekinetic Shield  (35 roisaen)
+Clear Vision  (23 roisaen)
+Piercing Gaze  (15 roisaen)
+Seer's Sense  (9 roisaen)
+Shadowling  (37 roisaen)
+<popStream/><castTime value='1792114028'/>
+<prompt time="1792114028">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='92' text='mana 92%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='97' text='concentration 97%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+<prompt time="1792114030">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792114032">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>You come upon an Elven burial ground in the shade of sacred groves.  The graves are almost impossible to distinguish from the surrounding forest growth, save for a slight elevation, greener cover, and saplings planted at their heads to commemorate the departed soul.  The forest nomads also come here, and leave their dead in the trees, to be stripped by scavenger birds.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<prompt time="1792114033">&gt;</prompt>

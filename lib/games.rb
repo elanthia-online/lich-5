@@ -1166,7 +1166,9 @@ module Lich
         end
 
         def process_room_information(alt_string)
-          if alt_string =~ /^(<pushStream id="familiar" ifClosedStyle="watching"\/>)?(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+          # The legacy roomName style, or the Saga-identity <room> block (see
+          # Lich::Common::RoomBlock); the room-number rewrites work on either.
+          if alt_string =~ /^(<pushStream id="familiar" ifClosedStyle="watching"\/>)?(?:<resource picture="\d+"\/>|<popBold\/>)?(?:<style id="roomName"\s+\/>|<room>)/
             if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
               @game_instance ? @game_instance.modify_room_display(alt_string) : alt_string
             end

@@ -44,6 +44,44 @@ RSpec.describe 'Lich::Common::XMLParser stream features' do
     expect(parser.stream_feature?(:links)).to be false
   end
 
+  it 'takes room_name from the Saga <room><name> child, as from the legacy roomName style' do
+    feed('<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>D.</description></room>')
+    expect(parser.room_name).to eq('[Bosque Deriel, Burial Ground]')
+  end
+
+  # Not in the captures (every Saga <name> there carries a bracketed title), but
+  # the game can send one without it. room_name then holds the name as sent,
+  # minus the room-number suffix, rather than going nil.
+  it 'takes room_name from a Saga <name> without a bracketed title, minus the room number' do
+    parser.instance_variable_set(:@room_name, '[Bosque Deriel, Burial Ground]')
+    feed('<resource picture="0"/><room><name>Somewhere Unbracketed (230009)</name><description>D.</description></room>')
+    expect(parser.room_name).to eq('Somewhere Unbracketed')
+  end
+
+  it 'takes room_name from a Saga <name> without a bracketed title or room number' do
+    feed('<resource picture="0"/><room><name>Somewhere Unbracketed</name><description>D.</description></room>')
+    expect(parser.room_name).to eq('Somewhere Unbracketed')
+  end
+
+  # The legacy roomName style gets the same fallback. Every real roomName text
+  # (DR legacy captures, GemStone logs) carries a bracketed title, so these
+  # shapes are synthetic.
+  it 'takes room_name from the legacy roomName style, minus the room number' do
+    feed(%(<style id="roomName" />[Town Square, Central] (4216009)\r\n), %(<style id=""/>))
+    expect(parser.room_name).to eq('[Town Square, Central]')
+  end
+
+  it 'takes room_name from a legacy roomName without a bracketed title, minus the room number' do
+    parser.instance_variable_set(:@room_name, '[Town Square, Central]')
+    feed(%(<style id="roomName" />Somewhere Unbracketed (4216010)\r\n), %(<style id=""/>))
+    expect(parser.room_name).to eq('Somewhere Unbracketed')
+  end
+
+  it 'takes room_name from a legacy roomName without a bracketed title or room number' do
+    feed(%(<style id="roomName" />Somewhere Unbracketed\r\n), %(<style id=""/>))
+    expect(parser.room_name).to eq('Somewhere Unbracketed')
+  end
+
   it 'observes :room_element from the Saga <room> block' do
     feed('<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>')
     expect(parser.stream_features).to eq([:room_element])

@@ -33,6 +33,7 @@ DragonRealms has two dialects:
 | `dr_saga_containers_speech.xml` | saga | 2026-10-15 17:49 | 100 | open/close/look in/rummage, bank deposit/withdraw, hide/unhide, linked speech preset |
 | `dr_saga_login.xml` | saga | 2026-10-16 09:00 | 2 | C8 capture `2026-10-16_09-00-23`, lines 2–228, cut with `--real-login --drop-settings-body`, then `<playerID>` set by hand to the synthetic `700001` the other fixtures use and the other player ids remapped in place like the rest (no golden field reads the playerID). Real Saga login: the stored `<settings>` record (emptied), `<settingsInfo instance='DR'>` at line 5, `<app char>`, a linked worn list before any other link, `<exposeContainer>`/`<container id='stow' target>` + `clearContainer` + the first stow header on one line (line 35), the stream-window and injury declarations, `<endSetup/>`, `<nav>`, the room components and then the first `<room>` block |
 | `dr_saga_no_room_heavens.xml` | saga | 2026-10-16 09:18 | 9 | C8 capture `2026-10-16_09-00-23`, lines 10717–10725 and 10803–10839, joined at a prompt boundary (`sed -n` of both ranges, then extract.rb with no window). A `<room>` block from LOOK, then a `[The Heavens]` view with a bare `<nav/>` and ` - [The Heavens] (**)` subtitles, and the return to the room, both sent as legacy room components with no `<room>` |
+| `dr_saga_locate_descflag.xml` | saga | 2026-10-16 14:26 | 21 | DR-extra (C2) capture `2026-10-16_14-26-39`, lines 2–94 (synthetic header). FLAG DESCRIPTION OFF and its reply, the own room's `<room>` (description still sent), a Locate whose view of another room is a bare `<room>` with its description and no `<nav>`, subtitle or room components, then FLAG DESCRIPTION ON and the own room again |
 | `gs_saga_login.xml` | GS, Saga identity | 2026-10-15 11:29 | 1 | GS-15 capture `2026-10-15_11-29-55`, lines 1–80, cut with `--real-login --end-prompt` (the window ends mid-login, so the closing prompt is the driver's synthetic one). Real login: `<settingsInfo instance='GSF'>` at line 5, then bracketless main/room subtitles (` - Shattered Nexus - 7199`), `compDef` room parts, a linked worn list, and `<exposeContainer>`/`<container id='stow' target>` + `clearContainer` + the first stow header on one line; no `<room>`. GS sends no `<app char>` in these 80 lines, so extract.rb adds one |
 | `gs_saga_hunt.xml` | GS, Saga identity | 2026-10-15 15:08 | 14 | GS-15 capture `2026-10-15_15-08-37`, lines 2–130 (synthetic header). A move with `<nav>`, bracketless subtitles, `compDef` room parts, `<roommeta>`, the `roomName`/`roomDesc` styles and a `<dir>` compass; the main-text room view with `<crtrStatus>` before a doubled-bold (`<pushBold/><pushBold/>`) creature link; standalone `<crtrStatus>` tags before a `room objs` component whose own tag precedes a single-bold `<b> <pushBold/>…<popBold/></b>` link; linked combat lines in single bold |
 
@@ -115,6 +116,13 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | DragonRealms sends 0 `<crtrStatus>` inside a `room objs` component; the batch follows the component | DR-16; the `dr_saga_*` and `dr_legacy_hunt.xml` fixtures |
 
 ### #1707
+
+| Absent or counted | Corpus |
+|---|---|
+| `<room>` block shape, 53,663 blocks: 0 opening tags with attributes; 0 not preceded by `<resource picture="0"/>` at line start; 0 lines with two blocks; 0 out-of-order, repeated or self-closed children; 0 elements other than `<crtrStatus>` between parts (0 to 17 tags, in 2,616 blocks); 0 `<name>` without `[…]`; 0 `<name>` with `(**)`; 0 empty `<exits>`; 0 non-empty `<extra>`; 0 lines with content after `</room>` (6 with trailing whitespace) | DR-16 Saga; the `<room>` blocks in the `dr_saga_*` fixtures |
+| Legacy `roomName` text: 11,035 of 11,035 bracketed | GS-15 (11,002), DR-16 legacy, FIX |
+| `<room>` split across lines: 0 of 53,663 blocks. 0 of 53,666 lines with `<room>` over DR-16, GS-15 and DR-extra (the 3 extra are DR-extra's). 0 `<room>` without `</room>` on the same line, and 0 the other way | DR-16 Saga; DR-16 + GS-15 + DR-extra |
+| `<description>` empty or self-closing: 0 of 53,663, including every block sent while FLAG DESCRIPTION was OFF (48,826 to 48,937 such blocks, depending on the report). `dr_saga_locate_descflag.xml` shows the description still sent while OFF | DR-16 Saga; DR-extra |
 
 ### #1709
 

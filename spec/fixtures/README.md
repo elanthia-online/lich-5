@@ -114,6 +114,19 @@ first shape, the "white-tailed leopard" of C8 `2026-10-17_00-00-00`, does not
 supply it: all 125 of its links in that capture send `noun="leopard"`, the
 text's last word.
 
+## room_block/dr_legacy_desc_no_objects.xml
+
+### What is it?
+
+A legacy-dialect DragonRealms room view captured verbatim (per-line
+timestamps removed): the `roomName` line, the description line and the exits
+line for a room with no objects, so the description line ends
+`…</preset>  ` with nothing after the two spaces.
+
+| Shape | Source | Used by |
+|---|---|---|
+| legacy `<style id=""/><preset id='roomDesc'>…</preset>  ` with no objects | C2, `2026-10-07_13-38-12`, lines 35–37 | `room_block_spec.rb` ("rewrites a captured Saga block into the captured legacy lines for the same room"), against the Saga `<room>` for the same room in `streams/dr_saga_locate_descflag.xml` |
+
 ## crtr_status/gs_saga_crtr_status.xml
 
 Six verbatim server lines from a GemStone Shattered `;logxml` capture of

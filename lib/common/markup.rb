@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+require File.join(LIB_DIR, 'common', 'room_block.rb')
 
 module Lich
   module Common
@@ -134,11 +135,23 @@ module Lich
         def strip_simple(line)
           return nil if line == "\r\n" # short-circuit empty links
 
-          line = line.gsub(SUPPRESSED_STREAMS, '')
+          # The Saga-identity <room> block becomes the legacy layout first, so
+          # scripts get the same room lines (title, description + objects,
+          # players, exits) in both stream dialects.
+          shaped = RoomBlock.legacy_shape(line)
+          room_block = shaped != line
+          line = shaped.gsub(SUPPRESSED_STREAMS, '')
           line = line.gsub(SPELLS_STREAM, '')
           line = line.gsub(DATA_ELEMENTS, '')
           line = line.gsub(ANY_TAG, '')
           line = Lich::Common::XmlEntities.decode(line)
+          # The legacy stream sends each room line as its own string, so a
+          # whitespace-only one (<style id=""/> and two spaces, for a room
+          # without a description or objects) or an empty one (a <crtrStatus>
+          # batch with no players or exits line to lead) is dropped by the
+          # check below. In a string that carried a block, drop every empty or
+          # whitespace-only line the same way, including any outside the block.
+          line = line.gsub(/^[ \t]*(?:\r\n|\z)/, '') if room_block
 
           return nil if line.match?(/\A\s*\z/)
 

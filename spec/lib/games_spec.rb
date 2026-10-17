@@ -1805,3 +1805,37 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
     end
   end
 end
+
+# The room-number display hooks key on the room line. The legacy stream sends it
+# as the roomName style; the Saga-identity stream as the inline <room> block.
+RSpec.describe Lich::GameBase::Game, '.process_room_information' do
+  legacy = "<resource picture=\"0\"/><style id=\"roomName\" />[Bosque Deriel, Hermit's Shacks] (230008)\r\n"
+  saga = "<resource picture=\"0\"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>A clearing.</description>" \
+         "<exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n"
+
+  let(:instance) { instance_double(Lich::DragonRealms::GameInstance, modify_room_display: nil) }
+
+  before do
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, instance)
+    allow(Lich).to receive(:display_lichid).and_return(true)
+  end
+
+  after do
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, nil)
+  end
+
+  { 'legacy roomName line' => legacy, 'Saga <room> block' => saga }.each do |label, line|
+    it "arms the after-prompt room display and rewrites the title for a #{label}" do
+      expect(instance).to receive(:modify_room_display).with(line)
+      described_class.process_room_information(+line)
+      expect(described_class.instance_variable_get(:@room_number_after_ready)).to be true
+    end
+  end
+
+  it 'ignores ordinary story lines' do
+    described_class.process_room_information(+"You stroll south.\r\n")
+    expect(described_class.instance_variable_get(:@room_number_after_ready)).to be false
+  end
+end
