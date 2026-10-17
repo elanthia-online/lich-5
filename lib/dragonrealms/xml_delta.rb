@@ -43,7 +43,7 @@ module Lich
       # it (the legacy stream has none). Names come from the room-objs link, the
       # stream-order pairing (legacy) or the assess backfill. Because sync
       # registers by id, this works whichever order the tag and the link arrive.
-      def self.apply_crtr_status(id, flags)
+      def self.apply_crtr_status(id, flags, in_room_objs: false) # rubocop:disable Lint/UnusedMethodArgument
         return false unless defined?(Lich::DragonRealms::Creature)
 
         Lich::DragonRealms::Creature.sync(id, flags)
