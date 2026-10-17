@@ -110,6 +110,36 @@ RSpec.describe Lich::Common::XMLParserDelta do
       expect(Lich::DragonRealms::XMLDelta.apply_crtr_status('4001', { 'hostile' => '1', 'immobile' => '1' })).to be true
       expect(Lich::DragonRealms::Creature[4001].crtr_flag?(:hostile)).to be true
     end
+
+    it 'applies id-first on DragonRealms inside room objs too (its batch carries no link to defer to)' do
+      require 'dragonrealms/creature'
+      Lich::DragonRealms::Creature.clear
+      expect(Lich::DragonRealms::XMLDelta.apply_crtr_status('4002', { 'hostile' => '1' }, in_room_objs: true)).to be true
+    end
+
+    context 'GemStone standalone tags (#1716)' do
+      let(:creature) { double('CreatureInstance', sync_crtr_status: nil) }
+
+      before do
+        require 'gemstone/creature'
+        allow(Lich::Gemstone::CreatureInstance).to receive(:current_room_ids).and_return([5001])
+        allow(Lich::Gemstone::CreatureInstance).to receive(:[]).with('5001').and_return(creature)
+      end
+
+      it 'applies a tag outside room objs to a creature in the current room roster, with nothing to stash or pair' do
+        expect(Lich::Gemstone::XMLDelta.apply_crtr_status('5001', { 'stunned' => '1' }, in_room_objs: false)).to eq(:applied)
+        expect(creature).to have_received(:sync_crtr_status).with({ 'stunned' => '1' })
+      end
+
+      it 'stashes a tag inside room objs, even for a creature in the roster (the link registers and applies it)' do
+        expect(Lich::Gemstone::XMLDelta.apply_crtr_status('5001', { 'stunned' => '1' }, in_room_objs: true)).to be false
+        expect(creature).not_to have_received(:sync_crtr_status)
+      end
+
+      it 'stashes a standalone tag for an id the current room has not linked' do
+        expect(Lich::Gemstone::XMLDelta.apply_crtr_status('5002', { 'stunned' => '1' })).to be false
+      end
+    end
   end
 
   # XMLParser applies only these keys from the hook's update (see

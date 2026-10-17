@@ -56,12 +56,14 @@ module Lich
         # @param subdir_names [Array<String>] subdirectory names
         # @param failed_scripts [Array<String>] scripts that failed (default: [])
         # @param failed_other [Hash<String, Array<String>>] subdir => failed files (default: {})
+        # @param held_scripts [Array<Array(String, String)>] [file, required Lich version] pairs
+        #   not installed because the running Lich is too old (default: [])
         # @return [void]
-        def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {})
+        def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {}, held_scripts = [])
           total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length
           total_failed = failed_scripts.length + failed_other.values.flatten.length
 
-          if total_downloaded == 0 && total_failed == 0
+          if total_downloaded == 0 && total_failed == 0 && held_scripts.empty?
             table = Terminal::Table.new(
               title: "#{repo_name} Sync",
               rows: [
@@ -79,6 +81,7 @@ module Lich
 
           downloaded_scripts.each { |f| table_rows << ['script', f, 'downloaded'] }
           failed_scripts.each { |f| table_rows << ['script', f, 'FAILED (will retry next login)'] }
+          held_scripts.each { |f, required| table_rows << ['script', f, "needs Lich #{required}+ (not updated)"] }
 
           downloaded_other.each do |subdir, files|
             files.each { |f| table_rows << [subdir, f, 'downloaded'] }
@@ -94,13 +97,14 @@ module Lich
             table_rows << [s, '--', 'up to date']
           end
 
-          if downloaded_scripts.empty? && failed_scripts.empty?
+          if downloaded_scripts.empty? && failed_scripts.empty? && held_scripts.empty?
             table_rows << ['scripts', '--', "#{script_count} checked, all up to date"]
           end
 
           table_rows << :separator
           summary = "Total: #{total_downloaded} updated"
           summary += ", #{total_failed} failed" if total_failed > 0
+          summary += ", #{held_scripts.length} need newer Lich" unless held_scripts.empty?
           table_rows << [{ value: summary, colspan: 3 }]
 
           table = Terminal::Table.new(title: "#{repo_name} Sync", rows: table_rows)

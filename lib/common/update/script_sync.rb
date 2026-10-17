@@ -82,6 +82,7 @@ module Lich
           local_shas = FileWriter.build_local_sha_map(dest)
           downloaded_scripts = []
           failed_scripts = []
+          held_scripts = []
           syncable.each do |entry|
             filename = File.basename(entry['path'])
             next if !force && local_shas[filename] == entry['sha']
@@ -90,6 +91,14 @@ module Lich
             unless content
               failed_scripts << filename
               next
+            end
+
+            if config[:check_lich_requirement]
+              required = Lich::Common::Script.required_lich_version_in(content)
+              unless Lich::Common::Script.lich_version_satisfied?(required)
+                held_scripts << [filename, required]
+                next
+              end
             end
 
             begin
@@ -109,7 +118,7 @@ module Lich
             failed_other[subdir_name] = failures unless failures.empty?
           end
 
-          StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other)
+          StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other, held_scripts)
           :synced
         end
 
