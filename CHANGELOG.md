@@ -1,5 +1,53 @@
 # Changelog
 
+## [5.23.0](https://github.com/elanthia-online/lich-5/compare/v5.22.0...v5.23.0) (2026-10-17)
+
+
+### Features
+
+* **all:** let each client declare the rich-stream rewrites it handles ([#1726](https://github.com/elanthia-online/lich-5/issues/1726)) ([afab365](https://github.com/elanthia-online/lich-5/commit/afab365b780776d754ad51ac414ecc87e3d73daf))
+* **all:** log the intercepted and emitted client strings ([#1731](https://github.com/elanthia-online/lich-5/issues/1731)) ([db7ffae](https://github.com/elanthia-online/lich-5/commit/db7ffae985fca5fbccb4c741f5ce97ca61caff74))
+* **all:** parse the Saga &lt;room&gt; element natively ([#1707](https://github.com/elanthia-online/lich-5/issues/1707)) ([e907362](https://github.com/elanthia-online/lich-5/commit/e907362a73fa2e6da0a5c6a40b3fe804c86c3ae4))
+* **all:** replace a proxied front end's client string with Lich's ([#1724](https://github.com/elanthia-online/lich-5/issues/1724)) ([7d567b5](https://github.com/elanthia-online/lich-5/commit/7d567b522824c8f842357d0af87cf7e1c6204dcd))
+* **all:** rewrite &lt;room&gt; to the legacy layout for front ends without room_element ([#1708](https://github.com/elanthia-online/lich-5/issues/1708)) ([6331e46](https://github.com/elanthia-online/lich-5/commit/6331e46771be8d4b354b9fcf170e44b0949b9dad))
+* **all:** Saga identifies as /P:SAGA in the headless handshake; add --fe-version ([#1682](https://github.com/elanthia-online/lich-5/issues/1682)) ([7184407](https://github.com/elanthia-online/lich-5/commit/7184407d3cbdcd6e9b2a659e7e29ccece0eb4c4f))
+* **all:** skip syncing eo/scripts scripts that need a newer Lich ([#1692](https://github.com/elanthia-online/lich-5/issues/1692)) ([f4cc3e3](https://github.com/elanthia-online/lich-5/commit/f4cc3e33e316fdf797ad573a71c0f1ccf205e0d8))
+* **dr:** DRCA.day_night_ok? exposes the waggle day/night rule ([#1691](https://github.com/elanthia-online/lich-5/issues/1691)) ([dd31c16](https://github.com/elanthia-online/lich-5/commit/dd31c164735b9aa69dabbe5bee145f6896846841))
+* **dr:** opt-in filter for the room description DragonRealms sends with FLAG DESCRIPTION OFF ([#1725](https://github.com/elanthia-online/lich-5/issues/1725)) ([50c68c9](https://github.com/elanthia-online/lich-5/commit/50c68c9f8c2b76d0ed3e3846240855bc3be73fd3))
+* **dr:** send the legacy compass after a &lt;room&gt; block rewritten for the front end ([#1721](https://github.com/elanthia-online/lich-5/issues/1721)) ([34f77eb](https://github.com/elanthia-online/lich-5/commit/34f77eb2277c4849cfa15a2b4ecbcd48168e2be8))
+* **dr:** strip game links and doubled bold for front ends without them ([#1722](https://github.com/elanthia-online/lich-5/issues/1722)) ([123c9a3](https://github.com/elanthia-online/lich-5/commit/123c9a325cdf3771b4f950be06f3f69bc1df005b))
+
+
+### Bug Fixes
+
+* **all:** --frontend=saga headless detachable clients get Saga handling ([#1696](https://github.com/elanthia-online/lich-5/issues/1696)) ([50d13f2](https://github.com/elanthia-online/lich-5/commit/50d13f2337dbb340f468482dd33ba5a1c275822b))
+* **all:** --login no longer rejects transport/bind options as game codes ([#1685](https://github.com/elanthia-online/lich-5/issues/1685)) ([fc03e4d](https://github.com/elanthia-online/lich-5/commit/fc03e4d3a1b778700e61695f577ab7a1986503cb))
+* **all:** ;hmr no longer reloads gem/stdlib files or dies on SyntaxError ([#1718](https://github.com/elanthia-online/lich-5/issues/1718)) ([3d905b1](https://github.com/elanthia-online/lich-5/commit/3d905b15e5109d483e572adae55ca902206eb32d))
+* **all:** guard ActiveSpell and Gift references in XMLParser ([#1711](https://github.com/elanthia-online/lich-5/issues/1711)) ([1d720e1](https://github.com/elanthia-online/lich-5/commit/1d720e1d70d89c37834549616dbb89ae17c0be57))
+* **all:** repair nested quotes before judging a stream desync ([#1732](https://github.com/elanthia-online/lich-5/issues/1732)) ([91fac90](https://github.com/elanthia-online/lich-5/commit/91fac90bae43e0ad580c704dafdcb4302c68ed2d))
+* **all:** trim whitespace from GameObj nouns ([#1730](https://github.com/elanthia-online/lich-5/issues/1730)) ([a326122](https://github.com/elanthia-online/lich-5/commit/a326122716329498d6e6eef24be0129ac55f2f31))
+* **dr:** DRC.bput resends once per roundtime refusal and ignores player speech ([#1693](https://github.com/elanthia-online/lich-5/issues/1693)) ([d451055](https://github.com/elanthia-online/lich-5/commit/d451055df83c7d0e1a7a369a176f24a02e079697))
+* **dr:** match DRParser patterns and Flags against a link-stripped line ([#1702](https://github.com/elanthia-online/lich-5/issues/1702)) ([6571109](https://github.com/elanthia-online/lich-5/commit/65711092efb480105476abaa12e7af6e71e0f108))
+* **dr:** stage the worn inv stream and learn the stow container from its header ([#1709](https://github.com/elanthia-online/lich-5/issues/1709)) ([27f0a9c](https://github.com/elanthia-online/lich-5/commit/27f0a9c44f0ac15617c523ee90cddcdca4e4902f))
+* **dr:** use the GS link path for room objs/players when links are present ([#1705](https://github.com/elanthia-online/lich-5/issues/1705)) ([b5659e9](https://github.com/elanthia-online/lich-5/commit/b5659e9513917440844874cab4a418ecc8de2332))
+* **gs:** apply standalone crtrStatus updates to known creatures ([#1716](https://github.com/elanthia-online/lich-5/issues/1716)) ([6d8be3a](https://github.com/elanthia-online/lich-5/commit/6d8be3aacb34cd39e29b24d72e6b4a7d6f6611bd))
+* **gs:** drop Creature.damage_report delegators to removed methods ([#1717](https://github.com/elanthia-online/lich-5/issues/1717)) ([366799b](https://github.com/elanthia-online/lich-5/commit/366799b490cf332b01b01064d4298955159d65eb))
+* **gs:** guard the GemStone Creature.register call in XMLParser ([#1719](https://github.com/elanthia-online/lich-5/issues/1719)) ([387e7de](https://github.com/elanthia-online/lich-5/commit/387e7de13d53cba56620ddf925a5a9dc7b4ecf52))
+
+
+### Refactoring
+
+* **all:** detect stream capabilities per session ([#1703](https://github.com/elanthia-online/lich-5/issues/1703)) ([e2386e2](https://github.com/elanthia-online/lich-5/commit/e2386e2a61a82b414ab729be22b5c8543dd5d195))
+* **all:** game-specific XMLParser deltas, map-style (subtitle UID first) ([#1704](https://github.com/elanthia-online/lich-5/issues/1704)) ([e2e9892](https://github.com/elanthia-online/lich-5/commit/e2e9892fa1dd00f9b749b342c5bf7a0a27c33c8a))
+* **all:** move identical combat/atmospherics tag handling into GameInstance::Base ([#1710](https://github.com/elanthia-online/lich-5/issues/1710)) ([fc1e788](https://github.com/elanthia-online/lich-5/commit/fc1e788cb3ff0ef291c6f2e644b4fa4bfa36fbe7))
+* **all:** move the crtrStatus apply policy into the game deltas ([#1706](https://github.com/elanthia-online/lich-5/issues/1706)) ([a65cea2](https://github.com/elanthia-online/lich-5/commit/a65cea2145e2a9c90d79a515fac44f033de529b7))
+* **all:** share the Creature facade via Lich::Common::CreatureFacade ([#1712](https://github.com/elanthia-online/lich-5/issues/1712)) ([6117765](https://github.com/elanthia-online/lich-5/commit/6117765b3057d57b19dc4173f22d1f5a098bd6d7))
+
+
+### Documentation
+
+* **all:** record Saga-stream series decisions and unverified dr-scripts consumers ([#1713](https://github.com/elanthia-online/lich-5/issues/1713)) ([a11b0a6](https://github.com/elanthia-online/lich-5/commit/a11b0a6a3f898990f85d26ad24189d3c77688128))
+
 ## [5.22.0](https://github.com/elanthia-online/lich-5/compare/v5.21.0...v5.22.0) (2026-10-07)
 
 
