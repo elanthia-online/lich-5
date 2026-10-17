@@ -36,7 +36,7 @@ RSpec.describe 'Lich::Common::XMLParser stream features' do
   end
 
   it 'observes :links from an <a exist> object link' do
-    feed('<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
+    feed('<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
     expect(parser.stream_feature?(:links)).to be true
   end
 
