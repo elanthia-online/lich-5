@@ -98,7 +98,15 @@ RSpec.configure do |config|
 
   # Reset shared state before each example to ensure test isolation.
   # This prevents state leakage between tests and allows random ordering.
-  config.before do
+  #
+  # prepend_before, not before: some specs (the settings specs) skip
+  # spec_helper and stub_const Script/XMLData in their own before hooks. When
+  # such a file loads before spec_helper in a process, RSpec adds this config
+  # hook to its already-defined groups, and a plain before would append it
+  # after the group's own hooks. The reset would then run against the stubs
+  # (MockScript has no current=) and fail every example. prepend_before makes
+  # the reset run first whatever order the files load in.
+  config.prepend_before do
     # Core game state
     XMLData.reset if defined?(XMLData) && XMLData.respond_to?(:reset)
     Script.current = nil if defined?(Script)
