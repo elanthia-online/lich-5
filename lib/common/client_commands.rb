@@ -263,6 +263,7 @@ module Lich
           elsif XMLData.game =~ /^DR/
             respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
             respond "   #{$clean_lich_char}display roomid <where>    where to show room id/RealID: title (room name line), line (below-room line), or both"
+            respond "   #{$clean_lich_char}display descflag [on|off] toggle hiding the room description while FLAG DESCRIPTION is OFF (the game sends it anyway)"
           end
           respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
           respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"

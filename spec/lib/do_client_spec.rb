@@ -780,6 +780,46 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('SET both')
     end
 
+    it 'toggles and sets display descflag' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:follow_description_flag) { false }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| puts "SET \#{v}" }
+        do_client(';display descflag')
+        do_client(';display descflag false')
+      RUBY
+      expect(out).to include('SET true')
+      expect(out).to include('SET false')
+      expect(out).to include('R:Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to true')
+    end
+
+    # on/off set the value, as for ;display expgains. Captured only true|false,
+    # "off" fell through to the toggle and flipped the filter on.
+    it 'sets display descflag with on and off instead of toggling' do
+      out = probe(<<~RUBY, game: 'DR')
+        state = false
+        Lich.define_singleton_method(:follow_description_flag) { state }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| state = v; puts "SET \#{v}" }
+        do_client(';display descflag off')
+        do_client(';display descflag ON')
+        do_client(';display descflag on')
+        do_client(';display descflag Off')
+      RUBY
+      expect(out.scan(/^SET \w+/)).to eq(['SET false', 'SET true', 'SET true', 'SET false'])
+    end
+
+    # Anchored like ;display expgains: other text after the command is not a
+    # toggle, and falls through to the script lookup as any unknown command.
+    it 'does not take display descflag followed by other text' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:follow_description_flag) { false }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| puts "SET \#{v}" }
+        Script.define_singleton_method(:start) { |*a| puts "START \#{a.inspect}" }
+        do_client(';display descflag offf')
+      RUBY
+      expect(out).not_to include('SET')
+      expect(out).to include('START ["display", "descflag offf"]')
+    end
+
     it 'routes the banks variants' do
       out = probe(<<~RUBY, game: 'DR')
         module Lich; module DragonRealms; module DRBanking

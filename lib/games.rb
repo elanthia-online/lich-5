@@ -5,6 +5,7 @@ require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
 require_relative 'common/room_block'
 require_relative 'common/markup'
+require_relative 'common/room_description_filter'
 require_relative 'common/client_capabilities'
 
 # Modernized version of games.rb with separated DR and GS functionality
@@ -1159,7 +1160,22 @@ module Lich
         # so clients that share a set (the usual case: one set for all) cost
         # one pass, as before per-client capabilities.
         def process_downstream_hooks(server_string)
+          dragonrealms = XMLData.game =~ /^DR/
+          # Followed before the hooks, so a hook that squelches the game's
+          # reply to FLAG DESCRIPTION or the FLAG listing (DRInfomon's quiet
+          # startup query) does not hide it from the filter, and whatever the
+          # setting, so turning it on applies at once.
+          Lich::Common::RoomDescriptionFilter.observe(server_string) if dragonrealms
           return unless (alt_string = DownstreamHook.run(server_string))
+
+          # DragonRealms ignores FLAG DESCRIPTION OFF in the Saga-identity
+          # stream's <room> block (a game bug). Opted in, every client gets the
+          # character's room without its description, before the per-client
+          # rewrites so both layouts come out as the legacy stream sends them.
+          if dragonrealms && Lich::Common::RoomDescriptionFilter.descriptions_off? &&
+             alt_string.include?('<room>') && Lich.follow_description_flag
+            alt_string = Lich::Common::RoomDescriptionFilter.apply(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
+          end
 
           outputs = []
           Lich::Common::ClientCapabilities.group(client_write_targets).each do |capabilities, clients|

@@ -2503,3 +2503,266 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with per-client 
     DownstreamHook.remove('spec_per_client_hook')
   end
 end
+
+# DragonRealms' FLAG DESCRIPTION OFF: the legacy stream sends the room view
+# without the description; the Saga-identity stream's <room> block keeps it, a
+# confirmed game bug. With the opt-in setting (;display descflag), the client
+# gets the view without it, in either layout; scripts keep it, and a view of
+# another room (Locate) keeps it. Real lines from dr_saga_group_bank.xml
+# (names pseudonymized) and a 2026-10-16 Locate capture.
+RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with room descriptions off' do
+  fixture = File.readlines(File.expand_path('../fixtures/streams/dr_saga_group_bank.xml', __dir__), chomp: true)
+  off_index = fixture.index('You will no longer see room descriptions.')
+  off_reply = "#{fixture[off_index]}\r\n"
+  on_reply = "You will now see room descriptions.\r\n"
+  # The game re-sends the character's room after the OFF reply.
+  shacks = "#{fixture[off_index..].find { |line| line.include?('<room>') }}\r\n"
+  shacks_name = "[Bosque Deriel, Hermit's Shacks] (230008)"
+  shacks_desc = shacks[%r{<description>(.*?)</description>}, 1]
+  shacks_players = shacks[%r{<players>(.*?)</players>}, 1]
+  shacks_exits = shacks[%r{<exits>(.*?)</exits>}, 1]
+  # A Moon Mage's Locate: another room, the same bare block, with its description.
+  locate = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>You come upon an ) +
+           %(Elven burial ground in the shade of sacred groves.</description><exists></exists><players></players>) +
+           %(<exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>\r\n)
+
+  def eventually(timeout: 1)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        return yield
+      rescue RSpec::Expectations::ExpectationNotMetError
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.005
+      end
+    end
+  end
+
+  def deliver(*lines)
+    lines.each { |line| described_class.send(:process_downstream_hooks, +line) }
+  end
+
+  # What the client got, in order (each write is one server string).
+  def written
+    eventually { expect(@writes).not_to be_empty }
+    @writes
+  end
+
+  # The legacy layout of the re-sent view, as a front end without links gets
+  # it (no objects here, so the line after the name is the description and
+  # the two spaces before them).
+  legacy_view = lambda do |description:|
+    desc = description ? "<preset id='roomDesc'>#{description}</preset>" : ''
+    players = shacks_players.gsub(%r{<a [^>]*>|</a>}, '')
+    %(<resource picture="0"/><style id="roomName" />#{shacks_name}\r\n<style id=""/>#{desc}  \r\n) +
+      %(#{players}\r\n#{shacks_exits}\r\n<compass><dir value="n"/><dir value="s"/></compass>\r\n)
+  end
+
+  around do |example|
+    filter = Lich::Common::RoomDescriptionFilter
+    saved_filter = filter.descriptions_off?
+    filter.reset
+    example.run
+  ensure
+    filter.instance_variable_set(:@descriptions_off, saved_filter)
+  end
+
+  before do
+    allow(Lich).to receive(:log)
+    allow(Lich).to receive(:display_lichid).and_return(false)
+    allow(Lich).to receive(:display_uid).and_return(false)
+    allow(Lich).to receive(:hide_uid_flag).and_return(false)
+    allow(Lich).to receive(:follow_description_flag).and_return(true)
+    stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+    stub_const('Frontend', Lich::Common::Frontend)
+    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline]
+    @saved_room = [XMLData.game, XMLData.room_id, XMLData.room_exits]
+    @saved_game_instance = described_class.instance_variable_get(:@game_instance)
+    @writes = []
+    writes = @writes
+    @raw_socket = instance_double('raw_client_socket', closed?: false, close: nil)
+    allow(@raw_socket).to receive(:write) { |data| writes << data.dup }
+    $_DETACHABLE_CLIENT_REGISTRY_ = nil
+    $_DETACHABLE_CLIENT_ = nil
+    $sftowiz_multiline = nil
+    $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
+    XMLData.game = 'DR'
+    XMLData.room_id = 230_008
+    XMLData.room_exits = %w[north south]
+  end
+
+  after do
+    $_CLIENT_.close rescue nil
+    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline = @saved_globals
+    XMLData.game, XMLData.room_id, XMLData.room_exits = @saved_room
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@game_instance, @saved_game_instance)
+  end
+
+  it 'replays real lines: the OFF reply, then the re-sent view of the room' do
+    expect(off_index).not_to be_nil
+    expect(shacks).to include("<name>#{shacks_name}</name>")
+    expect(shacks_desc).to start_with('Here on the route')
+  end
+
+  context 'for a front end that gets the legacy layout' do
+    before { $frontend = 'frostbite' }
+
+    # The legacy stream's view after the OFF reply (dr_legacy_hunt.xml):
+    #   <style id=""/>  You also see ...
+    it 'sends the view without the roomDesc preset, as the legacy stream does' do
+      deliver(off_reply, shacks)
+      eventually { expect(written.size).to eq(2) }
+      expect(written).to eq([off_reply, legacy_view.call(description: nil)])
+    end
+
+    it 'sends the description again after the ON reply' do
+      deliver(off_reply, shacks, on_reply, shacks)
+      eventually { expect(written.size).to eq(4) }
+      expect(written[1]).not_to include(shacks_desc)
+      expect(written[2]).to eq(on_reply)
+      expect(written[3]).to eq(legacy_view.call(description: shacks_desc))
+    end
+
+    it 'keeps the description of a view of another room (Locate)' do
+      deliver(off_reply, locate)
+      eventually { expect(written.size).to eq(2) }
+      expect(written[1]).to include("<preset id='roomDesc'>You come upon an Elven burial ground")
+      # It gets the located room's compass, as in the legacy stream.
+      expect(written[1]).to end_with(%(<compass><dir value="n"/><dir value="se"/></compass>\r\n))
+    end
+
+    it 'sends the room desc component unchanged, as the legacy stream does' do
+      component = "<component id='room desc'>#{shacks_desc}</component>\r\n"
+      deliver(off_reply, component)
+      eventually { expect(written.size).to eq(2) }
+      expect(written[1]).to eq(component)
+    end
+  end
+
+  context 'for a front end that renders the <room> block' do
+    before { $frontend = 'saga' }
+
+    it 'sends the block with an empty description' do
+      deliver(off_reply, shacks)
+      eventually { expect(written.size).to eq(2) }
+      expect(written[1]).to eq("\x1F#{shacks.sub(%r{<description>.*?</description>}, '<description></description>')}")
+    end
+
+    it 'sends the description again after the ON reply' do
+      deliver(off_reply, shacks, on_reply, shacks)
+      eventually { expect(written.size).to eq(4) }
+      expect(written[3]).to eq("\x1F#{shacks}")
+    end
+
+    it 'keeps the description of a view of another room (Locate)' do
+      deliver(off_reply, locate)
+      eventually { expect(written.size).to eq(2) }
+      expect(written[1]).to eq("\x1F#{locate}")
+    end
+  end
+
+  it 'gives Wizard the view without the description' do
+    $frontend = 'wizard'
+    require_relative '../../lib/common/markup'
+    allow(described_class).to receive(:sf_to_wiz) { |line| Lich::Common::Markup.sf_to_wiz(line) }
+    deliver(off_reply, shacks)
+    eventually { expect(written.size).to eq(2) }
+    expect(written[1]).to start_with("\034GSo\r\n#{shacks_name}\r\n\034GSp\r\n  \r\n")
+    expect(written[1]).not_to include(shacks_desc)
+  end
+
+  # Scripts see what the server sent: the hooks run before the filter.
+  it 'hands downstream hooks the block with its description' do
+    $frontend = 'genie'
+    seen = []
+    DownstreamHook.add('spec_desc_off_hook', proc { |line| seen << line.dup; line })
+    deliver(off_reply, shacks)
+    expect(seen).to eq([off_reply, shacks])
+  ensure
+    DownstreamHook.remove('spec_desc_off_hook')
+  end
+
+  it 'follows a reply a downstream hook squelches' do
+    $frontend = 'genie'
+    DownstreamHook.add('spec_desc_off_squelch', proc { |line| line.include?('see room descriptions') ? nil : line })
+    deliver(off_reply, shacks)
+    eventually { expect(written.size).to eq(1) }
+    expect(written.first).not_to include(shacks_desc)
+  ensure
+    DownstreamHook.remove('spec_desc_off_squelch')
+  end
+
+  # The bare FLAG listing's Description row (the real Saga-identity rows from
+  # the ON and OFF listings in spec/fixtures/flag/). DRInfomon's startup
+  # issues FLAG quietly, which squelches the listing in a downstream hook.
+  context 'with the bare FLAG listing' do
+    description_row = lambda do |name|
+      lines = File.readlines(File.expand_path("../fixtures/flag/#{name}", __dir__), chomp: true)
+      "#{lines.find { |line| line.include?('>Description</d>') }}\r\n"
+    end
+    listing_on = description_row.call('dr_saga_flag_listing.xml')
+    listing_off = description_row.call('dr_saga_flag_listing_description_off.xml')
+
+    before { $frontend = 'frostbite' }
+
+    it 'follows a listing row that says OFF, then one that says ON' do
+      deliver(listing_off, shacks, listing_on, shacks)
+      eventually { expect(written.size).to eq(4) }
+      expect(written[1]).to eq(legacy_view.call(description: nil))
+      expect(written[3]).to eq(legacy_view.call(description: shacks_desc))
+    end
+
+    it 'follows a listing a downstream hook squelches' do
+      DownstreamHook.add('spec_desc_off_listing', proc { |line| line.include?('Description') ? nil : line })
+      deliver(listing_off, shacks)
+      eventually { expect(written.size).to eq(1) }
+      expect(written.first).to eq(legacy_view.call(description: nil))
+    ensure
+      DownstreamHook.remove('spec_desc_off_listing')
+    end
+  end
+
+  # GemStone follows its own setting and sends no <room> block.
+  it 'leaves GemStone alone' do
+    XMLData.game = 'GS'
+    $frontend = 'saga'
+    deliver(off_reply, shacks)
+    eventually { expect(written.size).to eq(2) }
+    expect(written[1]).to eq("\x1F#{shacks}")
+  end
+
+  context 'with the setting off (the default)' do
+    before { allow(Lich).to receive(:follow_description_flag).and_return(false) }
+
+    %w[frostbite saga wizard].each do |fe|
+      it "sends #{fe} what it gets with descriptions on" do
+        $frontend = fe
+        if fe == 'wizard'
+          require_relative '../../lib/common/markup'
+          allow(described_class).to receive(:sf_to_wiz) { |line| Lich::Common::Markup.sf_to_wiz(line) }
+        end
+        deliver(shacks)
+        eventually { expect(written.size).to eq(1) }
+        baseline = written.dup
+        @writes.clear
+        deliver(off_reply, shacks)
+        eventually { expect(written.size).to eq(2) }
+        expect(written[1]).to eq(baseline.first)
+        expect(written[1]).to include(shacks_desc)
+      end
+    end
+
+    it 'still follows the replies, so turning the setting on applies at once' do
+      $frontend = 'frostbite'
+      deliver(off_reply)
+      allow(Lich).to receive(:follow_description_flag).and_return(true)
+      deliver(shacks)
+      eventually { expect(written.size).to eq(2) }
+      expect(written[1]).not_to include(shacks_desc)
+    end
+  end
+end

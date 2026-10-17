@@ -36,11 +36,14 @@ module StreamReplay
 
     # @param fixture [StreamReplay::Fixture] the stream to replay
     # @param frontend [String, nil] value for --frontend= (nil: pipe default)
+    # @param settings [Hash{String=>String}] lich_settings rows the child
+    #   starts with (e.g. a ;display toggle), seeded into its lich.db3
     # @param client_lines [Array<String>] lines the client sends Lich after
     #   its handshake, before the stream starts (e.g. SET_FRONTEND_CAPS)
-    def initialize(fixture, frontend: nil, client_lines: [])
+    def initialize(fixture, frontend: nil, settings: {}, client_lines: [])
       @fixture = fixture
       @frontend = frontend
+      @settings = settings
       @client_lines = client_lines
       @warnings = []
     end
@@ -50,6 +53,7 @@ module StreamReplay
       Dir.mktmpdir('lich_replay') do |tmp|
         %w[data scripts logs maps backup temp].each { |d| FileUtils.mkdir_p(File.join(tmp, d)) }
         FileUtils.cp(PROBE, File.join(tmp, 'scripts', 'replay_probe.lic'))
+        seed_settings(File.join(tmp, 'data', 'lich.db3')) unless @settings.empty?
         snapshot_path = File.join(tmp, 'snapshots.jsonl')
         server = TCPServer.new('127.0.0.1', 0)
         stdout = +''
@@ -89,6 +93,17 @@ module StreamReplay
     end
 
     private
+
+    # Lich creates its tables only if they are missing, so a row seeded here
+    # is what the child reads, as a setting a player had stored.
+    def seed_settings(db_path)
+      require 'sqlite3'
+      db = SQLite3::Database.new(db_path)
+      db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
+      @settings.each { |name, value| db.execute('INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);', [name.to_s, value.to_s]) }
+    ensure
+      db&.close
+    end
 
     def child_env(snapshot_path)
       { 'BUNDLE_WITHOUT' => 'gtk:vscode:profanity', 'LICH_REPLAY_SNAPSHOTS' => snapshot_path }

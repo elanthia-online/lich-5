@@ -27,6 +27,9 @@ module Lich
         'up' => 'up', 'down' => 'down', 'out' => 'out'
       }.freeze
 
+      # The room number the game ends a room name with: "[Area, Title] (230008)".
+      NAME_UID = /\((\d+)\)\s*\z/.freeze
+
       module_function
 
       # Rewrites a <room> block into the legacy stream's layout, so code written
@@ -90,6 +93,41 @@ module Lich
         end
       end
 
+      # Empties the description of every block for the character's own room,
+      # keeping the rest of the block as sent:
+      #
+      #   <room><name>[Area, Title] (230008)</name><description></description><exists>...
+      #
+      # legacy_shape then sends that room's description line without the
+      # roomDesc preset, as the legacy stream does while FLAG DESCRIPTION is
+      # OFF. A block for another room (a Moon Mage's Locate) keeps its
+      # description. A block is the character's room when the room number its
+      # name ends with is room_id (XMLData.room_id, from <nav>). A name without
+      # one (ShowRoomID off, or "(**)" for a room without a number) counts when
+      # its exits are room_exits (XMLData.room_exits, from the room exits
+      # component), so another room's description is never hidden.
+      #
+      # Only for the client (RoomDescriptionFilter): scripts, reget and the
+      # parser keep the description.
+      #
+      # @param server_string [String]
+      # @param room_id [Integer] the character's room number
+      # @param room_exits [Array<String>] the character's room's exit names
+      # @return [String] the string, or the same object when no description was emptied
+      def without_description(server_string, room_id:, room_exits:)
+        return server_string unless server_string.include?('<room>')
+
+        emptied = false
+        out = server_string.gsub(BLOCK) do |block|
+          body = Regexp.last_match(:body)
+          next block unless current_room?(body, exit_names(body), room_id, room_exits)
+
+          emptied = true
+          block.sub(%r{<description>.*?</description>}m, '<description></description>')
+        end
+        emptied ? out : server_string
+      end
+
       def legacy_lines(body, compass: nil)
         name = part(body, 'name')
         exists = part(body, 'exists')
@@ -117,6 +155,12 @@ module Lich
         part(body, 'exits').scan(%r{<d(?:\s[^>]*)?>(.*?)</d>}m).flatten
       end
       private_class_method :exit_names
+
+      def current_room?(body, exits, room_id, room_exits)
+        uid = part(body, 'name')[NAME_UID, 1]
+        uid ? uid.to_i == room_id : exits == room_exits
+      end
+      private_class_method :current_room?
 
       # The legacy stream's top-level compass for a room's exit names, in their
       # order: <compass><dir value="n"/><dir value="se"/></compass>. Names

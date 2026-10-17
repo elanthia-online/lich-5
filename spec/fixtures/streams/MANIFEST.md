@@ -153,3 +153,10 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | Creature bold outside room-object listings. Legacy: of the 327 `moradu` mentions in `dr_legacy_hunt.xml` outside `room objs`, assess and `You also see` lines, 0 have a bold pair of their own; the 3 in bold are inside whole bold combat damage lines. All 14 legacy assess lines that name a creature (from `dr_legacy_hunt.xml:135`) name it plain. Saga: 217 single bold pairs hold a creature link, each around nothing but an optional article and the link, all in action or assess lines, 0 in `room objs` (room-object listings double their bold, see #1702) | FIX |
 
 ### #1725
+
+| Absent or counted | Corpus |
+|---|---|
+| FLAG DESCRIPTION replies: exactly `You will no longer see room descriptions.` and `You will now see room descriptions.`, each on a whole line. 968 and 756 (960 and 747 in Saga captures); 0 other wordings | DR-16 + DR-extra |
+| Locate: 1 Saga Locate view (`dr_saga_locate_descflag.xml`; a second attempt fizzled). 0 legacy Locate views taken with descriptions off; the one legacy Locate capture (`spec/fixtures/room_block/dr_legacy_locate.xml`, outside DR-16) has them on | DR-16 + DR-extra |
+| FLAG listing with descriptions OFF: committed as `spec/fixtures/flag/dr_saga_flag_listing_description_off.xml`. In the 286-line window it comes from, the replies have the same two wordings (2 ON, 1 OFF), 3 of the 4 bare `FLAG` listings show the Description row OFF, and the `<room>` sent after the OFF reply still has its description | C8 `2026-10-17_11-02-10`, lines 27050–27335 (outside DR-16) |
+| GemStone: 0 FLAG DESCRIPTION replies and 0 `<room>` blocks. That GemStone follows the flag in its own room view is the maintainer's word, not a capture. DR Saga sessions with RoomBrief or RoomNames off: 0 | GS-15; DR-16 |

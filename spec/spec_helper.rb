@@ -864,7 +864,7 @@ module Lich
   class << self
     # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
-    attr_accessor :display_expgains, :display_roomid_location
+    attr_accessor :display_expgains, :display_roomid_location, :follow_description_flag
 
     def db
       @db ||= MockDB.new

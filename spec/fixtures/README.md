@@ -202,6 +202,38 @@ legacy-dialect PEER.
 |---|---|---|
 | a PEER view: "You peer south/north and see ..." and a bare `<room>` of the room peered into; the own room's `<room>` after LOOK | C8, `2026-10-17_13-24-35`, lines 14–19, 39–44 and 74–77 | `room_block_spec.rb` ("gives each PEER view the compass of the room peered into …"; "sends after the PEER view of 230007 the exits line and compass the legacy stream sent in 230007"), `games_spec.rb` ("sends the compass of the room peered into after a captured PEER view") |
 
+## flag/dr_saga_flag_listing.xml
+
+The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
+captured from C6's session on 2026-10-17 at 07:27 (corpus labels in
+`spec/fixtures/streams/MANIFEST.md`): the usage help, then the table in a mono
+block. Each row links the flag name with a `<d>` whose `cmd` is the toggle
+(the opposite of the Status column), and the first row leads with
+`<popBold/>`. Log timestamps were stripped; it holds no character names.
+
+Used by `room_description_filter_spec` and `games_spec`, which read the
+Description row from it. The listing was taken with descriptions ON; the OFF
+listing is the next fixture.
+
+## flag/dr_saga_flag_listing_description_off.xml
+
+The same `FLAG` listing taken with descriptions OFF, then the game's replies to
+FLAG DESCRIPTION ON and OFF, from C8's Saga-identity session on 2026-10-17 at
+12:12 (`2026-10-17_11-02-10`). The Description row is
+`  <d cmd="flag Description on">Description</d>        OFF  Do not display room descriptions.`:
+the `cmd` is the ON command, the opposite of the Status column. The command
+echoes and log timestamps were stripped; it holds no character names.
+
+| Shape | Source | Used by |
+|---|---|---|
+| the listing (usage help and table) with the Description row OFF, and its prompt | C8, `2026-10-17_11-02-10`, lines 27148–27200 | `room_description_filter_spec` (".observe with the bare FLAG listing"), `games_spec` ("with the bare FLAG listing") |
+| `You will now see room descriptions.` and its prompt | same capture, lines 27202–27203 | `room_description_filter_spec` (the listing, reply, listing sequence) |
+| `You will no longer see room descriptions.` and its prompt | same capture, lines 27282–27283 | `room_description_filter_spec` (the listing, reply, listing sequence) |
+
+In the capture, the next listing (after the ON reply) is the ON table of the
+previous fixture apart from the Avoid* and NoHarnessShare rows, and the one
+after the OFF reply starts as this table does, Description row OFF included.
+
 ## stow/dr_saga_handover.xml
 
 ### What is it?
