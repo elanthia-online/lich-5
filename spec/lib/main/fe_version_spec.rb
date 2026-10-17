@@ -185,7 +185,7 @@ RSpec.describe '--fe-version' do
       $frontend = 'saga'
       allow(Lich).to receive(:log)
       run(fe_version: 'saga-0.10.2')
-      expect(Lich).to have_received(:log).with('info: sending client string: /FE:WRAYTH /VERSION:saga-0.10.2 /P:SAGA /XML')
+      expect(Lich).to have_received(:log).with('info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.2 /P:SAGA /XML')
     end
   end
 
