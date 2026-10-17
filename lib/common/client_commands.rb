@@ -251,7 +251,7 @@ module Lich
           respond
           respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
           respond "                              see #{$clean_lich_char}lich5-update --help"
-          respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
+          respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching (files from Ruby itself or an installed gem are skipped)"
           if XMLData.game =~ /^GS/
             respond
             respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
