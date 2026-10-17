@@ -74,9 +74,10 @@ module Lich
       # gets an empty compass, which clears the last room's.
       #
       # The game also sends a <room> block for a room the character is not in
-      # (a Moon Mage's Locate shows the target's room). The legacy stream sent
-      # that room's compass after such a view too, so every block gets the
-      # compass of its own exits, whatever room the character is in.
+      # (a Moon Mage's Locate shows the target's room; PEER shows the next
+      # room). The legacy stream sent the located room's compass after a
+      # Locate view, so every block gets the compass of its own exits,
+      # whatever room the character is in.
       #
       # Only for the client: scripts, reget and the parser use legacy_shape
       # and never see the compass line.
