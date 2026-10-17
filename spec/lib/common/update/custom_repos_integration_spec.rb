@@ -237,7 +237,7 @@ RSpec.describe 'Custom repos integration with ScriptSync' do
 
       # Should have been called for built-in repos + custom repo
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Custom: MahtraDR/test', anything, anything, anything, anything, anything, anything
+        'Custom: MahtraDR/test', anything, anything, anything, anything, anything, anything, anything
       )
     end
   end

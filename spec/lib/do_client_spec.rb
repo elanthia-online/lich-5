@@ -612,6 +612,112 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
+  # ;hmr, ;kill/;pause/;unpause <name> and ;send to <name> compile what the
+  # user typed into a Regexp. A typo that is not a valid regex must come back
+  # as one plain "invalid pattern" line and let do_client finish (the
+  # UPSTREAM marker is printed by Script.new_upstream, do_client's last
+  # step), rather than raising out of the command handler.
+  describe 'user-supplied patterns that are not valid regexes' do
+    def bad_pattern_probe(command, running: [], hidden: [], binary: false)
+      probe(<<~RUBY)
+        #{fake_script_helper}
+        Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)
+        HMR.define_singleton_method(:reload) { |rx| puts "RELOAD \#{rx.inspect}" }
+        Script.define_singleton_method(:running) { #{running.inspect}.map { |n| fake_script(n) } }
+        Script.define_singleton_method(:hidden) { #{hidden.inspect}.map { |n| fake_script(n) } }
+        Script.define_singleton_method(:new_upstream) { |line| puts "UPSTREAM \#{line}" }
+        Lich.define_singleton_method(:log) { |msg| puts "LOG \#{msg}" }
+        do_client(#{command.inspect}#{'.b' if binary})
+      RUBY
+    end
+
+    it 'reports an unbalanced ;hmr pattern instead of raising' do
+      out = bad_pattern_probe(';hmr (')
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('RELOAD')
+      expect(out).to include('UPSTREAM ;hmr (')
+    end
+
+    it 'reports a ;hmr pattern Ruby rejects as a bad escape without a backtrace' do
+      out = bad_pattern_probe(';hmr lib\\')
+      # Shown as typed: one backslash, not the doubled String#inspect form.
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\": too short escape sequence')
+      expect(out).not_to include("\t")
+      expect(out).not_to include('LOG')
+      expect(out).to include('UPSTREAM')
+    end
+
+    it 'keeps the forward-slash hint for a ;hmr pattern with a \\u escape' do
+      out = bad_pattern_probe(';hmr lib\\users')
+      # The hint names \u, so the pattern must show \u too, not \\u.
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\users": invalid Unicode escape')
+      expect(out).to include('R:--- Lich: \\u is unicode escape, did you mean to use a / instead?')
+      expect(out).not_to include('RELOAD')
+
+      # As on main, only a bare \u gets the hint, not a bad \u{...} list.
+      out = bad_pattern_probe(';hmr lib\\u{zz}')
+      expect(out).to include('R:--- Lich: error: invalid pattern "lib\\u{zz}": invalid Unicode list')
+      expect(out).not_to include('did you mean')
+    end
+
+    it 'reports an invalid ;kill/;pause/;unpause name pattern and touches no script' do
+      out = bad_pattern_probe(';kill (', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('KILL')
+      # One line: the handler stops there, with no "not running" after it.
+      expect(out).not_to include('does not appear to be running')
+      expect(out).to include('UPSTREAM ;kill (')
+
+      out = bad_pattern_probe(';pause [', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "[": premature end of char-class')
+      expect(out).not_to include('PAUSE')
+    end
+
+    it 'still kills an exact name that is not a valid regex' do
+      out = bad_pattern_probe(';kill (', running: ['(', 'alpha'])
+      expect(out).to include('KILL (')
+      expect(out).not_to include('invalid pattern')
+
+      out = bad_pattern_probe(';kill (', running: ['alpha'], hidden: ['('])
+      expect(out).to include('KILL (')
+      expect(out).not_to include('invalid pattern')
+    end
+
+    it 'still sends to an exact name that is not a valid regex' do
+      out = bad_pattern_probe(';send to ( hello', running: ['(', 'alpha'])
+      expect(out).to include("R:--- sent to '(': hello")
+      expect(out).not_to include('invalid pattern')
+    end
+
+    # The fallback the helper now builds must stay what /^name/i was:
+    # anchored at the start, case-insensitive, running scripts then hidden.
+    it 'keeps the ;kill and ;send to name fallback an anchored, case-insensitive prefix match' do
+      out = bad_pattern_probe(';kill ALP', running: ['xalpha'], hidden: ['alphabet'])
+      expect(out).to include('KILL alphabet')
+      expect(out).not_to include('KILL xalpha')
+
+      out = bad_pattern_probe(';send to ALP hello', running: ['xalpha'], hidden: ['alphabet'])
+      expect(out).to include("R:--- sent to 'alphabet': hello")
+    end
+
+    # Lines read from the client socket are BINARY, so a non-ASCII pattern
+    # arrives as raw bytes. They go back out as typed, not as \xC3\xA9.
+    it 'shows a non-ASCII pattern from the client socket as typed' do
+      e_acute = [0xC3, 0xA9].pack('C*').force_encoding(Encoding::UTF_8) # U+00E9
+      out = bad_pattern_probe(";kill #{e_acute}(", running: ['alpha'], binary: true)
+      expect(out).to include("R:--- Lich: error: invalid pattern \"#{e_acute}(\": end pattern with unmatched parenthesis")
+      expect(out).not_to include('\\x')
+    end
+
+    it 'reports an invalid ;send to name pattern and sends nothing' do
+      out = bad_pattern_probe(';send to ( hello', running: ['alpha'])
+      expect(out).to include('R:--- Lich: error: invalid pattern "(": end pattern with unmatched parenthesis')
+      expect(out).not_to include('sent to')
+      expect(out).not_to include('does not match any active script')
+      expect(out).to include('UPSTREAM ;send to ( hello')
+    end
+  end
+
   describe 'infomon and sk (GemStone)' do
     it 'routes the infomon subcommands' do
       out = probe(<<~RUBY, game: 'GSIV')
@@ -672,6 +778,46 @@ RSpec.describe 'do_client command dispatch' do
       RUBY
       expect(out).to include('R:DragonRealms room id / RealID display placement is currently: title')
       expect(out).to include('SET both')
+    end
+
+    it 'toggles and sets display descflag' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:follow_description_flag) { false }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| puts "SET \#{v}" }
+        do_client(';display descflag')
+        do_client(';display descflag false')
+      RUBY
+      expect(out).to include('SET true')
+      expect(out).to include('SET false')
+      expect(out).to include('R:Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to true')
+    end
+
+    # on/off set the value, as for ;display expgains. Captured only true|false,
+    # "off" fell through to the toggle and flipped the filter on.
+    it 'sets display descflag with on and off instead of toggling' do
+      out = probe(<<~RUBY, game: 'DR')
+        state = false
+        Lich.define_singleton_method(:follow_description_flag) { state }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| state = v; puts "SET \#{v}" }
+        do_client(';display descflag off')
+        do_client(';display descflag ON')
+        do_client(';display descflag on')
+        do_client(';display descflag Off')
+      RUBY
+      expect(out.scan(/^SET \w+/)).to eq(['SET false', 'SET true', 'SET true', 'SET false'])
+    end
+
+    # Anchored like ;display expgains: other text after the command is not a
+    # toggle, and falls through to the script lookup as any unknown command.
+    it 'does not take display descflag followed by other text' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:follow_description_flag) { false }
+        Lich.define_singleton_method(:follow_description_flag=) { |v| puts "SET \#{v}" }
+        Script.define_singleton_method(:start) { |*a| puts "START \#{a.inspect}" }
+        do_client(';display descflag offf')
+      RUBY
+      expect(out).not_to include('SET')
+      expect(out).to include('START ["display", "descflag offf"]')
     end
 
     it 'routes the banks variants' do

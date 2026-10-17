@@ -111,8 +111,20 @@ RSpec.describe Lich::DragonRealms::DetachableClientInit do
   end
 
   describe 'compass' do
-    it 'sends the short form of each room exit' do
-      expect(init_string).to end_with("<compass><dir value='n'/><dir value='s'/></compass>")
+    it 'sends the short form of each room exit, quoted as the legacy stream and the <room> rewrite quote it' do
+      expect(init_string).to end_with('<compass><dir value="n"/><dir value="s"/></compass>')
+    end
+
+    it 'leaves out an exit name without a compass value' do
+      allow(XMLData).to receive(:room_exits).and_return(%w[north gate])
+
+      expect(init_string).to end_with('<compass><dir value="n"/></compass>')
+    end
+
+    it 'sends an empty compass for a room without exits' do
+      allow(XMLData).to receive(:room_exits).and_return([])
+
+      expect(init_string).to end_with('<compass></compass>')
     end
   end
 end

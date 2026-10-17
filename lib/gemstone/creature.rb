@@ -715,8 +715,8 @@ module Lich
     # comes from {Lich::Common::CreatureFacade}, delegating to {CreatureInstance},
     # which mixes in the shared id-keyed registry, room roster and
     # `targets`/`in_room` query methods from {Lich::Common::CreatureBase}.
-    # GemStone adds recycled-id handling on register, template counts in stats,
-    # and the damage reports.
+    # GemStone adds recycled-id handling on register and template counts in
+    # stats.
     module Creature
       extend Lich::Common::CreatureFacade
 
@@ -747,16 +747,6 @@ module Lich
       # Get registry stats (the shared stats plus the bestiary template count).
       def self.stats
         { instances: CreatureInstance.size, templates: CreatureTemplate.all.size }.merge(super)
-      end
-
-      # Generate damage report for HP analysis
-      def self.damage_report(**options)
-        CreatureInstance.damage_report(**options)
-      end
-
-      # Print formatted damage report
-      def self.print_damage_report(**options)
-        CreatureInstance.print_damage_report(**options)
       end
     end
 

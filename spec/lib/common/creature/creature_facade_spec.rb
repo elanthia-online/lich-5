@@ -27,8 +27,11 @@ RSpec.describe Lich::Common::CreatureFacade do
     end
   end
 
+  # GemStone's deltas are overrides of shared methods (register, stats); its
+  # damage_report delegators were dropped with the methods they forwarded to.
   it 'keeps each game\'s deltas on that game only' do
-    expect(Lich::Gemstone::Creature).to respond_to(:damage_report, :print_damage_report)
+    expect(Lich::Gemstone::Creature.method(:register).owner).to be(Lich::Gemstone::Creature.singleton_class)
+    expect(Lich::Gemstone::Creature).not_to respond_to(:damage_report, :print_damage_report)
     expect(Lich::Gemstone::Creature).not_to respond_to(:sync, :feed_assess)
     expect(Lich::DragonRealms::Creature).to respond_to(:sync, :feed_assess)
     expect(Lich::DragonRealms::Creature).not_to respond_to(:damage_report)
