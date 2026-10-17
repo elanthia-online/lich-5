@@ -671,7 +671,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
   describe 'Saga dialect object links' do
     saga_objs = "<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist=\"195652828\" noun=\"moradu\">jeol moradu</a><popBold/><popBold/> (immobile), a <a exist=\"195649758\" noun=\"pouch\">pouch of lead pellets</a>, an <a exist=\"195634669\" noun=\"card\">Immortal Glythtide card</a>, <pushBold/><pushBold/>a <a exist=\"195652888\" noun=\"moradu\">jeol moradu</a><popBold/><popBold/> (dead) and some junk.</component>"
     legacy_objs = "<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> (immobile), a pouch of lead pellets, an Immortal Glythtide card, <pushBold/>a jeol moradu<popBold/> (dead) and some junk.</component>"
-    saga_players = "<component id='room players'>Also here: Monster <a exist=\"-10514490\" noun=\"Aldric\">Aldric</a>, Daydreamer <a exist=\"-10604318\" noun=\"Brenna\">Brenna</a> who is surrounded by a pale electrical sphere, <a exist=\"-10623441\" noun=\"Corwin\">Corwin</a> and Druid <a exist=\"-10614301\" noun=\"Delphine\">Delphine</a>.</component>"
+    saga_players = "<component id='room players'>Also here: Monster <a exist=\"-10700002\" noun=\"Aldric\">Aldric</a>, Daydreamer <a exist=\"-10700003\" noun=\"Brenna\">Brenna</a> who is surrounded by a pale electrical sphere, <a exist=\"-10700004\" noun=\"Corwin\">Corwin</a> and Druid <a exist=\"-10700005\" noun=\"Delphine\">Delphine</a>.</component>"
     legacy_players = "<component id='room players'>Also here: Monster Aldric, Daydreamer Brenna who is surrounded by a pale electrical sphere, Corwin and Druid Delphine.</component>"
 
     # The shared 'DRParser stubs' context stubs DRRoom's setters, so capture what
@@ -699,8 +699,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
     describe '.match_line' do
       it 'removes object links but keeps their text' do
-        line = 'The clerk says, "<a exist="-10539485" noun="Evro">Evro</a>, it looks like your current balance is 5 platinum Kronars."'
-        expect(described_class.match_line(line)).to eq('The clerk says, "Evro, it looks like your current balance is 5 platinum Kronars."')
+        line = 'The clerk says, "<a exist="-10700006" noun="Edric">Edric</a>, it looks like your current balance is 5 platinum Kronars."'
+        expect(described_class.match_line(line)).to eq('The clerk says, "Edric, it looks like your current balance is 5 platinum Kronars."')
       end
 
       it 'collapses doubled bold to the single bold the legacy stream sends' do
@@ -765,7 +765,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
         allow(Flags).to receive(:flags).and_return(flags)
         allow(Flags).to receive(:matchers).and_return({ drums: [/^Brenna drums (?:his|her) fingers/] })
 
-        described_class.parse(+'<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
+        described_class.parse(+'<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
         expect(flags[:drums]).to be_truthy
       end
 
@@ -774,7 +774,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
         allow(Flags).to receive(:flags).and_return(flags)
         allow(Flags).to receive(:matchers).and_return({ hello: [/<preset id='speech'>Delphine politely says<\/preset>, "Hello\."/] })
 
-        described_class.parse(+%(<preset id='speech'><a exist="-10614301" noun="Delphine">Delphine</a> politely says</preset>, "Hello."))
+        described_class.parse(+%(<preset id='speech'><a exist="-10700005" noun="Delphine">Delphine</a> politely says</preset>, "Hello."))
         expect(flags[:hello]).to be_truthy
       end
     end
@@ -790,12 +790,12 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
 
       it 'reports the line as the server sent it, links included, and the matched copy' do
-        server_line = +'<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.'
+        server_line = +'<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.'
         described_class.parse(server_line)
 
-        expect(messages).to include('DRParser: line: <a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.')
+        expect(messages).to include('DRParser: line: <a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.')
         expect(messages).to include('DRParser: matched as: Brenna drums his fingers.')
-        expect(logs.join).to include('<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.', 'matched as: Brenna drums his fingers.')
+        expect(logs.join).to include('<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers.', 'matched as: Brenna drums his fingers.')
       end
 
       it 'reports a link-free (legacy) line once, as before' do
