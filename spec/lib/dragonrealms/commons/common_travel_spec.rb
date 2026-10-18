@@ -867,6 +867,106 @@ RSpec.describe DRCT do
       end
     end
 
+    context 'when the last room of the buddy pass is unreachable' do
+      # 200 is the last search room and walk_to always gives up on it; every
+      # other room is reachable. Nobody is in any room unless a test says so.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:unreachable) { [200] }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return(['Nemesis'])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          next false if unreachable.include?(room)
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'falls back to the empty-room search in the same attempt' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(Lich::Messaging.messages.map { |m| m[:message] })
+          .to include('DRCT: Could not reach last room in list, and found no buddies. Retrying for empty room.')
+      end
+
+      it 'does not idle before the empty-room search' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
+        expect(result).to eq(true)
+        expect(walks).not_to include(300)
+      end
+
+      it 'uses the predicate only for the empty-room search' do
+        checked = []
+        predicate = lambda do |attempt|
+          checked << [current.id, attempt]
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(checked).to eq([[100, 1]])
+      end
+
+      it 'still skips a room with a stranger in the empty-room search' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Stranger'] : [] }
+        unreachable << 300
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 400, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 400, 200, 100, 300, 400])
+      end
+
+      it 'returns false after one fallback pass when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([200, 200])
+      end
+
+      it 'keeps max_search_attempts as the bound for the empty-room search' do
+        unreachable << 100
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
+        expect(result).to eq(false)
+        # buddy pass, empty-room attempt 1, idle room, empty-room attempt 2
+        expect(walks).to eq([100, 200, 100, 200, 300, 100, 200])
+      end
+
+      it 'does not start the fallback at an unreachable room before the last one' do
+        unreachable.replace([100])
+        allow(DRRoom).to receive(:pcs) { current.id == 400 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200, 400], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 400])
+      end
+
+      it 'takes a buddy room reached before the unreachable last room' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100])
+      end
+
+      it 'skips a buddy room with a nemesis and still falls back' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? %w[Buddy Nemesis] : [] }
+        unreachable << 400
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 400, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 400, 200, 100, 300])
+      end
+
+      it 'does not retry the buddy search on a later attempt' do
+        # The fallback search is a fresh call without buddies, so a later
+        # unreachable last room is skipped like any other room.
+        allow(DRRoom).to receive(:pcs).and_return(['Stranger'])
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 3, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200, 300, 100, 200, 300, 100, 200])
+      end
+    end
+
     context 'when a search room is not an Integer room id' do
       # walk_to accepts numeric strings and go2 tags; Room.current.id is an Integer.
       let(:current) { OpenStruct.new(id: 50) }
