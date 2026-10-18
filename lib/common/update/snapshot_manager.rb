@@ -6,9 +6,9 @@
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
   updates. Supports rollback to most recent snapshot.
 
-  Both directions are built so that an interruption (disk full, a locked or
-  unreadable file, the process being killed) never leaves a half-made result
-  where it can be used:
+  Both directions are built so that a failure (disk full, a locked or
+  unreadable file) never leaves a half-made result where it can be used, and
+  a snapshot killed part way is never visible to #revert:
 
   - #snapshot copies into a staging directory that #revert cannot see, and
     renames it to its final L5-snapshot-<DATE-TIME> name only after every
@@ -16,8 +16,11 @@
   - #revert checks that the newest snapshot is complete before it touches
     anything, refuses (naming the directory) when it is not, and copies the
     snapshot next to the live files before swapping them in with renames
-    that are undone if any step fails. Only one #revert runs at a time on
-    an installation: a second one started meanwhile changes nothing.
+    that are undone if any step fails. A revert killed during the swap
+    cannot undo it and can leave lib/ unusable; the snapshot itself is
+    untouched, so a revert run again (or a manual copy) restores it. Where the
+    filesystem supports locking, only one #revert runs at a time on an
+    installation: a second one started meanwhile changes nothing.
 =end
 
 require 'tmpdir'
