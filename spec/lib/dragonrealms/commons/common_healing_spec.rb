@@ -1019,9 +1019,32 @@ RSpec.describe Lich::DragonRealms::DRCH do
         expect(result['wounds']).to eq({})
       end
 
-      it 'does not go on to send HEALTH' do
-        expect(Lich::Util).to receive(:issue_command).once
-        described_class.perceive_health
+      it 'still sends HEALTH and returns its diagnostics with captured false' do
+        health_reply = [
+          'Your body feels in bad shape.',
+          'You have a dormant infection.',
+          'You have a mildly poisoned right leg.',
+          'Bleeding',
+          'Area       Rate',
+          '-----------------------------------------',
+          'tail       slight',
+          prompt
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return([], health_reply)
+        result = described_class.perceive_health
+        expect(Lich::Util).to have_received(:issue_command).with('health', any_args)
+        expect(result.captured?).to be false
+        expect(result.wounds).to eq({})
+        expect(result.bleeders.values.flatten.length).to eq(1)
+        expect(result.poisoned).to be true
+        expect(result.diseased).to be true
+      end
+
+      it 'reports captured false even when the HEALTH reply is complete' do
+        allow(Lich::Util).to receive(:issue_command).and_return([], ['Your body feels at full strength.', prompt])
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        expect(Lich::Messaging).not_to receive(:msg).with('bold', /HEALTH output was cut off|Failed to capture HEALTH/)
+        expect(described_class.perceive_health.captured?).to be false
       end
     end
 
@@ -1194,6 +1217,42 @@ RSpec.describe Lich::DragonRealms::DRCH do
       it 'perceive_health_other prints the timeout message and returns nil' do
         expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture TOUCH output for Muleoak (timeout).')
         expect(described_class.perceive_health_other('Muleoak')).to be_nil
+      end
+    end
+
+    context 'when PERCEIVE HEALTH gets no reply and HEALTH replies in full' do
+      let(:sent) { [] }
+
+      before do
+        per_command = {
+          'health' => [
+            'Your body feels in bad shape.',
+            'You have a dormant infection.',
+            'You have a mildly poisoned right leg.',
+            'Bleeding',
+            'Area       Rate',
+            '-----------------------------------------',
+            'tail       slight',
+            prompt
+          ]
+        }
+        reply_queue = []
+        allow(Lich::Util).to receive(:fput) do |command|
+          sent << command
+          reply_queue.concat(per_command.fetch(command, []))
+        end
+        allow(Lich::Util).to receive(:get) { reply_queue.empty? ? sleep(5) : reply_queue.shift }
+      end
+
+      it 'perceive_health sends HEALTH and keeps its bleeders, poison and disease with captured false' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        result = described_class.perceive_health
+        expect(sent).to eq(['perceive health self', 'health'])
+        expect(result.captured?).to be false
+        expect(result.wounds).to eq({})
+        expect(result.bleeders.values.flatten.length).to eq(1)
+        expect(result.poisoned).to be true
+        expect(result.diseased).to be true
       end
     end
 

@@ -125,7 +125,9 @@ module Lich
       #
       # Returns nil only for a non-empath. When either reply (PERCEIVE HEALTH or the
       # HEALTH check merged into it) is not captured in full, a bold message is
-      # printed and the result has +captured+ false.
+      # printed and the result has +captured+ false. HEALTH is sent even when
+      # PERCEIVE HEALTH times out, so its bleeders, parasites, lodged items,
+      # poison and disease are still returned (with no perceived wounds).
       #
       # @return [HealthResult, nil]
       def perceive_health
@@ -140,19 +142,21 @@ module Lich
           timeout: 15
         )
         if lines.empty?
+          # Still send HEALTH: its bleeders, poison and disease are worth having
+          # even when the perceived wounds are unknown. The result is flagged
+          # captured: false because the perceived wounds are missing.
           Lich::Messaging.msg("bold", "DRCH: Failed to capture PERCEIVE HEALTH output (timeout).")
-          return HealthResult.new(captured: false)
-        end
+        else
+          lines = strip_xml(lines)
 
-        lines = strip_xml(lines)
+          if lines.any? { |line| line =~ /feel only an aching emptiness/ }
+            waitrt?
+            return check_health
+          end
 
-        if lines.any? { |line| line =~ /feel only an aching emptiness/ }
-          waitrt?
-          return check_health
-        end
-
-        unless complete
-          Lich::Messaging.msg("bold", "DRCH: PERCEIVE HEALTH output was cut off (timeout); the result is incomplete.")
+          unless complete
+            Lich::Messaging.msg("bold", "DRCH: PERCEIVE HEALTH output was cut off (timeout); the result is incomplete.")
+          end
         end
 
         perceived = parse_perceived_health_lines(lines)
