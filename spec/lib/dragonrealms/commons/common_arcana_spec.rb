@@ -15,7 +15,7 @@ end
 # Override get_data for this spec with DRCA-specific data (barb_abilities)
 def get_data(_type)
   @mock_data ||= OpenStruct.new(
-    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
+    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations', 'You seem to have forgotten this spell'],
     cast_messages: ['You gesture', 'Your target pattern dissipates'],
     invoke_messages: ['Your cambrinth absorbs', 'you find it too clumsy', 'Invoke what?'],
     charge_messages: ['Your cambrinth absorbs all of the energy', 'You are in no condition to do that', 'You\'ll have to hold it', 'you find it too clumsy'],
@@ -675,12 +675,15 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
       end
 
-      # Like '', a matched reply that has no failure arm passes through as is.
-      it 'returns a matched reply it has no failure arm for unchanged, keeping symbiosis' do
-        replies = { 'prepare symbiosis' => 'You recall the exact details of the', 'prepare fireball 10' => 'But you\'ve already prepared' }
-        silent_game(sent, replies)
-        expect(DRCA.prepare?('fireball', 10, true)).to eq('But you\'ve already prepared')
-        expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+      # Like '', a matched reply that has no failure arm passes through as is,
+      # including a prep_messages entry that reads like a failure.
+      ['You begin to draw your focus on', 'You seem to have forgotten this spell'].each do |prep_reply|
+        it "returns the matched prep reply #{prep_reply.inspect} unchanged, keeping symbiosis" do
+          replies = { 'prepare symbiosis' => 'You recall the exact details of the', 'prepare fireball 10' => prep_reply }
+          silent_game(sent, replies)
+          expect(DRCA.prepare?('fireball', 10, true)).to eq(prep_reply)
+          expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+        end
       end
     end
 

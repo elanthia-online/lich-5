@@ -403,11 +403,9 @@ module Lich
       #   the prep may have succeeded with a message that is not in the list
       #   (the reason custom_prep_message exists) or with a reply delayed by a
       #   server stall, and returning false there would abort a real prep. It
-      #   can also mean nothing was prepared at all, and in real logs that was
-      #   the more common outcome (the next cast got "You don't have a spell
-      #   prepared!"). Callers that would otherwise charge cambrinth, harness
-      #   mana or cast on the strength of this result can compare it against
-      #   +''+ first.
+      #   can also mean nothing was prepared at all. Callers that would
+      #   otherwise charge cambrinth, harness mana or cast on the strength of
+      #   this result can compare it against +''+ first.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
@@ -535,8 +533,7 @@ module Lich
       #   false if the +spell-fail+ flag was set or a retry limit ran out.
       #
       # @note A timeout counts as success. When nothing in cast_messages arrives
-      #   before bput gives up (in real logs, mostly a server stall, and in the
-      #   cases checked the cast had gone off; or a successful cast whose
+      #   before bput gives up (a server stall, or a successful cast whose
       #   message is not listed), bput returns +''+, which no +when+ arm
       #   handles: the barrage and cyclic/full-prep retry flags still apply,
       #   and the result rests on the +spell-fail+ flag. That flag is read only
