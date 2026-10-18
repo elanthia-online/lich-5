@@ -611,7 +611,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
   end
 
   describe 'a map that leads in circles' do
-    it 'stops after the path length plus UNKNOWN_ROOM_SPARE_HOPS moves' do
+    it 'stops once every room has been visited and the last budget is spent' do
       rooms = [
         make_room(101, { '102' => 'north' }),
         make_room(102, { '103' => 'north' }),
@@ -627,8 +627,10 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       result = Timeout.timeout(5) { DRCT.walk_to(104) }
 
       expect(result).to be(false)
-      expect(world.sent.size).to eq(2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
-      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 103), giving up.')
+      # 101 -> 102 -> 103 each grow the budget back to 2 + spare; from the
+      # first revisit on nothing grows it, so the last of those runs out.
+      expect(world.sent.size).to eq(2 + 2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 102), giving up.')
     end
   end
 
@@ -700,6 +702,50 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(bold_messages).to be_empty
     end
 
+    it 'arrives when a re-plan finds a path more than UNKNOWN_ROOM_SPARE_HOPS hops longer than the first' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(8), position: 101))
+      # The first search counts two hops; from 102 on the walk follows the
+      # corridor's real eight, three more than the spare hops cover.
+      allow(Map).to receive(:findpath) do |source, destination|
+        source.id == 101 ? [102, 109] : world.findpath(source, destination)
+      end
+
+      # With every retry already spent, nothing but the hop budget can carry
+      # the walk.
+      expect(DRCT.walk_to(109, true, retry_depth: DRCT::MAX_WALK_TO_RETRIES)).to be(true)
+      expect(world.sent).to eq(['north'] * 8)
+      expect(retry_messages).to be_empty
+      expect(bold_messages).to be_empty
+    end
+
+    it 'grows the budget again in every room the leg has not stood in' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(12), position: 101))
+      # Every search claims the target is two hops away through the next room.
+      allow(Map).to receive(:findpath) { |source, _destination| [source.id + 1, 113] }
+
+      expect(DRCT.walk_to(113, false)).to be(true)
+      expect(world.sent).to eq(['north'] * 12)
+      expect(bold_messages).to be_empty
+    end
+
+    it 'grows nothing in a room the leg already stood in' do
+      # 101 <-> 102 with a dead end beyond: every search from 101 or 102 sends
+      # the walk to the other one, claiming the target is two hops away.
+      rooms = [
+        make_room(101, { '102' => 'north' }),
+        make_room(102, { '101' => 'south' }),
+        make_room(103, {})
+      ]
+      world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+      allow(Map).to receive(:findpath) { |source, _destination| [source.wayto.keys.first.to_i, 103] }
+
+      expect(Timeout.timeout(5) { DRCT.walk_to(103) }).to be(false)
+      # 101 starts the budget at 2 + spare and 102 grows it back to that
+      # after one move; the revisits from then on grow nothing.
+      expect(world.sent).to eq(%w[north south north south north south])
+      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 103 (stopped in room 101), giving up.')
+    end
+
     it 'gives a move that lands far off course a budget for the longer path from there' do
       world = install(WalkToUnknownRoomSpec::World.new(corridor(10), position: 101))
       world.overrides[[101, 'north']] = 111
@@ -769,8 +815,10 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
         result = Timeout.timeout(5) { DRCT.walk_to(104) }
 
         expect(result).to be(false)
-        expect(world.sent.size).to eq(2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
-        expect(bold_messages.last).to start_with('DRCT: Ran out of moves walking from an unknown room to room 104')
+        # The same moves as without the hand-backs: the rooms visited travel
+        # with the leg, so a revisit after a hand-back grows nothing.
+        expect(world.sent.size).to eq(2 + 2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 102), giving up.')
       end
 
       it 'starts a fresh leg when the carried moves are handed back again without a move' do
@@ -781,7 +829,8 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
           make_room(104, {})
         ]
         world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
-        # Every leg is planned as two hops, so it may take 2 + spare moves.
+        # Every room is planned as two hops from the target, so each room new
+        # to a leg grows its budget back to 2 + spare moves.
         allow(Map).to receive(:findpath) { |source, _destination| [source.wayto.keys.first.to_i, 104] }
         # Reads 1-2: walk_to hands over. 3-6: two moves (each a loop read and
         # a landing read). 7: the room resolves, so the walker hands back
@@ -797,11 +846,12 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
         result = Timeout.timeout(5) { DRCT.walk_to(104) }
 
         expect(result).to be(false)
-        # Two moves of the first leg, then a whole new leg after the retry,
-        # not the moves the first leg had left.
-        expect(world.sent.size).to eq(2 + 2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        # Two moves of the first leg, then a whole new leg after the retry
+        # (two rooms new to it, then 2 + spare), not what the first leg had
+        # left.
+        expect(world.sent.size).to eq(2 + 2 + 2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
         expect(plain_messages.grep(/handing back/)).to eq(['DRCT: Room 103 resolved again without a move, handing back (retry 1/3).'])
-        expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 102), giving up.')
+        expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 101), giving up.')
       end
     end
 
@@ -928,6 +978,119 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       # The sweep must exercise both outcomes to mean anything.
       expect(outcomes[true]).to be > 30
       expect(outcomes[false]).to be > 30
+    end
+
+    # A seeded sweep of small maps whose pathfinder answers at random: every
+    # search sends the walk to a random neighbour and claims a random path
+    # length, like a map whose timeto StringProcs change every search. Moves
+    # always land where they were sent, so nothing spends a retry. Whatever
+    # the answers, a leg grows its budget at most once per room, so the walk
+    # ends within rooms x (longest claimed path + spare) moves.
+    it 'ends within its bound when every search answers at random' do
+      rng = Random.new(20_261_019)
+      outcomes = Hash.new(0)
+      grew = 0
+      200.times do
+        Lich::Messaging.clear_messages!
+        size = rng.rand(2..8)
+        ids = (201..(200 + size)).to_a
+        edges = Hash.new { |h, k| h[k] = {} }
+        # A random spanning tree, then a few extra edges.
+        ids.drop(1).each_with_index do |id, i|
+          other = ids[rng.rand(0..i)]
+          edges[id][other.to_s] = "go #{id}-#{other}"
+          edges[other][id.to_s] = "go #{other}-#{id}"
+        end
+        rng.rand(0..size).times do
+          a, b = ids.sample(2, random: rng)
+          next if a == b
+
+          edges[a][b.to_s] = "go #{a}-#{b}"
+          edges[b][a.to_s] = "go #{b}-#{a}"
+        end
+        # The target is either one of the rooms or a room nothing reaches.
+        rooms = ids.map { |id| make_room(id, edges[id]) } + [make_room(299, {})]
+        target = rng.rand < 0.5 ? 299 : ids.drop(1).sample(random: rng)
+        world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 201))
+        longest = rng.rand(1..6)
+        allow(Map).to receive(:findpath) do |source, _destination|
+          [source.wayto.keys.sample(random: rng).to_i] + ([target] * rng.rand(0...longest))
+        end
+        restart = rng.rand < 0.5
+
+        result = Timeout.timeout(5) { DRCT.walk_to(target, restart) }
+
+        outcomes[result] += 1
+        grew += 1 if world.sent.size > longest + DRCT::UNKNOWN_ROOM_SPARE_HOPS
+        expect(result).to eq(world.position == target)
+        expect(world.sent.size).to be <= size * (longest + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        expect(plain_messages.grep(/did not reach|handing back/)).to be_empty
+        expect(bold_messages.last).to start_with('DRCT: Ran out of moves walking from an unknown room') unless result
+      end
+      # The sweep must exercise both outcomes and budgets that grew.
+      expect(outcomes[true]).to be > 20
+      expect(outcomes[false]).to be > 20
+      expect(grew).to be > 20
+    end
+  end
+
+  # The map's own pathfinder (Room#dijkstra through Map.findpath) on a map
+  # where two routes cost the same in exact arithmetic but not in floating
+  # point: 2 -> 3 costs 1.0, and 2 -> 4 -> 5 -> 6 -> 7 -> 3 costs 0.2 + 0.3 +
+  # 0.2 + 0.2 + 0.1. From 1 the search goes 1 -> 2 -> 3 (two hops); from 2 it
+  # takes the five-hop detour, whose sum comes out just under 1.0.
+  describe 'on the map pathfinder with equal-cost routes of different lengths' do
+    let(:real_map) { Lich::Common::Map }
+
+    before do
+      MapLoader.use(:dr)
+      real_map.class_variable_set(:@@list, [])
+      real_map.class_variable_set(:@@loaded, true)
+    end
+
+    after { real_map.class_variable_set(:@@list, []) }
+
+    it 'walks the longer route the second search finds' do
+      weights = { [1, 2] => 0.6, [2, 3] => 1.0, [2, 4] => 0.2, [4, 5] => 0.3, [5, 6] => 0.2, [6, 7] => 0.2, [7, 3] => 0.1 }
+      wayto = Hash.new { |h, k| h[k] = {} }
+      timeto = Hash.new { |h, k| h[k] = {} }
+      weights.each do |(a, b), weight|
+        [[a, b], [b, a]].each do |from, to|
+          wayto[from][to.to_s] = "go #{from}-#{to}"
+          timeto[from][to.to_s] = weight
+        end
+      end
+      (1..7).each do |id|
+        real_map.new(id, ["[Room #{id}]"], ["Room #{id} description."], ["Obvious paths: #{wayto[id].values.join(', ')}."],
+                     [], nil, nil, nil, wayto[id], timeto[id], nil, nil, [])
+      end
+      # The premise: the two searches break the tie differently.
+      expect(real_map.findpath(real_map[1], 3)).to eq([2, 3])
+      expect(real_map.findpath(real_map[2], 3)).to eq([4, 5, 6, 7, 3])
+
+      position = 1
+      sent = []
+      allow(Map).to receive(:list) { real_map.list }
+      allow(Map).to receive(:[]) { |id| real_map[id] }
+      allow(Map).to receive(:findpath) { |source, destination| real_map.findpath(source, destination) }
+      allow(Room).to receive(:current).and_return(nil)
+      allow(XMLData).to receive(:room_title) { real_map[position].title.first }
+      allow(XMLData).to receive(:room_description) { real_map[position].description.first }
+      allow(XMLData).to receive(:room_exits_string) { real_map[position].paths.first }
+      allow(XMLData).to receive(:room_id).and_return(0)
+      allow(DRCT).to receive(:move) do |dir|
+        sent << dir
+        from, to = dir.delete_prefix('go ').split('-').map(&:to_i)
+        raise "move #{dir} sent from room #{position}" unless from == position
+
+        position = to
+        true
+      end
+
+      expect(Timeout.timeout(5) { DRCT.walk_to(3, true, retry_depth: DRCT::MAX_WALK_TO_RETRIES) }).to be(true)
+      expect(position).to eq(3)
+      expect(sent).to eq(['go 1-2', 'go 2-4', 'go 4-5', 'go 5-6', 'go 6-7', 'go 7-3'])
+      expect(bold_messages).to be_empty
     end
   end
 end
