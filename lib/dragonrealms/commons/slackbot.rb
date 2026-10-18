@@ -401,7 +401,7 @@ module Lich
           if deadline && total_delay >= seconds_left(deadline)
             Lich.log "SlackBot: Throttled fetching users list. Retry in #{total_delay}s would exceed the time budget"
             Lich::Messaging.msg('bold', 'SlackBot: Rate limited fetching users. Will retry on a later message.')
-            return users_list_failed(total_delay)
+            return users_list_failed(e.retry_after)
           end
 
           retries += 1

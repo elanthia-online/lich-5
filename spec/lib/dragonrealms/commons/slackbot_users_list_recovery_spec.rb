@@ -256,6 +256,32 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(calls['users.list']).to eq(3)
     end
 
+    # The throttle backoff jitter is pinned to its maximum (Retry-After 30
+    # gives a 45 s backoff; no Retry-After gives 2 s), so a cooldown taken
+    # from the backoff instead of Retry-After would show up here.
+    [['30', 'a Retry-After of 30'], [nil, 'no Retry-After']].each do |retry_after, label|
+      it "sets the cooldown from Retry-After, not the jittered backoff, after a throttled send (#{label})" do
+        allow_any_instance_of(described_class).to receive(:rand) { |_bot, range| range.max }
+        plan['users.list'] << failure(:http500)
+        bot = described_class.new
+        wait_out_cooldown
+        plan['users.list'].clear
+        plan['users.list'] << -> { http_response(429, '', retry_after ? { 'Retry-After' => retry_after } : {}) }
+        expect(bot.direct_message('alice', 'help')).to be_nil
+        throttled_calls = calls['users.list']
+
+        plan['users.list'].clear
+        plan['users.list'] << users_ok
+        advance(29)
+        expect(bot.direct_message('alice', 'help')).to be_nil
+        expect(calls['users.list']).to eq(throttled_calls)
+
+        advance(2)
+        expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+        expect(calls['users.list']).to eq(throttled_calls + 1)
+      end
+    end
+
     it 'does not let an unexpected transport error escape the message call' do
       plan['users.list'] << failure(:http500)
       bot = described_class.new
