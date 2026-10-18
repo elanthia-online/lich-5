@@ -425,6 +425,67 @@ RSpec.describe Lich::Util::Update::FileWriter do
       end
     end
 
+    context 'when a local file name differs from the written name only in case' do
+      let(:case_insensitive) do
+        probe = File.join(tmpdir, 'CaseProbe')
+        File.binwrite(probe, '')
+        File.exist?(File.join(tmpdir, 'caseprobe')).tap { File.delete(probe) }
+      end
+      let(:path) { File.join(tmpdir, 'buff.lic') }
+
+      before { File.binwrite(File.join(tmpdir, 'Buff.lic'), "# old\n") }
+
+      it 'renames the file to the written name on a case-insensitive file system' do
+        skip 'needs a case-insensitive file system' unless case_insensitive
+
+        described_class.safe_write(path, "# new\n")
+
+        expect(Dir.children(tmpdir)).to eq(['buff.lic'])
+        expect(File.binread(path)).to eq("# new\n")
+      end
+
+      it 'lets the next sync find the file up to date under the written name' do
+        skip 'needs a case-insensitive file system' unless case_insensitive
+
+        described_class.safe_write(path, "# new\n")
+        body = "# new\n"
+        sha = Digest::SHA1.hexdigest("blob #{body.size}\0#{body}")
+
+        expect(described_class.build_local_sha_map(tmpdir)).to eq('buff.lic' => sha)
+      end
+
+      it 'leaves a different file of the other case alone on a case-sensitive file system' do
+        skip 'needs a case-sensitive file system' if case_insensitive
+
+        described_class.safe_write(path, "# new\n")
+
+        expect(Dir.children(tmpdir)).to contain_exactly('Buff.lic', 'buff.lic')
+        expect(File.binread(File.join(tmpdir, 'Buff.lic'))).to eq("# old\n")
+        expect(File.binread(path)).to eq("# new\n")
+      end
+
+      it 'leaves a case-matching entry alone when it is not the same file' do
+        allow(File).to receive(:identical?).and_return(false)
+        allow(File).to receive(:rename).and_call_original
+
+        described_class.safe_write(path, "# new\n")
+
+        expect(File).not_to have_received(:rename).with(File.join(tmpdir, 'Buff.lic'), path)
+        expect(File.binread(path)).to eq("# new\n")
+      end
+
+      it 'reports success when the case-only rename fails' do
+        skip 'needs a case-insensitive file system' unless case_insensitive
+        existing = File.join(tmpdir, 'Buff.lic')
+        allow(File).to receive(:rename).and_call_original
+        allow(File).to receive(:rename).with(existing, path).and_raise(Errno::EACCES.new('Permission denied'))
+
+        expect { described_class.safe_write(path, "# new\n") }.not_to raise_error
+        expect(File.binread(path)).to eq("# new\n")
+        expect(Dir.children(tmpdir)).to eq(['Buff.lic'])
+      end
+    end
+
     it 'lets a second writer finish inside the first one without either failing' do
       path = File.join(tmpdir, 'shared.lic')
       File.binwrite(path, "# original\n")

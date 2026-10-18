@@ -42,7 +42,9 @@ module Lich
         # After a successful write, leftovers beside +path+ are removed (best
         # effort): a +.old+ left by an older version (unless it holds exactly
         # +content+), and a +.tmp+ left by an older version or a staging file
-        # of this name, once either is older than STALE_STAGING_AGE.
+        # of this name, once either is older than STALE_STAGING_AGE. If the
+        # file system kept an existing name that differs from +path+'s only in
+        # case, the file is renamed to +path+'s exact name.
         #
         # @param path [String] target file path
         # @param content [String] file content to write
@@ -91,6 +93,9 @@ module Lich
         # * +path.<pid>.<thread>.tmp+ staging files (a writer of this version
         #   that was hard-killed) are removed once older than
         #   STALE_STAGING_AGE.
+        # * An entry whose name differs from +path+'s only in case and that is
+        #   the same file (a case-insensitive file system) is renamed to
+        #   +path+'s exact name; see fix_name_case.
         #
         # @param path [String] target file path
         # @param content [String] the content just written to +path+
@@ -102,16 +107,38 @@ module Lich
           delete_quietly("#{path}.tmp", older_than: cutoff)
 
           dir = File.dirname(path)
-          staging = /\A#{Regexp.escape(File.basename(path))}\.\d+\.\d+\.tmp\z/
+          base = File.basename(path)
+          staging = /\A#{Regexp.escape(base)}\.\d+\.\d+\.tmp\z/
           Dir.each_child(dir) do |name|
-            next unless staging.match?(name)
-
-            delete_quietly(File.join(dir, name), older_than: cutoff)
+            if staging.match?(name)
+              delete_quietly(File.join(dir, name), older_than: cutoff)
+            elsif name != base && name.casecmp?(base)
+              fix_name_case(File.join(dir, name), path)
+            end
           end
         rescue StandardError
           nil
         end
         private_class_method :remove_leftovers
+
+        # On a case-insensitive file system, renaming the staging file over an
+        # existing file keeps the existing entry's name: writing buff.lic over
+        # a local Buff.lic leaves Buff.lic. The sync compares by exact name,
+        # so it would then download buff.lic again on every run. When
+        # +existing+ is the same file as +path+, it is renamed to +path+'s
+        # exact name. That is a case-only rename of one file, so the script
+        # never goes missing. On a case-sensitive file system the two names
+        # are different files and nothing is renamed. Never raises.
+        #
+        # @param existing [String] directory entry whose name case-matches +path+
+        # @param path [String] target file path, with the wanted name
+        # @return [void]
+        def self.fix_name_case(existing, path)
+          File.rename(existing, path) if File.identical?(existing, path)
+        rescue StandardError
+          nil
+        end
+        private_class_method :fix_name_case
 
         # Whether the existing regular file +file+ may be an older-version
         # writer's rollback copy of +content+: it holds exactly those bytes.
