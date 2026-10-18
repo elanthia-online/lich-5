@@ -96,6 +96,10 @@ module Lich
       # cache_key => [data_version, root]: the database's data_version just
       # before root was read into @settings_cache (see cached_root).
       @cache_versions = {}
+      # Held while a root is put in (or dropped from) @settings_cache, so that
+      # cached_root can cache a re-read row only if no other thread has
+      # changed the cache entry since the read began (see store_in_cache).
+      @cache_mutex = Mutex.new
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
 
@@ -185,10 +189,10 @@ module Lich
               cached.clear
               cached.concat(root_obj)
             else
-              @settings_cache[cache_key] = root_obj
+              store_in_cache(cache_key, root_obj)
             end
           elsif cached.nil?
-            @settings_cache[cache_key] = root_obj
+            store_in_cache(cache_key, root_obj)
           end
           _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
         end
@@ -213,12 +217,12 @@ module Lich
             cached.concat(fresh_root)
             current_root_for_scope = cached
           else
-            @settings_cache[cache_key] = fresh_root
+            store_in_cache(cache_key, fresh_root)
             current_root_for_scope = fresh_root
           end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache state for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         else
-          @settings_cache[cache_key] = fresh_root
+          store_in_cache(cache_key, fresh_root)
           current_root_for_scope = fresh_root
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache populated from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         end
@@ -231,7 +235,7 @@ module Lich
           unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
             _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
             current_root_for_scope = {}
-            @settings_cache[cache_key] = current_root_for_scope
+            store_in_cache(cache_key, current_root_for_scope)
           end
 
           if proxy.respond_to?(:detached?) && proxy.detached?
@@ -266,7 +270,7 @@ module Lich
         unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
           current_root_for_scope = {}
-          @settings_cache[cache_key] = current_root_for_scope
+          store_in_cache(cache_key, current_root_for_scope)
         end
 
         parent_path = path[0...-1]
@@ -371,7 +375,12 @@ module Lich
       # cached row is used rather than raising into the script; with nothing
       # cached, the error is raised as before.
       #
-      # @return [Hash, Array, Object] the cached root itself (not a copy)
+      # A re-read row is cached only if no other thread changed the cache
+      # entry while it was read; a later row (a write, a newer re-read) is
+      # never replaced by an older one. The row is returned either way.
+      #
+      # @return [Hash, Array, Object] the cached root itself (not a copy), or
+      #   a freshly read row that another thread's change kept out of the cache
       def self.cached_root(script_name, scope)
         cache_key = "#{script_name || ""}::#{scope}"
         version = @db_adapter.data_version
@@ -393,11 +402,32 @@ module Lich
           return cached
         end
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: Loaded #{cache_key} from DB (object_id: #{root.object_id}, data_version: #{version.inspect})" })
-        @settings_cache[cache_key] = root
-        @cache_versions[cache_key] = [version, root]
+        # Another thread may have put a newer row in the cache while this one
+        # was reading (its own write, or a re-read that began later), or
+        # dropped it (Settings.load). This row is cached only if the entry is
+        # still the one seen above; otherwise it is returned without caching.
+        cached_now = @cache_mutex.synchronize do
+          next false unless @settings_cache[cache_key].equal?(cached)
+
+          @settings_cache[cache_key] = root
+          @cache_versions[cache_key] = [version, root]
+          true
+        end
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: #{cache_key} changed in the cache while it was read; not caching this copy" }) unless cached_now
         root
       end
       private_class_method :cached_root
+
+      # Puts root in the cache for cache_key. Every write that replaces a
+      # cached root goes through here, holding @cache_mutex, so that it can't
+      # land between cached_root's check that the entry is unchanged and its
+      # own assignment (which would put an older row over this one).
+      #
+      # @return root
+      def self.store_in_cache(cache_key, root)
+        @cache_mutex.synchronize { @settings_cache[cache_key] = root }
+      end
+      private_class_method :store_in_cache
 
       def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
@@ -418,7 +448,7 @@ module Lich
         @db_adapter.save_settings(script_name, unwrapped_settings, scope)
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
 
-        @settings_cache[cache_key] = unwrapped_settings
+        store_in_cache(cache_key, unwrapped_settings)
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
       end
 
@@ -426,8 +456,10 @@ module Lich
         script_name = Script.current.name
         cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Deleting cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
-        @settings_cache.delete(cache_key)
-        @cache_versions.delete(cache_key)
+        @cache_mutex.synchronize do
+          @settings_cache.delete(cache_key)
+          @cache_versions.delete(cache_key)
+        end
         current_script_settings(scope)
       end
 
@@ -509,7 +541,7 @@ module Lich
         end
 
         if stored
-          @settings_cache[cache_key] = stored
+          store_in_cache(cache_key, stored)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "write_top_level_key: Saved '#{name}' for #{cache_key}; cache now holds the stored row." })
         else
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache left as it was." })
