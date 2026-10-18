@@ -512,8 +512,8 @@ module Lich
       #
       # When moonwatch is already running and no start is in progress, this
       # returns at once without inspecting the data. When another caller's
-      # start is in progress, it waits for that start to finish (returning at
-      # once if the data is already ready). Otherwise it clears the
+      # start is in progress, it waits for that start to finish (returning
+      # as soon as the data is ready). Otherwise it clears the
       # saved UserVars.moons (they may be stale), starts moonwatch and waits
       # until moon_data_ready? is true. The wait ends early, with a message,
       # when moonwatch cannot be found or stops before publishing, and ends
@@ -522,9 +522,9 @@ module Lich
       # than stale timers.
       #
       # A nil from start_script is not treated as a failure unless moonwatch
-      # cannot be found: Lich also returns nil while another start of moonwatch
-      # is still in progress, so in that case this waits (up to the deadline)
-      # for that start to finish.
+      # cannot be found (see moonwatch_findable?): Lich also returns nil while
+      # another start of moonwatch is still in progress, so in that case this
+      # waits (up to the deadline) for that start to finish.
       #
       # @param timeout [Numeric] seconds to wait for another caller's start to
       #   finish, and again for moonwatch to publish after starting it
@@ -535,6 +535,9 @@ module Lich
 
         lock_deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
         until MOONWATCH_START_LOCK.try_lock
+          # The other start may publish while the lock is still held (its
+          # holder can be paused or slow to return), so keep checking.
+          return true if Script.running?('moonwatch') && moon_data_ready?
           if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= lock_deadline
             Lich::Messaging.msg("bold", "DRCMM: Timed out waiting for another start of moonwatch to finish. Moon data is unavailable.")
             return false
@@ -550,7 +553,7 @@ module Lich
             if start_script('moonwatch')
               seen_running = true
               Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.")
-            elsif !Script.exists?('moonwatch') && !Script.running?('moonwatch')
+            elsif !Script.running?('moonwatch') && !moonwatch_findable?
               Lich::Messaging.msg("bold", "DRCMM: moonwatch could not be found. Moon data is unavailable.")
               return false
             end
@@ -559,6 +562,20 @@ module Lich
         ensure
           MOONWATCH_START_LOCK.unlock if MOONWATCH_START_LOCK.owned?
         end
+      end
+
+      # Whether Lich can find a moonwatch script file. Script.exists? does not
+      # look in custom/<subdir>/, which Script.start does, so when it says no
+      # this asks Script.version, which resolves names the same way
+      # Script.start does and returns nil when no file matches.
+      #
+      # @return [Boolean]
+      def moonwatch_findable?
+        return true if Script.exists?('moonwatch')
+
+        !Script.version('moonwatch').nil?
+      rescue ArgumentError
+        true # the file was found, but its version header is malformed
       end
 
       # Polls until moonwatch is running with real moon data, moonwatch stops

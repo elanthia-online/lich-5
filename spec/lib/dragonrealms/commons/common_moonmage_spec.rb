@@ -786,6 +786,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 0.3)
       allow(Script).to receive(:running?).with('moonwatch') { world[:running] }
       allow(Script).to receive(:exists?).with('moonwatch').and_return(true)
+      allow(Script).to receive(:version).with('moonwatch').and_return(Gem::Version.new('1.0.0'))
       allow(described_class).to receive(:pause) do |*_args|
         sleep 0.002
         world[:polls] += 1
@@ -878,6 +879,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'fails fast when moonwatch cannot be found, without restoring the saved data' do
         UserVars.moons = ready_moons
         allow(Script).to receive(:exists?).with('moonwatch').and_return(false)
+        allow(Script).to receive(:version).with('moonwatch').and_return(nil)
         allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
         stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 5)
         result = check
@@ -885,6 +887,15 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(bold_messages.last).to include('moonwatch could not be found')
         expect(UserVars.moons).to eq({})
         expect(result).to be false
+      end
+
+      it 'treats a malformed version header as a found script (no false "could not be found")' do
+        allow(Script).to receive(:exists?).with('moonwatch').and_return(false)
+        allow(Script).to receive(:version).with('moonwatch').and_raise(ArgumentError, 'Malformed version number string 1.0 beta')
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        expect(check).to be false
+        expect(bold_messages.grep(/could not be found/)).to be_empty
+        expect(bold_messages.last).to include('moonwatch did not start within 0.3 seconds')
       end
 
       it 'gives up at the deadline when start_script returns nil and moonwatch never runs' do
@@ -962,6 +973,19 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(check).to be true
       end
 
+      it 'waits for a duplicate start of a custom/<subdir>/ moonwatch that Script.exists? cannot see' do
+        # Script.start resolves custom/<subdir>/ scripts; Script.exists? does
+        # not, but Script.version does (it shares Script.start's resolver).
+        allow(Script).to receive(:exists?).with('moonwatch').and_return(false)
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        world[:on_poll] = lambda do |n|
+          world[:running] = true if n >= 2
+          UserVars.moons = ready_moons if n >= 4
+        end
+        expect(check).to be true
+        expect(bold_messages.grep(/could not be found|unavailable/)).to be_empty
+      end
+
       it 'serializes concurrent callers: one start, no wiped data, both see real moon data' do
         stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 2)
         start_calls = Queue.new
@@ -1017,6 +1041,49 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           expect(monotonic - started).to be < 0.3
         ensure
           holder.kill
+          holder.join
+        end
+      end
+
+      it 'keeps waiting while another start holds the lock and moonwatch has only written its skeleton' do
+        world[:running] = true
+        UserVars.moons = skeleton.dup
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 3 }
+        release = Queue.new
+        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
+        sleep 0.05
+        begin
+          expect(described_class).not_to receive(:start_script)
+          result = check(timeout: 2)
+          expect(world[:polls]).to be >= 3
+          expect(described_class.moon_data_ready?).to be true
+          expect(result).to be true
+          expect(Lich::Messaging.messages).to be_empty
+        ensure
+          release << :go
+          holder.join
+        end
+      end
+
+      it 'returns true once the other start publishes, even while its holder still holds the lock' do
+        # e.g. the holder's script is paused inside start_script or the wait.
+        world[:on_poll] = lambda do |n|
+          world[:running] = true if n >= 2
+          UserVars.moons = skeleton.dup if n == 3
+          UserVars.moons = ready_moons if n >= 5
+        end
+        release = Queue.new
+        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
+        sleep 0.05
+        begin
+          expect(described_class).not_to receive(:start_script)
+          started = monotonic
+          result = check(timeout: 2)
+          expect(monotonic - started).to be < 1
+          expect(result).to be true
+          expect(bold_messages).to be_empty
+        ensure
+          release << :go
           holder.join
         end
       end
