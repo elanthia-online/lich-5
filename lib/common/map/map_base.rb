@@ -646,8 +646,10 @@ module Lich
         # than overwriting the only copy; callers such as a mapdb upload ignore
         # the return value, so failing quietly would let them act on a stale map.
         # Each temp file is written while the file it replaces still exists, so
-        # replacing a file needs free space for the backup and the new map
-        # alongside the old one; with less, the save raises with the file unchanged.
+        # replacing a file needs free space for one extra copy of the map (two
+        # when there is no older backup, since the backup's rename frees the
+        # older one before the new map is written); with less, the save raises
+        # with the file unchanged.
         #
         # @param filename [String, nil] destination; nil writes a new
         #   map-<epoch>.json in the game's data directory
