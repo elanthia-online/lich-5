@@ -913,7 +913,19 @@ RSpec.describe Lich::DragonRealms::DRC do
     it 'issues collect without practice when false' do
       allow(described_class).to receive(:bput).and_return('You begin to forage around')
       described_class.collect('rock', false)
-      expect(described_class).to have_received(:bput).with('collect rock ', described_class::COLLECT_MESSAGES)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'sends no trailing whitespace when practice is nil' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', nil)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'waits out roundtime once on an uncluttered collect' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', false)
+      expect(described_class).to have_received(:waitrt?).once
     end
 
     it 'calls kick_pile? when room is cluttered' do
@@ -943,13 +955,15 @@ RSpec.describe Lich::DragonRealms::DRC do
         it 'retries without practice when practice is false' do
           script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
           described_class.collect('rock', false)
-          expect(sent).to eq(['collect rock ', 'kick pile', 'collect rock '])
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
         end
 
         it 'retries with practice by default' do
           script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
           described_class.collect('rock')
           expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
         end
 
         it 'retries with practice when practice is explicitly true' do
@@ -963,13 +977,14 @@ RSpec.describe Lich::DragonRealms::DRC do
                          'The room is too cluttered', 'take a step back and run up to',
                          'You begin to forage around,')
           described_class.collect('rock', false)
-          expect(sent).to eq(['collect rock ', 'kick pile', 'collect rock ', 'kick pile', 'collect rock '])
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
         end
 
         it 'does not retry when the kick misses the pile' do
           script_replies('The room is too cluttered', 'I could not find')
           expect(described_class.collect('rock', false)).to be_nil
-          expect(sent).to eq(['collect rock ', 'kick pile'])
+          expect(sent).to eq(['collect rock', 'kick pile'])
           expect(described_class).not_to have_received(:waitrt?)
         end
       end
@@ -980,7 +995,7 @@ RSpec.describe Lich::DragonRealms::DRC do
         it 'gives up without kicking or retrying' do
           script_replies('The room is too cluttered')
           expect(described_class.collect('rock', false)).to be_nil
-          expect(sent).to eq(['collect rock '])
+          expect(sent).to eq(['collect rock'])
           expect(described_class).not_to have_received(:waitrt?)
         end
       end
