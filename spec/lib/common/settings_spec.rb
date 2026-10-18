@@ -736,7 +736,7 @@ RSpec.describe Lich::Common::Settings do
 
         first = in_thread { game_write('a', 1) }
         second = in_thread do
-          first_stored.pop
+          first_stored.pop(timeout: 2)
           game_write('b', 2)
           second_done << true
         end
@@ -762,7 +762,7 @@ RSpec.describe Lich::Common::Settings do
 
         reader = in_thread { game_read('a') }
         writer = in_thread do
-          loaded.pop
+          loaded.pop(timeout: 2)
           game_write('a', 1)
           write_done << true
         end
@@ -787,13 +787,115 @@ RSpec.describe Lich::Common::Settings do
 
         reader = in_thread { settings.root_proxy_for("GSIV") }
         writer = in_thread do
-          loaded.pop
+          loaded.pop(timeout: 2)
           game_write('a', 1)
           write_done << true
         end
         [reader, writer].each { |t| t.join(5) }
 
         expect(game_read('a')).to eq(1)
+      end
+
+      it "leaves the cache on the newer row when a top-level write finishes during a nested write" do
+        settings[:list] = []
+        nested_saved = Queue.new
+        top_done = Queue.new
+        nested = nil
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          saved = original.call(*args)
+          if Thread.current.equal?(nested)
+            nested_saved << true
+            top_done.pop(timeout: pause)
+          end
+          saved
+        end
+
+        nested = in_thread { settings[:list] << 'x' }
+        top = in_thread do
+          nested_saved.pop(timeout: 2)
+          settings[:k] = 1
+          top_done << true
+        end
+        [nested, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'], k: 1)
+        expect(settings[:k]).to eq(1)
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      it "does not let a read that missed the cache replace a row a nested write cached after it" do
+        settings[:list] = []
+        list = settings[:list]
+        settings.instance_variable_set(:@settings_cache, {})
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { settings.current_script_settings(":") }
+        writer = in_thread do
+          loaded.pop(timeout: 2)
+          list << 'x'
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'])
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      it "does not make another script's first read wait for a write in progress" do
+        write_started = Queue.new
+        release = Queue.new
+        writer = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          if Thread.current.equal?(writer)
+            write_started << true
+            release.pop(timeout: 2)
+          end
+          original.call(*args, &block)
+        end
+
+        writer = in_thread { game_write('a', 1) }
+        write_started.pop(timeout: 2)
+        reader = in_thread { settings.get_scoped_setting("GSIV", 'b', script_name: 'other_script') }
+        finished = reader.join(1)
+        release << true
+        writer.join(5)
+
+        expect(finished).to eq(reader)
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "makes a second write to the same row wait for the one in progress" do
+        write_started = Queue.new
+        release = Queue.new
+        first = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          if Thread.current.equal?(first)
+            write_started << true
+            release.pop(timeout: 2)
+          end
+          original.call(*args, &block)
+        end
+
+        first = in_thread { game_write('a', 1) }
+        write_started.pop(timeout: 2)
+        second = in_thread { game_write('b', 2) }
+        waited = second.join(0.3).nil?
+        release << true
+        [first, second].each { |t| t.join(5) }
+
+        expect(waited).to be(true)
+        expect(game_read('a')).to eq(1)
+        expect(game_read('b')).to eq(2)
       end
 
       it "releases the lock when the database call raises, so the next write still runs" do

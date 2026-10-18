@@ -94,16 +94,33 @@ module Lich
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
-      # Orders this process's cache updates with the database reads and writes
-      # they come from. Without it, two threads can finish in one order in the
-      # database and the other in the cache: a top-level write, or a read that
-      # missed the cache, then assigns an older row over a newer one, and this
-      # process's reads miss the newer keys until the row is written again.
-      # A Monitor, so a nested call in the same thread does not deadlock.
-      # Cache hits do not take it.
-      @cache_lock = Monitor.new
+      # One lock per cache entry (script and scope), see with_cache_lock.
+      @cache_locks = {}
+      @cache_locks_guard = Mutex.new
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
+
+      # Runs the block holding the lock for one cache entry.
+      #
+      # Every write (top-level, nested through a SettingsProxy, or a whole row)
+      # and every fill after a cache miss runs its database calls and its cache
+      # update under the entry's lock. Without it, two threads can finish in
+      # one order in the database and in the other order in the cache: the
+      # cache then holds an older row over a newer one, and this process's
+      # reads miss the newer keys until the row is written again. Cache hits
+      # do not take the lock.
+      #
+      # The lock is per entry, so a write that waits (a busy database, or a
+      # top-level write retrying while another session keeps changing the row)
+      # holds up only threads using the same script and scope, not every
+      # script. A Monitor, so a write that calls another write for the same
+      # entry in the same thread does not deadlock. No code takes two entries'
+      # locks at once.
+      def self.with_cache_lock(cache_key, &block)
+        lock = @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
+        lock.synchronize(&block)
+      end
+      private_class_method :with_cache_lock
 
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
@@ -164,19 +181,25 @@ module Lich
 
         script_name ||= ""
         cache_key = "#{script_name}::#{scope}"
-        root = @settings_cache[cache_key] || @cache_lock.synchronize { @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope) }
+        root = @settings_cache[cache_key] || with_cache_lock(cache_key) { @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope) }
 
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
 
       def self.save_proxy_changes(proxy)
+        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
+        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
+        with_cache_lock("#{script_name || ""}::#{proxy.scope}") { store_proxy_changes(proxy, script_name) }
+      end
+
+      # save_proxy_changes's refresh, database write and cache update, under
+      # the cache entry's lock.
+      def self.store_proxy_changes(proxy, script_name)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Initiated for proxy.scope: #{proxy.scope.inspect}, proxy.path: #{proxy.path.inspect}, proxy.target_object_id: #{proxy.target.object_id}" })
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: proxy.target data: #{proxy.target.inspect}" })
 
         path        = proxy.path
         scope       = proxy.scope
-        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
-        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
         cache_key   = "#{script_name || ""}::#{scope}"
 
         # Local helper to keep cache in sync with the just-persisted root
@@ -348,6 +371,7 @@ module Lich
         save_to_database(current_root_for_scope, scope, script_name: script_name)
         sync_cache.call(current_root_for_scope)
       end
+      private_class_method :store_proxy_changes
 
       def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
@@ -361,7 +385,7 @@ module Lich
           return cached_data.dup
         else
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache miss for #{cache_key}. Loading from DB." })
-          settings = @cache_lock.synchronize do
+          settings = with_cache_lock(cache_key) do
             # Another thread may have filled the entry while this one waited.
             @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
           end
@@ -387,11 +411,13 @@ module Lich
         unwrapped_settings = unwrap_proxies(data_to_save)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_to_database: Data AFTER unwrap_proxies (object_id: #{unwrapped_settings.object_id}): #{unwrapped_settings.inspect}" })
 
-        @db_adapter.save_settings(script_name, unwrapped_settings, scope)
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
+        with_cache_lock(cache_key) do
+          @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
 
-        @settings_cache[cache_key] = unwrapped_settings
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+          @settings_cache[cache_key] = unwrapped_settings
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+        end
       end
 
       def self.refresh_data(scope = DEFAULT_SCOPE)
@@ -468,13 +494,12 @@ module Lich
         end
 
         cache_key = "#{script_name}::#{scope}"
-        @cache_lock.synchronize { store_top_level_key(script_name, cache_key, scope, name, value) }
+        with_cache_lock(cache_key) { store_top_level_key(script_name, cache_key, scope, name, value) }
       end
       private_class_method :write_top_level_key
 
-      # write_top_level_key's database write and cache update, which run
-      # under @cache_lock so that the cache takes rows in the order the
-      # database stored them.
+      # write_top_level_key's database write and cache update, under the cache
+      # entry's lock (see with_cache_lock).
       def self.store_top_level_key(script_name, cache_key, scope, name, value)
         stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
           if fresh_root.is_a?(Hash)
