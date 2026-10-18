@@ -1407,6 +1407,21 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json])
     end
 
+    it 'refuses to replace a read-only backup, leaving it and the file untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'protected backup')
+      File.chmod(0o444, backup)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.binread(backup)).to eq('protected backup')
+      expect(File.stat(backup).mode & 0o777).to eq(0o444)
+      expect(stray_files).to be_empty
+      expect(map_class).to have_received(:respond).with(/could not back up .*map not saved: Permission denied/)
+    end
+
     it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do
       File.binwrite(target, existing_bytes)
       File.chmod(0o640, target)

@@ -668,7 +668,11 @@ module Lich
           if existed
             respond 'File exists!  Backing it up before proceeding...'
             begin
-              publish_map_file("#{filename}.bak", mode_of: filename) { |io| IO.copy_stream(filename, io) }
+              backup = "#{filename}.bak"
+              # Same refusal for a read-only backup, which the rename would replace.
+              raise Errno::EACCES, backup if File.exist?(backup) && !File.writable?(backup)
+
+              publish_map_file(backup, mode_of: filename) { |io| IO.copy_stream(filename, io) }
             rescue StandardError => e
               report_map_save_failure("could not back up #{filename}; map not saved", e)
               raise
