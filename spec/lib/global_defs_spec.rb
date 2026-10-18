@@ -10,176 +10,67 @@ require_relative '../spec_helper'
 # (Script.new_script_output, $_CLIENT_, etc.), which breaks every test
 # that runs after this file in the randomized suite.
 #
-# Instead, we define fput/multifput directly in the describe block so they
-# are scoped to this example group and resolve stubs via normal method lookup.
+# Instead, GlobalDefsSpecSource.define reads the methods under test out of
+# lib/global_defs.rb and class_evals each one into its example group, so
+# the examples run the shipped code, the definitions stay scoped to that
+# group, and calls inside them resolve stubs via normal method lookup.
+module GlobalDefsSpecSource
+  PATH = File.expand_path('../../lib/global_defs.rb', __dir__)
 
-RSpec.describe '#fput' do
-  # Production fput - mirrors lib/global_defs.rb exactly.
-  # Defined locally to avoid polluting the global method table.
-  def fput(message, *waitingfor)
-    unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
-    waitingfor.flatten!
+  # Defines each named top-level method of lib/global_defs.rb on target.
+  # Raises when a definition or its column-0 `end` is missing, so a
+  # reformat of the production file fails loudly instead of testing nothing.
+  def self.define(target, *names)
+    lines = File.readlines(PATH)
+    names.each do |name|
+      first = def_index(lines, name)
+      offset = lines[(first + 1)..].index { |line| line.match?(/^end\s*$/) }
+      raise "global_defs.rb: def #{name} terminator missing" unless offset
 
-    # Options via a trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
-    #   timeout:          seconds with no game response before giving up (60;
-    #                     0 disables, the original behavior)
-    #   max_resends:      how many times a refusal ("...wait 3", "struggle to
-    #                     stand", stunned) may trigger a resend before giving
-    #                     up (nil, the original: unbounded)
-    #   interrupt:        a callable checked on every wait and before every
-    #                     resend; true ends the send at once (nil: never)
-    #   resend_transient: on a transient refusal that is not a stun or a
-    #                     web (a "can't seem", "don't seem"), resend after a
-    #                     quarter second instead of giving up (false, the
-    #                     original; bigshot's bs_put resends)
-    #   failures:         :false (the original: every failure returns false)
-    #                     or :symbol - :no_response, :too_many_resends,
-    #                     :interrupted, :dead, :refused - so a caller can
-    #                     tell them apart
-    options = (waitingfor.pop if waitingfor.last.is_a?(Hash)) || {}
-    option = ->(key) { options[key] || options[key.to_s] }
-    timeout = option.call(:timeout) || 60
-    max_resends = option.call(:max_resends)
-    interrupt = option.call(:interrupt)
-    unless interrupt.nil? || interrupt.respond_to?(:call)
-      raise ArgumentError, "fput: interrupt: must respond to call"
-    end
-    resend_transient = option.call(:resend_transient) ? true : false
-    symbols = option.call(:failures) == :symbol
-    fail_with = ->(reason) { symbols ? reason : false }
-    interrupted = -> { interrupt && interrupt.call ? true : false }
-    # With an interrupt, sleep in slices so it lands within a tenth of a
-    # second; without one, the plain sleep of before. True when interrupted.
-    wait = lambda do |seconds|
-      if interrupt.nil?
-        sleep(seconds)
-        return false
-      end
-      slices = (seconds / 0.1).ceil
-      slices.times do
-        return true if interrupted.call
-
-        sleep(0.1)
-      end
-      false
-    end
-    resends = 0
-    # true after 'stand' went out and before its reply came back; the reply
-    # is not the answer to message, so message goes out again on top of it
-    standing = false
-    # a refusal that asks for a resend: false when the cap allows it
-    over_cap = lambda do
-      resends += 1
-      !max_resends.nil? && resends > max_resends
-    end
-
-    clear
-    put(message)
-
-    timer = Time.now
-    loop do
-      string = get?
-
-      if string.nil?
-        return fail_with.call(:interrupted) if interrupted.call
-
-        if timeout > 0 && (Time.now - timer > timeout)
-          echo "fput: No game response for #{timeout}s to '#{message}'"
-          return fail_with.call(:no_response)
-        end
-        pause 0.1
-        next
-      end
-
-      timer = Time.now # Reset timeout on any game response
-
-      if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
-        return fail_with.call(:too_many_resends) if over_cap.call
-
-        hold_up = Regexp.last_match[:wait_time].to_i
-        return fail_with.call(:interrupted) if wait.call(hold_up)
-
-        standing = false
-        clear
-        put(message)
-        next
-      elsif string =~ /^You.+struggle.+stand/
-        # stand in this frame, under the same cap and interrupt, instead of
-        # a nested fput('stand') that started its own count and could not
-        # be interrupted; a persistent struggle recursed until the stack
-        # gave out
-        return fail_with.call(:too_many_resends) if over_cap.call
-        return fail_with.call(:interrupted) if interrupted.call
-
-        standing = true
-        clear
-        put('stand')
-        next
-      elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
-        if dead?
-          echo "You're dead...! You can't do that!"
-          sleep 1
-          script.downstream_buffer.unshift(string)
-          return fail_with.call(:dead)
-        elsif checkstunned
-          while checkstunned
-            return fail_with.call(:interrupted) if interrupted.call
-
-            sleep("0.25".to_f)
-          end
-        elsif checkwebbed
-          while checkwebbed
-            return fail_with.call(:interrupted) if interrupted.call
-
-            sleep("0.25".to_f)
-          end
-        elsif string =~ /Sorry, you may only type ahead/
-          return fail_with.call(:interrupted) if wait.call(1)
-        elsif resend_transient
-          return fail_with.call(:interrupted) if wait.call(0.25)
-        else
-          sleep 0.1
-          script.downstream_buffer.unshift(string)
-          return fail_with.call(:refused)
-        end
-        if over_cap.call
-          script.downstream_buffer.unshift(string)
-          return fail_with.call(:too_many_resends)
-        end
-
-        standing = false
-        clear
-        put(message)
-        next
-      elsif standing
-        # the reply to 'stand' ("You stand back up.", "You are already
-        # standing"): message went unanswered, send it again
-        standing = false
-        clear
-        put(message)
-        next
-      else
-        if waitingfor.empty?
-          script.downstream_buffer.unshift(string)
-          return string
-        else
-          if (foundit = waitingfor.find { |val| string =~ /#{val}/i })
-            script.downstream_buffer.unshift(string)
-            return foundit
-          end
-          return fail_with.call(:too_many_resends) if over_cap.call
-          return fail_with.call(:interrupted) if wait.call(1)
-
-          clear
-          put(message)
-          next
-        end
-      end
+      target.class_eval(lines[first..(first + offset + 1)].join, PATH, first + 1)
     end
   end
 
-  def multifput(*cmds)
-    cmds.flatten.compact.each { |cmd| fput(cmd) }
+  # The 1-based line of a method's def in lib/global_defs.rb.
+  def self.line_of(name)
+    def_index(File.readlines(PATH), name) + 1
+  end
+
+  # Ruby keeps the last of two top-level defs, so a second one would leave
+  # these examples testing the definition that does not ship.
+  def self.def_index(lines, name)
+    found = lines.each_index.select { |i| lines[i].match?(/^def #{Regexp.escape(name)}(?:\(|\s|$)/) }
+    raise "global_defs.rb: def #{name} missing" if found.empty?
+    raise "global_defs.rb: def #{name} defined #{found.size} times" if found.size > 1
+
+    found.first
+  end
+  private_class_method :def_index
+end
+
+RSpec.describe '#fput' do
+  GlobalDefsSpecSource.define(self, 'fput', 'multifput')
+
+  it 'runs the fput and multifput defined in lib/global_defs.rb' do
+    %w[fput multifput].each do |name|
+      expect(method(name).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of(name)])
+    end
+  end
+
+  it 'fails loudly when a method cannot be found in lib/global_defs.rb' do
+    expect { GlobalDefsSpecSource.define(Class.new, 'no_such_global') }
+      .to raise_error(RuntimeError, /def no_such_global missing/)
+  end
+
+  it 'fails loudly on a duplicate, prefix-only or unterminated def' do
+    allow(File).to receive(:readlines).and_call_original
+    allow(File).to receive(:readlines).with(GlobalDefsSpecSource::PATH)
+                                      .and_return(["def twice\n", "end\n", "def twice\n", "end\n",
+                                                   "def fputs_like(x)\n", "end\n", "def open_ended\n", "  1\n"])
+
+    expect { GlobalDefsSpecSource.define(Class.new, 'twice') }.to raise_error(RuntimeError, /def twice defined 2 times/)
+    expect { GlobalDefsSpecSource.define(Class.new, 'fputs') }.to raise_error(RuntimeError, /def fputs missing/)
+    expect { GlobalDefsSpecSource.define(Class.new, 'open_ended') }.to raise_error(RuntimeError, /terminator missing/)
   end
 
   let(:downstream_buffer) { [] }
@@ -192,6 +83,10 @@ RSpec.describe '#fput' do
 
   before do
     allow(Script).to receive(:current).and_return(mock_script)
+    # Production sleeps through Script.execution_sleep (it checks the
+    # script's execution guard); with no guard installed it is a plain
+    # sleep. Route it to self.sleep so examples can stub and count it.
+    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
     allow(self).to receive(:put)
     allow(self).to receive(:echo)
   end
@@ -206,9 +101,17 @@ RSpec.describe '#fput' do
     end
   end
 
-  # Stub get? to always return nil and stub pause to avoid real waits
-  def stub_no_game_responses
-    allow(self).to receive(:get?).and_return(nil)
+  # Stub get? to always return nil and stub pause to avoid real waits.
+  # A timeout regression would spin fput forever on a frozen clock, so
+  # past `limit` empty reads the stub raises and the example fails.
+  def stub_no_game_responses(limit: 1_000)
+    reads = 0
+    allow(self).to receive(:get?) do
+      reads += 1
+      raise "fput still polling after #{limit} empty reads" if reads > limit
+
+      nil
+    end
     allow(self).to receive(:pause)
   end
 
@@ -293,6 +196,91 @@ RSpec.describe '#fput' do
       result = fput('attack')
 
       expect(result).to eq(false)
+    end
+
+    it 'says why, pushes the refusal back and does not resend when dead' do
+      stub_game_responses("can't do that while dead")
+      allow(self).to receive(:dead?).and_return(true)
+      allow(self).to receive(:sleep)
+      expect(self).to receive(:echo).with("You're dead...! You can't do that!")
+      expect(self).to receive(:put).with('attack').once
+
+      expect(fput('attack', failures: :symbol)).to eq(:dead)
+      expect(downstream_buffer).to eq(["can't do that while dead"])
+    end
+
+    context 'when a refusal arrives while stunned or webbed' do
+      before do
+        allow(self).to receive(:dead?).and_return(false)
+        allow(self).to receive(:checkstunned).and_return(false)
+        allow(self).to receive(:checkwebbed).and_return(false)
+        allow(self).to receive(:sleep)
+      end
+
+      it 'waits the stun out in quarter seconds, then resends' do
+        stub_game_responses('You are still stunned.', 'You pick up a sword.')
+        # the branch check, then the wait loop: stunned, stunned, recovered
+        stun = [true, true, true, false]
+        allow(self).to receive(:checkstunned) { stun.shift }
+        expect(self).to receive(:sleep).with(0.25).twice
+        expect(self).to receive(:put).with('get sword').twice
+
+        expect(fput('get sword')).to eq('You pick up a sword.')
+        expect(stun).to be_empty
+        expect(downstream_buffer).to eq(['You pick up a sword.'])
+      end
+
+      it 'waits a web out in quarter seconds, then resends' do
+        # the branch keys on checkwebbed, not on the refusal wording
+        stub_game_responses("You can't do that while engaged!", 'You pick up a sword.')
+        web = [true, true, false]
+        allow(self).to receive(:checkwebbed) { web.shift }
+        expect(self).to receive(:sleep).with(0.25).once
+        expect(self).to receive(:put).with('get sword').twice
+
+        expect(fput('get sword')).to eq('You pick up a sword.')
+        expect(web).to be_empty
+      end
+
+      it 'treats a stun message as a refusal when the stun has already passed' do
+        stub_game_responses('You are still stunned.', 'You pick up a sword.')
+        expect(self).to receive(:put).with('get sword').once
+
+        expect(fput('get sword', failures: :symbol)).to eq(:refused)
+        expect(downstream_buffer).to eq(['You are still stunned.'])
+      end
+
+      it 'counts a stun resend against max_resends' do
+        stub_game_responses('You are still stunned.', 'You are still stunned.', 'You pick up a sword.')
+        stun = [true, false, true, false]
+        allow(self).to receive(:checkstunned) { stun.shift }
+        expect(self).to receive(:put).with('get sword').twice
+
+        expect(fput('get sword', max_resends: 1, failures: :symbol)).to eq(:too_many_resends)
+        expect(downstream_buffer).to eq(['You are still stunned.'])
+      end
+
+      it 'ends a stun that does not pass on the interrupt' do
+        stub_game_responses('You are still stunned.', 'You pick up a sword.')
+        allow(self).to receive(:checkstunned).and_return(true)
+        checks = 0
+        interrupt = -> { (checks += 1) > 3 }
+        expect(self).to receive(:sleep).with(0.25).exactly(3).times
+        expect(self).to receive(:put).with('get sword').once
+
+        expect(fput('get sword', interrupt: interrupt, failures: :symbol)).to eq(:interrupted)
+      end
+    end
+
+    it 'waits a second on the type-ahead limit, then resends' do
+      allow(self).to receive(:dead?).and_return(false)
+      allow(self).to receive(:checkstunned).and_return(false)
+      allow(self).to receive(:checkwebbed).and_return(false)
+      stub_game_responses('Sorry, you may only type ahead 1 command.', 'You pick up a sword.')
+      expect(self).to receive(:sleep).with(1).once
+      expect(self).to receive(:put).with('get sword').twice
+
+      expect(fput('get sword')).to eq('You pick up a sword.')
     end
   end
 
@@ -416,6 +404,18 @@ RSpec.describe '#fput' do
       result = fput('test command')
 
       expect(result).to eq(false)
+    end
+
+    it 'gives up only once more than the timeout has passed' do
+      stub_no_game_responses
+      start = Time.now
+      # the timer start, a poll at exactly 60s (not over), a poll past it
+      clock = [start, start + 60, start + 60.5]
+      allow(Time).to receive(:now) { clock.size > 1 ? clock.shift : clock.first }
+      expect(self).to receive(:pause).with(0.1).once
+      expect(self).to receive(:echo).with("fput: No game response for 60s to 'look'")
+
+      expect(fput('look', failures: :symbol)).to eq(:no_response)
     end
 
     it 'uses custom timeout when specified via Hash argument' do
@@ -911,27 +911,20 @@ RSpec.describe '#detachable_client_send_init' do
   end
 end
 
-# waitrt? / waitcastrt? - mirrored from lib/global_defs.rb for the reason
-# given at the top of this file. Two contracts: with no options the legacy
-# call (one sleep, then whether roundtime REMAINS), unchanged for every
-# existing caller; with an interrupt or a cap the bounded call (poll in
-# slices, whether there WAS roundtime to wait out).
+# waitrt? / waitcastrt? - loaded from lib/global_defs.rb as above. Two
+# contracts: with no options the legacy call (one sleep, then whether
+# roundtime REMAINS), unchanged for every existing caller; with an
+# interrupt or a cap the bounded call (poll in slices, whether there WAS
+# roundtime to wait out).
 RSpec.describe '#waitrt?' do
-  def waitrt?(interrupt: nil, cap: nil)
-    if interrupt.nil? && cap.nil?
-      sleep checkrt
-      return checkrt > 0.0
-    end
+  GlobalDefsSpecSource.define(self, 'waitrt?')
 
-    had_rt = checkrt > 0.0
-    stop_at = cap ? Time.now + cap : nil
-    while checkrt > 0.0
-      return had_rt if interrupt && interrupt.call
-      return had_rt if stop_at && Time.now >= stop_at
+  before do
+    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
+  end
 
-      sleep([checkrt, 0.1].min)
-    end
-    had_rt
+  it 'runs the waitrt? defined in lib/global_defs.rb' do
+    expect(method(:waitrt?).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of('waitrt?')])
   end
 
   it 'legacy: sleeps once and reports whether roundtime remains' do
@@ -965,7 +958,7 @@ RSpec.describe '#waitrt?' do
   it 'ends early on the interrupt' do
     allow(self).to receive(:checkrt).and_return(5.0)
     calls = 0
-    allow(self).to receive(:sleep) { calls += 1 }
+    allow(self).to receive(:sleep) { raise "still waiting after #{calls} sleeps" if (calls += 1) > 100 }
     expect(waitrt?(interrupt: -> { calls >= 2 })).to be(true)
     expect(calls).to eq(2)
   end
@@ -975,33 +968,21 @@ RSpec.describe '#waitrt?' do
     now = Time.now
     ticks = 0
     allow(Time).to receive(:now) { now + ticks }
-    allow(self).to receive(:sleep) { ticks += 1 }
+    allow(self).to receive(:sleep) { raise "still waiting after #{ticks} sleeps" if (ticks += 1) > 100 }
     expect(waitrt?(cap: 3)).to be(true)
     expect(ticks).to eq(3)
   end
 end
 
 RSpec.describe '#waitcastrt?' do
-  def waitcastrt?(interrupt: nil, cap: nil)
-    if interrupt.nil? && cap.nil?
-      current_castrt = checkcastrt
-      if current_castrt.to_f > 0.0
-        sleep(current_castrt)
-        return true
-      else
-        return false
-      end
-    end
+  GlobalDefsSpecSource.define(self, 'waitcastrt?')
 
-    had_rt = checkcastrt.to_f > 0.0
-    stop_at = cap ? Time.now + cap : nil
-    while checkcastrt.to_f > 0.0
-      return had_rt if interrupt && interrupt.call
-      return had_rt if stop_at && Time.now >= stop_at
+  before do
+    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
+  end
 
-      sleep([checkcastrt.to_f, 0.1].min)
-    end
-    had_rt
+  it 'runs the waitcastrt? defined in lib/global_defs.rb' do
+    expect(method(:waitcastrt?).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of('waitcastrt?')])
   end
 
   it 'legacy: one sleep of the whole cast roundtime, true when there was one' do
@@ -1017,8 +998,29 @@ RSpec.describe '#waitcastrt?' do
   it 'bounded: ends early on the interrupt' do
     allow(self).to receive(:checkcastrt).and_return(3.0)
     calls = 0
-    allow(self).to receive(:sleep) { calls += 1 }
+    allow(self).to receive(:sleep) { raise "still waiting after #{calls} sleeps" if (calls += 1) > 100 }
     expect(waitcastrt?(interrupt: -> { calls >= 1 })).to be(true)
     expect(calls).to eq(1)
+  end
+
+  it 'bounded: waits in tenth-second slices and ends at the cap' do
+    allow(self).to receive(:checkcastrt).and_return(3.0)
+    now = Time.now
+    ticks = 0
+    allow(Time).to receive(:now) { now + ticks }
+    sleeps = []
+    allow(self).to receive(:sleep) do |n|
+      sleeps << n
+      raise "still waiting after #{ticks} sleeps" if (ticks += 1) > 100
+    end
+    expect(waitcastrt?(cap: 3)).to be(true)
+    expect(sleeps).to eq([0.1, 0.1, 0.1])
+  end
+
+  it 'reads a nil cast roundtime as none, in both contracts' do
+    allow(self).to receive(:checkcastrt).and_return(nil)
+    expect(self).not_to receive(:sleep)
+    expect(waitcastrt?).to be(false)
+    expect(waitcastrt?(cap: 5)).to be(false)
   end
 end
