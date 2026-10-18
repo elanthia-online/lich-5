@@ -175,9 +175,9 @@ module Lich
 
         # Put held items away first so the hands are free for the wears below.
         # stow_weapon already sent the WEAR for a worn item, so a failure here
-        # is final: wearing it again would only repeat the same refusal or
-        # timeout, so a second entry for an item that already failed is
-        # skipped. An item that is no longer in hand by its turn (an earlier
+        # is final: the item is reported for the user to check rather than
+        # sent the same command again, so a second entry for an item that
+        # already failed is skipped. An item that is no longer in hand by its turn (an earlier
         # put-away took the hand it matched) is fetched and worn instead, in
         # its gear-set position.
         held_failures = []
