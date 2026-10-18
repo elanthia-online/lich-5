@@ -403,7 +403,7 @@ RSpec.describe Lich::Common::SessionLauncher do
   it 'omits the instance flag when neither launch_context nor launch_data names a game code' do
     no_code_launch_data = launch_data.reject { |line| line.start_with?('GAMECODE=') }
 
-    described_class.launch(no_code_launch_data, launch_context: { char_name: 'Tsetem', game_code: '' })
+    described_class.launch(no_code_launch_data, launch_context: { char_name: 'Tsetem' })
 
     expect(described_class).to have_received(:spawn).with(
       '/usr/bin/ruby',
