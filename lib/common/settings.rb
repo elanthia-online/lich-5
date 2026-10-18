@@ -6,6 +6,7 @@ module Lich
     # rubocop:disable Lint/RedundantRequireStatement
     require 'set' # Ensure Set is required for Ruby < 3.2, may be removed in future versions
     # rubocop:enable Lint/RedundantRequireStatement
+    require 'monitor'
 
     # settings_proxy.rb is now loaded after Settings module is defined, to allow it to call Settings._log
     # require_relative 'settings/settings_proxy'
@@ -93,6 +94,14 @@ module Lich
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
+      # Orders this process's cache updates with the database reads and writes
+      # they come from. Without it, two threads can finish in one order in the
+      # database and the other in the cache: a top-level write, or a read that
+      # missed the cache, then assigns an older row over a newer one, and this
+      # process's reads miss the newer keys until the row is written again.
+      # A Monitor, so a nested call in the same thread does not deadlock.
+      # Cache hits do not take it.
+      @cache_lock = Monitor.new
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
 
@@ -155,7 +164,7 @@ module Lich
 
         script_name ||= ""
         cache_key = "#{script_name}::#{scope}"
-        root = @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+        root = @settings_cache[cache_key] || @cache_lock.synchronize { @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope) }
 
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
@@ -352,9 +361,11 @@ module Lich
           return cached_data.dup
         else
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache miss for #{cache_key}. Loading from DB." })
-          settings = @db_adapter.get_settings(script_name, scope)
+          settings = @cache_lock.synchronize do
+            # Another thread may have filled the entry while this one waited.
+            @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+          end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Loaded from DB (object_id: #{settings.object_id}): #{settings.inspect}" })
-          @settings_cache[cache_key] = settings
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Stored in cache (object_id: #{@settings_cache[cache_key].object_id}). Returning DUP." })
           return settings.dup
         end
@@ -457,6 +468,14 @@ module Lich
         end
 
         cache_key = "#{script_name}::#{scope}"
+        @cache_lock.synchronize { store_top_level_key(script_name, cache_key, scope, name, value) }
+      end
+      private_class_method :write_top_level_key
+
+      # write_top_level_key's database write and cache update, which run
+      # under @cache_lock so that the cache takes rows in the order the
+      # database stored them.
+      def self.store_top_level_key(script_name, cache_key, scope, name, value)
         stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
           if fresh_root.is_a?(Hash)
             fresh_root[name] = value
@@ -476,7 +495,7 @@ module Lich
         end
         stored
       end
-      private_class_method :write_top_level_key
+      private_class_method :store_top_level_key
 
       def self.[](name)
         scope_to_use = DEFAULT_SCOPE

@@ -706,6 +706,107 @@ RSpec.describe Lich::Common::Settings do
       expect(game_read('lost')).to be_nil
       expect(@mock_db).not_to have_received(:get_settings)
     end
+
+    # Two threads of this process. Each test holds the first thread between
+    # its database call and its cache update for up to PAUSE seconds, or until
+    # the second thread is done, and checks that the cache ends on the newest
+    # row whichever way the threads are ordered.
+    describe "two threads of one process" do
+      pause = 0.5
+
+      def in_thread(&block)
+        Thread.new do
+          Thread.current.report_on_exception = false
+          block.call
+        end
+      end
+
+      it "leaves the cache on the newer row when a later write finishes first" do
+        first_stored = Queue.new
+        second_done = Queue.new
+        first = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          stored = original.call(*args, &block)
+          if Thread.current.equal?(first)
+            first_stored << true
+            second_done.pop(timeout: pause)
+          end
+          stored
+        end
+
+        first = in_thread { game_write('a', 1) }
+        second = in_thread do
+          first_stored.pop
+          game_write('b', 2)
+          second_done << true
+        end
+        [first, second].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('a' => 1, 'b' => 2)
+        expect(game_read('a')).to eq(1)
+        expect(game_read('b')).to eq(2)
+      end
+
+      it "does not let a read that missed the cache replace a row a write cached after it" do
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { game_read('a') }
+        writer = in_thread do
+          loaded.pop
+          game_write('a', 1)
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('a' => 1)
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "does not let a root proxy's cache fill replace a row a write cached after it" do
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { settings.root_proxy_for("GSIV") }
+        writer = in_thread do
+          loaded.pop
+          game_write('a', 1)
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "releases the lock when the database call raises, so the next write still runs" do
+        allow(@mock_db).to receive(:update_settings).and_raise(TypeError, 'incompatible marshal file format')
+        expect { game_write('a', 1) }.to raise_error(TypeError)
+        allow(@mock_db).to receive(:update_settings).and_call_original
+
+        writer = in_thread { game_write('b', 2) }
+
+        expect(writer.join(2)).to eq(writer)
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('b' => 2)
+      end
+    end
   end
 end
 
