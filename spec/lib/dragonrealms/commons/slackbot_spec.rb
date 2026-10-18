@@ -823,6 +823,19 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       end
     end
 
+    context 'when non-String objects reach the downstream buffer' do
+      # send_to_script pushes its arguments into a script's downstream
+      # buffer as given, so Script#gets can return objects other than
+      # String, nil or false.
+      it 'skips them and returns the token' do
+        downstream.push(42)
+        downstream.push({ note: 'not a line' })
+        downstream.push(token_line)
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+      end
+    end
+
     context 'when the reply arrives while the read is waiting' do
       it 'wakes on the line and returns the token' do
         stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
