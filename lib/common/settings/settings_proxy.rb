@@ -381,10 +381,11 @@ module Lich
       # Saves what +method+ (one in neither method list) changed in the
       # target, +before+ being the target's Marshal bytes before the call.
       #
-      # For a Hash, and for an Array whose size did not change, each entry
-      # that changed is replayed on the stored container: delete for a key
-      # that is gone, []= for a key or index whose value is new or
-      # different. So entries that other sessions, or writes made inside the
+      # For a Hash, and for an Array whose size did not change, the entries
+      # that changed are replayed on the stored container, all in one update
+      # of the row: delete for a key that is gone, []= for a key or index
+      # whose value is new or different (a changed value is stored whole).
+      # So entries that other sessions, or writes made inside the
       # call's block (opts.each_pair { |k, v| opts[k] = ... }), stored
       # meanwhile in the rest of the container are kept, although this
       # session's copy may not show them. Otherwise (an Array that grew or
@@ -398,11 +399,10 @@ module Lich
           return
         end
 
+        return if changes.empty?
+
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed #{changes.size} entries; replaying them" })
-        replayed = nil
-        changes.each do |operation, args|
-          replayed = @settings_module.save_proxy_changes(self, operation, args) || replayed
-        end
+        replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes])
         take_stored_container(replayed[1]) if replayed
       end
 
@@ -496,8 +496,6 @@ module Lich
           self # Return self if the method modified the target in-place and returned it
         elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
           SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
-        elsif @settings_module.container?(result) && pathless_element?
-          pathless_derived_proxy(result)
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.

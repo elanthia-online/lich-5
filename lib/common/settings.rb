@@ -262,7 +262,7 @@ module Lich
         existing = path.empty? ? root : parent[path.last]
         if method && existing.instance_of?(proxy.target.class)
           begin
-            result = existing.public_send(method, *args, &block)
+            result = method == REPLAY_ENTRY_CHANGES ? replay_entry_changes(existing, *args) : existing.public_send(method, *args, &block)
             yield [result, existing]
             return root
           rescue StandardError => e
@@ -285,6 +285,24 @@ module Lich
         root
       end
       private_class_method :apply_to_stored_row
+
+      # The operation save_proxy_changes replays for a method outside both of
+      # SettingsProxy's method lists that changed several entries of a
+      # container (SettingsProxy#save_changes_since). Its one argument is the
+      # list of [operation, args] entry changes ([:delete, [key]] or
+      # [:[]=, [key_or_index, value]]); they are all applied, in order, in one
+      # update of the row (see #replay_entry_changes).
+      REPLAY_ENTRY_CHANGES = :replay_entry_changes
+
+      # Applies +changes+, a list of [operation, args] entry changes, to
+      # +container+, in order.
+      #
+      # @return nil
+      def self.replay_entry_changes(container, changes)
+        changes.each { |operation, args| container.public_send(operation, *args) }
+        nil
+      end
+      private_class_method :replay_entry_changes
 
       # A copy of +value+, with proxies unwrapped, that shares no object with
       # it (not even a String), as a read of the stored row would give it back.

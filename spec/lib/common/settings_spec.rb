@@ -1055,6 +1055,50 @@ RSpec.describe Lich::Common::Settings do
         expect(stored["l"]).to eq([1, 2, 9])
       end
 
+      it "stores this session's copy of an array the method shrank, without the removed element" do
+        their_write("l" => [1, 2, 3])
+        l = game_read('l')
+
+        l.each_index { |i| l.target.pop if i.zero? }
+
+        expect(stored["l"]).to eq([1, 2])
+      end
+
+      it "stores every entry the method changed, keeping another session's entry, in one update of the row" do
+        their_write("opts" => { "a" => { "x" => 1 }, "b" => { "x" => 2 } })
+        opts = game_read('opts')
+        their_write("opts" => { "a" => { "x" => 1 }, "b" => { "x" => 2 }, "c" => 3 })
+        allow(@mock_db).to receive(:update_settings).and_call_original
+
+        opts.each_pair { |_k, v| v['seen'] = true }
+
+        expect(stored["opts"]).to eq("a" => { "x" => 1, "seen" => true }, "b" => { "x" => 2, "seen" => true }, "c" => 3)
+        expect(@mock_db).to have_received(:update_settings).once
+      end
+
+      it "stores a value whose only change is its class (1 to 1.0)" do
+        their_write("opts" => { "a" => 1 }, "l" => [1])
+        opts = game_read('opts')
+        l = game_read('l')
+
+        opts.each_pair { |k, v| opts.target[k] = v.to_f }
+        l.each_index { |i| l.target[i] = l.target[i].to_f }
+
+        expect(stored["opts"]["a"]).to eql(1.0)
+        expect(stored["l"][0]).to eql(1.0)
+      end
+
+      it "tells the user once, not once per entry, when the changed entries can't be stored" do
+        their_write("h" => { "n" => { "a" => { "x" => 1 }, "b" => { "x" => 2 }, "c" => { "x" => 3 } } })
+        n = game_read('h')['n']
+        their_write("h" => 5)
+
+        n.each_pair { |_k, v| v['y'] = 1 }
+
+        expect(stored).to eq("h" => 5)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("does not lead to a container")).once
+      end
+
       it "stores copies of the arguments, so later changes to the caller's objects are not saved or cached" do
         their_write("arr" => [])
         jar = { "gem" => "ruby" }
@@ -1459,6 +1503,16 @@ RSpec.describe Lich::Common::Settings do
         expect { game_read('rows').each { |row| row.merge({}).clear } }.to raise_error(NoMethodError)
 
         expect(stored).to eq("rows" => [{ "x" => 0 }], "top" => 1)
+      end
+
+      it "writes through an element of a new container built from a view of a root proxy into that element" do
+        their_write("a" => { "x" => 1 }, "top" => 1)
+        root = settings.root_proxy_for("GSIV", script_name: "test_script")
+
+        root.select { true }.merge({})['a']['k'] = 1
+
+        expect(stored).to eq("a" => { "x" => 1, "k" => 1 }, "top" => 1)
+        expect(Lich::Messaging).not_to have_received(:msg).with("error", anything)
       end
 
       it "does not write for a method that changes nothing, and runs its block once" do
