@@ -1022,6 +1022,42 @@ RSpec.describe DRCT do
         expect(walks).to eq([100, 200, 100])
       end
 
+      it 'says the last room had buddies and a nemesis, not that it had no buddies' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? %w[Buddy Nemesis] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but also a nemesis. Retrying for empty room.')
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+
+      it 'checks the nemesis before mana in a last room with a buddy and a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? %w[Buddy Nemesis] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but also a nemesis. Retrying for empty room.')
+        expect(messages.grep(/not the right mana/)).to be_empty
+      end
+
+      it 'describes only the last room when an earlier room had a buddy and a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? %w[Buddy Nemesis] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+        expect(messages.grep(/also a nemesis/)).to be_empty
+      end
+
+      it 'does not report a nemesis alone in the last room as buddies with a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages.grep(/also a nemesis/)).to be_empty
+      end
+
       it 'does not idle before the empty-room search' do
         allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
         result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
