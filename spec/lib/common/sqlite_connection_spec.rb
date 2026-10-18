@@ -203,19 +203,29 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         db = Lich.open_sequel_sqlite(path)
         db.create_table?(:rows) { Integer :n }
         holder = SQLite3::Database.new(path)
-        holder.execute('BEGIN IMMEDIATE')
+        if how == 'kill_in_prepare'
+          # A new connection has no schema loaded, so preparing its first
+          # statement needs a read lock, which an EXCLUSIVE lock blocks.
+          db.disconnect
+          holder.execute('BEGIN EXCLUSIVE')
+        else
+          holder.execute('BEGIN IMMEDIATE')
+        end
         holder.execute('INSERT INTO rows (n) VALUES (0)')
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         waiter = Thread.new do
           Thread.current.report_on_exception = false
-          if how == 'timeout'
-            Timeout.timeout(0.2) { db[:rows].insert(n: 1) }
-          else
-            db[:rows].insert(n: 1)
+          case how
+          when 'timeout' then Timeout.timeout(0.2) { db[:rows].insert(n: 1) }
+          when 'kill_in_prepare' then db[:rows].count
+          else db[:rows].insert(n: 1)
           end
         end
         sleep 0.2
-        how == 'kill' ? waiter.kill : waiter.raise(RuntimeError, 'interrupted') unless how == 'timeout'
+        case how
+        when 'kill', 'kill_in_prepare' then waiter.kill
+        when 'raise' then waiter.raise(RuntimeError, 'interrupted')
+        end
         sleep 0.2
         holder.execute('COMMIT')
         outcome = begin
@@ -231,30 +241,40 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       RUBY
     end
 
+    def run_harness(how)
+      lib = File.expand_path('../../../lib/common/sqlite_connection.rb', __dir__)
+      stdout = +''
+      stderr = +''
+      status = nil
+      Open3.popen3(RbConfig.ruby, '-e', harness, lib, path, how) do |_in, out, err, wait|
+        unless wait.join(20)
+          Process.kill(:KILL, wait.pid)
+          wait.join
+        end
+        stdout = out.read
+        stderr = err.read
+        status = wait.value
+      end
+      expect(status.success?).to be(true), "child hung or failed: #{stderr}"
+      stdout.lines.map(&:strip)
+    end
+
     { 'kill' => 'joined', 'raise' => 'RuntimeError', 'timeout' => 'Timeout::Error' }.each do |how, expected_outcome|
       it "delivers #{how} after the lock wait and leaves the connection usable" do
-        lib = File.expand_path('../../../lib/common/sqlite_connection.rb', __dir__)
-        stdout = +''
-        stderr = +''
-        status = nil
-        Open3.popen3(RbConfig.ruby, '-e', harness, lib, path, how) do |_in, out, err, wait|
-          unless wait.join(20)
-            Process.kill(:KILL, wait.pid)
-            wait.join
-          end
-          stdout = out.read
-          stderr = err.read
-          status = wait.value
-        end
+        lines = run_harness(how)
 
-        expect(status.success?).to be(true), "child hung or failed: #{stderr}"
-        lines = stdout.lines.map(&:strip)
         expect(lines[0]).to eq(expected_outcome)
         expect(lines[1]).to eq('true')
         # The interrupted write finishes once the lock frees; the interrupt
         # is delivered after it.
         expect(lines[2]).to eq('[0, 1, 2, 3, 4, 5]')
       end
+    end
+
+    it 'delivers kill after a lock wait inside statement preparation and leaves the connection usable' do
+      lines = run_harness('kill_in_prepare')
+
+      expect(lines).to eq(['joined', 'true', '[0, 2, 3, 4, 5]'])
     end
   end
 end

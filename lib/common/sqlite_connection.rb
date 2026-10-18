@@ -54,7 +54,7 @@ module Lich
   # delivered once the statement finishes or the busy timeout expires, as it
   # was with the C busy timeout.
   module SQLiteBusyWait
-    POLL_INTERVAL_S = 0.001
+    POLL_INTERVAL_S = 0.001 unless const_defined?(:POLL_INTERVAL_S)
 
     # Marks a connection that has the Ruby busy handler.
     module Connection; end
