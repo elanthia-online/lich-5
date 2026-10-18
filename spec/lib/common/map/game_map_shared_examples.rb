@@ -1272,6 +1272,17 @@ RSpec.shared_examples 'a game Map class' do |game|
         expect(File.binread(target)).to eq(existing_bytes)
         expect(stray_files).to be_empty
       end
+
+      it 'raises the original error even when the temp file cannot be removed' do
+        allow(File).to receive(:delete).and_raise(Errno::EACCES)
+
+        expect { map_class.save_json(target) }.to raise_error(Errno::ENOSPC)
+
+        expect(File.binread(backup)).to eq('older backup')
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(stray_files).to contain_exactly(match(/\Asaved\.json\.bak\.\d+\.\d+\.tmp\z/))
+        expect(map_class).to have_received(:respond).with(/could not back up .*map not saved: No space left/)
+      end
     end
 
     context 'when publishing the new file fails' do
@@ -1302,6 +1313,46 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(saved_ids(real)).to eq([1, 2])
       expect(File.binread(backup)).to eq(existing_bytes)
       expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json saved.json.bak])
+    end
+
+    it 'says no file was created when writing a new file fails' do
+      missing = File.join(map_dir, 'nope', 'new.json')
+
+      expect { map_class.save_json(missing) }.to raise_error(Errno::ENOENT)
+
+      expect(map_class).to have_received(:respond).with(/could not write #{Regexp.escape(missing)}; no file created: /)
+      expect(map_class).not_to have_received(:respond).with(/existing file left unchanged/)
+    end
+
+    it 'creates the file a dangling symlink points to, keeping the link', unless: Gem.win_platform? do
+      File.symlink('gone.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'gone.json'))).to eq([1, 2])
+      expect(Dir.children(map_dir).sort).to eq(%w[gone.json saved.json])
+    end
+
+    it 'follows a chain of dangling symlinks relative to each link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'sub'))
+      File.symlink('sub/hop.json', target)
+      File.symlink('../final.json', File.join(map_dir, 'sub', 'hop.json'))
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'final.json'))).to eq([1, 2])
+    end
+
+    it 'raises on a symlink cycle without leaving a temp file', unless: Gem.win_platform? do
+      other = File.join(map_dir, 'other.json')
+      File.symlink(other, target)
+      File.symlink(target, other)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::ELOOP)
+
+      expect(Dir.children(map_dir).sort).to eq(%w[other.json saved.json])
     end
 
     it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do

@@ -649,12 +649,16 @@ module Lich
         # @param filename [String, nil] destination; nil writes a new
         #   map-<epoch>.json in the game's data directory
         # @return [void]
-        # @raise [StandardError] when serializing, backing up or writing fails;
-        #   the existing file and any earlier backup are then left unchanged
+        # @raise [StandardError] when serializing, backing up or writing fails.
+        #   The existing file is always left unchanged. A failed serialization or
+        #   backup also leaves any earlier backup unchanged; a failed write comes
+        #   after the backup step, so "<filename>.bak" then holds a copy of the
+        #   existing file.
         def save_json(filename = nil)
           filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
           data = to_json
-          if File.exist?(filename)
+          existed = File.exist?(filename)
+          if existed
             respond 'File exists!  Backing it up before proceeding...'
             begin
               publish_map_file("#{filename}.bak", mode_of: filename) { |io| IO.copy_stream(filename, io) }
@@ -666,7 +670,8 @@ module Lich
           begin
             publish_map_file(filename, mode_of: filename) { |io| io.write(data) }
           rescue StandardError => e
-            report_map_save_failure("could not write #{filename}; existing file left unchanged", e)
+            left = existed ? 'existing file left unchanged' : 'no file created'
+            report_map_save_failure("could not write #{filename}; #{left}", e)
             raise
           end
           respond "#{filename} saved"
@@ -685,15 +690,15 @@ module Lich
         # and ends in .tmp so a leftover never matches the map-<epoch>.json
         # pattern that loading and uploading look for. Writes are binary, so
         # bytes are never transcoded. A destination that is a symlink keeps the
-        # link and has the file it points to replaced, as the in-place write
-        # this replaces did.
+        # link and has the file it points to replaced (or created, when the link
+        # dangles), as the in-place write this replaces did.
         # @param path [String] destination
         # @param mode_of [String] existing file whose permissions the result
         #   keeps, as the in-place write it replaces did
         # @yieldparam io [File] the open temp file
         # @return [void]
         def publish_map_file(path, mode_of:)
-          path = File.realpath(path) if File.symlink?(path) && File.exist?(path)
+          path = map_link_target(path) if File.symlink?(path)
           tmp = "#{path}.#{Process.pid}.#{Thread.current.object_id}.tmp"
           File.open(tmp, 'wb') do |io|
             yield io
@@ -704,6 +709,25 @@ module Lich
           File.rename(tmp, path)
         ensure
           remove_map_temp_file(tmp) if tmp
+        end
+
+        # The file a symlinked destination points to. A link to an existing
+        # file resolves fully; a dangling one is followed hop by hop, relative
+        # to the link's real directory as the kernel would, giving up after 40
+        # links with ELOOP.
+        # @param path [String] a symlink
+        # @return [String] the path the write should replace or create
+        # @raise [Errno::ELOOP] on a link cycle
+        # @raise [Errno::ENOENT] when a dangling link's directory is missing
+        def map_link_target(path)
+          return File.realpath(path) if File.exist?(path)
+
+          40.times do
+            return path unless File.symlink?(path)
+
+            path = File.expand_path(File.readlink(path), File.realpath(File.dirname(path)))
+          end
+          raise Errno::ELOOP, path
         end
 
         # Best-effort cleanup of a temp file left by a failed publish. It runs
@@ -724,7 +748,7 @@ module Lich
           Lich.log "error: #{message}: #{error.message}\n\t#{Array(error.backtrace).join("\n\t")}"
         end
 
-        private :publish_map_file, :remove_map_temp_file, :report_map_save_failure
+        private :publish_map_file, :map_link_target, :remove_map_temp_file, :report_map_save_failure
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets
