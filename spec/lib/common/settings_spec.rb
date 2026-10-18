@@ -1000,6 +1000,28 @@ RSpec.describe Lich::Common::Settings do
 
         expect(settings.to_hash).to eq('v' => 0)
       end
+
+      it "keeps the cached row when Settings.load fails to read the database, and releases the lock" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+        expect(settings.to_hash).to eq('v' => 0) # fills the cache
+        failures = 1
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          if failures.positive?
+            failures -= 1
+            raise 'database is locked'
+          end
+          original.call(*args)
+        end
+
+        expect { settings.load }.to raise_error(RuntimeError, 'database is locked')
+        failures = 1 # a read that went to the database would raise again
+
+        expect(settings.to_hash).to eq('v' => 0)
+        failures = 0
+        writer = in_thread { settings['w'] = 1 }
+        expect(writer.join(2)).to eq(writer)
+        expect(@mock_db.get_settings("test_script", ":")).to eq('v' => 0, 'w' => 1)
+      end
     end
   end
 end
