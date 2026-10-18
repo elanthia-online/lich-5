@@ -611,7 +611,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
   end
 
   describe 'a map that leads in circles' do
-    it 'stops after the first path length plus MAX_WALK_TO_RETRIES moves' do
+    it 'stops after the path length plus UNKNOWN_ROOM_SPARE_HOPS moves' do
       rooms = [
         make_room(101, { '102' => 'north' }),
         make_room(102, { '103' => 'north' }),
@@ -627,8 +627,276 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       result = Timeout.timeout(5) { DRCT.walk_to(104) }
 
       expect(result).to be(false)
-      expect(world.sent.size).to eq(2 + DRCT::MAX_WALK_TO_RETRIES)
-      expect(bold_messages.last).to include('within 5 moves')
+      expect(world.sent.size).to eq(2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 103), giving up.')
+    end
+  end
+
+  describe 'the hop budget' do
+    # Moves that make progress spend no retry, however many hops the walk
+    # takes; only moves that miss their room do.
+    def retry_messages
+      plain_messages.grep(/did not reach|handing back/)
+    end
+
+    # A move from +room_id+ is blocked (nil, nothing moves) the first time
+    # only; every other move follows the world.
+    def block_once(world, room_id)
+      blocked = false
+      allow(DRCT).to receive(:move) do |dir|
+        if !blocked && world.position == room_id
+          blocked = true
+          world.sent << dir
+          nil
+        else
+          world.move(dir)
+        end
+      end
+    end
+
+    [1, 2, 3, 4, 5, 6].each do |hops|
+      [true, false].each do |restart|
+        it "walks #{hops} hop(s) with nothing resolving (restart_on_fail #{restart})" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(hops), position: 101))
+
+          expect(DRCT.walk_to(101 + hops, restart)).to be(true)
+          expect(world.position).to eq(101 + hops)
+          expect(world.sent).to eq(['north'] * hops)
+          expect(retry_messages).to be_empty
+          expect(bold_messages).to be_empty
+          expect(DRCT).not_to have_received(:start_script)
+        end
+
+        it "walks #{hops} hop(s) when only the target resolves (restart_on_fail #{restart})" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(hops), position: 101, resolvable: [101 + hops]))
+
+          expect(DRCT.walk_to(101 + hops, restart)).to be(true)
+          expect(world.position).to eq(101 + hops)
+          expect(world.sent).to eq(['north'] * hops)
+          expect(retry_messages).to be_empty
+          expect(bold_messages).to be_empty
+        end
+      end
+    end
+
+    it 'walks a long path after walk_to has spent every retry' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+
+      expect(DRCT.walk_to(107, true, retry_depth: DRCT::MAX_WALK_TO_RETRIES)).to be(true)
+      expect(world.sent).to eq(['north'] * 6)
+    end
+
+    it 'allows spare hops beyond the first path even when no retries are allowed' do
+      stub_const('Lich::DragonRealms::DRCT::MAX_WALK_TO_RETRIES', 0)
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(4), position: 101))
+      # The first search counts two hops (a tie it broke the other way); the
+      # walk then follows the corridor's real four.
+      allow(Map).to receive(:findpath) do |source, destination|
+        source.id == 101 ? [102, 105] : world.findpath(source, destination)
+      end
+
+      expect(DRCT.walk_to(105)).to be(true)
+      expect(world.sent).to eq(['north'] * 4)
+      expect(bold_messages).to be_empty
+    end
+
+    it 'gives a move that lands far off course a budget for the longer path from there' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(10), position: 101))
+      world.overrides[[101, 'north']] = 111
+
+      expect(DRCT.walk_to(102)).to be(true)
+      expect(world.sent).to eq(['north'] + (['south'] * 9))
+      expect(retry_messages).to eq(['DRCT: Move from room 101 did not reach room 102, attempting again (retry 1/3).'])
+      expect(bold_messages).to be_empty
+    end
+
+    it 'stops a walk that keeps landing off course once the retries are spent' do
+      rooms = [
+        make_room(101, { '102' => 'north' }),
+        make_room(102, {}),
+        make_room(103, { '101' => 'west' }, paths: 'Obvious paths: west.')
+      ]
+      world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+      world.overrides[[101, 'north']] = 103
+
+      result = Timeout.timeout(5) { DRCT.walk_to(102) }
+
+      expect(result).to be(false)
+      expect(world.sent).to eq(['north'] + (%w[west north] * DRCT::MAX_WALK_TO_RETRIES))
+      expect(retry_messages.size).to eq(DRCT::MAX_WALK_TO_RETRIES)
+      expect(bold_messages.last).to eq('DRCT: Failed to navigate from unknown room after 3 retries, giving up.')
+    end
+
+    describe 'a room that resolves only between the walker and walk_to' do
+      # After each move: the landing check reads nil (the move is matched by
+      # its text), the walker's next read resolves the room and hands back,
+      # walk_to resolves it once more and then reads nil, so the walk comes
+      # straight back to the walker, which reads nil again and moves on.
+      def flap_after_each_move(world)
+        reads = 3
+        allow(DRCT).to receive(:move) do |dir|
+          reads = 0
+          world.move(dir)
+        end
+        allow(Room).to receive(:current) do
+          phase = reads
+          reads += 1
+          [1, 2].include?(phase) ? world.room(world.position) : nil
+        end
+      end
+
+      it 'still arrives on a long path' do
+        world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+        flap_after_each_move(world)
+
+        expect(Timeout.timeout(5) { DRCT.walk_to(107) }).to be(true)
+        expect(world.sent).to eq(['north'] * 6)
+        expect(DRCT).not_to have_received(:start_script)
+        expect(retry_messages).to be_empty
+      end
+
+      it 'carries the moves left across hand-backs, so a map that leads in circles still stops' do
+        rooms = [
+          make_room(101, { '102' => 'north' }),
+          make_room(102, { '103' => 'north' }),
+          make_room(103, { '101' => 'north' }),
+          make_room(104, {})
+        ]
+        world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+        allow(Map).to receive(:findpath) { |source, _destination| [source.wayto.keys.first.to_i, 104] }
+        flap_after_each_move(world)
+
+        result = Timeout.timeout(5) { DRCT.walk_to(104) }
+
+        expect(result).to be(false)
+        expect(world.sent.size).to eq(2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        expect(bold_messages.last).to start_with('DRCT: Ran out of moves walking from an unknown room to room 104')
+      end
+    end
+
+    describe 'real failures partway along a six-hop path' do
+      (1..6).each do |hop|
+        it "gives up after the retries when hop #{hop} stays blocked" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+          world.overrides[[100 + hop, 'north']] = nil
+
+          expect(DRCT.walk_to(107)).to be(false)
+          expect(world.position).to eq(100 + hop)
+          expect(world.sent).to eq(['north'] * (hop - 1 + DRCT::MAX_WALK_TO_RETRIES + 1))
+          expect(retry_messages).to eq(
+            (1..DRCT::MAX_WALK_TO_RETRIES).map { |n| "DRCT: Move from room #{100 + hop} did not reach room #{101 + hop}, attempting again (retry #{n}/3)." }
+          )
+          expect(bold_messages.last).to eq('DRCT: Failed to navigate from unknown room after 3 retries, giving up.')
+        end
+
+        it "arrives with one retry when hop #{hop} is blocked once" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+          block_once(world, 100 + hop)
+
+          expect(DRCT.walk_to(107)).to be(true)
+          expect(world.sent).to eq(['north'] * 7)
+          expect(retry_messages.size).to eq(1)
+        end
+
+        it "does not retry hop #{hop} when restart_on_fail is false" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+          world.overrides[[100 + hop, 'north']] = nil
+
+          expect(DRCT.walk_to(107, false)).to be(false)
+          expect(world.sent).to eq(['north'] * hop)
+          expect(retry_messages).to be_empty
+        end
+
+        it "stops at once when the game rejects hop #{hop}" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+          world.overrides[[100 + hop, 'north']] = false
+
+          expect(DRCT.walk_to(107)).to be(false)
+          expect(world.sent).to eq(['north'] * hop)
+          expect(bold_messages.last).to eq("DRCT: The exit 'north' from room #{100 + hop} did not work, giving up.")
+        end
+
+        it "stops without sending more when the map loses the path at hop #{hop}" do
+          world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+          allow(Map).to receive(:findpath) do |source, destination|
+            source.id >= 100 + hop ? nil : world.findpath(source, destination)
+          end
+
+          expect(DRCT.walk_to(107)).to be(false)
+          expect(world.sent).to eq(['north'] * (hop - 1))
+          expect(bold_messages.last).to eq("DRCT: No map path from room #{100 + hop} to room 107, giving up.")
+        end
+      end
+    end
+
+    # A seeded sweep of corridors with random trouble: each room may block
+    # its move once, block it for good, throw the character elsewhere in the
+    # corridor, or have its exit rejected. Whatever happens, the walk ends,
+    # reports where it stands, never spends more retries than it has, never
+    # makes more moves than its legs allow, and only gives up for a real
+    # failure.
+    it 'keeps its bounds across a seeded sweep of corridors with random trouble' do
+      rng = Random.new(20_261_019)
+      outcomes = Hash.new(0)
+      300.times do
+        Lich::Messaging.clear_messages!
+        length = rng.rand(1..10)
+        target = 101 + length
+        world = WalkToUnknownRoomSpec::World.new(corridor(length), position: 101)
+        install(world)
+        trouble = {}
+        (101...target).each do |id|
+          trouble[id] = %i[none none none once always thrown rejected].sample(random: rng)
+        end
+        thrown_to = trouble.keys.to_h { |id| [id, rng.rand(101..target)] }
+        once_used = {}
+        allow(DRCT).to receive(:move) do |dir|
+          here = world.position
+          case dir == 'north' ? trouble[here] : :none
+          when :once
+            if once_used[here]
+              world.move(dir)
+            else
+              once_used[here] = true
+              world.sent << dir
+              nil
+            end
+          when :always
+            world.sent << dir
+            nil
+          when :thrown
+            world.sent << dir
+            world.position = thrown_to[here]
+            true
+          when :rejected
+            world.sent << dir
+            false
+          else
+            world.move(dir)
+          end
+        end
+        retry_depth = rng.rand(0..DRCT::MAX_WALK_TO_RETRIES)
+
+        result = Timeout.timeout(5) { DRCT.walk_to(target, true, retry_depth: retry_depth) }
+
+        outcomes[result] += 1
+        expect(result).to eq(world.position == target)
+        expect(plain_messages.grep(/did not reach/).size).to be <= DRCT::MAX_WALK_TO_RETRIES - retry_depth
+        legs = DRCT::MAX_WALK_TO_RETRIES - retry_depth + 1
+        expect(world.sent.size).to be <= legs * (length + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        # A corridor's map is consistent: every leg's path is at most the
+        # corridor long and each hop along it is progress, so a walk can only
+        # fail on a rejected exit or with its retries spent, never by running
+        # out of moves.
+        unless result
+          expect(bold_messages.last).to match(/did not work|after 3 retries/)
+          expect(plain_messages.grep(/did not reach/).size).to eq(DRCT::MAX_WALK_TO_RETRIES - retry_depth) if bold_messages.last.include?('retries')
+        end
+        expect(world.sent.size).to eq(length) if trouble.values.uniq == [:none]
+      end
+      # The sweep must exercise both outcomes to mean anything.
+      expect(outcomes[true]).to be > 30
+      expect(outcomes[false]).to be > 30
     end
   end
 end
