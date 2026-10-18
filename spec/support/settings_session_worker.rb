@@ -18,6 +18,13 @@
 #   get   <api> <key>           api[key], proxies unwrapped     => value
 #   burst <api> <prefix> <n>    api["<prefix>_<i>"] = i, i < n  => "ok"
 #   row   <api>                 the row as stored in the database
+#   threads <api> <prefix> <t> <n> <f>
+#                               like several scripts of one session: stores a
+#                               filler key of f entries (so each write takes
+#                               a while), then t threads each set
+#                               api["<prefix>_<thread>_<i>"] = i for i < n,
+#                               while another thread keeps writing the uservars
+#                               table through Lich.db           => "ok"
 #   msgs                        Messaging and log lines so far  => [[kind, text], ...]
 #
 # <api> is G (GameSettings), C (CharSettings), S (Settings) or I (InstanceSettings).
@@ -99,6 +106,29 @@ def row_for(api)
   Lich::Common::Settings.instance_variable_get(:@db_adapter).get_settings(script, scope)
 end
 
+def run_threads(api, prefix, thread_count, writes, filler)
+  api["#{prefix}_filler"] = (0...filler).to_h { |i| ["f#{i}", 'x' * 50] }
+  done = false
+  raw_writer = Thread.new do
+    blob = SQLite3::Blob.new(Marshal.dump({ 'v' => 'x' * 2000 }))
+    until done
+      begin
+        Lich.db.execute('INSERT OR REPLACE INTO uservars (scope, hash) VALUES (?, ?)', ["#{XMLData.game}:#{XMLData.name}", blob])
+      rescue SQLite3::Exception => e
+        $captured << ['error', "uservars writer: #{e.class}: #{e.message}"]
+      end
+      sleep 0.001
+    end
+  end
+  writers = Array.new(thread_count) do |t|
+    Thread.new { writes.times { |i| api["#{prefix}_#{t}_#{i}"] = i } }
+  end
+  writers.each(&:join)
+  done = true
+  raw_writer.join
+  'ok'
+end
+
 def plain(value)
   value.is_a?(Lich::Common::SettingsProxy) ? JSON.parse(JSON.generate(value.target)) : value
 end
@@ -118,6 +148,8 @@ while (line = $stdin.gets)
       'ok'
     when 'row'
       row_for(api)
+    when 'threads'
+      run_threads(APIS.fetch(api), key, *rest.split.map { |v| Integer(v) })
     when 'msgs'
       $captured
     else

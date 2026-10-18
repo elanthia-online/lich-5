@@ -682,11 +682,13 @@ RSpec.describe Lich::Common::Settings do
       expect(@mock_db.get_settings("test_script", "DR:Alpha")).to eq({})
     end
 
-    it "does not raise and leaves the row alone when the stored row is not a Hash" do
+    it "does not raise, leaves the row alone and tells the user when the stored row is not a Hash" do
       @mock_db.save_settings("test_script", [1, 2], "GSIV")
+      allow(Lich::Messaging).to receive(:msg)
 
       expect { game_write('k', 'v') }.not_to raise_error
       expect(@mock_db.get_settings("test_script", "GSIV")).to eq([1, 2])
+      expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("stored as Array, not a Hash; 'k' was not saved"))
     end
 
     it "drops its cached row when a write fails, so the next read comes from the database" do

@@ -207,6 +207,35 @@ RSpec.describe 'Settings writes across Lich processes' do
     end
   end
 
+  describe 'several threads of one session (several scripts in one process)' do
+    it 'keeps every key and reports no error while another thread writes lich.db3' do
+      alpha = start('DR', 'Alpha', 'go2', 'LICH_SPEC_BUSY_TIMEOUT_MS' => '1000')
+
+      alpha.send_command('threads G t 4 150 200')
+      expect(alpha.answer(240)).to eq('ok')
+
+      row = stored_row('go2', 'DR')
+      expected = (0...4).flat_map { |t| (0...150).map { |i| ["t_#{t}_#{i}", i] } }.to_h
+      expect(row.reject { |k, _| k == 't_filler' }).to eq(expected)
+      expect(row['t_filler'].size).to eq(200)
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+  end
+
+  describe 'several sessions with several threads each' do
+    it 'keeps every key and reports no error while each session also writes lich.db3' do
+      writers = %w[Alpha Beta Gamma].map { |char| start('DR', char, 'go2') }
+
+      writers.each { |w| w.send_command("threads G #{w.label.split('/').first} 2 60 50") }
+      writers.each { |w| expect(w.answer(120)).to eq('ok') }
+
+      row = stored_row('go2', 'DR')
+      expected = %w[Alpha Beta Gamma].flat_map { |char| (0...2).flat_map { |t| (0...60).map { |i| ["#{char}_#{t}_#{i}", i] } } }.to_h
+      expect(row.reject { |k, _| k.end_with?('_filler') }).to eq(expected)
+      writers.each { |w| expect(w.call('msgs').select { |kind, _| kind == 'error' }).to be_empty }
+    end
+  end
+
   describe 'write lock' do
     def with_write_lock
       db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
@@ -221,7 +250,7 @@ RSpec.describe 'Settings writes across Lich processes' do
                  [script, scope, SQLite3::Blob.new(Marshal.dump(hash))])
     end
 
-    it 'reads the row only after it holds the lock, so a commit made while it waited survives' do
+    it 'keeps a change another process committed while this write waited for the lock' do
       alpha = start('DR', 'Alpha', 'go2')
       alpha.call('get G anything')
 

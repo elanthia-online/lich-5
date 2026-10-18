@@ -438,10 +438,13 @@ module Lich
       #
       # Other Lich sessions (separate processes) write the same row, and this
       # process's cached copy does not know about their keys. So the key is
-      # applied to the row as it is in the database right now, under the write
-      # lock (DatabaseAdapter#update_settings), and the cache takes the row as
-      # stored. If the write fails, the cache entry is dropped so the next read
-      # comes from the database instead of claiming the value was saved.
+      # applied to the row as it is in the database right now, and stored only
+      # if no one changed the row in between (DatabaseAdapter#update_settings
+      # retries otherwise). The cache then takes the row as stored. If the
+      # write fails, the cache entry is dropped so the next read comes from the
+      # database instead of claiming the value was saved. Changes made only to
+      # the cached row (for example through SettingsProxy#to_h) are not saved
+      # by this write; the stored row replaces them.
       #
       # @return [Hash, nil] the stored row, or nil when nothing was written
       def self.write_top_level_key(scope, name, value, script_name: nil)
@@ -458,6 +461,7 @@ module Lich
             fresh_root
           else
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: stored root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{fresh_root.class}" })
+            Lich::Messaging.msg("error", "--- Error: Report this - settings for #{script_name} (#{scope}) are stored as #{fresh_root.class}, not a Hash; '#{name}' was not saved ---")
             nil
           end
         end
