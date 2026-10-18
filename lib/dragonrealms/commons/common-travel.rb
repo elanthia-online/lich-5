@@ -172,9 +172,13 @@ module Lich
       # game server connection is lost or go2 repeatedly fails.
       MAX_WALK_TO_RETRIES = 3
 
-      # Navigate to +target_room+ using the go2 script. From a room the map
-      # cannot resolve, walks map edges by hand first (see
-      # {walk_from_unknown_room}).
+      # Navigate to +target_room+ using the go2 script.
+      #
+      # From a room Room.current cannot resolve, the walk goes to
+      # {walk_from_unknown_room} instead of go2. In practice that fails at once
+      # without moving: any room {match_unknown_room} accepts is one the map's
+      # own resolver (Map.current) already resolves. The hand walker only moves
+      # when the live room changes between the Room.current read and the match.
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure
@@ -254,7 +258,8 @@ module Lich
 
       # Whether the character stands in +room_num+: by Room.current when the
       # map resolves the room, otherwise by a unique title, description and
-      # exits match (see {match_unknown_room}).
+      # exits match (see {match_unknown_room}). That fallback only differs from
+      # Room.current when the live room changed between the two reads.
       #
       # @param room_num [Integer] room id
       # @return [Boolean]
@@ -281,6 +286,12 @@ module Lich
       # vetoed room itself, whose stored UID list is stale or incomplete. Taking
       # the room without a UID would report arrival in the second case with
       # nothing sent, so the match fails instead.
+      #
+      # With a script running, Map.current takes the first title, description
+      # and exits match unless its UIDs veto it, so a room this method accepts
+      # is normally one Room.current resolves as well. It returns a room
+      # Room.current did not resolve only when the live room changed between
+      # the two reads.
       #
       # @return [Lich::Common::Map, nil] the single matching room; nil when no
       #   room or more than one room matches, when the single match is vetoed
@@ -329,6 +340,9 @@ module Lich
       # (move returned false) ends the walk. Moves are capped at the first
       # path's length plus MAX_WALK_TO_RETRIES so a map that loops cannot walk
       # forever.
+      #
+      # Under the map's own resolver this normally ends on the first iteration
+      # with "Failed to find a matching room" (see {match_unknown_room}).
       #
       # @param room_num [Integer] target room id
       # @param restart_on_fail [Boolean] retry a move that made no progress
