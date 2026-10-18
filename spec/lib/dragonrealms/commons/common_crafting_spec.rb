@@ -601,10 +601,6 @@ describe DRCC do
       end
     end
 
-    # Every ordered sequence of four replies (the last one repeats), from the
-    # belt and without it: the method always ends with a boolean or, without
-    # skip_exit, an exit. It sends each command at most twice (the GET once),
-    # and visits safe-room at most once per untie command.
     # The untie and failure helpers are internal; scripts can only reach them
     # through get_crafting_item.
     context 'its helpers' do
@@ -615,6 +611,10 @@ describe DRCC do
       end
     end
 
+    # Every ordered sequence of four replies (the last one repeats), from the
+    # belt and without it: the method always ends with a boolean or, without
+    # skip_exit, an exit. It sends each command at most twice (the GET once),
+    # and visits safe-room at most once per untie command.
     context 'across every sequence of four replies' do
       let(:replies) { [got, heavy, not_found, tied, untied, untie_what, wounded, ''] }
 
