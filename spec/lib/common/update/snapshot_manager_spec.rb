@@ -26,9 +26,19 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
   after do
     # Restore permissions changed by the unreadable-file examples so the
-    # tree can be removed.
-    FileUtils.chmod_R('u+rwx', root) if File.exist?(root)
+    # tree can be removed. Symlinks are skipped: chmod follows them, and a
+    # dangling one would raise.
+    unlock_tree(root) if File.exist?(root)
     FileUtils.remove_entry(root, true)
+  end
+
+  # Gives the owner full access to +path+ and, for a directory, everything
+  # under it, fixing each directory before listing it.
+  def unlock_tree(path)
+    return if File.symlink?(path)
+
+    File.chmod(0o700, path)
+    Dir.children(path).each { |name| unlock_tree(File.join(path, name)) } if File.directory?(path)
   end
 
   def write(path, content)
@@ -89,6 +99,15 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
   def skip_unless_permissions_enforced
     skip 'file permissions are not enforced for root' if Process.respond_to?(:uid) && Process.uid.zero?
     skip 'chmod 000 does not block reads on Windows' if Gem.win_platform?
+  end
+
+  def symlinks_supported?
+    probe = File.join(root, 'symlink-probe')
+    File.symlink(root, probe)
+    File.delete(probe)
+    true
+  rescue NotImplementedError, SystemCallError
+    false
   end
 
   def capture_responses
@@ -244,6 +263,48 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(Dir.children(File.join(dir, 'lib')).grep(/\A\.lich5-revert-/)).to be_empty
       expect(tree(File.join(dir, 'lib'))).to eq(tree(LIB_DIR).reject { |rel, _| rel.start_with?('.lich5-revert-') })
       expect(File.read(File.join(dir, 'lib', '.hidden_user_file'))).to eq("keep\n")
+    end
+
+    context 'when LIB_DIR contains symlinks (a developer linking lib/<x> into a checkout)' do
+      let(:outside) { File.join(root, 'outside') }
+
+      before do
+        skip 'symlinks are not available on this platform' unless symlinks_supported?
+        write(File.join(outside, 'big.rb'), "# outside\n")
+      end
+
+      it 'still publishes a snapshot when a link in LIB_DIR is dangling' do
+        File.symlink(File.join(root, 'missing.rb'), File.join(LIB_DIR, 'dangling.rb'))
+
+        dir = manager.snapshot
+
+        expect(published).to eq([dir])
+        expect(staging).to be_empty
+        expect(File.readlink(File.join(dir, 'lib', 'dangling.rb'))).to eq(File.join(root, 'missing.rb'))
+      end
+
+      it 'keeps a linked directory as a link instead of copying its tree' do
+        File.symlink(outside, File.join(LIB_DIR, 'linkdir'))
+
+        dir = manager.snapshot
+
+        expect(File.symlink?(File.join(dir, 'lib', 'linkdir'))).to be(true)
+        expect(File.readlink(File.join(dir, 'lib', 'linkdir'))).to eq(outside)
+      end
+
+      it 'restores the links on revert' do
+        File.symlink(outside, File.join(LIB_DIR, 'linkdir'))
+        File.symlink(File.join(root, 'missing.rb'), File.join(LIB_DIR, 'dangling.rb'))
+        manager.snapshot
+        FileUtils.rm_f([File.join(LIB_DIR, 'linkdir'), File.join(LIB_DIR, 'dangling.rb')])
+        install('5.23.0')
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+        expect(File.readlink(File.join(LIB_DIR, 'linkdir'))).to eq(outside)
+        expect(File.readlink(File.join(LIB_DIR, 'dangling.rb'))).to eq(File.join(root, 'missing.rb'))
+      end
     end
 
     it 'leaves only an invisible staging directory when the process is killed mid-copy' do
@@ -467,6 +528,72 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         manager.revert
 
         expect(messages).not_to include("    #{older}")
+      end
+    end
+
+    context 'when an older Lich saved the snapshot with --lib-dir (files under its own name)' do
+      let(:legacy_name) { File.basename(LIB_DIR) }
+
+      # Older versions ran mkdir_p(<snap>/lib) then cp_r(LIB_DIR, <snap>),
+      # so the files land in <snap>/<LIB_DIR name>/ and lib/ stays empty.
+      def make_legacy_snapshot(stamp, version)
+        dir = make_snapshot(stamp, version, omit: %i[version lib])
+        FileUtils.mkdir_p(File.join(dir, 'lib'))
+        write(File.join(dir, legacy_name, 'version.rb'), "LICH_VERSION = '#{version}'\n")
+        write(File.join(dir, legacy_name, 'common', 'util.rb'), "# util #{version}\n")
+        dir
+      end
+
+      it 'refuses it and says to rename the directory instead of blaming an interruption' do
+        expect(legacy_name).not_to eq('lib')
+        dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(messages).to include("    #{dir}")
+        expect(messages).to include('  - lib/version.rb is missing')
+        expect(messages).to include("  - an older Lich saved this --lib-dir snapshot's files in #{legacy_name}/; " \
+                                    "rename #{legacy_name}/ to lib/ to use it")
+        expect(messages.grep(/interrupted/)).to be_empty
+      end
+
+      it 'restores it once the directory is renamed as instructed' do
+        dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+        FileUtils.rm_rf(File.join(dir, 'lib'))
+        File.rename(File.join(dir, legacy_name), File.join(dir, 'lib'))
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(File.read(File.join(LIB_DIR, 'common', 'util.rb'))).to eq("# util 5.21.0\n")
+      end
+
+      it 'still blames an interruption for the other directories when both kinds are listed' do
+        legacy = make_legacy_snapshot('2026-10-16-00-00-00', '5.21.0')
+        broken = make_snapshot('2026-10-17-00-00-00', '5.22.0', omit: %i[scripts])
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('The 2 newest snapshots are incomplete, so nothing was changed:')
+        expect(messages).to include("    #{legacy}", "    #{broken}")
+        expect(messages).to include('The ones without a rename hint were most likely left by snapshots that were interrupted.')
+      end
+
+      it 'gives no rename hint when LIB_DIR is named lib' do
+        dir = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[version])
+        write(File.join(dir, 'other', 'version.rb'), "LICH_VERSION = '5.21.0'\n")
+        stub_const('LIB_DIR', File.join(root, 'live', 'lib'))
+        install('5.22.0')
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages.grep(/rename/)).to be_empty
+        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
       end
     end
 

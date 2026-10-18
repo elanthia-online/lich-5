@@ -161,7 +161,10 @@ module Lich
         # exist into +dest+. LIB_DIR's contents always land in dest/lib, even
         # when LIB_DIR is not named "lib" (--lib-dir), because that is where
         # #revert reads them from. Working directories a failed #revert kept
-        # in LIB_DIR are not part of the install and are left out.
+        # in LIB_DIR are not part of the install and are left out. A child of
+        # LIB_DIR that is a symlink is copied as a link, not followed, so a
+        # dangling link cannot abort the snapshot and a linked directory is
+        # not copied as a full tree.
         #
         # @param dest [String] directory to fill
         # @return [void]
@@ -171,7 +174,7 @@ module Lich
           dest_lib = File.join(dest, 'lib')
           FileUtils.mkdir_p(dest_lib)
           Dir.children(LIB_DIR).each do |name|
-            FileUtils.cp_r(File.join(LIB_DIR, name), dest_lib) unless revert_temp_name?(name)
+            FileUtils.cp_r(File.join(LIB_DIR, name), dest_lib, dereference_root: false) unless revert_temp_name?(name)
           end
 
           FileUtils.mkdir_p(File.join(dest, 'scripts'))
@@ -221,12 +224,30 @@ module Lich
           problems = []
           if !File.file?(File.join(dir, 'lib', 'version.rb'))
             problems << 'lib/version.rb is missing'
+            legacy = legacy_lib_dir_name(dir)
+            if legacy
+              problems << "an older Lich saved this --lib-dir snapshot's files in #{legacy}/; " \
+                          "rename #{legacy}/ to lib/ to use it"
+            end
           elsif snapshot_version(dir).nil?
             problems << 'lib/version.rb does not declare LICH_VERSION'
           end
           problems << "#{lich_file_name} is missing" unless File.file?(File.join(dir, lich_file_name))
           problems << 'scripts/ is missing' unless File.directory?(File.join(dir, 'scripts'))
           problems
+        end
+
+        # Older Lich versions copied LIB_DIR into a snapshot under its own
+        # name, so with --lib-dir pointing at a directory not named "lib" the
+        # files landed in <snapshot>/<name>/ and lib/ stayed empty.
+        #
+        # @param dir [String] snapshot directory
+        # @return [String, nil] that directory name if +dir+ has this layout
+        def legacy_lib_dir_name(dir)
+          name = File.basename(LIB_DIR)
+          return nil if name == 'lib'
+
+          File.file?(File.join(dir, name, 'version.rb')) ? name : nil
         end
 
         # @param dir [String] snapshot directory
@@ -269,10 +290,13 @@ module Lich
             respond "    #{path}"
             problems.each { |problem| respond "  - #{problem}" }
           end
-          if incomplete.size == 1
+          interrupted = incomplete.count { |path, _| legacy_lib_dir_name(path).nil? }
+          if interrupted == incomplete.size && interrupted == 1
             respond 'It was most likely left by a snapshot that was interrupted.'
-          else
+          elsif interrupted == incomplete.size
             respond 'They were most likely left by snapshots that were interrupted.'
+          elsif interrupted.positive?
+            respond 'The ones without a rename hint were most likely left by snapshots that were interrupted.'
           end
 
           if fallback
