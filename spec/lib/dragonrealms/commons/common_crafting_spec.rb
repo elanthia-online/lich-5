@@ -357,6 +357,11 @@ describe DRCC do
       allow(Lich::Messaging).to receive(:msg)
     end
 
+    it 'keeps the belt tie helper out of the public DRCC API' do
+      expect(DRCC).not_to respond_to(:tie_to_crafting_belt?)
+      expect { DRCC.tie_to_crafting_belt?('tongs', belt) }.to raise_error(NoMethodError, /private method/)
+    end
+
     it 'returns nil without sending anything when there is no tool name' do
       expect(DRCC.stow_crafting_item(nil, 'backpack', belt)).to be_nil
       expect(sent).to be_empty
@@ -400,7 +405,7 @@ describe DRCC do
         expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
         expect(sent).to eq([tie, put])
         expect(Lich::Messaging).to have_received(:msg)
-          .with('bold', "DRCC: Failed to tie tongs to forger's belt. Putting it in your backpack.").once
+          .with('bold', "DRCC: Failed to tie tongs to forger's belt. Stowing it off the belt instead.").once
       end
     end
 
@@ -447,9 +452,11 @@ describe DRCC do
       end
     end
 
-    # Every pair of tie replies DRCI knows (and a timeout), in order: the trip
+    # Every ordered pair of tie replies DRCI knows (and a timeout): the trip
     # and the retry happen only for wounds, at most once, and anything that
-    # isn't a tie ends in the bag.
+    # isn't a tie ends in the bag. DRCI's /^You don't seem to be able to move/
+    # is left out: the real bput skips that line, so the outcome is the
+    # timeout ('') case covered here.
     describe 'for every pair of tie replies' do
       success = ["You attach the tongs to your forger's belt.", 'You tie the tongs to the belt.',
                  'The tongs has already been tied off.']

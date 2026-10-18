@@ -35,7 +35,6 @@ module Lich
       BELT_UNTIE_ALREADY = /^You are already/
       BELT_UNTIE_NOT_FOUND = /^Untie what/
       BELT_UNTIE_WOUNDED = /^Your wounds hinder your ability to do that/
-      BELT_TIE_WOUNDED = /^Your wounds hinder your ability to do that/
 
       GET_CRAFTING_SUCCESS = /^You get/
       GET_CRAFTING_ALREADY = /^You are already/
@@ -49,8 +48,7 @@ module Lich
       UNTIE_NOT_FOUND = /^Untie what/
       UNTIE_WOUNDED = /^Your wounds hinder your ability to do that/
 
-      TIE_BELT_SUCCESS = 'you attach'
-      TIE_BELT_WOUNDED = 'Your wounds hinder'
+      TIE_BELT_WOUNDED = /^Your wounds hinder your ability to do that/
 
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
@@ -373,7 +371,7 @@ module Lich
           # Not tied: wounds outlasted the safe-room trip, or the reply was a
           # refusal that retrying won't clear. Put the tool in the bag instead;
           # get_crafting_item's `get my <name>` finds it there.
-          Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Putting it in your #{bag}.")
+          Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
         end
 
         case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
@@ -396,7 +394,7 @@ module Lich
         command = "tie my #{name} to my #{belt['name']}"
         patterns = [DRCI::TIE_ITEM_SUCCESS_PATTERNS, DRCI::TIE_ITEM_EMPTY_PATTERN, DRCI::TIE_ITEM_FAILURE_PATTERNS]
         result = DRC.bput(command, *patterns)
-        if result.match?(BELT_TIE_WOUNDED)
+        if result.match?(TIE_BELT_WOUNDED)
           Lich::Messaging.msg('bold', "DRCC: Wounds hinder tying #{name} to #{belt['name']}. Visiting safe-room, then trying once more.")
           craft_room = Room.current.id
           DRC.wait_for_script_to_complete('safe-room', ['force'])
@@ -405,6 +403,7 @@ module Lich
         end
         DRCI::TIE_ITEM_SUCCESS_PATTERNS.any? { |pattern| result.match?(pattern) }
       end
+      private_class_method :tie_to_crafting_belt?
 
       def crafting_cost(recipe, hometown, parts, quantity, material)
         # To use this method, you'll need to pass:
