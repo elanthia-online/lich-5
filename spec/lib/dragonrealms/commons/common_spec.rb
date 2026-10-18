@@ -925,7 +925,7 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
 
     context 'when the room is cluttered' do
-      # Real kick_pile? runs; only the game round-trip and room state are stubbed.
+      # Real kick_pile? runs; only bput, the room's objects, fix_standing and waitrt? are stubbed.
       # Each bput call pops the next scripted reply and records the command sent.
       let(:sent) { [] }
 
