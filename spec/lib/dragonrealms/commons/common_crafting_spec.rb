@@ -430,6 +430,8 @@ describe DRCC do
         feed_input(nil, '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+        expect(DRCC).to have_received(:get).twice
+        expect(reprompts).to be_empty
       end
 
       it 'never returns nil once the menu is shown' do
