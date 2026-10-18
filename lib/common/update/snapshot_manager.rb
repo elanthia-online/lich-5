@@ -4,8 +4,9 @@
   Snapshot and rollback functionality for Lich core files.
 
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
-  updates. Supports rollback to most recent snapshot. #snapshot and
-  #revert describe how each leaves the installation as it was when it fails.
+  updates. Supports rollback to most recent snapshot. #snapshot, #revert
+  and #restore_from describe how each leaves the installation as it was when
+  it fails.
 
   A revert killed during the swap cannot undo it. It can leave lib/, the core
   scripts or lich.rbw missing, so that Lich will not start and cannot run the
@@ -410,7 +411,8 @@ module Lich
         # @return [void]
         # @raise [SystemCallError] if the restore fails; the install is left
         #   as it was (or, if even the undo fails, the working directories are
-        #   kept and named so the files can be recovered by hand)
+        #   kept and named so the files can be recovered by hand; the live
+        #   lib/, core scripts and lich.rbw may then be part old, part restored)
         def restore_from(snapshot_dir)
           temp_dirs = []
           begin
@@ -499,7 +501,7 @@ module Lich
         # Windows will not rename a file or directory while another process
         # (an antivirus or search indexer reading files just written) has it,
         # or a file inside it, open without delete sharing, and reports that
-        # as EACCES or EPERM until the other process lets go. Each retry
+        # as EACCES, EPERM or EBUSY until the other process lets go. Each retry
         # waits the next of RENAME_RETRY_DELAYS. Nothing is retried on other
         # platforms, where these errors do not clear on their own, nor when
         # +to+ exists, which no wait will change (#publish_snapshot treats
