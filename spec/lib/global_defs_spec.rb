@@ -89,15 +89,22 @@ RSpec.describe '#fput' do
     allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
     allow(self).to receive(:put)
     allow(self).to receive(:echo)
+    # An example that scripts no reads fails at once instead of reaching
+    # the real get? and waiting out the real 60s timeout.
+    allow(self).to receive(:get?) { raise 'fput read the game with no scripted response' }
   end
 
-  # Stub get? to return responses in order, then nil when exhausted
+  # Stub get? to return responses in order, then nil when exhausted. A
+  # regression that keeps fput reading past the script (a lost return, a
+  # timeout that never fires) raises 20 reads past the end instead of
+  # spinning forever.
   def stub_game_responses(*responses)
     call_count = 0
     allow(self).to receive(:get?) do
-      response = responses[call_count]
       call_count += 1
-      response
+      raise "fput read #{call_count - responses.size} times past the scripted responses" if call_count > responses.size + 20
+
+      responses[call_count - 1]
     end
   end
 
@@ -456,13 +463,7 @@ RSpec.describe '#fput' do
     end
 
     it 'does not timeout when timeout: 0 is specified' do
-      responses = Array.new(5, nil) + ['OK.']
-      call_count = 0
-      allow(self).to receive(:get?) do
-        r = responses[call_count]
-        call_count += 1
-        r
-      end
+      stub_game_responses(*Array.new(5, nil), 'OK.')
       allow(self).to receive(:pause)
       stub_elapsed_time(10_000)
 
@@ -475,17 +476,12 @@ RSpec.describe '#fput' do
 
     it 'resets the timer on any game response' do
       # nil, nil -> unmatched response (resets timer) -> nil, nil -> matching response
-      responses = [nil, nil, 'Some unmatched text.', nil, nil, 'Expected match.']
-      resp_index = 0
-      allow(self).to receive(:get?) do
-        r = responses[resp_index]
-        resp_index += 1
-        r
-      end
+      stub_game_responses(nil, nil, 'Some unmatched text.', nil, nil, 'Expected match.')
       allow(self).to receive(:pause)
       allow(self).to receive(:sleep)
 
-      # Time progresses: 30s before response, then 25s after reset - never exceeds 60s window
+      # 30s before the response, then 55s after the reset (85s after the
+      # send): under 60s only because of the reset
       frozen_time = Time.now
       time_calls = 0
       allow(Time).to receive(:now) do
@@ -947,7 +943,7 @@ RSpec.describe '#waitrt?' do
     expect(waitrt?).to be(false)
     left = [8.0, 0.0]
     allow(self).to receive(:checkrt) { left.first }
-    allow(self).to receive(:sleep) { left.shift }
+    allow(self).to receive(:sleep) { left.size > 1 ? left.shift : raise('legacy waitrt? slept twice') }
     expect(waitrt?).to be(false) # slept the 8 out, nothing remains
     expect(left).to eq([0.0])
   end
@@ -955,7 +951,7 @@ RSpec.describe '#waitrt?' do
   it 'legacy: roundtime that outlasts the one sleep reads as still present' do
     allow(self).to receive(:checkrt).and_return(8.0)
     sleeps = []
-    allow(self).to receive(:sleep) { |n| sleeps << n }
+    allow(self).to receive(:sleep) { |n| (sleeps << n).size > 1 ? raise('legacy waitrt? polled') : nil }
     expect(waitrt?).to be(true)
     expect(sleeps).to eq([8.0]) # one sleep, no polling
   end
@@ -963,7 +959,8 @@ RSpec.describe '#waitrt?' do
   it 'bounded: waits a roundtime out in slices and reports there was one' do
     left = [0.25, 0.15, 0.05, 0.0]
     sleeps = []
-    allow(self).to receive(:checkrt) { left.first }
+    reads = 0
+    allow(self).to receive(:checkrt) { (reads += 1) > 100 ? raise('waitrt? read checkrt without end') : left.first }
     allow(self).to receive(:sleep) do |n|
       sleeps << n
       left.shift
@@ -977,7 +974,8 @@ RSpec.describe '#waitrt?' do
   end
 
   it 'ends early on the interrupt' do
-    allow(self).to receive(:checkrt).and_return(5.0)
+    reads = 0
+    allow(self).to receive(:checkrt) { (reads += 1) > 500 ? raise('waitrt? read checkrt without end') : 5.0 }
     calls = 0
     allow(self).to receive(:sleep) { raise "still waiting after #{calls} sleeps" if (calls += 1) > 100 }
     expect(waitrt?(interrupt: -> { calls >= 2 })).to be(true)
@@ -985,7 +983,8 @@ RSpec.describe '#waitrt?' do
   end
 
   it 'ends at the cap' do
-    allow(self).to receive(:checkrt).and_return(5.0)
+    reads = 0
+    allow(self).to receive(:checkrt) { (reads += 1) > 500 ? raise('waitrt? read checkrt without end') : 5.0 }
     now = Time.now
     ticks = 0
     allow(Time).to receive(:now) { now + ticks }
@@ -1009,7 +1008,7 @@ RSpec.describe '#waitcastrt?' do
   it 'legacy: one sleep of the whole cast roundtime, true when there was one' do
     allow(self).to receive(:checkcastrt).and_return(3.0)
     sleeps = []
-    allow(self).to receive(:sleep) { |n| sleeps << n }
+    allow(self).to receive(:sleep) { |n| (sleeps << n).size > 1 ? raise('legacy waitcastrt? polled') : nil }
     expect(waitcastrt?).to be(true)
     expect(sleeps).to eq([3.0])
     allow(self).to receive(:checkcastrt).and_return(0)
@@ -1017,7 +1016,8 @@ RSpec.describe '#waitcastrt?' do
   end
 
   it 'bounded: ends early on the interrupt' do
-    allow(self).to receive(:checkcastrt).and_return(3.0)
+    reads = 0
+    allow(self).to receive(:checkcastrt) { (reads += 1) > 500 ? raise('waitcastrt? read checkcastrt without end') : 3.0 }
     calls = 0
     allow(self).to receive(:sleep) { raise "still waiting after #{calls} sleeps" if (calls += 1) > 100 }
     expect(waitcastrt?(interrupt: -> { calls >= 1 })).to be(true)
@@ -1025,7 +1025,8 @@ RSpec.describe '#waitcastrt?' do
   end
 
   it 'bounded: waits in tenth-second slices and ends at the cap' do
-    allow(self).to receive(:checkcastrt).and_return(3.0)
+    reads = 0
+    allow(self).to receive(:checkcastrt) { (reads += 1) > 500 ? raise('waitcastrt? read checkcastrt without end') : 3.0 }
     now = Time.now
     ticks = 0
     allow(Time).to receive(:now) { now + ticks }
