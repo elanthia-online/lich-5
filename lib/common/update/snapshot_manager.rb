@@ -114,9 +114,10 @@ module Lich
         #
         # Refuses, without changing anything, when the newest L5-snapshot-*
         # directory is incomplete (no lib/version.rb declaring LICH_VERSION,
-        # no lich.rbw, or no scripts/). It names that directory and, if there
-        # is one, the next complete snapshot, but never falls back to it on
-        # its own: an older snapshot may be several versions back.
+        # no lich.rbw, or no scripts/). It names every incomplete directory
+        # newer than the next complete snapshot, and that snapshot if there
+        # is one, but never falls back to it on its own: an older snapshot
+        # may be several versions back.
         #
         # @return [void]
         def revert
@@ -130,9 +131,8 @@ module Lich
             return
           end
 
-          problems = snapshot_problems(restore_snapshot)
-          unless problems.empty?
-            refuse_incomplete(restore_snapshot, problems, candidates.drop(1))
+          unless snapshot_problems(restore_snapshot).empty?
+            refuse_incomplete(candidates)
             return
           end
 
@@ -160,15 +160,19 @@ module Lich
         # Copies lich.rbw, the contents of LIB_DIR, and the core scripts that
         # exist into +dest+. LIB_DIR's contents always land in dest/lib, even
         # when LIB_DIR is not named "lib" (--lib-dir), because that is where
-        # #revert reads them from.
+        # #revert reads them from. Working directories a failed #revert kept
+        # in LIB_DIR are not part of the install and are left out.
         #
         # @param dest [String] directory to fill
         # @return [void]
         def copy_core_files(dest)
           FileUtils.cp(File.join(LICH_DIR, lich_file_name), File.join(dest, lich_file_name))
 
-          FileUtils.mkdir_p(File.join(dest, 'lib'))
-          FileUtils.cp_r(File.join(LIB_DIR, '.'), File.join(dest, 'lib'))
+          dest_lib = File.join(dest, 'lib')
+          FileUtils.mkdir_p(dest_lib)
+          Dir.children(LIB_DIR).each do |name|
+            FileUtils.cp_r(File.join(LIB_DIR, name), dest_lib) unless revert_temp_name?(name)
+          end
 
           FileUtils.mkdir_p(File.join(dest, 'scripts'))
           CORE_SCRIPTS.each do |file|
@@ -180,7 +184,9 @@ module Lich
         # Renames a fully copied staging directory to its final snapshot
         # name. If another snapshot already took this second's name, a
         # zero-padded counter is appended, which still sorts after the bare
-        # name so #revert picks the newer one.
+        # name so #revert picks the newer one. Windows reports a rename onto
+        # an existing directory as EACCES, so that counts as a collision too
+        # when the target now exists; any other EACCES is re-raised.
         #
         # @param staging_dir [String] completed staging directory
         # @return [String] path of the published snapshot
@@ -193,7 +199,9 @@ module Lich
             begin
               File.rename(staging_dir, target)
               return target
-            rescue Errno::EEXIST, Errno::ENOTEMPTY
+            rescue Errno::EEXIST, Errno::ENOTEMPTY, Errno::EACCES => e
+              raise if e.is_a?(Errno::EACCES) && !File.exist?(target)
+
               next # another process published the same name in between
             end
           end
@@ -230,25 +238,52 @@ module Lich
           nil
         end
 
-        # Explains why #revert will not restore +dir+ and what to do next.
+        # Explains why #revert will not restore the newest snapshot and what
+        # to do next. Every incomplete snapshot newer than the next complete
+        # one is listed, because the revert keeps refusing until all of them
+        # are out of the way (older Lich versions left one per failed
+        # snapshot attempt).
         #
-        # @param dir [String] the incomplete newest snapshot
-        # @param problems [Array<String>] from #snapshot_problems
-        # @param older [Array<String>] the remaining snapshots, newest first
+        # @param candidates [Array<String>] all snapshots, newest first; the
+        #   first is incomplete
         # @return [void]
-        def refuse_incomplete(dir, problems, older)
-          respond
-          respond 'The newest snapshot is incomplete, so nothing was changed:'
-          respond "    #{dir}"
-          problems.each { |problem| respond "  - #{problem}" }
-          respond 'It was most likely left by a snapshot that was interrupted.'
+        def refuse_incomplete(candidates)
+          incomplete = []
+          fallback = nil
+          candidates.each do |path|
+            problems = snapshot_problems(path)
+            if problems.empty?
+              fallback = path
+              break
+            end
+            incomplete << [path, problems]
+          end
 
-          fallback = older.find { |path| snapshot_problems(path).empty? }
+          respond
+          if incomplete.size == 1
+            respond 'The newest snapshot is incomplete, so nothing was changed:'
+          else
+            respond "The #{incomplete.size} newest snapshots are incomplete, so nothing was changed:"
+          end
+          incomplete.each do |path, problems|
+            respond "    #{path}"
+            problems.each { |problem| respond "  - #{problem}" }
+          end
+          if incomplete.size == 1
+            respond 'It was most likely left by a snapshot that was interrupted.'
+          else
+            respond 'They were most likely left by snapshots that were interrupted.'
+          end
+
           if fallback
             respond
             respond "The next complete snapshot is Lich5 version #{snapshot_version(fallback)}:"
             respond "    #{fallback}"
-            respond 'To revert to it, move or delete the incomplete directory above,'
+            if incomplete.size == 1
+              respond 'To revert to it, move or delete the incomplete directory above,'
+            else
+              respond "To revert to it, move or delete all #{incomplete.size} incomplete directories above,"
+            end
             respond 'then run the revert again.'
           else
             respond 'No complete snapshot was found. Seek assistance.'
@@ -263,7 +298,8 @@ module Lich
         # leaves the install untouched. Phase 2 swaps the copies in with
         # renames only, recording each one, and undoes them in reverse if any
         # rename fails. Core scripts that the snapshot does not contain are
-        # left in place rather than deleted.
+        # left in place rather than deleted, and so are working directories
+        # an earlier failed revert kept in LIB_DIR for recovery.
         #
         # @param snapshot_dir [String] a snapshot that passed #snapshot_problems
         # @return [void]
@@ -296,12 +332,13 @@ module Lich
 
           journal = []
           begin
+            # This run's working directories, and any a previous failed
+            # revert kept for recovery by hand, stay where they are.
             Dir.children(LIB_DIR).each do |name|
-              path = File.join(LIB_DIR, name)
-              move_entry(path, File.join(old_lib, name), journal) unless temp_dirs.include?(path)
+              move_entry(File.join(LIB_DIR, name), File.join(old_lib, name), journal) unless revert_temp_name?(name)
             end
             Dir.children(new_lib).each do |name|
-              move_entry(File.join(new_lib, name), File.join(LIB_DIR, name), journal)
+              move_entry(File.join(new_lib, name), File.join(LIB_DIR, name), journal) unless revert_temp_name?(name)
             end
 
             Dir.children(new_scripts).each do |name|
@@ -339,6 +376,12 @@ module Lich
           dir = Dir.mktmpdir("#{REVERT_TEMP_PREFIX}#{role}-", parent)
           temp_dirs << dir
           dir
+        end
+
+        # @param name [String] a directory entry name
+        # @return [Boolean] true if +name+ is a #restore_from working directory
+        def revert_temp_name?(name)
+          name.start_with?(REVERT_TEMP_PREFIX)
         end
 
         # Renames +from+ to +to+ and records the move so it can be undone.

@@ -18,6 +18,10 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     stub_const('LICH_DIR', lich_dir)
     stub_const('SCRIPT_DIR', script_dir)
     stub_const('BACKUP_DIR', backup_dir)
+    # Other spec files define a top-level respond with a different
+    # signature (one requires an argument), and which one is loaded
+    # depends on how the suite is split, so never rely on the global one.
+    allow(manager).to receive(:respond)
   end
 
   after do
@@ -199,6 +203,49 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(published.max).to eq(second)
     end
 
+    it 'treats EACCES as a collision when another snapshot took the name first (Windows)' do
+      allow(Time).to receive(:now).and_return(Time.new(2026, 10, 18, 12, 0, 0))
+      base = File.join(BACKUP_DIR, 'L5-snapshot-2026-10-18-12-00-00')
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        if to == base
+          # Another instance publishes between the existence check and the
+          # rename; Windows then reports EACCES, not EEXIST.
+          FileUtils.mkdir_p(File.join(base, 'lib'))
+          raise Errno::EACCES, to
+        end
+        original.call(from, to)
+      end
+
+      dir = manager.snapshot
+
+      expect(dir).to eq("#{base}-01")
+      expect(File.read(File.join(dir, lich_name))).to eq("# lich 5.22.0\n")
+      expect(staging).to be_empty
+    end
+
+    it 're-raises an EACCES from publishing when nothing took the name' do
+      allow(File).to receive(:rename).and_raise(Errno::EACCES)
+      messages = capture_responses
+
+      expect { manager.snapshot }.to raise_error(Errno::EACCES)
+
+      expect(published).to be_empty
+      expect(staging).to be_empty
+      expect(messages.join("\n")).to include('No snapshot was saved')
+    end
+
+    it 'leaves out working directories a failed revert kept in LIB_DIR' do
+      write(File.join(LIB_DIR, '.lich5-revert-old-abc123', 'version.rb'), "LICH_VERSION = '5.21.0'\n")
+      write(File.join(LIB_DIR, '.lich5-revert-new-def456', 'common', 'util.rb'), "# util 5.20.0\n")
+      write(File.join(LIB_DIR, '.hidden_user_file'), "keep\n")
+
+      dir = manager.snapshot
+
+      expect(Dir.children(File.join(dir, 'lib')).grep(/\A\.lich5-revert-/)).to be_empty
+      expect(tree(File.join(dir, 'lib'))).to eq(tree(LIB_DIR).reject { |rel, _| rel.start_with?('.lich5-revert-') })
+      expect(File.read(File.join(dir, 'lib', '.hidden_user_file'))).to eq("keep\n")
+    end
+
     it 'leaves only an invisible staging directory when the process is killed mid-copy' do
       skip 'fork is not available on this platform' unless Process.respond_to?(:fork)
       older = make_snapshot('2026-01-01-00-00-00', '5.21.0')
@@ -312,6 +359,18 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
     end
 
+    it 'leaves a working directory an earlier failed revert kept for recovery in place' do
+      make_snapshot('2026-10-01-00-00-00', '5.21.0')
+      kept = File.join(LIB_DIR, '.lich5-revert-old-abc123')
+      write(File.join(kept, 'version.rb'), "LICH_VERSION = '5.22.0'\n")
+
+      manager.revert
+
+      expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      expect(File.read(File.join(kept, 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+      expect(revert_temp_dirs).to eq([kept])
+    end
+
     context 'when the newest snapshot is incomplete' do
       let!(:complete) { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
 
@@ -360,6 +419,67 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
         expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
       end
+    end
+
+    context 'when several incomplete snapshots are stacked above a complete one' do
+      # Older Lich versions left one empty L5-snapshot-* directory per failed
+      # snapshot attempt, e.g. a --home without lich.rbw failing every time.
+      let!(:complete) { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
+      let!(:stacked) do
+        %w[10 11 12].map do |day|
+          make_snapshot("2026-10-#{day}-00-00-00", '5.22.0', omit: %i[lich version lib scripts])
+        end
+      end
+
+      it 'names every one of them and changes nothing' do
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('The 3 newest snapshots are incomplete, so nothing was changed:')
+        stacked.each { |dir| expect(messages).to include("    #{dir}") }
+        expect(messages).to include('They were most likely left by snapshots that were interrupted.')
+        expect(messages).to include('The next complete snapshot is Lich5 version 5.21.0:')
+        expect(messages).to include("    #{complete}")
+        expect(messages).to include('To revert to it, move or delete all 3 incomplete directories above,')
+        expect(messages.join("\n")).not_to include('has been reverted')
+      end
+
+      it 'restores the complete snapshot after the user removes every listed directory' do
+        messages = capture_responses
+        manager.revert
+        listed = messages.grep(/\A    /).map(&:strip) - [complete]
+        listed.each { |dir| FileUtils.remove_entry(dir) }
+
+        manager.revert
+
+        expect(listed).to match_array(stacked)
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
+      it 'does not list an incomplete snapshot older than the complete one' do
+        older = make_snapshot('2026-09-01-00-00-00', '5.20.0', omit: %i[scripts])
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).not_to include("    #{older}")
+      end
+    end
+
+    it 'names every incomplete snapshot when none is complete' do
+      first = make_snapshot('2026-10-16-00-00-00', '5.22.0', omit: %i[scripts])
+      second = make_snapshot('2026-10-17-00-00-00', '5.22.0', omit: %i[lich])
+      messages = capture_responses
+
+      manager.revert
+
+      expect(messages).to include('The 2 newest snapshots are incomplete, so nothing was changed:')
+      expect(messages.index("    #{second}")).to be < messages.index("    #{first}")
+      expect(messages).to include('No complete snapshot was found. Seek assistance.')
     end
 
     it 'says no complete snapshot exists when the only one is incomplete' do
