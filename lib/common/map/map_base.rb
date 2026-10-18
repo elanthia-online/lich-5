@@ -302,9 +302,7 @@ module Lich
         # @return [Array<Integer, String>] a new Array; +array+ is untouched
         # @raise [ArgumentError] when +from+ is not a room id or room
         def estimate_time_path_from(array, from)
-          # Rooms are Map instances even when this is called through Room, so
-          # test against the Map class, not self.
-          origin = if from.is_a?(tag_cache_host)
+          origin = if from.is_a?(room_class)
                      from.id
                    elsif from.is_a?(Integer) && !from.negative?
                      # A negative id would index Map.[]'s room list from the
@@ -324,7 +322,16 @@ module Lich
 
           [origin] + array
         end
-        private :estimate_time_path_from
+
+        # The class rooms are instances of. Rooms are built as Map objects even
+        # when a method runs through Room, so this is the class that includes
+        # MapBase, not self. That is the same class #tag_cache_host finds, so
+        # reuse its lookup.
+        # @return [Class]
+        def room_class
+          tag_cache_host
+        end
+        private :estimate_time_path_from, :room_class
 
         # Tag name => Array of room ids. Private: callers must go through
         # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.

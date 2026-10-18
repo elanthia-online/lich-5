@@ -31,8 +31,9 @@ raises `ArgumentError`, including an explicit `nil` (what `Room.current` gives
 in an unmapped room), since quietly treating it as "no start room" would return
 the short estimate again. A negative id is refused too: DragonRealms reports
 `Map.current_room_id` as -1 when it doesn't know the room. A non-numeric String
-is refused, not looked up by title. If the path already begins with the `from:` room, that room is not added
-a second time, so a full path is also safe to pass with `from:`.
+is refused, not looked up by title. If the path already begins with the `from:`
+room, that room is not added a second time, so a full path is also safe to pass
+with `from:`.
 
 Leave `from:` out and `estimate_time` behaves as it always has.
 
