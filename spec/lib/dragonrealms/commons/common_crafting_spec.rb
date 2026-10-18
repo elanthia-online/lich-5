@@ -292,6 +292,23 @@ describe DRCC do
       messages.grep(/is not on the list/)
     end
 
+    # Stubs get with a finite list of input lines. recipe_lookup loops until
+    # it accepts a number, so a stub that repeats its last value forever would
+    # turn a regression into a hang; this raises instead once input runs out.
+    # (The empty? check, not `shift || raise`, lets a literal nil be fed.)
+    def feed_input(*lines)
+      queue = lines.dup
+      allow(DRCC).to receive(:get) do
+        raise 'get called after input ran out' if queue.empty?
+
+        queue.shift
+      end
+    end
+
+    def hint
+      messages.grep(/full name/)
+    end
+
     context 'when no recipe matches' do
       it 'returns nil and says so without reading input' do
         expect(DRCC).not_to receive(:get)
@@ -326,39 +343,40 @@ describe DRCC do
 
     context 'when a partial name matches several recipes' do
       it 'lists the matches as a numbered menu in recipe order' do
-        allow(DRCC).to receive(:get).and_return('1')
+        feed_input('1')
 
         DRCC.recipe_lookup(recipes, 'metal targ')
 
         expect(menu_lines).to eq(['    1: a metal target shield', '    2: a metal targe'])
+        expect(hint.length).to eq(1)
       end
 
       it 'returns the first entry when 1 is chosen' do
-        allow(DRCC).to receive(:get).and_return('1')
+        feed_input('1')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(target_shield)
       end
 
       it 'returns the recipe at the chosen position, not one whose name merely contains it' do
-        allow(DRCC).to receive(:get).and_return('2')
+        feed_input('2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
       end
 
       it 'matches the partial name case-insensitively' do
-        allow(DRCC).to receive(:get).and_return('2')
+        feed_input('2')
 
         expect(DRCC.recipe_lookup(recipes, 'METAL PIKE')).to equal(pike_staff)
       end
 
       it 'accepts a choice surrounded by whitespace and a trailing newline' do
-        allow(DRCC).to receive(:get).and_return("  2 \n")
+        feed_input("  2 \n")
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
       end
 
       it 're-prompts on one past the end of the menu instead of returning an unrelated recipe' do
-        allow(DRCC).to receive(:get).and_return('3', '2')
+        feed_input('3', '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
         expect(DRCC).to have_received(:get).twice
@@ -366,42 +384,42 @@ describe DRCC do
       end
 
       it 're-prompts on a large number instead of returning the first recipe in the list' do
-        allow(DRCC).to receive(:get).and_return('999', '1')
+        feed_input('999', '1')
 
         expect(DRCC.recipe_lookup(recipes, 'metal pike')).to equal(pike)
         expect(reprompts.length).to eq(1)
       end
 
       it 're-prompts on 0 instead of returning the last menu entry' do
-        allow(DRCC).to receive(:get).and_return('0', '1')
+        feed_input('0', '1')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(target_shield)
         expect(reprompts).to eq(["DRCC: 0 is not on the list. Enter a number from 1 to 2 with #{$clean_lich_char}send #"])
       end
 
       it 're-prompts on a zero-padded zero' do
-        allow(DRCC).to receive(:get).and_return('00', '2')
+        feed_input('00', '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
         expect(reprompts.length).to eq(1)
       end
 
       it 'keeps re-prompting through several bad numbers' do
-        allow(DRCC).to receive(:get).and_return('0', '3', '42', '2')
+        feed_input('0', '3', '42', '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
         expect(reprompts.length).to eq(3)
       end
 
       it 'accepts the last entry exactly at the upper bound' do
-        allow(DRCC).to receive(:get).and_return('2')
+        feed_input('2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal pike')).to equal(pike_staff)
         expect(reprompts).to be_empty
       end
 
       it 'silently skips lines that are not a bare number, then takes the next valid choice' do
-        allow(DRCC).to receive(:get).and_return('abc', '', 'an unrelated line', '2x', '-1', '+1', '1.5', '2')
+        feed_input('abc', '', 'an unrelated line', '2x', '-1', '+1', '1.5', '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
         expect(DRCC).to have_received(:get).exactly(8).times
@@ -409,13 +427,13 @@ describe DRCC do
       end
 
       it 'skips a nil line (a read that returned nothing) instead of raising' do
-        allow(DRCC).to receive(:get).and_return(nil, '2')
+        feed_input(nil, '2')
 
         expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
       end
 
       it 'never returns nil once the menu is shown' do
-        allow(DRCC).to receive(:get).and_return('0', '7', 'x', '1')
+        feed_input('0', '7', 'x', '1')
 
         result = DRCC.recipe_lookup(recipes, 'metal targ')
         expect(result).not_to be_nil
@@ -425,7 +443,7 @@ describe DRCC do
 
     context 'when two recipes share the same name' do
       it 'labels the duplicate names with their type and chapter' do
-        allow(DRCC).to receive(:get).and_return('1')
+        feed_input('1')
 
         DRCC.recipe_lookup(recipes, 'a weighted staff')
 
@@ -433,14 +451,31 @@ describe DRCC do
                                   '    2: a weighted staff (shaping, chapter 9)'])
       end
 
+      it 'does not suggest typing the full name when the full name was typed' do
+        feed_input('1')
+
+        DRCC.recipe_lookup(recipes, 'a weighted staff')
+
+        expect(hint).to be_empty
+        expect(messages).to include("DRCC: Please select desired recipe #{$clean_lich_char}send #")
+      end
+
+      it 'still suggests the full name when a partial name reaches a duplicate' do
+        feed_input('1')
+
+        DRCC.recipe_lookup(recipes, 'weighted staff')
+
+        expect(hint.length).to eq(1)
+      end
+
       it 'returns the second recipe when the second entry is chosen' do
-        allow(DRCC).to receive(:get).and_return('2')
+        feed_input('2')
 
         expect(DRCC.recipe_lookup(recipes, 'a weighted staff')).to equal(shaping_staff)
       end
 
       it 'labels only the duplicated names when the menu also has unique names' do
-        allow(DRCC).to receive(:get).and_return('3')
+        feed_input('3')
 
         result = DRCC.recipe_lookup(recipes, 'staff')
 

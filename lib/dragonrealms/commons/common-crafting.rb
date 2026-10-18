@@ -291,7 +291,9 @@ module Lich
           exact_matches = matches.select { |x| x['name'] == item_name }
           return exact_matches.first if exact_matches.length == 1
 
-          Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
+          # The full-name hint is wrong when the full name was typed and is
+          # itself shared by several recipes.
+          Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')") if exact_matches.empty?
           Lich::Messaging.msg('plain', "DRCC: Please select desired recipe #{$clean_lich_char}send #")
           recipe_menu_labels(matches).each_with_index { |label, i| respond "    #{i + 1}: #{label}" }
           matches[recipe_menu_choice(matches.length) - 1]
