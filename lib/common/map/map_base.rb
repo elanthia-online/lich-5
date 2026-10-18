@@ -645,11 +645,6 @@ module Lich
         # that backup cannot be made the save is abandoned with an error rather
         # than overwriting the only copy; callers such as a mapdb upload ignore
         # the return value, so failing quietly would let them act on a stale map.
-        # Each temp file is written while the file it replaces still exists, so
-        # replacing a file needs free space for one extra copy of the map (two
-        # when there is no older backup, since the backup's rename frees the
-        # older one before the new map is written); with less, the save raises
-        # with the file unchanged.
         #
         # @param filename [String, nil] destination; nil writes a new
         #   map-<epoch>.json in the game's data directory
@@ -710,14 +705,17 @@ module Lich
         # with the destination unchanged. Writes are binary, so bytes are never
         # transcoded. A destination that is a symlink keeps the link and has the
         # file it points to replaced (or created, when the link dangles), as the
-        # in-place write this replaces did.
+        # in-place write this replaces did. File.realdirpath follows a dangling
+        # link the way the system does (a relative target from the link's
+        # directory, ".." from a directory's real location) and raises ELOOP on
+        # a cycle.
         # @param path [String] destination
         # @param mode_of [String] existing file whose permissions the result
         #   takes (the map file for both the map and its backup)
         # @yieldparam io [File] the open temp file
         # @return [void]
         def publish_map_file(path, mode_of:)
-          path = map_link_target(path) if File.symlink?(path)
+          path = File.realdirpath(path) if File.symlink?(path)
           tmp = "#{path}.#{Process.pid}.#{Thread.current.object_id}.tmp"
           File.open(tmp, 'wb') do |io|
             yield io
@@ -728,29 +726,6 @@ module Lich
           File.rename(tmp, path)
         ensure
           remove_map_temp_file(tmp) if tmp
-        end
-
-        # The file a symlinked destination points to. A link to an existing
-        # file resolves fully; a dangling one is followed hop by hop, as the
-        # kernel would: a relative target is taken from the link's directory,
-        # and each directory is resolved physically, so ".." after a
-        # symlinked directory climbs out of that directory's real location.
-        # Gives up after 40 links with ELOOP.
-        # @param path [String] a symlink
-        # @return [String] the path the write should replace or create
-        # @raise [Errno::ELOOP] on a link cycle
-        # @raise [Errno::ENOENT] when a dangling link's directory is missing
-        def map_link_target(path)
-          return File.realpath(path) if File.exist?(path)
-
-          40.times do
-            return path unless File.symlink?(path)
-
-            link = File.readlink(path)
-            hop = File.absolute_path?(link) ? link : File.join(File.realpath(File.dirname(path)), link)
-            path = File.join(File.realpath(File.dirname(hop)), File.basename(hop))
-          end
-          raise Errno::ELOOP, path
         end
 
         # Best-effort cleanup of a temp file left by a failed publish. It runs
@@ -771,7 +746,7 @@ module Lich
           Lich.log "error: #{message}: #{error.message}\n\t#{Array(error.backtrace).join("\n\t")}"
         end
 
-        private :publish_map_file, :map_link_target, :remove_map_temp_file, :report_map_save_failure
+        private :publish_map_file, :remove_map_temp_file, :report_map_save_failure
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets
