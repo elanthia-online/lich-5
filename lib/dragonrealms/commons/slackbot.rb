@@ -63,6 +63,11 @@ module Lich
       # never wait out the full network or rate-limit backoff.
       SEND_REQUEST_BUDGET = 5
 
+      # Part of a deadline request's remaining budget that net/http's own
+      # connect timeouts share out. The rest is headroom before the hard
+      # Timeout on the whole connect, so the two do not fire together.
+      CONNECT_SHARE_OF_BUDGET = 0.9
+
       # After a failed users.list call, #direct_message makes no new call for
       # this many seconds (or for Slack's Retry-After, if longer, but never
       # more than MAX_RETRY_DELAY_SECONDS), so a burst of messages during an
@@ -555,11 +560,10 @@ module Lich
 
       # Performs one HTTP request that is abandoned at the deadline.
       #
-      # The connection is opened before the Timeout block, bounded by
-      # net/http's own timeouts, and closed in an ensure after it. The
-      # asynchronous Timeout interrupt can then only land in the request on an
-      # open connection, never in net/http's connect or close, so it cannot
-      # leave a socket open.
+      # Timeout's default interrupt is not a StandardError, so if it lands in
+      # net/http's connect, net/http's `rescue => e` that closes the
+      # half-open socket never runs and the socket leaks. Each step below
+      # avoids that.
       #
       # With http_proxy set, net/http first resolves the target host to decide
       # whether to use the proxy. That lookup has no timeout of its own, so it
@@ -570,12 +574,18 @@ module Lich
       # connect and the TLS handshake (open_timeout). Through a proxy (taken
       # from http_proxy, which net/http always reaches without TLS) there is a
       # third, the CONNECT reply (read_timeout). Each step gets an equal share
-      # of the remaining budget, so together they stay within it. One limit
-      # remains: read_timeout bounds each read of the CONNECT reply, not the
-      # whole reply, so a reply that arrives in pieces can take longer, and a
-      # proxy that keeps sending it a byte at a time can hold the connect past
-      # the deadline without bound. The request is still never sent after the
-      # deadline.
+      # of most of the remaining budget, so a step that hangs ends with
+      # net/http's own error a little before the deadline. read_timeout only
+      # bounds each read of the CONNECT reply, though, so a proxy that keeps
+      # sending it a byte at a time could hold the connect without bound. The
+      # whole connect therefore also runs under a Timeout that raises
+      # Net::OpenTimeout, a StandardError, so net/http's connect still closes
+      # its socket when it is interrupted. The headroom keeps net/http's own
+      # timeouts from firing at the same moment as that interrupt.
+      #
+      # Once connected, the request runs under a Timeout for the rest of the
+      # budget, and the connection is closed in an ensure outside both
+      # Timeout blocks. The request is never sent after the deadline.
       #
       # @param http [Net::HTTP] a connection that is not started yet
       # @param req [Net::HTTP::Post]
@@ -598,12 +608,12 @@ module Lich
         raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
 
         # TCP connect and TLS handshake, plus the CONNECT reply through a proxy.
-        share = remaining / (proxied ? 3.0 : 2.0)
+        share = remaining * CONNECT_SHARE_OF_BUDGET / (proxied ? 3.0 : 2.0)
         http.open_timeout = share
         http.read_timeout = share
         http.write_timeout = share
-        http.start
         begin
+          Timeout.timeout(remaining, Net::OpenTimeout, 'SlackBot: connecting ran into the send deadline') { http.start }
           remaining = seconds_left(deadline)
           raise NetworkError, 'SlackBot: Time budget for the request ran out while connecting' if remaining <= 0
 
@@ -611,7 +621,10 @@ module Lich
           http.write_timeout = remaining
           Timeout.timeout(remaining) { http.request(req) }
         ensure
-          http.finish if http.started?
+          # net/http's own cleanup for start with a block. Unlike finish, it
+          # also closes a socket from a start interrupted after connecting
+          # but before the session was marked started.
+          http.send(:do_finish)
         end
       end
 

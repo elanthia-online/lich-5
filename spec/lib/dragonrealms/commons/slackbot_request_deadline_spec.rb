@@ -126,6 +126,26 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'deadline-bounded request' do
     expect(http.write_timeout).to be_between(1.0, 2.0)
   end
 
+  # The hard cap on the connect is an asynchronous interrupt, so it can also
+  # land after net/http has connected but before it marks the session
+  # started, when finish would refuse to close the socket.
+  it 'closes the socket when start is interrupted after connecting' do
+    serve
+    http = plain_http
+    allow(http).to receive(:connect).and_wrap_original do |original|
+      original.call
+      raise Net::OpenTimeout, 'interrupted after connecting'
+    end
+    GC.disable
+
+    expect { call(http, 2) }.to raise_error(Net::OpenTimeout, /after connecting/)
+
+    expect(http.started?).to be false
+    expect(peer_closed?(accepted.pop)).to be true
+  ensure
+    GC.enable
+  end
+
   it 'does not connect when the budget is already spent' do
     expect { bot.send(:request_before, plain_http, req, monotonic - 0.1) }
       .to raise_error(described_class::NetworkError, /exhausted/)
@@ -287,15 +307,38 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'deadline-bounded request' do
       expect(http.read_timeout).to be_between(0.3, 0.41)
     end
 
-    it 'gives each connect step an equal share of the budget' do
+    it 'gives each connect step an equal share of most of the budget' do
       http = proxied_http(use_ssl: true)
       allow(http).to receive(:start).and_raise(Net::OpenTimeout)
 
       expect { call(http, 3) }.to raise_error(Net::OpenTimeout)
 
-      expect(http.open_timeout).to be_between(0.9, 1.0)
-      expect(http.read_timeout).to be_between(0.9, 1.0)
-      expect(http.write_timeout).to be_between(0.9, 1.0)
+      # A third each of 90% of the budget; the rest is headroom before the
+      # hard cap on the whole connect.
+      expect(http.open_timeout).to be_between(0.85, 0.9)
+      expect(http.read_timeout).to be_between(0.85, 0.9)
+      expect(http.write_timeout).to be_between(0.85, 0.9)
+    end
+
+    # read_timeout bounds each read of the CONNECT reply, not the whole
+    # reply, so only the hard cap on the connect stops this one.
+    it 'cuts off a CONNECT reply sent a byte at a time at the deadline and closes the socket' do
+      serve_proxy do |conn|
+        "HTTP/1.1 200 Connection established\r\nX-Pad: #{'y' * 200}\r\n\r\n".each_char do |ch|
+          conn.write(ch)
+          sleep 0.05
+        end
+        sleep
+      end
+      GC.disable
+      started = monotonic
+
+      expect { call(proxied_http(use_ssl: true), 0.8) }.to raise_error(Net::OpenTimeout)
+
+      expect(monotonic - started).to be < 1.1
+      expect(peer_closed?(proxied.pop)).to be true
+    ensure
+      GC.enable
     end
 
     it 'times out a CONNECT reply that is slower than its share' do
