@@ -504,11 +504,33 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
-  describe 'logging a row problem inside a transaction' do
+  # Logging writes to $stderr, which lets other threads run. Inside a write
+  # transaction that would let a write through the shared Lich.db handle
+  # (SQLite's C busy timeout, GVL held) stall the whole process, so row
+  # problems are logged once the transaction has ended.
+  describe 'logging a row problem' do
+    # Records each logged line, and whether the settings write lock was held
+    # when it was logged (another connection can't take it without waiting).
     def record_logs
       calls = []
-      allow(Lich).to receive(:log) { |line| calls << line }
+      @lock_held_while_logging = []
+      allow(Lich).to receive(:log) do |line|
+        calls << line
+        @lock_held_while_logging << write_lock_held?
+      end
       calls
+    end
+
+    def write_lock_held?
+      probe = SQLite3::Database.new(SettingsSpecDB.path(data_dir))
+      probe.busy_timeout(0)
+      probe.execute('BEGIN IMMEDIATE')
+      probe.execute('ROLLBACK')
+      false
+    rescue SQLite3::BusyException
+      true
+    ensure
+      probe&.close
     end
 
     def seed_unreadable_legacy
@@ -534,6 +556,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         operation.call(described_module)
 
         expect(calls.grep(%r{unreadable settings row core/DR})).not_to be_empty
+        expect(@lock_held_while_logging).to all(be(false))
         expect(message_strings.grep(/could not/)).to be_empty
       end
     end
@@ -545,6 +568,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       described_module.update_balance('Crossings', 7)
 
       expect(calls.join).to include('unreadable settings row core.banking/DR:CharA')
+      expect(@lock_held_while_logging).to all(be(false))
       expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
     end
 
@@ -555,6 +579,18 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       described_module.update_balance('Crossings', 7)
 
       expect(calls.join).to include('core.banking/DR:CharA holding a Array')
+      expect(@lock_held_while_logging).to all(be(false))
+    end
+
+    it "logs the character's own unreadable row after a deposit's transaction" do
+      XMLData.room_title = '[[Provincial Bank, Teller]]'
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      calls = record_logs
+
+      described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 gold Kronars')
+
+      expect(calls.join).to include('unreadable settings row core.banking/DR:CharA')
+      expect(@lock_held_while_logging).to all(be(false))
     end
 
     it 'logs the line once when the transaction then fails' do
@@ -565,6 +601,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       described_module.update_balance('Crossings', 7)
 
       expect(calls.count { |c| c.include?('unreadable settings row core.banking/DR:CharA') }).to eq(1)
+      expect(@lock_held_while_logging).to all(be(false))
       expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
     end
   end
@@ -616,22 +653,37 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(message_strings.grep(/could not/)).to be_empty
     end
 
-    it 'goes through promptly while DRBanking logs a row problem inside its transaction' do
+    # The shared Lich.db handle keeps SQLite's C busy timeout, which waits
+    # with the GVL held, so nothing DRBanking does while it holds the lock may
+    # let such a write start: logging is held back until after the commit.
+    it 'lets a write through a raw SQLite handle go through when a row problem is logged' do
       seed_row('CharA', { 'Crossings' => 1 })
       SettingsSpecDB.write_raw(data_dir, 'core', 'DR', 'garbage')
-      locked = Queue.new
+      raw = Lich.open_sqlite_db(SettingsSpecDB.path(data_dir))
+      raw.busy_timeout(1000) # shortened; production waits the full 5s
+      logging = Queue.new
       # Like $stderr.puts, the log call lets other threads run for a moment.
       allow(Lich).to receive(:log) do
-        locked << true
+        logging << true
         sleep 0.3
       end
 
-      saved, elapsed = save_while_locked(locked) { described_module.update_balance('Crossings', 7) }
+      banking = Thread.new { described_module.update_balance('Crossings', 7) }
+      logging.pop
+      started = monotonic
+      error = nil
+      begin
+        raw.execute("INSERT INTO script_auto_settings (script, scope, hash) VALUES ('rawscript', 'DR:CharA', x'00')")
+      rescue SQLite3::BusyException => e
+        error = e
+      end
+      elapsed = monotonic - started
+      banking.join
+      raw.close
 
-      expect(saved).to be(true)
-      expect(elapsed).to be < 2
+      expect(error).to be_nil
+      expect(elapsed).to be < 0.5
       expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
-      expect(rows[['otherscript', 'DR:CharA']]).to eq('n' => 1)
     end
 
     it 'waits for the migration transaction, then both are kept' do

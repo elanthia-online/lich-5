@@ -92,6 +92,10 @@ module Lich
       # Pattern for parsing balance amounts from strings
       BALANCE_AMOUNT_PATTERN = /(\d+)\s+(platinum|gold|silver|bronze|copper)/i.freeze
 
+      # Thread-local key of the log lines held back while a transaction runs
+      # (see in_transaction)
+      DEFERRED_LOG_KEY = :lich_drbanking_deferred_log
+
       class << self
         # Returns the bank accounts of every character in this game, read
         # fresh from the database on every call (nothing is cached).
@@ -311,7 +315,7 @@ module Lich
           end
 
           db = adapter
-          db.transaction do
+          in_transaction(db) do
             migrate_legacy!(db)
             db.scopes_by_prefix(STORE_SCRIPT, "#{game}:").each do |scope|
               db.save_settings!(STORE_SCRIPT, {}, scope)
@@ -401,7 +405,7 @@ module Lich
           return nil unless legacy
 
           begin
-            db.transaction { migrate_legacy!(db) }
+            in_transaction(db) { migrate_legacy!(db) }
             nil
           rescue StandardError => e
             report_storage_error('move old bank data to per-character storage', e)
@@ -449,7 +453,7 @@ module Lich
           end
 
           db = adapter
-          db.transaction do
+          in_transaction(db) do
             migrate_legacy!(db)
             yield db, scope
           end
@@ -458,8 +462,37 @@ module Lich
           nil
         end
 
+        # Runs the block in one write transaction (adapter.transaction), and
+        # holds back the row problems logged meanwhile (see log_row_problem)
+        # until the transaction has ended. Logging writes to $stderr, which
+        # lets other threads run. Writes through Sequel connections then wait
+        # for the lock in Ruby, but a write through the shared Lich.db handle
+        # waits inside SQLite with the GVL held, so this thread couldn't run
+        # again to commit and the whole process would stall for the busy
+        # timeout. Nested calls share the outermost call's buffer. The
+        # held-back lines are written however the block ends, error or not.
+        # @return [Object] what the block returned
+        def in_transaction(db, &block)
+          outer = Thread.current[DEFERRED_LOG_KEY]
+          Thread.current[DEFERRED_LOG_KEY] = outer || []
+          db.transaction(&block)
+        ensure
+          unless outer
+            held = Thread.current[DEFERRED_LOG_KEY] || []
+            Thread.current[DEFERRED_LOG_KEY] = nil
+            held.each { |line| Lich.log(line) }
+          end
+        end
+
+        # Logs a problem with a stored row: right away, or after the
+        # transaction when called inside in_transaction.
+        def log_row_problem(line)
+          held = Thread.current[DEFERRED_LOG_KEY]
+          held ? held << line : Lich.log(line)
+        end
+
         # Moves the legacy game-wide blob into per-character rows. Must run
-        # inside adapter.transaction. Safe to run any number of times, and
+        # inside in_transaction. Safe to run any number of times, and
         # from several sessions at once:
         # - A character that already has a row keeps it (even one that can't
         #   be loaded). That row is newer than the blob, or was cleared on
@@ -500,12 +533,12 @@ module Lich
           row = db.get_settings(script, scope)
           return row if row.is_a?(Hash)
 
-          Lich.log("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
+          log_row_problem("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
           {}
         rescue Sequel::Error
           raise
         rescue StandardError => e
-          Lich.log("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
+          log_row_problem("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
           {}
         end
 
