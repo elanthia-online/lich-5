@@ -540,6 +540,25 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(@adapter.data_version).to be_a(Integer)
       expect(@adapter.instance_variable_get(:@version_db)).not_to equal(broken)
     end
+
+    it 'never repeats or goes back to a value it returned before its connection was reopened' do
+      allow(Lich).to receive(:log)
+      @adapter.data_version # opens the version connection
+      3.times { commit_elsewhere }
+      before_reopen = @adapter.data_version
+      broken = @adapter.instance_variable_get(:@version_db)
+      allow(broken).to receive(:execute_batch2).and_raise(SQLite3::IOException, 'disk I/O error')
+      expect(@adapter.data_version).to be_nil
+
+      after_reopen = @adapter.data_version
+      unchanged = @adapter.data_version
+      commit_elsewhere
+      later = @adapter.data_version
+
+      expect(after_reopen).to be > before_reopen
+      expect(unchanged).to eq(after_reopen)
+      expect(later).to be > after_reopen
+    end
   end
 
   describe '#save_settings' do

@@ -7,6 +7,8 @@ require_relative File.join(SPEC_ROOT, 'mock_database_adapter.rb')
 
 # Load production code
 require 'common/settings'
+require 'tmpdir'
+require 'fileutils'
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do
@@ -878,6 +880,35 @@ RSpec.describe Lich::Common::Settings do
       expect(@mock_db).to have_received(:get_settings).once
     end
 
+    it "reads the row again when a commit lands just after the row was read" do
+      their_write("k" => 0)
+      expect(game_read('k')).to eq(0)
+      their_write("k" => 1)
+      commit_once = true
+      allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+        row = original.call(*args)
+        if commit_once
+          commit_once = false
+          their_write("k" => 2) # commits after the row was read, before it is cached
+        end
+        row
+      end
+
+      expect(game_read('k')).to eq(1)
+      expect(game_read('k')).to eq(2)
+    end
+
+    it "does not keep serving a nested change whose save raised" do
+      their_write("opts" => { "x" => 0 })
+      expect(game_read('opts').to_h).to eq("x" => 0)
+      looped = {}
+      looped['self'] = looped
+
+      expect { game_read('opts')['bad'] = looped }.to raise_error(StandardError)
+
+      expect(game_read('opts').to_h).to eq("x" => 0)
+    end
+
     it "refresh_data (Settings.load) still reads the row again" do
       expect(settings[:k]).to be_nil
       @mock_db.data_version_unknown = true
@@ -887,6 +918,75 @@ RSpec.describe Lich::Common::Settings do
 
       expect(settings[:k]).to eq(1)
     end
+  end
+end
+
+# The same reads through the real DatabaseAdapter, whose data_version comes
+# from SQLite. Another session is played by a second connection to the file.
+RSpec.describe Lich::Common::Settings, "reads through the real DatabaseAdapter" do
+  let(:settings) { Lich::Common::Settings }
+  let(:tmp_dir) { Dir.mktmpdir('settings-real-adapter-spec') }
+  let(:db_file) { File.join(tmp_dir, 'lich.db3') }
+
+  before do
+    stub_const("Script", Lich::Common::MockScript)
+    stub_const("XMLData", Lich::Common::MockXMLData)
+    Lich::Common::MockScript.current_name = "test_script"
+    Lich::Common::MockXMLData.game = "GSIV"
+    allow(Lich).to receive(:log)
+    SQLite3::Database.new(db_file).tap do |db|
+      db.execute('CREATE TABLE script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));')
+    end.close
+    @saved_adapter = settings.instance_variable_get(:@db_adapter)
+    @saved_navigator = settings.instance_variable_get(:@path_navigator)
+    @adapter = Lich::Common::DatabaseAdapter.new(tmp_dir, :script_auto_settings)
+    settings.instance_variable_set(:@db_adapter, @adapter)
+    settings.instance_variable_set(:@path_navigator, Lich::Common::PathNavigator.new(@adapter))
+    settings.instance_variable_set(:@settings_cache, {})
+    settings.instance_variable_set(:@cache_versions, {})
+  end
+
+  after do
+    settings.instance_variable_set(:@db_adapter, @saved_adapter)
+    settings.instance_variable_set(:@path_navigator, @saved_navigator)
+    settings.instance_variable_set(:@settings_cache, {})
+    settings.instance_variable_set(:@cache_versions, {})
+    @adapter.instance_variable_get(:@db)&.disconnect
+    @adapter.instance_variable_get(:@version_db)&.close
+    FileUtils.remove_entry(tmp_dir)
+  end
+
+  def game_read(key)
+    settings.get_scoped_setting("GSIV", key)
+  end
+
+  def their_write(row)
+    db = SQLite3::Database.new(db_file)
+    db.execute('INSERT OR REPLACE INTO script_auto_settings (script, scope, hash) VALUES (?, ?, ?)',
+               ['test_script', 'GSIV', SQLite3::Blob.new(Marshal.dump(row))])
+  ensure
+    db&.close
+  end
+
+  it "shows another session's commit once the version connection has been reopened after an error" do
+    their_write("k" => 1)
+    expect(game_read('k')).to eq(1)
+    their_write("k" => 2)
+    broken = @adapter.instance_variable_get(:@version_db)
+    allow(broken).to receive(:execute_batch2).and_raise(SQLite3::IOException, 'disk I/O error')
+    expect(game_read('k')).to eq(1) # the version can't be read: the cached row is used
+
+    expect(game_read('k')).to eq(2)
+  end
+
+  it "shows another session's commit and then stops reading the row" do
+    expect(game_read('k')).to be_nil
+    their_write("k" => 1)
+
+    expect(game_read('k')).to eq(1)
+    allow(@adapter).to receive(:get_settings).and_call_original
+    3.times { expect(game_read('k')).to eq(1) }
+    expect(@adapter).not_to have_received(:get_settings)
   end
 end
 

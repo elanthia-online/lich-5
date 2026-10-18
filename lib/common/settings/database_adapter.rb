@@ -8,6 +8,8 @@ module Lich
         @table_name = table_name
         @version_mutex = Mutex.new
         @version_db = nil
+        @version_base = 0
+        @last_version = 0
         @version_error_reported = false
         setup!
       end
@@ -50,11 +52,21 @@ module Lich
       # commit may see the database as it was before it. The read runs in one
       # C call (sqlite3_exec), so no lock is held while Ruby code runs.
       #
+      # The pragma counts per connection, starting again from 1 on a new one,
+      # so after an error has closed the connection the reopened one could
+      # repeat a value already handed out while the database has since
+      # changed. Values from each new connection are therefore offset past the
+      # last one returned: the result never goes back, and the first value
+      # after a reopen differs from every earlier one.
+      #
       # @return [Integer, nil]
       def data_version
         @version_mutex.synchronize do
-          @version_db ||= SQLite3::Database.new(@file).tap { |db| db.busy_timeout(0) }
-          Integer(@version_db.execute_batch2('PRAGMA data_version').dig(0, 0))
+          unless @version_db
+            @version_db = SQLite3::Database.new(@file).tap { |db| db.busy_timeout(0) }
+            @version_base = @last_version + 1
+          end
+          @last_version = @version_base + Integer(@version_db.execute_batch2('PRAGMA data_version').dig(0, 0))
         end
       rescue SQLite3::BusyException
         nil
