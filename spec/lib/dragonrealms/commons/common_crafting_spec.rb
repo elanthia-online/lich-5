@@ -414,6 +414,21 @@ describe DRCC do
         expect(sent).to eq(['untie my mallet from my toolbelt'])
       end
 
+      it 'returns true without a GET when the belt untie says it is already in hand' do
+        reply_with('You are already', got)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, belt)).to be true
+        expect(sent).to eq(['untie my mallet from my toolbelt'])
+      end
+
+      it 'falls back to GET when the belt untie times out' do
+        reply_with('', got)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, belt)).to be true
+        expect(sent).to eq(['untie my mallet from my toolbelt', 'get my mallet'])
+        expect(drci).not_to have_received(:in_hands?)
+      end
+
       it 'falls back to GET when the belt untie finds nothing' do
         reply_with(untie_what, got)
 

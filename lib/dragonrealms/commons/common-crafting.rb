@@ -334,8 +334,10 @@ module Lich
       # - wounds still hinder the untie after the safe-room trip.
       # Each one beeps and prints a bold line. The method then returns false
       # when +skip_exit+ is set; otherwise it stops the script. A reply that
-      # matches nothing (a bput timeout) is not final: the method returns
-      # whether the item is in hand, as a late reply may still deliver it.
+      # matches nothing (a bput timeout) is not final. A timed-out GET, or a
+      # timed-out untie after "You should untie", returns whether the item is
+      # in hand, as a late reply may still deliver it; a timed-out belt untie
+      # falls back to the GET.
       #
       # @param name [String] item to put in hand
       # @param bag [String] container that holds +bag_items+
