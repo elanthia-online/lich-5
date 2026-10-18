@@ -321,45 +321,103 @@ module Lich
         DRC.bput("study my #{book}", BOOK_STUDY_SUCCESS)
       end
 
+      # Puts a crafting tool or material in hand. A tool listed on the
+      # crafting belt is untied from it; anything else is fetched with
+      # `get my <name>`, from +bag+ when +bag_items+ lists it.
+      #
+      # When wounds hinder an untie, visits safe-room once and unties once
+      # more. Four failures are final, and no retry follows them:
+      # - the item can't be found and isn't already in hand;
+      # - the game says it "can't quite lift it";
+      # - the GET says to untie the item, the untie finds nothing, and the
+      #   item isn't in hand;
+      # - wounds still hinder the untie after the safe-room trip.
+      # Each one beeps and prints a bold line. The method then returns false
+      # when +skip_exit+ is set; otherwise it stops the script. A reply that
+      # matches nothing (a bput timeout) is not final: the method returns
+      # whether the item is in hand, as a late reply may still deliver it.
+      #
+      # @param name [String] item to put in hand
+      # @param bag [String] container that holds +bag_items+
+      # @param bag_items [Array<String>, nil] items kept in +bag+
+      # @param belt [Hash, nil] crafting belt settings ('name', 'items')
+      # @param skip_exit [Boolean] return false on a final failure instead of
+      #   stopping the script
+      # @return [Boolean] true when the item is in hand (the untie or get
+      #   succeeded, or it was already held); false after a final failure
+      #   with +skip_exit+, or when a timed-out reply leaves it out of hand
       def get_crafting_item(name, bag, bag_items, belt, skip_exit = false)
         waitrt?
         if belt && belt['items'].find { |item| /\b#{name}/i =~ item || /\b#{item}/i =~ name }
-          case DRC.bput("untie my #{name} from my #{belt['name']}", BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY, BELT_UNTIE_NOT_FOUND, BELT_UNTIE_WOUNDED)
+          case untie_crafting_item(name, "untie my #{name} from my #{belt['name']}", BELT_UNTIE_WOUNDED, BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY, BELT_UNTIE_NOT_FOUND)
           when BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY
-            return
+            return true
           when BELT_UNTIE_WOUNDED
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return get_crafting_item(name, bag, bag_items, belt)
+            return crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
           end
         end
         command = "get my #{name}"
         command += " from my #{bag}" if bag_items && bag_items.include?(name)
         case DRC.bput(command, GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE, GET_CRAFTING_PICKUP, GET_CRAFTING_HEAVY, GET_CRAFTING_TIED)
+        when GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_PICKUP
+          true
         when GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE
           pause 2
-          return if DRCI.in_hands?(name)
+          return true if DRCI.in_hands?(name)
 
-          DRC.beep
-          Lich::Messaging.msg('bold', "DRCC: You seem to be missing: #{name}")
-          return nil if skip_exit
-
-          Lich::Messaging.msg('bold', 'DRCC: Cannot continue crafting without required item. Stopping script.')
-          exit
+          crafting_item_failed("DRCC: You seem to be missing: #{name}", skip_exit)
         when GET_CRAFTING_HEAVY
-          get_crafting_item(name, bag, bag_items, belt)
+          # Final: GETting it again won't make it liftable.
+          crafting_item_failed("DRCC: You can't quite lift: #{name}", skip_exit)
         when GET_CRAFTING_TIED
-          case DRC.bput("untie my #{name}", UNTIE_SUCCESS, UNTIE_NOT_FOUND, UNTIE_WOUNDED)
+          case untie_crafting_item(name, "untie my #{name}", UNTIE_WOUNDED, UNTIE_SUCCESS, UNTIE_NOT_FOUND)
           when UNTIE_SUCCESS
-            return
+            true
           when UNTIE_WOUNDED
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return get_crafting_item(name, bag, bag_items, belt)
+            crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
+          when UNTIE_NOT_FOUND
+            return true if DRCI.in_hands?(name)
+
+            crafting_item_failed("DRCC: Told to untie it, but found nothing to untie: #{name}", skip_exit)
+          else
+            DRCI.in_hands?(name)
           end
+        else
+          DRCI.in_hands?(name)
         end
+      end
+
+      # Sends an untie for get_crafting_item. When wounds hinder it, visits
+      # safe-room once, walks back and sends the untie once more.
+      #
+      # @param name [String] item being untied
+      # @param command [String] the untie command
+      # @param wounded [Regexp] the reply meaning wounds hinder the untie
+      # @param patterns [Array<Regexp>] the other replies to wait for
+      # @return [String] the matched reply ('' on a timeout)
+      def untie_crafting_item(name, command, wounded, *patterns)
+        result = DRC.bput(command, *patterns, wounded)
+        return result unless result.match?(wounded)
+
+        Lich::Messaging.msg('bold', "DRCC: Wounds hinder untying #{name}. Visiting safe-room, then trying once more.")
+        craft_room = Room.current.id
+        DRC.wait_for_script_to_complete('safe-room', ['force'])
+        DRCT.walk_to(craft_room)
+        DRC.bput(command, *patterns, wounded)
+      end
+
+      # Reports a final get_crafting_item failure: beeps and prints +message+.
+      #
+      # @param message [String] bold line naming the failure
+      # @param skip_exit [Boolean] return instead of stopping the script
+      # @return [false] when +skip_exit+; otherwise stops the script
+      def crafting_item_failed(message, skip_exit)
+        DRC.beep
+        Lich::Messaging.msg('bold', message)
+        return false if skip_exit
+
+        Lich::Messaging.msg('bold', 'DRCC: Cannot continue crafting without required item. Stopping script.')
+        exit
       end
 
       def stow_crafting_item(name, bag, belt)
