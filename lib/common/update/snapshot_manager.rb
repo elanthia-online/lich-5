@@ -225,10 +225,7 @@ module Lich
           if !File.file?(File.join(dir, 'lib', 'version.rb'))
             problems << 'lib/version.rb is missing'
             legacy = legacy_lib_dir_name(dir)
-            if legacy
-              problems << "an older Lich saved this --lib-dir snapshot's files in #{legacy}/; " \
-                          "rename #{legacy}/ to lib/ to use it"
-            end
+            problems << legacy_rename_hint(dir, legacy) if legacy
           elsif snapshot_version(dir).nil?
             problems << 'lib/version.rb does not declare LICH_VERSION'
           end
@@ -239,15 +236,42 @@ module Lich
 
         # Older Lich versions copied LIB_DIR into a snapshot under its own
         # name, so with --lib-dir pointing at a directory not named "lib" the
-        # files landed in <snapshot>/<name>/ and lib/ stayed empty.
+        # files landed in <snapshot>/<name>/ and lib/ stayed empty. Only a
+        # snapshot that renaming would make complete counts: lib/ must be
+        # absent or empty, and lich.rbw and scripts/ must be present (older
+        # versions copied them before and after LIB_DIR, so a missing one
+        # means that snapshot was interrupted, possibly mid-copy).
         #
         # @param dir [String] snapshot directory
         # @return [String, nil] that directory name if +dir+ has this layout
         def legacy_lib_dir_name(dir)
           name = File.basename(LIB_DIR)
           return nil if name == 'lib'
+          return nil unless File.file?(File.join(dir, name, 'version.rb'))
+          return nil unless File.file?(File.join(dir, lich_file_name)) && File.directory?(File.join(dir, 'scripts'))
 
-          File.file?(File.join(dir, name, 'version.rb')) ? name : nil
+          lib = File.join(dir, 'lib')
+          if File.symlink?(lib) || File.exist?(lib)
+            return nil unless File.directory?(lib) && !File.symlink?(lib) && Dir.empty?(lib)
+          end
+          name
+        end
+
+        # Tells the user how to turn a legacy --lib-dir snapshot (see
+        # #legacy_lib_dir_name) into one #revert accepts. The empty lib/ that
+        # older versions created has to go first: renaming onto it fails or
+        # nests the directory inside it, depending on the tool.
+        #
+        # @param dir [String] snapshot directory
+        # @param legacy [String] name returned by #legacy_lib_dir_name
+        # @return [String] the hint
+        def legacy_rename_hint(dir, legacy)
+          steps = if File.directory?(File.join(dir, 'lib'))
+                    "delete the empty lib/ in it, then rename #{legacy}/ to lib/"
+                  else
+                    "rename #{legacy}/ to lib/"
+                  end
+          "an older Lich saved this --lib-dir snapshot's files in #{legacy}/; to use it, #{steps}"
         end
 
         # @param dir [String] snapshot directory

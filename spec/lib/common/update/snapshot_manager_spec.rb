@@ -536,9 +536,9 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
       # Older versions ran mkdir_p(<snap>/lib) then cp_r(LIB_DIR, <snap>),
       # so the files land in <snap>/<LIB_DIR name>/ and lib/ stays empty.
-      def make_legacy_snapshot(stamp, version)
-        dir = make_snapshot(stamp, version, omit: %i[version lib])
-        FileUtils.mkdir_p(File.join(dir, 'lib'))
+      def make_legacy_snapshot(stamp, version, omit: [], empty_lib: true)
+        dir = make_snapshot(stamp, version, omit: %i[version lib] + omit)
+        FileUtils.mkdir_p(File.join(dir, 'lib')) if empty_lib
         write(File.join(dir, legacy_name, 'version.rb'), "LICH_VERSION = '#{version}'\n")
         write(File.join(dir, legacy_name, 'common', 'util.rb'), "# util #{version}\n")
         dir
@@ -556,19 +556,65 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(messages).to include("    #{dir}")
         expect(messages).to include('  - lib/version.rb is missing')
         expect(messages).to include("  - an older Lich saved this --lib-dir snapshot's files in #{legacy_name}/; " \
-                                    "rename #{legacy_name}/ to lib/ to use it")
+                                    "to use it, delete the empty lib/ in it, then rename #{legacy_name}/ to lib/")
         expect(messages.grep(/interrupted/)).to be_empty
       end
 
-      it 'restores it once the directory is renamed as instructed' do
+      it 'restores it once the steps in the hint are followed literally' do
         dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
-        FileUtils.rm_rf(File.join(dir, 'lib'))
+        Dir.rmdir(File.join(dir, 'lib')) # "delete the empty lib/"; raises if it is not empty
         File.rename(File.join(dir, legacy_name), File.join(dir, 'lib'))
 
         manager.revert
 
         expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
         expect(File.read(File.join(LIB_DIR, 'common', 'util.rb'))).to eq("# util 5.21.0\n")
+      end
+
+      it 'only says to rename when the snapshot has no lib/ at all, and that alone makes it restorable' do
+        dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0', empty_lib: false)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include("  - an older Lich saved this --lib-dir snapshot's files in #{legacy_name}/; " \
+                                    "to use it, rename #{legacy_name}/ to lib/")
+        expect(messages.grep(/delete the empty/)).to be_empty
+
+        File.rename(File.join(dir, legacy_name), File.join(dir, 'lib'))
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
+      {
+        'scripts/ is missing' => :scripts,
+        'lich.rbw is missing' => :lich
+      }.each do |problem, part|
+        it "gives no rename hint and blames an interruption when #{problem} too" do
+          dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0', omit: [part])
+          before = live_state
+          messages = capture_responses
+
+          manager.revert
+
+          expect(live_state).to eq(before)
+          expect(messages).to include("    #{dir}", "  - #{problem.sub('lich.rbw', lich_name)}")
+          expect(messages.grep(/rename/)).to be_empty
+          expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+        end
+      end
+
+      it 'gives no rename hint when lib/ in the snapshot is not empty' do
+        dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+        write(File.join(dir, 'lib', 'common', 'util.rb'), "# util 5.21.0\n")
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include("    #{dir}", '  - lib/version.rb is missing')
+        expect(messages.grep(/rename/)).to be_empty
+        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
       end
 
       it 'still blames an interruption for the other directories when both kinds are listed' do
