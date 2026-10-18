@@ -331,12 +331,12 @@ describe DRCC do
   describe '.stow_crafting_item' do
     let(:belt) { { 'name' => "forger's belt", 'items' => ['tongs'] } }
     let(:tie) { "tie my tongs to my forger's belt" }
-    let(:put) { 'put my tongs in my backpack' }
+    let(:bag_put) { 'put my tongs in my backpack' }
     let(:wounds) { 'Your wounds hinder your ability to do that.' }
     let(:attach) { "You attach the tongs to your forger's belt." }
     let(:sent) { [] }
     let(:tie_replies) { [] }
-    let(:put_reply) { 'You put your tongs in your backpack.' }
+    let(:bag_put_reply) { 'You put your tongs in your backpack.' }
     # The safe-room stub moves the character, so only a room id read before
     # the trip walks back to the crafting room (8775).
     let(:room_id) { [8775] }
@@ -351,7 +351,7 @@ describe DRCC do
         # main retried without limit; stop the example instead of the stack.
         raise 'tie sent a third time' if sent.count { |c| c.start_with?('tie ') } > 2
 
-        line = command.start_with?('tie ') ? tie_replies.shift.to_s : put_reply
+        line = command.start_with?('tie ') ? tie_replies.shift.to_s : bag_put_reply
         match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
         raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
 
@@ -397,7 +397,7 @@ describe DRCC do
 
     it 'puts the tool in the bag when there is no belt' do
       expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
-      expect(sent).to eq([put])
+      expect(sent).to eq([bag_put])
     end
 
     [
@@ -413,7 +413,7 @@ describe DRCC do
       it "puts the tool in the bag without a safe-room trip after #{reply.empty? ? 'no reply' : reply.inspect}" do
         tie_replies << reply
         expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
-        expect(sent).to eq([tie, put])
+        expect(sent).to eq([tie, bag_put])
         expect(Lich::Messaging).to have_received(:msg)
           .with('bold', "DRCC: Failed to tie tongs to forger's belt. Stowing it off the belt instead.").once
       end
@@ -431,7 +431,7 @@ describe DRCC do
     it 'puts the tool in the bag when wounds still hinder the tie after safe-room' do
       tie_replies.push(wounds, wounds)
       expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
-      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, put])
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
       expect(Lich::Messaging).to have_received(:msg).with('bold', /Wounds hinder tying tongs/).once
       expect(Lich::Messaging).to have_received(:msg).with('bold', /Failed to tie tongs/).once
     end
@@ -439,26 +439,26 @@ describe DRCC do
     it 'puts the tool in the bag when the tie after safe-room fails another way' do
       tie_replies.push(wounds, 'Tie what?')
       expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
-      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, put])
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
     end
 
     context 'when the bag has no room' do
-      let(:put_reply) { "There's no room in the backpack." }
+      let(:bag_put_reply) { "There's no room in the backpack." }
 
       it 'stows the tool after a failed tie and returns true' do
         tie_replies << 'Tie what?'
         expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
-        expect(sent).to eq([tie, put, 'stow my tongs'])
+        expect(sent).to eq([tie, bag_put, 'stow my tongs'])
       end
     end
 
     context 'when the bag refuses the tool' do
-      let(:put_reply) { "You can't put that there." }
+      let(:bag_put_reply) { "You can't put that there." }
 
       it 'returns false, as for any bag tool, after putting it in the other bag' do
         tie_replies << "There's no more free ties on the belt."
         expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(false)
-        expect(sent).to eq([tie, put, 'put my tongs in my other backpack'])
+        expect(sent).to eq([tie, bag_put, 'put my tongs in my other backpack'])
       end
     end
 
@@ -485,7 +485,7 @@ describe DRCC do
           tied = success.include?(retried ? second : first)
           expected = [tie]
           expected += ['safe-room force', 'walk 8775', tie] if retried
-          expected << put unless tied
+          expected << bag_put unless tied
           expect(sent).to eq(expected)
           expect(result).to be(true)
         end

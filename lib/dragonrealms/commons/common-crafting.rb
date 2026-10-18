@@ -48,7 +48,7 @@ module Lich
       UNTIE_NOT_FOUND = /^Untie what/
       UNTIE_WOUNDED = /^Your wounds hinder your ability to do that/
 
-      TIE_BELT_WOUNDED = /^Your wounds hinder your ability to do that/
+      TIE_BELT_WOUNDED = UNTIE_WOUNDED
 
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
