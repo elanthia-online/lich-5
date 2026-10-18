@@ -220,6 +220,42 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(calls['users.list']).to eq(12)
     end
 
+    it 'caps the cooldown at MAX_RETRY_DELAY_SECONDS when Retry-After is outsized' do
+      plan['users.list'] << -> { http_response(429, '', 'Retry-After' => '7200') }
+      bot = described_class.new
+      expect(calls['users.list']).to eq(11)
+
+      plan['users.list'].clear
+      plan['users.list'] << users_ok
+      advance(299)
+      expect(bot.direct_message('alice', 'help')).to be_nil
+      expect(calls['users.list']).to eq(11)
+
+      advance(2)
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls['users.list']).to eq(12)
+    end
+
+    it 'caps the cooldown when a Retry-After overruns the send budget' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << -> { http_response(429, '', 'Retry-After' => '7200') }
+      expect(bot.direct_message('alice', 'help')).to be_nil
+      expect(calls['users.list']).to eq(2)
+
+      plan['users.list'].clear
+      plan['users.list'] << users_ok
+      advance(299)
+      expect(bot.direct_message('alice', 'help')).to be_nil
+      expect(calls['users.list']).to eq(2)
+
+      advance(2)
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls['users.list']).to eq(3)
+    end
+
     it 'does not let an unexpected transport error escape the message call' do
       plan['users.list'] << failure(:http500)
       bot = described_class.new

@@ -64,8 +64,9 @@ module Lich
       SEND_REQUEST_BUDGET = 5
 
       # After a failed users.list call, #direct_message makes no new call for
-      # this many seconds (or for Slack's Retry-After, if longer), so a burst
-      # of messages during an outage neither waits on Slack nor hammers it.
+      # this many seconds (or for Slack's Retry-After, if longer, but never
+      # more than MAX_RETRY_DELAY_SECONDS), so a burst of messages during an
+      # outage neither waits on Slack nor hammers it.
       USERS_LIST_RETRY_COOLDOWN = 30
 
       USERS_LIST_UNAVAILABLE = 'Slack user list unavailable'
@@ -342,12 +343,14 @@ module Lich
         !@users_list_retry_at.nil? && monotonic_now < @users_list_retry_at
       end
 
-      # Starts the cooldown after a failed users.list call.
+      # Starts the cooldown after a failed users.list call. A longer wait
+      # asked for by Slack is honoured up to MAX_RETRY_DELAY_SECONDS, so an
+      # outsized Retry-After cannot block sends for hours.
       #
       # @param seconds [Numeric, nil] Slack's Retry-After, if any
       # @return [nil]
       def users_list_failed(seconds = nil)
-        @users_list_retry_at = monotonic_now + [seconds.to_i, USERS_LIST_RETRY_COOLDOWN].max
+        @users_list_retry_at = monotonic_now + seconds.to_i.clamp(USERS_LIST_RETRY_COOLDOWN, MAX_RETRY_DELAY_SECONDS)
         nil
       end
 
