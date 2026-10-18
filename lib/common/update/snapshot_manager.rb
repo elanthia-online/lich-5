@@ -7,8 +7,8 @@
   updates. Supports rollback to most recent snapshot.
 
   Both directions are built so that a failure (disk full, a locked or
-  unreadable file) never leaves a half-made result where it can be used, and
-  a snapshot killed part way is never visible to #revert:
+  unreadable file) leaves the installation as it was, apart from the one case
+  named below, and a snapshot killed part way is never visible to #revert:
 
   - #snapshot copies into a staging directory that #revert cannot see, and
     renames it to its final L5-snapshot-<DATE-TIME> name only after every
@@ -16,11 +16,19 @@
   - #revert checks that the newest snapshot is complete before it touches
     anything, refuses (naming the directory) when it is not, and copies the
     snapshot next to the live files before swapping them in with renames
-    that are undone if any step fails. A revert killed during the swap
-    cannot undo it and can leave lib/ unusable; the snapshot itself is
-    untouched, so a revert run again (or a manual copy) restores it. Where the
-    filesystem supports locking, only one #revert runs at a time on an
-    installation: a second one started meanwhile changes nothing.
+    that are undone if any step fails. If even the undo fails, lib/, the
+    core scripts and lich.rbw can be left part old, part restored; the
+    working directories are then kept and named so the previous files can
+    be recovered by hand. Where the filesystem supports locking, only one
+    #revert runs at a time on an installation: a second one started
+    meanwhile changes nothing.
+
+  A revert killed during the swap cannot undo it. It can leave lib/, the core
+  scripts or lich.rbw missing, so that Lich will not start and cannot run the
+  revert again. The snapshot itself is untouched: copying its lib/, the core
+  scripts in its scripts/ and its lich.rbw back by hand, or running the
+  revert from another session of this installation that is still running,
+  restores it.
 =end
 
 require 'tmpdir'
