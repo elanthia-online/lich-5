@@ -704,10 +704,13 @@ module Lich
         # the destination only once the block has finished and the bytes are
         # flushed to disk. The temp name is unique to this process and thread,
         # and ends in .tmp so a leftover never matches the map-<epoch>.json
-        # pattern that loading and uploading look for. Writes are binary, so
-        # bytes are never transcoded. A destination that is a symlink keeps the
-        # link and has the file it points to replaced (or created, when the link
-        # dangles), as the in-place write this replaces did.
+        # pattern that loading and uploading look for. The suffix makes the temp
+        # name about 15 bytes longer than the destination's, so a name within
+        # that of the system's limit (255 bytes on most) raises ENAMETOOLONG
+        # with the destination unchanged. Writes are binary, so bytes are never
+        # transcoded. A destination that is a symlink keeps the link and has the
+        # file it points to replaced (or created, when the link dangles), as the
+        # in-place write this replaces did.
         # @param path [String] destination
         # @param mode_of [String] existing file whose permissions the result
         #   takes (the map file for both the map and its backup)
