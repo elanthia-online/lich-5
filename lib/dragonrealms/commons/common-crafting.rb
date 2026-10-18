@@ -427,6 +427,9 @@ module Lich
         exit
       end
 
+      # Internal to get_crafting_item; kept off the public DRCC API.
+      private_class_method :untie_crafting_item, :crafting_item_failed
+
       def stow_crafting_item(name, bag, belt)
         return unless name
 

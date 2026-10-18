@@ -605,6 +605,16 @@ describe DRCC do
     # belt and without it: the method always ends with a boolean or, without
     # skip_exit, an exit. It sends each command at most twice (the GET once),
     # and visits safe-room at most once per untie command.
+    # The untie and failure helpers are internal; scripts can only reach them
+    # through get_crafting_item.
+    context 'its helpers' do
+      it 'are not public DRCC methods' do
+        expect(DRCC).not_to respond_to(:untie_crafting_item)
+        expect(DRCC).not_to respond_to(:crafting_item_failed)
+        expect { DRCC.crafting_item_failed('x', true) }.to raise_error(NoMethodError, /private method/)
+      end
+    end
+
     context 'across every sequence of four replies' do
       let(:replies) { [got, heavy, not_found, tied, untied, untie_what, wounded, ''] }
 
