@@ -708,7 +708,8 @@ module Lich
         # in-place write this replaces did. File.realdirpath follows a dangling
         # link the way the system does (a relative target from the link's
         # directory, ".." from a directory's real location) and raises ELOOP on
-        # a cycle.
+        # a cycle. Unlike the system it has no hop limit, so an acyclic chain
+        # longer than the system allows still resolves to its last name.
         # @param path [String] destination
         # @param mode_of [String] existing file whose permissions the result
         #   takes (the map file for both the map and its backup)
