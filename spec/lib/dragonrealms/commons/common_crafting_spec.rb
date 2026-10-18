@@ -462,6 +462,19 @@ describe DRCC do
         expect(messages).to include("DRCC: Please select desired recipe #{$clean_lich_char}send #")
       end
 
+      it 'does not suggest the full name when the typed duplicate full name is also part of a unique name' do
+        # Synthetic recipe: no name in base-recipes.yaml contains a duplicated
+        # name, but the menu then lists a unique name and only the typed-name
+        # check keeps the hint away.
+        staff_sling = { 'name' => 'a weighted staff sling', 'type' => 'shaping', 'chapter' => 9, 'volume' => 3 }
+        feed_input('1')
+
+        DRCC.recipe_lookup(recipes + [staff_sling], 'a weighted staff')
+
+        expect(menu_lines.length).to eq(3)
+        expect(hint).to be_empty
+      end
+
       it 'does not suggest the full name when every listed name is a duplicate' do
         feed_input('1')
 
