@@ -135,6 +135,7 @@ RSpec.describe Lich::Util::Update::FileWriter do
         expect(staged).not_to match(/\.(lic|rb|cmd|wiz)(\.(gz|Z))?\z/i)
         expect(File.fnmatch('*.lic', staged)).to be false
         expect(File.fnmatch('*.yaml', staged)).to be false
+        expect(File.fnmatch('*.xml', staged)).to be false
       end
     end
 
@@ -199,6 +200,104 @@ RSpec.describe Lich::Util::Update::FileWriter do
 
       expect { described_class.safe_write(path, "# updated\n") }.not_to raise_error
       expect(File.binread(path)).to eq("# updated\n")
+    end
+
+    it 'removes the staged file when the writing thread is killed mid-write' do
+      path = File.join(tmpdir, 'buff.lic')
+      File.binwrite(path, "# v1\n")
+      staging = Queue.new
+      allow(File).to receive(:binwrite).and_wrap_original do |original, tmp, data|
+        original.call(tmp, data[0, 3])
+        staging << tmp
+        sleep
+      end
+
+      writer = Thread.new { described_class.safe_write(path, "# v2\n") }
+      staged = staging.pop
+      expect(File.exist?(staged)).to be true
+      writer.kill
+      writer.join
+
+      expect(File.binread(path)).to eq("# v1\n")
+      expect(Dir.children(tmpdir)).to eq(['buff.lic'])
+    end
+
+    context 'with staging files left by a hard-killed writer' do
+      let(:path) { File.join(tmpdir, 'buff.lic') }
+      let(:old_time) { Time.now - described_class::STALE_STAGING_AGE - 60 }
+
+      def leave(name, age: old_time)
+        file = File.join(tmpdir, name)
+        File.binwrite(file, '# partial')
+        File.utime(age, age, file)
+        file
+      end
+
+      before { File.binwrite(path, "# v1\n") }
+
+      it 'removes stale staging files of the same name after a successful write' do
+        leave('buff.lic.4242.16.tmp')
+        leave('buff.lic.4243.8.tmp')
+
+        described_class.safe_write(path, "# v2\n")
+
+        expect(Dir.children(tmpdir)).to eq(['buff.lic'])
+      end
+
+      it 'keeps a recent staging file, which may belong to a writer still running' do
+        leave('buff.lic.4242.16.tmp', age: Time.now - 60)
+
+        described_class.safe_write(path, "# v2\n")
+
+        expect(Dir.children(tmpdir)).to contain_exactly('buff.lic', 'buff.lic.4242.16.tmp')
+      end
+
+      it 'keeps stale files that only look similar or belong to another script' do
+        others = ['buff-watcher.lic.4242.16.tmp', 'buff.lic.abc.16.tmp', 'buff.lic.4242.tmp',
+                  'buff.lic.4242.16.tmp.bak', 'xbuff.lic.4242.16.tmp']
+        others.each { |name| leave(name) }
+
+        described_class.safe_write(path, "# v2\n")
+
+        expect(Dir.children(tmpdir)).to contain_exactly('buff.lic', *others)
+      end
+
+      it 'matches the file name literally, not as a pattern' do
+        plus = File.join(tmpdir, 'a+b.lic')
+        leave('a+b.lic.1.2.tmp')
+        leave('aab.lic.1.2.tmp')
+
+        described_class.safe_write(plus, "# v2\n")
+
+        expect(Dir.children(tmpdir)).to contain_exactly('buff.lic', 'a+b.lic', 'aab.lic.1.2.tmp')
+      end
+
+      it 'leaves stale staging files alone when the write fails' do
+        leave('buff.lic.4242.16.tmp')
+        allow(File).to receive(:rename).and_raise(Errno::EACCES.new('Permission denied'))
+
+        expect { described_class.safe_write(path, "# v2\n") }.to raise_error(Errno::EACCES)
+
+        expect(Dir.children(tmpdir)).to contain_exactly('buff.lic', 'buff.lic.4242.16.tmp')
+        expect(File.binread(path)).to eq("# v1\n")
+      end
+
+      it 'reports success even when the directory cannot be listed for the sweep' do
+        leave('buff.lic.4242.16.tmp')
+        allow(Dir).to receive(:each_child).and_raise(Errno::EACCES.new('Permission denied'))
+
+        expect { described_class.safe_write(path, "# v2\n") }.not_to raise_error
+        expect(File.binread(path)).to eq("# v2\n")
+      end
+
+      it 'reports success even when a stale staging file cannot be removed' do
+        stale = leave('buff.lic.4242.16.tmp')
+        allow(File).to receive(:delete).and_call_original
+        allow(File).to receive(:delete).with(stale).and_raise(Errno::EBUSY.new('in use'))
+
+        expect { described_class.safe_write(path, "# v2\n") }.not_to raise_error
+        expect(File.binread(path)).to eq("# v2\n")
+      end
     end
 
     it 'lets a second writer finish inside the first one without either failing' do
