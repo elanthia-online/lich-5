@@ -787,7 +787,10 @@ module Lich
             quiet: true,
             timeout: 5
           )
-          return nil if lines.nil?
+          if lines.nil? || lines.empty?
+            Lich::Messaging.msg("bold", "DRCA: Failed to capture PERC MANA output (timeout).")
+            return nil
+          end
 
           mana_msgs = lines.map(&:strip).select { |line| line.include?('streams') }[0..3]
           return nil if mana_msgs.length < 4

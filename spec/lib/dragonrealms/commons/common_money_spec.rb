@@ -389,11 +389,33 @@ RSpec.describe Lich::DragonRealms::DRCM do
       expect(result).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
     end
 
-    it 'returns zeros on timeout (nil from issue_command)' do
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
+    it 'returns zeros on timeout ([] from issue_command)' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
 
       result = described_class.get_total_wealth
       expect(result).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
+    end
+
+    it 'prints a timeout message when issue_command returns []' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCM: Failed to capture WEALTH output (timeout).')
+
+      described_class.get_total_wealth
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCM: Failed to capture WEALTH output/)
+
+      expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
+    end
+
+    it 'prints no timeout message when the reply arrives' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  You have no Kronars.'])
+      expect(Lich::Messaging).not_to receive(:msg)
+
+      described_class.get_total_wealth
     end
 
     it 'handles partial currency (some currencies with no money)' do
@@ -410,7 +432,8 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     it 'calls issue_command with correct parameters' do
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      allow(Lich::Messaging).to receive(:msg)
 
       described_class.get_total_wealth
 

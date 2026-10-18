@@ -1078,9 +1078,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(result.keys).to contain_exactly('enlightened_geometry', 'moonlight_manipulation', 'perception', 'psychic_projection')
     end
 
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
     it 'returns nil when issue_command times out for moon mage' do
       DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'prints a timeout message when issue_command returns [] for moon mage' do
+      DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: Failed to capture PERC MANA output (timeout).')
+      DRCA.perc_mana
+    end
+
+    it 'treats nil from issue_command the same as a timeout for moon mage' do
+      DRStats.guild = 'Moon Mage'
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCA: Failed to capture PERC MANA output/)
       expect(DRCA.perc_mana).to be_nil
     end
 

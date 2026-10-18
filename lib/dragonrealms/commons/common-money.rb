@@ -75,6 +75,8 @@ module Lich
       # Captures total on-hand wealth across all three currencies.
       # Returns a hash of currency name => copper value.
       # Uses Lich::Util.issue_command for reliable bounded capture.
+      # issue_command returns [] (never nil) when the reply does not arrive in
+      # time; that prints a bold message and returns all zeros.
       def get_total_wealth
         wealth_lines = Lich::Util.issue_command(
           'wealth',
@@ -87,7 +89,10 @@ module Lich
         )
 
         result = { 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 }
-        return result if wealth_lines.nil?
+        if wealth_lines.nil? || wealth_lines.empty?
+          Lich::Messaging.msg("bold", "DRCM: Failed to capture WEALTH output (timeout).")
+          return result
+        end
 
         strip_xml(wealth_lines).each do |line|
           match = line.match(WEALTH_COPPER_REGEX)

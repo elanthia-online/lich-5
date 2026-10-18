@@ -91,6 +91,13 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         expect(result.commune_ready).to be true
         expect(result.active_communes).to eq([])
         expect(result.recent_communes).to eq([])
+        expect(result.captured?).to be true
+      end
+
+      it 'accepts captured false' do
+        result = described_class.new(captured: false)
+        expect(result.captured).to be false
+        expect(result.captured?).to be false
       end
 
       it 'accepts keyword arguments' do
@@ -901,17 +908,36 @@ RSpec.describe Lich::DragonRealms::DRCTH do
   # --- commune_sense (integration with issue_command) -----------------
 
   describe '.commune_sense' do
-    context 'when issue_command returns nil (timeout)' do
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
+    context 'when issue_command returns [] (timeout)' do
       before do
-        allow(Lich::Util).to receive(:issue_command).and_return(nil)
+        allow(Lich::Util).to receive(:issue_command).and_return([])
+        allow(Lich::Messaging).to receive(:msg)
       end
 
-      it 'returns a default CommuneSenseResult' do
+      it 'returns an uncaptured CommuneSenseResult that does not read as ready' do
         result = described_class.commune_sense
         expect(result).to be_a(described_class::CommuneSenseResult)
-        expect(result.commune_ready).to be true
+        expect(result.captured?).to be false
+        expect(result['captured']).to be false
+        expect(result.commune_ready?).to be false
         expect(result.active_communes).to be_empty
         expect(result.recent_communes).to be_empty
+      end
+
+      it 'prints a timeout message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCTH: Failed to capture COMMUNE SENSE output (timeout).')
+        described_class.commune_sense
+      end
+    end
+
+    context 'when issue_command returns nil' do
+      it 'treats it the same as a timeout' do
+        allow(Lich::Util).to receive(:issue_command).and_return(nil)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /DRCTH: Failed to capture COMMUNE SENSE output/)
+        result = described_class.commune_sense
+        expect(result.captured?).to be false
+        expect(result.commune_ready?).to be false
       end
     end
 
@@ -940,6 +966,11 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         result = described_class.commune_sense
         expect(result.active_communes).to eq(['Tamsine'])
         expect(result.recent_communes).to eq(['Tamsine'])
+      end
+
+      it 'reports captured true and prints no timeout message' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        expect(described_class.commune_sense.captured?).to be true
       end
     end
   end

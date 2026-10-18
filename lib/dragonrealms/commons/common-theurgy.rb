@@ -46,17 +46,27 @@ module Lich
 
       # Data class for commune_sense results. Replaces raw hash return.
       # Supports [] for backward compat with callers using result['key'].
+      #
+      # +captured+ is false when the COMMUNE SENSE reply was not captured (a
+      # timeout). commune_ready is then false and the lists are empty, which
+      # means "unknown", not "nothing active".
       class CommuneSenseResult
-        attr_reader :active_communes, :recent_communes, :commune_ready
+        attr_reader :active_communes, :recent_communes, :commune_ready, :captured
 
-        def initialize(active_communes: [], recent_communes: [], commune_ready: true)
+        def initialize(active_communes: [], recent_communes: [], commune_ready: true, captured: true)
           @active_communes = active_communes.freeze
           @recent_communes = recent_communes.freeze
           @commune_ready = commune_ready
+          @captured = captured
         end
 
         def commune_ready?
           @commune_ready
+        end
+
+        # @return [Boolean] true when the COMMUNE SENSE reply was captured
+        def captured?
+          @captured
         end
 
         def [](key)
@@ -279,6 +289,9 @@ module Lich
       # Issues 'commune sense' and parses the output to determine active/recent communes
       # and whether the character is ready to commune again.
       # Returns a CommuneSenseResult (backward-compatible with hash access via []).
+      # Lich::Util.issue_command returns [] (never nil) when the reply does not
+      # arrive in time; that prints a bold message and returns a result with
+      # captured false and commune_ready false, never a "ready" reading.
       def commune_sense
         lines = Lich::Util.issue_command(
           'commune sense',
@@ -288,7 +301,10 @@ module Lich
           quiet: true,
           include_end: false
         )
-        return CommuneSenseResult.new if lines.nil?
+        if lines.nil? || lines.empty?
+          Lich::Messaging.msg("bold", "DRCTH: Failed to capture COMMUNE SENSE output (timeout).")
+          return CommuneSenseResult.new(commune_ready: false, captured: false)
+        end
 
         parse_commune_sense_lines(lines.map(&:strip).reject(&:empty?))
       end

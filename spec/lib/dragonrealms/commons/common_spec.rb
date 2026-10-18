@@ -580,7 +580,26 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.assess_teach' do
-    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return(nil); expect(described_class.assess_teach).to eq({}) }
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
+    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return([]); expect(described_class.assess_teach).to eq({}) }
+
+    it 'prints a timeout message when issue_command returns []' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRC: Failed to capture ASSESS TEACH output (timeout).')
+      described_class.assess_teach
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRC: Failed to capture ASSESS TEACH output/)
+      expect(described_class.assess_teach).to eq({})
+    end
+
+    it 'prints no timeout message when no one is teaching' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching'])
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.assess_teach
+    end
     it('returns empty hash when no one is teaching') { allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching']); expect(described_class.assess_teach).to eq({}) }
     it('returns empty hash when "You are teaching"') { allow(Lich::Util).to receive(:issue_command).and_return(['You are teaching a class']); expect(described_class.assess_teach).to eq({}) }
 

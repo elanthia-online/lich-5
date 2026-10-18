@@ -626,6 +626,12 @@ module Lich
         false
       end
 
+      # Issues ASSESS TEACH and returns the classes being taught in the room.
+      #
+      # Lich::Util.issue_command returns [] (never nil) when the reply does not
+      # arrive in time; that prints a bold message and returns {} like "no classes".
+      #
+      # @return [Hash{String => String}] teacher name => skill
       def assess_teach
         lines = Lich::Util.issue_command(
           'assess teach',
@@ -636,7 +642,10 @@ module Lich
           include_end: false
         )
         waitrt?
-        return {} if lines.nil?
+        if lines.nil? || lines.empty?
+          Lich::Messaging.msg("bold", "DRC: Failed to capture ASSESS TEACH output (timeout).")
+          return {}
+        end
         return {} if lines.any? { |l| l.match?(/No one seems to be teaching|You are teaching a class/) }
 
         parse_assess_teach_lines(lines.map(&:strip).reject(&:empty?))
