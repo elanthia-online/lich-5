@@ -20,11 +20,11 @@ RSpec.describe Lich::Common::DatabaseAdapter do
     FileUtils.remove_entry(tmp_dir) if Dir.exist?(tmp_dir)
   end
 
-  it 'opens settings storage with the core sqlite busy timeout' do
+  it 'opens settings storage with the core sqlite lock-wait handling' do
     @adapter = described_class.new(tmp_dir, :script_auto_settings)
     db = @adapter.instance_variable_get(:@db)
 
-    expect(db.fetch('PRAGMA busy_timeout;').first[:timeout]).to eq(Lich.sqlite_busy_timeout_ms)
+    expect(db.synchronize { |conn| conn }).to be_a(Lich::SQLiteBusyWait::Connection)
   end
 
   context 'with the production table' do
