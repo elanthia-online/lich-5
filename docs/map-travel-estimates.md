@@ -16,16 +16,24 @@ of one step always estimates 0.0.
 Name the starting room with `from:` to count that leg:
 
 ```ruby
-path = Room.current.path_to(destination)
-seconds = Map.estimate_time(path, from: Room.current) if path
+start = Room.current
+path = start.path_to(destination)
+seconds = Map.estimate_time(path, from: start) if path
 ```
 
-`from:` takes a room, a room id, or a numeric id String. Anything else raises
-`ArgumentError`. A non-numeric String is refused, not looked up by title. If
-the path already begins with the `from:` room, that room is not added a second
-time, so a full path is also safe to pass with `from:`.
+Read `Room.current` once and reuse it, as above. It changes as soon as the
+character moves, so reading it a second time can name a different room from
+the one the path was built from.
 
-Without `from:`, `estimate_time` behaves as it always has.
+`from:` takes a room, a room id, or a numeric id String, and works the same
+whether you call `Map.estimate_time` or `Room.estimate_time`. Anything else
+raises `ArgumentError`, including an explicit `nil` (what `Room.current` gives
+in an unmapped room), since quietly treating it as "no start room" would return
+the short estimate again. A non-numeric String is refused, not looked up by
+title. If the path already begins with the `from:` room, that room is not added
+a second time, so a full path is also safe to pass with `from:`.
+
+Leave `from:` out and `estimate_time` behaves as it always has.
 
 ## Errors and the argument
 

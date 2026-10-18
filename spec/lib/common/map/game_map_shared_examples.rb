@@ -426,6 +426,31 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(map_class.estimate_time(path, from: '1')).to be_within(0.001).of(13.0)
     end
 
+    it 'accepts a real room as from: when called through Room' do
+      # Rooms are built with Map.new, so they are Map instances, not Room ones.
+      # Scripts call class methods through Room as often as through Map.
+      room_class = Lich::Common::Room
+      origin = map_class[1]
+
+      expect(origin).not_to be_a(room_class)
+      expect(room_class.estimate_time([2, 3], from: origin)).to be_within(0.001).of(13.0)
+      expect(room_class.estimate_time([2], from: origin)).to be_within(0.001).of(12.0)
+      expect(room_class.estimate_time([1, 2, 3], from: origin)).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses an explicit from: nil instead of dropping the first leg' do
+      # Room.current is nil in an unmapped room. Treating that like a missing
+      # from: would quietly return the short estimate from: exists to fix.
+      expect { map_class.estimate_time([2, 3], from: nil) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (NilClass)')
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'names the class of a rejected from: rather than dumping it' do
+      expect { map_class.estimate_time([2], from: Object.new) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Object)')
+    end
+
     it 'does not count the start twice when the path already begins there' do
       expect(map_class.estimate_time([1, 2, 3], from: 1)).to be_within(0.001).of(13.0)
       expect(map_class.estimate_time(%w[1 2 3], from: map_class[1])).to be_within(0.001).of(13.0)
