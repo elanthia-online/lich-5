@@ -416,6 +416,16 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(rows[%w[core DR]]).to eq('banking' => { 'CharA' => { 'Crossings' => 1 } })
     end
 
+    it "doesn't show an old entry over an existing row it can't load when the move fails" do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+      allow(Lich).to receive(:log)
+      allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      # The move would keep CharA's row, so the old entry isn't shown for it.
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 2 })
+    end
+
     it 'moves the data before a write, in the same transaction' do
       XMLData.name = 'CharA'
       seed_legacy({ 'CharA' => { 'Crossings' => 1, 'Shard' => 2 } })
@@ -494,23 +504,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
-  # Logging inside a write transaction lets other threads run while the lock
-  # is held; one of them that starts a write then waits inside SQLite without
-  # letting the lock holder commit, so both stall for the busy timeout.
-  describe 'logging a row problem while the write lock is held' do
-    # Records every Lich.log line, and whether a transaction was open then.
+  describe 'logging a row problem inside a transaction' do
     def record_logs
-      depth = 0
       calls = []
-      allow(adapter).to receive(:transaction).and_wrap_original do |original, &block|
-        depth += 1
-        begin
-          original.call(&block)
-        ensure
-          depth -= 1
-        end
-      end
-      allow(Lich).to receive(:log) { |line| calls << { line: line, in_transaction: depth.positive? } }
+      allow(Lich).to receive(:log) { |line| calls << line }
       calls
     end
 
@@ -525,9 +522,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       'a deposit'           => ->(m) { m.parse('The clerk slides a small metal box across the counter into which you drop 5 gold Kronars') },
       'a character reset'   => ->(m) { m.reset_character! },
       'a reset of all rows' => ->(m) { m.reset_all! },
-      'a read of every row' => ->(m) { m.all_accounts }
+      'a read of every row' => ->(m) { m.all_accounts },
+      'a read of own row'   => ->(m) { m.my_accounts }
     }.each do |what, operation|
-      it "logs an unreadable old shared row only after the transaction, on #{what}" do
+      it "logs an unreadable old shared row and still completes #{what}" do
         XMLData.room_title = '[[Provincial Bank, Teller]]'
         seed_row('CharA', { 'Crossings' => 1 })
         seed_unreadable_legacy
@@ -535,76 +533,124 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
         operation.call(described_module)
 
-        problem = calls.select { |c| c[:line].include?('unreadable settings row core/DR') }
-        expect(problem).not_to be_empty
-        expect(calls.select { |c| c[:in_transaction] }).to eq([])
+        expect(calls.grep(%r{unreadable settings row core/DR})).not_to be_empty
         expect(message_strings.grep(/could not/)).to be_empty
       end
     end
 
-    it "logs the character's own unreadable row after the transaction, then overwrites it" do
+    it "logs the character's own unreadable row, then overwrites it" do
       SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
       calls = record_logs
 
       described_module.update_balance('Crossings', 7)
 
-      expect(calls.map { |c| c[:line] }.join).to include('unreadable settings row core.banking/DR:CharA')
-      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+      expect(calls.join).to include('unreadable settings row core.banking/DR:CharA')
       expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
     end
 
-    it 'logs a row that holds something other than a Hash after the transaction' do
+    it 'logs a row that holds something other than a Hash' do
       SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', Marshal.dump([1, 2]))
       calls = record_logs
 
       described_module.update_balance('Crossings', 7)
 
-      expect(calls.map { |c| c[:line] }.join).to include('core.banking/DR:CharA holding a Array')
-      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+      expect(calls.join).to include('core.banking/DR:CharA holding a Array')
     end
 
-    it 'still logs the held-back line when the transaction fails, and keeps none for later' do
+    it 'logs the line once when the transaction then fails' do
       SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
       SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
       calls = record_logs
 
       described_module.update_balance('Crossings', 7)
 
-      expect(calls.count { |c| c[:line].include?('unreadable settings row core.banking/DR:CharA') }).to eq(1)
-      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+      expect(calls.count { |c| c.include?('unreadable settings row core.banking/DR:CharA') }).to eq(1)
       expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
-      expect(Thread.current[described_module::DEFERRED_LOG_KEY]).to be_nil
+    end
+  end
 
-      # The next operation starts with an empty buffer: the earlier line is
-      # not written a second time.
-      calls.clear
-      described_module.reset_character!
-      expect(calls.count { |c| c[:line].include?('unreadable settings row core.banking/DR:CharA') }).to eq(0)
+  # While DRBanking holds the write lock, other threads of the same process
+  # keep running (Ruby preempts threads, and IO lets them run). A settings
+  # write from one of them has to wait for the lock without stopping the lock
+  # holder, or both stall until the busy timeout and that write fails.
+  describe "another thread's settings write while the write lock is held" do
+    let(:other) { Lich::Common::DatabaseAdapter.new(data_dir, :script_auto_settings) }
+
+    before { XMLData.name = 'CharA' }
+    after { other.instance_variable_get(:@db)&.disconnect }
+
+    def monotonic
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
-    it 'leaves another thread\'s settings save unblocked while the line is written' do
+    # Runs operation in a thread; once it signals that it holds the lock,
+    # saves another script's settings from this thread.
+    # @return [Array(Boolean, Float)] what save_settings returned, seconds taken
+    def save_while_locked(locked, &operation)
+      writer = Thread.new(&operation)
+      locked.pop
+      started = monotonic
+      saved = other.save_settings('otherscript', { 'n' => 1 }, 'DR:CharA')
+      elapsed = monotonic - started
+      writer.join
+      [saved, elapsed]
+    end
+
+    it 'goes through promptly while DRBanking runs Ruby code inside its transaction' do
       seed_row('CharA', { 'Crossings' => 1 })
-      seed_unreadable_legacy
-      other = Lich::Common::DatabaseAdapter.new(data_dir, :script_auto_settings)
-      logging = Queue.new
-      # Like $stderr.puts, the log call lets other threads run for a moment.
-      allow(Lich).to receive(:log) do
-        logging << true
-        sleep 0.3
+      locked = Queue.new
+      allow(adapter).to receive(:save_settings!).and_wrap_original do |original, *args|
+        locked << true
+        # Plain Ruby work, no IO: the thread can only be preempted.
+        spin_until = monotonic + 0.3
+        nil while monotonic < spin_until
+        original.call(*args)
       end
 
-      writer = Thread.new { described_module.update_balance('Crossings', 7) }
-      logging.pop
-      started = Time.now
-      saved = other.save_settings('otherscript', { 'n' => 1 }, 'DR:CharA')
-      elapsed = Time.now - started
-      writer.join
+      saved, elapsed = save_while_locked(locked) { described_module.update_balance('Crossings', 7) }
 
       expect(saved).to be(true)
       expect(elapsed).to be < 2
       expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
-    ensure
-      other&.instance_variable_get(:@db)&.disconnect
+      expect(rows[['otherscript', 'DR:CharA']]).to eq('n' => 1)
+      expect(message_strings.grep(/could not/)).to be_empty
+    end
+
+    it 'goes through promptly while DRBanking logs a row problem inside its transaction' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      SettingsSpecDB.write_raw(data_dir, 'core', 'DR', 'garbage')
+      locked = Queue.new
+      # Like $stderr.puts, the log call lets other threads run for a moment.
+      allow(Lich).to receive(:log) do
+        locked << true
+        sleep 0.3
+      end
+
+      saved, elapsed = save_while_locked(locked) { described_module.update_balance('Crossings', 7) }
+
+      expect(saved).to be(true)
+      expect(elapsed).to be < 2
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+      expect(rows[['otherscript', 'DR:CharA']]).to eq('n' => 1)
+    end
+
+    it 'waits for the migration transaction, then both are kept' do
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+      locked = Queue.new
+      allow(adapter).to receive(:scopes_by_prefix).and_wrap_original do |original, *args|
+        locked << true
+        spin_until = monotonic + 0.3
+        nil while monotonic < spin_until
+        original.call(*args)
+      end
+
+      saved, elapsed = save_while_locked(locked) { described_module.all_accounts }
+
+      expect(saved).to be(true)
+      expect(elapsed).to be < 2
+      expect(rows[['core.banking', 'DR:CharB']]).to eq('Shard' => 2)
+      expect(rows[%w[core DR]]).to eq({})
+      expect(rows[['otherscript', 'DR:CharA']]).to eq('n' => 1)
     end
   end
 
@@ -630,6 +676,82 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       XMLData.name = nil
       seed_row('', { 'Crossings' => 1 })
       expect(described_module.my_accounts).to eq({})
+    end
+
+    it "reads only this character's row, not every character's" do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 10 })
+      seed_row('CharB', { 'Shard' => 2 })
+      allow(adapter).to receive(:get_settings_by_scope_prefix).and_call_original
+
+      expect(described_module.my_accounts).to eq('Crossings' => 10)
+      expect(described_module.total_wealth).to eq(10)
+      described_module.display_banks
+
+      expect(adapter).not_to have_received(:get_settings_by_scope_prefix)
+    end
+
+    it 'returns {} when the game is not known yet' do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 1 })
+      allow(XMLData).to receive(:game).and_return(nil)
+      expect(described_module.my_accounts).to eq({})
+    end
+
+    it 'moves the old shared row before reading' do
+      XMLData.name = 'CharA'
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+
+      expect(described_module.my_accounts).to eq('Crossings' => 1)
+      expect(rows[['core.banking', 'DR:CharB']]).to eq('Shard' => 2)
+      expect(rows[%w[core DR]]).to eq({})
+    end
+
+    it 'reports a database error and returns {}' do
+      XMLData.name = 'CharA'
+      allow(adapter).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
+      expect(described_module.my_accounts).to eq({})
+      expect(message_strings.last).to include('could not read bank data', 'database is locked')
+    end
+
+    # my_accounts reads one row, all_accounts reads them all; they must agree.
+    describe 'agreeing with all_accounts' do
+      own_rows = {
+        'no row'                 => nil,
+        'a row'                  => ->(spec) { spec.seed_row('CharA', { 'Crossings' => 3 }) },
+        'a cleared row'          => ->(spec) { spec.seed_row('CharA', {}) },
+        'an unreadable row'      => ->(spec) { SettingsSpecDB.write_raw(spec.data_dir, 'core.banking', 'DR:CharA', 'garbage') },
+        'a row holding an Array' => ->(spec) { SettingsSpecDB.write_raw(spec.data_dir, 'core.banking', 'DR:CharA', Marshal.dump([1])) }
+      }
+      legacies = {
+        'no old row'                      => nil,
+        'an old entry for this character' => { 'CharA' => { 'Shard' => 9 }, 'CharB' => { 'Ratha' => 4 } },
+        'an old entry for another only'   => { 'CharB' => { 'Ratha' => 4 } }
+      }
+
+      own_rows.each do |own_desc, seed_own|
+        legacies.each do |legacy_desc, legacy|
+          [false, true].each do |move_fails|
+            next if move_fails && legacy.nil?
+
+            it "with #{own_desc}, #{legacy_desc}#{move_fails ? ', and a failing move' : ''}" do
+              XMLData.name = 'CharA'
+              seed_own&.call(self)
+              seed_row('CharB', { 'Shard' => 1 }) unless legacy
+              seed_legacy(legacy) if legacy
+              allow(Lich).to receive(:log)
+              if move_fails
+                allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+              end
+
+              mine = described_module.my_accounts
+              everyone = described_module.all_accounts
+
+              expect(mine).to eq(everyone['CharA'] || {})
+            end
+          end
+        end
+      end
     end
   end
 
@@ -1017,7 +1139,9 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     it 'reports a failed read once, without also saying nothing is recorded' do
       XMLData.name = 'CharA'
       seed_row('CharA', { 'Crossings' => 10 })
-      allow(adapter).to receive(:get_settings_by_scope_prefix).and_raise(Sequel::DatabaseError, 'database is locked')
+      allow(adapter).to receive(:get_settings).and_call_original
+      allow(adapter).to receive(:get_settings).with('core.banking', 'DR:CharA')
+                                              .and_raise(Sequel::DatabaseError, 'database is locked')
 
       described_module.display_banks
 
@@ -1028,9 +1152,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       XMLData.name = 'CharA'
       seed_row('CharA', { 'Crossings' => 10_000, 'Riverhaven' => 5_000 })
       calls = 0
-      allow(adapter).to receive(:get_settings_by_scope_prefix).and_wrap_original do |original, *args|
-        calls += 1
-        raise Sequel::DatabaseError, 'database is locked' if calls > 1
+      allow(adapter).to receive(:get_settings).and_wrap_original do |original, *args|
+        if args == ['core.banking', 'DR:CharA']
+          calls += 1
+          raise Sequel::DatabaseError, 'database is locked' if calls > 1
+        end
 
         original.call(*args)
       end

@@ -92,10 +92,6 @@ module Lich
       # Pattern for parsing balance amounts from strings
       BALANCE_AMOUNT_PATTERN = /(\d+)\s+(platinum|gold|silver|bronze|copper)/i.freeze
 
-      # Thread-local key of the log lines held back while a transaction runs
-      # (see in_transaction)
-      DEFERRED_LOG_KEY = :lich_drbanking_deferred_log
-
       class << self
         # Returns the bank accounts of every character in this game, read
         # fresh from the database on every call (nothing is cached).
@@ -315,7 +311,7 @@ module Lich
           end
 
           db = adapter
-          in_transaction(db) do
+          db.transaction do
             migrate_legacy!(db)
             db.scopes_by_prefix(STORE_SCRIPT, "#{game}:").each do |scope|
               db.save_settings!(STORE_SCRIPT, {}, scope)
@@ -358,19 +354,15 @@ module Lich
           return {} unless game
 
           db = adapter
-          legacy = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
-          if legacy
-            begin
-              in_transaction(db) { migrate_legacy!(db) }
-              legacy = nil
-            rescue StandardError => e
-              report_storage_error('move old bank data to per-character storage', e)
-            end
-          end
-
+          legacy = migrate_before_read(db, game)
           accounts = stored_accounts(db, game)
-          # If the move failed, still show the old entries, read-only.
-          legacy&.each { |name, towns| accounts[name] = towns unless accounts.key?(name) }
+          # If the move failed, still show the old entries, read-only, for
+          # characters with no row (the move would keep an existing row).
+          if legacy
+            prefix = "#{game}:"
+            existing = db.scopes_by_prefix(STORE_SCRIPT, prefix)
+            legacy.each { |name, towns| accounts[name] = towns unless existing.include?("#{prefix}#{name}") }
+          end
           # An empty row is a character whose data was cleared.
           accounts.reject { |_name, towns| towns.empty? }
         rescue StandardError => e
@@ -378,15 +370,43 @@ module Lich
           nil
         end
 
-        # Reads this character's accounts.
-        # @return [Hash, nil] {} if the character isn't known yet; nil if the
-        #   read failed (already reported)
+        # Reads this character's accounts: only this character's row (and the
+        # old shared row, while it still holds data to move). Gives what
+        # all_accounts gives for this character, or {}.
+        # @return [Hash, nil] {} if the character or game isn't known yet;
+        #   nil if the read failed (already reported)
         def read_my_accounts
-          name = character_name.to_s
-          return {} if name.empty?
+          scope = my_scope
+          return {} unless scope
 
-          all = read_all_accounts
-          all && (all[name] || {})
+          db = adapter
+          name = character_name.to_s
+          legacy = migrate_before_read(db, game_code)
+          if legacy&.key?(name) && !db.scopes_by_prefix(STORE_SCRIPT, scope).include?(scope)
+            return legacy[name] # the move failed; shown read-only
+          end
+
+          read_row(db, STORE_SCRIPT, scope)
+        rescue StandardError => e
+          report_storage_error('read bank data', e)
+          nil
+        end
+
+        # Before a read: moves any legacy data into per-character rows.
+        # @return [Hash, nil] the legacy entries if there were some and moving
+        #   them failed (already reported); nil otherwise
+        # @raise [Sequel::Error] if the legacy row can't be read
+        def migrate_before_read(db, game)
+          legacy = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
+          return nil unless legacy
+
+          begin
+            db.transaction { migrate_legacy!(db) }
+            nil
+          rescue StandardError => e
+            report_storage_error('move old bank data to per-character storage', e)
+            legacy
+          end
         end
 
         # Reads every character's row for this game.
@@ -429,7 +449,7 @@ module Lich
           end
 
           db = adapter
-          in_transaction(db) do
+          db.transaction do
             migrate_legacy!(db)
             yield db, scope
           end
@@ -438,36 +458,8 @@ module Lich
           nil
         end
 
-        # Runs the block in one write transaction (adapter.transaction), and
-        # holds back any log line written meanwhile (see log_row_problem)
-        # until the transaction has ended. Logging writes to $stderr, which
-        # lets other threads run; one of them that starts a write then waits
-        # for the lock inside SQLite without letting this thread run again to
-        # commit, so both would stall until the busy timeout. Nested calls
-        # share the outermost call's buffer. The held-back lines are written
-        # however the block ends, error or not.
-        # @return [Object] what the block returned
-        def in_transaction(db, &block)
-          outer = Thread.current[DEFERRED_LOG_KEY]
-          Thread.current[DEFERRED_LOG_KEY] = outer || []
-          db.transaction(&block)
-        ensure
-          unless outer
-            held = Thread.current[DEFERRED_LOG_KEY] || []
-            Thread.current[DEFERRED_LOG_KEY] = nil
-            held.each { |line| Lich.log(line) }
-          end
-        end
-
-        # Logs a problem with a stored row: right away, or after the
-        # transaction when called inside in_transaction.
-        def log_row_problem(line)
-          held = Thread.current[DEFERRED_LOG_KEY]
-          held ? held << line : Lich.log(line)
-        end
-
         # Moves the legacy game-wide blob into per-character rows. Must run
-        # inside in_transaction. Safe to run any number of times, and
+        # inside adapter.transaction. Safe to run any number of times, and
         # from several sessions at once:
         # - A character that already has a row keeps it (even one that can't
         #   be loaded). That row is newer than the blob, or was cleared on
@@ -508,12 +500,12 @@ module Lich
           row = db.get_settings(script, scope)
           return row if row.is_a?(Hash)
 
-          log_row_problem("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
+          Lich.log("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
           {}
         rescue Sequel::Error
           raise
         rescue StandardError => e
-          log_row_problem("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
+          Lich.log("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
           {}
         end
 
