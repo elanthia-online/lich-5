@@ -216,7 +216,7 @@ module Lich
         #   SnapshotManager#snapshot call. When nil (a standalone call not part
         #   of a full update, such as the login autostart path), a fresh
         #   data-only backup directory is created (SnapshotManager#new_data_backup_dir)
-        #   -- never SnapshotManager#new_snapshot_dir -- so it can't be mistaken by
+        #   -- never an L5-snapshot-* directory -- so it can't be mistaken by
         #   SnapshotManager#revert for a real, restorable ecosystem snapshot.
         # @return [void]
         def update_core_data_and_scripts(version = LICH_VERSION, snapshot_dir = nil)
