@@ -560,6 +560,31 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(later).to be > after_reopen
     end
 
+    it 'sets the new offset before another thread can see a reopened connection' do
+      allow(Lich).to receive(:log)
+      @adapter.data_version # opens the version connection
+      old_db = @adapter.instance_variable_get(:@version_db)
+      old_base = @adapter.instance_variable_get(:@version_base)
+      allow(old_db).to receive(:execute_batch2).and_raise(SQLite3::IOException, 'disk I/O error')
+      expect(@adapter.data_version).to be_nil # closes it
+
+      # Another thread could run, or this one be interrupted, between any two
+      # lines. Record the offset it would read at every line at which the new
+      # connection is already visible.
+      seen = []
+      adapter_file = @adapter.method(:data_version).source_location.first
+      trace = TracePoint.new(:line) do |tp|
+        next unless tp.path == adapter_file
+
+        db = @adapter.instance_variable_get(:@version_db)
+        seen << @adapter.instance_variable_get(:@version_base) if db && !db.equal?(old_db)
+      end
+      trace.enable { expect(@adapter.data_version).to be_a(Integer) }
+
+      expect(seen).not_to be_empty
+      expect(seen).to all(be > old_base)
+    end
+
     it 'answers a thread that asks now and then while another thread asks in a tight loop' do
       @adapter.data_version
       stop = false
