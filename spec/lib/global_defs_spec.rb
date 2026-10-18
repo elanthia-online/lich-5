@@ -262,7 +262,20 @@ RSpec.describe '#fput' do
 
       it 'ends a stun that does not pass on the interrupt' do
         stub_game_responses('You are still stunned.', 'You pick up a sword.')
-        allow(self).to receive(:checkstunned).and_return(true)
+        stun_reads = 0
+        allow(self).to receive(:checkstunned) { (stun_reads += 1) > 50 ? raise('stun wait never interrupted') : true }
+        checks = 0
+        interrupt = -> { (checks += 1) > 3 }
+        expect(self).to receive(:sleep).with(0.25).exactly(3).times
+        expect(self).to receive(:put).with('get sword').once
+
+        expect(fput('get sword', interrupt: interrupt, failures: :symbol)).to eq(:interrupted)
+      end
+
+      it 'ends a web that does not pass on the interrupt' do
+        stub_game_responses("You can't do that while engaged!", 'You pick up a sword.')
+        web_reads = 0
+        allow(self).to receive(:checkwebbed) { (web_reads += 1) > 50 ? raise('web wait never interrupted') : true }
         checks = 0
         interrupt = -> { (checks += 1) > 3 }
         expect(self).to receive(:sleep).with(0.25).exactly(3).times
@@ -361,14 +374,16 @@ RSpec.describe '#fput' do
     end
 
     it 'caps a persistent struggle to stand' do
-      allow(self).to receive(:get?).and_return('You struggle to stand.')
+      reads = 0
+      allow(self).to receive(:get?) { (reads += 1) > 50 ? raise('struggle never capped') : 'You struggle to stand.' }
       expect(self).to receive(:put).with('stand').exactly(3).times
 
       expect(fput('get sword', max_resends: 3, failures: :symbol)).to eq(:too_many_resends)
     end
 
     it 'honors the interrupt on a persistent struggle to stand' do
-      allow(self).to receive(:get?).and_return('You struggle to stand.')
+      reads = 0
+      allow(self).to receive(:get?) { (reads += 1) > 50 ? raise('struggle never interrupted') : 'You struggle to stand.' }
 
       expect(fput('get sword', interrupt: -> { true }, failures: :symbol)).to eq(:interrupted)
       expect(fput('get sword', interrupt: -> { true })).to eq(false)
@@ -479,8 +494,8 @@ RSpec.describe '#fput' do
         when 1      then frozen_time        # initial timer
         when 2, 3   then frozen_time + 30   # 30s elapsed before response
         when 4      then frozen_time + 30   # response arrives, timer resets
-        when 5, 6   then frozen_time + 55   # 25s since reset (under 60s)
-        else frozen_time + 55
+        when 5, 6   then frozen_time + 85   # 55s since reset, 85s since send
+        else frozen_time + 85
         end
       end
 
@@ -947,10 +962,16 @@ RSpec.describe '#waitrt?' do
 
   it 'bounded: waits a roundtime out in slices and reports there was one' do
     left = [0.25, 0.15, 0.05, 0.0]
+    sleeps = []
     allow(self).to receive(:checkrt) { left.first }
-    allow(self).to receive(:sleep) { left.shift }
+    allow(self).to receive(:sleep) do |n|
+      sleeps << n
+      left.shift
+    end
     expect(waitrt?(cap: 60)).to be(true)
     expect(left).to eq([0.0])
+    # tenth-second slices, the last one cut to the roundtime left
+    expect(sleeps).to eq([0.1, 0.1, 0.05])
     allow(self).to receive(:checkrt).and_return(0.0)
     expect(waitrt?(cap: 60)).to be(false)
   end
