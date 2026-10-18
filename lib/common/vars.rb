@@ -79,13 +79,14 @@ module Lich
           if @@load_state == LoadState::LOADED
             current_md5 = Digest::MD5.hexdigest(@@vars.to_s)
             if current_md5 != @@md5
-              @@md5 = current_md5
               blob = SQLite3::Blob.new(Marshal.dump(@@vars))
               begin
                 Lich.db.execute(
                   'INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);',
                   ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob]
                 )
+                # Only mark clean once the write lands, so a failed save is retried next time
+                @@md5 = current_md5
               rescue SQLite3::BusyException
                 sleep 0.1
                 retry
