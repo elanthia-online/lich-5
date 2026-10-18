@@ -179,7 +179,7 @@ module Lich
       UNKNOWN_ROOM_SPARE_HOPS = 3
 
       # One leg of {walk_from_unknown_room}: the moves it has left and the rooms
-      # it has stood in (a Hash of room id => true). Internal.
+      # it has stood in (a Set of room ids). Internal.
       UnknownRoomLeg = Struct.new(:hops, :visited)
       private_constant :UnknownRoomLeg
 
@@ -440,13 +440,10 @@ module Lich
             return false
           end
 
-          leg ||= UnknownRoomLeg.new(0, {})
+          leg ||= UnknownRoomLeg.new(0, Set.new)
           # Only a room new to this leg can grow its budget, so the budget
           # grows at most once per map room and a leg always ends.
-          unless leg.visited[room.id]
-            leg.visited[room.id] = true
-            leg.hops = [leg.hops, path.length + UNKNOWN_ROOM_SPARE_HOPS].max
-          end
+          leg.hops = [leg.hops, path.length + UNKNOWN_ROOM_SPARE_HOPS].max if leg.visited.add?(room.id)
           if leg.hops <= 0
             Lich::Messaging.msg('bold', "DRCT: Ran out of moves walking from an unknown room to room #{room_num} (stopped in room #{room.id}), giving up.")
             return false
