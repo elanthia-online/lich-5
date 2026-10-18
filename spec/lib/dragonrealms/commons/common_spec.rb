@@ -579,6 +579,57 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
   end
 
+  describe '.capture_to_prompt' do
+    let(:prompt) { '<prompt time="1700000000">&gt;</prompt>' }
+
+    it 'asks issue_command for the prompt line, quietly, over XML, with the given timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('wealth', /^Wealth:/, timeout: 12)
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'wealth', /^Wealth:/, /<prompt/,
+        usexml: true, quiet: true, include_end: true, timeout: 12
+      )
+    end
+
+    it 'defaults the timeout to 5 seconds' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('health', /^Your body feels/)
+      expect(Lich::Util).to have_received(:issue_command).with(anything, anything, anything, hash_including(timeout: 5))
+    end
+
+    it 'drops the prompt line and reports complete when the reply ends on the prompt' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.', prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], true])
+    end
+
+    it 'returns [[], false] on a timeout before the start line ([])' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'keeps every line and reports incomplete when the prompt never arrived' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.'])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], false])
+    end
+
+    it 'does not count a lone prompt line as a complete reply' do
+      allow(Lich::Util).to receive(:issue_command).and_return([prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[prompt], false])
+    end
+
+    it 'does not mutate the array issue_command returned' do
+      raw = ['Wealth:', prompt].freeze
+      allow(Lich::Util).to receive(:issue_command).and_return(raw)
+      expect { described_class.capture_to_prompt('wealth', /^Wealth:/) }.not_to raise_error
+      expect(raw).to eq(['Wealth:', prompt])
+    end
+  end
+
   describe '.assess_teach' do
     # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
     it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return([]); expect(described_class.assess_teach).to eq({}) }

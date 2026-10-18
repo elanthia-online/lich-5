@@ -94,6 +94,41 @@ module Lich
              .reject(&:empty?)
       end
 
+      # Sends a command with Lich::Util.issue_command and captures its reply up to
+      # the next prompt.
+      #
+      # issue_command never returns nil. On a timeout it returns [] when the start
+      # line never arrived, or the lines collected so far when the prompt never
+      # arrived. Asking for the prompt line (include_end: true) is the only way to
+      # tell a complete reply from a cut-off one, so it is requested here and then
+      # dropped from the lines handed back.
+      #
+      # Shared by the commons for replies that end on the prompt (HEALTH,
+      # PERCEIVE HEALTH, TOUCH, WEALTH); each caller prints its own timeout message.
+      #
+      # @param command [String] the game command to send
+      # @param start_pattern [Regexp] the first line of the reply
+      # @param timeout [Integer] seconds to wait for the whole reply
+      # @return [Array(Array<String>, Boolean)] the reply lines without the prompt
+      #   line, and true when the prompt arrived (the reply is complete)
+      # @api private
+      def capture_to_prompt(command, start_pattern, timeout: 5)
+        lines = Array(
+          Lich::Util.issue_command(
+            command,
+            start_pattern,
+            /<prompt/,
+            usexml: true,
+            quiet: true,
+            include_end: true,
+            timeout: timeout
+          )
+        )
+        complete = lines.length > 1 && lines.last.match?(/<prompt/)
+        lines = lines[0...-1] if complete
+        [lines, complete]
+      end
+
       # Like `fput` but better because will wait for RT
       # before performing command and do smart retries.
       # Will wait for matching text up to 15 seconds then timeout.

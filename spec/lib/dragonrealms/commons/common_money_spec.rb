@@ -4,6 +4,7 @@ require 'timeout'
 require_relative '../../../spec_helper'
 
 # Load production code
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money.rb')
 require File.join(LIB_DIR, 'util', 'util.rb')

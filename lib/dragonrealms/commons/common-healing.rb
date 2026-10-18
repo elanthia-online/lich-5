@@ -27,7 +27,7 @@ module Lich
       #
       # @return [HealthResult]
       def check_health
-        health_lines, complete = capture_to_prompt('health', /^Your body feels\b/)
+        health_lines, complete = DRC.capture_to_prompt('health', /^Your body feels\b/)
         if health_lines.empty?
           Lich::Messaging.msg("bold", "DRCH: Failed to capture HEALTH output (timeout).")
           return HealthResult.new(captured: false)
@@ -38,38 +38,6 @@ module Lich
         end
 
         parse_health_lines(strip_xml(health_lines), captured: complete)
-      end
-
-      # Sends a command with Lich::Util.issue_command and captures its reply up to
-      # the next prompt.
-      #
-      # issue_command never returns nil. On a timeout it returns [] when the start
-      # line never arrived, or the lines collected so far when the prompt never
-      # arrived. Asking for the prompt line (include_end: true) is the only way to
-      # tell a complete reply from a cut-off one, so it is requested here and then
-      # dropped from the lines handed back.
-      #
-      # @param command [String] the game command to send
-      # @param start_pattern [Regexp] the first line of the reply
-      # @param timeout [Integer] seconds to wait for the whole reply
-      # @return [Array(Array<String>, Boolean)] the reply lines without the prompt
-      #   line, and true when the prompt arrived (the reply is complete)
-      # @api private
-      def capture_to_prompt(command, start_pattern, timeout: 5)
-        lines = Array(
-          Lich::Util.issue_command(
-            command,
-            start_pattern,
-            /<prompt/,
-            usexml: true,
-            quiet: true,
-            include_end: true,
-            timeout: timeout
-          )
-        )
-        complete = lines.length > 1 && lines.last.match?(/<prompt/)
-        lines = lines[0...-1] if complete
-        [lines, complete]
       end
 
       # Parses stripped HEALTH command output lines into a HealthResult.
@@ -136,7 +104,7 @@ module Lich
           return nil
         end
 
-        lines, complete = capture_to_prompt(
+        lines, complete = DRC.capture_to_prompt(
           'perceive health self',
           /injuries include\.\.\.|feel only an aching emptiness/,
           timeout: 15
@@ -191,7 +159,7 @@ module Lich
           return nil
         end
 
-        touch_lines, complete = capture_to_prompt(
+        touch_lines, complete = DRC.capture_to_prompt(
           "touch #{target}",
           /You sense a successful empathic link|Touch what|feels cold|avoids your touch|You quickly recoil/,
           timeout: 10
