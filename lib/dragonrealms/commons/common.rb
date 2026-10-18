@@ -305,7 +305,7 @@ module Lich
         when 'The room is too cluttered'
           return unless kick_pile?
 
-          collect(item)
+          collect(item, practice)
         end
         waitrt?
       end
