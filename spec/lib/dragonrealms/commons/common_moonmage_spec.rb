@@ -783,6 +783,50 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       UserVars.moons = ready.merge('yavash' => 12)
       expect(described_class.moon_data_ready?).to be false
     end
+
+    context 'with the sun data' do
+      let(:running_moons) { ready.merge('running' => true) }
+
+      it 'is false while moonwatch has marked the sun running but not yet written it' do
+        UserVars.moons = running_moons
+        UserVars.sun = { 'running' => true }
+        expect(described_class.moon_data_ready?).to be false
+      end
+
+      it "is false while moonwatch has written the sun's 'day' but not yet its 'timer'" do
+        UserVars.moons = running_moons
+        UserVars.sun = { 'running' => true, 'day' => false, 'night' => true, 'visible' => false }
+        expect(described_class.moon_data_ready?).to be false
+      end
+
+      it 'is false when the sun timer is not numeric' do
+        UserVars.moons = running_moons
+        UserVars.sun = { 'running' => true, 'day' => true, 'timer' => '120' }
+        expect(described_class.moon_data_ready?).to be false
+      end
+
+      it 'is true once moonwatch has written the sun timer, by night as by day' do
+        UserVars.moons = running_moons
+        [true, false].each do |day|
+          UserVars.sun = { 'running' => true, 'day' => day, 'night' => !day, 'timer' => 0 }
+          expect(described_class.moon_data_ready?).to be true
+        end
+      end
+
+      it "does not check sun data without a 'running' key (older moonwatch versions)" do
+        UserVars.moons = ready
+        [{}, { 'day' => true }, nil].each do |sun|
+          UserVars.sun = sun
+          expect(described_class.moon_data_ready?).to be true
+        end
+      end
+
+      it 'is false over a ready sun when the moons are not ready' do
+        UserVars.moons = running_moons.merge('xibar' => {})
+        UserVars.sun = { 'running' => true, 'day' => true, 'timer' => 120 }
+        expect(described_class.moon_data_ready?).to be false
+      end
+    end
   end
 
   # ================================================================
@@ -818,6 +862,26 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
     def monotonic
       Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    # Waits for another thread to signal on queue. Fails the example (instead
+    # of hanging the suite) if the signal never comes.
+    def await_signal(queue)
+      Timeout.timeout(5) { queue.pop }
+    end
+
+    # Holds MOONWATCH_START_LOCK in another thread until release is popped,
+    # as a start in progress elsewhere would. Returns once the lock is held.
+    def hold_start_lock(release)
+      locked = Queue.new
+      holder = Thread.new do
+        described_class::MOONWATCH_START_LOCK.synchronize do
+          locked << true
+          release.pop
+        end
+      end
+      await_signal(locked)
+      holder
     end
 
     before do
@@ -880,6 +944,27 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(world[:polls]).to be >= 4
         expect(UserVars.moons).to eq(ready_moons)
         expect(result).to be true
+      end
+
+      it 'waits for the sun when moonwatch has published the moons but not yet the sun' do
+        UserVars.moons = ready_moons
+        UserVars.sun = { 'running' => true }
+        world[:on_poll] = lambda do |n|
+          UserVars.sun = { 'running' => true, 'day' => true, 'night' => false, 'timer' => 120 } if n >= 2
+        end
+        result = check
+        expect(world[:polls]).to be >= 2
+        expect(result).to be true
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'lets bright_celestial_object? see a sun published just after the moons' do
+        UserVars.moons = ready_moons.merge('visible' => [])
+        UserVars.sun = { 'running' => true }
+        world[:on_poll] = lambda do |n|
+          UserVars.sun = { 'running' => true, 'day' => true, 'night' => false, 'timer' => 120 } if n >= 1
+        end
+        expect(Timeout.timeout(5) { described_class.bright_celestial_object? }).to be true
       end
 
       it 'returns false promptly when moonwatch stops before publishing, and does not latch' do
@@ -976,6 +1061,24 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         result = check
         expect(world[:polls]).to be >= 3
         expect(described_class.moon_data_ready?).to be true
+        expect(result).to be true
+      end
+
+      it "returns true only after the sun is published too, in moonwatch's startup order" do
+        sun = { 'running' => true, 'day' => false, 'night' => true, 'visible' => false, 'timer' => 45 }
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          world[:running] = true
+          UserVars.moons = skeleton.merge('running' => true)
+          UserVars.sun = { 'running' => true }
+          world[:on_poll] = lambda do |n|
+            UserVars.moons = ready_moons if n >= 2
+            UserVars.sun = sun if n >= 4
+          end
+          Object.new
+        end
+        result = check
+        expect(world[:polls]).to be >= 4
+        expect(UserVars.sun).to eq(sun)
         expect(result).to be true
       end
 
@@ -1293,17 +1396,24 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
       it 'does not start moonwatch from a caller queued on the lock behind a start that crashed' do
         starts = 0
+        in_start = Queue.new
+        go = Queue.new
         allow(described_class).to receive(:start_script).with('moonwatch') do
           starts += 1
-          sleep 0.1 # the second caller queues on the lock meanwhile
+          in_start << true
+          go.pop # the second caller queues on the lock meanwhile
           crashing_start.call
         end
+        queued = Queue.new
+        world[:on_poll] = ->(_n) { queued << true } # only the second caller polls before go
         results = {}
         threads = []
-        threads << Thread.new { results[:first] = described_class.check_moonwatch }
-        sleep 0.03
-        threads << Thread.new { results[:second] = described_class.check_moonwatch }
         begin
+          threads << Thread.new { results[:first] = described_class.check_moonwatch }
+          await_signal(in_start)
+          threads << Thread.new { results[:second] = described_class.check_moonwatch }
+          await_signal(queued)
+          go << true
           threads.each { |t| expect(t.join(5)).not_to be_nil }
         ensure
           threads.each(&:kill)
@@ -1385,6 +1495,8 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'serializes concurrent callers: one start, no wiped data, both see real moon data' do
         stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 2)
         start_calls = Queue.new
+        in_start = Queue.new
+        go = Queue.new
         starting = Mutex.new
         claimed = false
         allow(described_class).to receive(:start_script).with('moonwatch') do
@@ -1397,7 +1509,8 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           first = starting.synchronize { claimed ? false : (claimed = true) }
           next nil unless first
 
-          sleep 0.1
+          in_start << true
+          go.pop # the second caller queues on the lock meanwhile
           world[:running] = true
           Thread.new do
             sleep 0.03
@@ -1408,12 +1521,16 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           Object.new
         end
 
+        queued = Queue.new
+        world[:on_poll] = ->(_n) { queued << true } # only the second caller polls before go
         results = {}
         threads = []
-        threads << Thread.new { results[:first] = [described_class.check_moonwatch, UserVars.moons == ready_moons] }
-        sleep 0.05
-        threads << Thread.new { results[:second] = [described_class.check_moonwatch, UserVars.moons == ready_moons] }
         begin
+          threads << Thread.new { results[:first] = [described_class.check_moonwatch, UserVars.moons == ready_moons] }
+          await_signal(in_start)
+          threads << Thread.new { results[:second] = [described_class.check_moonwatch, UserVars.moons == ready_moons] }
+          await_signal(queued)
+          go << true
           threads.each { |t| expect(t.join(5)).not_to be_nil }
         ensure
           threads.each(&:kill)
@@ -1429,14 +1546,15 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'returns at once when another start is in progress but the data is already ready' do
         world[:running] = true
         UserVars.moons = ready_moons
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { sleep 0.5 } }
-        sleep 0.05
+        release = Queue.new
+        holder = hold_start_lock(release)
         begin
           started = monotonic
           expect(check(timeout: 2)).to be true
           expect(monotonic - started).to be < 0.3
+          expect(described_class::MOONWATCH_START_LOCK).to be_locked
         ensure
-          holder.kill
+          release << :go
           holder.join
         end
       end
@@ -1446,8 +1564,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         UserVars.moons = skeleton.dup
         world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 3 }
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         begin
           expect(described_class).not_to receive(:start_script)
           result = check(timeout: 2)
@@ -1469,8 +1586,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           UserVars.moons = ready_moons if n >= 5
         end
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         begin
           expect(described_class).not_to receive(:start_script)
           started = monotonic
@@ -1491,8 +1607,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         Lich::Messaging.clear_messages!
         world[:polls] = 0
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         begin
           expect(described_class).not_to receive(:start_script)
           started = monotonic
@@ -1510,8 +1625,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         world[:running] = true
         UserVars.moons = skeleton.dup
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         # On the second poll the holder's wait times out (latching the stall)
         # and it releases the lock before this caller looks at the latch.
         world[:on_poll] = lambda do |n|
@@ -1537,8 +1651,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         world[:running] = true
         UserVars.moons = skeleton.dup
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         # On the second poll the holder's wait times out (latching the stall),
         # moonwatch then publishes, and the holder releases the lock; this
         # caller's next try_lock succeeds before it looks at the data again.
@@ -1568,8 +1681,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         UserVars.moons = skeleton.dup
         expect(check).to be false # times out and latches the stall
         release = Queue.new
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         # Running (and latched) when the call begins, so it queues on the
         # lock; moonwatch has stopped by the time it next looks.
         running_calls = 0
@@ -1604,12 +1716,16 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           UserVars.moons = skeleton.dup
           Object.new
         end
+        first_polling = Queue.new
+        world[:on_poll] = ->(n) { first_polling << true if n == 1 }
         results = {}
         threads = []
-        threads << Thread.new { results[:first] = [described_class.check_moonwatch, monotonic] }
-        sleep 0.1
-        threads << Thread.new { results[:second] = [described_class.check_moonwatch, monotonic] }
         begin
+          threads << Thread.new { results[:first] = [described_class.check_moonwatch, monotonic] }
+          await_signal(first_polling) # the first caller holds the lock and is waiting for the data
+          # A longer timeout for the second caller, so only the first caller's
+          # stall (not the second's own deadline) can end its wait.
+          threads << Thread.new { results[:second] = [described_class.check_moonwatch(timeout: 2), monotonic] }
           threads.each { |t| expect(t.join(5)).not_to be_nil }
         ensure
           threads.each(&:kill)
@@ -1625,8 +1741,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'times out, without starting moonwatch, when another start never finishes' do
         release = Queue.new
         world[:running] = false
-        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
-        sleep 0.05
+        holder = hold_start_lock(release)
         begin
           expect(described_class).not_to receive(:start_script)
           expect(check(timeout: 0.1)).to be false

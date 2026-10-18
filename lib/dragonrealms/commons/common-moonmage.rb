@@ -526,13 +526,22 @@ module Lich
       # without a 'running' key (older moonwatch versions) is judged by the
       # timers alone.
       #
+      # moonwatch publishes the moons first and the sun right after, and the
+      # celestial checks read both. So while moonwatch has marked
+      # UserVars.sun as running but not yet written its 'timer' (the last key
+      # those checks read, written after 'day'), the data is not ready. Sun
+      # data without a 'running' key (older moonwatch versions) is not
+      # checked.
+      #
       # @return [Boolean]
       def moon_data_ready?
         moons = UserVars.moons
         return false unless moons.is_a?(Hash) && moons['visible'].is_a?(Array)
         return false if moons['running'] == false
+        return false unless MOON_NAMES.all? { |moon| moons[moon].is_a?(Hash) && moons[moon]['timer'].is_a?(Numeric) }
 
-        MOON_NAMES.all? { |moon| moons[moon].is_a?(Hash) && moons[moon]['timer'].is_a?(Numeric) }
+        sun = UserVars.sun
+        !(sun.is_a?(Hash) && sun['running'] == true && !sun['timer'].is_a?(Numeric))
       end
 
       # Makes sure moonwatch is running, starting it if needed, and waits a
