@@ -66,7 +66,7 @@ module SettingsSpecDB
       db[:script_auto_settings].all.to_h do |r|
         value = begin
           Marshal.load(r[:hash])
-        rescue TypeError, ArgumentError
+        rescue StandardError
           :unreadable
         end
         [[r[:script], r[:scope]], value]

@@ -36,6 +36,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     SettingsSpecDB.write(data_dir, 'core.banking', "#{game}:#{name}", towns)
   end
 
+  # A damaged Marshal blob that makes Marshal.load raise RegexpError, not one
+  # of the TypeError/ArgumentError a truncated blob gives.
+  def seed_regexp_error_row(script, scope)
+    blob = ['04082f15ec56363a59ce5b937ad9c27ee5baa09dcadc946f2c450c9dc421cec32573a634d6e7bd'].pack('H*')
+    expect { Marshal.load(blob) }.to raise_error(RegexpError)
+    SettingsSpecDB.write_raw(data_dir, script, scope, blob)
+  end
+
   before(:each) do
     Lich::Messaging.clear_messages!
 
@@ -361,6 +369,43 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(message_strings.grep(/could not/)).to be_empty
     end
 
+    it 'ignores an old row whose load raises an unusual error, for every operation' do
+      XMLData.name = 'CharA'
+      seed_regexp_error_row('core', 'DR')
+      seed_row('CharB', { 'Shard' => 2 })
+
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 2 })
+      described_module.update_balance('Crossings', 7)
+      expect(described_module.my_accounts).to eq('Crossings' => 7)
+      described_module.reset_character!
+      expect(described_module.my_accounts).to eq({})
+      described_module.reset_all!
+      expect(message_strings.grep(/could not/)).to be_empty
+      expect(message_strings.last).to include('Cleared all bank data')
+      expect(rows[['core.banking', 'DR:CharB']]).to eq({})
+    end
+
+    it 'drops old amounts that are not finite numbers instead of failing on them' do
+      XMLData.name = 'CharA'
+      seed_legacy({
+        'CharA' => { 'Crossings' => Float::INFINITY, 'Shard' => 3, 'Ratha' => Float::NAN, 'Riverhaven' => 2.9 },
+        'CharB' => { 'Crossings' => Rational(1, 3), 'Shard' => 4 }
+      })
+
+      expect(described_module.all_accounts).to eq('CharA' => { 'Shard' => 3, 'Riverhaven' => 2 }, 'CharB' => { 'Shard' => 4 })
+      described_module.update_balance('Crossings', 7)
+      expect(described_module.my_accounts).to eq('Crossings' => 7, 'Shard' => 3, 'Riverhaven' => 2)
+      expect(message_strings.grep(/could not/)).to be_empty
+    end
+
+    it 'drops an old entry whose name is not valid text instead of failing on it' do
+      seed_legacy({ ([0xFF].pack('C') + 'Bad ').force_encoding('UTF-8') => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 2 })
+      expect(message_strings.grep(/could not/)).to be_empty
+      expect(rows[%w[core DR]]).to eq({})
+    end
+
     it 'still shows the old entries, read-only, when the move fails' do
       seed_legacy({ 'CharA' => { 'Crossings' => 1 } })
       seed_row('CharB', { 'Shard' => 2 })
@@ -418,6 +463,34 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 2 })
       expect(rows[['core.banking', 'DR:CharA']]).to eq(:unreadable)
       expect(rows[%w[core DR]]).to eq({})
+    end
+  end
+
+  describe 'reading a row' do
+    it 'treats a row whose load raises an unusual error as empty, and logs it' do
+      seed_regexp_error_row('core.banking', 'DR:CharA')
+      logged = []
+      allow(Lich).to receive(:log) { |line| logged << line }
+
+      XMLData.name = 'CharA'
+      described_module.update_balance('Crossings', 7)
+
+      expect(described_module.my_accounts).to eq('Crossings' => 7)
+      expect(logged.join).to include('unreadable settings row core.banking/DR:CharA', 'RegexpError')
+      expect(message_strings.grep(/could not/)).to be_empty
+    end
+
+    it 'does not overwrite a row when reading it hits a database error' do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 1, 'Shard' => 2 })
+      allow(adapter).to receive(:get_settings).and_call_original
+      allow(adapter).to receive(:get_settings).with('core.banking', 'DR:CharA')
+                                              .and_raise(Sequel::DatabaseError, 'disk I/O error')
+
+      described_module.update_balance('Crossings', 7)
+
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 1, 'Shard' => 2)
+      expect(message_strings.last).to include('could not save the Crossings balance', 'disk I/O error')
     end
   end
 
@@ -826,6 +899,34 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       # Should display header and balances
       expect(message_strings.any? { |m| m.include?('Your bank balances') }).to be true
     end
+
+    it 'reports a failed read once, without also saying nothing is recorded' do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 10 })
+      allow(adapter).to receive(:get_settings_by_scope_prefix).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      described_module.display_banks
+
+      expect(message_strings).to eq(['DRBanking: could not read bank data: Sequel::DatabaseError: database is locked'])
+    end
+
+    it 'computes the grand total from the same read as the balances' do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 10_000, 'Riverhaven' => 5_000 })
+      calls = 0
+      allow(adapter).to receive(:get_settings_by_scope_prefix).and_wrap_original do |original, *args|
+        calls += 1
+        raise Sequel::DatabaseError, 'database is locked' if calls > 1
+
+        original.call(*args)
+      end
+
+      described_module.display_banks
+
+      expect(calls).to eq(1)
+      expect(message_strings.last).to include('Grand Total:', '1 platinum, 5 gold')
+      expect(message_strings.grep(/could not/)).to be_empty
+    end
   end
 
   describe '.display_banks_all' do
@@ -841,6 +942,15 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       described_module.update_balance('Shard', 5_000)
       described_module.display_banks_all
       expect(message_strings.any? { |m| m.include?('Bank balances for all characters') }).to be true
+    end
+
+    it 'reports a failed read once, without also saying nothing is recorded' do
+      seed_row('CharA', { 'Crossings' => 10 })
+      allow(adapter).to receive(:get_settings_by_scope_prefix).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      described_module.display_banks_all
+
+      expect(message_strings).to eq(['DRBanking: could not read bank data: Sequel::DatabaseError: database is locked'])
     end
   end
 
@@ -891,6 +1001,20 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
       described_module.update_balance('Crossings', 7)
       expect(described_module.my_accounts).to eq('Crossings' => 7)
+    end
+
+    it 'clears a row whose load raises an unusual error, without reading it' do
+      XMLData.name = 'CharA'
+      seed_regexp_error_row('core.banking', 'DR:CharA')
+      seed_row('CharB', { 'Shard' => 2 })
+      allow(adapter).to receive(:get_settings).and_call_original
+
+      described_module.reset_character!
+
+      expect(adapter).not_to have_received(:get_settings).with('core.banking', 'DR:CharA')
+      expect(rows[['core.banking', 'DR:CharA']]).to eq({})
+      expect(rows[['core.banking', 'DR:CharB']]).to eq('Shard' => 2)
+      expect(message_strings.last).to include('Cleared bank data for CharA')
     end
 
     it 'does not claim success when the database refuses the write' do
