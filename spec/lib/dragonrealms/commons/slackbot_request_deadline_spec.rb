@@ -149,4 +149,92 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'deadline-bounded request' do
     expect(received).to be_empty
     expect(http.started?).to be false
   end
+
+  context 'through a proxy' do
+    let(:proxy) { TCPServer.new('127.0.0.1', 0) }
+    let(:proxy_port) { proxy.addr[1] }
+    let(:proxied) { Queue.new }
+
+    # Accepts one connection on the proxy, reads the client's first request
+    # (a CONNECT for TLS) and hands the socket to +behaviour+.
+    def serve_proxy(&behaviour)
+      @proxy_thread = Thread.new do
+        conn = proxy.accept
+        proxied << conn
+        conn.readpartial(65_536)
+        behaviour.call(conn)
+      end
+    end
+
+    def proxied_http(use_ssl:)
+      Net::HTTP.new('127.0.0.1', port, '127.0.0.1', proxy_port).tap { |http| http.use_ssl = use_ssl }
+    end
+
+    after do
+      @proxy_thread&.kill
+      proxy.close
+    end
+
+    # The real send path: post builds its connection with Net::HTTP.new(host,
+    # port), which takes the proxy from http_proxy.
+    it 'keeps a late CONNECT reply followed by a TLS hang within the budget of post' do
+      allow(Lich).to receive(:log)
+      saved = %w[http_proxy HTTP_PROXY no_proxy NO_PROXY].to_h { |k| [k, ENV.fetch(k, nil)] }
+      saved.each_key { |k| ENV.delete(k) }
+      ENV['http_proxy'] = "http://127.0.0.1:#{proxy_port}"
+      budget = 1.5
+      # Answers the CONNECT just before the budget runs out, then never
+      # answers the ClientHello.
+      serve_proxy do |conn|
+        sleep budget - 0.05
+        conn.write("HTTP/1.1 200 Connection established\r\n\r\n")
+      end
+      started = monotonic
+
+      expect { bot.send(:post, 'auth.test', { 'token' => 't' }, deadline: monotonic + budget) }
+        .to raise_error(described_class::NetworkError)
+
+      expect(monotonic - started).to be < budget + 0.3
+      expect(peer_closed?(proxied.pop, wait: 3)).to be true
+    ensure
+      saved&.each { |k, v| v.nil? ? ENV.delete(k) : ENV.store(k, v) }
+    end
+
+    it 'gives each connect step an equal share of the budget' do
+      http = proxied_http(use_ssl: true)
+      allow(http).to receive(:start).and_raise(Net::OpenTimeout)
+
+      expect { call(http, 3) }.to raise_error(Net::OpenTimeout)
+
+      expect(http.open_timeout).to be_between(0.9, 1.0)
+      expect(http.read_timeout).to be_between(0.9, 1.0)
+      expect(http.write_timeout).to be_between(0.9, 1.0)
+    end
+
+    it 'times out a CONNECT reply that is slower than its share' do
+      serve_proxy { |_conn| sleep 10 }
+      started = monotonic
+
+      expect { call(proxied_http(use_ssl: true), 1.5) }.to raise_error(Net::ReadTimeout)
+
+      expect(monotonic - started).to be < 1.0
+      expect(peer_closed?(proxied.pop)).to be true
+    end
+
+    it 'gives the response the rest of the budget once connected' do
+      # A plain-HTTP request through a proxy needs no CONNECT; the proxy
+      # answers the request itself, later than the connect share.
+      serve_proxy do |conn|
+        sleep 0.8
+        conn.write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
+      end
+      http = proxied_http(use_ssl: false)
+
+      res = call(http, 1.5)
+
+      expect(res).to be_a(Net::HTTPOK)
+      expect(http.started?).to be false
+      expect(peer_closed?(proxied.pop)).to be true
+    end
+  end
 end

@@ -556,31 +556,46 @@ module Lich
       # Performs one HTTP request that is abandoned at the deadline.
       #
       # The connection is opened before the Timeout block, bounded by
-      # net/http's own open timeout, and closed in an ensure after it. The
+      # net/http's own timeouts, and closed in an ensure after it. The
       # asynchronous Timeout interrupt can then only land in the request on an
       # open connection, never in net/http's connect or close, so it cannot
       # leave a socket open.
+      #
+      # Connecting has two steps, each bounded on its own by net/http: the TCP
+      # connect and the TLS handshake (open_timeout). Through a proxy (taken
+      # from http_proxy, which net/http always reaches without TLS) there is a
+      # third, the CONNECT reply (read_timeout). Each step gets an equal share
+      # of the remaining budget, so together they stay within it. One limit
+      # remains: read_timeout bounds each read of the CONNECT reply, not the
+      # whole reply, so a reply that arrives in pieces can take longer, and a
+      # proxy that keeps sending it a byte at a time can hold the connect past
+      # the deadline without bound. The request is still never sent after the
+      # deadline.
       #
       # @param http [Net::HTTP] a connection that is not started yet
       # @param req [Net::HTTP::Post]
       # @param deadline [Float] monotonic deadline
       # @return [Net::HTTPResponse]
       # @raise [NetworkError] if the deadline has passed before the request is sent
-      # @raise [Timeout::Error] if connecting times out (Net::OpenTimeout) or
-      #   the request is still running at the deadline
+      # @raise [Timeout::Error] if connecting times out (Net::OpenTimeout, or
+      #   Net::ReadTimeout for a proxy's CONNECT reply) or the request is still
+      #   running at the deadline
       def request_before(http, req, deadline)
         remaining = seconds_left(deadline)
         raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
 
-        # The TCP connect and the TLS handshake are each bounded by open_timeout.
-        http.open_timeout = remaining / 2.0
-        http.read_timeout = remaining
-        http.write_timeout = remaining
+        # TCP connect and TLS handshake, plus the CONNECT reply through a proxy.
+        share = remaining / (http.proxy? ? 3.0 : 2.0)
+        http.open_timeout = share
+        http.read_timeout = share
+        http.write_timeout = share
         http.start
         begin
           remaining = seconds_left(deadline)
           raise NetworkError, 'SlackBot: Time budget for the request ran out while connecting' if remaining <= 0
 
+          http.read_timeout = remaining
+          http.write_timeout = remaining
           Timeout.timeout(remaining) { http.request(req) }
         ensure
           http.finish if http.started?
