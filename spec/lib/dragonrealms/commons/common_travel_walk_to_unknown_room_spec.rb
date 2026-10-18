@@ -772,6 +772,37 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
         expect(world.sent.size).to eq(2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
         expect(bold_messages.last).to start_with('DRCT: Ran out of moves walking from an unknown room to room 104')
       end
+
+      it 'starts a fresh leg when the carried moves are handed back again without a move' do
+        rooms = [
+          make_room(101, { '102' => 'north' }),
+          make_room(102, { '103' => 'north' }),
+          make_room(103, { '101' => 'north' }),
+          make_room(104, {})
+        ]
+        world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+        # Every leg is planned as two hops, so it may take 2 + spare moves.
+        allow(Map).to receive(:findpath) { |source, _destination| [source.wayto.keys.first.to_i, 104] }
+        # Reads 1-2: walk_to hands over. 3-6: two moves (each a loop read and
+        # a landing read). 7: the room resolves, so the walker hands back
+        # carrying the leg's remaining moves. 8-9: walk_to reads nil and comes
+        # straight back. 10: the room resolves before any move, which spends a
+        # retry. Everything after reads nil.
+        reads = 0
+        allow(Room).to receive(:current) do
+          reads += 1
+          [7, 10].include?(reads) ? world.room(world.position) : nil
+        end
+
+        result = Timeout.timeout(5) { DRCT.walk_to(104) }
+
+        expect(result).to be(false)
+        # Two moves of the first leg, then a whole new leg after the retry,
+        # not the moves the first leg had left.
+        expect(world.sent.size).to eq(2 + 2 + DRCT::UNKNOWN_ROOM_SPARE_HOPS)
+        expect(plain_messages.grep(/handing back/)).to eq(['DRCT: Room 103 resolved again without a move, handing back (retry 1/3).'])
+        expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104 (stopped in room 102), giving up.')
+      end
     end
 
     describe 'real failures partway along a six-hop path' do
