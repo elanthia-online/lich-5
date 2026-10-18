@@ -48,8 +48,18 @@ module GlobalDefsSpecSource
   private_class_method :def_index
 end
 
+# Production sleeps through Script.execution_sleep (it checks the script's
+# execution guard); with no guard installed it is a plain sleep. Route it to
+# the example's own sleep so examples can stub and count every wait.
+RSpec.shared_context 'global_defs_spec: execution_sleep routed to sleep' do
+  before do
+    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
+  end
+end
+
 RSpec.describe '#fput' do
   GlobalDefsSpecSource.define(self, 'fput', 'multifput')
+  include_context 'global_defs_spec: execution_sleep routed to sleep'
 
   it 'runs the fput and multifput defined in lib/global_defs.rb' do
     %w[fput multifput].each do |name|
@@ -83,10 +93,6 @@ RSpec.describe '#fput' do
 
   before do
     allow(Script).to receive(:current).and_return(mock_script)
-    # Production sleeps through Script.execution_sleep (it checks the
-    # script's execution guard); with no guard installed it is a plain
-    # sleep. Route it to self.sleep so examples can stub and count it.
-    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
     allow(self).to receive(:put)
     allow(self).to receive(:echo)
     # An example that scripts no reads fails at once instead of reading
@@ -940,10 +946,7 @@ end
 # roundtime to wait out).
 RSpec.describe '#waitrt?' do
   GlobalDefsSpecSource.define(self, 'waitrt?')
-
-  before do
-    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
-  end
+  include_context 'global_defs_spec: execution_sleep routed to sleep'
 
   it 'runs the waitrt? defined in lib/global_defs.rb' do
     expect(method(:waitrt?).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of('waitrt?')])
@@ -951,7 +954,10 @@ RSpec.describe '#waitrt?' do
 
   it 'legacy: sleeps once and reports whether roundtime remains' do
     allow(self).to receive(:checkrt).and_return(0.0)
+    sleeps = []
+    allow(self).to receive(:sleep) { |n| (sleeps << n).size > 1 ? raise('legacy waitrt? slept twice') : nil }
     expect(waitrt?).to be(false)
+    expect(sleeps).to eq([0.0]) # the one legacy sleep, stubbed: no real wait
     left = [8.0, 0.0]
     allow(self).to receive(:checkrt) { left.first }
     allow(self).to receive(:sleep) { left.size > 1 ? left.shift : raise('legacy waitrt? slept twice') }
@@ -1007,10 +1013,7 @@ end
 
 RSpec.describe '#waitcastrt?' do
   GlobalDefsSpecSource.define(self, 'waitcastrt?')
-
-  before do
-    allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
-  end
+  include_context 'global_defs_spec: execution_sleep routed to sleep'
 
   it 'runs the waitcastrt? defined in lib/global_defs.rb' do
     expect(method(:waitcastrt?).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of('waitcastrt?')])
