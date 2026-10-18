@@ -11,10 +11,6 @@ module Lich
   module Util
     module Update
       module FileWriter
-        # Suffixes that older versions of safe_write (and the legacy
-        # updater) left beside a file when they were interrupted.
-        LEGACY_LEFTOVER_SUFFIXES = %w[.old .tmp].freeze
-
         # A staging file is only left behind when its writer was hard-killed
         # (SIGKILL, power loss). One older than this is treated as such a
         # leftover and removed after the next successful write of the same
@@ -43,9 +39,10 @@ module Lich
         # background login sync is mid-write. Only a hard kill (SIGKILL,
         # power loss) can leave one; see STALE_STAGING_AGE.
         #
-        # After a successful write, +.old+ and +.tmp+ files that older
-        # versions left beside +path+, and staging files of this name older
-        # than STALE_STAGING_AGE, are removed (best effort).
+        # After a successful write, leftovers beside +path+ are removed (best
+        # effort): a +.old+ left by an older version, and a +.tmp+ left by an
+        # older version or a staging file of this name, once either is older
+        # than STALE_STAGING_AGE.
         #
         # @param path [String] target file path
         # @param content [String] file content to write
@@ -68,39 +65,53 @@ module Lich
           remove_leftovers(path)
         end
 
-        # Best-effort removal, after a successful write of +path+, of
-        # +path.old+ / +path.tmp+ left by older versions and of
-        # +path.<pid>.<thread>.tmp+ staging files older than
-        # STALE_STAGING_AGE (left by a writer that was hard-killed).
-        # Never raises: the write it follows already succeeded.
+        # Best-effort removal, after a successful write of +path+, of files
+        # left beside it by an interrupted writer. Never raises: the write it
+        # follows already succeeded.
+        #
+        # * +path.old+ (older versions of safe_write and the legacy updater)
+        #   is removed whatever its age. Its mtime is the original file's, so
+        #   age says nothing about it, and an older-version writer that is
+        #   still running renames its +.tmp+ into place without needing it.
+        # * +path.tmp+ (older versions) is removed only once it is older than
+        #   STALE_STAGING_AGE. A recent one may belong to an older-version
+        #   writer in another session that is about to rename it over +path+;
+        #   removing it then, after its writer moved +path+ to +.old+, would
+        #   leave no file at +path+.
+        # * +path.<pid>.<thread>.tmp+ staging files (a writer of this version
+        #   that was hard-killed) are removed once older than
+        #   STALE_STAGING_AGE.
         #
         # @param path [String] target file path
         # @return [void]
         def self.remove_leftovers(path)
-          LEGACY_LEFTOVER_SUFFIXES.each { |suffix| delete_quietly("#{path}#{suffix}") }
+          cutoff = Time.now - STALE_STAGING_AGE
+          delete_quietly("#{path}.old")
+          delete_quietly("#{path}.tmp", older_than: cutoff)
 
           dir = File.dirname(path)
           staging = /\A#{Regexp.escape(File.basename(path))}\.\d+\.\d+\.tmp\z/
-          cutoff = Time.now - STALE_STAGING_AGE
           Dir.each_child(dir) do |name|
             next unless staging.match?(name)
 
-            stale = File.join(dir, name)
-            delete_quietly(stale) if File.mtime(stale) < cutoff
-          rescue StandardError
-            nil
+            delete_quietly(File.join(dir, name), older_than: cutoff)
           end
         rescue StandardError
           nil
         end
         private_class_method :remove_leftovers
 
-        # Deletes +file+ if it is a regular file, ignoring any error.
+        # Deletes +file+ if it is a regular file (and, when +older_than+ is
+        # given, last modified before that time), ignoring any error.
         #
         # @param file [String] path to delete
+        # @param older_than [Time, nil] only delete a file modified before this
         # @return [void]
-        def self.delete_quietly(file)
-          File.delete(file) if File.file?(file)
+        def self.delete_quietly(file, older_than: nil)
+          return unless File.file?(file)
+          return if older_than && File.mtime(file) >= older_than
+
+          File.delete(file)
         rescue StandardError
           nil
         end

@@ -160,15 +160,60 @@ RSpec.describe Lich::Util::Update::FileWriter do
       expect(File.binread(path)).to eq("# original\n")
     end
 
-    it 'removes .old and .tmp files left by older versions after a successful write' do
+    it 'removes .old and day-old .tmp files left by older versions after a successful write' do
       path = File.join(tmpdir, 'legacy.lic')
       File.binwrite("#{path}.old", "# left by an interrupted update\n")
       File.binwrite("#{path}.tmp", "# partial\n")
+      day_old = Time.now - described_class::STALE_STAGING_AGE - 60
+      File.utime(day_old, day_old, "#{path}.tmp")
 
       described_class.safe_write(path, content_lf)
 
       expect(File.binread(path)).to eq(content_lf)
       expect(Dir.children(tmpdir)).to eq(['legacy.lic'])
+    end
+
+    it 'removes a .old left by an older version whatever its age' do
+      path = File.join(tmpdir, 'legacy.lic')
+      File.binwrite("#{path}.old", "# left by an interrupted update\n")
+      long_ago = Time.now - (10 * described_class::STALE_STAGING_AGE)
+      File.utime(long_ago, long_ago, "#{path}.old")
+
+      described_class.safe_write(path, content_lf)
+
+      expect(Dir.children(tmpdir)).to eq(['legacy.lic'])
+    end
+
+    it 'keeps a recent .tmp, which may belong to an older-version writer still running' do
+      path = File.join(tmpdir, 'legacy.lic')
+      File.binwrite("#{path}.tmp", "# being written by an older version\n")
+
+      described_class.safe_write(path, content_lf)
+
+      expect(File.binread(path)).to eq(content_lf)
+      expect(Dir.children(tmpdir)).to contain_exactly('legacy.lic', 'legacy.lic.tmp')
+    end
+
+    it 'keeps the live file when an older-version writer of the same file is mid-write' do
+      # The older safe_write renamed the live file to .old, wrote .tmp, then
+      # renamed .tmp over the live name. Here it reaches its last step just
+      # after this version's rename, while this version cleans up leftovers.
+      path = File.join(tmpdir, 'buff.lic')
+      File.binwrite(path, "# v0\n")
+      older_version_mid_write = false
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        original.call(from, to)
+        next if older_version_mid_write
+
+        older_version_mid_write = true
+        original.call(path, "#{path}.old")
+        File.binwrite("#{path}.tmp", "# older version\n")
+      end
+
+      described_class.safe_write(path, "# this version\n")
+      expect { File.rename("#{path}.tmp", path) }.not_to raise_error
+
+      expect(File.binread(path)).to eq("# older version\n")
     end
 
     it 'leaves other files with similar names alone' do
