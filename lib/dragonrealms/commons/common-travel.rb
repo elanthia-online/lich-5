@@ -359,17 +359,21 @@ module Lich
       # in legs: the first starts with the walk, and every retry starts
       # another, planned from wherever the character stands. In each room the
       # leg has not stood in yet, the leg gets at least the length of the map
-      # path from there plus UNKNOWN_ROOM_SPARE_HOPS moves. A walk that keeps
-      # making progress therefore completes however many hops it takes, even
-      # when the pathfinder breaks a tie between equal-cost paths differently
-      # from one room to the next, and a move that lands far off course gets
-      # a budget for the longer path from there. A room the leg has already
-      # stood in adds nothing, so a map that leads in circles runs out of
-      # moves: a leg can grow its budget at most once per map room. A
-      # hand-back to walk_to after a move carries the leg (+leg+), so a room
-      # that keeps resolving and unresolving cannot restart the budget either.
-      # The walk therefore makes at most MAX_WALK_TO_RETRIES + 1 legs, each
-      # bounded.
+      # path from there plus UNKNOWN_ROOM_SPARE_HOPS moves. As long as every
+      # map edge costs more than zero and keeps its cost for the whole walk,
+      # a walk that keeps making progress therefore completes however many
+      # hops it takes, even when the pathfinder breaks a tie between
+      # equal-cost paths differently from one room to the next, and a move
+      # that lands far off course gets a budget for the longer path from
+      # there. Without that (a cycle of zero-cost edges, or a timeto
+      # StringProc whose cost changes between searches) the pathfinder can
+      # lead the walk in circles until the budget runs out.
+      # A room the leg has already stood in adds nothing, so a map that leads
+      # in circles runs out of moves: a leg can grow its budget at most once
+      # per map room. A hand-back to walk_to after a move carries the leg
+      # (+leg+), so a room that keeps resolving and unresolving cannot
+      # restart the budget either. The walk therefore makes at most
+      # MAX_WALK_TO_RETRIES + 1 legs, each bounded.
       #
       # Under the map's own resolver this normally ends on the first iteration
       # with "Failed to find a matching room" (see {match_unknown_room}).
