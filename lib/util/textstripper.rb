@@ -183,8 +183,8 @@ module Lich
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
 
-        # Validate mode BEFORE entering the rescue block
-        # This allows ArgumentError to propagate to the caller as documented
+        # Validate mode outside the begin/rescue below, which wraps only the
+        # parsing, so ArgumentError propagates to the caller as documented
         validated_mode = validate_mode(mode)
 
         # Check if kramdown is required and available
@@ -193,25 +193,27 @@ module Lich
           return text
         end
 
-        # Route to appropriate parsing method based on mode
-        case validated_mode
-        when Mode::XML
-          strip_xml_with_ox(text)
-        else
-          strip_with_kramdown(text, validated_mode)
+        begin
+          # Route to appropriate parsing method based on mode
+          case validated_mode
+          when Mode::XML
+            strip_xml_with_ox(text)
+          else
+            strip_with_kramdown(text, validated_mode)
+          end
+        rescue Kramdown::Error => e
+          # Handle Kramdown parsing errors (HTML/MARKUP/MARKDOWN modes)
+          log_error("Failed to parse #{validated_mode}", e)
+          text
+        rescue Ox::ParseError => e
+          # Handle Ox parsing errors (XML mode)
+          log_error("Failed to parse #{validated_mode}", e)
+          text
+        rescue StandardError => e
+          # Catch any other unexpected errors during parsing
+          log_error("Unexpected error during #{validated_mode} parsing", e)
+          text
         end
-      rescue Kramdown::Error => e
-        # Handle Kramdown parsing errors (HTML/MARKUP/MARKDOWN modes)
-        log_error("Failed to parse #{validated_mode}", e)
-        text
-      rescue Ox::ParseError => e
-        # Handle Ox parsing errors (XML mode)
-        log_error("Failed to parse #{validated_mode}", e)
-        text
-      rescue StandardError => e
-        # Catch any other unexpected errors during parsing
-        log_error("Unexpected error during #{validated_mode} parsing", e)
-        text
       end
 
       # Validate and normalize a mode value

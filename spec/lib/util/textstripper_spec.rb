@@ -15,6 +15,18 @@ require 'util/textstripper'
 # parse-failure CDATA fallback, and whitespace -- the fixtures gathered during
 # that evaluation.
 RSpec.describe Lich::Util::TextStripper do
+  describe '.strip with an invalid mode' do
+    it 'raises ArgumentError for an unknown mode instead of returning the input' do
+      expect { described_class.strip('<b>x</b>', :bogus) }
+        .to raise_error(ArgumentError, /Invalid mode: bogus/)
+    end
+
+    it 'raises ArgumentError for a non-Symbol/String mode' do
+      expect { described_class.strip('<b>x</b>', 42) }
+        .to raise_error(ArgumentError, /Mode must be a Symbol or String/)
+    end
+  end
+
   describe '.strip with XML mode (Ox-backed)' do
     # U+00A0 (nbsp) and other non-ASCII expected values are built via pack to
     # keep this source file ASCII-only (enforced by the custom RuboCop cop).
