@@ -468,6 +468,16 @@ describe DRCC do
         expect(drc).to have_received(:wait_for_script_to_complete).once
       end
 
+      it 'returns true without stopping when wounds persist but the item is in hand' do
+        reply_with(wounded)
+        allow(drci).to receive(:in_hands?).with('mallet').and_return(true)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, belt)).to be true
+        expect(drc).to have_received(:wait_for_script_to_complete).once
+        expect(sent).to eq(['untie my mallet from my toolbelt'] * 2)
+        expect(drc).not_to have_received(:beep)
+      end
+
       it 'keeps skip_exit after the safe-room trip when the item then is missing' do
         reply_with(wounded, untie_what, not_found)
 
@@ -506,6 +516,16 @@ describe DRCC do
         reply_with(tied, wounded)
 
         expect { DRCC.get_crafting_item('mallet', 'backpack', nil, nil) }.to raise_error(SystemExit)
+      end
+
+      it 'returns true without stopping when wounds persist but the item is in hand' do
+        reply_with(tied, wounded)
+        allow(drci).to receive(:in_hands?).with('mallet').and_return(true)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be true
+        expect(drc).to have_received(:wait_for_script_to_complete).once
+        expect(sent).to eq(['get my mallet', 'untie my mallet', 'untie my mallet'])
+        expect(drc).not_to have_received(:beep)
       end
 
       it 'returns true when the untie finds nothing but the item is in hand' do

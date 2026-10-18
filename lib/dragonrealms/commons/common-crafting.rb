@@ -331,7 +331,8 @@ module Lich
       # - the game says it "can't quite lift it";
       # - the GET says to untie the item, the untie finds nothing, and the
       #   item isn't in hand;
-      # - wounds still hinder the untie after the safe-room trip.
+      # - wounds still hinder the untie after the safe-room trip, and the
+      #   item isn't in hand.
       # Each one beeps and prints a bold line. The method then returns false
       # when +skip_exit+ is set; otherwise it stops the script. A reply that
       # matches nothing (a bput timeout) is not final. A timed-out GET, or a
@@ -355,6 +356,8 @@ module Lich
           when BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY
             return true
           when BELT_UNTIE_WOUNDED
+            return true if DRCI.in_hands?(name)
+
             return crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
           end
         end
@@ -376,6 +379,8 @@ module Lich
           when UNTIE_SUCCESS
             true
           when UNTIE_WOUNDED
+            return true if DRCI.in_hands?(name)
+
             crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
           when UNTIE_NOT_FOUND
             return true if DRCI.in_hands?(name)
