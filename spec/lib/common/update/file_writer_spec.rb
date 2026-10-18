@@ -216,6 +216,65 @@ RSpec.describe Lich::Util::Update::FileWriter do
       expect(File.binread(path)).to eq("# older version\n")
     end
 
+    context 'when an older-version writer moves this write aside before cleanup' do
+      # The older writer (legacy updater or older safe_write) renames the live
+      # file to .old before it writes, and renames .old back if its write
+      # fails. Here it moves this version's freshly renamed file aside in the
+      # gap before this version removes leftovers.
+      let(:path) { File.join(tmpdir, 'buff.lic') }
+
+      def move_aside_after_rename
+        moved = false
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          original.call(from, to)
+          next if moved
+
+          moved = true
+          original.call(path, "#{path}.old")
+        end
+      end
+
+      it "keeps that writer's rollback copy, so its failed write can be undone" do
+        File.binwrite(path, "# v0\n")
+        move_aside_after_rename
+
+        described_class.safe_write(path, "# this version\n")
+
+        expect(File.binread("#{path}.old")).to eq("# this version\n")
+        File.rename("#{path}.old", path) # the older writer's rollback
+        expect(File.binread(path)).to eq("# this version\n")
+      end
+
+      it 'compares bytes, so non-ASCII content in a UTF-8 string still matches' do
+        content = "# caf#{[0xE9].pack('U')} #{[0x2014].pack('U')} v2\n" # e-acute, em dash
+        move_aside_after_rename
+
+        described_class.safe_write(path, content)
+
+        expect(File.binread("#{path}.old")).to eq(content.b)
+      end
+    end
+
+    it 'removes a .old of the same size as the new content but different bytes' do
+      path = File.join(tmpdir, 'legacy.lic')
+      File.binwrite("#{path}.old", "# version 1\n")
+
+      described_class.safe_write(path, "# version 2\n")
+
+      expect(Dir.children(tmpdir)).to eq(['legacy.lic'])
+    end
+
+    it 'keeps a .old whose content cannot be read, rather than risk removing a rollback copy' do
+      path = File.join(tmpdir, 'legacy.lic')
+      old_path = "#{path}.old"
+      File.binwrite(old_path, "# v2\n")
+      allow(File).to receive(:binread).and_call_original
+      allow(File).to receive(:binread).with(old_path).and_raise(Errno::EACCES.new('Permission denied'))
+
+      expect { described_class.safe_write(path, "# v2\n") }.not_to raise_error
+      expect(Dir.children(tmpdir)).to contain_exactly('legacy.lic', 'legacy.lic.old')
+    end
+
     it 'leaves other files with similar names alone' do
       path = File.join(tmpdir, 'legacy.lic')
       others = ['legacy.lic.bak', 'legacy-other.lic.old', 'legacy.old']

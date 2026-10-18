@@ -40,9 +40,9 @@ module Lich
         # power loss) can leave one; see STALE_STAGING_AGE.
         #
         # After a successful write, leftovers beside +path+ are removed (best
-        # effort): a +.old+ left by an older version, and a +.tmp+ left by an
-        # older version or a staging file of this name, once either is older
-        # than STALE_STAGING_AGE.
+        # effort): a +.old+ left by an older version (unless it holds exactly
+        # +content+), and a +.tmp+ left by an older version or a staging file
+        # of this name, once either is older than STALE_STAGING_AGE.
         #
         # @param path [String] target file path
         # @param content [String] file content to write
@@ -62,7 +62,7 @@ module Lich
               nil # the write error, if any, is the one worth reporting
             end
           end
-          remove_leftovers(path)
+          remove_leftovers(path, content)
         end
 
         # Best-effort removal, after a successful write of +path+, of files
@@ -70,9 +70,14 @@ module Lich
         # follows already succeeded.
         #
         # * +path.old+ (older versions of safe_write and the legacy updater)
-        #   is removed whatever its age. Its mtime is the original file's, so
-        #   age says nothing about it, and an older-version writer that is
-        #   still running renames its +.tmp+ into place without needing it.
+        #   is removed whatever its age (its mtime is the original file's, so
+        #   age says nothing about it) unless it holds exactly +content+.
+        #   Such a +.old+ is an older-version writer's rollback copy of the
+        #   file this call just wrote: that writer moved +path+ aside after
+        #   this call's rename and restores +.old+ if its own write fails, so
+        #   removing it then would leave no file at +path+. A leftover from an
+        #   interrupted older update holds the version before it, which
+        #   differs, so it is still removed.
         # * +path.tmp+ (older versions) is removed only once it is older than
         #   STALE_STAGING_AGE. A recent one may belong to an older-version
         #   writer in another session that is about to rename it over +path+;
@@ -83,10 +88,12 @@ module Lich
         #   STALE_STAGING_AGE.
         #
         # @param path [String] target file path
+        # @param content [String] the content just written to +path+
         # @return [void]
-        def self.remove_leftovers(path)
+        def self.remove_leftovers(path, content)
           cutoff = Time.now - STALE_STAGING_AGE
-          delete_quietly("#{path}.old")
+          old = "#{path}.old"
+          delete_quietly(old) unless rollback_copy?(old, content)
           delete_quietly("#{path}.tmp", older_than: cutoff)
 
           dir = File.dirname(path)
@@ -100,6 +107,22 @@ module Lich
           nil
         end
         private_class_method :remove_leftovers
+
+        # Whether +file+ may be an older-version writer's rollback copy of
+        # +content+: a regular file holding exactly those bytes. The size is
+        # compared first so a differing file is not read. If the file cannot
+        # be read, it is kept (true): a leftover is cheaper than a lost file.
+        #
+        # @param file [String] path to compare
+        # @param content [String] the content just written
+        # @return [Boolean]
+        def self.rollback_copy?(file, content)
+          File.file?(file) && File.size(file) == content.bytesize &&
+            File.binread(file) == content.b
+        rescue StandardError
+          true
+        end
+        private_class_method :rollback_copy?
 
         # Deletes +file+ if it is a regular file (and, when +older_than+ is
         # given, last modified before that time), ignoring any error.
