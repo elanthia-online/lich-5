@@ -344,6 +344,8 @@ describe DRCC do
     before(:each) do
       # Same contract as the real DRC.bput: String patterns become /pattern/i and
       # the matched text (not the whole line) is returned; '' on a timeout.
+      # A non-empty reply that no pattern matches raises: the real bput would
+      # wait out its 15 s timeout and print a debug block instead.
       allow(DRC).to receive(:bput) do |command, *patterns|
         sent << command
         # main retried without limit; stop the example instead of the stack.
@@ -351,6 +353,8 @@ describe DRCC do
 
         line = command.start_with?('tie ') ? tie_replies.shift.to_s : put_reply
         match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
+
         match ? match.to_a.first : ''
       end
       allow(DRC).to receive(:wait_for_script_to_complete) do |script, args|
