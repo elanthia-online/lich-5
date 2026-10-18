@@ -38,9 +38,10 @@ module Lich
       # reporter, and the autostart that follows would add a second one.
       @@reporter_thread = nil unless defined?(@@reporter_thread)
       @@running = false unless defined?(@@running)
-      # Bumped by every start, stop and reset!. A reporter thread only acts
-      # while the generation it was started with is still current, so a
-      # stopped thread cannot clear or outlive the state of its replacement.
+      # Bumped whenever start launches a reporter, stop retires one, or
+      # reset! runs. A reporter thread only acts while the generation it was
+      # started with is still current, so a stopped thread cannot clear or
+      # outlive the state of its replacement.
       @@generation = 0 unless defined?(@@generation)
       @@mutex = Mutex.new unless defined?(@@mutex) # Thread safety for start/stop operations
       @@report_interval = 1 # Hard-coded 1 second for real-time reporting
