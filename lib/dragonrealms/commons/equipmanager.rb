@@ -132,17 +132,18 @@ module Lich
 
       # Alerts the user about equipment items that could not be worn.
       #
-      # Items that could not be found get the MISSING EQUIPMENT listing, which
-      # asks the user to check their containers. Items still in hand after a
-      # failed wear or put-away are named in a check-your-hands line instead,
-      # so one item never gets both instructions. Either way the alert is
-      # bracketed by a beep and a pause.
+      # Held items whose put-away failed are named in a check-your-hands line;
+      # every other item that could not be found or worn gets the MISSING
+      # EQUIPMENT listing, which asks the user to check their containers. One
+      # item never gets both instructions. Either way the alert is bracketed
+      # by a beep and a pause.
       #
       # @param lost_items [Array<DRC::Item>, nil] every item that could not be worn or put away
-      # @param held_items [Array<DRC::Item>] the subset of lost_items still in hand
+      # @param held_items [Array<DRC::Item>] the subset of lost_items whose put-away
+      #   failed in hand; when omitted, every item gets the MISSING EQUIPMENT listing
       # @return [void]
       # @api private
-      def notify_missing(lost_items, held_items)
+      def notify_missing(lost_items, held_items = [])
         return unless lost_items && !lost_items.empty?
 
         in_hand, not_found = lost_items.partition { |item| held_items.include?(item) }

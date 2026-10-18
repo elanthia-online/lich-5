@@ -1603,6 +1603,61 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         )
       end
     end
+
+    # Only a held item whose put-away failed gets the check-your-hands line.
+    # An unheld item that is fetched and then refused is still in hand, but it
+    # keeps the MISSING EQUIPMENT listing, as before this change.
+    context 'when an unheld item is fetched but its WEAR is refused (existing behaviour)' do
+      let(:gear_sets) { { 'standard' => ['iron helm'] } }
+
+      it 'returns false and lists it under MISSING EQUIPMENT, without a check-your-hands line' do
+        allow(em).to receive(:get_item?).and_return(true)
+        allow(DRCI).to receive(:wear_item?).with('iron.helm').and_return(false)
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(alert_block).to eq(
+          [
+            :beep,
+            'EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:',
+            'EquipmentManager: iron.helm',
+            :pause,
+            :beep
+          ]
+        )
+      end
+    end
+  end
+
+  describe '#notify_missing' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:helm) { double('helm', short_name: 'iron.helm') }
+    let(:shield) { double('shield', short_name: 'steel.shield') }
+    let(:alert) { [] }
+
+    before do
+      allow(em).to receive(:pause) { alert << :pause }
+      allow(DRC).to receive(:beep) { alert << :beep }
+      allow(Lich::Messaging).to receive(:msg) { |type, text| alert << text if type == 'bold' }
+    end
+
+    it 'lists every item under MISSING EQUIPMENT when called with only the lost items' do
+      em.notify_missing([helm, shield])
+      expect(alert).to eq(
+        [
+          :beep,
+          'EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:',
+          'EquipmentManager: iron.helm, steel.shield',
+          :pause,
+          :beep
+        ]
+      )
+    end
+
+    it 'does nothing for a nil or empty list called with one argument' do
+      em.notify_missing(nil)
+      em.notify_missing([])
+      expect(alert).to be_empty
+    end
   end
 
   describe '#stow_weapon return value' do
