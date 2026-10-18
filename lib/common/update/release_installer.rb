@@ -30,6 +30,8 @@ module Lich
         REQUIRED_ARCHIVE_ITEMS = %w[lib lich.rbw Gemfile LICENSE].freeze
         REQUIRED_RUBY_PATTERN = /REQUIRED_RUBY\s*=\s*["']([^"']+)["']/.freeze
         GEMSTONE_INSTALL_URL = 'https://gswiki.play.net/Lich:Software/Installation'.freeze
+        # Seconds a beta notice stays open for `lich5-update --beta --confirm`.
+        BETA_CONFIRM_WINDOW = 60
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -45,6 +47,8 @@ module Lich
           @zipfile = nil
           @release_tag = nil
           @required_ruby = nil
+          @beta_prompted_at = nil
+          @beta_lock = Mutex.new
         end
 
         # Displays announcement if new version available.
@@ -133,95 +137,52 @@ module Lich
 
         # Handles beta update requests (full install or individual file).
         #
+        # A full beta install is a two-step command so that it never reads a
+        # client socket: this step only prints the notice and opens a
+        # confirmation window; #confirm_betatest performs the install.
+        #
         # @param type [String, nil] file type ('script', 'library', 'data') or nil for full beta
         # @param requested_file [String, nil] file name if type is set
         # @return [void]
         def prep_betatest(type = nil, requested_file = nil)
           if type.nil?
+            @beta_lock.synchronize { @beta_prompted_at = monotonic_now }
             respond 'You are electing to participate in the beta testing of the next Lich release.'
-            respond 'This beta test will include only Lich code, and does not include Ruby upates.'
+            respond 'This beta test will include only Lich code, and does not include Ruby updates.'
             respond 'While we will do everything we can to ensure you have a smooth experience, '
-            respond 'it is a test, and untoward things can result.  Please confirm your choice:'
-            respond "Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N"
-            respond "You have 10 seconds to confirm, otherwise will be cancelled."
-
-            client_sock = $_CLIENT_ || $_DETACHABLE_CLIENT_
-            unless client_sock
-              respond 'No client connection available. Aborting beta test request.'
-              return
-            end
-            deadline = Time.now + 10
-            line = nil
-            loop do
-              remaining = deadline - Time.now
-              break if remaining <= 0
-
-              reader = Thread.new { client_sock.gets }
-              if reader.join(remaining)
-                line = reader.value
-                break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
-              else
-                reader.kill
-                break
-              end
-            end
-
-            if line.is_a?(String) && line =~ /send Y|s Y/i
-              beta_response = 'accepted'
-              respond 'Beta test installation accepted.  Thank you for considering!'
-            else
-              beta_response = 'rejected'
-              respond 'Aborting beta test installation request.  Thank you for considering!'
-              respond
-            end
-
-            if beta_response =~ /accepted/
-              ref = @resolver.resolve_channel_ref(:beta)
-              if ref.nil?
-                if @resolver.last_error
-                  StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
-                else
-                  respond 'No viable beta found. Aborting beta update.'
-                end
-                return
-              end
-
-              releases_url = "https://api.github.com/repos/#{GITHUB_REPO}/releases"
-              update_info = URI.parse(releases_url).open.read
-              releases = JSON.parse(update_info)
-              record = releases.find { |r| r['prerelease'] && r['tag_name'] == (ref.start_with?('v') ? ref : "v#{ref}") }
-
-              if record
-                record.each do |entry, value|
-                  if entry.include? 'tag_name'
-                    @update_to = value.sub('v', '')
-                  elsif entry.include? 'assets'
-                    @holder = value
-                  elsif entry.include? 'body'
-                    @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
-                  end
-                end
-                release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
-                if release_asset
-                  @zipfile = release_asset.fetch('browser_download_url')
-                else
-                  @zipfile = "https://codeload.github.com/#{GITHUB_REPO}/tar.gz/#{ref}"
-                end
-              else
-                @update_to = ref.sub(/^v/, '')
-                @zipfile = "https://codeload.github.com/#{GITHUB_REPO}/tar.gz/#{ref}"
-              end
-              download_release_update
-            elsif beta_response =~ /rejected/
-              nil
-            else
-              respond 'This is not where I want to be on a beta test request.'
-              respond
-            end
+            respond 'it is a test, and untoward things can result.'
+            respond "To confirm your participation, run:  #{$clean_lich_char}lich5-update --beta --confirm"
+            respond "You have #{BETA_CONFIRM_WINDOW} seconds to confirm.  To decline, do nothing; the request expires on its own."
           else
             file_updater = FileUpdater.new(@client, @resolver, @snapshot_manager)
             file_updater.update_file(type, requested_file, 'beta')
           end
+        end
+
+        # Installs the latest beta if the notice from #prep_betatest was shown
+        # within the last BETA_CONFIRM_WINDOW seconds. A notice can be confirmed
+        # only once; a second confirmation needs a fresh notice.
+        #
+        # @return [void]
+        def confirm_betatest
+          prompted_at = @beta_lock.synchronize do
+            value = @beta_prompted_at
+            @beta_prompted_at = nil
+            value
+          end
+
+          if prompted_at.nil?
+            respond "There is no beta test request to confirm.  Run #{$clean_lich_char}lich5-update --beta first and read the notice."
+            return
+          end
+
+          if monotonic_now - prompted_at > BETA_CONFIRM_WINDOW
+            respond "Your beta test request expired after #{BETA_CONFIRM_WINDOW} seconds.  Run #{$clean_lich_char}lich5-update --beta again to start over."
+            return
+          end
+
+          respond 'Beta test installation accepted.  Thank you for considering!'
+          install_beta
         end
 
         # Downloads and installs latest stable release.
@@ -385,6 +346,55 @@ module Lich
             return $1
           end
           nil
+        end
+
+        private
+
+        # Resolves the latest beta reference and installs it.
+        #
+        # @return [void]
+        def install_beta
+          ref = @resolver.resolve_channel_ref(:beta)
+          if ref.nil?
+            if @resolver.last_error
+              StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
+            else
+              respond 'No viable beta found. Aborting beta update.'
+            end
+            return
+          end
+
+          releases_url = "https://api.github.com/repos/#{GITHUB_REPO}/releases"
+          update_info = URI.parse(releases_url).open.read
+          releases = JSON.parse(update_info)
+          record = releases.find { |r| r['prerelease'] && r['tag_name'] == (ref.start_with?('v') ? ref : "v#{ref}") }
+
+          if record
+            record.each do |entry, value|
+              if entry.include? 'tag_name'
+                @update_to = value.sub('v', '')
+              elsif entry.include? 'assets'
+                @holder = value
+              elsif entry.include? 'body'
+                @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+              end
+            end
+            release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
+            if release_asset
+              @zipfile = release_asset.fetch('browser_download_url')
+            else
+              @zipfile = "https://codeload.github.com/#{GITHUB_REPO}/tar.gz/#{ref}"
+            end
+          else
+            @update_to = ref.sub(/^v/, '')
+            @zipfile = "https://codeload.github.com/#{GITHUB_REPO}/tar.gz/#{ref}"
+          end
+          download_release_update
+        end
+
+        # @return [Float] seconds on a clock that wall-clock changes cannot move
+        def monotonic_now
+          Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
       end
     end
