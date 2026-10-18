@@ -1,85 +1,56 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require_relative '../../../support/lich_sqlite'
+require_relative '../../../support/settings_db'
 
-# Load dependencies
+require_relative '../../../../lib/common/settings/database_adapter'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
-
-# Test data storage - class-level to avoid closure issues
-class DRBankingTestData
-  class << self
-    attr_accessor :game_data, :messages
-
-    def reset!
-      @game_data = {}
-      @messages = []
-    end
-  end
-end
-
-# Minimal stubs for initial load (if real modules not yet defined)
-module Lich
-  module Common
-    module InstanceSettings
-      def self.game
-        # Returns a mock accessor that reads/writes to test data
-        Object.new.tap do |obj|
-          obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
-          obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
-        end
-      end
-    end
-  end unless defined?(Lich::Common::InstanceSettings)
-end
+require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 
 # Note: XMLData and Lich::Messaging are provided by spec_helper.rb
 # We use Lich::Messaging.messages/clear_messages! for test assertions
 
-require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
-
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
+
+  # Each example gets its own on-disk settings database, reached through a real
+  # DatabaseAdapter (the one Settings.db_adapter returns in Lich).
+  let(:data_dir) { Dir.mktmpdir('drbanking-spec-') }
+  let(:adapter) { Lich::Common::DatabaseAdapter.new(data_dir, :script_auto_settings) }
 
   # Helper to extract message strings from Lich::Messaging (provided by spec_helper)
   def message_strings
     Lich::Messaging.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
-  # Capture and restore InstanceSettings.game per-example using around(:each) semantics
-  # via before/after(:each) so that any test failure cannot leave the shared singleton
-  # method permanently redefined. (before/after(:all) would share @original_game_method
-  # across all examples but runs outside the normal per-example ivar scope, which is
-  # confusing and prevents proper cleanup on early failures.)
-  before(:each) do
-    @original_game_method = Lich::Common::InstanceSettings.method(:game)
+  def rows
+    SettingsSpecDB.rows(data_dir)
+  end
 
-    # Reset test data
-    DRBankingTestData.reset!
+  def seed_legacy(banking, extra = {})
+    SettingsSpecDB.write(data_dir, 'core', 'DR', extra.merge('banking' => banking))
+  end
+
+  def seed_row(name, towns, game: 'DR')
+    SettingsSpecDB.write(data_dir, 'core.banking', "#{game}:#{name}", towns)
+  end
+
+  before(:each) do
     Lich::Messaging.clear_messages!
 
     # XMLData is reset by spec_helper's before(:each) via reset_xml_data!
     # Just set room_title which isn't reset by default
     XMLData.room_title = ''
 
-    # Redefine InstanceSettings.game to use our test data
-    Lich::Common::InstanceSettings.define_singleton_method(:game) do
-      Object.new.tap do |obj|
-        obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
-        obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
-      end
-    end
-
-    # NOTE: class_variable_set is acceptable here because DRBanking has no reset! method -
-    # only reload!, which re-reads from storage but does not nil out the in-memory cache.
-    # Clearing @@accounts_cache forces reload! to build a fresh cache from test data,
-    # ensuring each test starts with a clean state. TODO: add DRBanking.reset! to production code.
-    described_module.class_variable_set(:@@accounts_cache, nil)
-    described_module.reload!
+    allow(XMLData).to receive(:game).and_return('DR')
+    SettingsSpecDB.prepare(data_dir)
+    allow(described_module).to receive(:adapter).and_return(adapter)
   end
 
   after(:each) do
-    # Restore the real InstanceSettings.game singleton method after each test
-    Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method) if @original_game_method
+    adapter.instance_variable_get(:@db)&.disconnect
+    FileUtils.remove_entry(data_dir, true)
   end
 
   describe 'Pattern constants' do
@@ -280,14 +251,143 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all character accounts' do
-      DRBankingTestData.game_data['banking'] = {
-        'CharA' => { 'Crossings' => 10_000 },
-        'CharB' => { 'Shard' => 20_000 }
-      }
-      described_module.reload!
+      seed_row('CharA', { 'Crossings' => 10_000 })
+      seed_row('CharB', { 'Shard' => 20_000 })
       accounts = described_module.all_accounts
       expect(accounts['CharA']).to eq({ 'Crossings' => 10_000 })
       expect(accounts['CharB']).to eq({ 'Shard' => 20_000 })
+    end
+
+    it 'reads the database on every call' do
+      expect(described_module.all_accounts).to eq({})
+      seed_row('CharB', { 'Shard' => 1 })
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 1 })
+    end
+
+    it 'returns a copy: changing it changes nothing stored' do
+      seed_row('CharA', { 'Crossings' => 10 })
+      described_module.all_accounts['CharA']['Crossings'] = 99
+      described_module.all_accounts['CharZ'] = { 'Shard' => 1 }
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 10 })
+    end
+
+    it 'leaves out characters whose data was cleared' do
+      seed_row('CharA', {})
+      seed_row('CharB', { 'Shard' => 0 })
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 0 })
+    end
+
+    it 'shows only rows of the current game instance' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      seed_row('CharF', { 'Crossings' => 2 }, game: 'DRF')
+      expect(described_module.all_accounts.keys).to eq(['CharA'])
+
+      allow(XMLData).to receive(:game).and_return('DRF')
+      expect(described_module.all_accounts).to eq('CharF' => { 'Crossings' => 2 })
+    end
+
+    it 'skips a row it cannot read and still shows the others' do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:Broken', 'not a marshal dump')
+      seed_row('CharA', { 'Crossings' => 1 })
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 1 })
+    end
+
+    it 'returns {} when the game is not known yet' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      allow(XMLData).to receive(:game).and_return(nil)
+      expect(described_module.all_accounts).to eq({})
+    end
+
+    it 'reports a database error and returns {}' do
+      allow(adapter).to receive(:get_settings_by_scope_prefix).and_raise(Sequel::DatabaseError, 'database is locked')
+      expect(described_module.all_accounts).to eq({})
+      expect(message_strings.last).to include('could not read bank data', 'database is locked')
+    end
+  end
+
+  describe 'moving the old shared row' do
+    it 'moves each character into its own row and removes only the banking key' do
+      seed_legacy({ 'CharA' => { 'Crossings' => 10_000 }, 'CharB' => { 'Shard' => 20_000 } }, 'other' => 1)
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 10_000 }, 'CharB' => { 'Shard' => 20_000 })
+      expect(rows).to eq(
+        %w[core DR]                  => { 'other' => 1 },
+        ['core.banking', 'DR:CharA'] => { 'Crossings' => 10_000 },
+        ['core.banking', 'DR:CharB'] => { 'Shard' => 20_000 }
+      )
+    end
+
+    it 'does nothing the second time' do
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 } })
+      described_module.all_accounts
+      before = rows
+      expect(adapter).not_to receive(:transaction)
+      described_module.all_accounts
+      expect(rows).to eq(before)
+    end
+
+    it 'keeps an existing row over the old entry for the same character' do
+      seed_row('CharA', { 'Shard' => 5 })
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Crossings' => 2 } })
+      expect(described_module.all_accounts).to eq('CharA' => { 'Shard' => 5 }, 'CharB' => { 'Crossings' => 2 })
+    end
+
+    it 'drops malformed entries and keeps the well-formed parts' do
+      seed_legacy({
+        'CharA' => { 'Crossings' => 10, 'Shard' => 'lots', 5 => 3, 'Ratha' => 2.9 },
+        'CharB' => 'not a hash',
+        ''      => { 'Crossings' => 1 },
+        ' '     => { 'Crossings' => 1 },
+        :symbol => { 'Crossings' => 1 },
+        'CharC' => nil
+      })
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 10, 'Ratha' => 2 })
+      expect(rows.keys).to contain_exactly(%w[core DR], ['core.banking', 'DR:CharA'])
+      expect(rows[%w[core DR]]).to eq({})
+    end
+
+    it 'removes a banking key that holds no hash' do
+      seed_legacy(nil)
+      expect(described_module.all_accounts).to eq({})
+      expect(rows[%w[core DR]]).to eq({})
+    end
+
+    it 'ignores an unreadable old row instead of blocking reads and writes' do
+      XMLData.name = 'CharA'
+      SettingsSpecDB.write_raw(data_dir, 'core', 'DR', 'not a marshal dump')
+      seed_row('CharB', { 'Shard' => 2 })
+
+      described_module.update_balance('Crossings', 7)
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 7 }, 'CharB' => { 'Shard' => 2 })
+      expect(message_strings.grep(/could not/)).to be_empty
+    end
+
+    it 'still shows the old entries, read-only, when the move fails' do
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 } })
+      seed_row('CharB', { 'Shard' => 2 })
+      allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 })
+      expect(message_strings.last).to include('could not move old bank data', 'database is locked')
+      expect(rows[%w[core DR]]).to eq('banking' => { 'CharA' => { 'Crossings' => 1 } })
+    end
+
+    it 'moves the data before a write, in the same transaction' do
+      XMLData.name = 'CharA'
+      seed_legacy({ 'CharA' => { 'Crossings' => 1, 'Shard' => 2 } })
+      described_module.update_balance('Crossings', 7)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7, 'Shard' => 2)
+      expect(rows[%w[core DR]]).to eq({})
+    end
+
+    it 'keeps the old row untouched when the write fails' do
+      XMLData.name = 'CharA'
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 } })
+      allow(adapter).to receive(:update_settings).and_call_original
+      allow(adapter).to receive(:update_settings).with('core.banking', 'DR:CharA').and_raise(Sequel::DatabaseError, 'disk I/O error')
+
+      described_module.update_balance('Crossings', 7)
+      expect(rows).to eq(%w[core DR] => { 'banking' => { 'CharA' => { 'Crossings' => 1 } } })
+      expect(message_strings.last).to include('could not save the Crossings balance', 'disk I/O error')
     end
   end
 
@@ -297,20 +397,22 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns current characters accounts' do
-      # Directly set up multi-character data in storage
-      DRBankingTestData.game_data['banking'] = {
-        'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
-        'OtherChar' => { 'Riverhaven' => 20_000 }
-      }
-      described_module.reload!
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 10_000, 'Shard' => 5_000 })
+      seed_row('OtherChar', { 'Riverhaven' => 20_000 })
+      expect(described_module.my_accounts).to eq('Crossings' => 10_000, 'Shard' => 5_000)
+    end
 
-      # Verify data structure is correct via all_accounts
-      # (my_accounts depends on XMLData.name which may not be settable in CI)
-      all = described_module.all_accounts
-      expect(all['Mahtra']['Crossings']).to eq(10_000)
-      expect(all['Mahtra']['Shard']).to eq(5_000)
-      expect(all['OtherChar']['Riverhaven']).to eq(20_000)
-      expect(all['Mahtra']).not_to have_key('Riverhaven')
+    it "does not match another character whose name starts with this one's" do
+      XMLData.name = 'Char'
+      seed_row('CharA', { 'Crossings' => 1 })
+      expect(described_module.my_accounts).to eq({})
+    end
+
+    it 'returns {} before the character name is known' do
+      XMLData.name = nil
+      seed_row('', { 'Crossings' => 1 })
+      expect(described_module.my_accounts).to eq({})
     end
   end
 
@@ -337,11 +439,31 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(message_strings.last).to include('Updated Crossings balance')
     end
 
-    it 'persists to InstanceSettings' do
+    it "persists to this character's own row only" do
+      XMLData.name = 'CharA'
       described_module.update_balance('Crossings', 10_000)
-      # Reload to verify persistence
-      described_module.reload!
-      expect(described_module.my_accounts['Crossings']).to eq(10_000)
+      expect(rows).to eq(['core.banking', 'DR:CharA'] => { 'Crossings' => 10_000 })
+    end
+
+    it "keeps the row's other towns" do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Shard' => 5 })
+      described_module.update_balance('Crossings', 10_000)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Shard' => 5, 'Crossings' => 10_000)
+    end
+
+    it 'writes nothing and says so before the character name is known' do
+      XMLData.name = ''
+      described_module.update_balance('Crossings', 10_000)
+      expect(rows).to eq({})
+      expect(message_strings.last).to include("Can't save the Crossings balance before the character is known")
+    end
+
+    it 'reports a database error instead of raising, and claims no update' do
+      allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+      expect { described_module.update_balance('Crossings', 10_000) }.not_to raise_error
+      expect(message_strings.last).to include('could not save the Crossings balance')
+      expect(message_strings.grep(/Updated Crossings/)).to be_empty
     end
   end
 
@@ -654,18 +776,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe '.reload!' do
-    it 'clears cache and reloads from storage' do
-      # Set initial data
+    it 'returns a fresh read of every account' do
+      XMLData.name = 'CharA'
       described_module.update_balance('Crossings', 10_000)
-
-      # NOTE: class_variable_set is acceptable here because we are specifically testing
-      # that reload! re-reads from storage after the cache is cleared. This verifies the
-      # internal state machine of the caching layer - an intentional implementation test.
-      described_module.class_variable_set(:@@accounts_cache, nil)
-      described_module.reload!
-
-      # Data should still be there (loaded from storage)
-      expect(described_module.my_accounts['Crossings']).to eq(10_000)
+      seed_row('CharB', { 'Shard' => 3 })
+      expect(described_module.reload!).to eq('CharA' => { 'Crossings' => 10_000 }, 'CharB' => { 'Shard' => 3 })
     end
   end
 
@@ -678,27 +793,30 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'preserves other characters data' do
-      # Use the character name that spec_helper sets (XMLData.name = 'TestChar')
-      # This avoids relying on XMLData.name being settable in CI
       current_char = XMLData.name
+      seed_legacy({ 'OtherChar' => { 'Crossings' => 10_000 }, current_char => { 'Shard' => 5_000 } })
+      expect(described_module.all_accounts.keys).to include('OtherChar', current_char)
 
-      # Directly set up multi-character data with current_char as one of them
-      DRBankingTestData.game_data['banking'] = {
-        'Mahtra'     => { 'Crossings' => 10_000 },
-        current_char => { 'Shard' => 5_000 }
-      }
-      described_module.reload!
-
-      # Verify both characters have data before reset
-      expect(described_module.all_accounts.keys).to include('Mahtra', current_char)
-
-      # Reset current character (whatever XMLData.name returns)
       described_module.reset_character!
 
-      # Verify current_char is cleared but Mahtra still has data
-      expect(described_module.all_accounts.keys).to include('Mahtra')
-      expect(described_module.all_accounts[current_char]).to be_nil
-      expect(described_module.all_accounts['Mahtra']['Crossings']).to eq(10_000)
+      expect(described_module.all_accounts).to eq('OtherChar' => { 'Crossings' => 10_000 })
+    end
+
+    it 'keeps an empty row, so old data for this character cannot come back' do
+      current_char = XMLData.name
+      described_module.update_balance('Crossings', 1)
+      described_module.reset_character!
+      seed_legacy({ current_char => { 'Crossings' => 1 } })
+
+      expect(described_module.my_accounts).to eq({})
+      expect(rows[['core.banking', "DR:#{current_char}"]]).to eq({})
+    end
+
+    it 'does not claim success when the write fails' do
+      allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+      described_module.reset_character!
+      expect(message_strings.grep(/Cleared bank data/)).to be_empty
+      expect(message_strings.last).to include('could not clear your bank data')
     end
 
     it 'logs a message confirming the character bank data was cleared' do
@@ -720,6 +838,33 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     it 'logs a message confirming all character bank data was cleared' do
       described_module.reset_all!
       expect(message_strings.last).to include('Cleared all bank data')
+    end
+
+    it 'clears rows and old data of this game instance only' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      seed_row('CharF', { 'Crossings' => 2 }, game: 'DRF')
+      seed_legacy({ 'CharB' => { 'Shard' => 3 } })
+      described_module.reset_all!
+
+      expect(rows).to eq(
+        %w[core DR]                   => {},
+        ['core.banking', 'DR:CharA']  => {},
+        ['core.banking', 'DR:CharB']  => {},
+        ['core.banking', 'DRF:CharF'] => { 'Crossings' => 2 }
+      )
+    end
+
+    it 'does not claim success when the write fails' do
+      allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
+      described_module.reset_all!
+      expect(message_strings.grep(/Cleared all/)).to be_empty
+      expect(message_strings.last).to include('could not clear all bank data')
+    end
+
+    it 'refuses before the game is known' do
+      allow(XMLData).to receive(:game).and_return('')
+      described_module.reset_all!
+      expect(message_strings.last).to include("Can't clear bank data before the game is known")
     end
 
     it 'resets total_wealth_all to 0' do

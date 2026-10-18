@@ -96,6 +96,14 @@ module Lich
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
 
+      # The adapter for the shared script_auto_settings table. For core code
+      # that needs a fresh read or an atomic write, which the cached
+      # Settings API doesn't offer (see DRBanking).
+      # @return [DatabaseAdapter]
+      def self.db_adapter
+        @db_adapter
+      end
+
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
       end
