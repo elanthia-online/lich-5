@@ -77,7 +77,12 @@ module Lich
         #   this call's rename and restores +.old+ if its own write fails, so
         #   removing it then would leave no file at +path+. A leftover from an
         #   interrupted older update holds the version before it, which
-        #   differs, so it is still removed.
+        #   differs, so it is still removed. +.old+ is looked up once: if it
+        #   is absent, nothing is deleted, even if such a writer moves +path+
+        #   there a moment later. One race remains: when a differing leftover
+        #   is present and such a writer moves +path+ over it between the
+        #   compare and the delete, its rollback copy is removed. There is no
+        #   atomic compare-and-delete to close that gap.
         # * +path.tmp+ (older versions) is removed only once it is older than
         #   STALE_STAGING_AGE. A recent one may belong to an older-version
         #   writer in another session that is about to rename it over +path+;
@@ -93,7 +98,7 @@ module Lich
         def self.remove_leftovers(path, content)
           cutoff = Time.now - STALE_STAGING_AGE
           old = "#{path}.old"
-          delete_quietly(old) unless rollback_copy?(old, content)
+          delete_quietly(old) if File.file?(old) && !rollback_copy?(old, content)
           delete_quietly("#{path}.tmp", older_than: cutoff)
 
           dir = File.dirname(path)
@@ -108,17 +113,18 @@ module Lich
         end
         private_class_method :remove_leftovers
 
-        # Whether +file+ may be an older-version writer's rollback copy of
-        # +content+: a regular file holding exactly those bytes. The size is
-        # compared first so a differing file is not read. If the file cannot
-        # be read, it is kept (true): a leftover is cheaper than a lost file.
+        # Whether the existing regular file +file+ may be an older-version
+        # writer's rollback copy of +content+: it holds exactly those bytes.
+        # The size is compared first so a differing file is not read. If the
+        # file cannot be read (or has gone), it is kept (true): a leftover is
+        # cheaper than a lost file. The caller checks that +file+ exists, so
+        # existence is not looked up a second time here.
         #
         # @param file [String] path to compare
         # @param content [String] the content just written
         # @return [Boolean]
         def self.rollback_copy?(file, content)
-          File.file?(file) && File.size(file) == content.bytesize &&
-            File.binread(file) == content.b
+          File.size(file) == content.bytesize && File.binread(file) == content.b
         rescue StandardError
           true
         end

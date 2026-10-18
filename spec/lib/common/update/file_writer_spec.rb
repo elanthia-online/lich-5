@@ -245,6 +245,27 @@ RSpec.describe Lich::Util::Update::FileWriter do
         expect(File.binread(path)).to eq("# this version\n")
       end
 
+      it 'keeps the rollback copy when the move lands just after the check found no .old' do
+        old = "#{path}.old"
+        File.binwrite(path, "# v0\n")
+        moved = false
+        allow(File).to receive(:file?).and_wrap_original do |original, file|
+          result = original.call(file)
+          if file == old && !result && !moved
+            moved = true
+            File.rename(path, old) # the older writer moves this write aside now
+          end
+          result
+        end
+
+        described_class.safe_write(path, "# this version\n")
+
+        expect(moved).to be(true)
+        expect(File.binread(old)).to eq("# this version\n")
+        File.rename(old, path) # the older writer's rollback
+        expect(File.binread(path)).to eq("# this version\n")
+      end
+
       it 'compares bytes, so non-ASCII content in a UTF-8 string still matches' do
         content = "# caf#{[0xE9].pack('U')} #{[0x2014].pack('U')} v2\n" # e-acute, em dash
         move_aside_after_rename
