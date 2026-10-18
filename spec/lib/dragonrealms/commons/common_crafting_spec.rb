@@ -322,7 +322,7 @@ describe DRCC do
       it 'returns that recipe without reading input' do
         expect(DRCC).not_to receive(:get)
 
-        expect(DRCC.recipe_lookup(recipes, 'ring aventail')).to equal(aventail)
+        expect(DRCC.recipe_lookup(recipes, 'pike staff')).to equal(pike_staff)
       end
     end
 
@@ -462,12 +462,22 @@ describe DRCC do
         expect(messages).to include("DRCC: Please select desired recipe #{$clean_lich_char}send #")
       end
 
-      it 'still suggests the full name when a partial name reaches a duplicate' do
+      it 'does not suggest the full name when every listed name is a duplicate' do
         feed_input('1')
 
         DRCC.recipe_lookup(recipes, 'weighted staff')
 
+        expect(hint).to be_empty
+        expect(menu_lines.length).to eq(2)
+      end
+
+      it 'still suggests the full name when a partial name also lists a unique name' do
+        feed_input('1')
+
+        DRCC.recipe_lookup(recipes, 'staff')
+
         expect(hint.length).to eq(1)
+        expect(menu_lines.length).to eq(3)
       end
 
       it 'returns the second recipe when the second entry is chosen' do
