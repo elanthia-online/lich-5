@@ -184,7 +184,9 @@ module Lich
       # container of the proxy's class at its path (another session removed or
       # replaced it), or when the operation raises on the stored container. A
       # detached view without a path (an element yielded by each) is not
-      # stored at all, as before.
+      # stored at all, as before. Nor is the proxy of a view's element that
+      # can't be found in the settings (SettingsProxy#unlocated?), and the
+      # user is told.
       #
       # On success the cache takes the row as stored. On failure the cache is
       # left as it was, and the next read checks the database again.
@@ -215,6 +217,9 @@ module Lich
         end
 
         if proxy.respond_to?(:detached?) && proxy.detached?
+          if proxy.respond_to?(:unlocated?) && proxy.unlocated?
+            return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
+          end
           if path.empty?
             _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Detached view without a path; nothing to save." })
             return nil

@@ -14,7 +14,12 @@ module Lich
       # +source+, for a detached view (what select or sort returned), is the
       # container the view was taken from, so that an element taken from the
       # view (view.first) can be found in it and saved where it is.
-      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil)
+      #
+      # +unlocated+ marks a proxy (detached, without a path) for an element
+      # of a view, or of an element yielded by each, that can't be found in
+      # the settings: a write through it is refused with a message instead
+      # of being saved somewhere else.
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -22,6 +27,7 @@ module Lich
         @detached = detached
         @script_name = script_name
         @source = source
+        @unlocated = unlocated
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -30,6 +36,12 @@ module Lich
       # Minimal change: expose detached? status
       def detached?
         !!@detached
+      end
+
+      # True for the proxy of a view's element that can't be found in the
+      # settings (see #initialize).
+      def unlocated?
+        !!@unlocated
       end
 
       def nil?
@@ -240,11 +252,12 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
         if @settings_module.container?(value)
-          # In a detached view (what select or sort returned), a position is
-          # not the element's position in the settings, so the element is
-          # looked up in the container the view was taken from.
-          new_path = (detached? && @source && path_of_child(value, @source)) || (@path.dup << key)
-          SettingsProxy.new(@settings_module, @scope, new_path, value, script_name: @script_name)
+          # In a detached view (what select or sort returned, or an element
+          # yielded by each), a position is not the element's position in
+          # the settings, so the element is looked up in the container the
+          # view was taken from.
+          (detached? && view_element_proxy([key], value)) ||
+            SettingsProxy.new(@settings_module, @scope, @path.dup << key, value, script_name: @script_name)
         else
           value
         end
@@ -351,11 +364,21 @@ module Lich
       # (with whatever other sessions saved in it) through this proxy and
       # through every view sharing this proxy's container. (A detached view
       # is never replayed, so it keeps its own contents.)
+      #
+      # A Hash that is being iterated (opts.each_pair { |k, v| opts[k] = ... },
+      # in this thread or another one) can't be replaced, so it keeps this
+      # session's copy until the next read; the write is stored all the same.
       private def take_stored_container(stored_container)
         return unless stored_container.instance_of?(@target.class)
         return if stored_container.equal?(@target)
 
-        @target.replace(stored_container)
+        begin
+          @target.replace(stored_container)
+        rescue FrozenError
+          raise
+        rescue RuntimeError => e
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "stored container not shown (#{e.message}); the proxy keeps this session's copy" })
+        end
       end
 
       # Marshal bytes of the target, or nil when it can't be dumped.
@@ -374,10 +397,12 @@ module Lich
       # NON_DESTRUCTIVE_CONTAINER_VIEWS are tagged as detached.
       #
       # A detached view's elements are looked up in the container the view
-      # was taken from.
+      # was taken from (see #view_element_proxy).
       def handle_non_destructive_result(method, result, args = [])
         @settings_module.reset_path_and_return(
-          if @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
+          if @settings_module.container?(result) && detached? && (element = view_element_proxy(keys_for(method, args), result))
+            element
+          elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
             SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
@@ -425,19 +450,63 @@ module Lich
       # The path of +result+ when it is an element of this proxy's container:
       # for dig, fetch and at, the element their keys lead to; otherwise the
       # first element that is +result+ itself (not just equal to it). An
-      # Array index is made non-negative. For a detached view, the element is
-      # looked up in the container the view was taken from, since positions
-      # in the view are not positions in the settings. nil when +result+ is
-      # not one.
+      # Array index is made non-negative. nil when +result+ is not one, and
+      # for a detached view, whose positions are not positions in the
+      # settings (see #view_element_proxy).
       private def element_path_for(method, args, result)
-        return @source && path_of_child(result, @source) if detached?
+        return nil if detached?
 
-        keys = case method
-               when :dig then args
-               when :fetch, :at then args.first(1)
-               else []
-               end
-        (keys.empty? ? nil : path_along(keys, result)) || path_of_child(result, @target)
+        segments = segments_to(keys_for(method, args), result, @target)
+        segments && @path + segments
+      end
+
+      # The keys that dig, fetch and at follow; none for other methods.
+      private def keys_for(method, args)
+        case method
+        when :dig then args
+        when :fetch, :at then args.first(1)
+        else []
+        end
+      end
+
+      # The segments from +container+ to +result+: along +keys+ (from
+      # #keys_for) when they lead to +result+ itself, otherwise the index or
+      # key of the first element of +container+ that is +result+. nil when
+      # +result+ is neither.
+      private def segments_to(keys, result, container)
+        (keys.empty? ? nil : segments_along(container, keys, result)) || child_segment(container, result)
+      end
+
+      # For a detached view: the proxy for +value+ when it is one of the
+      # view's elements (or, along +keys+, one further down). Its path is
+      # where that element is in the container the view was taken from. When
+      # the element is not there (a view of an element yielded by each, or
+      # the container has since taken the stored row's elements), the proxy
+      # is detached and unlocated, so a write through it is refused instead
+      # of being saved by position somewhere else. nil when +value+ is not an
+      # element of the view (a new container, such as what merge returns).
+      private def view_element_proxy(keys, value)
+        segments = segments_to(keys, value, @target)
+        return nil unless segments
+
+        base = @source && source_segment(segments.first)
+        if base
+          SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name)
+        else
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
+          SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true)
+        end
+      end
+
+      # The segment, in the container the view was taken from, of the view's
+      # element at +view_segment+: the same key or index when that is where
+      # it is (Hash views keep their keys), otherwise where it is found.
+      private def source_segment(view_segment)
+        element = @target[view_segment]
+        same = segment_in(@source, view_segment)
+        return same if same && @source[same.first].equal?(element)
+
+        child_segment(@source, element)
       end
 
       # The container a view taken from this proxy shares its elements with.
@@ -445,10 +514,9 @@ module Lich
         detached? ? @source : @target
       end
 
-      # @path plus +keys+ when they lead from this proxy's container to
-      # +result+ itself; nil otherwise.
-      private def path_along(keys, result)
-        node = @target
+      # The segments along +keys+ when they lead from +node+ to +result+
+      # itself; nil otherwise.
+      private def segments_along(node, keys, result)
         segments = keys.map do |key|
           segment = segment_in(node, key)
           return nil unless segment
@@ -456,7 +524,7 @@ module Lich
           node = node[segment.first]
           segment.first
         end
-        node.equal?(result) ? @path + segments : nil
+        node.equal?(result) ? segments : nil
       end
 
       # [key], or [index] made non-negative, when +key+ finds an entry in
@@ -473,16 +541,16 @@ module Lich
         end
       end
 
-      # @path plus the index or key of the first element of +container+ that
-      # is +result+.
-      private def path_of_child(result, container)
+      # [index] or [key] of the first element of +container+ that is
+      # +result+ itself; nil when there is none.
+      private def child_segment(container, result)
         case container
         when Array
           index = container.index { |element| element.equal?(result) }
-          @path + [index] if index
+          [index] if index
         when Hash
           entry = container.find { |_key, value| value.equal?(result) }
-          @path + [entry.first] if entry
+          [entry.first] if entry
         end
       end
 

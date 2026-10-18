@@ -896,6 +896,54 @@ RSpec.describe Lich::Common::Settings do
         expect(outer['inner'].to_h).to eq("x" => 0, "theirs" => 1, "mine" => 2)
       end
 
+      it "stores every write made while the same hash is being iterated, and keeps iterating" do
+        loops = {
+          "each_pair on the kept proxy" => ->(opts) { opts.each_pair { |k, v| opts[k] = v + 10 } },
+          "each_key on the kept proxy"  => ->(opts) { opts.each_key { |k| opts[k] = 0 } },
+          "each through a fresh read"   => ->(_opts) { game_read('opts').each { |k, v| game_read('opts')[k] = v * 10 } },
+          "a second proxy of the hash"  => ->(opts) { other = game_read('opts'); opts.each_pair { |k, _v| other[k] = 7 } }
+        }
+        expected = {
+          "each_pair on the kept proxy" => { "a" => 11, "b" => 12 },
+          "each_key on the kept proxy"  => { "a" => 0, "b" => 0 },
+          "each through a fresh read"   => { "a" => 10, "b" => 20 },
+          "a second proxy of the hash"  => { "a" => 7, "b" => 7 }
+        }
+        loops.each do |label, loop_body|
+          settings.instance_variable_set(:@settings_cache, {})
+          their_write("opts" => { "a" => 1, "b" => 2 })
+          opts = game_read('opts')
+
+          expect { loop_body.call(opts) }.not_to raise_error, label
+          expect(stored["opts"]).to eq(expected[label]), "#{label}: #{stored["opts"].inspect}"
+        end
+      end
+
+      it "stores a write made in one thread while another thread iterates the same hash" do
+        their_write("spells" => { "101" => 1, "102" => 2 })
+        spells = game_read('spells')
+        iterating = Queue.new
+        written = Queue.new
+        reader = Thread.new do
+          spells.each_pair do |_k, _v|
+            iterating << true
+            written.pop
+          end
+        end
+        iterating.pop
+        writer_error = nil
+        begin
+          game_read('spells')['102'] = 20
+        rescue StandardError => e
+          writer_error = e
+        end
+        2.times { written << true }
+        reader.join
+
+        expect(writer_error).to be_nil
+        expect(stored["spells"]).to eq("101" => 1, "102" => 20)
+      end
+
       it "stores copies of the arguments, so later changes to the caller's objects are not saved or cached" do
         their_write("arr" => [])
         jar = { "gem" => "ruby" }
@@ -1019,6 +1067,31 @@ RSpec.describe Lich::Common::Settings do
         view.values.first['j'] = 2
 
         expect(stored).to eq("opts" => { "a" => { "x" => 0 }, "b" => { "x" => 1, "k" => 1, "j" => 2 } })
+      end
+
+      it "saves a write through what dig, fetch or at returned from a view, several keys down, to that element" do
+        list = [{ "on" => false, "k" => { "x" => 1 } }, { "on" => true, "k" => { "x" => 2 } }]
+        cases = {
+          ->(l) { l.select { true }.dig(1, 'k') }                  => ->(rows) { rows[1]['k']['y'] = 1 },
+          ->(l) { l.select { |e| e['on'] }.dig(0, 'k') }           => ->(rows) { rows[1]['k']['y'] = 1 },
+          ->(l) { l.sort_by { |e| e['on'] ? 0 : 1 }.dig(-1, 'k') } => ->(rows) { rows[0]['k']['y'] = 1 },
+          ->(l) { l.reject { |e| e['on'] }.fetch(0) }              => ->(rows) { rows[0]['y'] = 1 },
+          ->(l) { l.select { true }.at(-1) }                       => ->(rows) { rows[1]['y'] = 1 }
+        }
+        cases.each_with_index do |(pick, change), i|
+          their_write("l" => Marshal.load(Marshal.dump(list)))
+          picked = pick.call(game_read('l'))
+          their_write("l" => Marshal.load(Marshal.dump(list)), "theirs" => 1)
+
+          picked['y'] = 1
+
+          expected = Marshal.load(Marshal.dump(list)).tap { |rows| change.call(rows) }
+          expect(stored).to eq("l" => expected, "theirs" => 1), "case #{i}: #{stored.inspect}"
+        end
+
+        their_write("h" => { "n" => { "m" => { "x" => 1 } }, "sib" => 1 })
+        game_read('h').select { true }.dig('n', 'm')['y'] = 1
+        expect(stored).to eq("h" => { "n" => { "m" => { "x" => 1, "y" => 1 } }, "sib" => 1 })
       end
 
       it "saves a write through what dig returned several levels down, at a negative index, to that element" do
@@ -1200,6 +1273,31 @@ RSpec.describe Lich::Common::Settings do
 
         expect(@mock_db).not_to have_received(:update_settings)
         expect(stored).to eq("rows" => [{ "x" => 0 }])
+      end
+
+      it "stores nothing and says so for an element of a view once its container has taken the stored elements" do
+        their_write("l" => [{ "on" => false }, { "on" => true }])
+        l = game_read('l')
+        selected = l.select { |e| e['on'] }
+        l.push({ "on" => false })
+        element = selected[0]
+
+        element['k2'] = 1
+        selected.first['k3'] = 1
+
+        expect(stored).to eq("l" => [{ "on" => false }, { "on" => true }, { "on" => false }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not found in the settings")).twice
+        expect(element).to be_unlocated
+      end
+
+      it "stores nothing and says so for a container under an element yielded by each, instead of writing it at the top of the row" do
+        their_write("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
+
+        game_read('rows').each { |row| row['sub']['k'] = 1 }
+        game_read('rows').each { |row| row.dig('sub')['j'] = 1 }
+
+        expect(stored).to eq("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).twice
       end
 
       it "does not write for a method that changes nothing, and runs its block once" do
