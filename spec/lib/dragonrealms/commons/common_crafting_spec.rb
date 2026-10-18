@@ -312,12 +312,16 @@ describe DRCC do
     let(:sent) { [] }
 
     # Feeds +replies+ to bput in order, recording each command; the last reply
-    # repeats, as a stuck game state would.
+    # repeats, as a stuck game state would. Like the real bput, it returns the
+    # text matched by the first pattern (in argument order) that matches the
+    # reply, or '' when none does, so a pattern missing from a bput call shows
+    # up as a timeout instead of passing unnoticed.
     def reply_with(*replies)
       queue = replies.dup
-      allow(drc).to receive(:bput) do |command, *_patterns|
+      allow(drc).to receive(:bput) do |command, *patterns|
         sent << command
-        queue.size > 1 ? queue.shift : queue.first
+        reply = queue.size > 1 ? queue.shift : queue.first
+        patterns.flatten.map { |pattern| reply.match(pattern) }.compact.first.to_a.first || ''
       end
     end
 
@@ -348,24 +352,27 @@ describe DRCC do
       end
     end
 
-    context 'when the item cannot be found and skip_exit is false (default)' do
-      it 'halts the script instead of continuing' do
-        reply_with('What do you')
+    # Both not-found replies, so dropping either pattern from the GET fails here.
+    ['What do you', 'What were you'].each do |reply|
+      context "when the item cannot be found (\"#{reply}\") and skip_exit is false (default)" do
+        it 'halts the script instead of continuing' do
+          reply_with(reply)
 
-        expect { DRCC.get_crafting_item('mallet', 'backpack', nil, nil) }.to raise_error(SystemExit)
-        expect(drc).to have_received(:beep)
+          expect { DRCC.get_crafting_item('mallet', 'backpack', nil, nil) }.to raise_error(SystemExit)
+          expect(drc).to have_received(:beep)
+        end
       end
-    end
 
-    context 'when the item cannot be found and skip_exit is true' do
-      it 'returns false without halting the script' do
-        reply_with('What do you')
+      context "when the item cannot be found (\"#{reply}\") and skip_exit is true" do
+        it 'returns false without halting the script' do
+          reply_with(reply)
 
-        result = nil
-        expect { result = DRCC.get_crafting_item('mallet', 'backpack', nil, nil, true) }.not_to raise_error
-        expect(result).to be false
-        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: You seem to be missing: mallet')
-        expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Stopping script/)
+          result = nil
+          expect { result = DRCC.get_crafting_item('mallet', 'backpack', nil, nil, true) }.not_to raise_error
+          expect(result).to be false
+          expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: You seem to be missing: mallet')
+          expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Stopping script/)
+        end
       end
     end
 
