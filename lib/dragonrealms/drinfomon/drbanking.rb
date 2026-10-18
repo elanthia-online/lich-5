@@ -374,9 +374,9 @@ module Lich
           nil
         end
 
-        # Reads this character's accounts: only this character's row (and the
-        # old shared row, while it still holds data to move). Gives what
-        # all_accounts gives for this character, or {}.
+        # Reads this character's accounts: only this character's row, plus the
+        # old shared row (loaded on every call to check for data left to
+        # move). Gives what all_accounts gives for this character, or {}.
         # @return [Hash, nil] {} if the character or game isn't known yet;
         #   nil if the read failed (already reported)
         def read_my_accounts
