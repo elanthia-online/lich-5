@@ -909,6 +909,30 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(messages.grep(/Snapshot failed/)).to be_empty
     end
 
+    it 'says once per refused rename, before the first wait, that it is retrying' do
+      refuse_renames(times: 2) { |from, to| to == base && from.include?('L5-staging-') }
+      messages = capture_responses
+      said_before_wait = []
+      allow(manager).to receive(:sleep) { said_before_wait << messages.grep(/retrying/).size }
+
+      manager.snapshot
+
+      retry_lines = messages.grep(/retrying/)
+      expect(retry_lines.size).to eq(1)
+      expect(retry_lines.first).to include('L5-staging-')
+      expect(retry_lines.first).to match(/up to 3 seconds/)
+      expect(retry_lines.first).to match(/do not close/i)
+      expect(said_before_wait).to eq([1, 1])
+    end
+
+    it 'says nothing about retrying when no rename is refused' do
+      messages = capture_responses
+
+      manager.snapshot
+
+      expect(messages.grep(/retrying/)).to be_empty
+    end
+
     [Errno::EPERM, Errno::EBUSY].each do |error|
       it "retries a staging rename refused with #{error.name.split('::').last}" do
         refuse_renames(times: 1, error: error) { |from, _to| from.include?('L5-staging-') }
@@ -940,9 +964,12 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         true
       end
 
+      messages = capture_responses
+
       expect(manager.snapshot).to eq("#{base}-01")
       expect(manager).not_to have_received(:sleep)
       expect(staging).to be_empty
+      expect(messages.grep(/retrying/)).to be_empty
     end
 
     it 'does not retry errors other than the transient ones' do
@@ -957,12 +984,14 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     it 'does not retry on other platforms, where the refusal does not clear on its own' do
       allow(Gem).to receive(:win_platform?).and_return(false)
       calls = refuse_renames(times: 1) { |from, _to| from.include?('L5-staging-') }
+      messages = capture_responses
 
       expect { manager.snapshot }.to raise_error(Errno::EACCES)
 
       expect(calls.size).to eq(1)
       expect(manager).not_to have_received(:sleep)
       expect(published).to be_empty
+      expect(messages.grep(/retrying/)).to be_empty
     end
 
     context 'during a revert' do
@@ -983,6 +1012,24 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.21.0\n")
         expect(revert_temp_dirs).to be_empty
         expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
+        expect(messages.grep(/retrying/).size).to eq(1)
+      end
+
+      it 'warns, while the launcher is moved out, not to close Lich during the wait' do
+        refuse_renames(times: 1) { |from, to| to == live_lich && from.include?('.lich5-revert-new-') }
+        messages = capture_responses
+        during_wait = []
+        allow(manager).to receive(:sleep) do
+          during_wait << [File.exist?(live_lich), messages.grep(/retrying/).last]
+        end
+
+        manager.revert
+
+        expect(during_wait.size).to eq(1)
+        launcher_present, warning = during_wait.first
+        expect(launcher_present).to be(false)
+        expect(warning).to include('.lich5-revert-new-')
+        expect(warning).to match(/do not close/i)
       end
 
       it 'retries the undo too, so a briefly refused undo still restores everything' do

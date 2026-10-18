@@ -13,7 +13,9 @@
   revert again. The snapshot itself is untouched: copying its lib/, the core
   scripts in its scripts/ and its lich.rbw back by hand, or running the
   revert from another session of this installation that is still running,
-  restores it.
+  restores it. On Windows each rename of the swap that Windows refuses
+  keeps this window open for up to about 3 seconds while it is retried;
+  Lich says so while it waits.
 =end
 
 require 'tmpdir'
@@ -505,7 +507,9 @@ module Lich
         # waits the next of RENAME_RETRY_DELAYS. Nothing is retried on other
         # platforms, where these errors do not clear on their own, nor when
         # +to+ exists, which no wait will change (#publish_snapshot treats
-        # that EACCES as a name collision).
+        # that EACCES as a name collision). The first retry of each rename
+        # says so, because during a revert swap the waits can leave lib/ or
+        # the launcher half moved, and closing Lich then stops it starting.
         #
         # @raise [SystemCallError] the last error once the retries run out
         # @return [void]
@@ -516,6 +520,11 @@ module Lich
           rescue *TRANSIENT_RENAME_ERRORS
             raise unless Gem.win_platform? && attempt < RENAME_RETRY_DELAYS.size && !File.exist?(to)
 
+            if attempt.zero?
+              respond "Windows is refusing to rename #{from} (another program, such as an antivirus, " \
+                      "probably has it open); retrying for up to #{RENAME_RETRY_DELAYS.sum.round} seconds. " \
+                      'Do not close Lich meanwhile.'
+            end
             sleep(RENAME_RETRY_DELAYS[attempt])
             attempt += 1
             retry
