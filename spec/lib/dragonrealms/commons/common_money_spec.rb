@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require 'timeout'
 require_relative '../../../spec_helper'
 
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money.rb')
+require File.join(LIB_DIR, 'util', 'util.rb')
 
 DRCM = Lich::DragonRealms::DRCM unless defined?(DRCM)
 
@@ -354,6 +356,8 @@ RSpec.describe Lich::DragonRealms::DRCM do
   # --- get_total_wealth ------------------------------------------------
 
   describe '.get_total_wealth' do
+    let(:prompt) { '<prompt time="1790992193">&gt;</prompt>' }
+
     before do
       stub_const('Lich::Util', double('Lich::Util'))
     end
@@ -364,7 +368,8 @@ RSpec.describe Lich::DragonRealms::DRCM do
         '  1 gold, 6 silver, and 9 copper Kronars (1609 copper Kronars).',
         '  2 gold and 1 silver Lirums (2100 copper Lirums).',
         '  1 platinum, 2 gold, 10 silver, 17 bronze, and 11 copper Dokoras (13181 copper Dokoras).',
-        '<output class=""/>'
+        '<output class=""/>',
+        prompt
       ]
       allow(Lich::Util).to receive(:issue_command).and_return(raw_lines)
 
@@ -381,7 +386,8 @@ RSpec.describe Lich::DragonRealms::DRCM do
         'Wealth:',
         '  You have no Kronars.',
         '  You have no Lirums.',
-        '  You have no Dokoras.'
+        '  You have no Dokoras.',
+        prompt
       ]
       allow(Lich::Util).to receive(:issue_command).and_return(raw_lines)
 
@@ -411,10 +417,40 @@ RSpec.describe Lich::DragonRealms::DRCM do
       expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
     end
 
-    it 'prints no timeout message when the reply arrives' do
-      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  You have no Kronars.'])
+    it 'prints no message when the full reply arrives' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  You have no Kronars.', prompt])
       expect(Lich::Messaging).not_to receive(:msg)
 
+      described_class.get_total_wealth
+    end
+
+    # The start line arrived but the prompt did not: issue_command returns the
+    # lines collected so far.
+    context 'when the reply is cut off before the prompt' do
+      let(:partial) { ['Wealth:', '  No Kronars.', '  5 copper Lirums (5 copper Lirums).'] }
+
+      before { allow(Lich::Util).to receive(:issue_command).and_return(partial) }
+
+      it 'prints a cut-off message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCM: WEALTH output was cut off (timeout); the result is incomplete.')
+        described_class.get_total_wealth
+      end
+
+      it 'keeps the currencies that arrived and leaves the rest at 0' do
+        allow(Lich::Messaging).to receive(:msg)
+        expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 5, 'dokoras' => 0 })
+      end
+    end
+
+    it 'treats a lone start line as cut off' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:'])
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCM: WEALTH output was cut off/)
+      expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
+    end
+
+    it 'treats a reply whose last line is not the prompt as cut off' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  No Kronars.', '<output class=""/>'])
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCM: WEALTH output was cut off/)
       described_class.get_total_wealth
     end
 
@@ -423,7 +459,8 @@ RSpec.describe Lich::DragonRealms::DRCM do
         'Wealth:',
         '  5 gold Kronars (5000 copper Kronars).',
         '  You have no Lirums.',
-        '  You have no Dokoras.'
+        '  You have no Dokoras.',
+        prompt
       ]
       allow(Lich::Util).to receive(:issue_command).and_return(raw_lines)
 
@@ -443,9 +480,75 @@ RSpec.describe Lich::DragonRealms::DRCM do
         /<prompt/,
         usexml: true,
         quiet: true,
-        include_end: false,
+        include_end: true,
         timeout: 5
       )
+    end
+  end
+
+  # Drives the REAL Lich::Util.issue_command (not a stub), so these examples
+  # pin the actual timeout contract: [] or the lines so far, never nil.
+  describe '.get_total_wealth through the real Lich::Util.issue_command' do
+    let(:prompt) { '<prompt time="1790992193">&gt;</prompt>' }
+    # The WEALTH reply as recorded in spec/fixtures/streams/dr_legacy_bank.xml.
+    let(:full_reply) do
+      [
+        '<output class="mono"/>',
+        '',
+        'Wealth:',
+        '  No Kronars.',
+        '  No Lirums.',
+        '  16 platinum, 109 gold, 332 silver, 229 bronze, and 287 copper Dokoras (304777 copper Dokoras).',
+        '<output class=""/>',
+        prompt
+      ]
+    end
+    let(:replies) { [] }
+    let(:messages) { [] }
+
+    before do
+      allow(Lich::Messaging).to receive(:msg) { |_type, text| messages << text }
+      stub_const('DownstreamHook', Class.new do
+        def self.add(*_args, **_kwargs); end
+
+        def self.remove(*_args); end
+      end)
+      allow(Script).to receive(:current).and_return(
+        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+      )
+      allow(Lich::Util).to receive(:fput)
+      queue = replies.dup
+      # Hand out the scripted lines, then block like a quiet game would.
+      allow(Lich::Util).to receive(:get) { queue.empty? ? sleep(5) : queue.shift }
+      # Keep the real method but shorten its timeout so the examples run fast.
+      allow(Lich::Util).to receive(:issue_command).and_wrap_original do |original, *args, **kwargs|
+        original.call(*args, **kwargs, timeout: 0.2)
+      end
+    end
+
+    context 'when no reply arrives' do
+      it 'prints the timeout message and returns all zeros' do
+        expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
+        expect(messages).to eq(['DRCM: Failed to capture WEALTH output (timeout).'])
+      end
+    end
+
+    context 'when the reply is cut off before the Dokoras line and the prompt' do
+      let(:replies) { full_reply.first(5) }
+
+      it 'prints the cut-off message and leaves the missing Dokoras at 0' do
+        expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 })
+        expect(messages).to eq(['DRCM: WEALTH output was cut off (timeout); the result is incomplete.'])
+      end
+    end
+
+    context 'when the full reply arrives' do
+      let(:replies) { full_reply }
+
+      it 'parses every currency and prints nothing' do
+        expect(described_class.get_total_wealth).to eq({ 'kronars' => 0, 'lirums' => 0, 'dokoras' => 304_777 })
+        expect(messages).to be_empty
+      end
     end
   end
 

@@ -75,23 +75,36 @@ module Lich
       # Captures total on-hand wealth across all three currencies.
       # Returns a hash of currency name => copper value.
       # Uses Lich::Util.issue_command for reliable bounded capture.
+      #
       # issue_command returns [] (never nil) when the reply does not arrive in
-      # time; that prints a bold message and returns all zeros.
+      # time; that prints a bold message and returns all zeros. The WEALTH reply
+      # ends on the prompt, so the prompt line is requested (include_end: true)
+      # to tell a complete reply from one cut off by the timeout. A cut-off reply
+      # prints a bold message and returns what was parsed, with 0 for any
+      # currency whose line never arrived.
       def get_total_wealth
-        wealth_lines = Lich::Util.issue_command(
-          'wealth',
-          /^Wealth:/,
-          /<prompt/,
-          usexml: true,
-          quiet: true,
-          include_end: false,
-          timeout: 5
+        wealth_lines = Array(
+          Lich::Util.issue_command(
+            'wealth',
+            /^Wealth:/,
+            /<prompt/,
+            usexml: true,
+            quiet: true,
+            include_end: true,
+            timeout: 5
+          )
         )
 
         result = { 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 }
-        if wealth_lines.nil? || wealth_lines.empty?
+        if wealth_lines.empty?
           Lich::Messaging.msg("bold", "DRCM: Failed to capture WEALTH output (timeout).")
           return result
+        end
+
+        if wealth_lines.length > 1 && wealth_lines.last.match?(/<prompt/)
+          wealth_lines = wealth_lines[0...-1]
+        else
+          Lich::Messaging.msg("bold", "DRCM: WEALTH output was cut off (timeout); the result is incomplete.")
         end
 
         strip_xml(wealth_lines).each do |line|

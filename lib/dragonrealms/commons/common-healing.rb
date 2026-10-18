@@ -462,6 +462,9 @@ module Lich
       # +captured+ is false when the game reply was not captured in full (a
       # timeout). The other fields then hold defaults or partial data and do not
       # mean "healthy": callers should treat the result as unknown and check again.
+      # +captured+ true means a complete reply was read; it does not prove the
+      # reply was sent in answer to this call (a reply that arrives after an
+      # earlier call timed out can still be read by the next call).
       class HealthResult
         attr_reader :wounds, :bleeders, :parasites, :lodged,
                     :poisoned, :diseased, :score, :dead, :vitality, :captured

@@ -1146,6 +1146,17 @@ RSpec.describe Lich::DragonRealms::DRCH do
   describe 'timeouts through the real Lich::Util.issue_command' do
     let(:prompt) { '<prompt time="1787075465">&gt;</prompt>' }
     let(:replies) { [] }
+    let(:health_reply) { ['Your body feels at full strength.', 'You have a mildly poisoned right leg.'] }
+    let(:perceive_reply) do
+      ['Your injuries include...', 'Wounds to the HEAD:', 'Fresh External:  light scratches -- negligible']
+    end
+    let(:touch_reply) do
+      [
+        'You sense a successful empathic link has been forged between you and Muleoak.',
+        'Wounds to the HEAD:',
+        'Fresh External:  light scratches -- negligible'
+      ]
+    end
 
     before do
       allow(Lich::Messaging).to receive(:msg)
@@ -1196,6 +1207,38 @@ RSpec.describe Lich::DragonRealms::DRCH do
       end
     end
 
+    context 'when the PERCEIVE reply arrives without its prompt' do
+      let(:replies) { perceive_reply }
+
+      it 'perceive_health prints the cut-off message, reports captured false and keeps the wounds' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: PERCEIVE HEALTH output was cut off (timeout); the result is incomplete.')
+        result = described_class.perceive_health
+        expect(result.captured?).to be false
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the PERCEIVE reply is complete but the HEALTH reply is cut off' do
+      let(:replies) { perceive_reply + [prompt] + health_reply }
+
+      it 'perceive_health reports captured false and keeps both parses' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: HEALTH output was cut off (timeout); the result is incomplete.')
+        result = described_class.perceive_health
+        expect(result.captured?).to be false
+        expect(result.poisoned).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the TOUCH reply arrives without its prompt' do
+      let(:replies) { touch_reply }
+
+      it 'perceive_health_other prints the cut-off message and returns nil' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: TOUCH output for Muleoak was cut off (timeout).')
+        expect(described_class.perceive_health_other('Muleoak')).to be_nil
+      end
+    end
+
     context 'when the full reply arrives' do
       let(:replies) { ['Your body feels at full strength.', 'You have a mildly poisoned right leg.', prompt] }
 
@@ -1204,6 +1247,29 @@ RSpec.describe Lich::DragonRealms::DRCH do
         result = described_class.check_health
         expect(result.captured?).to be true
         expect(result.poisoned).to be true
+      end
+    end
+
+    context 'when the full PERCEIVE and HEALTH replies arrive' do
+      let(:replies) { perceive_reply + [prompt] + health_reply + [prompt] }
+
+      it 'perceive_health reports captured true and prints nothing' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        result = described_class.perceive_health
+        expect(result.captured?).to be true
+        expect(result.poisoned).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the full TOUCH reply arrives' do
+      let(:replies) { touch_reply + [prompt] }
+
+      it 'perceive_health_other returns a captured result and prints nothing' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        result = described_class.perceive_health_other('Muleoak')
+        expect(result.captured?).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
       end
     end
   end
