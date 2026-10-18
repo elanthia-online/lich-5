@@ -964,6 +964,42 @@ RSpec.describe Lich::Common::Settings do
         expect(writer.join(2)).to eq(writer)
         expect(@mock_db.get_settings("test_script", "GSIV")).to eq('b' => 2)
       end
+
+      it "makes Settings.load return and cache a row committed before it was called, over an older fill in progress" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+        loaded = Queue.new
+        release = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            release.pop(timeout: 2)
+          end
+          row
+        end
+
+        reader = in_thread { settings.to_hash }
+        loaded.pop(timeout: 2)
+        # Another session commits a newer row while the reader holds the older one.
+        @mock_db.save_settings("test_script", { 'v' => 1 }, ":")
+        refreshed = nil
+        refresher = in_thread { refreshed = settings.load }
+        Thread.pass until refresher.status == 'sleep' || !refresher.alive?
+        release << true
+        [reader, refresher].each { |t| t.join(5) }
+
+        expect(refreshed).to eq('v' => 1)
+        expect(settings.to_hash).to eq('v' => 1)
+      end
+
+      it "returns a copy from Settings.load, so changing it leaves the cache alone" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+
+        settings.load['v'] = 9
+
+        expect(settings.to_hash).to eq('v' => 0)
+      end
     end
   end
 end

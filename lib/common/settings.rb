@@ -427,9 +427,14 @@ module Lich
       def self.refresh_data(scope = DEFAULT_SCOPE)
         script_name = Script.current.name
         cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Deleting cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
-        @settings_cache.delete(cache_key)
-        current_script_settings(scope)
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Reloading cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
+        # Reload under the entry's lock, replacing whatever is cached. A cache
+        # miss fill keeps a row another thread cached while it waited, which
+        # could be one read before this call began.
+        settings = with_cache_lock(cache_key) do
+          @settings_cache[cache_key] = @db_adapter.get_settings(script_name, scope)
+        end
+        settings.dup
       end
 
       def self.reset_path_and_return(value)
