@@ -364,13 +364,18 @@ module Lich
             # walk_to sent us here because Room.current was nil, and nothing
             # has moved since. A hand-back with no move spends a retry, so a
             # room that resolves on one read and not the next cannot bounce
-            # between walk_to and this walker forever.
+            # between walk_to and this walker forever. The budget may already
+            # be spent by go2 failures in walk_to, so the give-up message
+            # does not claim the room alternated more than once.
             if moves.zero?
               if retries >= MAX_WALK_TO_RETRIES
-                Lich::Messaging.msg('bold', "DRCT: Room #{current_id} keeps resolving and unresolving without a move, giving up after #{MAX_WALK_TO_RETRIES} retries.")
+                Lich::Messaging.msg('bold', "DRCT: Room #{current_id} resolved again without a move; no retries left (#{MAX_WALK_TO_RETRIES}), giving up.")
                 return false
               end
               retries += 1
+              # Logged so walk_to's "attempting again (n/N)" count does not
+              # appear to skip the retry spent here.
+              Lich::Messaging.msg('plain', "DRCT: Room #{current_id} resolved again without a move, handing back (retry #{retries}/#{MAX_WALK_TO_RETRIES}).")
             end
             return walk_to(room_num, restart_on_fail, retry_depth: retries)
           end

@@ -145,6 +145,10 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
     Lich::Messaging.messages.select { |m| m[:type] == 'bold' }.map { |m| m[:message] }
   end
 
+  def plain_messages
+    Lich::Messaging.messages.select { |m| m[:type] == 'plain' }.map { |m| m[:message] }
+  end
+
   before(:each) do
     Lich::Messaging.clear_messages!
     allow(DRC).to receive(:fix_standing)
@@ -549,6 +553,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(DRCT.walk_to(103)).to be(true)
       expect(world.sent).to be_empty
       expect(DRCT).to have_received(:start_script).with('go2', ['103'], force: true).once
+      expect(plain_messages).to include('DRCT: Room 101 resolved again without a move, handing back (retry 1/3).')
     end
 
     it 'gives up instead of bouncing between walk_to and the walker forever' do
@@ -566,7 +571,10 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(result).to be(false)
       expect(world.sent).to be_empty
       expect(DRCT).not_to have_received(:start_script)
-      expect(bold_messages.last).to include('keeps resolving and unresolving without a move')
+      expect(plain_messages.grep(/handing back/)).to eq(
+        (1..DRCT::MAX_WALK_TO_RETRIES).map { |n| "DRCT: Room 101 resolved again without a move, handing back (retry #{n}/3)." }
+      )
+      expect(bold_messages.last).to eq('DRCT: Room 101 resolved again without a move; no retries left (3), giving up.')
     end
 
     it 'counts a bounce against the retries walk_to already spent' do
@@ -579,6 +587,10 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(103, true, retry_depth: DRCT::MAX_WALK_TO_RETRIES)).to be(false)
       expect(DRCT).not_to have_received(:start_script)
+      # One bounce after walk_to spent the budget: the message must not claim
+      # the room kept alternating, and no hand-back was logged.
+      expect(bold_messages.last).to eq('DRCT: Room 101 resolved again without a move; no retries left (3), giving up.')
+      expect(plain_messages.grep(/handing back/)).to be_empty
     end
   end
 
