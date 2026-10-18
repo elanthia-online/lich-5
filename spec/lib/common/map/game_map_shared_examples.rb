@@ -1377,6 +1377,17 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(Dir.children(map_dir).sort).to eq(%w[other.json saved.json])
     end
 
+    it 'raises on a dangling symlink into a missing directory, keeping the link', unless: Gem.win_platform? do
+      File.symlink('nope/new.json', target)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::ENOENT)
+
+      expect(File.symlink?(target)).to be true
+      expect(File.readlink(target)).to eq('nope/new.json')
+      expect(Dir.children(map_dir).sort).to eq(%w[saved.json])
+      expect(map_class).to have_received(:respond).with(/could not write #{Regexp.escape(target)}; no file created: /)
+    end
+
     # Root can write any file, so the refusal (like the in-place write before
     # it) does not apply there; Process.uid is also 0 on Windows.
     it 'refuses to replace a read-only file, leaving it and its backup untouched',
