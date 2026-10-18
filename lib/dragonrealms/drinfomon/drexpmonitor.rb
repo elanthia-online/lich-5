@@ -228,13 +228,15 @@ module Lich
         formatted_gains = format_gains(new_skills)
         Lich::Messaging.msg('info', "DRExpMonitor: #{formatted_gains.join(', ')}")
       end
+
+      # Stop the reporter on exit (handles disconnect and normal exit).
+      # Registered once: `;hmr drinfomon` re-runs this file, and each run
+      # would otherwise add another hook. Only stops a running reporter, so
+      # exiting with reporting off prints no "already inactive".
+      unless defined?(@@exit_hook_registered)
+        @@exit_hook_registered = true
+        at_exit { DRExpMonitor.stop if DRExpMonitor.active? }
+      end
     end
   end
-end
-
-# Register cleanup on exit (handles disconnect and normal exit)
-at_exit do
-  # Only when running: a reload registers this hook again, and an extra stop
-  # would print "already inactive" on the way out.
-  Lich::DragonRealms::DRExpMonitor.stop if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.active?
 end
