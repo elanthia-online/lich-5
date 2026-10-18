@@ -20,6 +20,7 @@ require "gemstone/experience"
 require "util/util"
 require "gemstone/psms"
 require "gemstone/psms/ascension"
+require "gemstone/society"
 
 # Top-level aliases for constants used by production code
 Skills = Lich::Gemstone::Skills unless defined?(Skills)
@@ -582,22 +583,46 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
   end
 
   context "Society Join or Resign" do
-    it "handles joining a society" do
+    before do
+      Lich::Gemstone::Infomon.set('society.status', 'None')
+      Lich::Gemstone::Infomon.set('society.rank', 0)
+      # Voln ability metadata resolves favor cost and duration using level.
+      allow(Lich::Gemstone::Stats).to receive(:level).and_return(20)
+    end
+
+    it "handles joining the Order of Voln through membership and ability readers" do
       output = <<~SOCIETYJOIN
         The Grandmaster says, "Welcome to the Order of Voln."
       SOCIETYJOIN
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
       expect(Lich::Gemstone::Infomon.get('society.status')).to eq('Order of Voln')
       expect(Lich::Gemstone::Infomon.get('society.rank')).to eq(1)
+      expect(Lich::Gemstone::Society.serialize).to eq(['Order of Voln', 1])
+      expect(Lich::Gemstone::Societies::OrderOfVoln.member?(1)).to be true
+      expect(Lich::Gemstone::Societies::OrderOfVoln.known?('recognition')).to be true
+      expect(Lich::Gemstone::Societies::OrderOfVoln.known?('blessing')).to be false
     end
 
-    it "handles joining a society (test2)" do
+    it "handles joining the Guardians of Sunfist through membership and ability readers" do
       output = <<~SOCIETYJOIN
         The Grandmaster says, "You are now a member of the Guardians of Sunfist."
       SOCIETYJOIN
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
       expect(Lich::Gemstone::Infomon.get('society.status')).to eq('Guardians of Sunfist')
       expect(Lich::Gemstone::Infomon.get('society.rank')).to eq(0)
+      expect(Lich::Gemstone::Society.serialize).to eq(['Guardians of Sunfist', 0])
+      expect(Lich::Gemstone::Societies::GuardiansOfSunfist.member?(0)).to be true
+      expect(Lich::Gemstone::Societies::GuardiansOfSunfist.known?('recognition')).to be false
+    end
+
+    it "handles joining the Council of Light through membership and ability readers" do
+      result = Lich::Gemstone::Infomon::Parser.parse('The Grand Poohbah smiles broadly.  "Welcome to the Lodge," he cries')
+
+      expect(result).to eq(:ok)
+      expect(Lich::Gemstone::Society.serialize).to eq(['Council of Light', 1])
+      expect(Lich::Gemstone::Societies::CouncilOfLight.member?(1)).to be true
+      expect(Lich::Gemstone::Societies::CouncilOfLight.known?('recognition')).to be true
+      expect(Lich::Gemstone::Societies::CouncilOfLight.known?('signal')).to be false
     end
 
     it "handles resigning froim a society" do

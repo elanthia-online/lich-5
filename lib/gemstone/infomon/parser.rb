@@ -219,6 +219,12 @@ module Lich
           end
         end
 
+        # Updates character data from one game-output line, including society
+        # membership and initial rank for Order, Guardians, and Lodge welcomes.
+        #
+        # @param line [String] One physical line of game output
+        # @return [Symbol] :ok when handled, or :noop when ignored
+        # @note Parsing errors are logged and suppressed; their return is unspecified.
         def self.parse(line)
           # O(1) vs O(N): the anchored union is attempted only at line start; mid-line
           # patterns (AllMid) are checked separately.
@@ -412,7 +418,7 @@ module Lich
               :ok
             when Pattern::SocietyJoin
               match = Regexp.last_match.to_s
-              case match[/Order|Council|Guardians/]
+              case match[/Order|Lodge|Guardians/]
               when 'Order'
                 Infomon.set('society.status', 'Order of Voln')
                 Infomon.set('society.rank', 1)
