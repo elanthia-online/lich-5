@@ -68,6 +68,10 @@ module Lich
       # freshly started moonwatch has already published.
       MOONWATCH_START_LOCK = Mutex.new
 
+      # Set when check_moonwatch gave up waiting for a running moonwatch's data
+      # (see await_running_moonwatch).
+      @moonwatch_data_stalled = false
+
       # Expected game responses when centering a telescope on a target.
       CENTER_TELESCOPE_MESSAGES = [
         'Center what',
@@ -499,23 +503,34 @@ module Lich
       # skeleton ({'katamba' => {}, ..., 'visible' => []}) and fills in the
       # timers afterwards, so the skeleton does not count as ready.
       #
+      # moonwatch sets 'running' to false when it exits. UserVars persist
+      # between sessions, so data marked that way is left over from a
+      # moonwatch that has stopped and does not count as ready either. Data
+      # without a 'running' key (older moonwatch versions) is judged by the
+      # timers alone.
+      #
       # @return [Boolean]
       def moon_data_ready?
         moons = UserVars.moons
         return false unless moons.is_a?(Hash) && moons['visible'].is_a?(Array)
+        return false if moons['running'] == false
 
         MOON_NAMES.all? { |moon| moons[moon].is_a?(Hash) && moons[moon]['timer'].is_a?(Numeric) }
       end
 
       # Makes sure moonwatch is running, starting it if needed, and waits a
-      # bounded time for a freshly started moonwatch to publish real moon data.
+      # bounded time for it to publish real moon data (see moon_data_ready?).
       #
-      # When moonwatch is already running and no start is in progress, this
-      # returns at once without inspecting the data. When another caller's
-      # start is in progress, it waits for that start to finish (returning
-      # as soon as the data is ready). Otherwise it clears the
-      # saved UserVars.moons (they may be stale), starts moonwatch and waits
-      # until moon_data_ready? is true. The wait ends early, with a message,
+      # When moonwatch is running and the data is ready, this returns at once.
+      # When moonwatch is running but the data is not ready yet (it was
+      # started elsewhere, for example by autostart, and is still starting
+      # up), this waits for the data. If that wait times out while moonwatch
+      # keeps running, later calls return false at once instead of waiting
+      # again, until the data becomes ready or moonwatch is seen stopped.
+      # When another caller's start is in progress, it waits for that start
+      # to finish (returning as soon as the data is ready). Otherwise it
+      # clears the saved UserVars.moons (they may be stale), starts moonwatch
+      # and waits until moon_data_ready? is true. The wait ends early, with a message,
       # when moonwatch cannot be found or stops before publishing, and ends
       # at the deadline when it never starts or never publishes. The saved
       # data is never restored on failure, so moon checks see no moon rather
@@ -527,11 +542,20 @@ module Lich
       # waits (up to the deadline) for that start to finish.
       #
       # @param timeout [Numeric] seconds to wait for another caller's start to
-      #   finish, and again for moonwatch to publish after starting it
-      # @return [Boolean] true when moonwatch is running (and, after a start,
-      #   has published real moon data); false when moon data is unavailable
+      #   finish, and again for moonwatch to publish (after starting it, or
+      #   when it is already running)
+      # @return [Boolean] true when moonwatch is running and has published
+      #   real moon data; false when moon data is unavailable
       def check_moonwatch(timeout: MOONWATCH_READY_TIMEOUT)
-        return true if Script.running?('moonwatch') && (!MOONWATCH_START_LOCK.locked? || moon_data_ready?)
+        if Script.running?('moonwatch')
+          if moon_data_ready?
+            @moonwatch_data_stalled = false
+            return true
+          end
+          return await_running_moonwatch(timeout) unless MOONWATCH_START_LOCK.locked?
+        else
+          @moonwatch_data_stalled = false
+        end
 
         lock_deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
         until MOONWATCH_START_LOCK.try_lock
@@ -562,6 +586,26 @@ module Lich
         ensure
           MOONWATCH_START_LOCK.unlock if MOONWATCH_START_LOCK.owned?
         end
+      end
+
+      # Waits for an already-running moonwatch (started outside check_moonwatch,
+      # for example by autostart) to publish real moon data. After one wait
+      # times out with moonwatch still running, later calls return false at
+      # once rather than stalling every caller for the full timeout; that
+      # latch clears when the data becomes ready or moonwatch is seen stopped.
+      #
+      # @param timeout [Numeric] seconds to wait
+      # @return [Boolean] true when moon data is ready
+      def await_running_moonwatch(timeout)
+        return false if @moonwatch_data_stalled
+
+        return true if await_moonwatch_data(true, timeout)
+
+        if Script.running?('moonwatch')
+          @moonwatch_data_stalled = true
+          Lich::Messaging.msg("plain", "DRCMM: Not waiting for moonwatch's moon data again until it publishes the data or stops.")
+        end
+        false
       end
 
       # Whether Lich can find a moonwatch script file. Script.exists? does not

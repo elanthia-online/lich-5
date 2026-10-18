@@ -508,7 +508,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.visible_moons' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
     end
 
     it 'returns moons that are visible and have timer >= threshold' do
@@ -559,7 +559,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.moon_visible?' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
       UserVars.moons = {
         'katamba' => { 'timer' => 10 },
         'xibar'   => { 'timer' => 1 },
@@ -585,7 +585,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.moons_visible?' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
     end
 
     it 'returns true when at least one moon is visible with sufficient timer' do
@@ -615,7 +615,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.bright_celestial_object?' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
     end
 
     it 'returns true when sun is up with sufficient timer' do
@@ -666,7 +666,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.any_celestial_object?' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
     end
 
     it 'returns true when katamba is visible (unlike bright_celestial_object?)' do
@@ -721,6 +721,11 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       expect(described_class.moon_data_ready?).to be false
     end
 
+    it 'is false when moonwatch marked the data as stale on exit' do
+      UserVars.moons = ready.merge('running' => false)
+      expect(described_class.moon_data_ready?).to be false
+    end
+
     it "is false for moonwatch's startup skeleton" do
       UserVars.moons = { 'katamba' => {}, 'yavash' => {}, 'xibar' => {}, 'visible' => [] }
       expect(described_class.moon_data_ready?).to be false
@@ -769,6 +774,10 @@ RSpec.describe Lich::DragonRealms::DRCMM do
     # Shared, thread-visible state of the fake moonwatch.
     let(:world) { { running: false, polls: 0, on_poll: nil } }
 
+    after do
+      described_class.instance_variable_set(:@moonwatch_data_stalled, false)
+    end
+
     def bold_messages
       Lich::Messaging.messages.select { |m| m[:type] == 'bold' }.map { |m| m[:message] }
     end
@@ -783,6 +792,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
     end
 
     before do
+      described_class.instance_variable_set(:@moonwatch_data_stalled, false)
       stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 0.3)
       allow(Script).to receive(:running?).with('moonwatch') { world[:running] }
       allow(Script).to receive(:exists?).with('moonwatch').and_return(true)
@@ -794,23 +804,108 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       end
     end
 
-    context 'when moonwatch is already running' do
-      before { world[:running] = true }
+    context 'when moonwatch is already running with real moon data' do
+      before do
+        world[:running] = true
+        UserVars.moons = ready_moons
+      end
 
-      it 'returns true without logging any messages' do
+      it 'returns true at once without logging any messages' do
         expect(check).to be true
         expect(Lich::Messaging.messages).to be_empty
+        expect(world[:polls]).to eq(0)
       end
 
       it 'does not call start_script' do
         expect(described_class).not_to receive(:start_script)
         check
       end
+    end
 
-      it 'does not inspect or wait on the data when no start is in progress' do
-        UserVars.moons = {}
-        expect(check).to be true
+    context 'when moonwatch was started elsewhere and is still starting up' do
+      let(:stalled_message) { "Not waiting for moonwatch's moon data again" }
+
+      before do
+        world[:running] = true
+        allow(described_class).to receive(:start_script) { raise 'check_moonwatch must not start a running moonwatch' }
+      end
+
+      it 'waits for the timers instead of returning over the skeleton' do
+        UserVars.moons = skeleton.dup
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 3 }
+        result = check
+        expect(world[:polls]).to be >= 3
+        expect(described_class.moon_data_ready?).to be true
+        expect(result).to be true
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'does not accept saved timers that the previous moonwatch marked as stale on exit' do
+        UserVars.moons = ready_moons.merge('katamba' => { 'timer' => 999 }, 'running' => false)
+        world[:on_poll] = lambda do |n|
+          UserVars.moons = skeleton.merge('running' => true) if n == 2
+          UserVars.moons = ready_moons if n >= 4
+        end
+        result = check
+        expect(world[:polls]).to be >= 4
+        expect(UserVars.moons).to eq(ready_moons)
+        expect(result).to be true
+      end
+
+      it 'returns false promptly when moonwatch stops before publishing, and does not latch' do
+        UserVars.moons = skeleton.dup
+        world[:on_poll] = ->(n) { world[:running] = false if n >= 2 }
+        started = monotonic
+        expect(check(timeout: 4)).to be false
+        expect(monotonic - started).to be < 2
+        expect(bold_messages.last).to include('moonwatch stopped before it published moon data')
+        expect(Lich::Messaging.messages.map { |m| m[:message] }.join).not_to include(stalled_message)
+      end
+
+      it 'times out once when the data never becomes ready, then returns false at once on later calls' do
+        UserVars.moons = skeleton.dup
+        expect(check).to be false
+        expect(bold_messages.last).to include('moonwatch did not publish moon data within 0.3 seconds')
+        expect(Lich::Messaging.messages.last[:message]).to include(stalled_message)
+
+        Lich::Messaging.clear_messages!
+        world[:polls] = 0
+        started = monotonic
+        2.times { expect(check).to be false }
+        expect(monotonic - started).to be < 0.2
         expect(world[:polls]).to eq(0)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'waits again after a stall once the data has been ready' do
+        UserVars.moons = skeleton.dup
+        expect(check).to be false
+        UserVars.moons = ready_moons
+        expect(check).to be true
+
+        UserVars.moons = skeleton.dup
+        world[:polls] = 0
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
+        expect(check).to be true
+        expect(world[:polls]).to be >= 2
+      end
+
+      it 'waits again after a stall once moonwatch has been seen stopped' do
+        UserVars.moons = skeleton.dup
+        expect(check).to be false
+
+        world[:running] = false
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        allow(Script).to receive(:exists?).with('moonwatch').and_return(false)
+        allow(Script).to receive(:version).with('moonwatch').and_return(nil)
+        expect(check).to be false # missing: fails at once, and clears the latch
+
+        world[:running] = true
+        UserVars.moons = skeleton.dup
+        world[:polls] = 0
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
+        expect(check).to be true
+        expect(world[:polls]).to be >= 2
       end
     end
 
@@ -1110,7 +1205,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.set_moon_data' do
     before do
-      allow(Script).to receive(:running?).with('moonwatch').and_return(true)
+      allow(described_class).to receive(:check_moonwatch).and_return(true)
     end
 
     context 'when data has no moon key' do
