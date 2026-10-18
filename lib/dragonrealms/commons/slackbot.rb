@@ -3,6 +3,7 @@
 require 'json'
 require 'net/http'
 require 'openssl'
+require 'timeout'
 require 'uri'
 
 module Lich
@@ -56,34 +57,47 @@ module Lich
       USERS_CACHE_TTL = 3600
       MAX_THROTTLE_RETRIES = 10
 
+      # Hard cap, in seconds, on the users.list attempt that #direct_message
+      # makes when the list could not be loaded earlier. A message is often
+      # sent right before an emergency logout, so it must never wait out the
+      # full network or rate-limit backoff.
+      SEND_USERS_LIST_BUDGET = 5
+
+      # After a failed users.list call, #direct_message makes no new call for
+      # this many seconds (or for Slack's Retry-After, if longer), so a burst
+      # of messages during an outage neither waits on Slack nor hammers it.
+      USERS_LIST_RETRY_COOLDOWN = 30
+
+      USERS_LIST_UNAVAILABLE = 'Slack user list unavailable'
+
       def initialize
         @initialized = false
         @error_message = nil
+        @token_verified = false
+        @users_list = nil
+        @users_list_retry_at = nil
 
-        ensure_slack_token unless authed?(UserVars.slack_token)
-        return if @error_message
-
-        fetch_users_list
-        @initialized = true
+        connect
       end
 
-      # @return [Boolean] true if the bot has a valid token and users list
+      # @return [Boolean] true if the bot has a valid token and a non-empty users list
       def initialized?
         @initialized
       end
 
-      # Reinitializes the bot by re-fetching the token and users list.
+      # Reinitializes the bot by re-checking the token and re-loading the users list.
+      # A failed users-list load keeps any list loaded earlier.
       #
-      # @return [Boolean] true if reconnection succeeded
-      def reconnect!
+      # @param users_list_budget [Numeric, nil] seconds allowed for the users-list
+      #   step, or nil for the full retry policy
+      # @return [Boolean] true if the token is valid and a non-empty users list
+      #   (fresh, cached, or the one loaded earlier) is available
+      def reconnect!(users_list_budget: nil)
         @error_message = nil
         @initialized = false
+        @token_verified = false
 
-        ensure_slack_token unless authed?(UserVars.slack_token)
-        return false if @error_message
-
-        fetch_users_list
-        @initialized = true
+        connect(users_list_budget: users_list_budget)
       end
 
       # Checks whether the LNet connection is alive and responsive.
@@ -127,7 +141,7 @@ module Lich
           return nil
         end
 
-        reconnect! unless initialized?
+        restore_connection unless initialized?
 
         unless initialized?
           Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - not connected. Will retry on next attempt.')
@@ -135,6 +149,7 @@ module Lich
         end
 
         dm_channel = get_dm_channel(username)
+        dm_channel = get_dm_channel(username) if dm_channel.nil? && load_users_from_cache('Reloaded cached users list')
         unless dm_channel
           Lich::Messaging.msg('bold', "SlackBot: Cannot send message - user '#{username}' not found in Slack workspace.")
           return nil
@@ -153,6 +168,70 @@ module Lich
       end
 
       private
+
+      # Verifies (or discovers) the token, then loads the users list.
+      # The bot is initialized only when a non-empty users list is loaded.
+      #
+      # @param users_list_budget [Numeric, nil] seconds allowed for the users-list step
+      # @return [Boolean] the new initialized? state
+      def connect(users_list_budget: nil)
+        ensure_slack_token unless authed?(UserVars.slack_token)
+        return false if @error_message
+
+        @token_verified = true
+        load_users_list(users_list_budget)
+      end
+
+      # Loads the users list and updates initialized? and error_message.
+      #
+      # @param budget [Numeric, nil] seconds allowed, or nil for the full retry policy
+      # @return [Boolean] the new initialized? state
+      def load_users_list(budget)
+        deadline = budget && (monotonic_now + budget)
+        fetch_users_list(deadline)
+        @initialized = users_list_loaded?
+        @error_message = @initialized ? nil : USERS_LIST_UNAVAILABLE
+        @initialized
+      end
+
+      # Called by #direct_message when the bot is not initialized. If the token
+      # was already verified and only the users list is missing, retries just
+      # the users list (cache first, then one bounded API attempt) without
+      # re-running the token discovery. Otherwise performs a full #reconnect!
+      # whose users-list step is bounded the same way.
+      #
+      # Never raises: a message is often sent right before an emergency logout,
+      # and an unexpected error here must not stop the calling script.
+      #
+      # @return [Boolean] the new initialized? state
+      def restore_connection
+        return load_users_list(SEND_USERS_LIST_BUDGET) if @token_verified
+
+        reconnect!(users_list_budget: SEND_USERS_LIST_BUDGET)
+      rescue StandardError => e
+        Lich.log "SlackBot: Reconnect failed: #{e.class}: #{e.message}"
+        users_list_failed
+        @initialized = false
+        @error_message = "Reconnect failed: #{e.message}"
+        false
+      end
+
+      # @return [Boolean] true when a non-empty users list is loaded
+      def users_list_loaded?
+        members = @users_list && @users_list['members']
+        members.is_a?(Array) && !members.empty?
+      end
+
+      # @return [Float] monotonic clock reading in seconds
+      def monotonic_now
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+
+      # @param deadline [Float] monotonic deadline
+      # @return [Float] seconds left before the deadline (may be negative)
+      def seconds_left(deadline)
+        deadline - monotonic_now
+      end
 
       # @return [Boolean] true if the LNet script object is loaded
       def lnet_available?
@@ -209,53 +288,108 @@ module Lich
       end
 
       # Loads the users list from shared DB cache or Slack API.
+      # On failure the current list (if any) is left untouched.
       #
-      # @return [void]
-      def fetch_users_list
-        cached = read_users_cache
-        if cached
-          @users_list = { 'members' => cached['members'] }
-          Lich.log "SlackBot: Using cached users list (#{cached['members'].length} members)"
-          return
+      # @param deadline [Float, nil] monotonic deadline for the API attempt; when
+      #   set, the startup jitter is skipped
+      # @return [Boolean] true if a non-empty users list was loaded
+      def fetch_users_list(deadline = nil)
+        return true if load_users_from_cache('Using cached users list')
+
+        unless deadline
+          sleep rand(0.0..5.0)
+          return true if load_users_from_cache('Using cached users list after jitter')
         end
 
-        sleep rand(0.0..5.0)
-
-        cached = read_users_cache
-        if cached
-          @users_list = { 'members' => cached['members'] }
-          Lich.log "SlackBot: Using cached users list after jitter (#{cached['members'].length} members)"
-          return
+        if deadline && users_list_cooling_down?
+          Lich.log 'SlackBot: Skipping users.list until the retry cooldown ends'
+          return false
         end
 
-        @users_list = fetch_users_from_api
-        write_users_cache(@users_list['members']) if @users_list['members']&.any?
+        members = fetch_users_from_api(deadline)
+        return false unless members
+
+        @users_list = { 'members' => members }
+        true
       end
 
-      # Fetches the users list from the Slack API with throttle retry.
+      # Replaces the users list with the shared cache when the cache is fresh
+      # and non-empty. Makes no HTTP request.
       #
-      # @return [Hash] response hash with 'members' key
-      def fetch_users_from_api
+      # @param label [String] log message prefix
+      # @return [Boolean] true if the cache was loaded
+      def load_users_from_cache(label)
+        members = cached_members
+        return false unless members
+
+        @users_list = { 'members' => members }
+        Lich.log "SlackBot: #{label} (#{members.length} members)"
+        true
+      end
+
+      # @return [Boolean] true while a recent users.list failure blocks a new call from #direct_message
+      def users_list_cooling_down?
+        !@users_list_retry_at.nil? && monotonic_now < @users_list_retry_at
+      end
+
+      # Starts the cooldown after a failed users.list call.
+      #
+      # @param seconds [Numeric, nil] Slack's Retry-After, if any
+      # @return [nil]
+      def users_list_failed(seconds = nil)
+        @users_list_retry_at = monotonic_now + [seconds.to_i, USERS_LIST_RETRY_COOLDOWN].max
+        nil
+      end
+
+      # @return [Array<Hash>, nil] members from a fresh, non-empty shared cache
+      def cached_members
+        cached = read_users_cache
+        members = cached && cached['members']
+        members.is_a?(Array) && !members.empty? ? members : nil
+      end
+
+      # Fetches the users list from the Slack API with throttle retry, and
+      # writes a successful result to the shared cache.
+      #
+      # @param deadline [Float, nil] monotonic deadline; retries that would
+      #   overrun it are skipped
+      # @return [Array<Hash>, nil] members, or nil on failure
+      def fetch_users_from_api(deadline = nil)
         retries = 0
         begin
-          post('users.list', { 'token' => UserVars.slack_token })
+          members = post('users.list', { 'token' => UserVars.slack_token }, deadline: deadline)['members']
+          unless members.is_a?(Array) && !members.empty?
+            Lich.log 'SlackBot: users.list returned no members'
+            Lich::Messaging.msg('bold', 'SlackBot: Failed to fetch Slack user list: Slack returned no members')
+            return users_list_failed
+          end
+
+          @users_list_retry_at = nil
+          write_users_cache(members)
+          members
         rescue ThrottlingError => e
-          cached = read_users_cache
-          if cached
+          members = cached_members
+          if members
             Lich.log "SlackBot: Throttled, but another character cached the users list"
-            return { 'members' => cached['members'] }
+            return members
           end
 
           if retries >= MAX_THROTTLE_RETRIES
             Lich.log "SlackBot: Throttle retry limit (#{MAX_THROTTLE_RETRIES}) exceeded"
             Lich::Messaging.msg('bold', "SlackBot: Rate limit retry exhausted. User list unavailable.")
-            return { 'members' => [] }
+            return users_list_failed(e.retry_after)
           end
 
           base_delay = e.retry_after || (BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min))
           delay = [base_delay, MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.5).to_i)
           total_delay = delay + jitter
+          if deadline && total_delay >= seconds_left(deadline)
+            Lich.log "SlackBot: Throttled fetching users list. Retry in #{total_delay}s would exceed the time budget"
+            Lich::Messaging.msg('bold', 'SlackBot: Rate limited fetching users. Will retry on a later message.')
+            return users_list_failed(total_delay)
+          end
+
           retries += 1
           Lich.log "SlackBot: Throttled fetching users list. Retry ##{retries} in #{total_delay}s..."
           Lich::Messaging.msg('bold', "SlackBot: Rate limited fetching users. Retrying in #{total_delay}s...") if retries <= 3
@@ -264,7 +398,7 @@ module Lich
         rescue ApiError, NetworkError => e
           Lich.log "SlackBot: Error fetching user list: #{e.message}"
           Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
-          { 'members' => [] }
+          users_list_failed
         end
       end
 
@@ -336,11 +470,13 @@ module Lich
       #
       # @param method [String] Slack API method name (e.g. 'chat.postMessage')
       # @param params [Hash] request parameters including token
+      # @param deadline [Float, nil] monotonic deadline; when set, each attempt
+      #   is cut off at the deadline and retries that would overrun it are skipped
       # @return [Hash] parsed JSON response body
       # @raise [ThrottlingError] on HTTP 429
-      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted
+      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, or when the deadline is reached
       # @raise [ApiError] on non-ok Slack responses or JSON parse errors
-      def post(method, params)
+      def post(method, params, deadline: nil)
         retries = 0
 
         begin
@@ -351,7 +487,7 @@ module Lich
           req = Net::HTTP::Post.new(uri.path)
           req.set_form_data(params)
 
-          res = http.request(req)
+          res = deadline ? request_before(http, req, deadline) : http.request(req)
 
           if res.code == '429'
             retry_after = res['Retry-After']&.to_i
@@ -373,11 +509,28 @@ module Lich
           delay = [BASE_RETRY_DELAY_SECONDS * (2**retries), MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.25).to_i)
           total_delay = delay + jitter
+          raise NetworkError, "SlackBot: Network error, no time left to retry: #{e.message}" if deadline && total_delay >= seconds_left(deadline)
+
           retries += 1
           Lich.log "SlackBot: Network error: #{e.message}. Retry ##{retries} in #{total_delay}s..."
           sleep total_delay
           retry
         end
+      end
+
+      # Performs one HTTP request that is abandoned at the deadline.
+      #
+      # @param http [Net::HTTP]
+      # @param req [Net::HTTP::Post]
+      # @param deadline [Float] monotonic deadline
+      # @return [Net::HTTPResponse]
+      # @raise [NetworkError] if the deadline has already passed
+      # @raise [Timeout::Error] if the request is still running at the deadline
+      def request_before(http, req, deadline)
+        remaining = seconds_left(deadline)
+        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+
+        Timeout.timeout(remaining) { http.request(req) }
       end
 
       # Finds the DM channel ID for a Slack username.
