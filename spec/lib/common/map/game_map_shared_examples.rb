@@ -1345,6 +1345,28 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(saved_ids(File.join(map_dir, 'final.json'))).to eq([1, 2])
     end
 
+    it 'resolves .. after a symlinked directory physically when following a dangling link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'deep', 'dir'))
+      File.symlink('deep/dir', File.join(map_dir, 'sub'))
+      File.symlink('sub/../climbed.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'deep', 'climbed.json'))).to eq([1, 2])
+      expect(File.exist?(File.join(map_dir, 'climbed.json'))).to be false
+    end
+
+    it 'follows a dangling link with an absolute target', unless: Gem.win_platform? do
+      absolute = File.join(File.realpath(map_dir), 'abs.json')
+      File.symlink(absolute, target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(absolute)).to eq([1, 2])
+    end
+
     it 'raises on a symlink cycle without leaving a temp file', unless: Gem.win_platform? do
       other = File.join(map_dir, 'other.json')
       File.symlink(other, target)
@@ -1353,6 +1375,36 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect { map_class.save_json(target) }.to raise_error(Errno::ELOOP)
 
       expect(Dir.children(map_dir).sort).to eq(%w[other.json saved.json])
+    end
+
+    # Root can write any file, so the refusal (like the in-place write before
+    # it) does not apply there; Process.uid is also 0 on Windows.
+    it 'refuses to replace a read-only file, leaving it and its backup untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'older backup')
+      File.chmod(0o444, target)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.stat(target).mode & 0o777).to eq(0o444)
+      expect(File.binread(backup)).to eq('older backup')
+      expect(stray_files).to be_empty
+      expect(map_class).to have_received(:respond).with(/could not write .*existing file left unchanged: Permission denied/)
+      expect(map_class).not_to have_received(:respond).with(/Backing it up/)
+    end
+
+    it 'refuses to replace a read-only file reached through a symlink', unless: Gem.win_platform? || Process.uid.zero? do
+      real = File.join(map_dir, 'real.json')
+      File.binwrite(real, existing_bytes)
+      File.chmod(0o444, real)
+      File.symlink(real, target)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(real)).to eq(existing_bytes)
+      expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json])
     end
 
     it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do

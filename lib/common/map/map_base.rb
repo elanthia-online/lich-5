@@ -658,6 +658,13 @@ module Lich
           filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
           data = to_json
           existed = File.exist?(filename)
+          # The rename below would replace a read-only file that the in-place
+          # write refused to open, so keep that refusal explicitly.
+          if existed && !File.writable?(filename)
+            error = Errno::EACCES.new(filename)
+            report_map_save_failure("could not write #{filename}; existing file left unchanged", error)
+            raise error
+          end
           if existed
             respond 'File exists!  Backing it up before proceeding...'
             begin
@@ -712,9 +719,11 @@ module Lich
         end
 
         # The file a symlinked destination points to. A link to an existing
-        # file resolves fully; a dangling one is followed hop by hop, relative
-        # to the link's real directory as the kernel would, giving up after 40
-        # links with ELOOP.
+        # file resolves fully; a dangling one is followed hop by hop, as the
+        # kernel would: a relative target is taken from the link's directory,
+        # and each directory is resolved physically, so ".." after a
+        # symlinked directory climbs out of that directory's real location.
+        # Gives up after 40 links with ELOOP.
         # @param path [String] a symlink
         # @return [String] the path the write should replace or create
         # @raise [Errno::ELOOP] on a link cycle
@@ -725,7 +734,9 @@ module Lich
           40.times do
             return path unless File.symlink?(path)
 
-            path = File.expand_path(File.readlink(path), File.realpath(File.dirname(path)))
+            link = File.readlink(path)
+            hop = File.absolute_path?(link) ? link : File.join(File.realpath(File.dirname(path)), link)
+            path = File.join(File.realpath(File.dirname(hop)), File.basename(hop))
           end
           raise Errno::ELOOP, path
         end
