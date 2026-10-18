@@ -267,6 +267,191 @@ describe DRCC do
     end
   end
 
+  describe '.recipe_lookup' do
+    # Shapes and names are taken from base-recipes.yaml. 'a metal targe' is a
+    # substring of 'a metal target shield', and 'a weighted staff' exists in
+    # two disciplines with different volumes.
+    let(:aventail) { { 'name' => 'a metal ring aventail', 'type' => 'armorsmithing', 'chapter' => 1, 'volume' => 5 } }
+    let(:target_shield) { { 'name' => 'a metal target shield', 'type' => 'armorsmithing', 'chapter' => 5, 'volume' => 8 } }
+    let(:targe) { { 'name' => 'a metal targe', 'type' => 'armorsmithing', 'chapter' => 5, 'volume' => 7 } }
+    let(:pike) { { 'name' => 'a metal pike', 'type' => 'weaponsmithing', 'chapter' => 7, 'volume' => 16 } }
+    let(:pike_staff) { { 'name' => 'a metal pike staff', 'type' => 'weaponsmithing', 'chapter' => 7, 'volume' => 18 } }
+    let(:smith_staff) { { 'name' => 'a weighted staff', 'type' => 'weaponsmithing', 'chapter' => 8, 'volume' => 10 } }
+    let(:shaping_staff) { { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9, 'volume' => 9 } }
+    let(:recipes) { [aventail, target_shield, targe, pike, pike_staff, smith_staff, shaping_staff] }
+
+    let(:menu_lines) { [] }
+    let(:messages) { [] }
+
+    before(:each) do
+      allow(DRCC).to receive(:respond) { |line| menu_lines << line }
+      allow(Lich::Messaging).to receive(:msg) { |_type, text, **_opts| messages << text }
+    end
+
+    def reprompts
+      messages.grep(/is not on the list/)
+    end
+
+    context 'when no recipe matches' do
+      it 'returns nil and says so without reading input' do
+        expect(DRCC).not_to receive(:get)
+
+        expect(DRCC.recipe_lookup(recipes, 'mithril anvil')).to be_nil
+        expect(messages).to include('DRCC: No recipe in base-recipes.yaml matches mithril anvil')
+      end
+    end
+
+    context 'when exactly one recipe matches' do
+      it 'returns that recipe without reading input' do
+        expect(DRCC).not_to receive(:get)
+
+        expect(DRCC.recipe_lookup(recipes, 'ring aventail')).to equal(aventail)
+      end
+    end
+
+    context 'when the full name is given and other names contain it' do
+      it 'returns the exact-name recipe without showing the menu' do
+        expect(DRCC).not_to receive(:get)
+
+        expect(DRCC.recipe_lookup(recipes, 'a metal pike')).to equal(pike)
+        expect(menu_lines).to be_empty
+      end
+
+      it 'returns the exact-name recipe even when it is a substring of an earlier name' do
+        expect(DRCC).not_to receive(:get)
+
+        expect(DRCC.recipe_lookup(recipes, 'a metal targe')).to equal(targe)
+      end
+    end
+
+    context 'when a partial name matches several recipes' do
+      it 'lists the matches as a numbered menu in recipe order' do
+        allow(DRCC).to receive(:get).and_return('1')
+
+        DRCC.recipe_lookup(recipes, 'metal targ')
+
+        expect(menu_lines).to eq(['    1: a metal target shield', '    2: a metal targe'])
+      end
+
+      it 'returns the first entry when 1 is chosen' do
+        allow(DRCC).to receive(:get).and_return('1')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(target_shield)
+      end
+
+      it 'returns the recipe at the chosen position, not one whose name merely contains it' do
+        allow(DRCC).to receive(:get).and_return('2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+      end
+
+      it 'matches the partial name case-insensitively' do
+        allow(DRCC).to receive(:get).and_return('2')
+
+        expect(DRCC.recipe_lookup(recipes, 'METAL PIKE')).to equal(pike_staff)
+      end
+
+      it 'accepts a choice surrounded by whitespace and a trailing newline' do
+        allow(DRCC).to receive(:get).and_return("  2 \n")
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+      end
+
+      it 're-prompts on one past the end of the menu instead of returning an unrelated recipe' do
+        allow(DRCC).to receive(:get).and_return('3', '2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+        expect(DRCC).to have_received(:get).twice
+        expect(reprompts).to eq(["DRCC: 3 is not on the list. Enter a number from 1 to 2 with #{$clean_lich_char}send #"])
+      end
+
+      it 're-prompts on a large number instead of returning the first recipe in the list' do
+        allow(DRCC).to receive(:get).and_return('999', '1')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal pike')).to equal(pike)
+        expect(reprompts.length).to eq(1)
+      end
+
+      it 're-prompts on 0 instead of returning the last menu entry' do
+        allow(DRCC).to receive(:get).and_return('0', '1')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(target_shield)
+        expect(reprompts).to eq(["DRCC: 0 is not on the list. Enter a number from 1 to 2 with #{$clean_lich_char}send #"])
+      end
+
+      it 're-prompts on a zero-padded zero' do
+        allow(DRCC).to receive(:get).and_return('00', '2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+        expect(reprompts.length).to eq(1)
+      end
+
+      it 'keeps re-prompting through several bad numbers' do
+        allow(DRCC).to receive(:get).and_return('0', '3', '42', '2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+        expect(reprompts.length).to eq(3)
+      end
+
+      it 'accepts the last entry exactly at the upper bound' do
+        allow(DRCC).to receive(:get).and_return('2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal pike')).to equal(pike_staff)
+        expect(reprompts).to be_empty
+      end
+
+      it 'silently skips lines that are not a bare number, then takes the next valid choice' do
+        allow(DRCC).to receive(:get).and_return('abc', '', 'an unrelated line', '2x', '-1', '+1', '1.5', '2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+        expect(DRCC).to have_received(:get).exactly(8).times
+        expect(reprompts).to be_empty
+      end
+
+      it 'skips a nil line (a read that returned nothing) instead of raising' do
+        allow(DRCC).to receive(:get).and_return(nil, '2')
+
+        expect(DRCC.recipe_lookup(recipes, 'metal targ')).to equal(targe)
+      end
+
+      it 'never returns nil once the menu is shown' do
+        allow(DRCC).to receive(:get).and_return('0', '7', 'x', '1')
+
+        result = DRCC.recipe_lookup(recipes, 'metal targ')
+        expect(result).not_to be_nil
+        expect(result['volume']).to eq(8)
+      end
+    end
+
+    context 'when two recipes share the same name' do
+      it 'labels the duplicate names with their type and chapter' do
+        allow(DRCC).to receive(:get).and_return('1')
+
+        DRCC.recipe_lookup(recipes, 'a weighted staff')
+
+        expect(menu_lines).to eq(['    1: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    2: a weighted staff (shaping, chapter 9)'])
+      end
+
+      it 'returns the second recipe when the second entry is chosen' do
+        allow(DRCC).to receive(:get).and_return('2')
+
+        expect(DRCC.recipe_lookup(recipes, 'a weighted staff')).to equal(shaping_staff)
+      end
+
+      it 'labels only the duplicated names when the menu also has unique names' do
+        allow(DRCC).to receive(:get).and_return('3')
+
+        result = DRCC.recipe_lookup(recipes, 'staff')
+
+        expect(menu_lines).to eq(['    1: a metal pike staff',
+                                  '    2: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    3: a weighted staff (shaping, chapter 9)'])
+        expect(result).to equal(shaping_staff)
+      end
+    end
+  end
+
   describe '.find_recipe' do
     context 'when the character is too distracted to turn the book (in combat)' do
       it 'halts the script instead of falling through to read the book' do
