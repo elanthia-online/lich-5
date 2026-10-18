@@ -387,7 +387,24 @@ module Lich
       # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
-      # @return [String, false] the matched prep message, or false on failure
+      # @return [String, false] the matched prep message; or +''+ (truthy) when no
+      #   prep message matched within the DRC.bput timeout; or false on a listed
+      #   failure, a nil +abbrev+, or exhausted retries.
+      #
+      # @note A timeout is not a failure. When nothing in prep_messages (or
+      #   invoke_messages for a runestone) arrives before bput gives up, bput
+      #   returns +''+ and prepare? returns it unchanged, after still sending
+      #   the tattoo/runestone +target+. {#cast_spell} and {#ritual} test the
+      #   result for truthiness and carry on as if the spell were prepared;
+      #   {#crafting_prepare_spell} returns it as is. A timeout is ambiguous:
+      #   the prep may have succeeded with a message that is not in the list
+      #   (the reason custom_prep_message exists) or with a reply delayed by a
+      #   server stall, and returning false there would abort a real prep. It
+      #   can also mean nothing was prepared at all, and in real logs that was
+      #   the more common outcome (the next cast got "You don't have a spell
+      #   prepared!"). Callers that would otherwise charge cambrinth, harness
+      #   mana or cast on the strength of this result can compare it against
+      #   +''+ first.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
@@ -510,7 +527,26 @@ module Lich
       # @param after [Array<Hash>] actions to bput after casting
       # @param custom_cast_message [String, nil] a per-spell cast message to also accept (see {#with_custom_messages})
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
-      # @return [Boolean] true if the spell cast without a failure flag being set
+      # @return [Boolean] true if the spell cast without a failure flag being set,
+      #   including when no cast message arrived within the DRC.bput timeout;
+      #   false if the +spell-fail+ flag was set or a retry limit ran out.
+      #
+      # @note A timeout counts as success. When nothing in cast_messages arrives
+      #   before bput gives up (in real logs, mostly a server stall, and in the
+      #   cases checked the cast had gone off; or a successful cast whose
+      #   message is not listed), bput returns +''+, which no +when+ arm
+      #   handles: the barrage and cyclic/full-prep retry flags still apply,
+      #   and the result rests on the +spell-fail+ flag. That flag is read only
+      #   after the cast bput, the roundtime wait and the +after+ actions, so
+      #   the result is true unless a failure line arrived before then (in
+      #   which case mana, and any symbiosis, is released and the result is
+      #   false); a failure line that arrives later is missed. This is
+      #   deliberate. Mapping a timeout to false would make retry loops such as
+      #   +until cast_spell?(...)+ prepare and cast again after a cast that went
+      #   off but was not recognised (a stall, or a message that is not listed;
+      #   the reason custom_cast_message exists). {#cast_spell}, {#cast_spell?}
+      #   and {#crafting_cast_spell} pass this result through ({#cast_spell}
+      #   returns nil for a ritual spell).
       def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
