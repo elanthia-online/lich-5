@@ -582,6 +582,29 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(latencies.max).to be < 0.5
     end
 
+    it 'takes no Ruby lock to answer once its connection is open, so it never waits behind another thread' do
+      first = @adapter.data_version
+      locked = Queue.new
+      release = Queue.new
+      holder = Thread.new do
+        @adapter.instance_variable_get(:@version_mutex).synchronize do
+          locked << true
+          release.pop
+        end
+      end
+      locked.pop
+
+      answer = nil
+      asker = Thread.new { answer = @adapter.data_version }
+      finished = asker.join(2)
+      release << true
+      holder.join
+      asker.join
+
+      expect(finished).to eq(asker)
+      expect(answer).to eq(first)
+    end
+
     context 'when another thread replaces the connection during a check' do
       before do
         allow(Lich).to receive(:log)

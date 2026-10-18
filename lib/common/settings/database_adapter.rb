@@ -9,7 +9,7 @@ module Lich
         @version_mutex = Mutex.new
         @version_db = nil
         @version_base = 0
-        @last_version = 0
+        @version_epoch = -1
         @version_error_reported = false
         setup!
       end
@@ -55,29 +55,34 @@ module Lich
       # The pragma counts per connection, starting again from 1 on a new one,
       # so after an error has closed the connection the reopened one could
       # repeat a value already handed out while the database has since
-      # changed. Values from each new connection are therefore offset past the
-      # last one returned: no value is handed out twice for different states
-      # of the database, and the first value after a reopen differs from every
-      # earlier one.
+      # changed. Each connection therefore gets a range of its own: its values
+      # are offset by 2**40 times the number of connections opened before it.
+      # No value is handed out twice for different states of the database,
+      # and every value from a reopened connection is greater than every
+      # earlier one (a connection would need 2**40 commits to reach the next
+      # range).
       #
-      # The pragma is read without holding @version_mutex. Ruby's Mutex is not
-      # fair: a thread calling this in a tight loop would take the lock back
-      # before a waiting thread got to run, and stall every other thread's
-      # Settings reads for up to seconds. The GVL already keeps two threads out
-      # of the C call at once. The mutex guards only opening and closing the
-      # connection and recording the value; a value read on a connection that
-      # another thread has closed or replaced meanwhile is discarded (nil).
+      # No Ruby lock is held on the way, so a cache hit never waits for one.
+      # Ruby's Mutex is not fair: a thread calling this in a tight loop would
+      # take the lock back before a waiting thread got to run, and stall other
+      # threads' Settings reads (measured: up to seconds with the lock held
+      # around the pragma, about 100 ms now and then with it held only to
+      # record the value). The GVL already keeps two threads out of the C call
+      # at once. @version_mutex guards only opening and closing the
+      # connection; a value read on a connection that another thread has
+      # closed or replaced meanwhile is discarded (nil).
       #
       # @return [Integer, nil]
       def data_version
         db = @version_db || open_version_connection
-        value = @version_base + Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
-        @version_mutex.synchronize do
-          return nil unless @version_db.equal?(db)
+        # Read after db: a connection is published only after its offset is
+        # set, and a connection replaced after this point fails the identity
+        # check below.
+        base = @version_base
+        raw = Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
+        return nil unless @version_db.equal?(db)
 
-          @last_version = value if value > @last_version
-        end
-        value
+        base + raw
       rescue SQLite3::BusyException
         nil
       rescue SQLite3::Exception, ArgumentError, TypeError => e
@@ -190,7 +195,7 @@ module Lich
         @version_mutex.synchronize do
           @version_db || begin
             fresh = SQLite3::Database.new(@file).tap { |conn| conn.busy_timeout(0) }
-            @version_base = @last_version + 1
+            @version_base = (@version_epoch += 1) << 40
             @version_db = fresh
           end
         end
