@@ -555,17 +555,36 @@ module Lich
 
       # Performs one HTTP request that is abandoned at the deadline.
       #
-      # @param http [Net::HTTP]
+      # The connection is opened before the Timeout block, bounded by
+      # net/http's own open timeout, and closed in an ensure after it. The
+      # asynchronous Timeout interrupt can then only land in the request on an
+      # open connection, never in net/http's connect or close, so it cannot
+      # leave a socket open.
+      #
+      # @param http [Net::HTTP] a connection that is not started yet
       # @param req [Net::HTTP::Post]
       # @param deadline [Float] monotonic deadline
       # @return [Net::HTTPResponse]
-      # @raise [NetworkError] if the deadline has already passed
-      # @raise [Timeout::Error] if the request is still running at the deadline
+      # @raise [NetworkError] if the deadline has passed before the request is sent
+      # @raise [Timeout::Error] if connecting times out (Net::OpenTimeout) or
+      #   the request is still running at the deadline
       def request_before(http, req, deadline)
         remaining = seconds_left(deadline)
         raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
 
-        Timeout.timeout(remaining) { http.request(req) }
+        # The TCP connect and the TLS handshake are each bounded by open_timeout.
+        http.open_timeout = remaining / 2.0
+        http.read_timeout = remaining
+        http.write_timeout = remaining
+        http.start
+        begin
+          remaining = seconds_left(deadline)
+          raise NetworkError, 'SlackBot: Time budget for the request ran out while connecting' if remaining <= 0
+
+          Timeout.timeout(remaining) { http.request(req) }
+        ensure
+          http.finish if http.started?
+        end
       end
 
       # Finds the DM channel ID for a Slack username.

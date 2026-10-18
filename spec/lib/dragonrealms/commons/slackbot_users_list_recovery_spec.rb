@@ -10,7 +10,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'slackbot.rb')
 
 # Exercises users.list failure and recovery through the real SlackBot code:
 # real Net::HTTP and Net::HTTP::Post objects, real response classes, real
-# retry and cache logic. Only the transport (Net::HTTP#request), SlackBot#sleep
+# retry and cache logic. Only the transport (Net::HTTP#start and #request), SlackBot#sleep
 # (which moves the monotonic clock forward instead of waiting) and the
 # in-memory DB_Store mock from spec_helper stand in for the outside world.
 RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
@@ -88,6 +88,10 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     allow(Lich).to receive(:log)
     allow(Lich::Messaging).to receive(:msg) { |_type, text| messages << text }
 
+    # The send path opens the connection itself (SlackBot#request_before);
+    # keep it off the network. The connection stays "not started", so
+    # request_before has nothing to close.
+    allow_any_instance_of(Net::HTTP).to receive(:start) { |http| http }
     allow_any_instance_of(Net::HTTP).to receive(:request) do |_http, req|
       method = req.path.sub('/api/', '')
       calls[method] += 1
