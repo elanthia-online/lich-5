@@ -158,13 +158,54 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     expect(db[:rows].select_order_map(:n)).to eq([0, 1])
   end
 
-  it 'leaves statements on other sqlite3 connections alone' do
-    open_db
-    plain = SQLite3::Database.new(path)
-    @raw << plain
-    expect(Lich::SQLiteBusyWait).not_to receive(:defer_interrupts)
+  describe 'which statements defer interrupts' do
+    # Records the interrupt masks this thread sets while the block runs.
+    def masks_set_during
+      masks = []
+      me = Thread.current
+      allow(Thread).to receive(:handle_interrupt).and_wrap_original do |original, *args, &block|
+        masks << args.first if Thread.current.equal?(me)
+        original.call(*args, &block)
+      end
+      result = yield
+      [result, masks]
+    end
 
-    expect(plain.get_first_value('SELECT count(*) FROM rows')).to eq(0)
+    it 'defers interrupts while preparing and stepping statements on a pooled connection' do
+      db = open_db
+      db.synchronize do |conn|
+        count, masks = masks_set_during { conn.get_first_value('SELECT count(*) FROM rows') }
+
+        expect(count).to eq(0)
+        # One for Statement.new (prepare), at least one for #step.
+        expect(masks.size).to be >= 2
+        expect(masks).to all(eq(Object => :never))
+      end
+    end
+
+    it 'leaves statements on other sqlite3 connections alone' do
+      open_db
+      plain = SQLite3::Database.new(path)
+      @raw << plain
+      expect(SQLite3::Statement.ancestors).to include(Lich::SQLiteBusyWait::Statement)
+      count, masks = masks_set_during { plain.get_first_value('SELECT count(*) FROM rows') }
+
+      expect(count).to eq(0)
+      expect(masks).to be_empty
+    end
+
+    it 'leaves a plain connection alone even after it has been given its own busy handler' do
+      open_db
+      plain = SQLite3::Database.new(path)
+      @raw << plain
+      plain.busy_handler { |_count| true }
+      expect(SQLite3::Statement.ancestors).to include(Lich::SQLiteBusyWait::Statement)
+      _, masks = masks_set_during do
+        plain.prepare('SELECT count(*) FROM rows') { |stmt| stmt.execute.to_a }
+      end
+
+      expect(masks).to be_empty
+    end
   end
 
   it 'falls back to the C busy timeout when the connection has no busy handler API' do
