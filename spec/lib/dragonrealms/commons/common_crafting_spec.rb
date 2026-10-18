@@ -440,6 +440,24 @@ describe DRCC do
       expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
     end
 
+    [
+      'a bronze nugget, molten iron and a granite rock',
+      'a bronze nugget and molten iron',
+      'a bronze nugget, a granite rock, and molten iron'
+    ].each do |list|
+      it "tilts bare molten metal that is not first in the list: #{list}" do
+        look_replies.push("In the large crucible you see #{list}.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'does not split a solid item at a molten-hued word after and' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
     it 'picks up a solid item whose description only contains the word molten' do
       look_replies.push('In the large crucible you see a nugget of once-molten bronze.', empty)
       expect(DRCC.empty_crucible?).to be(true)

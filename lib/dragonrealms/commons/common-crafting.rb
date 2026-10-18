@@ -10,9 +10,10 @@ module Lich
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
       # Splits the LOOK_CRUCIBLE_SEE_PATTERN items list into entries at ", ",
-      # ", and " or " and " followed by an article, keeping the article. The
-      # " and " must be a whole word, so "a gold wand and ..." is not cut.
-      LOOK_CRUCIBLE_ITEM_SEPARATOR = /(?:,\s+(?:and\s+)?|\s+and\s+)(?=(?:some|an?)\s)/.freeze
+      # ", and " or " and " followed by an article or a bare "molten ", keeping
+      # that word. The " and " must be a whole word, so "a gold wand and ..."
+      # is not cut.
+      LOOK_CRUCIBLE_ITEM_SEPARATOR = /(?:,\s+(?:and\s+)?|\s+and\s+)(?=(?:some|an?|molten)\s)/.freeze
       # Matches one entry of the LOOK_CRUCIBLE_SEE_PATTERN items list.
       LOOK_CRUCIBLE_MOLTEN = /\A(?:(?:some|an?)\s+)?molten\s/.freeze
       EMPTY_CRUCIBLE_MAX_PASSES = 3
@@ -135,8 +136,8 @@ module Lich
       # Molten metal is found wherever it appears in the list. Clutter is only
       # disposed of when it was actually picked up from the crucible, and
       # clutter whose noun matches something already in hand (DRCI.in_hands?
-      # matches any held word starting with the noun) is left alone, so the
-      # player's own item is never the one thrown away.
+      # matches any held word starting with the noun) is left alone, so a held
+      # item cannot stand in for clutter that was not picked up.
       # pass: is an internal recursion counter -- callers should not set it.
       def empty_crucible?(pass: 0)
         case result = DRC.bput('look in cruc',
