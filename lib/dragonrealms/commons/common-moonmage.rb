@@ -605,14 +605,17 @@ module Lich
       # Waits for an already-running moonwatch (started outside check_moonwatch,
       # for example by autostart) to publish real moon data. Returns false at
       # once while a previous wait is latched as stalled (see
-      # note_moonwatch_stall).
+      # note_moonwatch_stall), unless the data has become ready since.
       #
       # @param timeout [Numeric] seconds to wait
       # @return [Boolean] true when moon data is ready
       def await_running_moonwatch(timeout)
-        return false if @moonwatch_data_stalled
+        return false if @moonwatch_data_stalled && !(Script.running?('moonwatch') && moon_data_ready?)
 
-        return true if await_moonwatch_data(true, timeout)
+        if await_moonwatch_data(true, timeout)
+          @moonwatch_data_stalled = false
+          return true
+        end
 
         note_moonwatch_stall
         false

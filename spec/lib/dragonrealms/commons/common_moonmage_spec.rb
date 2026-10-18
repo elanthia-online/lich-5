@@ -1297,6 +1297,36 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         end
       end
 
+      it 'returns true and clears the latch when moonwatch publishes after the holder\'s wait stalled but before it gets the lock' do
+        world[:running] = true
+        UserVars.moons = skeleton.dup
+        release = Queue.new
+        holder = Thread.new { described_class::MOONWATCH_START_LOCK.synchronize { release.pop } }
+        sleep 0.05
+        # On the second poll the holder's wait times out (latching the stall),
+        # moonwatch then publishes, and the holder releases the lock; this
+        # caller's next try_lock succeeds before it looks at the data again.
+        world[:on_poll] = lambda do |n|
+          next unless n == 2
+
+          described_class.instance_variable_set(:@moonwatch_data_stalled, true)
+          UserVars.moons = ready_moons
+          release << :go
+          holder.join
+        end
+        begin
+          expect(described_class).not_to receive(:start_script)
+          expect(check(timeout: 2)).to be true
+          expect(world[:polls]).to eq(2)
+          expect(described_class.instance_variable_get(:@moonwatch_data_stalled)).to be false
+          expect(Lich::Messaging.messages).to be_empty
+          expect(described_class::MOONWATCH_START_LOCK).not_to be_locked
+        ensure
+          release << :go
+          holder.join
+        end
+      end
+
       it 'clears the stall latch before it starts moonwatch when moonwatch stopped while it waited for the lock' do
         world[:running] = true
         UserVars.moons = skeleton.dup
