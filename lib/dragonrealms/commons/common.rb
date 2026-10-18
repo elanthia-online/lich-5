@@ -170,8 +170,6 @@ module Lich
             put message
             timer = Time.now
             next
-          when /^You don't seem to be able to move to do that/
-            next unless matches.include?(response)
           when /^You are still stunned/
             pause 0.5 while stunned?
             pause 0.5
@@ -185,7 +183,11 @@ module Lich
             timer = Time.now
             next
           when /^You must be standing/, /^You should stand up first/, /^You'll need to stand up first/, /^You can't do that while (sitting|kneeling|lying)/, /^You should be sitting up/, /^You really should be standing to play/, /^After failing to draw a breath for what feels like forever/
-            fix_standing
+            # When standing can't succeed now (held, unconscious, overburdened),
+            # resending would draw the same reply again at once, so keep
+            # reading until the timeout instead.
+            next unless fix_standing
+
             waitrt?
             put message
             timer = Time.now
@@ -592,13 +594,14 @@ module Lich
       # the CANNOT_STAND_PATTERN guard these states loop forever spamming
       # STAND, because matching the message never makes standing? true
       # (issue #3668: safe-room spamming STAND while unconscious).
-      # @return [void]
+      # @return [Boolean] true once standing, false when the game says
+      #   standing cannot succeed now
       def fix_standing
         loop do
-          break if standing?
+          return true if standing?
 
           result = bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
-          break if result =~ CANNOT_STAND_PATTERN
+          return false if result =~ CANNOT_STAND_PATTERN
         end
       end
 

@@ -239,6 +239,11 @@ module Lich
           # may have a timer on them that prevents you removing them.
           Lich::Messaging.msg("bold", "EquipmentManager: The #{item.short_name} is not ready to be removed yet. Try again later.")
           return false
+        when /^You don't seem to be able to move/
+          # Held or rooted: emptying the hands won't help, and what is lowered
+          # might not be picked up again while held.
+          Lich::Messaging.msg("bold", "EquipmentManager: Unable to move to remove #{item.short_name}. Try again later.")
+          return false
         when *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           # We may need to empty our hands to remove the item.
           # For example, exoskeletal armor requires two hands.

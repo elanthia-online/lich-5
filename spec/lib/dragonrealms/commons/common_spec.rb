@@ -770,6 +770,99 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(sent).to eq(['drop my gem'])
       end
     end
+
+    # The same model of the game stream, answering by command. get? raises
+    # when no reply has arrived for a second, so a reply bput skips fails
+    # the example at once instead of waiting out the 15 s timeout.
+    context "the immobile reply (\"You don't seem to be able to move to do that.\")" do
+      let(:immobile) { "You don't seem to be able to move to do that." }
+      let(:buffer) { [] }
+      let(:sent) { [] }
+
+      def game(replies)
+        last_reply = Time.now
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          raise "#{message.inspect} sent #{sent.count(message)} times" if sent.count(message) > 5
+
+          reply = replies[message]
+          buffer.concat(Array(reply.respond_to?(:call) ? reply.call : reply))
+          last_reply = Time.now
+        end
+        allow(described_class).to receive(:get?) do
+          raise 'bput skipped the reply and waited for another' if buffer.empty? && Time.now - last_reply > 1
+
+          buffer.shift
+        end
+        allow(described_class).to receive(:pause) { sleep(0.001) }
+      end
+
+      it 'returns it when a String pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', 'You get', "You don't seem to be able to move to do that"))
+          .to eq("You don't seem to be able to move to do that")
+        expect(sent).to eq(['get my gem'])
+      end
+
+      it 'returns it when a Regexp pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/))
+          .to eq("You don't seem to be able to move")
+        expect(sent).to eq(['get my gem'])
+      end
+
+      it "returns it to a broad 'You' pattern instead of waiting out the timeout" do
+        game('invoke my orb' => immobile)
+        expect(described_class.bput('invoke my orb', 'You')).to eq('You')
+        expect(sent).to eq(['invoke my orb'])
+      end
+
+      it 'waits out the timeout without resending when no pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', { 'timeout' => 0.2 }, 'You get')).to eq('')
+        expect(sent).to eq(['get my gem'])
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to include("DRC: > #{immobile}")
+      end
+
+      it 'does not return a quoted copy in speech to an anchored pattern' do
+        game('get my gem' => ["Bob says, \"#{immobile}\"", 'You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/)).to eq('You get')
+      end
+
+      it 'returns it when it was read during a roundtime hold' do
+        game('get my gem' => -> { sent.size == 1 ? ['...wait 1 seconds.', immobile] : ['You get a gem.'] })
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/))
+          .to eq("You don't seem to be able to move")
+        expect(sent).to eq(['get my gem'] * 2)
+      end
+
+      context 'when a command needs the character standing' do
+        before { allow(described_class).to receive(:standing?).and_return(false) }
+
+        it 'stands once and does not resend the command when the stand is refused' do
+          game('get my gem' => 'You must be standing to do that.', 'stand' => immobile)
+          expect(described_class.bput('get my gem', { 'timeout' => 0.3 }, 'You get')).to eq('')
+          expect(sent).to eq(['get my gem', 'stand'])
+        end
+
+        it 'does not resend the command when standing fails for being overburdened' do
+          game('get my gem' => 'You must be standing to do that.',
+               'stand'      => 'You are overburdened and cannot manage to stand.')
+          expect(described_class.bput('get my gem', { 'timeout' => 0.3 }, 'You get')).to eq('')
+          expect(sent).to eq(['get my gem', 'stand'])
+        end
+
+        it 'resends the command once standing succeeds' do
+          standing = false
+          allow(described_class).to receive(:standing?) { standing }
+          game('get my gem' => -> { standing ? ['You get a gem.'] : ['You must be standing to do that.'] },
+               'stand'      => -> { standing = true; ['You stand back up.'] })
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(sent).to eq(['get my gem', 'stand', 'get my gem'])
+        end
+      end
+    end
   end
 
   describe '.fix_standing' do
@@ -824,6 +917,59 @@ RSpec.describe Lich::DragonRealms::DRC do
 
     it 'does not treat a plain "You stand" success as a non-recoverable state' do
       expect('You stand').not_to match(described_class::CANNOT_STAND_PATTERN)
+    end
+
+    # Through the real bput: only put, get?, clear and pause are stubbed.
+    context 'through the real bput' do
+      let(:sent) { [] }
+
+      def stand_replies(*replies)
+        buffer = []
+        last_reply = Time.now
+        allow(described_class).to receive(:waitrt?)
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:pause) { sleep(0.001) }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          raise 'fix_standing looped: STAND sent again' if sent.size > replies.size
+
+          buffer << replies[sent.size - 1]
+          last_reply = Time.now
+        end
+        allow(described_class).to receive(:get?) do
+          raise 'bput skipped the reply to STAND' if buffer.empty? && Time.now - last_reply > 1
+
+          buffer.shift
+        end
+      end
+
+      it "stands once and returns false on \"You don't seem to be able to move to do that.\"" do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You don't seem to be able to move to do that.")
+        expect(described_class.fix_standing).to be false
+        expect(sent).to eq(['stand'])
+      end
+
+      it 'returns false on another state that prevents standing' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You're unconscious!")
+        expect(described_class.fix_standing).to be false
+      end
+
+      it 'returns true once standing, after an unbalanced attempt' do
+        standing = [false, false, true]
+        allow(described_class).to receive(:standing?) { standing.shift }
+        stand_replies('You are so unbalanced you cannot manage to stand.', 'You stand back up.')
+        expect(described_class.fix_standing).to be true
+        expect(sent).to eq(%w[stand stand])
+      end
+
+      it 'returns true without standing when already standing' do
+        allow(described_class).to receive(:standing?).and_return(true)
+        stand_replies
+        expect(described_class.fix_standing).to be true
+        expect(sent).to be_empty
+      end
     end
   end
 

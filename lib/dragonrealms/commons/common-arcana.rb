@@ -928,15 +928,25 @@ module Lich
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
         elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)
-          discern_data['time_stamp'] = Time.now
           DRC.retreat
           case discern = DRC.bput("discern #{data['abbrev']}", 'The spell requires at minimum \d+ mana streams and you think you can reinforce it with \d+ more', 'You don\'t think you are able to cast this spell', 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that')
-          when /you don't think you are able/i, 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that'
+          when /you don't think you are able/i, 'You have no idea how to cast that spell'
+            discern_data['time_stamp'] = Time.now
+            discern_data['mana'] = 1
+            discern_data['cambrinth'] = nil
+          when 'You don\'t seem to be able to move to do that'
+            # Held or rooted: the reply says nothing about the spell, so cast
+            # at the minimum this time and leave the time stamp alone so the
+            # next cast discerns again.
             discern_data['mana'] = 1
             discern_data['cambrinth'] = nil
           else
+            # Only a real answer is cached; no reply is retried on the next cast.
             match = discern.match(DISCERN_FULL_PATTERN)
-            calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings) if match
+            if match
+              discern_data['time_stamp'] = Time.now
+              calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings)
+            end
           end
         end
         waitrt?
