@@ -55,9 +55,9 @@ module Lich
       # The moons moonwatch publishes in UserVars.moons, each with a 'timer'.
       MOON_NAMES = %w[katamba yavash xibar].freeze
 
-      # Seconds check_moonwatch waits, after starting moonwatch, for it to
-      # publish real moon data (and, separately, for another caller's start of
-      # moonwatch to finish).
+      # Seconds check_moonwatch waits, after starting moonwatch or when
+      # moonwatch is already running, for it to publish real moon data (and,
+      # separately, for another caller's start of moonwatch to finish).
       MOONWATCH_READY_TIMEOUT = 10
 
       # Seconds between polls while check_moonwatch waits for moonwatch.
@@ -524,9 +524,10 @@ module Lich
       # When moonwatch is running and the data is ready, this returns at once.
       # When moonwatch is running but the data is not ready yet (it was
       # started elsewhere, for example by autostart, and is still starting
-      # up), this waits for the data. If that wait times out while moonwatch
-      # keeps running, later calls return false at once instead of waiting
-      # again, until the data becomes ready or moonwatch is seen stopped.
+      # up), this waits for the data. If any wait for the data (this one or
+      # the one after starting moonwatch) times out while moonwatch keeps
+      # running, later calls return false at once instead of waiting again,
+      # until the data becomes ready or moonwatch is seen stopped.
       # When another caller's start is in progress, it waits for that start
       # to finish (returning as soon as the data is ready). Otherwise it
       # clears the saved UserVars.moons (they may be stale), starts moonwatch
@@ -582,17 +583,19 @@ module Lich
               return false
             end
           end
-          await_moonwatch_data(seen_running, timeout)
+          return true if await_moonwatch_data(seen_running, timeout)
+
+          note_moonwatch_stall
+          false
         ensure
           MOONWATCH_START_LOCK.unlock if MOONWATCH_START_LOCK.owned?
         end
       end
 
       # Waits for an already-running moonwatch (started outside check_moonwatch,
-      # for example by autostart) to publish real moon data. After one wait
-      # times out with moonwatch still running, later calls return false at
-      # once rather than stalling every caller for the full timeout; that
-      # latch clears when the data becomes ready or moonwatch is seen stopped.
+      # for example by autostart) to publish real moon data. Returns false at
+      # once while a previous wait is latched as stalled (see
+      # note_moonwatch_stall).
       #
       # @param timeout [Numeric] seconds to wait
       # @return [Boolean] true when moon data is ready
@@ -601,11 +604,19 @@ module Lich
 
         return true if await_moonwatch_data(true, timeout)
 
-        if Script.running?('moonwatch')
-          @moonwatch_data_stalled = true
-          Lich::Messaging.msg("plain", "DRCMM: Not waiting for moonwatch's moon data again until it publishes the data or stops.")
-        end
+        note_moonwatch_stall
         false
+      end
+
+      # Called after a wait for moon data has failed. When moonwatch is still
+      # running, it is running without publishing, so later calls return false
+      # at once rather than stalling every caller for the full timeout; that
+      # latch clears when the data becomes ready or moonwatch is seen stopped.
+      def note_moonwatch_stall
+        return unless Script.running?('moonwatch')
+
+        @moonwatch_data_stalled = true
+        Lich::Messaging.msg("plain", "DRCMM: Not waiting for moonwatch's moon data again until it publishes the data or stops.")
       end
 
       # Whether Lich can find a moonwatch script file. Script.exists? does not
@@ -638,7 +649,7 @@ module Lich
           if running
             seen_running = true
           elsif seen_running
-            Lich::Messaging.msg("bold", "DRCMM: moonwatch stopped before it published moon data. Moon data is unavailable.")
+            Lich::Messaging.msg("bold", "DRCMM: moonwatch stopped before its moon data was ready. Moon data is unavailable.")
             return false
           end
 

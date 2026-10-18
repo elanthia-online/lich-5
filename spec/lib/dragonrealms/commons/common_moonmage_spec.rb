@@ -858,8 +858,16 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         started = monotonic
         expect(check(timeout: 4)).to be false
         expect(monotonic - started).to be < 2
-        expect(bold_messages.last).to include('moonwatch stopped before it published moon data')
+        expect(bold_messages.last).to include('moonwatch stopped before its moon data was ready')
         expect(Lich::Messaging.messages.map { |m| m[:message] }.join).not_to include(stalled_message)
+      end
+
+      it 'does not claim moonwatch never published when it stops while shutting down' do
+        UserVars.moons = ready_moons.merge('running' => false)
+        world[:on_poll] = ->(n) { world[:running] = false if n >= 2 }
+        expect(check).to be false
+        expect(bold_messages.last).to include("moonwatch stopped before its moon data was ready")
+        expect(bold_messages.join).not_to include('before it published')
       end
 
       it 'times out once when the data never becomes ready, then returns false at once on later calls' do
@@ -1012,7 +1020,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         started = monotonic
         result = check
         expect(monotonic - started).to be < 2
-        expect(bold_messages.last).to include('moonwatch stopped before it published moon data')
+        expect(bold_messages.last).to include('moonwatch stopped before its moon data was ready')
         expect(result).to be false
       end
 
@@ -1024,7 +1032,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           Object.new
         end
         result = check
-        expect(bold_messages.last).to include('moonwatch stopped before it published moon data')
+        expect(bold_messages.last).to include('moonwatch stopped before its moon data was ready')
         expect(result).to be false
       end
 
@@ -1038,6 +1046,37 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(bold_messages.last).to include('moonwatch did not publish moon data within 0.3 seconds')
         expect(UserVars.moons).to eq(skeleton)
         expect(result).to be false
+      end
+
+      it 'does not wait again on the next call after moonwatch it started never publishes' do
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          world[:running] = true
+          UserVars.moons = skeleton.dup
+          Object.new
+        end
+        expect(check).to be false
+        expect(Lich::Messaging.messages.last[:message]).to include("Not waiting for moonwatch's moon data again")
+
+        Lich::Messaging.clear_messages!
+        world[:polls] = 0
+        started = monotonic
+        2.times { expect(check).to be false }
+        expect(monotonic - started).to be < 0.2
+        expect(world[:polls]).to eq(0)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'does not latch when the moonwatch it started is not running at the deadline' do
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        expect(check).to be false
+        expect(Lich::Messaging.messages.map { |m| m[:message] }.join).not_to include("Not waiting for moonwatch's moon data again")
+
+        world[:running] = true
+        UserVars.moons = skeleton.dup
+        world[:polls] = 0
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
+        expect(check).to be true
+        expect(world[:polls]).to be >= 2
       end
 
       it 'releases the start lock when start_script raises' do
