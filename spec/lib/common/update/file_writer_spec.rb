@@ -47,15 +47,14 @@ RSpec.describe Lich::Util::Update::FileWriter do
       expect(File.binread(path)).to eq(content_lf)
     end
 
-    it 'creates .old backup and cleans up on success' do
+    it 'leaves no temporary or backup file behind on success' do
       path = File.join(tmpdir, 'test.lic')
       File.binwrite(path, 'original')
 
       described_class.safe_write(path, content_lf)
 
       expect(File.binread(path)).to eq(content_lf)
-      expect(File.exist?("#{path}.old")).to be false
-      expect(File.exist?("#{path}.tmp")).to be false
+      expect(Dir.children(tmpdir)).to eq(['test.lic'])
     end
 
     it 'round-trips content with matching SHA' do
@@ -76,27 +75,7 @@ RSpec.describe Lich::Util::Update::FileWriter do
       expect { described_class.safe_write(path, "# new content\n") }.to raise_error(Errno::ENOSPC)
 
       expect(File.binread(path)).to eq(original_content)
-      expect(File.exist?("#{path}.tmp")).to be false
-      expect(File.exist?("#{path}.old")).to be false
-    end
-
-    it 'preserves successful write when .old cleanup fails' do
-      path = File.join(tmpdir, 'keeper.lic')
-      original_content = "# original\n"
-      new_content = "# updated\n"
-      File.binwrite(path, original_content)
-
-      old_path = "#{path}.old"
-      allow(File).to receive(:delete).with(old_path).and_raise(Errno::EACCES.new("Permission denied"))
-
-      # The write should succeed despite the .old delete failing
-      expect { described_class.safe_write(path, new_content) }.to raise_error(Errno::EACCES)
-
-      # New content must survive -- the old file must NOT overwrite it
-      expect(File.binread(path)).to eq(new_content)
-      # The .old file remains because delete was denied
-      expect(File.exist?(old_path)).to be true
-      expect(File.binread(old_path)).to eq(original_content)
+      expect(Dir.children(tmpdir)).to eq(['important.lic'])
     end
 
     it 'cleans up tmp file when writing a new file fails' do
@@ -106,9 +85,143 @@ RSpec.describe Lich::Util::Update::FileWriter do
 
       expect { described_class.safe_write(path, "# content\n") }.to raise_error(Errno::EACCES)
 
-      expect(File.exist?(path)).to be false
-      expect(File.exist?("#{path}.tmp")).to be false
-      expect(File.exist?("#{path}.old")).to be false
+      expect(Dir.children(tmpdir)).to be_empty
+    end
+
+    context 'while the new content is being staged' do
+      let(:path) { File.join(tmpdir, 'buff.lic') }
+      let(:original_content) { "# buff v1\n" }
+
+      before do
+        File.binwrite(path, original_content)
+        File.binwrite(File.join(tmpdir, 'buff-watcher.lic'), "# watcher\n")
+      end
+
+      # Runs safe_write and captures directory state from inside the staging
+      # write, i.e. after safe_write started and before it finished.
+      def observe_during_staging(new_content)
+        seen = {}
+        allow(File).to receive(:binwrite).and_wrap_original do |original, tmp, data|
+          seen[:children] = Dir.children(tmpdir).sort
+          seen[:live] = File.exist?(path) ? File.binread(path) : :missing
+          seen[:tmp] = tmp
+          original.call(tmp, data)
+        end
+        described_class.safe_write(path, new_content)
+        seen
+      end
+
+      it 'keeps the live file in place with its old content' do
+        seen = observe_during_staging(content_modified)
+
+        expect(seen[:live]).to eq(original_content)
+        expect(File.binread(path)).to eq(content_modified)
+      end
+
+      it 'keeps the exact script name listed, so a start cannot fall back to a prefix sibling' do
+        seen = observe_during_staging(content_modified)
+
+        expect(seen[:children]).to include('buff.lic', 'buff-watcher.lic')
+        expect(seen[:children].grep(/\.old\z/)).to be_empty
+      end
+
+      it 'stages into a same-directory name that no script or SHA glob matches' do
+        seen = observe_during_staging(content_modified)
+        staged = File.basename(seen[:tmp])
+
+        expect(File.dirname(seen[:tmp])).to eq(tmpdir)
+        expect(staged).to start_with('buff.lic.')
+        expect(staged).to end_with('.tmp')
+        expect(staged).not_to match(/\.(lic|rb|cmd|wiz)(\.(gz|Z))?\z/i)
+        expect(File.fnmatch('*.lic', staged)).to be false
+        expect(File.fnmatch('*.yaml', staged)).to be false
+      end
+    end
+
+    it 'preserves the original file and removes the staged file when the rename fails' do
+      path = File.join(tmpdir, 'locked.lic')
+      File.binwrite(path, "# original\n")
+      allow(File).to receive(:rename).and_raise(Errno::EACCES.new('Permission denied'))
+
+      expect { described_class.safe_write(path, "# new\n") }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(path)).to eq("# original\n")
+      expect(Dir.children(tmpdir)).to eq(['locked.lic'])
+    end
+
+    it 'raises the write error, not a cleanup error, when the staged file cannot be removed' do
+      path = File.join(tmpdir, 'stuck.lic')
+      File.binwrite(path, "# original\n")
+      allow(File).to receive(:rename).and_raise(Errno::EACCES.new('Permission denied'))
+      allow(File).to receive(:delete).and_raise(Errno::EBUSY.new('in use'))
+
+      expect { described_class.safe_write(path, "# new\n") }.to raise_error(Errno::EACCES)
+      expect(File.binread(path)).to eq("# original\n")
+    end
+
+    it 'removes .old and .tmp files left by older versions after a successful write' do
+      path = File.join(tmpdir, 'legacy.lic')
+      File.binwrite("#{path}.old", "# left by an interrupted update\n")
+      File.binwrite("#{path}.tmp", "# partial\n")
+
+      described_class.safe_write(path, content_lf)
+
+      expect(File.binread(path)).to eq(content_lf)
+      expect(Dir.children(tmpdir)).to eq(['legacy.lic'])
+    end
+
+    it 'leaves other files with similar names alone' do
+      path = File.join(tmpdir, 'legacy.lic')
+      others = ['legacy.lic.bak', 'legacy-other.lic.old', 'legacy.old']
+      others.each { |name| File.binwrite(File.join(tmpdir, name), 'keep') }
+
+      described_class.safe_write(path, content_lf)
+
+      expect(Dir.children(tmpdir)).to contain_exactly('legacy.lic', *others)
+    end
+
+    it 'does not remove a directory that happens to carry a leftover name' do
+      path = File.join(tmpdir, 'odd.lic')
+      Dir.mkdir("#{path}.old")
+
+      described_class.safe_write(path, content_lf)
+
+      expect(File.directory?("#{path}.old")).to be true
+    end
+
+    it 'reports success even when a leftover from an older version cannot be removed' do
+      path = File.join(tmpdir, 'keeper.lic')
+      old_path = "#{path}.old"
+      File.binwrite(path, "# original\n")
+      File.binwrite(old_path, "# stale\n")
+      allow(File).to receive(:delete).and_call_original
+      allow(File).to receive(:delete).with(old_path).and_raise(Errno::EACCES.new('Permission denied'))
+
+      expect { described_class.safe_write(path, "# updated\n") }.not_to raise_error
+      expect(File.binread(path)).to eq("# updated\n")
+    end
+
+    it 'lets a second writer finish inside the first one without either failing' do
+      path = File.join(tmpdir, 'shared.lic')
+      File.binwrite(path, "# original\n")
+      second_error = nil
+      calls = 0
+      allow(File).to receive(:binwrite).and_wrap_original do |original, *args|
+        calls += 1
+        original.call(*args)
+        next unless calls == 1
+
+        Thread.new do
+          described_class.safe_write(path, "# second\n")
+        rescue StandardError => e
+          second_error = e
+        end.join
+      end
+
+      expect { described_class.safe_write(path, "# first\n") }.not_to raise_error
+      expect(second_error).to be_nil
+      expect(File.binread(path)).to eq("# first\n")
+      expect(Dir.children(tmpdir)).to eq(['shared.lic'])
     end
   end
 end

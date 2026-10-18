@@ -3,7 +3,7 @@
 =begin
   Atomic file writing utilities for the update system.
 
-  Provides safe_write (tmp-rename-delete pattern) and SHA map building
+  Provides safe_write (write-temp-then-rename pattern) and SHA map building
   for detecting file changes.
 =end
 
@@ -11,26 +11,65 @@ module Lich
   module Util
     module Update
       module FileWriter
-        # Atomically writes content to file with rollback on error.
+        # Suffixes that older versions of safe_write (and the legacy
+        # updater) left beside a file when they were interrupted.
+        LEGACY_LEFTOVER_SUFFIXES = %w[.old .tmp].freeze
+
+        # Atomically replaces the file at +path+ with +content+.
+        #
+        # The content is written to a temporary file in the same directory
+        # and then renamed over +path+. The live file is never moved away,
+        # so a reader (for example a script start resolving the name) sees
+        # either the old content or the new content, never a missing file.
+        # File.rename replaces an existing destination on POSIX (rename(2))
+        # and on Windows (MoveFileExW with MOVEFILE_REPLACE_EXISTING).
+        #
+        # The temporary name carries the process and thread so two writers of
+        # the same file (two sessions sharing a scripts directory, or a manual
+        # sync during the login sync) never share one. It ends in +.tmp+, so
+        # neither the script resolver nor the +*.lic+/+*.yaml+ SHA globs
+        # ever match it.
+        #
+        # After a successful write, +.old+ and +.tmp+ files that older
+        # versions left beside +path+ are removed (best effort).
         #
         # @param path [String] target file path
         # @param content [String] file content to write
         # @return [void]
-        # @raise [StandardError] if write fails (original file restored)
+        # @raise [StandardError] if the write or rename fails; +path+ is left
+        #   untouched and the temporary file is removed
         def self.safe_write(path, content)
-          tmp = "#{path}.tmp"
-          old = "#{path}.old"
-          File.rename(path, old) if File.exist?(path)
+          tmp = "#{path}.#{Process.pid}.#{Thread.current.object_id}.tmp"
           begin
             File.binwrite(tmp, content)
             File.rename(tmp, path)
           rescue StandardError
-            File.rename(old, path) if File.exist?(old)
-            File.delete(tmp) if File.exist?(tmp)
+            begin
+              File.delete(tmp) if File.exist?(tmp)
+            rescue StandardError
+              nil # the write error is the one worth reporting
+            end
             raise
           end
-          File.delete(old) if File.exist?(old)
+          remove_legacy_leftovers(path)
         end
+
+        # Best-effort removal of +path.old+ / +path.tmp+ left by older
+        # versions. Never raises: the write it follows already succeeded.
+        #
+        # @param path [String] target file path
+        # @return [void]
+        def self.remove_legacy_leftovers(path)
+          LEGACY_LEFTOVER_SUFFIXES.each do |suffix|
+            leftover = "#{path}#{suffix}"
+            begin
+              File.delete(leftover) if File.file?(leftover)
+            rescue StandardError
+              nil
+            end
+          end
+        end
+        private_class_method :remove_legacy_leftovers
 
         # Builds filename => git-SHA map for files in directory.
         #
