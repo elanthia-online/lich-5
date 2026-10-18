@@ -331,10 +331,11 @@ module Lich
             last_buddy_room = false
             nemesis_with_buddy = false
             if prioritize_buddies
-              # The buddy pass is the first pass over the rooms, and it always
-              # ends at its last room (with a buddy room or the fallback below).
-              # A room is a buddy room if it has a friend and no nemesis; an
-              # unreachable room is skipped.
+              # The buddy pass is the first pass over the rooms, and it never
+              # runs past its last room: it returns at a buddy room or, at the
+              # last room, through the fallback below. A room is a buddy room
+              # if it has a friend and no nemesis; an unreachable room is
+              # skipped.
               buddy_here = reached && (DRRoom.pcs & UserVars.friends).any?
               nemesis_with_buddy = buddy_here && (DRRoom.pcs & UserVars.hunting_nemesis).any?
               suitable_room = buddy_here && !nemesis_with_buddy
