@@ -880,19 +880,6 @@ module Lich
         end
       end
 
-      # Executes a stow action with automatic recovery on common failure conditions.
-      #
-      # Handles unload prompts, fan close, combat busy, movement lock,
-      # container size, and wound/sheath failures by retrying with
-      # corrective actions.
-      #
-      # @param action [String] game command to execute (e.g., "sheath my sword")
-      # @param weapon_name [String] weapon noun for recovery commands
-      # @param accept_strings [Array<Regexp, String>] success patterns to match
-      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
-      # @param retries [Integer] remaining retry attempts
-      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
-      #
       # Stows an item based on its configured storage type (tie, sheath, container, or default stow).
       #
       # Handles the common tie/wield/container/stow decision shared by
@@ -915,9 +902,6 @@ module Lich
         end
       end
 
-      # @see STOW_RECOVERY_PATTERNS
-      # @see STOW_HELPER_MAX_RETRIES
-      # @api private
       # Picks up an item this class lowered to the ground.
       #
       # A hold that starts after the lowering draws the immobile reply to GET,
@@ -946,6 +930,22 @@ module Lich
         false
       end
 
+      # Executes a stow action with automatic recovery on common failure conditions.
+      #
+      # Handles unload prompts, fan close, combat busy, movement lock,
+      # container size, and wound/sheath failures by retrying with
+      # corrective actions.
+      #
+      # @param action [String] game command to execute (e.g., "sheath my sword")
+      # @param weapon_name [String] weapon noun for recovery commands
+      # @param accept_strings [Array<Regexp, String>] success patterns to match
+      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
+      # @param retries [Integer] remaining retry attempts
+      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
+      #
+      # @see STOW_RECOVERY_PATTERNS
+      # @see STOW_HELPER_MAX_RETRIES
+      # @api private
       def stow_helper(action, weapon_name, *accept_strings, failure_patterns: [], retries: STOW_HELPER_MAX_RETRIES)
         if retries <= 0
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper exceeded max retries for '#{action}'")
