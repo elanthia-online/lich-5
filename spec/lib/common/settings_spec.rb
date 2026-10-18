@@ -691,7 +691,7 @@ RSpec.describe Lich::Common::Settings do
       expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("stored as Array, not a Hash; 'k' was not saved"))
     end
 
-    it "keeps serving its cached row after a failed write, without asking the database" do
+    it "keeps serving its cached row after a failed write, without asking the still-locked database" do
       game_write('saved', 1)
       # The adapter reads the row and runs the block, then cannot store it.
       allow(@mock_db).to receive(:update_settings) do |script, scope, &block|
@@ -700,11 +700,192 @@ RSpec.describe Lich::Common::Settings do
       end
 
       game_write('lost', 2)
-      allow(@mock_db).to receive(:get_settings).and_raise(RuntimeError, 'database is locked')
+      # The lock that failed the write is still held: data_version can't be read.
+      @mock_db.data_version_unknown = true
+      allow(@mock_db).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
 
       expect(game_read('saved')).to eq(1)
       expect(game_read('lost')).to be_nil
       expect(@mock_db).not_to have_received(:get_settings)
+    end
+
+    it "serves its cached row after a failed write when the database can't be re-read" do
+      game_write('saved', 1)
+      allow(@mock_db).to receive(:update_settings) do |script, scope, &block|
+        block.call(@mock_db.get_settings(script, scope))
+        nil
+      end
+
+      game_write('lost', 2)
+      allow(@mock_db).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      expect(game_read('saved')).to eq(1)
+      expect(game_read('lost')).to be_nil
+      expect(@mock_db).to have_received(:get_settings).at_least(:once)
+    end
+  end
+
+  # Another Lich session is another process. These examples play it by writing
+  # to the adapter directly, which (like a commit by another connection)
+  # changes the adapter's data_version.
+  describe "Reads when another session committed" do
+    let(:settings) { Lich::Common::Settings }
+
+    def game_read(key)
+      settings.get_scoped_setting("GSIV", key)
+    end
+
+    def their_write(row, scope = "GSIV", script = "test_script")
+      @mock_db.save_settings(script, row, scope)
+    end
+
+    before do
+      settings.instance_variable_set(:@settings_cache, {})
+      settings.instance_variable_set(:@cache_versions, {})
+    end
+
+    it "shows a key the other session wrote after this process cached the row" do
+      expect(game_read('theirs')).to be_nil
+      their_write("theirs" => 1)
+
+      expect(game_read('theirs')).to eq(1)
+    end
+
+    it "shows a value the other session changed and drops a key it removed" do
+      their_write("mode" => "slow", "gone" => true)
+      expect(game_read('mode')).to eq("slow")
+      their_write("mode" => "fast")
+
+      expect(game_read('mode')).to eq("fast")
+      expect(game_read('gone')).to be_nil
+    end
+
+    it "is fresh for every read API: Settings[], to_hash, nested proxies and root proxies" do
+      expect(settings[:k]).to be_nil
+      expect(settings.to_hash).to eq({})
+      proxy_root = settings.root_proxy_for("DR", script_name: "core")
+      expect(proxy_root.to_h).to eq({})
+
+      their_write({ k: { "n" => 1 } }, ":")
+      their_write({ "bank" => 5 }, "DR", "core")
+
+      expect(settings[:k]["n"]).to eq(1)
+      expect(settings.to_hash).to eq(k: { "n" => 1 })
+      expect(settings.root_proxy_for("DR", script_name: "core")["bank"]).to eq(5)
+    end
+
+    it "does not read the row again while nothing has been committed" do
+      their_write("k" => 1)
+      expect(game_read('k')).to eq(1)
+      allow(@mock_db).to receive(:get_settings).and_call_original
+
+      200.times { game_read('k') }
+      settings.root_proxy_for("GSIV")
+
+      expect(@mock_db).not_to have_received(:get_settings)
+    end
+
+    it "reads the row again only once per commit" do
+      game_read('k')
+      allow(@mock_db).to receive(:get_settings).and_call_original
+
+      their_write("k" => 1)
+      5.times { game_read('k') }
+      their_write("k" => 2)
+      5.times { game_read('k') }
+
+      expect(@mock_db).to have_received(:get_settings).twice
+      expect(game_read('k')).to eq(2)
+    end
+
+    it "uses the cached row while the database's version can't be read (another process holds the lock)" do
+      their_write("k" => 1)
+      expect(game_read('k')).to eq(1)
+      @mock_db.data_version_unknown = true
+      their_write("k" => 2)
+      allow(@mock_db).to receive(:get_settings).and_call_original
+
+      expect(game_read('k')).to eq(1)
+      expect(@mock_db).not_to have_received(:get_settings)
+
+      @mock_db.data_version_unknown = false
+      expect(game_read('k')).to eq(2)
+    end
+
+    it "reads a row it has not cached even while the version can't be read, and checks it again later" do
+      @mock_db.data_version_unknown = true
+      their_write("k" => 1)
+      expect(game_read('k')).to eq(1)
+
+      their_write("k" => 2)
+      @mock_db.data_version_unknown = false
+
+      expect(game_read('k')).to eq(2)
+    end
+
+    it "keeps answering from the cached row when the row can't be read again for a database error" do
+      their_write("k" => 1)
+      expect(game_read('k')).to eq(1)
+      their_write("k" => 2)
+      allow(@mock_db).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      expect(game_read('k')).to eq(1)
+
+      allow(@mock_db).to receive(:get_settings).and_call_original
+      expect(game_read('k')).to eq(2)
+    end
+
+    it "raises the database error when nothing is cached to fall back on" do
+      allow(@mock_db).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
+
+      expect { game_read('k') }.to raise_error(Sequel::DatabaseError)
+    end
+
+    it "raises, rather than serving the cached row, when the changed row can't be unmarshalled" do
+      their_write("k" => 1)
+      expect(game_read('k')).to eq(1)
+      their_write("k" => 2)
+      allow(@mock_db).to receive(:get_settings).and_raise(TypeError, 'incompatible marshal file format')
+
+      expect { game_read('k') }.to raise_error(TypeError)
+    end
+
+    it "shows this process's own write on the next read, then reads the stored row again once" do
+      settings.set_script_settings("GSIV", 'mine', 1)
+      allow(@mock_db).to receive(:get_settings).and_call_original
+
+      expect(game_read('mine')).to eq(1)
+      expect(game_read('mine')).to eq(1)
+      expect(@mock_db).to have_received(:get_settings).once
+    end
+
+    it "does not show a nested change whose save failed once the database can be read" do
+      their_write("opts" => { "x" => 0 })
+      allow(@mock_db).to receive(:save_settings).and_return(false) # the lock outlasted the busy timeout
+
+      game_read('opts')['y'] = 1
+
+      expect(game_read('opts').to_h).to eq("x" => 0)
+    end
+
+    it "does not trust a version taken for a row that a write has since replaced in the cache" do
+      expect(game_read('k')).to be_nil
+      cache = settings.instance_variable_get(:@settings_cache)
+      cache["test_script::GSIV"] = { "k" => "only in memory" } # what a write that kept its row does
+      allow(@mock_db).to receive(:get_settings).and_call_original
+
+      expect(game_read('k')).to be_nil
+      expect(@mock_db).to have_received(:get_settings).once
+    end
+
+    it "refresh_data (Settings.load) still reads the row again" do
+      expect(settings[:k]).to be_nil
+      @mock_db.data_version_unknown = true
+      their_write({ k: 1 }, ":")
+
+      settings.load
+
+      expect(settings[:k]).to eq(1)
     end
   end
 end

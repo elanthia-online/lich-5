@@ -15,6 +15,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
   after do
     db = @adapter&.instance_variable_get(:@db)
     db&.disconnect
+    @adapter&.instance_variable_get(:@version_db)&.close
     FileUtils.remove_entry(tmp_dir) if Dir.exist?(tmp_dir)
   end
 
@@ -403,6 +404,141 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(@adapter.update_settings('go2', 'DR') { |fresh| fresh.merge('a' => 1) }).to be_nil
       expect(stored_row('go2', 'DR')).to be_nil
       expect(messages).to include(['error', a_string_including('Database error while saving settings')])
+    end
+  end
+
+  describe '#data_version' do
+    let(:db_file) { File.join(tmp_dir, 'lich.db3') }
+
+    before do
+      # The production table, as Lich.init_db creates it before Settings loads.
+      other_connection { |db| db.execute('CREATE TABLE script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));') }
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+    end
+
+    # Another Lich process: its own connection to the same file.
+    def other_connection
+      db = SQLite3::Database.new(db_file)
+      yield db
+    ensure
+      db&.close
+    end
+
+    def commit_elsewhere(hash = { 'k' => rand })
+      other_connection do |db|
+        db.execute('INSERT OR REPLACE INTO script_auto_settings (script, scope, hash) VALUES (?, ?, ?)',
+                   ['go2', 'DR', SQLite3::Blob.new(Marshal.dump(hash))])
+      end
+    end
+
+    it 'returns an Integer that stays the same while nothing is committed' do
+      first = @adapter.data_version
+
+      expect(first).to be_a(Integer)
+      expect(Array.new(5) { @adapter.data_version }).to all(eq(first))
+      @adapter.get_settings('go2', 'DR') # a read is not a commit
+      expect(@adapter.data_version).to eq(first)
+    end
+
+    it 'changes when another connection commits' do
+      before = @adapter.data_version
+
+      commit_elsewhere
+
+      expect(@adapter.data_version).not_to eq(before)
+    end
+
+    it 'changes when this adapter itself saves, through any of its connections' do
+      before = @adapter.data_version
+      @adapter.save_settings('go2', { 'a' => 1 }, 'DR')
+      after_save = @adapter.data_version
+      Thread.new { @adapter.update_settings('go2', 'DR') { |row| row.merge('b' => 2) } }.join
+
+      expect(after_save).not_to eq(before)
+      expect(@adapter.data_version).not_to eq(after_save)
+    end
+
+    it 'does not change for a transaction another connection rolled back' do
+      before = @adapter.data_version
+      other_connection do |db|
+        db.execute('BEGIN IMMEDIATE')
+        db.execute("INSERT INTO script_auto_settings (script, scope, hash) VALUES ('go2', 'DR', x'00')")
+        expect(@adapter.data_version).to eq(before) # still uncommitted
+        db.execute('ROLLBACK')
+      end
+
+      expect(@adapter.data_version).to eq(before)
+    end
+
+    it 'returns nil at once, without waiting for the busy timeout, while another connection holds the exclusive lock' do
+      before = @adapter.data_version
+      other_connection do |db|
+        db.execute('BEGIN EXCLUSIVE')
+        db.execute("INSERT INTO script_auto_settings (script, scope, hash) VALUES ('go2', 'DR', x'00')")
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        expect(@adapter.data_version).to be_nil
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 1.0
+        db.execute('COMMIT')
+      end
+
+      expect(@adapter.data_version).to be_a(Integer).and(satisfy { |v| v != before })
+    end
+
+    it 'holds no lock once it returns, so another connection can take the exclusive lock at once' do
+      @adapter.data_version
+
+      other_connection do |db|
+        db.busy_timeout(0)
+        expect { db.execute('BEGIN EXCLUSIVE') }.not_to raise_error
+        db.execute('ROLLBACK')
+      end
+    end
+
+    it 'answers every thread when called from several threads at once' do
+      results = Queue.new
+      threads = Array.new(8) { Thread.new { 50.times { results << @adapter.data_version } } }
+      committer = Thread.new { 10.times { commit_elsewhere } }
+      (threads + [committer]).each(&:join)
+
+      values = Array.new(results.size) { results.pop }
+      expect(values.size).to eq(400)
+      expect(values).to all(be_a(Integer).or(be_nil))
+      expect(values.compact).not_to be_empty
+    end
+
+    context 'when the database cannot be opened for the check' do
+      before do
+        allow(Lich).to receive(:log)
+        @adapter.data_version # opens the version connection
+        @adapter.send(:close_version_connection)
+        allow(SQLite3::Database).to receive(:new).and_call_original
+        allow(SQLite3::Database).to receive(:new).with(db_file).and_raise(SQLite3::CantOpenException, 'unable to open database file')
+      end
+
+      it 'returns nil and logs the problem once, however often it is asked' do
+        expect(Array.new(3) { @adapter.data_version }).to eq([nil, nil, nil])
+        expect(Lich).to have_received(:log).with(a_string_including('cannot tell whether settings changed', 'SQLite3::CantOpenException')).once
+      end
+
+      it 'recovers once the database can be opened again' do
+        expect(@adapter.data_version).to be_nil
+        allow(SQLite3::Database).to receive(:new).with(db_file).and_call_original
+
+        expect(@adapter.data_version).to be_a(Integer)
+      end
+    end
+
+    it 'reopens its connection after a failed check instead of reusing a broken one' do
+      allow(Lich).to receive(:log)
+      @adapter.data_version
+      broken = @adapter.instance_variable_get(:@version_db)
+      allow(broken).to receive(:execute_batch2).and_raise(SQLite3::IOException, 'disk I/O error')
+
+      expect(@adapter.data_version).to be_nil
+      expect(broken).to be_closed
+      expect(@adapter.data_version).to be_a(Integer)
+      expect(@adapter.instance_variable_get(:@version_db)).not_to equal(broken)
     end
   end
 

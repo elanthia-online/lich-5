@@ -21,6 +21,19 @@ module Lich
     class MockDatabaseAdapter
       def initialize
         @storage = {}
+        @version = 0
+        @data_version_unknown = false
+      end
+
+      # Set to true to play a database whose data_version can't be read right
+      # now (DatabaseAdapter#data_version returns nil while another process
+      # holds the lock).
+      attr_accessor :data_version_unknown
+
+      # Like DatabaseAdapter#data_version: changes on every save, as the real
+      # one changes on every commit by any connection, this process's included.
+      def data_version
+        @data_version_unknown ? nil : @version
       end
 
       # Get settings for a specific script and scope
@@ -41,6 +54,8 @@ module Lich
         key = "#{script_name}:#{scope}"
         # Store a deep copy to prevent unintended modifications
         @storage[key] = deep_copy(settings)
+        @version += 1
+        true
       end
 
       # Read-modify-write of one row, mirroring DatabaseAdapter#update_settings:
@@ -59,6 +74,7 @@ module Lich
       # This is useful for resetting the state between tests
       def clear
         @storage = {}
+        @version += 1
       end
 
       # Get a copy of the entire storage hash

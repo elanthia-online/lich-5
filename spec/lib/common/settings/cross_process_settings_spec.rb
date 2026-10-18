@@ -236,6 +236,163 @@ RSpec.describe 'Settings writes across Lich processes' do
     end
   end
 
+  describe 'reads (a session sees what other sessions committed)' do
+    it 'shows a GameSettings key another session wrote after this one loaded the row' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      expect(alpha.call('get G target')).to be_nil # alpha has cached the row
+
+      beta.call('set G target "bank"')
+
+      expect(alpha.call('get G target')).to eq('bank')
+    end
+
+    it 'shows a changed value, not only a new key' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G mode "slow"')
+      expect(beta.call('get G mode')).to eq('slow')
+
+      alpha.call('set G mode "fast"')
+
+      expect(beta.call('get G mode')).to eq('fast')
+    end
+
+    it 'shows a DragonRealms session\'s Settings key to a GemStone session' do
+      dr = start('DR', 'Alpha', 'autostart')
+      gs = start('GSIV', 'Zed', 'autostart')
+      expect(gs.call('get S scripts')).to be_nil
+
+      dr.call('set S scripts ["lnet"]')
+
+      expect(gs.call('get S scripts')).to eq(['lnet'])
+    end
+
+    it 'shows a CharSettings key written by the same character in another process' do
+      first = start('DR', 'Alpha', 'kill-counter')
+      second = start('DR', 'Alpha', 'kill-counter')
+      expect(second.call('get C kills')).to be_nil
+
+      first.call('set C kills 7')
+
+      expect(second.call('get C kills')).to eq(7)
+    end
+
+    it 'shows InstanceSettings keys, character-scoped and game-scoped (root proxy)' do
+      alpha = start('DR', 'Alpha', 'any-script')
+      other = start('DR', 'Alpha', 'other-script')
+      beta = start('DR', 'Beta', 'any-script')
+      expect(other.call('get I note')).to be_nil
+      expect(beta.call('get IG shared')).to be_nil
+
+      alpha.call('set I note "hi"')
+      alpha.call('set IG shared {"Alpha":1}')
+
+      expect(other.call('get I note')).to eq('hi')
+      expect(beta.call('get IG shared')).to eq('Alpha' => 1)
+    end
+
+    it 'keeps a game-scoped InstanceSettings key another character wrote when writing its own' do
+      alpha = start('DR', 'Alpha', 'any-script')
+      beta = start('DR', 'Beta', 'any-script')
+      beta.call('get IG anything')
+      alpha.call('set IG alpha {"bank":1}')
+
+      beta.call('set IG beta {"bank":2}')
+
+      expect(stored_row('core', 'DR')).to eq('alpha' => { 'bank' => 1 }, 'beta' => { 'bank' => 2 })
+    end
+
+    it 'keeps both entries of a read-modify-write of one key done in turn by two sessions' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('get G anything')
+      beta.call('get G anything')
+
+      # targets = GameSettings['custom targets'] || {}; targets[name] = room; GameSettings['custom targets'] = targets
+      alpha.call('set G custom_targets {"foo":"1"}')
+      targets = beta.call('get G custom_targets') || {}
+      beta.call("set G custom_targets #{JSON.generate(targets.merge('bar' => '2'))}")
+
+      expect(stored_row('go2', 'DR')).to eq('custom_targets' => { 'foo' => '1', 'bar' => '2' })
+    end
+
+    it 'keeps both entries when two sessions in turn write into one nested hash' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      first.call('set G opts {"x":0}')
+      second.call('get G opts')
+
+      first.call('nset G opts n 1')
+      second.call('nset G opts m 2')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'n' => 1, 'm' => 2 })
+    end
+
+    it 'saves a nested write into a hash another session created after this one loaded the row' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      second.call('get G anything')
+      first.call('set G opts {"x":0}')
+
+      second.call('nset G opts z 3')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'z' => 3 })
+    end
+
+    it 'keeps both elements when two sessions in turn push onto one array' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      first.call('set G arr []')
+      second.call('get G arr')
+
+      first.call('push G arr "k1"')
+      second.call('push G arr "l1"')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => %w[k1 l1])
+    end
+
+    it 'does not show a change another process rolled back' do
+      alpha = start('DR', 'Alpha', 'go2')
+      alpha.call('set G mode "slow"')
+
+      db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      begin
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('UPDATE script_auto_settings SET hash = ? WHERE script = ? AND scope = ?',
+                   [SQLite3::Blob.new(Marshal.dump('mode' => 'rolled back')), 'go2', 'DR'])
+        expect(alpha.call('get G mode')).to eq('slow') # the change is not committed yet
+        db.execute('ROLLBACK')
+      ensure
+        db.close
+      end
+
+      expect(alpha.call('get G mode')).to eq('slow')
+    end
+
+    it 'answers from its cache at once, without waiting out the busy timeout, while another process holds the lock' do
+      alpha = start('DR', 'Alpha', 'go2') # default busy timeout (5 s)
+      alpha.call('set G mode "slow"')
+      alpha.call('get G mode')
+
+      db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      begin
+        db.execute('BEGIN EXCLUSIVE') # blocks readers too
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        expect(alpha.call('get G mode')).to eq('slow')
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 2.5
+        db.execute('UPDATE script_auto_settings SET hash = ? WHERE script = ? AND scope = ?',
+                   [SQLite3::Blob.new(Marshal.dump('mode' => 'fast')), 'go2', 'DR'])
+        db.execute('COMMIT')
+      ensure
+        db.close
+      end
+
+      expect(alpha.call('get G mode')).to eq('fast')
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+  end
+
   describe 'write lock' do
     def with_write_lock
       db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))

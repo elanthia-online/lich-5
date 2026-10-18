@@ -6,6 +6,9 @@ module Lich
         @file = File.join(data_dir, "lich.db3")
         @db = Lich.open_sequel_sqlite(@file)
         @table_name = table_name
+        @version_mutex = Mutex.new
+        @version_db = nil
+        @version_error_reported = false
         setup!
       end
 
@@ -25,6 +28,43 @@ module Lich
       def get_settings(script_name, scope = ":")
         entry = @table.first(script: script_name, scope: scope)
         entry.nil? ? {} : Marshal.load(entry[:hash])
+      end
+
+      # A number that changes whenever lich.db3 has had a commit since it was
+      # last read, or nil when that can't be told right now.
+      #
+      # Every Lich session is a separate process, and Settings caches rows per
+      # process. SQLite's PRAGMA data_version changes when another connection
+      # commits, so a cache can compare it with the value seen when a row was
+      # read and re-read the row only when it may have changed. The pragma
+      # reports changes by *other* connections only, and Sequel may hand each
+      # thread a different connection, so it is read on a connection of its
+      # own that never writes: every commit, from another process or from this
+      # one, changes it.
+      #
+      # The connection has no busy timeout. While another process holds the
+      # database's exclusive lock (a commit in progress, or a script holding
+      # it), the read fails at once and this returns nil, rather than waiting
+      # inside SQLite, which keeps the GVL and would stall every thread of
+      # this process. Callers then keep what they have; a read that overlaps a
+      # commit may see the database as it was before it. The read runs in one
+      # C call (sqlite3_exec), so no lock is held while Ruby code runs.
+      #
+      # @return [Integer, nil]
+      def data_version
+        @version_mutex.synchronize do
+          @version_db ||= SQLite3::Database.new(@file).tap { |db| db.busy_timeout(0) }
+          Integer(@version_db.execute_batch2('PRAGMA data_version').dig(0, 0))
+        end
+      rescue SQLite3::BusyException
+        nil
+      rescue SQLite3::Exception, ArgumentError, TypeError => e
+        close_version_connection
+        unless @version_error_reported
+          @version_error_reported = true
+          Lich.log("--- Error: cannot tell whether settings changed in lich.db3 (#{e.class}: #{e.message}); settings may not show other sessions' changes ---")
+        end
+        nil
       end
 
       def save_settings(script_name, settings, scope = ":")
@@ -121,6 +161,15 @@ module Lich
       end
 
       private
+
+      def close_version_connection
+        @version_mutex.synchronize do
+          @version_db&.close
+          @version_db = nil
+        end
+      rescue SQLite3::Exception
+        @version_db = nil
+      end
 
       def serialize_settings(script_name, settings)
         unless settings.is_a?(Hash)

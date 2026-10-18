@@ -93,6 +93,9 @@ module Lich
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
+      # cache_key => [data_version, root]: the database's data_version just
+      # before root was read into @settings_cache (see cached_root).
+      @cache_versions = {}
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
 
@@ -154,8 +157,7 @@ module Lich
         raise ArgumentError, "scope must be a non-empty String" if scope.nil? || scope.to_s.strip.empty?
 
         script_name ||= ""
-        cache_key = "#{script_name}::#{scope}"
-        root = @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+        root = cached_root(script_name, scope)
 
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
@@ -169,6 +171,9 @@ module Lich
         # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
         script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
         cache_key   = "#{script_name || ""}::#{scope}"
+        # Whatever happens below (a save, a failed save, an early return), the
+        # next read checks the database again instead of trusting the cache.
+        @cache_versions.delete(cache_key)
 
         # Local helper to keep cache in sync with the just-persisted root
         sync_cache = lambda do |root_obj|
@@ -343,22 +348,56 @@ module Lich
       def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
         script_name = script_name || Script.current.name
-        cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "current_script_settings: Request for scope: #{scope.inspect}, cache_key: #{cache_key}" })
-
-        cached_data = @settings_cache[cache_key]
-        if cached_data
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache hit for #{cache_key} (object_id: #{cached_data.object_id}). Returning DUP: #{cached_data.inspect}" })
-          return cached_data.dup
-        else
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache miss for #{cache_key}. Loading from DB." })
-          settings = @db_adapter.get_settings(script_name, scope)
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Loaded from DB (object_id: #{settings.object_id}): #{settings.inspect}" })
-          @settings_cache[cache_key] = settings
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Stored in cache (object_id: #{@settings_cache[cache_key].object_id}). Returning DUP." })
-          return settings.dup
-        end
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "current_script_settings: Request for scope: #{scope.inspect}, script_name: #{script_name.inspect}" })
+        cached_root(script_name, scope).dup
       end
+
+      # Returns this process's cached root for (script_name, scope), reading it
+      # from the database first when it is not cached or may have changed.
+      #
+      # Every Lich session is a separate process with its own cache, and all
+      # of them share lich.db3. A cached row is used only while the database's
+      # data_version (DatabaseAdapter#data_version) is the one seen just before
+      # the row was read; any commit since then, by another session or by this
+      # one, changes it, and the row is read again. The check is one pragma on
+      # an idle connection, so a read of an unchanged database still costs no
+      # query of the settings table. The version is only good for the object
+      # it was taken for: code that puts another object in the cache (a write)
+      # makes the next read check again.
+      #
+      # When the version can't be read (another process is committing or holds
+      # the lock), the cached row is used, as it was before this check
+      # existed. When the row itself can't be read for a database error, a
+      # cached row is used rather than raising into the script; with nothing
+      # cached, the error is raised as before.
+      #
+      # @return [Hash, Array, Object] the cached root itself (not a copy)
+      def self.cached_root(script_name, scope)
+        cache_key = "#{script_name || ""}::#{scope}"
+        version = @db_adapter.data_version
+        cached = @settings_cache[cache_key]
+        if cached
+          stamp = @cache_versions[cache_key]
+          if version.nil? || (stamp && stamp[0] == version && stamp[1].equal?(cached))
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: Cache hit for #{cache_key} (object_id: #{cached.object_id}, data_version: #{version.inspect})" })
+            return cached
+          end
+        end
+
+        begin
+          root = @db_adapter.get_settings(script_name, scope)
+        rescue Sequel::Error, SQLite3::Exception => e
+          raise unless cached
+
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "cached_root: Could not re-read #{cache_key} (#{e.class}: #{e.message}); using the cached row." })
+          return cached
+        end
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: Loaded #{cache_key} from DB (object_id: #{root.object_id}, data_version: #{version.inspect})" })
+        @settings_cache[cache_key] = root
+        @cache_versions[cache_key] = [version, root]
+        root
+      end
+      private_class_method :cached_root
 
       def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
@@ -388,6 +427,7 @@ module Lich
         cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Deleting cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
         @settings_cache.delete(cache_key)
+        @cache_versions.delete(cache_key)
         current_script_settings(scope)
       end
 
