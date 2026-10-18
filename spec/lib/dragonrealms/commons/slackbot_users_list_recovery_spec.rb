@@ -553,6 +553,36 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
 
       expect(bot.direct_message('alice', 'help')).to include('ok' => true)
     end
+
+    context 'when reading the shared cache raises' do
+      let(:db_error) { Class.new(StandardError) }
+
+      def make_cache_unreadable
+        allow(Lich::Common::DB_Store).to receive(:get_data).and_raise(db_error, 'database is locked')
+      end
+
+      it 'reports the user missing instead of raising out of the message call' do
+        bot = described_class.new
+        make_cache_unreadable
+
+        result = :unset
+        expect { result = bot.direct_message('bob', 'help') }.not_to raise_error
+        expect(result).to be_nil
+        expect(messages.last).to match(/user 'bob' not found/)
+        expect(Lich).to have_received(:log).with(/Failed to reload cached users list: .*database is locked/)
+      end
+
+      it 'keeps its list and keeps delivering to known users' do
+        bot = described_class.new
+        make_cache_unreadable
+
+        bot.direct_message('bob', 'help')
+
+        expect(bot.initialized?).to be true
+        expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+        expect(posted.map { |p| p['channel'] }).to eq(['U1'])
+      end
+    end
   end
 
   describe 'empty or malformed member lists' do
