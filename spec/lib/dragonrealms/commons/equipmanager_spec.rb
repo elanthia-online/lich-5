@@ -1233,16 +1233,20 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     # fixture must keep its state in instance variables (a double cannot).
     let(:gear_class) do
       Class.new do
-        attr_reader :short_name, :short_regex, :worn, :needs_unloading, :transforms_to, :tie_to, :wield, :container
+        attr_reader :short_name, :short_regex, :worn, :needs_unloading, :transforms_to, :transform_verb, :transform_text,
+                    :tie_to, :wield, :container
 
-        def initialize(short_name:, short_regex:, worn:, wield: false, container: nil)
+        def initialize(short_name:, short_regex:, worn:, wield: false, container: nil,
+                       transforms_to: nil, transform_verb: nil, transform_text: nil)
           @short_name = short_name
           @short_regex = short_regex
           @worn = worn
           @wield = wield
           @container = container
           @needs_unloading = false
-          @transforms_to = nil
+          @transforms_to = transforms_to
+          @transform_verb = transform_verb
+          @transform_text = transform_text
           @tie_to = nil
         end
       end
@@ -1361,6 +1365,40 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(missing_warning?).to be true
         expect(missing_list).to eq('EquipmentManager: bronze.sword')
         expect(sent.grep(/^wear /)).to be_empty
+      end
+    end
+
+    context 'when a held transform item turns into something that is not in the gear list' do
+      # stow_weapon runs the transform, then returns nil because the
+      # transformed description matches no gear item: nothing was put away.
+      let(:orb) do
+        gear_class.new(short_name: 'silver.orb', short_regex: /\bsilver.*\borb/i, worn: false,
+                       transforms_to: 'silver armband', transform_verb: 'turn', transform_text: 'You turn')
+      end
+      let(:gear_sets) { { 'standard' => ['silver orb'] } }
+      let(:replies) { { 'turn my silver.orb' => 'You turn your silver orb.' } }
+
+      before do
+        @hand = 'silver orb'
+        allow(em).to receive(:items).and_return([orb])
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @hand = 'silver armband' if command == 'turn my silver.orb'
+          replies.fetch(command, '')
+        end
+      end
+
+      it 'treats the nil result as a failure: returns false, lists the item, and names it in the check-your-hands line' do
+        expect(em.stow_weapon('silver orb')).to be_nil
+        sent.clear
+        @hand = 'silver orb'
+
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(sent).to eq(['turn my silver.orb'])
+        expect(missing_warning?).to be true
+        expect(missing_list).to eq('EquipmentManager: silver.orb')
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: silver.orb')
       end
     end
 
