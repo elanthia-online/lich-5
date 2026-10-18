@@ -110,12 +110,16 @@ module Lich
       # reads miss the newer keys until the row is written again. Cache hits
       # do not take the lock.
       #
-      # The lock is per entry, so a write that waits (a busy database, or a
-      # top-level write retrying while another session keeps changing the row)
-      # holds up only threads using the same script and scope, not every
-      # script. A Monitor, so a write that calls another write for the same
-      # entry in the same thread does not deadlock. No code takes two entries'
-      # locks at once.
+      # The lock is per entry, so a top-level write retrying while another
+      # session keeps changing the row holds up only threads using the same
+      # script and scope, not every script (its pauses release the GVL). A
+      # write waiting for a locked database is different: SQLite's busy
+      # timeout waits with the GVL held, so it stalls every thread of the
+      # process whatever lock it holds.
+      #
+      # A Monitor, so a write that calls another write for the same entry in
+      # the same thread does not deadlock. No code takes two entries' locks at
+      # once.
       def self.with_cache_lock(cache_key, &block)
         lock = @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
         lock.synchronize(&block)
