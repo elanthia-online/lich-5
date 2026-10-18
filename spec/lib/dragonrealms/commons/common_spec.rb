@@ -1008,6 +1008,21 @@ RSpec.describe Lich::DragonRealms::DRC do
           expect(described_class).not_to have_received(:waitrt?)
         end
       end
+
+      context 'when the pile is gone on a later attempt' do
+        before do
+          room_states = [['a pile of rocks'], []]
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+        end
+
+        it 'gives up without waiting after the first kick succeeded' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).not_to have_received(:waitrt?)
+        end
+      end
     end
   end
 
