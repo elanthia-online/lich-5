@@ -94,8 +94,8 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       expect(described_class::MAX_THROTTLE_RETRIES).to eq(10)
     end
 
-    it 'defines SEND_USERS_LIST_BUDGET as a short cap' do
-      expect(described_class::SEND_USERS_LIST_BUDGET).to eq(5)
+    it 'defines SEND_REQUEST_BUDGET as a short cap' do
+      expect(described_class::SEND_REQUEST_BUDGET).to eq(5)
     end
   end
 

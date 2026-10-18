@@ -57,11 +57,11 @@ module Lich
       USERS_CACHE_TTL = 3600
       MAX_THROTTLE_RETRIES = 10
 
-      # Hard cap, in seconds, on the users.list attempt that #direct_message
-      # makes when the list could not be loaded earlier. A message is often
-      # sent right before an emergency logout, so it must never wait out the
-      # full network or rate-limit backoff.
-      SEND_USERS_LIST_BUDGET = 5
+      # Hard cap, in seconds, on each Slack API step (token check, users.list)
+      # that #direct_message runs when it has to restore the connection. A
+      # message is often sent right before an emergency logout, so it must
+      # never wait out the full network or rate-limit backoff.
+      SEND_REQUEST_BUDGET = 5
 
       # After a failed users.list call, #direct_message makes no new call for
       # this many seconds (or for Slack's Retry-After, if longer), so a burst
@@ -88,16 +88,17 @@ module Lich
       # Reinitializes the bot by re-checking the token and re-loading the users list.
       # A failed users-list load keeps any list loaded earlier.
       #
-      # @param users_list_budget [Numeric, nil] seconds allowed for the users-list
-      #   step, or nil for the full retry policy
+      # @param budget [Numeric, nil] seconds allowed for each Slack API step
+      #   (token check, users.list), or nil for the full retry policy. The LNet
+      #   token discovery keeps its own timeouts.
       # @return [Boolean] true if the token is valid and a non-empty users list
       #   (fresh, cached, or the one loaded earlier) is available
-      def reconnect!(users_list_budget: nil)
+      def reconnect!(budget: nil)
         @error_message = nil
         @initialized = false
         @token_verified = false
 
-        connect(users_list_budget: users_list_budget)
+        connect(budget: budget)
       end
 
       # Checks whether the LNet connection is alive and responsive.
@@ -120,11 +121,13 @@ module Lich
       # Tests whether a Slack API token is valid.
       #
       # @param token [String, nil] the token to test
+      # @param budget [Numeric, nil] seconds allowed for the check, or nil for
+      #   the full retry policy
       # @return [Boolean]
-      def authed?(token)
+      def authed?(token, budget: nil)
         return false unless token
 
-        post('auth.test', { 'token' => token })['ok']
+        post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
       rescue ApiError, NetworkError
         false
       end
@@ -172,14 +175,14 @@ module Lich
       # Verifies (or discovers) the token, then loads the users list.
       # The bot is initialized only when a non-empty users list is loaded.
       #
-      # @param users_list_budget [Numeric, nil] seconds allowed for the users-list step
+      # @param budget [Numeric, nil] seconds allowed for each Slack API step
       # @return [Boolean] the new initialized? state
-      def connect(users_list_budget: nil)
-        ensure_slack_token unless authed?(UserVars.slack_token)
+      def connect(budget: nil)
+        ensure_slack_token(budget) unless authed?(UserVars.slack_token, budget: budget)
         return false if @error_message
 
         @token_verified = true
-        load_users_list(users_list_budget)
+        load_users_list(budget)
       end
 
       # Loads the users list and updates initialized? and error_message.
@@ -187,8 +190,7 @@ module Lich
       # @param budget [Numeric, nil] seconds allowed, or nil for the full retry policy
       # @return [Boolean] the new initialized? state
       def load_users_list(budget)
-        deadline = budget && (monotonic_now + budget)
-        fetch_users_list(deadline)
+        fetch_users_list(deadline_for(budget))
         @initialized = users_list_loaded?
         @error_message = @initialized ? nil : USERS_LIST_UNAVAILABLE
         @initialized
@@ -196,21 +198,22 @@ module Lich
 
       # Called by #direct_message when the bot is not initialized. If the token
       # was already verified and only the users list is missing, retries just
-      # the users list (cache first, then one bounded API attempt) without
-      # re-running the token discovery. Otherwise performs a full #reconnect!
-      # whose users-list step is bounded the same way.
+      # the users list (cache first, then one users.list try capped at
+      # SEND_REQUEST_BUDGET; several calls if Slack's Retry-After fits in it)
+      # without re-running the token discovery. Otherwise performs a full
+      # #reconnect! whose token checks and users-list step are capped the same
+      # way. The LNet token discovery keeps its own timeouts.
       #
       # Never raises: a message is often sent right before an emergency logout,
       # and an unexpected error here must not stop the calling script.
       #
       # @return [Boolean] the new initialized? state
       def restore_connection
-        return load_users_list(SEND_USERS_LIST_BUDGET) if @token_verified
+        return load_users_list(SEND_REQUEST_BUDGET) if @token_verified
 
-        reconnect!(users_list_budget: SEND_USERS_LIST_BUDGET)
+        reconnect!(budget: SEND_REQUEST_BUDGET)
       rescue StandardError => e
         Lich.log "SlackBot: Reconnect failed: #{e.class}: #{e.message}"
-        users_list_failed
         @initialized = false
         @error_message = "Reconnect failed: #{e.message}"
         false
@@ -225,6 +228,12 @@ module Lich
       # @return [Float] monotonic clock reading in seconds
       def monotonic_now
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+
+      # @param budget [Numeric, nil] seconds from now
+      # @return [Float, nil] monotonic deadline, or nil when there is no budget
+      def deadline_for(budget)
+        budget && (monotonic_now + budget)
       end
 
       # @param deadline [Float] monotonic deadline
@@ -249,8 +258,9 @@ module Lich
 
       # Discovers and authenticates a Slack token via LNet.
       #
+      # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [void]
-      def ensure_slack_token
+      def ensure_slack_token(budget = nil)
         unless lnet_connected?
           unless Script.exists?(LNET_SCRIPT_NAME)
             set_error('lnet.lic not found - cannot retrieve Slack token')
@@ -269,7 +279,7 @@ module Lich
           return
         end
 
-        return if find_token
+        return if find_token(budget)
 
         set_error('Unable to locate a Slack token')
       end
@@ -380,7 +390,8 @@ module Lich
             return users_list_failed(e.retry_after)
           end
 
-          base_delay = e.retry_after || (BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min))
+          # A Retry-After of 0 (or less) still waits 1 s, so the retries cannot run back to back.
+          base_delay = e.retry_after ? [e.retry_after, 1].max : (BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min))
           delay = [base_delay, MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.5).to_i)
           total_delay = delay + jitter
@@ -399,6 +410,11 @@ module Lich
           Lich.log "SlackBot: Error fetching user list: #{e.message}"
           Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
           users_list_failed
+        rescue StandardError
+          # An error post does not wrap (e.g. ECONNREFUSED) still counts as a
+          # failed users.list call; the caller decides whether to rescue it.
+          users_list_failed
+          raise
         end
       end
 
@@ -429,15 +445,16 @@ module Lich
 
       # Searches LICHBOTS for a valid Slack token via LNet chat.
       #
+      # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [Boolean] true if a valid token was found and stored
-      def find_token
+      def find_token(budget = nil)
         return false unless lnet_available?
 
         Lich::Messaging.msg('plain', 'SlackBot: Looking for a token...')
 
         LICHBOTS.any? do |bot|
           token = request_token(bot)
-          authed = token && authed?(token)
+          authed = token && authed?(token, budget: budget)
           UserVars.slack_token = token if authed
           authed
         end
@@ -490,7 +507,8 @@ module Lich
           res = deadline ? request_before(http, req, deadline) : http.request(req)
 
           if res.code == '429'
-            retry_after = res['Retry-After']&.to_i
+            # Retry-After is a whole number of seconds; anything else is ignored.
+            retry_after = Integer(res['Retry-After'].to_s.strip, 10, exception: false)
             raise ThrottlingError.new('Throttled by Slack API', retry_after)
           end
 

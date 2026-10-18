@@ -25,7 +25,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
   let(:sleeps) { [] }
   let(:messages) { [] }
   let(:clock) { { offset: 0.0 } }
-  # The documented in-send cap (SlackBot::SEND_USERS_LIST_BUDGET).
+  # The documented in-send cap per Slack API step (SlackBot::SEND_REQUEST_BUDGET).
   let(:send_budget) { 5 }
 
   def http_response(code, body = '', headers = {})
@@ -51,6 +51,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     when :econnreset then -> { raise Errno::ECONNRESET }
     when :throttle then -> { http_response(429, '', 'Retry-After' => '1') }
     when :throttle_long then -> { http_response(429, '', 'Retry-After' => '30') }
+    when :throttle_zero then -> { http_response(429, '', 'Retry-After' => '0') }
+    when :econnrefused then -> { raise Errno::ECONNREFUSED }
     end
   end
 
@@ -232,6 +234,43 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(bot.error_message).to include('Connection refused')
     end
 
+    it 'starts the cooldown after an unexpected transport error from users.list' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << failure(:econnrefused)
+      bot.direct_message('alice', 'help')
+      expect(calls['users.list']).to eq(2)
+
+      plan['users.list'].clear
+      plan['users.list'] << users_ok
+      advance(29)
+      expect(bot.direct_message('alice', 'help')).to be_nil
+      expect(calls['users.list']).to eq(2)
+
+      advance(2)
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls['users.list']).to eq(3)
+    end
+
+    it 'waits at least 1 s between calls when Retry-After is 0' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << failure(:throttle_zero)
+      sleeps.clear
+
+      result, elapsed, delta = measure { bot.direct_message('alice', 'help') }
+
+      expect(result).to be_nil
+      expect(elapsed).to be < send_budget
+      expect(sleeps).to all(be >= 1)
+      expect(delta['users.list']).to eq(sleeps.length + 1)
+      expect(delta['users.list']).to be <= send_budget
+    end
+
     it 'still delivers from a refilled cache during the cooldown' do
       plan['users.list'] << failure(:http500)
       bot = described_class.new
@@ -256,7 +295,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       plan['users.list'] << failure(:http500)
       bot = described_class.new
       wait_out_cooldown
-      stub_const("#{described_class}::SEND_USERS_LIST_BUDGET", 0.2)
+      stub_const("#{described_class}::SEND_REQUEST_BUDGET", 0.2)
       plan['users.list'].clear
       plan['users.list'] << -> { Kernel.sleep(5) }
 
@@ -270,7 +309,117 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
   end
 
+  describe 'a startup throttled with an unusable Retry-After' do
+    it 'waits at least 1 s between the retries when Retry-After is 0' do
+      plan['users.list'] << failure(:throttle_zero)
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(calls['users.list']).to eq(11)
+      throttle_waits = sleeps.drop(1) # the first sleep is the startup jitter
+      expect(throttle_waits.length).to eq(10)
+      expect(throttle_waits).to all(be >= 1)
+    end
+
+    it 'falls back to the exponential backoff when Retry-After is not a number' do
+      plan['users.list'] << -> { http_response(429, '', 'Retry-After' => 'soon') }
+      plan['users.list'] << users_ok
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be true
+      expect(sleeps.drop(1).first).to be >= 30
+    end
+  end
+
   describe 'a bot whose token was never verified' do
+    # Startup leaves the bot unverified: auth.test answers ok: false and
+    # lnet.lic is not installed, so no token can be discovered.
+    def unverified_bot
+      allow(Script).to receive(:exists?).with('lnet').and_return(false)
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:ok_false)
+      bot = described_class.new
+      expect(bot.error_message).to include('lnet.lic not found')
+      plan['auth.test'].clear
+      sleeps.clear
+      bot
+    end
+
+    it 'bounds the token check of the reconnect a message triggers' do
+      bot = unverified_bot
+      plan['auth.test'] << failure(:econnreset)
+
+      result, elapsed, delta = measure { bot.direct_message('alice', 'help') }
+
+      expect(result).to be_nil
+      expect(elapsed).to be < send_budget
+      expect(delta['auth.test']).to eq(1)
+      expect(calls['users.list']).to eq(0)
+    end
+
+    it 'abandons a hung token check at the deadline' do
+      bot = unverified_bot
+      stub_const("#{described_class}::SEND_REQUEST_BUDGET", 0.2)
+      plan['auth.test'] << -> { Kernel.sleep(5) }
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = bot.direct_message('alice', 'help')
+      wall = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(result).to be_nil
+      expect(wall).to be < 2
+    end
+
+    it 'bounds the check of a token found over LNet' do
+      bot = unverified_bot
+      lnet = double('lnet script', name: 'lnet', unique_buffer: [])
+      stub_const('LNet', Module.new)
+      allow(LNet).to receive(:server).and_return(double('server', closed?: false))
+      allow(Script).to receive(:running).and_return([lnet])
+      allow(Script).to receive(:hidden).and_return([])
+      allow_any_instance_of(described_class).to receive(:pause)
+      allow_any_instance_of(described_class).to receive(:get)
+        .and_return('[Private]-X:Quilsilgas: "slack_token: found-token"')
+      plan['auth.test'] << failure(:ok_false)   # the stored token
+      plan['auth.test'] << failure(:econnreset) # the token found over LNet
+
+      result, elapsed, delta = measure { bot.direct_message('alice', 'help') }
+
+      expect(result).to be_nil
+      expect(elapsed).to be < send_budget
+      expect(delta['auth.test']).to eq(2)
+      expect(bot.error_message).to include('Unable to locate a Slack token')
+    end
+
+    it 'delivers on the next message after an unexpected error in the token check' do
+      bot = unverified_bot
+      plan['auth.test'] << failure(:econnrefused)
+      plan['auth.test'] << ok({})
+      plan['users.list'] << users_ok
+
+      expect(bot.direct_message('alice', 'help')).to be_nil
+      expect(bot.error_message).to include('Connection refused')
+
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls['users.list']).to eq(1)
+      expect(posted.map { |p| p['channel'] }).to eq(['U1'])
+    end
+
+    it 'keeps the full retry policy for the token check at startup' do
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:econnreset)
+      plan['auth.test'] << ok({})
+      plan['users.list'] << users_ok
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be true
+      expect(calls['auth.test']).to eq(2)
+      expect(sleeps.first).to be >= 30
+    end
+
     it 'bounds the users.list step of the reconnect a message triggers' do
       allow(Script).to receive(:exists?).with('lnet').and_return(false)
       UserVars.slack_token = nil
