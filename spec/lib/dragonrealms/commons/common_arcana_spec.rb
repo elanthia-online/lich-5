@@ -674,6 +674,14 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(DRCA.prepare?('fireball', 10)).to eq('')
         expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
       end
+
+      # Like '', a matched reply that has no failure arm passes through as is.
+      it 'returns a matched reply it has no failure arm for unchanged, keeping symbiosis' do
+        replies = { 'prepare symbiosis' => 'You recall the exact details of the', 'prepare fireball 10' => 'But you\'ve already prepared' }
+        silent_game(sent, replies)
+        expect(DRCA.prepare?('fireball', 10, true)).to eq('But you\'ve already prepared')
+        expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+      end
     end
 
     describe '.cast?' do

@@ -388,8 +388,10 @@ module Lich
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
       # @return [String, false] the matched prep message; or +''+ (truthy) when no
-      #   prep message matched within the DRC.bput timeout; or false on a listed
-      #   failure, a nil +abbrev+, or exhausted retries.
+      #   prep message matched within the DRC.bput timeout; or false on one of
+      #   the failure replies prepare? itself checks for (its +when+ arms), a nil
+      #   +abbrev+, or exhausted retries. Any other matched reply is returned
+      #   as is, even one that reads like a failure.
       #
       # @note A timeout is not a failure. When nothing in prep_messages (or
       #   invoke_messages for a runestone) arrives before bput gives up, bput
