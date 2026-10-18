@@ -113,6 +113,7 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('extracts noun from multi-word item') { expect(described_class.get_noun(' a steel sword')).to eq('sword') }
     it('extracts hyphenated noun') { expect(described_class.get_noun(' a long-sword')).to eq('long-sword') }
     it('extracts noun with apostrophe') { expect(described_class.get_noun(" a thief's pick")).to eq("pick") }
+    it('returns nil when the name does not end in a word') { expect(described_class.get_noun('a 5')).to be_nil }
   end
 
   describe '.remove_flavor_text' do

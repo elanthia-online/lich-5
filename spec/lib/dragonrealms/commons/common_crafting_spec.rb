@@ -417,6 +417,23 @@ describe DRCC do
                           'look in cruc'])
     end
 
+    it 'tilts molten metal listed without an article' do
+      look_replies.push('In the large crucible you see molten bronze.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'skips an entry with no noun to pick up and gives up after one look' do
+      # The real DRC.get_noun returns nil for a name that does not end in a
+      # word (see common_spec.rb); the spec_helper stub never does.
+      allow(common).to receive(:get_noun).with('a 5').and_return(nil)
+      look_replies << 'In the large crucible you see a 5.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:in_hands?)
+      expect(items).not_to have_received(:get_item_unsafe)
+    end
+
     it 'tilts molten metal anywhere in a comma-separated list' do
       look_replies.push('In the large crucible you see a bronze nugget, some molten iron and a granite rock.', empty)
       expect(DRCC.empty_crucible?).to be(true)
