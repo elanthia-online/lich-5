@@ -355,6 +355,16 @@ RSpec.describe '#fput' do
       expect(fput('get sword', interrupt: interrupt, failures: :symbol)).to eq(:interrupted)
     end
 
+    it 'sleeps a roundtime out in tenth-second slices under an interrupt that never fires' do
+      stub_game_responses('...wait 1 seconds.', 'OK.')
+      checks = 0
+      expect(self).to receive(:sleep).with(0.1).exactly(10).times
+      expect(self).to receive(:put).with('get sword').twice
+
+      expect(fput('get sword', interrupt: -> { (checks += 1) > 50 }, failures: :symbol)).to eq('OK.')
+      expect(checks).to eq(10)
+    end
+
     it 'stops on the interrupt while waiting for any response' do
       stub_no_game_responses
       expect(fput('get sword', interrupt: -> { true }, failures: :symbol)).to eq(:interrupted)
