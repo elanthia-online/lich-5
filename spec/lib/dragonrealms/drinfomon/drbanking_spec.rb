@@ -494,6 +494,120 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
+  # Logging inside a write transaction lets other threads run while the lock
+  # is held; one of them that starts a write then waits inside SQLite without
+  # letting the lock holder commit, so both stall for the busy timeout.
+  describe 'logging a row problem while the write lock is held' do
+    # Records every Lich.log line, and whether a transaction was open then.
+    def record_logs
+      depth = 0
+      calls = []
+      allow(adapter).to receive(:transaction).and_wrap_original do |original, &block|
+        depth += 1
+        begin
+          original.call(&block)
+        ensure
+          depth -= 1
+        end
+      end
+      allow(Lich).to receive(:log) { |line| calls << { line: line, in_transaction: depth.positive? } }
+      calls
+    end
+
+    def seed_unreadable_legacy
+      SettingsSpecDB.write_raw(data_dir, 'core', 'DR', 'garbage')
+    end
+
+    before { XMLData.name = 'CharA' }
+
+    {
+      'a balance update'    => ->(m) { m.update_balance('Crossings', 7) },
+      'a deposit'           => ->(m) { m.parse('The clerk slides a small metal box across the counter into which you drop 5 gold Kronars') },
+      'a character reset'   => ->(m) { m.reset_character! },
+      'a reset of all rows' => ->(m) { m.reset_all! },
+      'a read of every row' => ->(m) { m.all_accounts }
+    }.each do |what, operation|
+      it "logs an unreadable old shared row only after the transaction, on #{what}" do
+        XMLData.room_title = '[[Provincial Bank, Teller]]'
+        seed_row('CharA', { 'Crossings' => 1 })
+        seed_unreadable_legacy
+        calls = record_logs
+
+        operation.call(described_module)
+
+        problem = calls.select { |c| c[:line].include?('unreadable settings row core/DR') }
+        expect(problem).not_to be_empty
+        expect(calls.select { |c| c[:in_transaction] }).to eq([])
+        expect(message_strings.grep(/could not/)).to be_empty
+      end
+    end
+
+    it "logs the character's own unreadable row after the transaction, then overwrites it" do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      calls = record_logs
+
+      described_module.update_balance('Crossings', 7)
+
+      expect(calls.map { |c| c[:line] }.join).to include('unreadable settings row core.banking/DR:CharA')
+      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+    end
+
+    it 'logs a row that holds something other than a Hash after the transaction' do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', Marshal.dump([1, 2]))
+      calls = record_logs
+
+      described_module.update_balance('Crossings', 7)
+
+      expect(calls.map { |c| c[:line] }.join).to include('core.banking/DR:CharA holding a Array')
+      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+    end
+
+    it 'still logs the held-back line when the transaction fails, and keeps none for later' do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      calls = record_logs
+
+      described_module.update_balance('Crossings', 7)
+
+      expect(calls.count { |c| c[:line].include?('unreadable settings row core.banking/DR:CharA') }).to eq(1)
+      expect(calls.select { |c| c[:in_transaction] }).to eq([])
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
+      expect(Thread.current[described_module::DEFERRED_LOG_KEY]).to be_nil
+
+      # The next operation starts with an empty buffer: the earlier line is
+      # not written a second time.
+      calls.clear
+      described_module.reset_character!
+      expect(calls.count { |c| c[:line].include?('unreadable settings row core.banking/DR:CharA') }).to eq(0)
+    end
+
+    it 'leaves another thread\'s settings save unblocked while the line is written' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      seed_unreadable_legacy
+      other = Lich::Common::DatabaseAdapter.new(data_dir, :script_auto_settings)
+      logging = Queue.new
+      # Like $stderr.puts, the log call lets other threads run for a moment.
+      allow(Lich).to receive(:log) do
+        logging << true
+        sleep 0.3
+      end
+
+      writer = Thread.new { described_module.update_balance('Crossings', 7) }
+      logging.pop
+      started = Time.now
+      saved = other.save_settings('otherscript', { 'n' => 1 }, 'DR:CharA')
+      elapsed = Time.now - started
+      writer.join
+
+      expect(saved).to be(true)
+      expect(elapsed).to be < 2
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+    ensure
+      other&.instance_variable_get(:@db)&.disconnect
+    end
+  end
+
   describe '.my_accounts' do
     it 'returns empty hash for new character' do
       expect(described_module.my_accounts).to eq({})

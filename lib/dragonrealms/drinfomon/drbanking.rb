@@ -92,6 +92,10 @@ module Lich
       # Pattern for parsing balance amounts from strings
       BALANCE_AMOUNT_PATTERN = /(\d+)\s+(platinum|gold|silver|bronze|copper)/i.freeze
 
+      # Thread-local key of the log lines held back while a transaction runs
+      # (see in_transaction)
+      DEFERRED_LOG_KEY = :lich_drbanking_deferred_log
+
       class << self
         # Returns the bank accounts of every character in this game, read
         # fresh from the database on every call (nothing is cached).
@@ -298,9 +302,11 @@ module Lich
         end
 
         # Reset all bank data for all characters in this game.
-        # Empties every character's row (and the legacy row) in one
-        # transaction. Rows are overwritten without being read, so a row that
-        # can't be loaded is cleared too.
+        # Empties every character's row and removes the old game-wide row's
+        # 'banking' key, in one transaction. Character rows are overwritten
+        # without being read, so a character row that can't be loaded is
+        # cleared too. An old game-wide row that can't be loaded is left as it
+        # is, since it isn't DRBanking's alone.
         def reset_all!
           game = game_code
           unless game
@@ -309,7 +315,7 @@ module Lich
           end
 
           db = adapter
-          db.transaction do
+          in_transaction(db) do
             migrate_legacy!(db)
             db.scopes_by_prefix(STORE_SCRIPT, "#{game}:").each do |scope|
               db.save_settings!(STORE_SCRIPT, {}, scope)
@@ -355,7 +361,7 @@ module Lich
           legacy = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
           if legacy
             begin
-              db.transaction { migrate_legacy!(db) }
+              in_transaction(db) { migrate_legacy!(db) }
               legacy = nil
             rescue StandardError => e
               report_storage_error('move old bank data to per-character storage', e)
@@ -423,7 +429,7 @@ module Lich
           end
 
           db = adapter
-          db.transaction do
+          in_transaction(db) do
             migrate_legacy!(db)
             yield db, scope
           end
@@ -432,8 +438,36 @@ module Lich
           nil
         end
 
+        # Runs the block in one write transaction (adapter.transaction), and
+        # holds back any log line written meanwhile (see log_row_problem)
+        # until the transaction has ended. Logging writes to $stderr, which
+        # lets other threads run; one of them that starts a write then waits
+        # for the lock inside SQLite without letting this thread run again to
+        # commit, so both would stall until the busy timeout. Nested calls
+        # share the outermost call's buffer. The held-back lines are written
+        # however the block ends, error or not.
+        # @return [Object] what the block returned
+        def in_transaction(db, &block)
+          outer = Thread.current[DEFERRED_LOG_KEY]
+          Thread.current[DEFERRED_LOG_KEY] = outer || []
+          db.transaction(&block)
+        ensure
+          unless outer
+            held = Thread.current[DEFERRED_LOG_KEY] || []
+            Thread.current[DEFERRED_LOG_KEY] = nil
+            held.each { |line| Lich.log(line) }
+          end
+        end
+
+        # Logs a problem with a stored row: right away, or after the
+        # transaction when called inside in_transaction.
+        def log_row_problem(line)
+          held = Thread.current[DEFERRED_LOG_KEY]
+          held ? held << line : Lich.log(line)
+        end
+
         # Moves the legacy game-wide blob into per-character rows. Must run
-        # inside adapter.transaction. Safe to run any number of times, and
+        # inside in_transaction. Safe to run any number of times, and
         # from several sessions at once:
         # - A character that already has a row keeps it (even one that can't
         #   be loaded). That row is newer than the blob, or was cleared on
@@ -466,19 +500,20 @@ module Lich
         # Reads one row. A row that can't be loaded (a damaged blob can make
         # Marshal.load raise almost any StandardError), or doesn't hold a
         # Hash, is logged and treated as empty, so one corrupted row can't
-        # block every read and write of balances (`;banks reset` then
-        # overwrites it). Database errors still raise.
+        # block every read and write of balances (a BALANCE line or
+        # `;banks reset` overwrites a character's own row; the old game-wide
+        # row is left as it is). Database errors still raise.
         # @return [Hash]
         def read_row(db, script, scope)
           row = db.get_settings(script, scope)
           return row if row.is_a?(Hash)
 
-          Lich.log("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
+          log_row_problem("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
           {}
         rescue Sequel::Error
           raise
         rescue StandardError => e
-          Lich.log("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
+          log_row_problem("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
           {}
         end
 
