@@ -45,7 +45,7 @@ module Lich
         end
 
         begin
-          upsert(script_name, scope, blob)
+          upsert_settings(script_name, scope, blob)
           return true
         rescue Sequel::DatabaseError => db_err
           Lich::Messaging.msg("error", "--- Database error while saving settings ---")
@@ -73,6 +73,18 @@ module Lich
         @db.transaction(mode: :immediate, &block)
       end
 
+      # Lists the scopes of every row for script_name whose scope starts with
+      # scope_prefix, without loading the stored values (so a row that can't
+      # be loaded is still listed).
+      #
+      # @param script_name [String]
+      # @param scope_prefix [String] matched literally (not as a LIKE pattern)
+      # @return [Array<String>]
+      def scopes_by_prefix(script_name, scope_prefix)
+        prefix = scope_prefix.to_s
+        @table.where(script: script_name).select_map(:scope).map(&:to_s).select { |scope| scope.start_with?(prefix) }
+      end
+
       # Reads every row for script_name whose scope starts with scope_prefix,
       # straight from the database (no cache).
       #
@@ -96,33 +108,53 @@ module Lich
         end
       end
 
+      # Writes one settings row without reading it first.
+      #
+      # Unlike #save_settings, which reports errors and returns false, this
+      # raises, so a caller inside #transaction gets the whole transaction
+      # rolled back and can tell that nothing was written.
+      #
+      # @param script_name [String]
+      # @param settings [Hash]
+      # @param scope [String]
+      # @return [Hash] settings
+      # @raise [TypeError] if settings is not a Hash or can't be serialized
+      # @raise [Sequel::DatabaseError] if the database is locked or the write fails
+      def save_settings!(script_name, settings, scope)
+        raise TypeError, "settings must be a Hash, got #{settings.class}" unless settings.is_a?(Hash)
+
+        upsert_settings(script_name, scope, Sequel::SQL::Blob.new(Marshal.dump(settings)))
+        settings
+      end
+
       # Atomically reads, changes and writes one settings row.
       #
       # Yields a fresh copy of the stored hash ({} when there is no row) inside
       # #transaction. If the block returns a Hash, that Hash is written to the
       # row; if it returns nil, the row is left as it was.
       #
-      # Unlike #save_settings, errors are raised rather than logged, so the
-      # caller can tell that nothing was written.
+      # Raises on every failure, like #save_settings!, so the caller can tell
+      # that nothing was written.
       #
       # @return [Hash, nil] what the block returned
       # @raise [Sequel::DatabaseError] if the database is locked or the write fails
-      # @raise [TypeError] if the block returns something other than a Hash or nil
-      def update_settings(script_name, scope)
+      # @raise [TypeError] if the stored row can't be loaded, or the block
+      #   returns something other than a Hash or nil
+      def update_settings!(script_name, scope)
         transaction do
           updated = yield(get_settings(script_name, scope))
           unless updated.nil? || updated.is_a?(Hash)
-            raise TypeError, "update_settings block must return a Hash or nil, got #{updated.class}"
+            raise TypeError, "update_settings! block must return a Hash or nil, got #{updated.class}"
           end
 
-          upsert(script_name, scope, Sequel::SQL::Blob.new(Marshal.dump(updated))) if updated
+          save_settings!(script_name, updated, scope) if updated
           updated
         end
       end
 
       private
 
-      def upsert(script_name, scope, blob)
+      def upsert_settings(script_name, scope, blob)
         @table
           .insert_conflict(target: [:script, :scope], update: { hash: blob })
           .insert(script: script_name, scope: scope, hash: blob)

@@ -9,11 +9,13 @@ module Lich
     #
     # Storage: each character's balances live in that character's own row of
     # the shared settings table (script STORE_SCRIPT, scope "<game>:<name>",
-    # value { "Town" => copper }). Only that character's session writes its
-    # row, every read comes straight from the database, and every write is an
-    # atomic read-modify-write. So several sessions on one install can't
-    # overwrite each other's balances, and `;banks all` always shows every
-    # character's latest recorded balances.
+    # value { "Town" => copper }). Normally only that character's session
+    # writes its row; the one-time migration and `;banks reset all` write all
+    # of this game's rows, each in one transaction. Every read comes straight
+    # from the database, and every write is an atomic read-modify-write. So
+    # several sessions on one install can't overwrite each other's balances,
+    # and `;banks all` always shows every character's latest recorded
+    # balances. A row that can't be loaded is logged and treated as empty.
     #
     # Older versions kept every character in one game-wide row (script 'core',
     # scope "<game>", key 'banking'), and each session wrote back its own stale
@@ -101,7 +103,7 @@ module Lich
           return {} unless game
 
           db = adapter
-          legacy = legacy_entries(read_legacy_row(db, game), present_only: true)
+          legacy = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
           if legacy
             begin
               db.transaction { migrate_legacy!(db) }
@@ -311,7 +313,9 @@ module Lich
         end
 
         # Reset all bank data for all characters in this game.
-        # Empties every character's row (and the legacy row) in one transaction.
+        # Empties every character's row (and the legacy row) in one
+        # transaction. Rows are overwritten without being read, so a row that
+        # can't be loaded is cleared too.
         def reset_all!
           game = game_code
           unless game
@@ -322,8 +326,8 @@ module Lich
           db = adapter
           db.transaction do
             migrate_legacy!(db)
-            db.get_settings_by_scope_prefix(STORE_SCRIPT, "#{game}:").each_key do |scope|
-              db.update_settings(STORE_SCRIPT, scope) { |_accounts| {} }
+            db.scopes_by_prefix(STORE_SCRIPT, "#{game}:").each do |scope|
+              db.save_settings!(STORE_SCRIPT, {}, scope)
             end
           end
           Lich::Messaging.msg('info', 'DRBanking: Cleared all bank data for all characters.')
@@ -369,8 +373,9 @@ module Lich
         end
 
         # Atomically changes this character's row, after moving any legacy
-        # data in the same transaction. Yields a fresh copy of the row; the
-        # block returns the Hash to store, or nil to store nothing.
+        # data in the same transaction. Yields a fresh copy of the row ({}
+        # when there is none or it can't be loaded); the block returns the
+        # Hash to store, or nil to store nothing.
         # @param action [String] what is being done, for error messages
         # @return [Hash, nil] the stored Hash; nil if nothing was stored
         def modify_my_accounts(action)
@@ -383,7 +388,9 @@ module Lich
           db = adapter
           db.transaction do
             migrate_legacy!(db)
-            db.update_settings(STORE_SCRIPT, scope) { |accounts| yield accounts }
+            updated = yield read_row(db, STORE_SCRIPT, scope)
+            db.save_settings!(STORE_SCRIPT, updated, scope) unless updated.nil?
+            updated
           end
         rescue StandardError => e
           report_storage_error(action, e)
@@ -393,8 +400,9 @@ module Lich
         # Moves the legacy game-wide blob into per-character rows. Must run
         # inside adapter.transaction. Safe to run any number of times, and
         # from several sessions at once:
-        # - A character that already has a row keeps it. That row is newer
-        #   than the blob, or was cleared on purpose.
+        # - A character that already has a row keeps it (even one that can't
+        #   be loaded). That row is newer than the blob, or was cleared on
+        #   purpose.
         # - The 'banking' key leaves the old row in the same transaction, so
         #   the next run finds nothing to do.
         # @return [Boolean] true if there was legacy data to move
@@ -402,32 +410,37 @@ module Lich
           game = game_code
           return false unless game
 
-          entries = legacy_entries(read_legacy_row(db, game), present_only: true)
+          entries = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
           return false unless entries
 
           prefix = "#{game}:"
-          existing = db.get_settings_by_scope_prefix(STORE_SCRIPT, prefix)
+          existing = db.scopes_by_prefix(STORE_SCRIPT, prefix)
           entries.each do |name, towns|
             scope = "#{prefix}#{name}"
-            next if existing.key?(scope)
+            next if existing.include?(scope)
 
-            db.update_settings(STORE_SCRIPT, scope) { |_accounts| towns }
+            db.save_settings!(STORE_SCRIPT, towns, scope)
           end
-          db.update_settings(LEGACY_SCRIPT, game) do |row|
+          db.update_settings!(LEGACY_SCRIPT, game) do |row|
             row.delete(SETTINGS_KEY)
             row
           end
           true
         end
 
-        # Reads the legacy game-wide row. A row that can't be loaded is logged
-        # and treated as having no bank data, so it can't block every read
-        # and write of balances. Database errors still raise.
+        # Reads one row. A row that can't be loaded, or doesn't hold a Hash,
+        # is logged and treated as empty, so one corrupted row can't block
+        # every read and write of balances (`;banks reset` then overwrites
+        # it). Database errors still raise.
         # @return [Hash]
-        def read_legacy_row(db, game)
-          db.get_settings(LEGACY_SCRIPT, game)
+        def read_row(db, script, scope)
+          row = db.get_settings(script, scope)
+          return row if row.is_a?(Hash)
+
+          Lich.log("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
+          {}
         rescue TypeError, ArgumentError, EncodingError => e
-          Lich.log("error: DRBanking ignoring unreadable legacy row #{LEGACY_SCRIPT}/#{game}: #{e.class}: #{e.message}")
+          Lich.log("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
           {}
         end
 

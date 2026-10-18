@@ -48,10 +48,29 @@ module SettingsSpecDB
     end
   end
 
-  # @return [Hash{Array(String, String) => Object}] [script, scope] => stored value
+  # Makes every insert or update of the row with this scope fail inside
+  # SQLite, as a real write failure would (the upsert can take either path).
+  def fail_writes_to(data_dir, scope)
+    with_db(data_dir) do |db|
+      %w[INSERT UPDATE].each do |event|
+        db.run("CREATE TRIGGER fail_#{event.downcase}_#{scope.gsub(/\W/, '_')} BEFORE #{event} ON script_auto_settings " \
+               "WHEN NEW.scope = #{db.literal(scope)} BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END")
+      end
+    end
+  end
+
+  # @return [Hash{Array(String, String) => Object}] [script, scope] => stored
+  #   value, or :unreadable for a row that can't be loaded
   def rows(data_dir)
     with_db(data_dir) do |db|
-      db[:script_auto_settings].all.to_h { |r| [[r[:script], r[:scope]], Marshal.load(r[:hash])] }
+      db[:script_auto_settings].all.to_h do |r|
+        value = begin
+          Marshal.load(r[:hash])
+        rescue TypeError, ArgumentError
+          :unreadable
+        end
+        [[r[:script], r[:scope]], value]
+      end
     end
   end
 end

@@ -379,15 +379,45 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(rows[%w[core DR]]).to eq({})
     end
 
-    it 'keeps the old row untouched when the write fails' do
+    # The database itself refuses one character's row (no stubbed adapter), so
+    # these hold only if every write in the move raises and rolls it all back.
+    it "keeps the old row and every character when one character's row can't be written" do
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharB')
+
+      expect(described_module.all_accounts).to eq('CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 })
+      expect(rows).to eq(%w[core DR] => { 'banking' => { 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } } })
+      expect(message_strings.last).to include('could not move old bank data', 'simulated write failure')
+    end
+
+    it "keeps the old row untouched when a write's move fails" do
+      XMLData.name = 'CharA'
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharB')
+
+      described_module.update_balance('Crossings', 7)
+      expect(rows).to eq(%w[core DR] => { 'banking' => { 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } } })
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
+      expect(message_strings.grep(/Updated Crossings/)).to be_empty
+    end
+
+    it "keeps the old row untouched when the character's own write fails" do
       XMLData.name = 'CharA'
       seed_legacy({ 'CharA' => { 'Crossings' => 1 } })
-      allow(adapter).to receive(:update_settings).and_call_original
-      allow(adapter).to receive(:update_settings).with('core.banking', 'DR:CharA').and_raise(Sequel::DatabaseError, 'disk I/O error')
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
 
       described_module.update_balance('Crossings', 7)
       expect(rows).to eq(%w[core DR] => { 'banking' => { 'CharA' => { 'Crossings' => 1 } } })
-      expect(message_strings.last).to include('could not save the Crossings balance', 'disk I/O error')
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
+    end
+
+    it "keeps an existing row it can't load instead of filling it from the old entry" do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      seed_legacy({ 'CharA' => { 'Crossings' => 1 }, 'CharB' => { 'Shard' => 2 } })
+
+      expect(described_module.all_accounts).to eq('CharB' => { 'Shard' => 2 })
+      expect(rows[['core.banking', 'DR:CharA']]).to eq(:unreadable)
+      expect(rows[%w[core DR]]).to eq({})
     end
   end
 
@@ -457,6 +487,37 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       described_module.update_balance('Crossings', 10_000)
       expect(rows).to eq({})
       expect(message_strings.last).to include("Can't save the Crossings balance before the character is known")
+    end
+
+    it "starts again from an empty row when this character's row can't be loaded" do
+      XMLData.name = 'CharA'
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      logged = []
+      allow(Lich).to receive(:log) { |msg| logged << msg }
+
+      described_module.update_balance('Crossings', 7)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+      expect(message_strings.last).to include('Updated Crossings balance')
+      expect(logged.join).to include('unreadable settings row core.banking/DR:CharA')
+    end
+
+    it "starts again from an empty row when this character's row holds no Hash" do
+      XMLData.name = 'CharA'
+      SettingsSpecDB.write(data_dir, 'core.banking', 'DR:CharA', [1, 2])
+
+      described_module.update_balance('Crossings', 7)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+    end
+
+    it 'claims no update and keeps the row when the database refuses the write' do
+      XMLData.name = 'CharA'
+      seed_row('CharA', { 'Crossings' => 1 })
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+
+      described_module.update_balance('Crossings', 10_000)
+      expect(rows).to eq(['core.banking', 'DR:CharA'] => { 'Crossings' => 1 })
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure')
+      expect(message_strings.grep(/Updated Crossings/)).to be_empty
     end
 
     it 'reports a database error instead of raising, and claims no update' do
@@ -658,6 +719,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
           expect(message_strings.last).to include('No prior balance recorded')
           expect(message_strings.last).to include('check BALANCE')
         end
+
+        it "treats a row it can't load as no prior balance and leaves it for BALANCE or reset" do
+          SettingsSpecDB.write_raw(data_dir, 'core.banking', "DR:#{XMLData.name}", 'garbage')
+          described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 platinum Kronars')
+          expect(message_strings.last).to include('No prior balance recorded')
+          expect(message_strings.grep(/could not/)).to be_empty
+          expect(rows[['core.banking', "DR:#{XMLData.name}"]]).to eq(:unreadable)
+        end
       end
 
       describe 'deposit all' do
@@ -812,6 +881,26 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(rows[['core.banking', "DR:#{current_char}"]]).to eq({})
     end
 
+    it "clears a row that can't be loaded, so later writes work again" do
+      XMLData.name = 'CharA'
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+
+      described_module.reset_character!
+      expect(rows[['core.banking', 'DR:CharA']]).to eq({})
+      expect(message_strings.last).to include('Cleared bank data for CharA')
+
+      described_module.update_balance('Crossings', 7)
+      expect(described_module.my_accounts).to eq('Crossings' => 7)
+    end
+
+    it 'does not claim success when the database refuses the write' do
+      XMLData.name = 'CharA'
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.reset_character!
+      expect(message_strings.grep(/Cleared bank data/)).to be_empty
+      expect(message_strings.last).to include('could not clear your bank data', 'simulated write failure')
+    end
+
     it 'does not claim success when the write fails' do
       allow(adapter).to receive(:transaction).and_raise(Sequel::DatabaseError, 'database is locked')
       described_module.reset_character!
@@ -852,6 +941,26 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         ['core.banking', 'DR:CharB']  => {},
         ['core.banking', 'DRF:CharF'] => { 'Crossings' => 2 }
       )
+    end
+
+    it "clears rows that can't be loaded, without reading them" do
+      SettingsSpecDB.write_raw(data_dir, 'core.banking', 'DR:CharA', 'garbage')
+      seed_row('CharB', { 'Shard' => 3 })
+      described_module.reset_all!
+
+      expect(rows).to eq(['core.banking', 'DR:CharA'] => {}, ['core.banking', 'DR:CharB'] => {})
+      expect(message_strings.last).to include('Cleared all bank data')
+    end
+
+    it 'keeps every row and claims nothing when one row cannot be cleared' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      seed_row('CharB', { 'Shard' => 3 })
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharB')
+      described_module.reset_all!
+
+      expect(rows).to eq(['core.banking', 'DR:CharA'] => { 'Crossings' => 1 }, ['core.banking', 'DR:CharB'] => { 'Shard' => 3 })
+      expect(message_strings.grep(/Cleared all/)).to be_empty
+      expect(message_strings.last).to include('could not clear all bank data', 'simulated write failure')
     end
 
     it 'does not claim success when the write fails' do

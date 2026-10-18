@@ -77,35 +77,85 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       end
     end
 
-    describe '#update_settings' do
+    describe '#update_settings!' do
       it 'yields {} for a missing row and writes what the block returns' do
         yielded = nil
-        @adapter.update_settings('s', 'x') { |h| yielded = h; h.merge('a' => 1) }
+        @adapter.update_settings!('s', 'x') { |h| yielded = h; h.merge('a' => 1) }
         expect(yielded).to eq({})
         expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => { 'a' => 1 })
       end
 
       it 'yields the stored row read fresh' do
         SettingsSpecDB.write(tmp_dir, 's', 'x', { 'a' => 1 })
-        @adapter.update_settings('s', 'x') { |h| h.merge('b' => 2) }
+        @adapter.update_settings!('s', 'x') { |h| h.merge('b' => 2) }
         expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => { 'a' => 1, 'b' => 2 })
       end
 
       it 'leaves the row alone and creates none when the block returns nil' do
         SettingsSpecDB.write(tmp_dir, 's', 'x', { 'a' => 1 })
-        expect(@adapter.update_settings('s', 'x') { |h| h['a'] = 2; nil }).to be_nil
-        expect(@adapter.update_settings('s', 'y') { nil }).to be_nil
+        expect(@adapter.update_settings!('s', 'x') { |h| h['a'] = 2; nil }).to be_nil
+        expect(@adapter.update_settings!('s', 'y') { nil }).to be_nil
         expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => { 'a' => 1 })
       end
 
       it 'raises and writes nothing when the block returns something else' do
-        expect { @adapter.update_settings('s', 'x') { [1] } }.to raise_error(TypeError, /Hash or nil, got Array/)
+        expect { @adapter.update_settings!('s', 'x') { [1] } }.to raise_error(TypeError, /Hash or nil, got Array/)
         expect(SettingsSpecDB.rows(tmp_dir)).to eq({})
       end
 
       it 'raises when the value cannot be serialized' do
-        expect { @adapter.update_settings('s', 'x') { { 'p' => proc {} } } }.to raise_error(TypeError)
+        expect { @adapter.update_settings!('s', 'x') { { 'p' => proc {} } } }.to raise_error(TypeError)
         expect(SettingsSpecDB.rows(tmp_dir)).to eq({})
+      end
+
+      it "raises without yielding when the stored row can't be loaded" do
+        SettingsSpecDB.write_raw(tmp_dir, 's', 'x', 'garbage')
+        yielded = false
+        expect { @adapter.update_settings!('s', 'x') { yielded = true; {} } }.to raise_error(TypeError)
+        expect(yielded).to be(false)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => :unreadable)
+      end
+
+      it 'raises, instead of reporting and returning nil, when the database refuses the write' do
+        SettingsSpecDB.fail_writes_to(tmp_dir, 'x')
+        expect { @adapter.update_settings!('s', 'x') { { 'a' => 1 } } }
+          .to raise_error(Sequel::DatabaseError, /simulated write failure/)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq({})
+      end
+    end
+
+    describe '#save_settings!' do
+      it 'writes the row without reading it, so it replaces a row that cannot be loaded' do
+        SettingsSpecDB.write_raw(tmp_dir, 's', 'x', 'garbage')
+        expect(@adapter.save_settings!('s', { 'a' => 1 }, 'x')).to eq('a' => 1)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => { 'a' => 1 })
+      end
+
+      it 'raises and writes nothing for a non-Hash or unserializable value' do
+        expect { @adapter.save_settings!('s', [1], 'x') }.to raise_error(TypeError, /must be a Hash, got Array/)
+        expect { @adapter.save_settings!('s', { 'p' => proc {} }, 'x') }.to raise_error(TypeError)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq({})
+      end
+
+      it 'raises when the database refuses the write' do
+        SettingsSpecDB.fail_writes_to(tmp_dir, 'x')
+        expect { @adapter.save_settings!('s', { 'a' => 1 }, 'x') }
+          .to raise_error(Sequel::DatabaseError, /simulated write failure/)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq({})
+      end
+    end
+
+    describe '#scopes_by_prefix' do
+      it "lists matching scopes literally, including rows that can't be loaded" do
+        SettingsSpecDB.write(tmp_dir, 's', 'DR:a', { 'a' => 1 })
+        SettingsSpecDB.write_raw(tmp_dir, 's', 'DR:bad', 'garbage')
+        SettingsSpecDB.write(tmp_dir, 's', 'DRF:c', { 'c' => 1 })
+        SettingsSpecDB.write(tmp_dir, 's', 'D%:d', { 'd' => 1 })
+        SettingsSpecDB.write(tmp_dir, 'other', 'DR:e', { 'e' => 1 })
+
+        expect(@adapter.scopes_by_prefix('s', 'DR:')).to contain_exactly('DR:a', 'DR:bad')
+        expect(@adapter.scopes_by_prefix('s', 'D%')).to eq(['D%:d'])
+        expect(@adapter.scopes_by_prefix('s', 'dr:')).to eq([])
       end
     end
 
@@ -113,8 +163,8 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       it 'keeps nothing written inside it when the block raises' do
         expect {
           @adapter.transaction do
-            @adapter.update_settings('s', 'x') { { 'a' => 1 } }
-            @adapter.update_settings('s', 'y') { { 'b' => 2 } }
+            @adapter.update_settings!('s', 'x') { { 'a' => 1 } }
+            @adapter.update_settings!('s', 'y') { { 'b' => 2 } }
             raise 'boom'
           end
         }.to raise_error(RuntimeError, 'boom')
@@ -141,7 +191,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           module Lich; def self.log(*) = nil; end
           adapter = Lich::Common::DatabaseAdapter.new(ARGV[0], :script_auto_settings)
           #{increments}.times do
-            adapter.update_settings('s', 'counter') { |h| h.merge('n' => h.fetch('n', 0) + 1) }
+            adapter.update_settings!('s', 'counter') { |h| h.merge('n' => h.fetch('n', 0) + 1) }
           end
         RUBY
         pids = Array.new(workers) { Process.spawn(RbConfig.ruby, '-e', script, tmp_dir) }
