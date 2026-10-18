@@ -9,7 +9,8 @@ module Lich
       LOOK_CRUCIBLE_NOT_FOUND = '^I could not find'
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
-      LOOK_CRUCIBLE_MOLTEN = /crucible you see some molten/.freeze
+      # Matches one entry of the LOOK_CRUCIBLE_SEE_PATTERN items list.
+      LOOK_CRUCIBLE_MOLTEN = /\A(?:(?:some|an?)\s+)?molten\s/.freeze
       EMPTY_CRUCIBLE_MAX_PASSES = 3
 
       LOOK_ANVIL_NOT_FOUND = '^I could not find'
@@ -127,6 +128,8 @@ module Lich
 
       # Tilts out molten metal and clears clutter, then looks again, up to
       # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
+      # Molten metal is found wherever it appears in the list. Clutter is only
+      # disposed of when it was actually picked up from the crucible.
       def empty_crucible?(pass: 0)
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
@@ -142,20 +145,21 @@ module Lich
             return false
           end
 
-          if result.match?(LOOK_CRUCIBLE_MOLTEN)
+          match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
+          return false unless match
+
+          contents = match[:items]
+                     .split(/(?:,|and) (?:some|an|a)/)
+                     .map(&:strip)
+          if contents.any? { |entry| entry.match?(LOOK_CRUCIBLE_MOLTEN) }
             fput('tilt crucible')
             fput('tilt crucible')
           else
-            match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
-            return false unless match
-
-            clutter = match[:items]
-                      .split(/(?:,|and) (?:some|an|a)/)
-                      .map(&:strip)
-            clutter.each do |junk|
+            contents.each do |junk|
               junk = DRC.get_noun(junk)
-              DRCI.get_item_unsafe(junk, 'crucible')
-              DRCI.dispose_trash(junk)
+              # A failed GET leaves nothing in hand, and dispose_trash would
+              # then fetch a same-noun item from the player's own containers.
+              DRCI.dispose_trash(junk) if DRCI.get_item_unsafe(junk, 'crucible')
             end
           end
           DRCC.empty_crucible?(pass: pass + 1)
