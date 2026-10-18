@@ -34,6 +34,16 @@ module Lich
         end
       end
 
+      it 'keeps non-corporeal record classifications consistent with their table keys' do
+        described_class.table.fetch(:non_corporeal).each do |location, ranks|
+          ranks.each do |rank, record|
+            expect(described_class.clean_key(record[:type])).to eq('non_corporeal')
+            expect(described_class.clean_key(record[:location].to_s)).to eq(location.to_s)
+            expect(record[:rank]).to eq(rank)
+          end
+        end
+      end
+
       describe '.parse' do
         # Records whose regex is a plain anchored literal can be turned back
         # into a matching input line, giving us real table-driven fixtures.

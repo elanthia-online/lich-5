@@ -320,6 +320,7 @@ module Lich
                                   :regex           => /^To your horror, .*? substance flows around the wound without leaving a trace./ },
                            6 =>
                                 { :type            => "non-corporeal",
+                                  :location        => "neck",
                                   :rank            => 6,
                                   :damage          => 0,
                                   :position        => nil,

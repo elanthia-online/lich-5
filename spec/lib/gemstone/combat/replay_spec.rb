@@ -3,6 +3,8 @@
 require_relative '../../../spec_helper'
 require 'gemstone/combat/parser'
 require 'gemstone/combat/processor'
+require 'gemstone/combat/recorder'
+require 'tmpdir'
 
 # Replay-fidelity regression net.
 #
@@ -113,6 +115,36 @@ RSpec.describe 'Combat replay fidelity' do
   blobs = load_blobs(fixture_dir)
   it 'has a non-empty curated fixture set' do
     expect(blobs.size).to be >= 50
+  end
+
+  it 'records the companion vocal-cords critical as a neck hit' do
+    lines = File.readlines(File.join(fixture_dir, 'companion.txt'), chomp: true)
+                .reject { |line| line.start_with?('#') || line.strip.empty? }
+    events = processor.parse_events(lines)
+    expect(events.map { |event| event[:name] }).to eq([:companion])
+    expect(events.first[:hits]).to contain_exactly(
+      include(damage: 30, crit: include(type: 'non-corporeal', location: 'neck', rank: 6, wound_rank: 0))
+    )
+    allow(Lich::Common::Events).to receive(:off)
+
+    Dir.mktmpdir('companion-neck-replay') do |dir|
+      path = File.join(dir, 'combat.db')
+      recorder = Lich::Gemstone::Combat::Recorder.new(path)
+      begin
+        recorder.start_session(character: 'Tester', source: 'companion replay')
+        events.each { |event| recorder.record(:attack, event) }
+        db = SQLite3::Database.new(path)
+        db.results_as_hash = true
+        rows = db.execute('SELECT damage, location, body_part, crit_type, crit_rank, wound_rank FROM hits')
+        expect(rows).to contain_exactly(
+          include('damage' => 30, 'location' => 'neck', 'body_part' => 'neck',
+                  'crit_type' => 'non-corporeal', 'crit_rank' => 6, 'wound_rank' => 0)
+        )
+      ensure
+        db&.close
+        recorder.close
+      end
+    end
   end
 
   blobs.each do |header, expect_line, lines|
