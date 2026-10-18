@@ -147,12 +147,17 @@ module Lich
 
       # Wears items from the target set that are not currently in the combat inventory.
       #
-      # Stows any target items found in hands before wearing. Returns items
-      # that could not be worn (missing from containers).
+      # Target items already in a hand are put away first via {#stow_weapon},
+      # which sends the WEAR itself for worn items; a held item whose put-away
+      # fails is reported as missing (with a check-your-hands line) rather than
+      # retried. The hands are checked again just before each put-away; a held
+      # item that has left the hand by then joins the unheld items, which are
+      # then fetched and worn. Returns, in gear-set order, every item that
+      # could not be worn or put away.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
-      # @return [Array<DRC::Item>] items that could not be worn
+      # @return [Array<DRC::Item>] items that could not be worn or put away
       # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
@@ -161,16 +166,42 @@ module Lich
           Lich::Messaging.msg("plain", "EquipmentManager: target: #{target_items.map(&:short_name).join(',')}")
         end
 
-        missing_items = target_items
-                        .reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
-                        .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
+        not_worn = target_items.reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
+        held, missing_items = not_worn.partition { |item| item_in_hand?(item) }
+
+        # Put held items away first so the hands are free for the wears below.
+        # stow_weapon already sent the WEAR for a worn item, so a failure here
+        # is final: wearing it again would only repeat the same refusal or
+        # timeout. An item that is no longer in hand by its turn (an earlier
+        # put-away took the hand it matched) is fetched and worn instead.
+        held_failures = []
+        held.each do |item|
+          if !item_in_hand?(item)
+            missing_items << item
+          elsif !stow_weapon(item.short_name)
+            held_failures << item
+          end
+        end
+        Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{held_failures.map(&:short_name).join(', ')}") unless held_failures.empty?
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
-        missing_items.reject do |item|
+        wear_failures = missing_items.reject do |item|
           item_copy = item.dup
           item_copy.instance_variable_set(:@worn, false)
           wear_item?(item_copy)
         end
+
+        failures = held_failures + wear_failures
+        not_worn.select { |item| failures.include?(item) }
+      end
+
+      # Whether either hand holds something matching the item.
+      #
+      # @param item [DRC::Item] gear item to look for
+      # @return [Boolean]
+      # @api private
+      def item_in_hand?(item)
+        [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any?
       end
 
       # Removes currently worn combat items that are not in the target gear set.
@@ -832,7 +863,9 @@ module Lich
       #
       # @param description [String, nil] weapon description to match, or nil to stow both hands
       # @param transform_depth [Integer] remaining transform recursion depth
-      # @return [void]
+      # @return [Boolean, nil] true if the item was put away, false if the put-away
+      #   command failed, nil if the description is not in the gear list or the
+      #   transform depth ran out; always nil when called without a description
       def stow_weapon(description = nil, transform_depth: 3)
         unless description
           return unless DRC.right_hand || DRC.left_hand
@@ -863,19 +896,6 @@ module Lich
         end
       end
 
-      # Executes a stow action with automatic recovery on common failure conditions.
-      #
-      # Handles unload prompts, fan close, combat busy, movement lock,
-      # container size, and wound/sheath failures by retrying with
-      # corrective actions.
-      #
-      # @param action [String] game command to execute (e.g., "sheath my sword")
-      # @param weapon_name [String] weapon noun for recovery commands
-      # @param accept_strings [Array<Regexp, String>] success patterns to match
-      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
-      # @param retries [Integer] remaining retry attempts
-      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
-      #
       # Stows an item based on its configured storage type (tie, sheath, container, or default stow).
       #
       # Handles the common tie/wield/container/stow decision shared by
@@ -898,6 +918,19 @@ module Lich
         end
       end
 
+      # Executes a stow action with automatic recovery on common failure conditions.
+      #
+      # Handles unload prompts, fan close, combat busy, movement lock,
+      # container size, and wound/sheath failures by retrying with
+      # corrective actions.
+      #
+      # @param action [String] game command to execute (e.g., "sheath my sword")
+      # @param weapon_name [String] weapon noun for recovery commands
+      # @param accept_strings [Array<Regexp, String>] success patterns to match
+      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
+      # @param retries [Integer] remaining retry attempts
+      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
+      #
       # @see STOW_RECOVERY_PATTERNS
       # @see STOW_HELPER_MAX_RETRIES
       # @api private

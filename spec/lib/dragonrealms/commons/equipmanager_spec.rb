@@ -1225,4 +1225,269 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       data[:transform][:failure_recovery].call('orb', item, "You'll need a free hand to do that!")
     end
   end
+
+  # --- wear_equipment_set? with gear-set items already in hand ----------
+
+  describe '#wear_equipment_set? with gear-set items already in hand' do
+    # Plain gear fixture: wear_missing_items dups items and flips @worn, so the
+    # fixture must keep its state in instance variables (a double cannot).
+    let(:gear_class) do
+      Class.new do
+        attr_reader :short_name, :short_regex, :worn, :needs_unloading, :transforms_to, :tie_to, :wield, :container
+
+        def initialize(short_name:, short_regex:, worn:, wield: false, container: nil)
+          @short_name = short_name
+          @short_regex = short_regex
+          @worn = worn
+          @wield = wield
+          @container = container
+          @needs_unloading = false
+          @transforms_to = nil
+          @tie_to = nil
+        end
+      end
+    end
+
+    let(:shield) { gear_class.new(short_name: 'steel.shield', short_regex: /\bsteel.*\bshield/i, worn: true) }
+    let(:helm) { gear_class.new(short_name: 'iron.helm', short_regex: /\biron.*\bhelm/i, worn: true) }
+    let(:sword) { gear_class.new(short_name: 'bronze.sword', short_regex: /\bbronze.*\bsword/i, worn: false, container: 'scabbard') }
+    let(:gear_sets) { { 'standard' => ['steel shield', 'iron helm'] } }
+    let(:settings) { double('settings', gear_sets: gear_sets, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    let(:right_hand) { nil }
+    let(:left_hand) { nil }
+    let(:worn_now) { [] }
+    let(:replies) { {} }
+    let(:sent) { [] }
+    let(:bold) { [] }
+
+    before do
+      allow(em).to receive(:items).and_return([shield, helm, sword])
+      allow(em).to receive(:get_combat_items).and_return(worn_now)
+      allow(em).to receive(:pause)
+      allow(DRC).to receive(:right_hand) { right_hand }
+      allow(DRC).to receive(:left_hand) { left_hand }
+      allow(DRC).to receive(:beep)
+      allow(DRC).to receive(:bput) do |command, *_patterns|
+        sent << command
+        replies.fetch(command, '')
+      end
+      allow(Lich::Messaging).to receive(:msg) { |type, text| bold << text if type == 'bold' }
+    end
+
+    def missing_warning?
+      bold.any? { |line| line.include?('MISSING EQUIPMENT') }
+    end
+
+    def missing_list
+      bold.find do |line|
+        line.start_with?('EquipmentManager: ') && !line.include?('MISSING') &&
+          !line.include?('stow_helper') && !line.include?('check your hands')
+      end
+    end
+
+    def hands_line
+      bold.find { |line| line.include?('check your hands') }
+    end
+
+    context 'when a held worn item is refused by WEAR' do
+      let(:gear_sets) { { 'standard' => ['steel shield'] } }
+      let(:left_hand) { 'steel shield' }
+      let(:replies) { { 'wear my steel.shield' => "You can't wear that right now." } }
+
+      it 'returns false' do
+        expect(em.wear_equipment_set?('standard')).to be false
+      end
+
+      it 'raises the MISSING EQUIPMENT warning naming the held item, with beep and pause' do
+        em.wear_equipment_set?('standard')
+        expect(missing_warning?).to be true
+        expect(missing_list).to eq('EquipmentManager: steel.shield')
+        expect(DRC).to have_received(:beep).twice
+        expect(em).to have_received(:pause)
+      end
+
+      it 'sends WEAR exactly once (no second attempt through the fetch-and-wear path)' do
+        em.wear_equipment_set?('standard')
+        expect(sent.count('wear my steel.shield')).to eq(1)
+      end
+
+      it 'tells the user to check their hands for the item' do
+        em.wear_equipment_set?('standard')
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.shield')
+      end
+    end
+
+    context 'when the WEAR for a held worn item gets no reply (bput timeout)' do
+      let(:gear_sets) { { 'standard' => ['steel shield'] } }
+      let(:right_hand) { 'steel shield' }
+
+      it 'returns false, warns, and does not resend WEAR' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_warning?).to be true
+        expect(sent).to eq(['wear my steel.shield'])
+      end
+    end
+
+    context 'when a held worn item is worn successfully' do
+      let(:gear_sets) { { 'standard' => ['steel shield'] } }
+      let(:left_hand) { 'steel shield' }
+      let(:replies) { { 'wear my steel.shield' => 'You strap your steel shield to your arm.' } }
+
+      it 'returns true without a warning and sends WEAR once' do
+        expect(em.wear_equipment_set?('standard')).to be true
+        expect(missing_warning?).to be false
+        expect(hands_line).to be_nil
+        expect(DRC).not_to have_received(:beep)
+        expect(sent).to eq(['wear my steel.shield'])
+      end
+    end
+
+    context 'when a held non-worn set item is put away' do
+      let(:gear_sets) { { 'standard' => ['bronze sword'] } }
+      let(:right_hand) { 'bronze sword' }
+
+      it 'returns true and never sends WEAR when the put-away succeeds' do
+        replies['put my bronze.sword in my scabbard'] = 'You put your bronze sword in your scabbard.'
+        expect(em.wear_equipment_set?('standard')).to be true
+        expect(missing_warning?).to be false
+        expect(sent).to eq(['put my bronze.sword in my scabbard'])
+      end
+
+      it 'returns false and warns, without a pointless WEAR, when the put-away fails' do
+        replies['put my bronze.sword in my scabbard'] = "There isn't any more room in your scabbard."
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_warning?).to be true
+        expect(missing_list).to eq('EquipmentManager: bronze.sword')
+        expect(sent.grep(/^wear /)).to be_empty
+      end
+    end
+
+    context 'when a refused held item and an unheld item are both in the set' do
+      let(:left_hand) { 'steel shield' }
+      let(:replies) { { 'wear my steel.shield' => "You can't wear that right now." } }
+
+      before do
+        allow(em).to receive(:get_item?).with(having_attributes(short_name: 'iron.helm')).and_return(true)
+        allow(DRCI).to receive(:wear_item?).with('iron.helm').and_return(true)
+      end
+
+      it 'wears the unheld item, lists only the held failure, and returns false' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(DRCI).to have_received(:wear_item?).with('iron.helm').once
+        expect(missing_list).to eq('EquipmentManager: steel.shield')
+        expect(sent.count('wear my steel.shield')).to eq(1)
+      end
+
+      it 'puts the held item away before fetching the unheld one (hands are freed first)' do
+        em.wear_equipment_set?('standard')
+        expect(DRC).to have_received(:bput).with('wear my steel.shield', any_args).ordered
+        expect(em).to have_received(:get_item?).ordered
+      end
+    end
+
+    context 'when both a held and an unheld item fail' do
+      let(:right_hand) { 'iron helm' }
+      let(:replies) { { 'wear my iron.helm' => "You can't wear that right now." } }
+
+      before do
+        allow(em).to receive(:get_item?).with(having_attributes(short_name: 'steel.shield')).and_return(false)
+      end
+
+      it 'lists both failures in gear-set order' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_list).to eq('EquipmentManager: steel.shield, iron.helm')
+      end
+
+      it 'names only the held failure in the check-your-hands line' do
+        em.wear_equipment_set?('standard')
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: iron.helm')
+      end
+    end
+
+    context 'when two set items match the same held item and the first put-away empties the hand' do
+      let(:chain_helm) { gear_class.new(short_name: 'iron.chain.helm', short_regex: /\biron.*\bchain.*\bhelm/i, worn: true) }
+      let(:gear_sets) { { 'standard' => ['iron chain helm', 'iron helm'] } }
+      let(:replies) { { 'wear my iron.chain.helm' => 'You put on an iron chain helm.' } }
+
+      before do
+        @hand = 'iron chain helm'
+        allow(em).to receive(:items).and_return([chain_helm, helm])
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @hand = nil if command == 'wear my iron.chain.helm'
+          replies.fetch(command, '')
+        end
+        allow(em).to receive(:get_item?).with(having_attributes(short_name: 'iron.helm')).and_return(true)
+        allow(DRCI).to receive(:wear_item?).with('iron.helm').and_return(true)
+      end
+
+      it 'fetches and wears the second item instead of sending it a WEAR from an empty hand' do
+        expect(em.wear_equipment_set?('standard')).to be true
+        expect(sent).to eq(['wear my iron.chain.helm'])
+        expect(DRCI).to have_received(:wear_item?).with('iron.helm').once
+        expect(missing_warning?).to be false
+      end
+    end
+
+    context 'when every set item is already worn' do
+      let(:right_hand) { 'steel shield' }
+      let(:worn_now) { ['a steel shield', 'an iron helm'] }
+
+      it 'sends nothing and returns true even if a matching item is also in hand' do
+        expect(em.wear_equipment_set?('standard')).to be true
+        expect(sent).to be_empty
+        expect(missing_warning?).to be false
+      end
+    end
+
+    context 'when an unheld item cannot be fetched (existing behaviour)' do
+      let(:gear_sets) { { 'standard' => ['iron helm'] } }
+
+      it 'returns false and warns, without a check-your-hands line' do
+        allow(em).to receive(:get_item?).and_return(false)
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_list).to eq('EquipmentManager: iron.helm')
+        expect(hands_line).to be_nil
+      end
+    end
+  end
+
+  describe '#stow_weapon return value' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:shield) do
+      double('shield', short_name: 'steel.shield', short_regex: /\bsteel.*\bshield/i,
+                       needs_unloading: false, worn: true)
+    end
+
+    before do
+      allow(em).to receive(:items).and_return([shield])
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    it 'is true when the WEAR succeeds' do
+      allow(DRC).to receive(:bput).and_return('You strap your steel shield to your arm.')
+      expect(em.stow_weapon('steel shield')).to be true
+    end
+
+    it 'is false when the WEAR is refused' do
+      allow(DRC).to receive(:bput).and_return("You can't wear that right now.")
+      expect(em.stow_weapon('steel shield')).to be false
+    end
+
+    it 'is nil when the description is not in the gear list' do
+      expect(DRC).not_to receive(:bput)
+      expect(em.stow_weapon('golden halberd')).to be_nil
+    end
+
+    it 'is nil when called without a description' do
+      allow(DRC).to receive(:right_hand).and_return('steel shield')
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:bput).and_return('You strap your steel shield to your arm.')
+      expect(em.stow_weapon).to be_nil
+    end
+  end
 end
