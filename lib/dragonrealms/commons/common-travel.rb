@@ -427,6 +427,7 @@ module Lich
             return false
           end
           retries += 1
+          Lich::Messaging.msg('plain', "DRCT: Move from room #{room.id} did not reach room #{next_id}, attempting again (retry #{retries}/#{MAX_WALK_TO_RETRIES}).")
         end
       end
 

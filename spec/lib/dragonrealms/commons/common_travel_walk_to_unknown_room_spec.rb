@@ -501,7 +501,21 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(102)).to be(false)
       expect(world.sent).to eq(['north'] * (DRCT::MAX_WALK_TO_RETRIES + 1))
-      expect(bold_messages.last).to include('giving up')
+      expect(plain_messages.grep(/did not reach/)).to eq(
+        (1..DRCT::MAX_WALK_TO_RETRIES).map { |n| "DRCT: Move from room 101 did not reach room 102, attempting again (retry #{n}/3)." }
+      )
+      expect(bold_messages.last).to eq('DRCT: Failed to navigate from unknown room after 3 retries, giving up.')
+    end
+
+    it 'numbers its retries on from the ones walk_to already spent' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(1), position: 101))
+      world.overrides[[101, 'north']] = nil
+
+      expect(DRCT.walk_to(102, true, retry_depth: 1)).to be(false)
+      expect(world.sent).to eq(['north'] * DRCT::MAX_WALK_TO_RETRIES)
+      expect(plain_messages.grep(/did not reach/)).to eq(
+        [2, 3].map { |n| "DRCT: Move from room 101 did not reach room 102, attempting again (retry #{n}/3)." }
+      )
     end
 
     it 'does not retry a blocked move when restart_on_fail is false' do
@@ -510,6 +524,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(102, false)).to be(false)
       expect(world.sent).to eq(['north'])
+      expect(plain_messages.grep(/did not reach/)).to be_empty
     end
 
     it 'stops at once when the game rejects the exit' do
@@ -536,6 +551,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(103)).to be(true)
       expect(world.sent).to eq(%w[north west north])
+      expect(plain_messages.grep(/did not reach/)).to eq(['DRCT: Move from room 101 did not reach room 102, attempting again (retry 1/3).'])
     end
   end
 
