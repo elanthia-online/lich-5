@@ -337,6 +337,9 @@ describe DRCC do
     let(:sent) { [] }
     let(:tie_replies) { [] }
     let(:put_reply) { 'You put your tongs in your backpack.' }
+    # The safe-room stub moves the character, so only a room id read before
+    # the trip walks back to the crafting room (8775).
+    let(:room_id) { [8775] }
 
     before(:each) do
       # Same contract as the real DRC.bput: String patterns become /pattern/i and
@@ -350,9 +353,12 @@ describe DRCC do
         match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
         match ? match.to_a.first : ''
       end
-      allow(DRC).to receive(:wait_for_script_to_complete) { |script, args| sent << "#{script} #{args.join(' ')}" }
+      allow(DRC).to receive(:wait_for_script_to_complete) do |script, args|
+        sent << "#{script} #{args.join(' ')}"
+        room_id[0] = 1
+      end
       allow(DRCT).to receive(:walk_to) { |room| sent << "walk #{room}" }
-      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 8775))
+      allow(Room).to receive(:current) { OpenStruct.new(id: room_id.first) }
       allow(DRCC).to receive(:fput) { |command| sent << command }
       allow(Lich::Messaging).to receive(:msg)
     end
