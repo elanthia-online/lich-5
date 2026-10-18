@@ -101,6 +101,17 @@ RSpec.describe 'Callers that list the immobile reply' do
       expect(sent).to eq(['drop my rock'])
       expect(messages).to include("DRCI: Failed to dispose of 'rock'.")
     end
+
+    it 'dispose_trash goes on from a worn trashcan to the room bin and the drop' do
+      allow(drci).to receive(:get_item_if_not_held?).and_return(true)
+      allow(drci).to receive(:trash_storage).and_return(%w[bin])
+      allow(Room).to receive(:current).and_return(OpenStruct.new(tags: []))
+      allow(DRRoom).to receive(:room_objs).and_return(['waste bin'])
+      allow(drc).to receive(:get_noun) { |long_name| long_name.split.last }
+      expect(drci.dispose_trash('rock', 'shroud', 'tap')).to be false
+      expect(sent).to eq(['put my rock in my shroud', 'put my rock in waste bin', 'drop my rock'])
+      expect(messages).to include("DRCI: Failed to dispose of 'rock'.")
+    end
   end
 
   describe 'EquipmentManager' do
