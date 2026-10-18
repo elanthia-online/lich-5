@@ -203,10 +203,14 @@ module Lich
 
       # Closes the version connection if it is still +db+, so that the next
       # check opens a new one. A thread whose read failed on a connection
-      # another thread has already replaced leaves the new one alone.
+      # another thread has already replaced leaves the new one alone. +db+ is
+      # required, so no caller can skip that check by closing "whatever is
+      # current". It is nil when opening the connection failed; with no
+      # connection open, that counts as current.
       #
+      # @param db [SQLite3::Database, nil] the connection the failed read used
       # @return [Boolean] whether +db+ was the current connection
-      def close_version_connection(db = @version_db)
+      def close_version_connection(db)
         @version_mutex.synchronize do
           return false unless @version_db.equal?(db)
 

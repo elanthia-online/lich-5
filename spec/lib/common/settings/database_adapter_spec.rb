@@ -511,7 +511,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       before do
         allow(Lich).to receive(:log)
         @adapter.data_version # opens the version connection
-        @adapter.send(:close_version_connection)
+        @adapter.send(:close_version_connection, @adapter.instance_variable_get(:@version_db))
         allow(SQLite3::Database).to receive(:new).and_call_original
         allow(SQLite3::Database).to receive(:new).with(db_file).and_raise(SQLite3::CantOpenException, 'unable to open database file')
       end
@@ -630,6 +630,47 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(answer).to eq(first)
     end
 
+    describe 'closing the version connection' do
+      before { @adapter.data_version } # opens the version connection
+
+      it 'needs to be told which connection to close' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect { @adapter.send(:close_version_connection) }.to raise_error(ArgumentError)
+        expect(current).not_to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to equal(current)
+      end
+
+      it 'closes the connection it is given while that is still the current one' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, current)).to be(true)
+        expect(current).to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to be_nil
+      end
+
+      it 'leaves the current connection open when given one that was already replaced' do
+        old = @adapter.instance_variable_get(:@version_db)
+        @adapter.send(:close_version_connection, old)
+        @adapter.data_version # opens a new one
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, old)).to be(false)
+        expect(current).not_to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to equal(current)
+        expect(@adapter.data_version).to be_a(Integer)
+      end
+
+      it 'counts a connection that failed to open (nil) as current only while none is open' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, nil)).to be(false)
+        expect(current).not_to be_closed
+        @adapter.send(:close_version_connection, current)
+        expect(@adapter.send(:close_version_connection, nil)).to be(true)
+      end
+    end
+
     context 'when another thread replaces the connection during a check' do
       before do
         allow(Lich).to receive(:log)
@@ -643,7 +684,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       def replace_connection_from_another_thread
         value = nil
         Thread.new do
-          @adapter.send(:close_version_connection)
+          @adapter.send(:close_version_connection, @old)
           value = @adapter.data_version
         end.join(2)
         value
