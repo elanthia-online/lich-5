@@ -89,8 +89,9 @@ RSpec.describe '#fput' do
     allow(Script).to receive(:execution_sleep) { |seconds| sleep(seconds) }
     allow(self).to receive(:put)
     allow(self).to receive(:echo)
-    # An example that scripts no reads fails at once instead of reaching
-    # the real get? and waiting out the real 60s timeout.
+    # An example that scripts no reads fails at once instead of reading
+    # spec_helper's nil get? stand-in and busy-polling until fput's real
+    # 60s timeout.
     allow(self).to receive(:get?) { raise 'fput read the game with no scripted response' }
   end
 
