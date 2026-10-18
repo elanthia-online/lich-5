@@ -987,6 +987,14 @@ RSpec.describe Lich::DragonRealms::DRC do
           expect(sent).to eq(['collect rock', 'kick pile'])
           expect(described_class).not_to have_received(:waitrt?)
         end
+
+        it 'gives up without waiting when a later kick misses the pile' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile'])
+          expect(described_class).not_to have_received(:waitrt?)
+        end
       end
 
       context 'with no pile in the room' do
