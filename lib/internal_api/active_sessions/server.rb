@@ -45,6 +45,7 @@ module Lich
           @mutex = Mutex.new
           @client_threads = []
           @stopping = false
+          @run_id = Object.new
         end
 
         # Starts the TCP server and accept loop.
@@ -58,9 +59,10 @@ module Lich
             @server = @server_factory.call(@host, @port)
             @server.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1) rescue nil
             @port = @server.addr[1]
+            run_id = @run_id = Object.new
             @thread = @accept_thread_factory.call do
               Lich.log("info: ActiveSessions accept thread started pid=#{Process.pid} port=#{@port}") if defined?(Lich) && Lich.respond_to?(:log)
-              accept_loop
+              accept_loop(run_id)
             end
           end
           true
@@ -118,8 +120,9 @@ module Lich
         # transient failure does not kill the thread and leave the TCPServer
         # socket bound but unserviceable (zombie server).
         #
+        # @param run_id [Object] identity of the run spawning this accept loop
         # @return [void]
-        def accept_loop
+        def accept_loop(run_id = @run_id)
           loop do
             server = @server
             unless server
@@ -132,8 +135,7 @@ module Lich
             socket = nil
             begin
               socket = server.accept
-              client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
-              track_client_thread(client_thread)
+              @client_thread_factory.call(socket) { |client| handle_tracked_client(client, run_id) }
             rescue IOError, Errno::EBADF => e
               Lich.log("warning: ActiveSessions accept_loop closed unexpectedly: #{e.class} pid=#{Process.pid}") if !stopping? && defined?(Lich) && Lich.respond_to?(:log)
               break
@@ -154,13 +156,19 @@ module Lich
           end
         end
 
-        # Wraps client handling so finished client threads can be removed from
-        # the tracked thread set regardless of request outcome.
+        # Registers the running handler before processing its request, so a
+        # factory returning after completion cannot retain a finished thread.
+        # Handlers starting after shutdown or restart close without dispatch.
         #
         # @param socket [IO]
+        # @param run_id [Object] identity captured before spawning the handler
         # @return [void]
-        def handle_tracked_client(socket)
-          handle_client(socket)
+        def handle_tracked_client(socket, run_id = @run_id)
+          if track_client_thread(Thread.current, run_id)
+            handle_client(socket)
+          else
+            socket.close rescue nil
+          end
         ensure
           untrack_current_thread
         end
@@ -255,14 +263,20 @@ module Lich
         end
         private :unauthorized_response
 
-        # Records a spawned client handler thread for later shutdown cleanup.
+        # Records a running handler atomically with the shutdown snapshot.
         #
         # @param thread [Thread, nil]
-        # @return [void]
-        def track_client_thread(thread)
-          return unless thread
+        # @param run_id [Object] run that accepted the handler's socket
+        # @return [Boolean] whether the handler may process its request
+        def track_client_thread(thread, run_id = @run_id)
+          return false unless thread
 
-          @mutex.synchronize { @client_threads << thread }
+          @mutex.synchronize do
+            return false if @stopping || !run_id.equal?(@run_id)
+
+            @client_threads << thread
+            true
+          end
         end
         private :track_client_thread
 
