@@ -318,7 +318,43 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           expect(result).to eq('same' => 1, 'new' => 2)
         end
 
-        it 'gives up after MAX_UPDATE_ATTEMPTS when the row changes every time, and reports it' do
+        it 'gives up once the busy timeout has passed while the row changes every time, and reports it' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+          calls = 0
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+          result = @adapter.update_settings('go2', 'DR') do |fresh|
+            calls += 1
+            put_row('go2', 'DR', { 'theirs' => calls })
+            fresh.merge('mine' => calls)
+          end
+          elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+          expect(result).to be_nil
+          expect(elapsed).to be >= 0.2
+          expect(elapsed).to be < 2
+          expect(calls).to be > described_class::MIN_UPDATE_ATTEMPTS
+          expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
+          expect(messages).to include(['error', a_string_including("kept changing, gave up after #{calls} attempts")])
+        end
+
+        it 'keeps trying past 20 attempts while within the busy timeout' do
+          calls = 0
+
+          result = @adapter.update_settings('go2', 'DR') do |fresh|
+            calls += 1
+            put_row('go2', 'DR', fresh.merge('theirs' => calls)) if calls <= 30
+            fresh.merge('mine' => calls)
+          end
+
+          expect(calls).to eq(31)
+          expect(result).to eq('theirs' => 30, 'mine' => 31)
+          expect(stored_row('go2', 'DR')).to eq('theirs' => 30, 'mine' => 31)
+          expect(messages).to be_empty
+        end
+
+        it 'still tries MIN_UPDATE_ATTEMPTS times when the busy timeout is zero' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(0)
           calls = 0
 
           result = @adapter.update_settings('go2', 'DR') do |fresh|
@@ -328,9 +364,8 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           end
 
           expect(result).to be_nil
-          expect(calls).to eq(described_class::MAX_UPDATE_ATTEMPTS)
-          expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
-          expect(messages).to include(['error', a_string_including('kept changing')])
+          expect(calls).to eq(described_class::MIN_UPDATE_ATTEMPTS)
+          expect(messages).to include(['error', a_string_including('gave up after 3 attempts')])
         end
       end
 

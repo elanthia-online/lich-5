@@ -441,8 +441,10 @@ module Lich
       # applied to the row as it is in the database right now, and stored only
       # if no one changed the row in between (DatabaseAdapter#update_settings
       # retries otherwise). The cache then takes the row as stored. If the
-      # write fails, the cache entry is dropped so the next read comes from the
-      # database instead of claiming the value was saved. Changes made only to
+      # write fails, the cache is left as it was: it never received the value
+      # (the block changes the row just read, not the cached one), and
+      # dropping it would send the next read to a database that may still be
+      # locked, where get_settings raises into the script. Changes made only to
       # the cached row (for example through SettingsProxy#to_h) are not saved
       # by this write; the stored row replaces them.
       #
@@ -470,8 +472,7 @@ module Lich
           @settings_cache[cache_key] = stored
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "write_top_level_key: Saved '#{name}' for #{cache_key}; cache now holds the stored row." })
         else
-          @settings_cache.delete(cache_key)
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache entry dropped." })
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache left as it was." })
         end
         stored
       end

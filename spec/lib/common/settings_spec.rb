@@ -691,14 +691,20 @@ RSpec.describe Lich::Common::Settings do
       expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("stored as Array, not a Hash; 'k' was not saved"))
     end
 
-    it "drops its cached row when a write fails, so the next read comes from the database" do
+    it "keeps serving its cached row after a failed write, without asking the database" do
       game_write('saved', 1)
-      allow(@mock_db).to receive(:update_settings).and_return(nil)
+      # The adapter reads the row and runs the block, then cannot store it.
+      allow(@mock_db).to receive(:update_settings) do |script, scope, &block|
+        block.call(@mock_db.get_settings(script, scope))
+        nil
+      end
 
       game_write('lost', 2)
+      allow(@mock_db).to receive(:get_settings).and_raise(RuntimeError, 'database is locked')
 
-      expect(game_read('lost')).to be_nil
       expect(game_read('saved')).to eq(1)
+      expect(game_read('lost')).to be_nil
+      expect(@mock_db).not_to have_received(:get_settings)
     end
   end
 end

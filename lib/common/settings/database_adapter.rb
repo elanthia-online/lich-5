@@ -45,9 +45,12 @@ module Lich
         false
       end
 
-      # How many times update_settings reads a row and tries to store it when
-      # other writers keep changing it between the read and the write.
-      MAX_UPDATE_ATTEMPTS = 20
+      # update_settings keeps reading a row and trying to store it, while other
+      # writers keep changing it in between, for as long as a write would wait
+      # for SQLite's lock (Lich.sqlite_busy_timeout_ms), and at least this many
+      # times. A writer whose row takes longer to rebuild than its rivals' does
+      # loses more often, so a fixed count would give up on it first.
+      MIN_UPDATE_ATTEMPTS = 3
 
       # Longest pause, in seconds, before trying again. Each pause is random,
       # up to 4 ms before the second attempt and doubling from there, so that
@@ -70,7 +73,8 @@ module Lich
       # if the row still holds exactly the bytes it read: one conditional
       # UPDATE (or, for a new row, an INSERT that does nothing on conflict).
       # If another writer got in first, it pauses briefly, reads the row again
-      # and calls the block again, up to MAX_UPDATE_ATTEMPTS times.
+      # and calls the block again, until the busy timeout has passed (see
+      # MIN_UPDATE_ATTEMPTS).
       #
       # Each statement takes and releases SQLite's write lock by itself, so the
       # lock is never held while Ruby code (the block, Marshal) runs. Holding it
@@ -87,8 +91,12 @@ module Lich
       # @raise whatever the block raises, and what get_settings raises for a
       #   stored row it cannot read (such as TypeError or ArgumentError)
       def update_settings(script_name, scope = ":")
-        MAX_UPDATE_ATTEMPTS.times do |attempt|
-          sleep(rand * [0.002 * (2**attempt), MAX_RETRY_PAUSE].min) if attempt.positive?
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        budget = Lich.sqlite_busy_timeout_ms.to_f / 1000
+        attempts = 0
+        loop do
+          sleep(rand * [0.002 * (2**[attempts, 5].min), MAX_RETRY_PAUSE].min) if attempts.positive?
+          attempts += 1
           row = statement { read_row_in_one_call(script_name, scope) }
           old_blob = row && row[:hash]
           updated = yield(row.nil? ? {} : Marshal.load(old_blob))
@@ -98,10 +106,14 @@ module Lich
           return nil unless new_blob
 
           return updated if statement { store_if_unchanged(script_name, scope, old_blob, row.nil?, new_blob) }
+
+          elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+          break if attempts >= MIN_UPDATE_ATTEMPTS && elapsed >= budget
         end
 
-        Lich::Messaging.msg("error", "--- Error while saving settings: #{script_name} (#{scope}) kept changing, gave up after #{MAX_UPDATE_ATTEMPTS} attempts ---")
-        Lich.log("--- Error while saving settings: #{script_name} (#{scope}) kept changing, gave up after #{MAX_UPDATE_ATTEMPTS} attempts ---")
+        message = "--- Error while saving settings: #{script_name} (#{scope}) kept changing, gave up after #{attempts} attempts ---"
+        Lich::Messaging.msg("error", message)
+        Lich.log(message)
         nil
       rescue StatementFailed => e
         report_database_error(e.cause)

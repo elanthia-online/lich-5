@@ -278,5 +278,23 @@ RSpec.describe 'Settings writes across Lich processes' do
       expect(alpha.call('get G during')).to be_nil
       expect(alpha.call('msgs')).to include(['error', a_string_including('error while saving settings')])
     end
+
+    it 'keeps answering reads from its cache after a failed write while the database is still locked' do
+      alpha = start('DR', 'Alpha', 'go2', 'LICH_SPEC_BUSY_TIMEOUT_MS' => '200')
+      alpha.call('set G before "1"')
+
+      db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      begin
+        db.execute('BEGIN EXCLUSIVE') # blocks readers too
+        expect(alpha.call('set G during "2"')).to eq('ok')
+        expect(alpha.call('get G before')).to eq('1')
+        expect(alpha.call('get G during')).to be_nil
+        db.execute('ROLLBACK')
+      ensure
+        db.close
+      end
+
+      expect(alpha.call('msgs')).to include(['error', a_string_including('error while saving settings')])
+    end
   end
 end
