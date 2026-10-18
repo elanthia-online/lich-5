@@ -342,9 +342,12 @@ module Lich
             Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
             return false
           end
-          # nil means this read timed out; the loop re-checks the deadline.
+          # nil means this read timed out (or a pushed nil); the loop re-checks
+          # the deadline.
           # Other non-String objects can reach the buffer through
-          # send_to_script, which pushes its arguments as given.
+          # send_to_script, which pushes its arguments as given. A pushed
+          # false cannot be told apart from the no-downstream read above and
+          # ends the wait.
           next unless line.is_a?(String)
 
           if (match = line.match(token_pattern))
