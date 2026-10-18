@@ -4,24 +4,8 @@
   Snapshot and rollback functionality for Lich core files.
 
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
-  updates. Supports rollback to most recent snapshot.
-
-  Both directions are built so that a failure (disk full, a locked or
-  unreadable file) leaves the installation as it was, apart from the one case
-  named below, and a snapshot killed part way is never visible to #revert:
-
-  - #snapshot copies into a staging directory that #revert cannot see, and
-    renames it to its final L5-snapshot-<DATE-TIME> name only after every
-    copy has succeeded.
-  - #revert checks that the newest snapshot is complete before it touches
-    anything, refuses (naming the directory) when it is not, and copies the
-    snapshot next to the live files before swapping them in with renames
-    that are undone if any step fails. If even the undo fails, lib/, the
-    core scripts and lich.rbw can be left part old, part restored; the
-    working directories are then kept and named so the previous files can
-    be recovered by hand. Where the filesystem supports locking, only one
-    #revert runs at a time on an installation: a second one started
-    meanwhile changes nothing.
+  updates. Supports rollback to most recent snapshot. #snapshot and
+  #revert describe how each leaves the installation as it was when it fails.
 
   A revert killed during the swap cannot undo it. It can leave lib/, the core
   scripts or lich.rbw missing, so that Lich will not start and cannot run the
@@ -63,6 +47,14 @@ module Lich
         # How many same-second name collisions #snapshot tolerates before
         # giving up on publishing.
         MAX_PUBLISH_ATTEMPTS = 100
+
+        # Seconds to wait before each retry of a rename Windows refused with
+        # a transient error (see #rename_with_retry); about 3s in all.
+        RENAME_RETRY_DELAYS = [0.1, 0.2, 0.4, 0.8, 1.6].freeze
+
+        # Errors Windows reports when a rename is refused because another
+        # process has the entry, or a file inside it, open.
+        TRANSIENT_RENAME_ERRORS = [Errno::EACCES, Errno::EPERM, Errno::EBUSY].freeze
 
         # Creates a fresh timestamped directory under BACKUP_DIR for a
         # data-only backup (e.g. effect-list.xml with no preceding full
@@ -253,7 +245,8 @@ module Lich
         # zero-padded counter is appended, which still sorts after the bare
         # name so #revert picks the newer one. Windows reports a rename onto
         # an existing directory as EACCES, so that counts as a collision too
-        # when the target now exists; any other EACCES is re-raised.
+        # when the target now exists; any other EACCES is re-raised once
+        # #rename_with_retry has given up on it.
         #
         # @param staging_dir [String] completed staging directory
         # @return [String] path of the published snapshot
@@ -264,7 +257,7 @@ module Lich
             next if File.exist?(target)
 
             begin
-              File.rename(staging_dir, target)
+              rename_with_retry(staging_dir, target)
               return target
             rescue Errno::EEXIST, Errno::ENOTEMPTY, Errno::EACCES => e
               raise if e.is_a?(Errno::EACCES) && !File.exist?(target)
@@ -498,8 +491,33 @@ module Lich
 
         # Renames +from+ to +to+ and records the move so it can be undone.
         def move_entry(from, to, journal)
-          File.rename(from, to)
+          rename_with_retry(from, to)
           journal << [from, to]
+        end
+
+        # File.rename, retried on Windows while the refusal looks transient.
+        # Windows will not rename a file or directory while another process
+        # (an antivirus or search indexer reading files just written) has it,
+        # or a file inside it, open without delete sharing, and reports that
+        # as EACCES or EPERM until the other process lets go. Each retry
+        # waits the next of RENAME_RETRY_DELAYS. Nothing is retried on other
+        # platforms, where these errors do not clear on their own, nor when
+        # +to+ exists, which no wait will change (#publish_snapshot treats
+        # that EACCES as a name collision).
+        #
+        # @raise [SystemCallError] the last error once the retries run out
+        # @return [void]
+        def rename_with_retry(from, to)
+          attempt = 0
+          begin
+            File.rename(from, to)
+          rescue *TRANSIENT_RENAME_ERRORS
+            raise unless Gem.win_platform? && attempt < RENAME_RETRY_DELAYS.size && !File.exist?(to)
+
+            sleep(RENAME_RETRY_DELAYS[attempt])
+            attempt += 1
+            retry
+          end
         end
 
         # Reverses recorded moves, newest first.
@@ -507,7 +525,7 @@ module Lich
         # @return [Boolean] true if every move was undone
         def undo_moves(journal)
           journal.reverse.map do |from, to|
-            File.rename(to, from)
+            rename_with_retry(to, from)
             true
           rescue SystemCallError
             false

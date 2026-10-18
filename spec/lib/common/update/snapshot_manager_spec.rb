@@ -22,6 +22,8 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     # signature (one requires an argument), and which one is loaded
     # depends on how the suite is split, so never rely on the global one.
     allow(manager).to receive(:respond)
+    # Rename retries on Windows wait between attempts; never really sleep.
+    allow(manager).to receive(:sleep)
   end
 
   after do
@@ -860,6 +862,153 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
         expect(messages.grep(/Could not create the revert lock file/)).not_to be_empty
         expect(File.exist?(lock_path)).to be(false)
+      end
+    end
+  end
+
+  context 'when Windows briefly refuses a rename (a scanner holding a file open)' do
+    let(:delays) { described_class::RENAME_RETRY_DELAYS }
+    let(:stamp) { Time.new(2026, 10, 18, 12, 0, 0) }
+    let(:base) { File.join(BACKUP_DIR, 'L5-snapshot-2026-10-18-12-00-00') }
+
+    before do
+      install('5.22.0')
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      allow(Time).to receive(:now).and_return(stamp)
+    end
+
+    # Makes File.rename raise +error+ for the first +times+ calls the block
+    # matches (all of them when +times+ is nil) and returns the matching
+    # calls as [from, to] pairs.
+    def refuse_renames(times: nil, error: Errno::EACCES)
+      matched = []
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        if yield(from, to)
+          matched << [from, to]
+          raise error, to if times.nil? || matched.size <= times
+        end
+        original.call(from, to)
+      end
+      matched
+    end
+
+    it 'publishes the snapshot once the staging rename is allowed, waiting between attempts' do
+      calls = refuse_renames(times: 2) { |from, to| to == base && from.include?('L5-staging-') }
+      messages = capture_responses
+
+      dir = manager.snapshot
+
+      expect(dir).to eq(base)
+      expect(calls.size).to eq(3)
+      expect(File.read(File.join(dir, lich_name))).to eq("# lich 5.22.0\n")
+      expect(File.read(File.join(dir, 'lib', 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+      expect(staging).to be_empty
+      expect(manager).to have_received(:sleep).with(delays[0]).ordered
+      expect(manager).to have_received(:sleep).with(delays[1]).ordered
+      expect(manager).to have_received(:sleep).twice
+      expect(messages.grep(/Snapshot failed/)).to be_empty
+    end
+
+    [Errno::EPERM, Errno::EBUSY].each do |error|
+      it "retries a staging rename refused with #{error.name.split('::').last}" do
+        refuse_renames(times: 1, error: error) { |from, _to| from.include?('L5-staging-') }
+
+        expect(manager.snapshot).to eq(base)
+        expect(staging).to be_empty
+      end
+    end
+
+    it 'gives up after the last retry, publishes nothing and removes the staging directory' do
+      calls = refuse_renames { |from, to| to == base && from.include?('L5-staging-') }
+      messages = capture_responses
+
+      expect { manager.snapshot }.to raise_error(Errno::EACCES)
+
+      expect(calls.size).to eq(delays.size + 1)
+      delays.each { |delay| expect(manager).to have_received(:sleep).with(delay).ordered }
+      expect(manager).to have_received(:sleep).exactly(delays.size).times
+      expect(published).to be_empty
+      expect(staging).to be_empty
+      expect(messages).to include('No snapshot was saved and nothing was changed.')
+    end
+
+    it 'does not wait when the name was taken; it moves on to the next name' do
+      refuse_renames do |_from, to|
+        next false unless to == base
+
+        FileUtils.mkdir_p(File.join(base, 'lib'))
+        true
+      end
+
+      expect(manager.snapshot).to eq("#{base}-01")
+      expect(manager).not_to have_received(:sleep)
+      expect(staging).to be_empty
+    end
+
+    it 'does not retry errors other than the transient ones' do
+      calls = refuse_renames(error: Errno::ENOENT) { |from, _to| from.include?('L5-staging-') }
+
+      expect { manager.snapshot }.to raise_error(Errno::ENOENT)
+
+      expect(calls.size).to eq(1)
+      expect(manager).not_to have_received(:sleep)
+    end
+
+    it 'does not retry on other platforms, where the refusal does not clear on its own' do
+      allow(Gem).to receive(:win_platform?).and_return(false)
+      calls = refuse_renames(times: 1) { |from, _to| from.include?('L5-staging-') }
+
+      expect { manager.snapshot }.to raise_error(Errno::EACCES)
+
+      expect(calls.size).to eq(1)
+      expect(manager).not_to have_received(:sleep)
+      expect(published).to be_empty
+    end
+
+    context 'during a revert' do
+      let(:live_lich) { File.join(LICH_DIR, lich_name) }
+      let(:live_version) { File.join(LIB_DIR, 'version.rb') }
+
+      before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
+
+      it 'completes the swap when one rename is refused at first' do
+        calls = refuse_renames(times: 1) { |from, to| to == live_lich && from.include?('.lich5-revert-new-') }
+        messages = capture_responses
+
+        manager.revert
+
+        expect(calls.size).to eq(2)
+        expect(tree(LIB_DIR)).to eq(tree(File.join(BACKUP_DIR, 'L5-snapshot-2026-10-01-00-00-00', 'lib')))
+        expect(File.read(live_lich)).to eq("# lich 5.21.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.21.0\n")
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
+      end
+
+      it 'retries the undo too, so a briefly refused undo still restores everything' do
+        before = live_state
+        swap_calls = []
+        undo_calls = []
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          if to == live_lich && from.include?('.lich5-revert-new-')
+            swap_calls << [from, to]
+            raise Errno::EACCES, to
+          end
+          if to == live_version && from.include?('.lich5-revert-old-')
+            undo_calls << [from, to]
+            raise Errno::EACCES, to if undo_calls.size == 1
+          end
+          original.call(from, to)
+        end
+        messages = capture_responses
+
+        expect { manager.revert }.to raise_error(Errno::EACCES)
+
+        expect(swap_calls.size).to eq(delays.size + 1)
+        expect(undo_calls.size).to eq(2)
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('Every change was undone; your installation is as it was.')
       end
     end
   end
