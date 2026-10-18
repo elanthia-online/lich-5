@@ -836,11 +836,28 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       end
     end
 
+    # The reply is already buffered, so the method must answer from it in
+    # well under the timeout. A timing bound keeps a timeout-driven false
+    # from passing for the reply-driven one.
+    def expect_prompt_false
+      stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+      started = monotonic
+      waiter = request_in_thread
+
+      finished = waiter.join(3)
+      elapsed = monotonic - started
+      waiter.kill unless finished
+
+      expect(finished).not_to be_nil, 'request_token did not answer from the buffered reply'
+      expect(waiter.value).to be false
+      expect(elapsed).to be < 1
+    end
+
     context 'when Not Found response' do
-      it 'returns false' do
+      it 'returns false at once' do
         downstream.push('[Private]-MAHTRA:Quilsilgas: "slack_token: Not Found"')
 
-        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect_prompt_false
       end
     end
 
@@ -848,7 +865,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       it 'returns false at once' do
         downstream.push('[server]: "no user Quilsilgas"')
 
-        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect_prompt_false
       end
     end
 
