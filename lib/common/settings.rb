@@ -186,7 +186,9 @@ module Lich
       # detached view without a path (an element yielded by each) is not
       # stored at all, as before. Nor is the proxy of a view's element that
       # can't be found in the settings (SettingsProxy#unlocated?), and the
-      # user is told.
+      # user is told. Nothing is stored either, and the user is told, when
+      # +block+ leaves early (break, throw or return) or is interrupted while
+      # it runs on the stored container.
       #
       # On success the cache takes the row as stored. On failure the cache is
       # left as it was, and the next read checks the database again.
@@ -227,6 +229,7 @@ module Lich
             _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Detached view without a path; nothing to save." })
             return nil
           end
+          label ||= method
           method = nil
         end
 
@@ -239,7 +242,7 @@ module Lich
         replayed = nil
         stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
           replayed = nil
-          apply_to_stored_row(fresh_root, proxy, method, stored_args, block, script_name) { |result| replayed = result }
+          apply_to_stored_row(fresh_root, proxy, method, stored_args, block, script_name, label) { |result| replayed = result }
         end
         return nil unless stored
 
@@ -252,7 +255,7 @@ module Lich
       # [result, container] when +method+ was replayed on the container.
       #
       # @return [Hash, nil] the row to store, or nil to store nothing
-      def self.apply_to_stored_row(root, proxy, method, args, block, script_name)
+      def self.apply_to_stored_row(root, proxy, method, args, block, script_name, label = nil)
         path = proxy.path
         unless root.is_a?(Hash)
           return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash")
@@ -265,12 +268,24 @@ module Lich
 
         existing = path.empty? ? root : parent[path.last]
         if method && existing.instance_of?(proxy.target.class)
+          # A break, throw or return in +block+ that fires only here, on the
+          # stored container, leaves this method (and update_settings) before
+          # anything is stored, and the rescue below can't catch it. So the
+          # user is told that nothing was saved, as for an interrupt.
+          finished = false
           begin
             result = method == REPLAY_ENTRY_CHANGES ? replay_entry_changes(existing, *args) : existing.public_send(method, *args, &block)
+            finished = true
             yield [result, existing]
             return root
           rescue StandardError => e
+            finished = true
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
+          ensure
+            unless finished
+              how = $! ? "was interrupted (#{$!.class})" : "left early (break, throw or return)"
+              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings")
+            end
           end
         end
 

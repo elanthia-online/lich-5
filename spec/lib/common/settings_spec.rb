@@ -1617,6 +1617,99 @@ RSpec.describe Lich::Common::Settings do
         expect(arr.to_a).to eq(["a"])
         expect(stored["arr"]).to eq(["a", "b"])
       end
+
+      context "when the block leaves early only while it runs on the stored container" do
+        # Another session adds "stop", which this session's copy doesn't hold,
+        # so the block leaves early only when it is replayed.
+        let!(:list) do
+          their_write("l" => [1, 2, 3])
+          game_read('l').tap { their_write("l" => [1, 2, 3, "stop"]) }
+        end
+
+        def delete_one_or_return(list)
+          list.delete_if do |e|
+            return :returned if e == "stop"
+
+            e == 1
+          end
+        end
+
+        it "stores nothing and says so for a break, which returns its value" do
+          result = list.delete_if do |e|
+            break :stopped if e == "stop"
+
+            e == 1
+          end
+
+          expect(result).to eq(:stopped)
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with("error", a_string_including("not saved: delete_if left early (break, throw or return) while it ran on the stored settings")).once
+        end
+
+        it "stores nothing and says so for a throw" do
+          result = catch(:out) do
+            list.delete_if do |e|
+              throw :out, :thrown if e == "stop"
+
+              e == 1
+            end
+          end
+
+          expect(result).to eq(:thrown)
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: delete_if left early")).once
+        end
+
+        it "stores nothing and says so for a return from the enclosing method" do
+          expect(delete_one_or_return(list)).to eq(:returned)
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: delete_if left early")).once
+        end
+
+        it "stores nothing, says so and lets an exception that isn't a StandardError through" do
+          expect do
+            list.delete_if do |e|
+              raise Interrupt if e == "stop"
+
+              e == 1
+            end
+          end.to raise_error(Interrupt)
+
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with("error", a_string_including("not saved: delete_if was interrupted (Interrupt) while it ran on the stored settings")).once
+        end
+
+        it "still stores this session's copy, without a message, for a StandardError" do
+          result = list.delete_if do |e|
+            raise ArgumentError, "stop" if e == "stop"
+
+            e == 1
+          end
+
+          expect(result.to_a).to eq([2, 3])
+          expect(stored["l"]).to eq([2, 3])
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it "says nothing when the block finishes on the stored container" do
+          list.delete_if { |e| e == 1 }
+
+          expect(stored["l"]).to eq([2, 3, "stop"])
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+      end
+
+      it "names the method when an argument written through a detached view with a path can't be stored" do
+        their_write("opts" => { "a" => 1 })
+        view = game_read('opts').select { true }
+
+        view['k'] = proc { 1 }
+
+        expect(stored).to eq("opts" => { "a" => 1 })
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: an argument of []= can't be stored")).once
+      end
     end
 
     describe "SettingsProxy::MUTATING_METHODS" do
