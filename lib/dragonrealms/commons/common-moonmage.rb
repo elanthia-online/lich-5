@@ -391,8 +391,10 @@ module Lich
         data
       end
 
-      # Returns the names in +planets+ that the telescope can see, or nil when
-      # there is no telescope to look through (no settings, or it can't be fetched).
+      # Returns the names in +planets+ that did not turn up fruitless through the
+      # telescope (any other reply, such as daylight or indoors, still counts as
+      # visible), or nil when there is no telescope to look through (no settings,
+      # or it can't be fetched).
       def find_visible_planets(planets, settings = nil)
         # Without settings there is no telescope name or storage, so don't send
         # a bare "get" for a nil item.
