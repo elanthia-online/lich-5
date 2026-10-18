@@ -1825,6 +1825,11 @@ module Lich
         end
       end
 
+      # Builds a script body and its lifecycle state. Body-read failures retain
+      # their original exception so execution cannot succeed or cache a library;
+      # the empty body still follows normal startup and teardown.
+      #
+      # @param args [Hash] script file, arguments, quiet and publication options
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
@@ -1876,20 +1881,22 @@ module Lich
         @cleanup_started = false
         @completed_successfully = false
         @ignore_pause = false
-        data = nil
+        data = []
         if @file_name =~ /\.gz$/i
           begin
             Zlib::GzipReader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            # return nil
+          rescue StandardError => error
+            data = []
+            __record_exit_error(error)
+            respond "--- Lich: error reading script file (#{@file_name}): #{error}"
           end
         else
           begin
             File.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            # return nil
+          rescue StandardError => error
+            data = []
+            __record_exit_error(error)
+            respond "--- Lich: error reading script file (#{@file_name}): #{error}"
           end
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i

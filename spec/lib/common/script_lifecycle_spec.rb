@@ -48,6 +48,126 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@stopping, [])
   end
 
+  describe 'script body-read failures' do
+    let(:source) { "# quiet\nSCRIPT_READ_EVENTS << :body\nDone:\nnil\n" }
+
+    around do |example|
+      Dir.mktmpdir('script-read-failure') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        @read_root = root
+        example.run
+      end
+    end
+
+    before do
+      stub_const('SCRIPT_DIR', @read_root)
+      stub_const('SCRIPT_READ_EVENTS', Queue.new)
+      # This isolated spec omits lich.rbw's global include of Lich::Common.
+      # Supply a real binding for the trusted, empty failed-script body.
+      stub_const('Lich::Common::TRUSTED_SCRIPT_BINDING', proc { Lich::Common::Scripting.new.script })
+    end
+
+    def expect_read_failure_cleanup
+      expect(script_class.list).to be_empty
+      %i[@@startup_reservations @@completed_named_starts @@loading_libraries @@loaded_library_owners].each do |registry|
+        expect(script_class.class_variable_get(registry)).to be_empty
+      end
+    end
+
+    { 'plain' => [File, '.lic'], 'gzip' => [Zlib::GzipReader, '.lic.gz'] }.each do |format, (reader_class, extension)|
+      context "with a #{format} script" do
+        let(:path) { File.join(SCRIPT_DIR, 'custom', "libreadfailure#{extension}") }
+
+        before do
+          if format == 'gzip'
+            Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+          else
+            File.write(path, source)
+          end
+        end
+
+        %i[open readlines].each do |failure_point|
+          context "when #{failure_point} fails" do
+            let(:read_error) { Errno::EACCES.new(path) }
+
+            before do
+              @read_attempts = 0
+              @readable = false
+              allow(reader_class).to receive(:open).and_call_original
+              allow(reader_class).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                @read_attempts += 1
+                if @readable
+                  method.call(*args, &block)
+                elsif failure_point == :open
+                  raise read_error
+                else
+                  method.call(*args) do |reader|
+                    allow(reader).to receive(:readlines).and_raise(read_error)
+                    block.call(reader)
+                  end
+                end
+              end
+            end
+
+            it 'records failed start completion, tears down, and can start after recovery' do
+              started = script_class.start('libreadfailure')
+
+              expect(started).not_to be_nil
+              expect(started.join(2)).to equal(started)
+              expect(started.exit_error).to equal(read_error)
+              expect(started).not_to be_completed_successfully
+              expect(SCRIPT_READ_EVENTS).to be_empty
+              expect_read_failure_cleanup
+
+              @readable = true
+              recovered = script_class.start('libreadfailure')
+              expect(recovered.join(2)).to equal(recovered)
+              expect(recovered).to be_completed_successfully
+              expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+              expect(@read_attempts).to eq(2)
+              expect_read_failure_cleanup
+            end
+
+            it 'rejects loadlib without caching and rereads successfully after recovery' do
+              expect { script_class.loadlib('readfailure') }.to raise_error(LoadError, /script library failed: libreadfailure:.*Permission denied/)
+
+              expect(script_class.libs).not_to include('libreadfailure')
+              expect(SCRIPT_READ_EVENTS).to be_empty
+              expect_read_failure_cleanup
+
+              @readable = true
+              expect(script_class.loadlib('readfailure')).to be(true)
+              expect(script_class.libs).to include('libreadfailure')
+              expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+              expect(script_class.loadlib('readfailure')).to be(true)
+              expect(@read_attempts).to eq(2)
+              expect(SCRIPT_READ_EVENTS).to be_empty
+            end
+          end
+        end
+      end
+    end
+
+    it 'rejects a corrupt gzip library and loads its replacement after recovery' do
+      path = File.join(SCRIPT_DIR, 'custom', 'libcorrupt.lic.gz')
+      File.write(path, 'invalid gzip data')
+
+      started = script_class.start('libcorrupt')
+      expect(started.join(2)).to equal(started)
+      expect(started.exit_error).to be_a(Zlib::GzipFile::Error)
+      expect(started).not_to be_completed_successfully
+      expect { script_class.loadlib('corrupt') }.to raise_error(LoadError, /script library failed: libcorrupt/)
+      expect(script_class.libs).not_to include('libcorrupt')
+      expect(SCRIPT_READ_EVENTS).to be_empty
+      expect_read_failure_cleanup
+
+      Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+      expect(script_class.loadlib('corrupt')).to be(true)
+      expect(script_class.libs).to include('libcorrupt')
+      expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+    end
+  end
+
   describe 'named-script lifetime execution guards' do
     def guarded_fixture(source)
       Dir.mktmpdir('script-lifetime-guard') do |root|
