@@ -32,6 +32,10 @@ module Lich
         GEMSTONE_INSTALL_URL = 'https://gswiki.play.net/Lich:Software/Installation'.freeze
         # Seconds a beta notice stays open for `lich5-update --beta --confirm`.
         BETA_CONFIRM_WINDOW = 60
+        # Guards the check-and-clear of the beta notice. Class-level so that an
+        # installer built before this file was reloaded still has a lock; the
+        # guard keeps a reload from swapping the mutex while it is held.
+        BETA_LOCK = Mutex.new unless const_defined?(:BETA_LOCK, false)
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -48,7 +52,6 @@ module Lich
           @release_tag = nil
           @required_ruby = nil
           @beta_prompted_at = nil
-          @beta_lock = Mutex.new
         end
 
         # Displays announcement if new version available.
@@ -146,7 +149,7 @@ module Lich
         # @return [void]
         def prep_betatest(type = nil, requested_file = nil)
           if type.nil?
-            @beta_lock.synchronize { @beta_prompted_at = monotonic_now }
+            BETA_LOCK.synchronize { @beta_prompted_at = monotonic_now }
             respond 'You are electing to participate in the beta testing of the next Lich release.'
             respond 'This beta test will include only Lich code, and does not include Ruby updates.'
             respond 'While we will do everything we can to ensure you have a smooth experience, '
@@ -165,7 +168,7 @@ module Lich
         #
         # @return [void]
         def confirm_betatest
-          prompted_at = @beta_lock.synchronize do
+          prompted_at = BETA_LOCK.synchronize do
             value = @beta_prompted_at
             @beta_prompted_at = nil
             value

@@ -232,19 +232,44 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         expect(resolver).to have_received(:resolve_channel_ref).once
       end
 
-      it 'installs only once when several confirmations race for one notice' do
-        calls = 0
-        count_lock = Mutex.new
-        allow(resolver).to receive(:resolve_channel_ref) do
-          count_lock.synchronize { calls += 1 }
-          sleep 0.05
-          nil
-        end
+      it 'checks and clears the notice under the lock, so racing confirmations install once' do
         installer.prep_betatest
+        confirmers = []
+        begin
+          described_class::BETA_LOCK.synchronize do
+            confirmers = Array.new(2) { Thread.new { installer.confirm_betatest } }
+            deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+            until confirmers.all? { |t| t.status == 'sleep' || !t.alive? } ||
+                  Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+              Thread.pass
+            end
 
-        Array.new(8) { Thread.new { installer.confirm_betatest } }.each(&:join)
+            # Both confirmers are parked on the lock: neither has read or
+            # cleared the notice, and nothing has been installed.
+            expect(confirmers.map(&:status)).to eq(%w[sleep sleep])
+            expect(installer.instance_variable_get(:@beta_prompted_at)).not_to be_nil
+            expect(resolver).not_to have_received(:resolve_channel_ref)
+          end
+        ensure
+          confirmers.each(&:join)
+        end
 
-        expect(calls).to eq(1)
+        expect(resolver).to have_received(:resolve_channel_ref).once
+        expect(messages.grep(/There is no beta test request to confirm/).size).to eq(1)
+      end
+
+      it 'still arms and confirms on an installer built without the current initializer' do
+        # An installer memoized at login keeps its ivars when this file is
+        # reloaded in place, so the lock must not live in #initialize.
+        legacy = described_class.allocate
+        legacy.instance_variable_set(:@resolver, resolver)
+        allow(legacy).to receive(:respond) { |message = ''| messages << message }
+
+        legacy.prep_betatest
+        legacy.confirm_betatest
+
+        expect(messages).to include('Beta test installation accepted.  Thank you for considering!')
+        expect(resolver).to have_received(:resolve_channel_ref).with(:beta).once
       end
 
       it 'reports a GitHub failure while resolving the beta' do
