@@ -18,7 +18,7 @@ module WalkToUnknownRoomSpec
   # Minimal map world. Rooms are keyed by id; +overrides+ maps [room_id, dir] to
   # the room a move actually lands in (defaults to following the wayto).
   class World
-    attr_accessor :position, :resolvable, :fog, :blank_description
+    attr_accessor :position, :resolvable, :fog, :blank
     attr_reader :rooms, :sent, :overrides, :live_uids
 
     def initialize(rooms, position:, resolvable: [])
@@ -28,7 +28,8 @@ module WalkToUnknownRoomSpec
       @sent = []
       @overrides = {}
       @fog = false
-      @blank_description = false
+      # :title, :description or :exits: that live field reads as blank
+      @blank = nil
       # room id -> the UID the game shows there; 0 (none) when absent
       @live_uids = Hash.new(0)
     end
@@ -42,14 +43,16 @@ module WalkToUnknownRoomSpec
     end
 
     def live_title
-      room(@position).title.first
+      @blank == :title ? '' : room(@position).title.first
     end
 
     def live_description
-      @blank_description ? '' : "#{room(@position).description.first}  "
+      @blank == :description ? '' : "#{room(@position).description.first}  "
     end
 
     def live_exits
+      return '' if @blank == :exits
+
       @fog ? 'Obvious paths: obscured by a thick fog.' : room(@position).paths.first
     end
 
@@ -292,13 +295,20 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(world.sent).to be_empty
     end
 
-    it 'fails without moving when the live description is blank' do
-      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
-      world.blank_description = true
-      install(world)
+    # The start room's stored text also holds an empty string, so a blank
+    # live field would pass the include? checks; only the blank-text guard
+    # stops the match.
+    %i[title description exits].each do |field|
+      it "fails without moving when the live #{field} is blank, even if the map stores an empty one" do
+        world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+        start = world.room(101)
+        { title: start.title, description: start.description, exits: start.paths }.fetch(field) << ''
+        world.blank = field
+        install(world)
 
-      expect(DRCT.walk_to(102)).to be(false)
-      expect(world.sent).to be_empty
+        expect(DRCT.walk_to(102)).to be(false)
+        expect(world.sent).to be_empty
+      end
     end
 
     it 'skips nil holes in the map list' do
@@ -522,6 +532,53 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(103)).to be(true)
       expect(world.sent).to eq(%w[north west north])
+    end
+  end
+
+  describe 'a room that resolves on one read and not the next' do
+    # walk_to reads Room.current twice before it hands over (the arrival check
+    # and the unknown-room check); the walker reads it once more first.
+    it 'goes to go2 when the room resolves between walk_to and the walker' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(2), position: 101))
+      reads = 0
+      allow(Room).to receive(:current) do
+        reads += 1
+        reads <= 2 ? nil : world.room(world.position)
+      end
+
+      expect(DRCT.walk_to(103)).to be(true)
+      expect(world.sent).to be_empty
+      expect(DRCT).to have_received(:start_script).with('go2', ['103'], force: true).once
+    end
+
+    it 'gives up instead of bouncing between walk_to and the walker forever' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(2), position: 101))
+      # nil for walk_to's second read, the room for the walker and for
+      # walk_to's first read, over and over, with no move in between.
+      reads = 0
+      allow(Room).to receive(:current) do
+        reads += 1
+        ((reads - 2) % 3).zero? || reads == 1 ? nil : world.room(world.position)
+      end
+
+      result = Timeout.timeout(5) { DRCT.walk_to(103) }
+
+      expect(result).to be(false)
+      expect(world.sent).to be_empty
+      expect(DRCT).not_to have_received(:start_script)
+      expect(bold_messages.last).to include('keeps resolving and unresolving without a move')
+    end
+
+    it 'counts a bounce against the retries walk_to already spent' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(2), position: 101))
+      reads = 0
+      allow(Room).to receive(:current) do
+        reads += 1
+        reads <= 2 ? nil : world.room(world.position)
+      end
+
+      expect(DRCT.walk_to(103, true, retry_depth: DRCT::MAX_WALK_TO_RETRIES)).to be(false)
+      expect(DRCT).not_to have_received(:start_script)
     end
   end
 

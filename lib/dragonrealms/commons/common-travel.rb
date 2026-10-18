@@ -330,7 +330,9 @@ module Lich
       # Walk toward +room_num+ from a room Room.current cannot resolve, one map
       # edge at a time, always the first hop of the map path (as go2 would
       # take it). As soon as Room.current resolves again the
-      # walk hands back to walk_to (and go2).
+      # walk hands back to walk_to (and go2). A hand-back before any move
+      # (the room resolved between walk_to's read and this one) spends one of
+      # the MAX_WALK_TO_RETRIES, so the two cannot call each other forever.
       #
       # Arrival is checked after every move. A move that lands in the expected
       # next room is progress and does not spend a retry; a move that does not
@@ -358,7 +360,20 @@ module Lich
           current_id = Room.current&.id
           return true if current_id == room_num
           # The map knows where we are again; go2 is the better walker.
-          return walk_to(room_num, restart_on_fail, retry_depth: retries) unless current_id.nil?
+          unless current_id.nil?
+            # walk_to sent us here because Room.current was nil, and nothing
+            # has moved since. A hand-back with no move spends a retry, so a
+            # room that resolves on one read and not the next cannot bounce
+            # between walk_to and this walker forever.
+            if moves.zero?
+              if retries >= MAX_WALK_TO_RETRIES
+                Lich::Messaging.msg('bold', "DRCT: Room #{current_id} keeps resolving and unresolving without a move, giving up after #{MAX_WALK_TO_RETRIES} retries.")
+                return false
+              end
+              retries += 1
+            end
+            return walk_to(room_num, restart_on_fail, retry_depth: retries)
+          end
 
           room = match_unknown_room
           if room.nil?
