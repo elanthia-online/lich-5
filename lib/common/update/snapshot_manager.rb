@@ -16,7 +16,8 @@
   - #revert checks that the newest snapshot is complete before it touches
     anything, refuses (naming the directory) when it is not, and copies the
     snapshot next to the live files before swapping them in with renames
-    that are undone if any step fails.
+    that are undone if any step fails. Only one #revert runs at a time on
+    an installation: a second one started meanwhile changes nothing.
 =end
 
 require 'tmpdir'
@@ -43,6 +44,10 @@ module Lich
         # Prefix of the hidden working directories #revert creates beside the
         # live lib/, scripts/ and lich.rbw while it restores them.
         REVERT_TEMP_PREFIX = '.lich5-revert-'
+
+        # Lock file in BACKUP_DIR that #revert holds for its whole run, so two
+        # reverts on one installation never swap files at the same time.
+        REVERT_LOCK_NAME = '.lich5-revert.lock'
 
         # How many same-second name collisions #snapshot tolerates before
         # giving up on publishing.
@@ -119,11 +124,61 @@ module Lich
         # is one, but never falls back to it on its own: an older snapshot
         # may be several versions back.
         #
+        # Holds an exclusive lock for the whole run. If another revert on the
+        # same installation holds it, says so and changes nothing.
+        #
         # @return [void]
         def revert
           respond
           respond 'Reverting Lich5 to previously installed version.'
 
+          with_revert_lock { revert_newest_snapshot }
+        end
+
+        private
+
+        # Runs the block while holding an exclusive, non-blocking flock on
+        # BACKUP_DIR/REVERT_LOCK_NAME. Two reverts that swap files in the
+        # same lib/ at once rename each other's entries and can lose files,
+        # so a revert that finds the lock taken returns without yielding.
+        # The lock is released when the file is closed, including when the
+        # holder is killed, so it can never go stale. If the lock file cannot
+        # be created or the filesystem does not support flock (some network
+        # shares), the block runs unlocked rather than blocking every revert.
+        #
+        # @return [void]
+        def with_revert_lock
+          lock = begin
+            FileUtils.mkdir_p(BACKUP_DIR)
+            File.open(File.join(BACKUP_DIR, REVERT_LOCK_NAME), File::RDWR | File::CREAT, 0o644)
+          rescue SystemCallError => e
+            respond "Could not create the revert lock file (#{e.class}: #{e.message}); continuing without it."
+            return yield
+          end
+
+          begin
+            locked = begin
+              lock.flock(File::LOCK_EX | File::LOCK_NB)
+            rescue NotImplementedError, SystemCallError => e
+              respond "Could not lock #{lock.path} (#{e.class}: #{e.message}); continuing without the lock."
+              :unsupported
+            end
+            unless locked
+              respond
+              respond 'Another revert is already running on this installation. Nothing was changed.'
+              return
+            end
+
+            yield
+          ensure
+            lock.close
+          end
+        end
+
+        # The body of #revert, run while holding the revert lock.
+        #
+        # @return [void]
+        def revert_newest_snapshot
           candidates = snapshot_dirs
           restore_snapshot = candidates.first
           if restore_snapshot.nil?
@@ -149,8 +204,6 @@ module Lich
           respond "You should exit the game, then log back in.  This will start the game"
           respond "with your previous version of Lich.  Enjoy!"
         end
-
-        private
 
         # @return [String] file name of the running Lich launcher (lich.rbw)
         def lich_file_name

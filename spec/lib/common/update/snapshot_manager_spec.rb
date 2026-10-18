@@ -719,5 +719,148 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(messages).to include('Some changes could not be undone. Your previous files are kept in:')
       kept.each { |path| expect(messages).to include("    #{path}") }
     end
+
+    context 'when another revert on the same installation is running' do
+      let(:lock_path) { File.join(BACKUP_DIR, described_class::REVERT_LOCK_NAME) }
+      let(:refusal) { 'Another revert is already running on this installation. Nothing was changed.' }
+
+      before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
+
+      # Takes the revert lock through a separate open file, as another
+      # process would. flock locks belong to the open file, so this
+      # conflicts with the manager's own open even within one process.
+      def hold_lock
+        File.open(lock_path, File::RDWR | File::CREAT, 0o644) do |lock|
+          expect(lock.flock(File::LOCK_EX | File::LOCK_NB)).to be_truthy
+          yield
+        end
+      end
+
+      def lock_free?
+        File.open(lock_path, File::RDWR | File::CREAT, 0o644) { |lock| lock.flock(File::LOCK_EX | File::LOCK_NB) ? true : false }
+      end
+
+      it 'changes nothing and says so while the lock is held' do
+        before = live_state
+        messages = capture_responses
+
+        hold_lock { manager.revert }
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include(refusal)
+        expect(messages).not_to include('Restoring Lich5 version 5.21.0 from:')
+      end
+
+      it 'refuses while a revert in another process is part way through swapping files' do
+        skip 'needs fork' unless Process.respond_to?(:fork)
+        paused_r, paused_w = IO.pipe
+        resume_r, resume_w = IO.pipe
+        result_r, result_w = IO.pipe
+        pid = fork do
+          [paused_r, resume_w, result_r].each(&:close)
+          first = described_class.new
+          first.define_singleton_method(:respond) { |*| nil }
+          move = first.method(:move_entry)
+          paused = false
+          # Stops after the first rename of the swap, with the live lib/
+          # half moved out, until the parent says to go on.
+          first.define_singleton_method(:move_entry) do |from, to, journal|
+            move.call(from, to, journal)
+            next if paused
+
+            paused = true
+            paused_w.write('p')
+            paused_w.flush
+            resume_r.read(1)
+          end
+          status = begin
+            first.revert
+            'ok'
+          rescue StandardError => e
+            "#{e.class}: #{e.message}"
+          end
+          result_w.write(status)
+          result_w.close
+          exit!(0)
+        end
+        [paused_w, resume_r, result_w].each(&:close)
+        begin
+          expect(paused_r.wait_readable(30)).to be_truthy
+          expect(paused_r.read(1)).to eq('p')
+          messages = capture_responses
+
+          manager.revert
+
+          expect(messages).to include(refusal)
+          resume_w.write('g')
+          resume_w.close
+          expect(result_r.read).to eq('ok')
+        ensure
+          resume_w.close unless resume_w.closed?
+          Process.wait(pid)
+        end
+
+        expect(tree(LIB_DIR)).to eq(tree(File.join(BACKUP_DIR, 'L5-snapshot-2026-10-01-00-00-00', 'lib')))
+        expect(File.read(File.join(LICH_DIR, lich_name))).to eq("# lich 5.21.0\n")
+        expect(revert_temp_dirs).to be_empty
+      end
+
+      it 'releases the lock when it finishes and when it fails' do
+        manager.revert
+        expect(lock_free?).to be(true)
+
+        install('5.22.0')
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          raise Errno::EACCES, to if to == File.join(LICH_DIR, lich_name) && from.include?('.lich5-revert-new-')
+
+          original.call(from, to)
+        end
+        expect { manager.revert }.to raise_error(Errno::EACCES)
+        expect(lock_free?).to be(true)
+      end
+
+      it 'creates BACKUP_DIR for the lock and still reports when there is no snapshot' do
+        FileUtils.rm_rf(BACKUP_DIR)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('No prior Lich5 version found. Seek assistance.')
+        expect(File.file?(lock_path)).to be(true)
+      end
+
+      it 'runs without the lock when the filesystem does not support flock' do
+        allow(File).to receive(:open).and_wrap_original do |original, *args, **kwargs, &block|
+          file = original.call(*args, **kwargs)
+          allow(file).to receive(:flock).and_raise(Errno::ENOLCK) if args.first == lock_path
+          next file unless block
+
+          begin
+            block.call(file)
+          ensure
+            file.close
+          end
+        end
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(messages.grep(/continuing without the lock/)).not_to be_empty
+      end
+
+      it 'runs without the lock when the lock file cannot be created' do
+        skip_unless_permissions_enforced
+        File.chmod(0o555, BACKUP_DIR)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(messages.grep(/Could not create the revert lock file/)).not_to be_empty
+        expect(File.exist?(lock_path)).to be(false)
+      end
+    end
   end
 end
