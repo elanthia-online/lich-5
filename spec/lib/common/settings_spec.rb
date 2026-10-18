@@ -944,6 +944,117 @@ RSpec.describe Lich::Common::Settings do
         expect(stored["spells"]).to eq("101" => 1, "102" => 20)
       end
 
+      it "keeps every write made through fresh reads inside an iteration of the hash, reverting none of them" do
+        loops = {
+          "each_pair, fresh writes" => -> { game_read('opts').each_pair { |k, v| game_read('opts')[k] = v * 10 } },
+          "each_key, fresh writes"  => -> { game_read('opts').each_key { |k| game_read('opts')[k] = 0 } },
+          "each_pair, fresh delete" => -> { game_read('opts').each_pair { |k, _v| k == "a" ? game_read('opts').delete("a") : game_read('opts')[k] = 0 } }
+        }
+        expected = {
+          "each_pair, fresh writes" => { "a" => 10, "b" => 20 },
+          "each_key, fresh writes"  => { "a" => 0, "b" => 0 },
+          "each_pair, fresh delete" => { "b" => 0 }
+        }
+        loops.each do |label, loop_body|
+          settings.instance_variable_set(:@settings_cache, {})
+          their_write("opts" => { "a" => 1, "b" => 2 })
+
+          expect { loop_body.call }.not_to raise_error, label
+          expect(stored["opts"]).to eq(expected[label]), "#{label}: #{stored["opts"].inspect}"
+        end
+      end
+
+      it "keeps another session's entry when a kept proxy writes while iterating the hash" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        opts = game_read('opts')
+        their_write("opts" => { "a" => 1, "b" => 2, "c" => 3 })
+
+        opts.each_pair { |k, v| opts[k] = v + 1 }
+
+        expect(stored["opts"]).to eq("a" => 2, "b" => 3, "c" => 3)
+        expect(opts.to_h).to eq("a" => 2, "b" => 3, "c" => 3)
+      end
+
+      it "keeps another session's entry committed while a kept proxy iterates and writes" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        opts = game_read('opts')
+
+        opts.each_pair do |k, v|
+          their_write("opts" => { "a" => 1, "b" => 2, "c" => 3 }) if k == "a"
+          opts[k] = v + 1
+        end
+
+        expect(stored["opts"]).to eq("a" => 2, "b" => 3, "c" => 3)
+      end
+
+      it "stores a change made to a yielded value inside each_pair, keeping another session's entry" do
+        their_write("opts" => { "a" => { "x" => 1 } })
+        opts = game_read('opts')
+        their_write("opts" => { "a" => { "x" => 1 }, "c" => 3 })
+
+        opts.each_pair { |_k, v| v['y'] = 1 }
+
+        expect(stored["opts"]).to eq("a" => { "x" => 1, "y" => 1 }, "c" => 3)
+      end
+
+      it "removes from the stored hash a key the method removed from this session's copy, keeping another session's entry" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        opts = game_read('opts')
+        their_write("opts" => { "a" => 1, "b" => 2, "c" => 3 })
+
+        opts.each_pair { |k, _v| opts.target.delete(k) if k == "a" }
+
+        expect(stored["opts"]).to eq("b" => 2, "c" => 3)
+      end
+
+      it "keeps another session's commit when a thread that only reads finishes iterating the hash another thread wrote" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        game_read('opts').to_h
+        iterating = Queue.new
+        go_on = Queue.new
+        reader = Thread.new do
+          game_read('opts').each_pair do |k, _v|
+            next unless k == "a"
+
+            iterating << true
+            go_on.pop
+          end
+        end
+        iterating.pop
+        game_read('opts')['b'] = 20
+        their_write(stored.merge("opts" => stored["opts"].merge("c" => 3)))
+        go_on << true
+        reader.join
+
+        expect(stored["opts"]).to eq("a" => 1, "b" => 20, "c" => 3)
+      end
+
+      it "keeps every write made through fresh reads inside an iteration of an array that does not change its size" do
+        their_write("l" => [1, 2])
+
+        game_read('l').each_index { |i| game_read('l')[i] = 0 }
+
+        expect(stored["l"]).to eq([0, 0])
+      end
+
+      it "keeps another session's element when changes to the yielded elements of a kept array are stored" do
+        their_write("l" => [{ "n" => 1 }])
+        l = game_read('l')
+        their_write("l" => [{ "n" => 1 }, { "n" => 2 }])
+
+        l.reverse_each { |e| e['seen'] = true }
+
+        expect(stored["l"]).to eq([{ "n" => 1, "seen" => true }, { "n" => 2 }])
+      end
+
+      it "stores this session's copy of an array whose size the method changed" do
+        their_write("l" => [1, 2])
+
+        game_read('l').each_index { |i| game_read('l').push(9) if i.zero? }
+
+        expect(stored["l"]).to eq([1, 2, 9])
+      end
+
       it "stores copies of the arguments, so later changes to the caller's objects are not saved or cached" do
         their_write("arr" => [])
         jar = { "gem" => "ruby" }
@@ -1067,6 +1178,18 @@ RSpec.describe Lich::Common::Settings do
         view.values.first['j'] = 2
 
         expect(stored).to eq("opts" => { "a" => { "x" => 0 }, "b" => { "x" => 1, "k" => 1, "j" => 2 } })
+      end
+
+      it "saves a write through an element taken from a Hash view to that element after the hash took the stored row" do
+        their_write("h" => { "n" => { "m" => 1 }, "sib" => 1 })
+        h = game_read('h')
+        view = h.select { true }
+        h['new'] = 1
+
+        view['n']['w'] = 1
+
+        expect(stored).to eq("h" => { "n" => { "m" => 1, "w" => 1 }, "sib" => 1, "new" => 1 })
+        expect(Lich::Messaging).not_to have_received(:msg)
       end
 
       it "saves a write through what dig, fetch or at returned from a view, several keys down, to that element" do
@@ -1298,6 +1421,44 @@ RSpec.describe Lich::Common::Settings do
 
         expect(stored).to eq("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).twice
+      end
+
+      it "stores nothing and says so for an element of a Hash view whose key now holds another kind of value" do
+        their_write("h" => { "n" => { "m" => 1 } })
+        h = game_read('h')
+        view = h.select { true }
+        their_write("h" => { "n" => [1] })
+        h['new'] = 1
+
+        view['n']['w'] = 1
+
+        expect(stored).to eq("h" => { "n" => [1], "new" => 1 })
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings"))
+      end
+
+      it "stores nothing for a new container built from a view's element that is not in the settings, instead of writing at the top of the row" do
+        their_write("l" => [{ "on" => false }, { "on" => true }], "top" => 1)
+        l = game_read('l')
+        selected = l.select { |e| e['on'] }
+        l.push({ "z" => 1 })
+        mapped = game_read('l').map { |e| e.merge("m" => 1) }
+
+        selected[0].except("nope")['k'] = 1
+        expect { selected[0].merge({}).delete("top") }.to raise_error(NoMethodError)
+        mapped[0].merge({})['k'] = 1
+        expect { mapped[0].merge({}).clear }.to raise_error(NoMethodError)
+
+        expect(stored).to eq("l" => [{ "on" => false }, { "on" => true }, { "z" => 1 }], "top" => 1)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).twice
+      end
+
+      it "stores nothing for a new container built from an element yielded by each, instead of writing at the top of the row" do
+        their_write("rows" => [{ "x" => 0 }], "top" => 1)
+
+        game_read('rows').each { |row| row.merge({})['k'] = 1 }
+        expect { game_read('rows').each { |row| row.merge({}).clear } }.to raise_error(NoMethodError)
+
+        expect(stored).to eq("rows" => [{ "x" => 0 }], "top" => 1)
       end
 
       it "does not write for a method that changes nothing, and runs its block once" do

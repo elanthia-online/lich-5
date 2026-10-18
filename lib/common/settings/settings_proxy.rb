@@ -318,13 +318,10 @@ module Lich
             return call_mutating_method(method, unwrapped_args, block) if MUTATING_METHODS.include?(method)
 
             # Any other method (key?, each_pair, ...) may or may not change the
-            # container. It is saved, as this session's copy, only if it did.
+            # container. What it changed, if anything, is saved.
             before = dump_of_target
             result = @target.send(method, *unwrapped_args, &block)
-            if before.nil? || dump_of_target != before
-              @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed the target; saving this session's copy" })
-              @settings_module.save_proxy_changes(self)
-            end
+            save_changes_since(method, before) if before.nil? || dump_of_target != before
             return handle_method_result(result, method, unwrapped_args)
           end
         else
@@ -381,6 +378,65 @@ module Lich
         end
       end
 
+      # Saves what +method+ (one in neither method list) changed in the
+      # target, +before+ being the target's Marshal bytes before the call.
+      #
+      # For a Hash, and for an Array whose size did not change, each entry
+      # that changed is replayed on the stored container: delete for a key
+      # that is gone, []= for a key or index whose value is new or
+      # different. So entries that other sessions, or writes made inside the
+      # call's block (opts.each_pair { |k, v| opts[k] = ... }), stored
+      # meanwhile in the rest of the container are kept, although this
+      # session's copy may not show them. Otherwise (an Array that grew or
+      # shrank, or a target that can't be dumped) this session's copy of the
+      # container is stored.
+      private def save_changes_since(method, before)
+        changes = changed_entries(load_dump(before))
+        unless changes
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed the target; saving this session's copy" })
+          @settings_module.save_proxy_changes(self)
+          return
+        end
+
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed #{changes.size} entries; replaying them" })
+        replayed = nil
+        changes.each do |operation, args|
+          replayed = @settings_module.save_proxy_changes(self, operation, args) || replayed
+        end
+        take_stored_container(replayed[1]) if replayed
+      end
+
+      # The [operation, args] pairs that turn +old+ into the target, for a
+      # Hash or an Array of the same size: [:delete, [key]] for a key that
+      # is gone, then [:[]=, [key_or_index, value]] for each entry that is
+      # new or whose value differs (compared by Marshal.dump). nil for any
+      # other pair of containers.
+      private def changed_entries(old)
+        if @target.is_a?(Hash) && old.is_a?(Hash)
+          removed = old.each_key.reject { |key| @target.key?(key) }.map { |key| [:delete, [key]] }
+          changed = @target.reject { |key, value| old.key?(key) && same_dump?(old[key], value) }
+          removed + changed.map { |key, value| [:[]=, [key, value]] }
+        elsif @target.is_a?(Array) && old.is_a?(Array) && @target.size == old.size
+          @target.each_index.reject { |index| same_dump?(old[index], @target[index]) }.map { |index| [:[]=, [index, @target[index]]] }
+        end
+      end
+
+      # True when +a+ and +b+ have the same Marshal bytes; false when either
+      # can't be dumped.
+      private def same_dump?(a, b)
+        Marshal.dump(a) == Marshal.dump(b)
+      rescue StandardError
+        false
+      end
+
+      # The object +bytes+ (from #dump_of_target) hold; nil for nil, or when
+      # they can't be loaded.
+      private def load_dump(bytes)
+        bytes && Marshal.load(bytes)
+      rescue StandardError
+        nil
+      end
+
       # Marshal bytes of the target, or nil when it can't be dumped.
       private def dump_of_target
         Marshal.dump(@target)
@@ -404,6 +460,8 @@ module Lich
             element
           elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
             SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+          elsif @settings_module.container?(result) && pathless_element?
+            pathless_derived_proxy(result)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
               # For Array#find / Array#detect, identify the element index in the
@@ -438,6 +496,8 @@ module Lich
           self # Return self if the method modified the target in-place and returned it
         elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
           SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+        elsif @settings_module.container?(result) && pathless_element?
+          pathless_derived_proxy(result)
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
@@ -445,6 +505,23 @@ module Lich
         else
           result
         end
+      end
+
+      # True for the proxy of an element that has no path in the settings:
+      # an element yielded by each, or a view's element not found in the
+      # settings (detached, without a path, and not a view of a root proxy,
+      # which has the root as its source).
+      private def pathless_element?
+        detached? && @path.empty? && @source.nil?
+      end
+
+      # The proxy for a new container (what merge or except return) built
+      # from a #pathless_element? proxy. It is detached and has no path
+      # either, so a write through it is not stored (and, for a view's
+      # element, is refused with a message) instead of landing at the top of
+      # the row.
+      private def pathless_derived_proxy(result)
+        SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?)
       end
 
       # The path of +result+ when it is an element of this proxy's container:
@@ -500,13 +577,23 @@ module Lich
 
       # The segment, in the container the view was taken from, of the view's
       # element at +view_segment+: the same key or index when that is where
-      # it is (Hash views keep their keys), otherwise where it is found.
+      # it is, otherwise where it is found. A Hash view of a Hash (select,
+      # reject, slice, compact) keeps the keys, so its key also addresses
+      # the element after the container has taken the stored row's elements,
+      # as long as that key still holds the same kind of container; a fresh
+      # read of that key would address the same entry.
       private def source_segment(view_segment)
         element = @target[view_segment]
         same = segment_in(@source, view_segment)
-        return same if same && @source[same.first].equal?(element)
+        return same if same && (@source[same.first].equal?(element) || same_key_in_hash_source?(same.first, element))
 
         child_segment(@source, element)
+      end
+
+      # True when this view and its source are Hashes and +key+ holds, in
+      # the source, a container of the same class as +element+.
+      private def same_key_in_hash_source?(key, element)
+        @target.is_a?(Hash) && @source.is_a?(Hash) && @source[key].instance_of?(element.class)
       end
 
       # The container a view taken from this proxy shares its elements with.
