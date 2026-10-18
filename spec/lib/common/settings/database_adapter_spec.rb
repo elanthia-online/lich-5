@@ -559,6 +559,78 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(unchanged).to eq(after_reopen)
       expect(later).to be > after_reopen
     end
+
+    it 'answers a thread that asks now and then while another thread asks in a tight loop' do
+      @adapter.data_version
+      stop = false
+      looper = Thread.new { @adapter.data_version until stop }
+      latencies = []
+      occasional = Thread.new do
+        10.times do
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          @adapter.data_version
+          latencies << (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started)
+          sleep 0.01
+        end
+      end
+      occasional.join(5)
+      stop = true
+      looper.join
+      occasional.join
+
+      expect(latencies.size).to eq(10)
+      expect(latencies.max).to be < 0.5
+    end
+
+    context 'when another thread replaces the connection during a check' do
+      before do
+        allow(Lich).to receive(:log)
+        @adapter.data_version # opens the version connection
+        3.times { commit_elsewhere }
+        @old = @adapter.instance_variable_get(:@version_db)
+      end
+
+      # What another thread does when its own check fails: close the
+      # connection, then open a new one with its next check.
+      def replace_connection_from_another_thread
+        value = nil
+        Thread.new do
+          @adapter.send(:close_version_connection)
+          value = @adapter.data_version
+        end.join(2)
+        value
+      end
+
+      it 'discards the value read on the replaced connection' do
+        replaced_value = nil
+        allow(@old).to receive(:execute_batch2).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          replaced_value = replace_connection_from_another_thread
+          result
+        end
+
+        expect(@adapter.data_version).to be_nil
+        expect(replaced_value).to be_a(Integer)
+        expect(@adapter.data_version).to eq(replaced_value)
+        commit_elsewhere
+        expect(@adapter.data_version).to be > replaced_value
+      end
+
+      it 'leaves the new connection open, and logs nothing, when the read fails on the replaced one' do
+        replaced_value = nil
+        allow(@old).to receive(:execute_batch2) do
+          replaced_value = replace_connection_from_another_thread
+          raise SQLite3::MisuseException, 'cannot use a closed database'
+        end
+
+        expect(@adapter.data_version).to be_nil
+        current = @adapter.instance_variable_get(:@version_db)
+        expect(current).not_to equal(@old)
+        expect(current).not_to be_closed
+        expect(@adapter.data_version).to eq(replaced_value)
+        expect(Lich).not_to have_received(:log)
+      end
+    end
   end
 
   describe '#save_settings' do

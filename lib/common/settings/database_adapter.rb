@@ -56,23 +56,32 @@ module Lich
       # so after an error has closed the connection the reopened one could
       # repeat a value already handed out while the database has since
       # changed. Values from each new connection are therefore offset past the
-      # last one returned: the result never goes back, and the first value
-      # after a reopen differs from every earlier one.
+      # last one returned: no value is handed out twice for different states
+      # of the database, and the first value after a reopen differs from every
+      # earlier one.
+      #
+      # The pragma is read without holding @version_mutex. Ruby's Mutex is not
+      # fair: a thread calling this in a tight loop would take the lock back
+      # before a waiting thread got to run, and stall every other thread's
+      # Settings reads for up to seconds. The GVL already keeps two threads out
+      # of the C call at once. The mutex guards only opening and closing the
+      # connection and recording the value; a value read on a connection that
+      # another thread has closed or replaced meanwhile is discarded (nil).
       #
       # @return [Integer, nil]
       def data_version
+        db = @version_db || open_version_connection
+        value = @version_base + Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
         @version_mutex.synchronize do
-          unless @version_db
-            @version_db = SQLite3::Database.new(@file).tap { |db| db.busy_timeout(0) }
-            @version_base = @last_version + 1
-          end
-          @last_version = @version_base + Integer(@version_db.execute_batch2('PRAGMA data_version').dig(0, 0))
+          return nil unless @version_db.equal?(db)
+
+          @last_version = value if value > @last_version
         end
+        value
       rescue SQLite3::BusyException
         nil
       rescue SQLite3::Exception, ArgumentError, TypeError => e
-        close_version_connection
-        unless @version_error_reported
+        if close_version_connection(db) && !@version_error_reported
           @version_error_reported = true
           Lich.log("--- Error: cannot tell whether settings changed in lich.db3 (#{e.class}: #{e.message}); settings may not show other sessions' changes ---")
         end
@@ -174,13 +183,36 @@ module Lich
 
       private
 
-      def close_version_connection
+      # Opens the version connection unless another thread already has. Its
+      # offset is set before the connection is published, so a thread that
+      # sees the new connection also sees its offset.
+      def open_version_connection
         @version_mutex.synchronize do
-          @version_db&.close
+          @version_db || begin
+            fresh = SQLite3::Database.new(@file).tap { |conn| conn.busy_timeout(0) }
+            @version_base = @last_version + 1
+            @version_db = fresh
+          end
+        end
+      end
+
+      # Closes the version connection if it is still +db+, so that the next
+      # check opens a new one. A thread whose read failed on a connection
+      # another thread has already replaced leaves the new one alone.
+      #
+      # @return [Boolean] whether +db+ was the current connection
+      def close_version_connection(db = @version_db)
+        @version_mutex.synchronize do
+          return false unless @version_db.equal?(db)
+
           @version_db = nil
         end
-      rescue SQLite3::Exception
-        @version_db = nil
+        begin
+          db&.close
+        rescue SQLite3::Exception
+          nil
+        end
+        true
       end
 
       def serialize_settings(script_name, settings)
