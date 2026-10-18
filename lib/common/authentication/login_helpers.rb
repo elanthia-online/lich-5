@@ -619,27 +619,19 @@ module Lich
           requested_frontend
         end
 
-        # Formats the game instance launch flag for Lich based on version.
+        # Formats the game instance launch flag for a spawned Lich session.
         #
-        # Older versions of Lich (pre-5.12) only recognize specific lowercase flags
-        # (e.g., `--gst`, `--drt`). Newer versions (5.12+) accept generalized `--GAMECODE` format.
+        # Callers spawn the running Lich installation itself (the session
+        # launcher respawns `$PROGRAM_NAME`; login scripts spawn
+        # `LICH_DIR/lich.rbw`), so the child always understands the
+        # generalized `--GAMECODE` form that {resolve_instance} parses.
         #
-        # @param game_code [String, Symbol] the game instance code (e.g., 'GS3', 'GST', 'GSX')
-        # @return [String, nil] the correctly formatted launch flag (e.g., '--gst', '--GSX'), or nil if not needed
+        # @param game_code [String, Symbol, nil] the game instance code (e.g., 'GS3', 'GST', 'DRX')
+        # @return [String, nil] the upcased launch flag (e.g., '--GS3', '--GST'), or nil when game_code is blank
         def self.format_launch_flag(game_code)
           return nil if game_code.to_s.strip.empty?
 
-          normalized_code = game_code.to_s.upcase
-
-          if LoginHelpers.lich_version_at_least?(5, 12, 0)
-            "--#{normalized_code}"
-          else
-            case normalized_code
-            when 'GST' then '--gst'
-            when 'DRT' then '--drt'
-            else nil
-            end
-          end
+          "--#{game_code.to_s.upcase}"
         end
       end
     end
