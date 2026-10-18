@@ -831,6 +831,15 @@ module Lich
             respond "--- Lich: error: line: #{line}"
             Lich.log "error: Infomon::Parser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             Lich.log "error: line: #{line}\n\t"
+            # Abandon any in-progress section: drop its partial batch and release
+            # the DB lock its header took, so Infomon reads/writes are not blocked.
+            @stat_hold = []
+            @expr_hold = []
+            @skills_hold = []
+            @psm_hold = []
+            @enhancive_hold = []
+            State.set(State::Ready) if State.enhancive_state?
+            Infomon.mutex_unlock
           end
         end
       end

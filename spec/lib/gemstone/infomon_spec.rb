@@ -821,6 +821,29 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
   end
 
+  context "error mid-section" do
+    it "releases the DB lock so other threads can read" do
+      Lich::Gemstone::Infomon::Parser.parse(" Testing (at level 12), your current skill bonuses and ranks (including all modifiers) are:")
+      expect(Lich::Gemstone::Infomon.mutex).to be_owned
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("  Two Weapon Combat..................|  12            2")
+      Lich::Gemstone::Infomon::Parser.parse("Training Points: 100 Phy 50 Mnt")
+
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+      reader = Thread.new { Lich::Gemstone::Infomon.get("uncached.key") }
+      expect(reader.join(2)).not_to be_nil, "Infomon.get blocked on a mutex left held by the parser"
+    end
+
+    it "resets enhancive state so the next enhancive header starts fresh" do
+      Lich::Gemstone::Infomon::Parser.parse("Stats:")
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+
+      expect(Lich::Gemstone::Infomon::Parser::State.get).to eq(Lich::Gemstone::Infomon::Parser::State::Ready)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+  end
+
   context "flush barrier" do
     it "returns true immediately when queue is empty" do
       # Ensure queue is empty first
