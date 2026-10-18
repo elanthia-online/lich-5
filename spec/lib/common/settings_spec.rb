@@ -1099,6 +1099,18 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("does not lead to a container")).once
       end
 
+      it "stores none of the changed entries when one can't be stored, and names the script's method" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        opts = game_read('opts')
+
+        expect { opts.each_pair { |k, _v| opts.target[k] = (k == 'a' ? 10 : proc { 1 }) } }.not_to raise_error
+
+        expect(stored["opts"]).to eq("a" => 1, "b" => 2)
+        expect(Lich::Messaging).to have_received(:msg)
+          .with("error", a_string_including("not saved: a value changed by each_pair can't be stored", "Proc")).once
+        expect(Lich::Messaging).not_to have_received(:msg).with("error", a_string_including("replay_entry_changes"))
+      end
+
       it "stores copies of the arguments, so later changes to the caller's objects are not saved or cached" do
         their_write("arr" => [])
         jar = { "gem" => "ruby" }

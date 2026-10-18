@@ -402,7 +402,7 @@ module Lich
         return if changes.empty?
 
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed #{changes.size} entries; replaying them" })
-        replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes])
+        replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes], label: method)
         take_stored_container(replayed[1]) if replayed
       end
 

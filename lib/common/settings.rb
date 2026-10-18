@@ -192,15 +192,18 @@ module Lich
       # left as it was, and the next read checks the database again.
       #
       # @param proxy [SettingsProxy] the proxy the change was made through
-      # @param method [Symbol, nil] the operation applied to proxy.target
+      # @param method [Symbol, nil] the operation applied to proxy.target, or
+      #   REPLAY_ENTRY_CHANGES for the entries a script's call changed
       # @param args [Array] its arguments; they are stored as copies (proxies
       #   unwrapped, everything copied as a read of the stored row would give
       #   it back), so the stored and cached row share no object with them
       # @param block [Proc, nil] its block
+      # @param label [Symbol, nil] the script's method that made the change,
+      #   named in messages (defaults to +method+)
       # @return [Array(Object, Hash|Array), nil] when the operation was
       #   replayed and stored: its result on the stored container, and that
       #   container (part of the row now cached); nil otherwise
-      def self.save_proxy_changes(proxy, method = nil, args = [], block = nil)
+      def self.save_proxy_changes(proxy, method = nil, args = [], block = nil, label: nil)
         path        = proxy.path
         scope       = proxy.scope
         # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
@@ -230,7 +233,8 @@ module Lich
         begin
           stored_args = stored_copy(args)
         rescue TypeError => e
-          return refuse_proxy_save(script_name, proxy, "an argument of #{method} can't be stored (#{e.message})")
+          what = method == REPLAY_ENTRY_CHANGES ? "a value changed by #{label || "a method"}" : "an argument of #{label || method}"
+          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})")
         end
         replayed = nil
         stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
@@ -240,7 +244,7 @@ module Lich
         return nil unless stored
 
         store_in_cache(cache_key, stored)
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Saved #{path.inspect} for #{cache_key} (#{replayed ? "replayed #{method}" : "this session's copy"}); cache now holds the stored row." })
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Saved #{path.inspect} for #{cache_key} (#{replayed ? "replayed #{label || method}" : "this session's copy"}); cache now holds the stored row." })
         replayed
       end
 
