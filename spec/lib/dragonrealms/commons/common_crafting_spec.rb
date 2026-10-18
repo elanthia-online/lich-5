@@ -470,6 +470,15 @@ describe DRCC do
       expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot', 'look in cruc'])
     end
 
+    it 'clears the entry glued to a molten-hued item on the next pass' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.',
+                        'In the large crucible you see a bronze nugget.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
     it 'picks up a solid item whose description only contains the word molten' do
       look_replies.push('In the large crucible you see a nugget of once-molten bronze.', empty)
       expect(DRCC.empty_crucible?).to be(true)
