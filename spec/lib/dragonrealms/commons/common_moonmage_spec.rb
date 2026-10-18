@@ -552,6 +552,18 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       }
       expect(described_class.visible_moons).to be_empty
     end
+
+    it 'returns empty array when moon data is unavailable, ignoring saved timers' do
+      allow(described_class).to receive(:check_moonwatch).and_return(false)
+      UserVars.moons = {
+        'katamba' => { 'timer' => 100 },
+        'visible' => ['katamba'],
+        'running' => false
+      }
+      expect(described_class.visible_moons).to be_empty
+      expect(described_class.moons_visible?).to be false
+      expect(described_class.moon_visible?('katamba')).to be false
+    end
   end
 
   # ================================================================
@@ -659,6 +671,14 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       UserVars.moons = { 'visible' => [] }
       expect(described_class.bright_celestial_object?).to be false
     end
+
+    it 'returns false when moon data is unavailable, ignoring saved sun and moon data' do
+      allow(described_class).to receive(:check_moonwatch).and_return(false)
+      UserVars.sun = { 'day' => true, 'timer' => 100, 'running' => false }
+      UserVars.moons = { 'xibar' => { 'timer' => 10 }, 'visible' => ['xibar'], 'running' => false }
+      expect(described_class.bright_celestial_object?).to be false
+      expect(described_class).to have_received(:check_moonwatch).once
+    end
   end
 
   # ================================================================
@@ -685,6 +705,14 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       UserVars.sun = { 'day' => false, 'timer' => 0 }
       UserVars.moons = { 'visible' => [] }
       expect(described_class.any_celestial_object?).to be false
+    end
+
+    it 'returns false when moon data is unavailable, ignoring saved sun and moon data' do
+      allow(described_class).to receive(:check_moonwatch).and_return(false)
+      UserVars.sun = { 'day' => true, 'timer' => 100, 'running' => false }
+      UserVars.moons = { 'katamba' => { 'timer' => 10 }, 'visible' => ['katamba'], 'running' => false }
+      expect(described_class.any_celestial_object?).to be false
+      expect(described_class).to have_received(:check_moonwatch).once
     end
   end
 
@@ -776,6 +804,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
     after do
       described_class.instance_variable_set(:@moonwatch_data_stalled, false)
+      described_class.instance_variable_set(:@moonwatch_restart_blocked_until, nil)
     end
 
     def bold_messages
@@ -793,6 +822,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
     before do
       described_class.instance_variable_set(:@moonwatch_data_stalled, false)
+      described_class.instance_variable_set(:@moonwatch_restart_blocked_until, nil)
       stub_const("#{described_class}::MOONWATCH_READY_TIMEOUT", 0.3)
       allow(Script).to receive(:running?).with('moonwatch') { world[:running] }
       allow(Script).to receive(:exists?).with('moonwatch').and_return(true)
@@ -868,6 +898,21 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(check).to be false
         expect(bold_messages.last).to include("moonwatch stopped before its moon data was ready")
         expect(bold_messages.join).not_to include('before it published')
+      end
+
+      it 'leaves no moon or sun for the readers when it stops with the saved data marked stale' do
+        UserVars.moons = ready_moons.merge('running' => false)
+        UserVars.sun = { 'day' => true, 'night' => false, 'timer' => 120, 'running' => false }
+        world[:on_poll] = ->(n) { world[:running] = false if n >= 1 }
+        visible = Timeout.timeout(5) { described_class.visible_moons }
+        expect(bold_messages.last).to include('moonwatch stopped before its moon data was ready')
+        expect(visible).to eq([])
+
+        %i[bright_celestial_object? any_celestial_object?].each do |reader|
+          world[:running] = true
+          world[:polls] = 0
+          expect(Timeout.timeout(5) { described_class.public_send(reader) }).to be false
+        end
       end
 
       it 'times out once when the data never becomes ready, then returns false at once on later calls' do
@@ -981,7 +1026,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
       it 'waits out a slow start: the deadline starts after start_script returns' do
         allow(described_class).to receive(:start_script).with('moonwatch') do
-          sleep 0.5 # longer than the 0.3 s timeout; Script.new compiles in the caller
+          sleep 0.5 # longer than the 0.3 s timeout; Script.new reads the file in the caller
           world[:running] = true
           world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
           Object.new
@@ -1112,6 +1157,197 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       end
     end
 
+    context 'after its own start of moonwatch fails (restart cooldown)' do
+      let(:cooldown_message) { 'Not starting moonwatch again for' }
+      let(:crashing_start) do
+        lambda do
+          world[:running] = true
+          world[:on_poll] = ->(n) { world[:running] = false if n >= 1 }
+          Object.new
+        end
+      end
+
+      def all_messages
+        Lich::Messaging.messages.map { |m| m[:message] }
+      end
+
+      it 'does not restart a moonwatch that crashed at startup on the next calls' do
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          crashing_start.call
+        end
+        expect(check).to be false
+        expect(bold_messages.last).to include('moonwatch stopped before its moon data was ready')
+        expect(all_messages.last).to include("#{cooldown_message} 60 seconds")
+
+        Lich::Messaging.clear_messages!
+        world[:polls] = 0
+        started = monotonic
+        3.times { expect(check).to be false }
+        expect(monotonic - started).to be < 0.2
+        expect(starts).to eq(1)
+        expect(world[:polls]).to eq(0)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'starts a crashing moonwatch once per bright_celestial_object? call, not once per moon looked at' do
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          crashing_start.call
+        end
+        UserVars.sun = { 'day' => true, 'timer' => 120, 'running' => false }
+        expect(Timeout.timeout(5) { described_class.bright_celestial_object? }).to be false
+        expect(Timeout.timeout(5) { described_class.any_celestial_object? }).to be false
+        expect(starts).to eq(1)
+        expect(bold_messages.grep(/not running/).size).to eq(1)
+        expect(all_messages.grep(/#{cooldown_message}/).size).to eq(1)
+      end
+
+      it 'does not look for a missing moonwatch again on the next calls' do
+        allow(Script).to receive(:exists?).with('moonwatch').and_return(false)
+        allow(Script).to receive(:version).with('moonwatch').and_return(nil)
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        expect(check).to be false
+        expect(bold_messages.last).to include('moonwatch could not be found')
+        expect(all_messages.last).to include(cooldown_message)
+
+        Lich::Messaging.clear_messages!
+        2.times { expect(check).to be false }
+        expect(described_class).to have_received(:start_script).once
+        expect(Script).to have_received(:version).once
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'does not wait out the deadline again after a start that never showed moonwatch running' do
+        allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
+        expect(check).to be false
+        expect(bold_messages.last).to include('moonwatch did not start within 0.3 seconds')
+        expect(all_messages.last).to include(cooldown_message)
+
+        world[:polls] = 0
+        started = monotonic
+        expect(check).to be false
+        expect(monotonic - started).to be < 0.2
+        expect(world[:polls]).to eq(0)
+        expect(described_class).to have_received(:start_script).once
+      end
+
+      it 'starts moonwatch again once the cooldown has passed' do
+        stub_const("#{described_class}::MOONWATCH_RESTART_COOLDOWN", 0.2)
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          next crashing_start.call if starts == 1
+
+          world[:running] = true
+          world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 1 }
+          Object.new
+        end
+        expect(check).to be false
+        expect(all_messages.last).to include("#{cooldown_message} 0.2 seconds")
+        expect(check).to be false
+        expect(starts).to eq(1)
+
+        sleep 0.25
+        expect(check).to be true
+        expect(starts).to eq(2)
+        expect(described_class.instance_variable_get(:@moonwatch_restart_blocked_until)).to be_nil
+      end
+
+      it 'still uses a moonwatch started some other way during the cooldown, waiting for its data' do
+        allow(described_class).to receive(:start_script).with('moonwatch') { crashing_start.call }
+        expect(check).to be false
+
+        world[:running] = true
+        UserVars.moons = skeleton.dup
+        world[:polls] = 0
+        world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
+        expect(check).to be true
+        expect(world[:polls]).to be >= 2
+        expect(described_class).to have_received(:start_script).once
+      end
+
+      it 'clears the cooldown once moonwatch has been seen with real data, so a later stop is restarted at once' do
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          next crashing_start.call if starts == 1
+
+          world[:running] = true
+          world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 1 }
+          Object.new
+        end
+        expect(check).to be false
+
+        world[:running] = true # started elsewhere, and it publishes
+        world[:on_poll] = nil
+        UserVars.moons = ready_moons
+        expect(check).to be true
+
+        world[:running] = false # then it stops, well within the 60 s cooldown
+        expect(check).to be true
+        expect(starts).to eq(2)
+      end
+
+      it 'does not start moonwatch from a caller queued on the lock behind a start that crashed' do
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          sleep 0.1 # the second caller queues on the lock meanwhile
+          crashing_start.call
+        end
+        results = {}
+        threads = []
+        threads << Thread.new { results[:first] = described_class.check_moonwatch }
+        sleep 0.03
+        threads << Thread.new { results[:second] = described_class.check_moonwatch }
+        begin
+          threads.each { |t| expect(t.join(5)).not_to be_nil }
+        ensure
+          threads.each(&:kill)
+        end
+
+        expect(results).to eq(first: false, second: false)
+        expect(starts).to eq(1)
+        expect(bold_messages.grep(/not running/).size).to eq(1)
+      end
+
+      it 'clears data a moonwatch started some other way left behind when it stopped during the cooldown' do
+        allow(described_class).to receive(:start_script).with('moonwatch') { crashing_start.call }
+        expect(check).to be false
+
+        # Meanwhile moonwatch ran elsewhere, unseen by any check, and exited,
+        # leaving its last timers marked stale.
+        UserVars.moons = ready_moons.merge('running' => false)
+        UserVars.sun = { 'day' => true, 'night' => false, 'timer' => 120, 'running' => false }
+        result = Timeout.timeout(5) do
+          [described_class.visible_moons, described_class.bright_celestial_object?, described_class.any_celestial_object?]
+        end
+        expect(result).to eq([[], false, false])
+        expect(UserVars.moons).to eq({})
+        expect(UserVars.sun).to eq({})
+        expect(described_class).to have_received(:start_script).once
+      end
+
+      it 'does not apply to a started moonwatch that keeps running without publishing' do
+        starts = 0
+        allow(described_class).to receive(:start_script).with('moonwatch') do
+          starts += 1
+          world[:running] = true
+          UserVars.moons = skeleton.dup
+          Object.new
+        end
+        expect(check).to be false
+        expect(all_messages.grep(/#{cooldown_message}/)).to be_empty
+
+        world[:running] = false # then it stops: the next call starts it again
+        expect(check).to be false
+        expect(starts).to eq(2)
+      end
+    end
+
     context 'when another start of moonwatch is in progress' do
       it 'treats a nil start_script as a duplicate start and waits for that start to publish' do
         allow(described_class).to receive(:start_script).with('moonwatch').and_return(nil)
@@ -1155,7 +1391,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
           start_calls << :called
           # Emulates Lich's Script.start: a start while another same-name start
           # is in progress (or the script is running) returns nil; otherwise
-          # the script compiles in the caller, is published (running) before
+          # the script file is read in the caller, is published (running) before
           # start returns, then its own thread writes the skeleton and, a
           # moment later, the timers.
           first = starting.synchronize { claimed ? false : (claimed = true) }
