@@ -850,6 +850,27 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
         expect(Lich::Gemstone::Infomon.get("rapid.#{i}")).to eq(i * 10)
       end
     end
+
+    it "allows a failed write to be retried" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.test"
+      infomon.set(k, 1)
+      infomon.flush
+      infomon.get(k) # ensure the cache is loaded so the next get is served from it
+      trigger = "CREATE TRIGGER reject_write_failure_test BEFORE INSERT ON %s WHEN NEW.key = %s BEGIN SELECT RAISE(FAIL, 'injected'); END"
+      infomon.db.run(trigger % [infomon.db.literal(infomon.table_name), infomon.db.literal(k)])
+      begin
+        infomon.set(k, 2)
+        infomon.flush
+      ensure
+        infomon.db.run("DROP TRIGGER reject_write_failure_test")
+      end
+      # failed write must not leave the unpersisted value cached
+      expect(infomon.get(k)).to eq(1)
+      expect(infomon.set(k, 2)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to eq(2)
+    end
   end
 end
 

@@ -212,14 +212,15 @@ module Lich
         value = self._validate!(key, value)
         return :noop if self.cache.get(key) == value
         self.cache.put(key, value)
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
-      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), current_timestamp]
+        # queue items are [sql, keys] so a failed write can invalidate its cache entries
+        self.queue << ["INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), current_timestamp], [key]]
       end
 
       def self.delete!(key)
         key = self._key(key)
         self.cache.delete(key)
-        self.queue << "DELETE FROM %s WHERE key = (%s);" % [self.db.literal(self.table_name), self.db.literal(key)]
+        self.queue << ["DELETE FROM %s WHERE key = (%s);" % [self.db.literal(self.table_name), self.db.literal(key)], [key]]
       end
 
       # Flush all pending SQL operations and wait for completion.
@@ -253,8 +254,8 @@ module Lich
           %[(%s, %s, %s)] % [self.db.literal(key), self.db.literal(value), now]
         }.join(", ")
         # queue sql statement to run async
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES %s
-      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), pairs]
+        self.queue << ["INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES %s
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), pairs], updated.map(&:first)]
       end
 
       Thread.new do
@@ -268,11 +269,15 @@ module Lich
             end
 
             # Normal SQL statement processing
+            sql, keys = item
             Infomon.mutex.synchronize do
               begin
-                Infomon.db.run(item)
+                Infomon.db.run(sql)
               rescue StandardError => e
-                pp(e)
+                # The cache was updated before queueing; drop those entries so the
+                # next get reads the DB and the next set of the same value is retried.
+                keys.each { |key| Infomon.cache.delete(key) }
+                Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{e.class}: #{e.message}"
               end
             end
           rescue StandardError
