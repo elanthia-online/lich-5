@@ -1056,6 +1056,99 @@ RSpec.describe DRCT do
       end
     end
 
+    context 'when the last room of the buddy pass is short on mana' do
+      # Every room is reachable. 200 is the last search room and holds a buddy
+      # with too little mana; 100 is empty with enough mana unless a test says
+      # otherwise. min_mana is 30.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:mana) { { 100 => 50, 200 => 10 } }
+      let(:messages) { Lich::Messaging.messages.map { |m| m[:message] } }
+      let(:new_message) { 'DRCT: Reached last room in list, and found buddies but not the right mana. Retrying for empty room.' }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return(['Nemesis'])
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana) { mana.fetch(current.id) }
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          current.id = room
+          true
+        end
+      end
+
+      it 'falls back in the same attempt with strict_mana and takes the empty room with mana' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+
+      it 'falls back with strict_mana and no idle room even with unlimited attempts' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, Float::INFINITY, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'does not idle before the empty-room search with strict_mana' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 30, true, 2, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'keeps strict_mana in the fallback and never takes a room short on mana' do
+        mana[100] = 10
+        accept_all = ->(_attempt) { true }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, accept_all, 30, true, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages.grep(/not with the right mana/)).to be_empty
+      end
+
+      it 'takes the buddy room in the fallback when the predicate accepts it and its mana is enough' do
+        # The buddy pass reads 10 mana in 200; by the fallback it reads 40.
+        reads = Hash.new(0)
+        allow(DRCA).to receive(:perc_mana) do
+          reads[current.id] += 1
+          current.id == 200 && reads[200] > 1 ? 40 : 10
+        end
+        accept_all = ->(_attempt) { true }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, accept_all, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+      end
+
+      it 'leaves a buddy room short on mana to the mana relaxation without strict_mana' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(messages.grep(/not with the right mana\. Going to use those anyway/).size).to eq(1)
+        expect(messages).not_to include(new_message)
+      end
+
+      it 'takes a last buddy room with enough mana' do
+        mana[200] = 30
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200])
+      end
+
+      it 'keeps the existing message when an earlier buddy room is short on mana and the last has no buddy' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 200 => 50)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages).to include('DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+        expect(messages).not_to include(new_message)
+      end
+    end
+
     context 'when a search room is not an Integer room id' do
       # walk_to accepts numeric strings and go2 tags; Room.current.id is an Integer.
       let(:current) { OpenStruct.new(id: 50) }
