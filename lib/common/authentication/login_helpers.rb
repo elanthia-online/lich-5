@@ -114,6 +114,19 @@ module Lich
           VALID_REALMS.include?(realm)
         end
 
+        # Compares the running Lich's `LICH_VERSION` against a minimum version.
+        #
+        # Kept only for backward compatibility: nothing in Lich calls it since
+        # {format_launch_flag} stopped checking the version, and it will be
+        # removed in a later change.
+        #
+        # @param major [Integer] minimum major version
+        # @param minor [Integer] minimum minor version
+        # @param patch [Integer] minimum patch version
+        # @return [Boolean] true when `LICH_VERSION` is defined and at least
+        #   major.minor.patch (a prerelease ranks below its release)
+        # @deprecated Compare `Gem::Version.new(LICH_VERSION)` against the
+        #   minimum version directly.  Deprecated 10/2026
         def self.lich_version_at_least?(major, minor = 0, patch = 0)
           return false unless defined?(LICH_VERSION)
 
