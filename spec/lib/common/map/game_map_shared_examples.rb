@@ -377,6 +377,138 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
   end
 
+  describe 'travel time estimates' do
+    # 1 -(12)-> 2 -(1)-> 3 -(0.2)-> 4, plus 1 -(StringProc 3.5)-> 5. The first
+    # leg out of room 1 is the expensive one, so dropping it is visible.
+    before do
+      (1..5).each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      map_class[1].wayto['2'] = 'climb wall'
+      map_class[1].timeto['2'] = 12
+      map_class[2].wayto['3'] = 'north'
+      map_class[2].timeto['3'] = 1.0
+      map_class[3].wayto['4'] = 'north'
+      map_class[3].timeto['4'] = 0.2
+      map_class[1].wayto['5'] = 'go door'
+      map_class[1].timeto['5'] = StringProc.new('3.5')
+    end
+
+    it 'keeps treating the first element as the start without from:' do
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(map_class[1].path_to(3))).to be_within(0.001).of(1.0)
+    end
+
+    it 'counts the leg out of the from: room on a path_to result' do
+      path = map_class[1].path_to(3)
+
+      expect(path).to eq([2, 3])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'gives a one-step trip its leg instead of 0.0' do
+      path = map_class[1].path_to(2)
+
+      expect(path).to eq([2])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(12.0)
+    end
+
+    it 'evaluates a StringProc timeto on the first leg' do
+      expect(map_class.estimate_time(map_class[1].path_to(5), from: 1)).to be_within(0.001).of(3.5)
+    end
+
+    it 'counts the first leg on a Map.findpath result' do
+      expect(map_class.estimate_time(map_class.findpath(1, 4), from: 1)).to be_within(0.001).of(13.2)
+    end
+
+    it 'accepts the from: room as a room or a numeric id String' do
+      path = [2, 3]
+
+      expect(map_class.estimate_time(path, from: map_class[1])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(path, from: '1')).to be_within(0.001).of(13.0)
+    end
+
+    it 'does not count the start twice when the path already begins there' do
+      expect(map_class.estimate_time([1, 2, 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[1 2 3], from: map_class[1])).to be_within(0.001).of(13.0)
+    end
+
+    it 'estimates an empty path from a room as 0.0' do
+      expect(map_class.estimate_time([], from: 1)).to eq(0.0)
+    end
+
+    it 'applies the default to the first leg when the from: room is gone' do
+      expect(map_class.estimate_time([2, 3], from: 7777)).to be_within(0.001).of(1.2)
+    end
+
+    it 'matches the distance dijkstra found for every reachable room' do
+      # A different method than the fixed graph above: a seeded random graph,
+      # where the estimate along each returned path must equal the distance the
+      # search itself computed to that room.
+      rng = Random.new(1729)
+      ids = (10..40).to_a
+      ids.each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      ids.each do |id|
+        ids.sample(3, random: rng).each do |to|
+          next if to == id
+
+          map_class[id].wayto[to.to_s] = 'go path'
+          map_class[id].timeto[to.to_s] = rng.rand(1..50) / 4.0
+        end
+      end
+      source = map_class[10]
+      _previous, distances = source.dijkstra
+      reachable = distances.keys - [10]
+
+      expect(reachable.size).to be > 10
+      reachable.each do |dest|
+        path = source.path_to(dest)
+
+        estimate = map_class.estimate_time(path, from: source)
+
+        expect(estimate).to be_within(0.0001).of(distances[dest]), "room #{dest} via #{path.inspect}"
+      end
+    end
+
+    it 'leaves the caller array untouched' do
+      path = [2, 3]
+      full = [1, 2, 3]
+
+      map_class.estimate_time(path, from: 1)
+      map_class.estimate_time(full)
+
+      expect(path).to eq([2, 3])
+      expect(full).to eq([1, 2, 3])
+    end
+
+    it 'estimates a frozen path' do
+      expect(map_class.estimate_time([1, 2, 3].freeze)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time([2, 3].freeze, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'raises an ordinary StandardError for the nil an unreachable path_to returns' do
+      expect(map_class[4].path_to(1)).to be_nil
+      expect { map_class.estimate_time(map_class[4].path_to(1)) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given something not an array!')
+      expect { map_class.estimate_time(nil, from: 4) }.to raise_error(ArgumentError)
+    end
+
+    it 'is caught by a bare rescue' do
+      result = begin
+        map_class.estimate_time(nil)
+      rescue => e
+        e
+      end
+
+      expect(result).to be_a(StandardError)
+    end
+
+    it 'rejects a from: that does not name a room id' do
+      # Map.[] would treat this text as a fuzzy title search.
+      expect { map_class.estimate_time([2], from: 'Room 1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: :'1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: 1.0) }.to raise_error(ArgumentError, /invalid from: room/)
+    end
+  end
+
   describe 'pathfinding' do
     before do
       shared_room(1, title: '[One]', description: 'first', tags: ['shop'])

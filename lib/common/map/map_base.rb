@@ -230,23 +230,50 @@ module Lich
           list[id]
         end
 
-        # Estimate total travel time for a path
-        # @param array [Array<Integer>] Array of room IDs representing the path
-        # @return [Float] Total estimated time in seconds
-        def estimate_time(array)
+        # Estimate total travel time along a path
+        #
+        # Sums the +timeto+ of each leg between consecutive rooms, treating the
+        # first element as the room the trip starts in: +[a, b, c]+ counts the
+        # a->b and b->c legs. A leg with no +timeto+ (including one from a room
+        # that is gone) counts as 0.2 seconds, and a StringProc +timeto+ is
+        # evaluated.
+        #
+        # Room#path_to and Map.findpath return paths that leave the starting
+        # room out, so passing one of those alone drops the first leg (and a
+        # one-step trip estimates 0.0). Name the starting room with +from:+ to
+        # count it:
+        #
+        #   path = Room.current.path_to(destination)
+        #   Map.estimate_time(path, from: Room.current) if path
+        #
+        # When +array+ already begins with the +from:+ room it is not counted
+        # twice, so a full path is safe to pass with +from:+ as well.
+        #
+        # The argument is never modified.
+        #
+        # @param array [Array<Integer, String>] room ids along the path
+        # @param from [Integer, String, Map, nil] the room the path starts from
+        #   when +array+ leaves it out: a room id, a numeric id String, or a
+        #   room. nil (the default) treats +array.first+ as the start.
+        # @return [Float] total estimated time in seconds; 0.0 for a path with
+        #   fewer than two rooms
+        # @raise [ArgumentError] when +array+ is not an Array (for example the
+        #   nil Room#path_to returns for an unreachable room), or +from:+ is not
+        #   a room id or room
+        def estimate_time(array, from: nil)
           self.load unless loaded?
           unless array.is_a?(Array)
-            raise Exception.exception('MapError'), 'Map.estimate_time was given something not an array!'
+            raise ArgumentError, 'Map.estimate_time was given something not an array!'
           end
 
+          rooms = from.nil? ? array : estimate_time_path_from(array, from)
           time = 0.0
-          until array.length < 2
-            room = array.shift
+          rooms.each_cons(2) do |room, next_room|
             # A path can name a room that is gone. Under the NilClass patch the
             # lookup yielded nil and the 0.2 default below applied; keep that
             # without relying on the patch.
             current = self[room]
-            t = current.nil? ? nil : current.timeto[array.first.to_s]
+            t = current.nil? ? nil : current.timeto[next_room.to_s]
             if t
               time += t.is_a?(StringProc) ? t.call.to_f : t.to_f
             else
@@ -255,6 +282,30 @@ module Lich
           end
           time
         end
+
+        # The path estimate_time walks when given +from:+: +array+ with the
+        # origin in front, unless it already starts there.
+        # @param array [Array<Integer, String>] room ids along the path
+        # @param from [Integer, String, Map] the starting room
+        # @return [Array<Integer, String>] a new Array; +array+ is untouched
+        # @raise [ArgumentError] when +from+ is not a room id or room
+        def estimate_time_path_from(array, from)
+          origin = if from.is_a?(self)
+                     from.id
+                   elsif from.is_a?(Integer)
+                     from
+                   elsif from.is_a?(String) && from.match?(/\A[0-9]+\z/)
+                     from.to_i
+                   else
+                     # A String that is not an id would reach the fuzzy title
+                     # search in Map.[], which is no way to name a start room.
+                     raise ArgumentError, "Map.estimate_time was given an invalid from: room #{from.inspect}"
+                   end
+          return array.dup if array.first.to_s == origin.to_s
+
+          [origin] + array
+        end
+        private :estimate_time_path_from
 
         # Tag name => Array of room ids. Private: callers must go through
         # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.
