@@ -9,6 +9,10 @@ module Lich
       LOOK_CRUCIBLE_NOT_FOUND = '^I could not find'
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
+      # Splits the LOOK_CRUCIBLE_SEE_PATTERN items list into entries at ", ",
+      # ", and " or " and " followed by an article, keeping the article. The
+      # " and " must be a whole word, so "a gold wand and ..." is not cut.
+      LOOK_CRUCIBLE_ITEM_SEPARATOR = /(?:,\s+(?:and\s+)?|\s+and\s+)(?=(?:some|an?)\s)/.freeze
       # Matches one entry of the LOOK_CRUCIBLE_SEE_PATTERN items list.
       LOOK_CRUCIBLE_MOLTEN = /\A(?:(?:some|an?)\s+)?molten\s/.freeze
       EMPTY_CRUCIBLE_MAX_PASSES = 3
@@ -129,7 +133,9 @@ module Lich
       # Tilts out molten metal and clears clutter, then looks again, up to
       # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
       # Molten metal is found wherever it appears in the list. Clutter is only
-      # disposed of when it was actually picked up from the crucible.
+      # disposed of when it was actually picked up from the crucible, and
+      # clutter sharing a noun with something already in hand is left alone,
+      # so the player's own item is never the one thrown away.
       def empty_crucible?(pass: 0)
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
@@ -149,18 +155,30 @@ module Lich
           return false unless match
 
           contents = match[:items]
-                     .split(/(?:,|and) (?:some|an|a)/)
+                     .split(LOOK_CRUCIBLE_ITEM_SEPARATOR)
                      .map(&:strip)
           if contents.any? { |entry| entry.match?(LOOK_CRUCIBLE_MOLTEN) }
             fput('tilt crucible')
             fput('tilt crucible')
           else
+            attempted = false
             contents.each do |junk|
               junk = DRC.get_noun(junk)
+              next unless junk
+
+              # get_item_unsafe and dispose_trash only check that the noun is in
+              # hand, so a held same-noun item would be the one thrown away.
+              if DRCI.in_hands?(junk)
+                Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding one.")
+                next
+              end
+
+              attempted = true
               # A failed GET leaves nothing in hand, and dispose_trash would
               # then fetch a same-noun item from the player's own containers.
               DRCI.dispose_trash(junk) if DRCI.get_item_unsafe(junk, 'crucible')
             end
+            return false unless attempted
           end
           DRCC.empty_crucible?(pass: pass + 1)
         else

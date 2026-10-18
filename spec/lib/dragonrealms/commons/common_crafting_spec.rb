@@ -322,7 +322,11 @@ describe DRCC do
         !stuck.include?(item)
       end
       allow(items).to receive(:dispose_trash) { |item| sent << "dispose #{item}" }
+      allow(items).to receive(:in_hands?) { |item| held.include?(item) }
     end
+
+    # Nouns the player is already holding (DRCI.in_hands? returns true).
+    let(:held) { [] }
 
     it 'returns true for an empty crucible' do
       look_replies << empty
@@ -423,6 +427,68 @@ describe DRCC do
       look_replies.push('In the large crucible you see a nugget of once-molten bronze.', empty)
       expect(DRCC.empty_crucible?).to be(true)
       expect(sent).to eq(['look in cruc', 'get bronze from crucible', 'dispose bronze', 'look in cruc'])
+    end
+
+    %w[wand band stand].each do |noun|
+      it "tilts molten metal listed after a #{noun}" do
+        look_replies.push("In the large crucible you see a gold #{noun} and some molten bronze.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'tilts molten metal at the end of a list with a serial comma' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and some molten iron.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'picks up every item of a serial-comma list by its own noun' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get rock from crucible', 'dispose rock',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'does not cut a noun ending in "and" when splitting the list' do
+      look_replies.push('In the large crucible you see a gold wand and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get wand from crucible', 'dispose wand',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'picks up a solid item whose adjective starts with molten' do
+      look_replies.push('In the large crucible you see a nugget and a molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
+    it 'leaves clutter alone when the player already holds an item with that noun' do
+      look_replies << 'In the large crucible you see a steel bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:get_item_unsafe)
+      expect(items).not_to have_received(:dispose_trash)
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('Not clearing the bar')
+    end
+
+    it 'clears the other clutter, then gives up on the held noun without more passes' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'still tilts molten metal while holding an item with the same noun' do
+      look_replies.push(molten, empty)
+      held << 'bronze'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
     end
 
     it 'lets find_empty_crucible move on from a crucible that will not empty' do
