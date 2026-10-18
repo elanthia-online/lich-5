@@ -43,6 +43,17 @@ module Lich
         @storage[key] = deep_copy(settings)
       end
 
+      # Read-modify-write of one row, mirroring DatabaseAdapter#update_settings:
+      # the block gets the stored row and returns the row to store, or nil to
+      # store nothing. Returns the stored row, or nil.
+      def update_settings(script_name, scope = ":")
+        updated = yield get_settings(script_name, scope)
+        return nil unless updated.is_a?(Hash)
+
+        save_settings(script_name, updated, scope)
+        deep_copy(updated)
+      end
+
       # Clear all stored settings
       # This is useful for resetting the state between tests
       def clear

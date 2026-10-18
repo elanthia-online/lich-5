@@ -426,26 +426,52 @@ module Lich
         unwrapped_value = unwrap_proxies(value)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: unwrapped_value: #{unwrapped_value.inspect}" })
 
-        current_root = current_script_settings(scope, script_name: script_name)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: current_root (DUP) for scope #{scope.inspect} (object_id: #{current_root.object_id}): #{current_root.inspect}" })
-
-        if @path_navigator.path.empty?
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: Path is empty. Setting '#{name}' on current_root." })
-          current_root[name] = unwrapped_value
-          save_to_database(current_root, scope, script_name: script_name)
-        else
-          if !@path_navigator.path.empty?
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: WARNING: Called with non-empty path_navigator path: #{@path_navigator.path.inspect}. This is unusual for Char/GameSettings direct assignment." })
-          end
-          if current_root.is_a?(Hash)
-            current_root[name] = unwrapped_value
-            save_to_database(current_root, scope, script_name: script_name)
-          else
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: current_root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{current_root.class}" })
-          end
+        unless @path_navigator.path.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: WARNING: Called with non-empty path_navigator path: #{@path_navigator.path.inspect}. This is unusual for Char/GameSettings direct assignment." })
         end
+
+        write_top_level_key(scope, name, unwrapped_value, script_name: script_name)
         reset_path_and_return(value)
       end
+
+      # Stores one top-level key without rewriting the rest of the row.
+      #
+      # Other Lich sessions (separate processes) write the same row, and this
+      # process's cached copy does not know about their keys. So the key is
+      # applied to the row as it is in the database right now, under the write
+      # lock (DatabaseAdapter#update_settings), and the cache takes the row as
+      # stored. If the write fails, the cache entry is dropped so the next read
+      # comes from the database instead of claiming the value was saved.
+      #
+      # @return [Hash, nil] the stored row, or nil when nothing was written
+      def self.write_top_level_key(scope, name, value, script_name: nil)
+        script_name ||= Script.current.name
+        if script_name.nil? || script_name.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
+          return nil
+        end
+
+        cache_key = "#{script_name}::#{scope}"
+        stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
+          if fresh_root.is_a?(Hash)
+            fresh_root[name] = value
+            fresh_root
+          else
+            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: stored root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{fresh_root.class}" })
+            nil
+          end
+        end
+
+        if stored
+          @settings_cache[cache_key] = stored
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "write_top_level_key: Saved '#{name}' for #{cache_key}; cache now holds the stored row." })
+        else
+          @settings_cache.delete(cache_key)
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache entry dropped." })
+        end
+        stored
+      end
+      private_class_method :write_top_level_key
 
       def self.[](name)
         scope_to_use = DEFAULT_SCOPE

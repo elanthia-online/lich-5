@@ -586,6 +586,119 @@ RSpec.describe Lich::Common::Settings do
       expect(storage["test_script::"][:data][1][:tags]).to contain_exactly("tag2", "tag3", "tag4")
     end
   end
+
+  # Another Lich session is another process: it writes the same database row,
+  # and this process's cache does not see it. These examples play the other
+  # session by writing to the adapter directly.
+  describe "Top-level writes when another session changed the row" do
+    let(:settings) { Lich::Common::Settings }
+
+    # GameSettings[]= and GameSettings[] for game "GSIV", called the way
+    # gamesettings.rb calls them. (Loading gamesettings.rb here would define
+    # Lich::Common::GameSettings for every later spec in the process.)
+    def game_write(key, value)
+      settings.set_script_settings("GSIV", key, value)
+    end
+
+    def game_read(key)
+      settings.get_scoped_setting("GSIV", key)
+    end
+
+    before do
+      settings.instance_variable_set(:@settings_cache, {})
+    end
+
+    it "keeps the other session's keys when GameSettings writes a different key" do
+      expect(game_read('mine')).to be_nil # this process caches the empty row
+      @mock_db.save_settings("test_script", { "theirs" => 1 }, "GSIV")
+
+      game_write('mine', 2)
+
+      expect(@mock_db.get_settings("test_script", "GSIV")).to eq("theirs" => 1, "mine" => 2)
+      expect(game_read('theirs')).to eq(1)
+    end
+
+    it "keeps the other session's keys when Settings writes a different key" do
+      expect(settings[:mine]).to be_nil
+      @mock_db.save_settings("test_script", { theirs: 1 }, ":")
+
+      settings[:mine] = 2
+
+      expect(@mock_db.get_settings("test_script", ":")).to eq(theirs: 1, mine: 2)
+    end
+
+    it "replaces the other session's value when both write the same key" do
+      game_write('shared', 'mine')
+      @mock_db.save_settings("test_script", { "shared" => "theirs", "other" => 1 }, "GSIV")
+
+      game_write('shared', 'mine again')
+
+      expect(@mock_db.get_settings("test_script", "GSIV")).to eq("shared" => "mine again", "other" => 1)
+    end
+
+    it "stores a copy, so later changes to the caller's hash are not saved or cached" do
+      value = { "a" => 1 }
+      game_write('h', value)
+      value["b"] = 2
+
+      expect(@mock_db.get_settings("test_script", "GSIV")).to eq("h" => { "a" => 1 })
+      expect(game_read('h').to_h).to eq("a" => 1)
+    end
+
+    it "stores the unwrapped value when assigning a proxy" do
+      game_write('src', { "x" => [1, 2] })
+
+      game_write('copy', game_read('src'))
+
+      expect(@mock_db.get_settings("test_script", "GSIV")["copy"]).to eq("x" => [1, 2])
+      expect(@mock_db.get_settings("test_script", "GSIV")["copy"]).to be_a(Hash)
+    end
+
+    it "returns the assigned value and leaves no navigation path behind" do
+      expect(settings.set_script_settings("GSIV", 'k', 'v')).to eq('v')
+      expect(settings.instance_variable_get(:@path_navigator).path).to be_empty
+    end
+
+    it "still writes the top-level key when a stale navigation path is left over" do
+      settings.instance_variable_get(:@path_navigator).set_path(['stale', 'path'])
+
+      settings.set_script_settings("GSIV", 'k', 'v')
+
+      expect(@mock_db.get_settings("test_script", "GSIV")).to eq('k' => 'v')
+      expect(settings.instance_variable_get(:@path_navigator).path).to be_empty
+    end
+
+    it "writes nothing when there is no script name" do
+      Lich::Common::MockScript.current_name = nil
+
+      expect(settings.set_script_settings("GSIV", 'k', 'v')).to eq('v')
+      expect(@mock_db.dump).to be_empty
+    end
+
+    it "writes to the named script when one is given" do
+      settings.set_script_settings("DR:Alpha", 'k', 'v', script_name: 'core')
+
+      expect(@mock_db.get_settings("core", "DR:Alpha")).to eq('k' => 'v')
+      expect(@mock_db.get_settings("test_script", "DR:Alpha")).to eq({})
+    end
+
+    it "does not raise and leaves the row alone when the stored row is not a Hash" do
+      @mock_db.save_settings("test_script", [1, 2], "GSIV")
+
+      expect { game_write('k', 'v') }.not_to raise_error
+      expect(@mock_db.get_settings("test_script", "GSIV")).to eq([1, 2])
+    end
+
+    it "drops its cached row when a write fails, so the next read comes from the database" do
+      game_write('saved', 1)
+      allow(@mock_db).to receive(:update_settings).and_return(nil)
+
+      game_write('lost', 2)
+
+      expect(game_read('lost')).to be_nil
+      expect(game_read('saved')).to eq(1)
+    end
+  end
 end
 
 describe 'SettingsProxy#rebind_to_live!' do

@@ -1,0 +1,130 @@
+# frozen_string_literal: true
+
+# One Lich session per OS process, for the cross-process Settings specs.
+#
+# Usage: ruby settings_session_worker.rb <data_dir> <game> <char> <script>
+#
+# Loads the real lib/lich.rb (open_sequel_sqlite and init_db, so the table has
+# the production PRIMARY KEY), class_exts/nilclass.rb (always loaded by the
+# Lich runtime), and the real Settings stack: settings.rb with its
+# DatabaseAdapter, gamesettings.rb and charsettings.rb. Only the game and IO
+# boundary is stubbed: XMLData (game and name), Script.current.name, Lich.log
+# and Lich::Messaging.msg (both captured so a spec can inspect them).
+#
+# Reads one command per line on stdin and answers with one JSON line on stdout.
+# Values are JSON so a spec can write false, nil, numbers and hashes.
+#
+#   set   <api> <key> <json>    api[key] = value               => "ok"
+#   get   <api> <key>           api[key], proxies unwrapped     => value
+#   burst <api> <prefix> <n>    api["<prefix>_<i>"] = i, i < n  => "ok"
+#   row   <api>                 the row as stored in the database
+#   msgs                        Messaging and log lines so far  => [[kind, text], ...]
+#
+# <api> is G (GameSettings), C (CharSettings), S (Settings) or I (InstanceSettings).
+# Set LICH_SPEC_BUSY_TIMEOUT_MS to shorten the SQLite busy timeout.
+
+require 'json'
+require 'sequel'
+require 'sqlite3'
+
+data_dir, game, char, script_name = ARGV
+abort 'usage: settings_session_worker.rb <data_dir> <game> <char> <script>' unless script_name
+
+DATA_DIR = data_dir
+LIB_ROOT = File.expand_path('../../lib', __dir__)
+
+require File.join(LIB_ROOT, 'lich.rb')
+
+$captured = []
+
+module Lich
+  def self.log(msg)
+    $captured << ['log', msg.to_s]
+  end
+
+  def self.deprecated(*_args); end
+
+  if ENV['LICH_SPEC_BUSY_TIMEOUT_MS']
+    def self.sqlite_busy_timeout_ms
+      ENV['LICH_SPEC_BUSY_TIMEOUT_MS'].to_i
+    end
+  end
+
+  module Messaging
+    def self.msg(kind, text)
+      $captured << [kind.to_s, text.to_s]
+    end
+  end
+end
+
+require File.join(LIB_ROOT, 'common/class_exts/nilclass')
+
+module XMLData
+  class << self
+    attr_accessor :game, :name
+  end
+end
+XMLData.game = game
+XMLData.name = char
+
+class Script
+  Current = Struct.new(:name)
+
+  class << self
+    attr_accessor :current
+  end
+end
+Script.current = Script::Current.new(script_name)
+
+Lich.init_db
+
+require File.join(LIB_ROOT, 'common/settings')
+require File.join(LIB_ROOT, 'common/settings/gamesettings')
+require File.join(LIB_ROOT, 'common/settings/charsettings')
+
+APIS = {
+  'G' => Lich::Common::GameSettings,
+  'C' => Lich::Common::CharSettings,
+  'S' => Lich::Common::Settings,
+  'I' => Lich::Common::InstanceSettings,
+}.freeze
+
+def row_for(api)
+  scope, script = case api
+                  when 'G' then [XMLData.game, Script.current.name]
+                  when 'C' then ["#{XMLData.game}:#{XMLData.name}", Script.current.name]
+                  when 'S' then [':', Script.current.name]
+                  when 'I' then ["#{XMLData.game}:#{XMLData.name}", Lich::Common::InstanceSettings::SCRIPT_NAME]
+                  end
+  Lich::Common::Settings.instance_variable_get(:@db_adapter).get_settings(script, scope)
+end
+
+def plain(value)
+  value.is_a?(Lich::Common::SettingsProxy) ? JSON.parse(JSON.generate(value.target)) : value
+end
+
+$stdout.sync = true
+while (line = $stdin.gets)
+  cmd, api, key, rest = line.chomp.split(' ', 4)
+  out = begin
+    case cmd
+    when 'set'
+      APIS.fetch(api)[key] = JSON.parse(rest)
+      'ok'
+    when 'get'
+      plain(APIS.fetch(api)[key])
+    when 'burst'
+      Integer(rest).times { |i| APIS.fetch(api)["#{key}_#{i}"] = i }
+      'ok'
+    when 'row'
+      row_for(api)
+    when 'msgs'
+      $captured
+    else
+      { 'error' => "unknown command #{cmd.inspect}" }
+    end
+  rescue StandardError => e
+    { 'error' => "#{e.class}: #{e.message}" }
+  end
+  puts JSON.generate([out])
+end
