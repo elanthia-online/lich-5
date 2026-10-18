@@ -10,13 +10,18 @@ module Lich
       # Added script_name parameter to support InstanceSettings (core Lich functionality
       # that runs outside of Script context). When script_name is provided, it takes
       # precedence over Script.current.name in the save path.
-      def initialize(settings_module, scope, path, target, detached: false, script_name: nil)
+      #
+      # +source+, for a detached view (what select or sort returned), is the
+      # container the view was taken from, so that an element taken from the
+      # view (view.first) can be found in it and saved where it is.
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
         @target = target
         @detached = detached
         @script_name = script_name
+        @source = source
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -235,8 +240,10 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
         if @settings_module.container?(value)
-          new_path = @path.dup
-          new_path << key
+          # In a detached view (what select or sort returned), a position is
+          # not the element's position in the settings, so the element is
+          # looked up in the container the view was taken from.
+          new_path = (detached? && @source && path_of_child(value, @source)) || (@path.dup << key)
           SettingsProxy.new(@settings_module, @scope, new_path, value, script_name: @script_name)
         else
           value
@@ -281,7 +288,7 @@ module Lich
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             result = target_dup.send(method, *unwrapped_args, &block)
             # Minimal change: pass method name so we can tag views as detached and keep path
-            return handle_non_destructive_result(method, result)
+            return handle_non_destructive_result(method, result, unwrapped_args)
           else
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
 
@@ -305,7 +312,7 @@ module Lich
               @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed the target; saving this session's copy" })
               @settings_module.save_proxy_changes(self)
             end
-            return handle_method_result(result)
+            return handle_method_result(result, method, unwrapped_args)
           end
         else
           super
@@ -320,19 +327,31 @@ module Lich
         result = @target.send(method, *args, &block)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
         replayed = @settings_module.save_proxy_changes(self, method, args, block)
-        return handle_method_result(result) unless replayed
+        return handle_mutating_result(result, method, args) unless replayed
 
         stored_result, stored_container = replayed
         take_stored_container(stored_container)
-        stored_result.equal?(stored_container) ? self : handle_method_result(stored_result)
+        stored_result.equal?(stored_container) ? self : handle_mutating_result(stored_result, method, args)
+      end
+
+      # The result of a MUTATING_METHODS call. A container that is still one
+      # of this proxy's elements (what store returns) is a proxy for that
+      # element. Any other container is what the call took out (delete, pop,
+      # shift, slice!): it is no longer part of the settings, so it is
+      # returned as the plain value, and changing it saves nothing.
+      private def handle_mutating_result(result, method, args)
+        return self if result.equal?(@target)
+        return result unless @settings_module.container?(result)
+
+        element_path = element_path_for(method, args, result)
+        element_path ? SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name) : result
       end
 
       # After a write was replayed on the stored row, shows that container
       # (with whatever other sessions saved in it) through this proxy and
-      # through every view sharing this proxy's container. A detached view
-      # keeps its own contents.
+      # through every view sharing this proxy's container. (A detached view
+      # is never replayed, so it keeps its own contents.)
       private def take_stored_container(stored_container)
-        return if detached?
         return unless stored_container.instance_of?(@target.class)
         return if stored_container.equal?(@target)
 
@@ -346,14 +365,21 @@ module Lich
         nil
       end
 
-      # Minimal change: keep path (not []), and tag view proxies as detached.
-      # NEW: when a non-destructive method like `find` / `detect` on an Array
-      # returns an element that is itself a container (e.g., a Hash),
-      # return a proxy whose path includes the array index so that mutations
-      # save back to that element instead of clobbering the entire array.
-      def handle_non_destructive_result(method, result)
+      # A container returned by a non-destructive method. When it is one of
+      # this proxy's elements (find, first, last, at, fetch, min_by, sample,
+      # ...) or, for dig, an element further down, the proxy for it has that
+      # element's path, so that a write through it saves to that element.
+      # Any other container (a new one, such as what merge or first(2)
+      # return) keeps this proxy's path, and the views listed in
+      # NON_DESTRUCTIVE_CONTAINER_VIEWS are tagged as detached.
+      #
+      # A detached view's elements are looked up in the container the view
+      # was taken from.
+      def handle_non_destructive_result(method, result, args = [])
         @settings_module.reset_path_and_return(
-          if @settings_module.container?(result)
+          if @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
+            SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+          elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
               # For Array#find / Array#detect, identify the element index in the
               # original array and create a proxy that points to that element.
@@ -372,7 +398,8 @@ module Lich
             else
               # Existing behavior for all other non-destructive container methods
               is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
+              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
+                                                                               source: is_view ? view_source : nil)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -381,15 +408,81 @@ module Lich
         )
       end
 
-      def handle_method_result(result)
+      def handle_method_result(result, method = nil, args = [])
         if result.equal?(@target)
           self # Return self if the method modified the target in-place and returned it
+        elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
+          SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
           SettingsProxy.new(@settings_module, @scope, @path, result, script_name: @script_name)
         else
           result
+        end
+      end
+
+      # The path of +result+ when it is an element of this proxy's container:
+      # for dig, fetch and at, the element their keys lead to; otherwise the
+      # first element that is +result+ itself (not just equal to it). An
+      # Array index is made non-negative. For a detached view, the element is
+      # looked up in the container the view was taken from, since positions
+      # in the view are not positions in the settings. nil when +result+ is
+      # not one.
+      private def element_path_for(method, args, result)
+        return @source && path_of_child(result, @source) if detached?
+
+        keys = case method
+               when :dig then args
+               when :fetch, :at then args.first(1)
+               else []
+               end
+        (keys.empty? ? nil : path_along(keys, result)) || path_of_child(result, @target)
+      end
+
+      # The container a view taken from this proxy shares its elements with.
+      private def view_source
+        detached? ? @source : @target
+      end
+
+      # @path plus +keys+ when they lead from this proxy's container to
+      # +result+ itself; nil otherwise.
+      private def path_along(keys, result)
+        node = @target
+        segments = keys.map do |key|
+          segment = segment_in(node, key)
+          return nil unless segment
+
+          node = node[segment.first]
+          segment.first
+        end
+        node.equal?(result) ? @path + segments : nil
+      end
+
+      # [key], or [index] made non-negative, when +key+ finds an entry in
+      # +node+; nil otherwise.
+      private def segment_in(node, key)
+        case node
+        when Hash
+          [key] if node.key?(key)
+        when Array
+          return nil unless key.is_a?(Integer)
+
+          index = key.negative? ? key + node.size : key
+          [index] if index >= 0 && index < node.size
+        end
+      end
+
+      # @path plus the index or key of the first element of +container+ that
+      # is +result+.
+      private def path_of_child(result, container)
+        case container
+        when Array
+          index = container.index { |element| element.equal?(result) }
+          @path + [index] if index
+        when Hash
+          entry = container.find { |_key, value| value.equal?(result) }
+          @path + [entry.first] if entry
         end
       end
 

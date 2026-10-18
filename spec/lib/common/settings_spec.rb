@@ -906,6 +906,21 @@ RSpec.describe Lich::Common::Settings do
         expect(game_read('arr').to_a).to eq([{ "gem" => "ruby" }])
       end
 
+      it "stores copies of String arguments too, so changing the caller's String later is not shown or saved" do
+        their_write("arr" => [], "opts" => {})
+        arr = game_read('arr')
+        opts = game_read('opts')
+        name = +"abc"
+        arr.push(name)
+        opts['name'] = name
+        name << "X"
+
+        expect(arr.to_a).to eq(["abc"])
+        expect(game_read('arr').to_a).to eq(["abc"])
+        expect(game_read('opts')['name']).to eq("abc")
+        expect(stored).to eq("arr" => ["abc"], "opts" => { "name" => "abc" })
+      end
+
       it "stores the plain value when the argument is a proxy" do
         their_write("src" => { "x" => [1] }, "arr" => [])
 
@@ -933,6 +948,120 @@ RSpec.describe Lich::Common::Settings do
         jar["count"] = 2
 
         expect(stored["jars"]).to eq([{ "gem" => "ruby", "count" => 1 }, { "gem" => "onyx", "count" => 2, "full" => true }])
+      end
+
+      it "saves a write through an element that dig, fetch, first, last, at, min_by, max_by or sample returned to that element" do
+        cases = {
+          ->(m) { m.first }                    => [[1, 9], [2], [3]],
+          ->(m) { m.last }                     => [[1], [2], [3, 9]],
+          ->(m) { m.at(1) }                    => [[1], [2, 9], [3]],
+          ->(m) { m.at(-1) }                   => [[1], [2], [3, 9]],
+          ->(m) { m.fetch(-2) }                => [[1], [2, 9], [3]],
+          ->(m) { m.dig(0) }                   => [[1, 9], [2], [3]],
+          ->(m) { m.min_by { |row| -row[0] } } => [[1], [2], [3, 9]],
+          ->(m) { m.max_by { |row| -row[0] } } => [[1, 9], [2], [3]]
+        }
+        cases.each do |pick, expected|
+          their_write("m" => [[1], [2], [3]])
+          row = pick.call(game_read('m'))
+
+          row.push(9)
+
+          expect(stored["m"]).to eq(expected)
+        end
+
+        their_write("m" => [[1]])
+        game_read('m').sample.push(9)
+        expect(stored["m"]).to eq([[1, 9]])
+      end
+
+      it "saves a write through what Hash#dig and Hash#fetch returned to that hash, keeping its siblings" do
+        their_write("opts" => { "a" => { "x" => 0 }, "sib" => 1 })
+        by_dig = game_read('opts').dig('a')
+        by_fetch = game_read('opts').fetch('a')
+        their_write("opts" => { "a" => { "x" => 0, "theirs" => 1 }, "sib" => 1 })
+
+        by_dig['k'] = 1
+        by_fetch['j'] = 2
+
+        expect(stored).to eq("opts" => { "a" => { "x" => 0, "theirs" => 1, "k" => 1, "j" => 2 }, "sib" => 1 })
+        expect(by_dig.to_h).to eq("x" => 0, "theirs" => 1, "k" => 1, "j" => 2)
+      end
+
+      it "saves a write through an element taken from a view (select, sort_by), by a method or by [], to where it is in the stored container" do
+        cases = {
+          ->(m) { m.select { |row| row[0] > 1 }.first }                          => [[1], [2, 9], [3]],
+          ->(m) { m.sort_by { |row| -row[0] }.first }                            => [[1], [2], [3, 9]],
+          ->(m) { m.sort_by { |row| -row[0] }.find { |row| row[0] == 2 } }       => [[1], [2, 9], [3]],
+          ->(m) { m.select { |row| row[0] > 1 }.sort_by { |row| -row[0] }.last } => [[1], [2, 9], [3]],
+          ->(m) { m.reject { |row| row[0] == 1 }.sample }                        => nil,
+          ->(m) { m.sort_by { |row| -row[0] }[0] }                               => [[1], [2], [3, 9]],
+          ->(m) { m.select { |row| row[0] > 1 }.sort_by { |row| -row[0] }[-1] }  => [[1], [2, 9], [3]]
+        }
+        cases.each do |pick, expected|
+          their_write("m" => [[1], [2], [3]])
+          row = pick.call(game_read('m'))
+          picked = row.to_a.dup
+          their_write("m" => [[1], [2], [3]], "theirs" => 1)
+
+          row.push(9)
+
+          expected ||= [[1], [2], [3]].map { |r| r == picked ? r + [9] : r }
+          expect(stored).to eq("m" => expected, "theirs" => 1)
+        end
+      end
+
+      it "saves a write through an element taken from a Hash view to that element" do
+        their_write("opts" => { "a" => { "x" => 0 }, "b" => { "x" => 1 } })
+        view = game_read('opts').reject { |k, _v| k == "a" }
+
+        view['b']['k'] = 1
+        view.values.first['j'] = 2
+
+        expect(stored).to eq("opts" => { "a" => { "x" => 0 }, "b" => { "x" => 1, "k" => 1, "j" => 2 } })
+      end
+
+      it "saves a write through what dig returned several levels down, at a negative index, to that element" do
+        their_write("outer" => { "list" => [{ "n" => 1 }, { "n" => 2 }] })
+        row = game_read('outer').dig('list', -1)
+        their_write("outer" => { "list" => [{ "n" => 1 }, { "n" => 2 }], "theirs" => 1 })
+
+        row['k'] = 1
+
+        expect(stored).to eq("outer" => { "list" => [{ "n" => 1 }, { "n" => 2, "k" => 1 }], "theirs" => 1 })
+      end
+
+      it "saves a write through what store returned to the stored element" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+
+        added = opts.store('sub', {})
+        added['y'] = 1
+
+        expect(stored).to eq("opts" => { "x" => 0, "sub" => { "y" => 1 } })
+      end
+
+      it "returns what delete, delete_at, pop, shift or slice! took out as the plain value, so changing it saves nothing" do
+        their_write("opts" => { "sub" => { "x" => 0 }, "sib" => 1 }, "list" => [{ "n" => 1 }, { "n" => 2 }, { "n" => 3 }, { "n" => 4 }])
+        taken = [
+          game_read('opts').delete('sub'),
+          game_read('list').pop,
+          game_read('list').shift,
+          game_read('list').delete_at(0),
+          game_read('list').slice!(0, 1),
+          game_read('opts').shift # Hash#shift returns a [key, value] pair
+        ]
+
+        taken.each do |value|
+          expect(Lich::Common::SettingsProxy === value).to be(false), "got a proxy: #{value.inspect}"
+        end
+        expect(taken[0]).to eq("x" => 0)
+        expect(taken[1]).to eq("n" => 4)
+        taken[0]['y'] = 1
+        taken[1]['k'] = 1
+        taken[4].push("z")
+
+        expect(stored).to eq("opts" => {}, "list" => [])
       end
 
       it "writes through a root proxy (InstanceSettings.game) into the right script's row" do
@@ -975,6 +1104,26 @@ RSpec.describe Lich::Common::Settings do
         expect(stored["arr"]).to eq(["a"])
         expect(arr.to_a).to eq(["a"])
       end
+
+      it "returns this session's own result when an attempt that replayed was not stored and the next one stores the copy" do
+        their_write("arr" => ["a"])
+        arr = game_read('arr')
+        attempts = 0
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, script, scope, &block|
+          block.call({ "arr" => ["a", "theirs"] }) # replays pop, then its store finds the row changed
+          attempts += 1
+          their_write("arr" => nil) # another session removed the array meanwhile
+          original.call(script, scope) do |row|
+            attempts += 1
+            block.call(row)
+          end
+        end
+
+        expect(arr.pop).to eq("a")
+        expect(attempts).to eq(2)
+        expect(stored["arr"]).to eq([])
+        expect(arr.to_a).to eq([])
+      end
     end
 
     describe "storing this session's copy instead" do
@@ -986,6 +1135,19 @@ RSpec.describe Lich::Common::Settings do
         opts['y'] = 1
 
         expect(stored).to eq("opts" => { "x" => 0, "y" => 1 }, "other" => 1)
+      end
+
+      it "stores a copy that shares no String with the caller when it stores the proxy's copy" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => nil)
+        name = +"abc"
+
+        opts['name'] = name
+        name << "X"
+
+        expect(stored).to eq("opts" => { "x" => 0, "name" => "abc" })
+        expect(game_read('opts')['name']).to eq("abc")
       end
 
       it "stores the proxy's copy when another session put a different kind of value there" do
@@ -1085,6 +1247,27 @@ RSpec.describe Lich::Common::Settings do
 
         expect(stored).to eq([1, 2])
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("stored as Array, not a Hash"))
+      end
+
+      it "stores nothing and says so when an argument can't be stored" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+
+        expect { opts['callback'] = proc { 1 } }.not_to raise_error
+
+        expect(stored).to eq("opts" => { "x" => 0 })
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "Proc"))
+      end
+
+      it "stores nothing and says so when this session's copy can't be stored" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => nil)
+
+        expect { opts['callback'] = proc { 1 } }.not_to raise_error
+
+        expect(stored).to eq("opts" => nil)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "Proc"))
       end
 
       it "stores nothing without a script name" do

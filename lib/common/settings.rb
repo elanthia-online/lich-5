@@ -191,8 +191,9 @@ module Lich
       #
       # @param proxy [SettingsProxy] the proxy the change was made through
       # @param method [Symbol, nil] the operation applied to proxy.target
-      # @param args [Array] its arguments; proxies are unwrapped and containers
-      #   copied, so the stored row shares nothing with the caller's objects
+      # @param args [Array] its arguments; they are stored as copies (proxies
+      #   unwrapped, everything copied as a read of the stored row would give
+      #   it back), so the stored and cached row share no object with them
       # @param block [Proc, nil] its block
       # @return [Array(Object, Hash|Array), nil] when the operation was
       #   replayed and stored: its result on the stored container, and that
@@ -221,7 +222,11 @@ module Lich
           method = nil
         end
 
-        stored_args = args.map { |arg| unwrap_proxies(arg) }
+        begin
+          stored_args = stored_copy(args)
+        rescue TypeError => e
+          return refuse_proxy_save(script_name, proxy, "an argument of #{method} can't be stored (#{e.message})")
+        end
         replayed = nil
         stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
           replayed = nil
@@ -260,7 +265,11 @@ module Lich
           end
         end
 
-        copy = unwrap_proxies(proxy.target)
+        begin
+          copy = stored_copy(proxy.target)
+        rescue TypeError => e
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})")
+        end
         if path.empty?
           return copy if copy.is_a?(Hash)
 
@@ -271,6 +280,16 @@ module Lich
         root
       end
       private_class_method :apply_to_stored_row
+
+      # A copy of +value+, with proxies unwrapped, that shares no object with
+      # it (not even a String), as a read of the stored row would give it back.
+      #
+      # @raise [TypeError] when +value+ can't be stored (a Proc, a Hash with a
+      #   default proc, an object with singleton methods, ...)
+      def self.stored_copy(value)
+        Marshal.load(Marshal.dump(unwrap_proxies(value)))
+      end
+      private_class_method :stored_copy
 
       # The container at +segments+ under +root+, creating missing (or nil)
       # Hash and Array entries on the way, as nested saves always have. An
