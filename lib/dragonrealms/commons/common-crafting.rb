@@ -134,8 +134,10 @@ module Lich
       # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
       # Molten metal is found wherever it appears in the list. Clutter is only
       # disposed of when it was actually picked up from the crucible, and
-      # clutter sharing a noun with something already in hand is left alone,
-      # so the player's own item is never the one thrown away.
+      # clutter whose noun matches something already in hand (DRCI.in_hands?
+      # matches any held word starting with the noun) is left alone, so the
+      # player's own item is never the one thrown away.
+      # pass: is an internal recursion counter -- callers should not set it.
       def empty_crucible?(pass: 0)
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
@@ -167,9 +169,9 @@ module Lich
               next unless junk
 
               # get_item_unsafe and dispose_trash only check that the noun is in
-              # hand, so a held same-noun item would be the one thrown away.
+              # hand, so a held matching item would be the one thrown away.
               if DRCI.in_hands?(junk)
-                Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding one.")
+                Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding something that matches it.")
                 next
               end
 
