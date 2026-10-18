@@ -304,13 +304,17 @@ module Lich
       end
 
       # Menu labels for recipe_lookup. A name that appears more than once is
-      # suffixed with its type and chapter so the entries can be told apart.
+      # suffixed with its type and chapter so the entries can be told apart,
+      # and with its volume too when the type and chapter are also shared.
       def recipe_menu_labels(matches)
         name_counts = matches.map { |x| x['name'] }.tally
+        place_counts = matches.map { |x| x.values_at('name', 'type', 'chapter') }.tally
         matches.map do |x|
           next x['name'] if name_counts[x['name']] == 1
 
-          "#{x['name']} (#{x['type']}, chapter #{x['chapter']})"
+          details = [x['type'], "chapter #{x['chapter']}"]
+          details << "volume #{x['volume']}" if x['volume'] && place_counts[x.values_at('name', 'type', 'chapter')] > 1
+          "#{x['name']} (#{details.join(', ')})"
         end
       end
 
@@ -326,6 +330,8 @@ module Lich
           Lich::Messaging.msg('bold', "DRCC: #{choice} is not on the list. Enter a number from 1 to #{count} with #{$clean_lich_char}send #")
         end
       end
+
+      private_class_method :recipe_menu_labels, :recipe_menu_choice
 
       def find_recipe(chapter, match_string, book = 'book')
         case DRC.bput("turn my #{book} to chapter #{chapter}", BOOK_CHAPTER_TURN_SUCCESS, BOOK_CHAPTER_DISTRACTED, BOOK_CHAPTER_ALREADY)

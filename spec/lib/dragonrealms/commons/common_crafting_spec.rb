@@ -510,6 +510,43 @@ describe DRCC do
         expect(result).to equal(shaping_staff)
       end
     end
+
+    # Synthetic data: base-recipes.yaml has no two recipes sharing a name,
+    # type and chapter, but nothing in the data format prevents it.
+    context 'when two recipes share the same name, type and chapter' do
+      let(:short_staff) { { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9, 'volume' => 6 } }
+
+      it 'adds the volume so the two menu lines differ' do
+        feed_input('3')
+
+        result = DRCC.recipe_lookup(recipes + [short_staff], 'a weighted staff')
+
+        expect(menu_lines).to eq(['    1: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    2: a weighted staff (shaping, chapter 9, volume 9)',
+                                  '    3: a weighted staff (shaping, chapter 9, volume 6)'])
+        expect(result).to equal(short_staff)
+      end
+
+      it 'leaves out the volume when an entry has none' do
+        no_volume = { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9 }
+        feed_input('3')
+
+        result = DRCC.recipe_lookup(recipes + [no_volume], 'a weighted staff')
+
+        expect(menu_lines).to eq(['    1: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    2: a weighted staff (shaping, chapter 9, volume 9)',
+                                  '    3: a weighted staff (shaping, chapter 9)'])
+        expect(result).to equal(no_volume)
+      end
+    end
+
+    context 'menu helpers' do
+      it 'keeps them off the public DRCC interface' do
+        expect(DRCC).not_to respond_to(:recipe_menu_labels)
+        expect(DRCC).not_to respond_to(:recipe_menu_choice)
+        expect { DRCC.recipe_menu_choice(1) }.to raise_error(NoMethodError, /private method/)
+      end
+    end
   end
 
   describe '.find_recipe' do
