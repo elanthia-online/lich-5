@@ -329,25 +329,24 @@ module Lich
             # change.
             reached = walk_to(room_id)
             rooms_searched += 1
-            unless reached
-              # The buddy pass ends at the last room of the first pass. If that
-              # room can't be reached there is no buddy to find there either, so
-              # fall back to the empty-room search now, as for a reached last
-              # room with nobody in it, instead of idling for another attempt.
-              if prioritize_buddies && rooms_searched == search_rooms.size
-                Lich::Messaging.msg('plain', 'DRCT: Could not reach last room in list, and found no buddies. Retrying for empty room.')
-                return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, false)
-              end
-              next
-            end
 
             if prioritize_buddies && (rooms_searched <= search_rooms.size)
-              suitable_room = ((DRRoom.pcs & UserVars.friends).any? && (DRRoom.pcs & UserVars.hunting_nemesis).none?)
-              if rooms_searched == search_rooms.size && (DRRoom.pcs & UserVars.friends).empty? && (DRRoom.pcs & UserVars.hunting_nemesis).empty?
-                Lich::Messaging.msg('plain', 'DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+              # The buddy pass is the first pass over the rooms. A room is a
+              # buddy room if it has a friend and no nemesis; an unreachable
+              # room is skipped.
+              suitable_room = reached && (DRRoom.pcs & UserVars.friends).any? && (DRRoom.pcs & UserVars.hunting_nemesis).none?
+              # When the pass ends without a buddy room (the last room has no
+              # friend, has a nemesis, or can't be reached), start the
+              # empty-room search now instead of idling for another attempt.
+              if rooms_searched == search_rooms.size && !suitable_room
+                outcome = reached ? 'Reached' : 'Could not reach'
+                Lich::Messaging.msg('plain', "DRCT: #{outcome} last room in list, and found no buddies. Retrying for empty room.")
                 return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, false)
               end
             else
+              # walk_to returned false: skip the room for this pass.
+              next unless reached
+
               suitable_room = predicate ? predicate.call(search_attempt) : (DRRoom.pcs - DRRoom.group_members).empty?
             end
             if suitable_room && check_mana && !(DRStats.moon_mage? || DRStats.trader?)
