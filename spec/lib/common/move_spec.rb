@@ -269,6 +269,18 @@ RSpec.describe Lich::Common::Move do
     expect(g.sent.count('north')).to eq(9)
   end
 
+  it 'waits out the "... wait" spelling and a wait appended to the previous line' do
+    g = game(['... wait 1 second.', 'You slip....wait 1 seconds.'], arrive_after: 3)
+    expect(move.move('north')).to be(true)
+    expect(g.sent.count('north')).to eq(3)
+  end
+
+  it 'does not resend on player speech containing "Wait N"' do
+    g = game(['Soandso says, "Wait 5 seconds."', 'You walk north.'], arrive_after: 1)
+    expect(move.move('north')).to be(true)
+    expect(g.sent).to eq(['north'])
+  end
+
   it 'no longer mutates the caller string when swapping go for climb' do
     way = 'go ledge'
     g = game(['You will have to climb that.'], arrive_after: 2)

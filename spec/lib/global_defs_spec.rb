@@ -3,6 +3,7 @@
 require 'open3'
 require 'rbconfig'
 require_relative '../spec_helper'
+require_relative '../../lib/common/wait_response'
 
 # NOTE: We intentionally do NOT `require 'global_defs.rb'` here.
 # Loading the entire file redefines global methods (respond, get, put, etc.)
@@ -93,10 +94,10 @@ RSpec.describe '#fput' do
 
       timer = Time.now # Reset timeout on any game response
 
-      if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+      if (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(string))
         return fail_with.call(:too_many_resends) if over_cap.call
 
-        hold_up = Regexp.last_match[:wait_time].to_i
+        hold_up = wait_match[:seconds].to_i
         return fail_with.call(:interrupted) if wait.call(hold_up)
 
         standing = false
@@ -280,6 +281,33 @@ RSpec.describe '#fput' do
 
       expect(result).to eq('You pick up a sword.')
     end
+
+    it 'honors the "... wait" spelling and a wait appended to the previous line' do
+      stub_game_responses('... wait 2 seconds.', 'You reach for it....wait 1 second.', 'You pick up a sword.')
+      expect(self).to receive(:sleep).with(2).ordered
+      expect(self).to receive(:sleep).with(1).ordered
+      expect(self).to receive(:put).with('get sword').exactly(3).times
+
+      expect(fput('get sword')).to eq('You pick up a sword.')
+    end
+
+    it 'does not treat player speech containing "Wait N" as a refusal' do
+      ['Soandso says, "Wait 5 minutes before we go."', 'You whisper to Bob, "Wait 10 and then follow."'].each do |speech|
+        stub_game_responses(speech)
+        expect(self).not_to receive(:sleep)
+        expect(self).to receive(:put).with('get sword').once
+
+        expect(fput('get sword')).to eq(speech)
+      end
+    end
+  end
+
+  # The fput above is a copy; this pins production fput, dothis and
+  # dothistimeout to the shared pattern so the copy cannot drift from them.
+  it 'production fput, dothis and dothistimeout all use the shared wait pattern' do
+    source = File.read(File.expand_path('../../lib/global_defs.rb', __dir__))
+    expect(source.scan('Lich::Common::WAIT_RESPONSE_PATTERN.match(').size).to eq(3)
+    expect(source).not_to match(/[.W]ait \(\?<wait_time>|[.W]ait \(\[0-9\]\+\)/)
   end
 
   context 'when character is stunned or dead' do

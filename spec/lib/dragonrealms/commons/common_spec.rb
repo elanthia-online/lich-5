@@ -73,6 +73,10 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('FLAVOR_TEXT_PATTERN is frozen') { expect(described_class::FLAVOR_TEXT_PATTERN).to be_frozen }
     it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
 
+    it 'WAIT_RESPONSE_PATTERN is the core pattern fput uses' do
+      expect(described_class::WAIT_RESPONSE_PATTERN).to equal(Lich::Common::WAIT_RESPONSE_PATTERN)
+    end
+
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
       match = "...wait 3 seconds.".match(described_class::WAIT_RESPONSE_PATTERN)
       expect(match).not_to be_nil

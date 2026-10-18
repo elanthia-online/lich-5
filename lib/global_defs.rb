@@ -1556,10 +1556,10 @@ def fput(message, *waitingfor)
 
     timer = Time.now # Reset timeout on any game response
 
-    if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+    if (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(string))
       return fail_with.call(:too_many_resends) if over_cap.call
 
-      hold_up = Regexp.last_match[:wait_time].to_i
+      hold_up = wait_match[:seconds].to_i
       return fail_with.call(:interrupted) if wait.call(hold_up)
 
       standing = false
@@ -1898,9 +1898,9 @@ def dothis(action, success_line)
       line = get
       if line =~ success_line
         return line
-      elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
-        if $2.to_i > 1
-          Script.execution_sleep($2.to_i - "0.5".to_f)
+      elsif (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(line))
+        if wait_match[:seconds].to_i > 1
+          Script.execution_sleep(wait_match[:seconds].to_i - "0.5".to_f)
         else
           Script.execution_sleep 0.3
         end
@@ -1963,9 +1963,9 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
         Script.execution_sleep 0.1
       elsif line =~ success_line
         return line
-      elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
-        if $2.to_i > 1
-          Script.execution_sleep($2.to_i - "0.5".to_f)
+      elsif (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(line))
+        if wait_match[:seconds].to_i > 1
+          Script.execution_sleep(wait_match[:seconds].to_i - "0.5".to_f)
         else
           Script.execution_sleep 0.3
         end

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'wait_response'
+
 module Lich
   module Common
     # The movement primitive. Scripts call the top-level +move+ shim in
@@ -360,10 +362,10 @@ module Lich
                 command.call(dir.sub(/go|climb/, 'open'), :open)
                 put_dir.call
               end
-            elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
+            elsif (wait_match = WAIT_RESPONSE_PATTERN.match(line))
               # Waiting is not a remedy that can fail; roundtime always ends.
-              if $2.to_i > 1
-                Script.execution_sleep($2.to_i - "0.2".to_f)
+              if wait_match[:seconds].to_i > 1
+                Script.execution_sleep(wait_match[:seconds].to_i - "0.2".to_f)
               else
                 Script.execution_sleep 0.3
               end
