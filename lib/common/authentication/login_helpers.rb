@@ -621,10 +621,9 @@ module Lich
 
         # Formats the game instance launch flag for a spawned Lich session.
         #
-        # Callers spawn the running Lich installation itself (the session
-        # launcher respawns `$PROGRAM_NAME`; login scripts spawn
-        # `LICH_DIR/lich.rbw`), so the child always understands the
-        # generalized `--GAMECODE` form that {resolve_instance} parses.
+        # Always emits the generalized `--GAMECODE` form that
+        # {resolve_instance} parses. Every Lich release that ships this
+        # method (5.13.0 and later) accepts that form.
         #
         # @param game_code [String, Symbol, nil] the game instance code (e.g., 'GS3', 'GST', 'DRX')
         # @return [String, nil] the upcased launch flag (e.g., '--GS3', '--GST'), or nil when game_code is blank
