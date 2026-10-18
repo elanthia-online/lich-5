@@ -1057,6 +1057,34 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(revert_temp_dirs).to be_empty
         expect(messages).to include('Every change was undone; your installation is as it was.')
       end
+
+      # The one rename in a revert whose target can exist: an undo that
+      # moves a file back over a name an earlier undo already failed to
+      # clear. The run is kept by then, so waiting could not change that.
+      it 'does not wait on an undo whose target an earlier failed undo left in place, and loses nothing' do
+        old_back = []
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          raise Errno::EACCES, to if to == live_lich && from.include?('.lich5-revert-new-')
+          raise Errno::EACCES, to if from == live_version && to.include?('.lich5-revert-new-')
+
+          if to == live_version && from.include?('.lich5-revert-old-')
+            old_back << [from, to]
+            raise Errno::EACCES, to
+          end
+          original.call(from, to)
+        end
+        messages = capture_responses
+
+        expect { manager.revert }.to raise_error(Errno::EACCES)
+
+        expect(old_back.size).to eq(1)
+        expect(messages.grep(/retrying/).grep(/lich5-revert-old-/)).to be_empty
+        expect(File.read(live_version)).to eq("LICH_VERSION = '5.21.0'\n")
+        old_lib = revert_temp_dirs.find { |path| path.start_with?(LIB_DIR) && path.include?('-old-') }
+        expect(File.read(File.join(old_lib, 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+        expect(messages).to include('Some changes could not be undone. Your previous files are kept in:')
+        expect(messages).to include("    #{old_lib}")
+      end
     end
   end
 end

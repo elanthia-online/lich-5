@@ -506,10 +506,15 @@ module Lich
         # as EACCES, EPERM or EBUSY until the other process lets go. Each retry
         # waits the next of RENAME_RETRY_DELAYS. Nothing is retried on other
         # platforms, where these errors do not clear on their own, nor when
-        # +to+ exists, which no wait will change (#publish_snapshot treats
-        # that EACCES as a name collision). The first retry of each rename
-        # says so, because during a revert swap the waits can leave lib/ or
-        # the launcher half moved, and closing Lich then stops it starting.
+        # +to+ exists. For #publish_snapshot that is a name collision, which
+        # it handles by trying the next name. In a revert, the swap only
+        # renames onto free names (it moves each live entry out first), so
+        # the target can exist only for an undo after an earlier undo
+        # already failed; the run's working directories are kept by then,
+        # and waiting would only leave the installation half moved for
+        # longer. The first retry of each rename says so, because during a
+        # revert swap the waits can leave lib/ or the launcher half moved,
+        # and closing Lich then stops it starting.
         #
         # @raise [SystemCallError] the last error once the retries run out
         # @return [void]
