@@ -353,11 +353,9 @@ module Lich
             next unless last_buddy_room
 
             # The buddy pass ended without a buddy room. Start the empty-room
-            # search now instead of idling for another attempt, unless the last
-            # room was a buddy room short only on mana and strict_mana is off:
-            # the mana relaxation below handles that case.
-            next if mana_short && !strict_mana
-
+            # search now instead of idling for another attempt. It checks mana
+            # first and relaxes it (without strict_mana) only if no room has
+            # enough.
             outcome = if mana_short
                         'Reached last room in list, and found buddies but not the right mana.'
                       elsif reached

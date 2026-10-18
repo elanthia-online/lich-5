@@ -1123,12 +1123,49 @@ RSpec.describe DRCT do
         expect(walks).to eq([100, 200, 100, 200])
       end
 
-      it 'leaves a buddy room short on mana to the mana relaxation without strict_mana' do
+      it 'falls back without strict_mana and takes the empty room with mana, not the first empty room' do
+        # 100 is empty but short on mana, 150 is empty with enough, 200 is the
+        # buddy room short on mana. Buddies off would take 150.
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 150 => 50, 200 => 10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(current.id).to eq(150)
+        expect(walks).to eq([100, 150, 200, 100, 150])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/Going to use those anyway/)).to be_empty
+      end
+
+      it 'takes the same room as buddies off without strict_mana' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 150 => 50, 200 => 10)
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, false) }
+        off_room = current.id
+        current.id = 50
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, true) }
+        expect(current.id).to eq(off_room)
+      end
+
+      it 'relaxes mana in the fallback without strict_mana only when no room has enough' do
+        mana[100] = 10
         result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, false, 1, true) }
         expect(result).to eq(true)
-        expect(walks).to eq([100, 200, 100])
+        expect(current.id).to eq(100)
+        expect(walks).to eq([100, 200, 100, 200, 100])
+        expect(messages).to include(new_message)
         expect(messages.grep(/not with the right mana\. Going to use those anyway/).size).to eq(1)
-        expect(messages).not_to include(new_message)
+      end
+
+      it 'does not claim empty rooms without strict_mana when only buddy rooms were short on mana' do
+        # The default predicate rejects a friend's room, so the fallback finds
+        # no empty room and no mana relaxation applies.
+        allow(DRRoom).to receive(:pcs).and_return(['Buddy'])
+        mana.replace(100 => 10, 200 => 10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/Going to use those anyway/)).to be_empty
       end
 
       it 'takes a last buddy room with enough mana' do
