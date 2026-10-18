@@ -341,17 +341,49 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(world.sent).to eq(['north'])
     end
 
-    it 'finds the real room behind an earlier look-alike the map rejects by UID' do
-      # Map.current resolves only the first title/description/exits match;
-      # when that look-alike's stored UID excludes the live one, Room.current
-      # is nil although room 101 (no stored UID) is the room we stand in.
-      look_alike = make_room(100, {}, title: '[Room 101]', description: 'Room 101 description.', uid: [1100])
-      world = WalkToUnknownRoomSpec::World.new([look_alike, *corridor(1)], position: 101)
-      world.live_uids[101] = 5555
-      install(world)
+    # Room 100 looks exactly like room 101 and carries a stored UID; room 101
+    # carries none. When the live UID is not room 100's, Map.current rejects
+    # room 100 (its first match) and Room.current is nil. From here the
+    # character may stand in room 101, or in room 100 whose stored UID list is
+    # stale; both look the same, so neither is accepted.
+    def look_alike_world(position:, live_uid:)
+      look_alike = make_room(100, { '102' => 'north' }, title: '[Room 101]', description: 'Room 101 description.', uid: [1100])
+      world = WalkToUnknownRoomSpec::World.new([look_alike, *corridor(1)], position: position)
+      world.live_uids[position] = live_uid
+      world
+    end
 
-      expect(DRCT.walk_to(102)).to be(true)
-      expect(world.sent).to eq(['north'])
+    it 'fails without moving when a vetoed look-alike shares the text of a room with no stored UID' do
+      world = install(look_alike_world(position: 101, live_uid: 5555))
+
+      expect(DRCT.walk_to(102)).to be(false)
+      expect(world.sent).to be_empty
+      expect(bold_messages).to include('DRCT: Failed to find a matching room from unknown location.')
+    end
+
+    it 'does not take the look-alike as arrival when the vetoed room is the one we stand in (stale stored UID)' do
+      world = install(look_alike_world(position: 100, live_uid: 5555))
+
+      expect(DRCT.walk_to(101)).to be(false)
+      expect(world.position).to eq(100)
+      expect(world.sent).to be_empty
+    end
+
+    it 'does not take the look-alike as arrival when go2 ends in the vetoed room' do
+      [false, true].each do |restart_on_fail|
+        Lich::Messaging.clear_messages!
+        world = look_alike_world(position: 100, live_uid: 5555)
+        world.position = 102
+        world.resolvable = [102]
+        install(world)
+        allow(DRCT).to receive(:start_script) do |_name, _args, **_opts|
+          world.position = 100
+          :go2_handle
+        end
+
+        expect(DRCT.walk_to(101, restart_on_fail)).to be(false), "restart_on_fail=#{restart_on_fail}"
+        expect(world.position).to eq(100)
+      end
     end
 
     it 'still matches a room with stored UIDs when the game shows no UID' do
@@ -417,6 +449,18 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(world.sent).to be_empty
       expect(Map).not_to have_received(:findpath)
       expect(bold_messages.last).to include('No map path from room 101 to room 999')
+    end
+
+    it 'does not walk toward the last room for a negative target id' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(2), position: 101)
+      install(world)
+      # The real Map[] indexes an Array, so a negative id is a real room.
+      allow(Map).to receive(:[]) { |id| id.to_i.negative? ? world.rooms.values[id.to_i] : world.room(id.to_i) }
+
+      expect(DRCT.walk_to(-1)).to be(false)
+      expect(world.sent).to be_empty
+      expect(Map).not_to have_received(:findpath)
+      expect(bold_messages.last).to include('No map path from room 101 to room -1')
     end
 
     it 'fails without sending anything when findpath returns nil' do

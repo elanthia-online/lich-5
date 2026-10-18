@@ -273,31 +273,34 @@ module Lich
       #
       # A stored UID vetoes the match the same way the map's own resolver does
       # (Map.resolve_matched_room): when the game shows a live UID and the room
-      # carries UIDs that do not include it, that room is a different room that
-      # only looks the same (a day/night variant or a look-alike cell), not the
-      # one the character stands in. This matters because Map.current resolves
-      # the FIRST title/description/exits match only; when that first room is
-      # vetoed by its UID, Room.current is nil even if a later look-alike with no
-      # stored UID is the real room. A room the map rejects by UID is never
-      # accepted here.
+      # carries UIDs that do not include it, that room is not accepted. A vetoed
+      # room still counts as a candidate, so a vetoed look-alike next to a room
+      # with no stored UID makes the match ambiguous and nothing is returned.
+      # The two cases look identical from here: the character may stand in the
+      # room without a UID (the vetoed one is a different room), or in the
+      # vetoed room itself, whose stored UID list is stale or incomplete. Taking
+      # the room without a UID would report arrival in the second case with
+      # nothing sent, so the match fails instead.
       #
       # @return [Lich::Common::Map, nil] the single matching room; nil when no
-      #   room or more than one room matches, or the live room text is missing
+      #   room or more than one room matches, when the single match is vetoed
+      #   by its UID, or when the live room text is missing
       def match_unknown_room
         title = XMLData.room_title.to_s
         description = XMLData.room_description.to_s.strip
         exits = XMLData.room_exits_string.to_s.strip
         return nil if title.empty? || description.empty? || exits.empty?
 
-        live_uid = XMLData.room_id.to_i
         rooms = Map.list.select do |room|
           room &&
             room.title.include?(title) &&
             room.description.include?(description) &&
-            room.paths.include?(exits) &&
-            !uid_excludes?(room, live_uid)
+            room.paths.include?(exits)
         end
-        rooms.length == 1 ? rooms.first : nil
+        return nil unless rooms.length == 1
+        return nil if uid_excludes?(rooms.first, XMLData.room_id.to_i)
+
+        rooms.first
       end
 
       # Whether +room+'s stored UIDs rule out the live UID: the game shows one
@@ -350,7 +353,8 @@ module Lich
           end
           return true if room.id == room_num
 
-          target = Map[room_num]
+          # Map[] indexes an Array, so Map[-1] is the last room, not nil.
+          target = room_num.negative? ? nil : Map[room_num]
           # Map.findpath(room, nil) searches for room 0, so a target the map
           # does not know would walk toward whatever room 0 is.
           path = target.nil? ? nil : Map.findpath(room, target)
