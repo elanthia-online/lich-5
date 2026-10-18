@@ -243,14 +243,29 @@ module Lich
         end
       end
 
+      # Core Ruby methods that change a Hash or an Array in place. A call to
+      # one of them through a proxy is applied to this session's copy and then
+      # replayed on the row as stored (Settings.save_proxy_changes), so that
+      # what other sessions saved in the same container is kept. Their blocks
+      # (delete_if { ... }) therefore run once on this session's copy and again
+      # on the stored container, and once more each time another session's
+      # write makes the save start over, so they must not have side effects.
+      MUTATING_METHODS = [
+        :<<, :[]=, :append, :clear, :collect!, :compact!, :compare_by_identity,
+        :concat, :default=, :default_proc=, :delete, :delete_at, :delete_if,
+        :fill, :filter!, :flatten!, :insert, :keep_if, :map!, :merge!, :pop,
+        :prepend, :push, :rehash, :reject!, :replace, :reverse!, :rotate!,
+        :select!, :shift, :shuffle!, :slice!, :sort!, :sort_by!, :store,
+        :transform_keys!, :transform_values!, :uniq!, :unshift, :update
+      ].freeze
+
       def []=(key, value)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, value: #{value.inspect}, target_object_id: #{@target.object_id}" })
         actual_value = value.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(value) : value # Corrected to use @settings_module
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_before_set: #{@target.inspect}" })
         @target[key] = actual_value
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
-        @settings_module.save_proxy_changes(self)
+        replayed = @settings_module.save_proxy_changes(self, :[]=, [key, actual_value])
+        take_stored_container(replayed[1]) if replayed
         # rubocop:disable Lint/Void
         # This is Ruby expected behavior to return the value.
         value
@@ -280,16 +295,55 @@ module Lich
             end
 
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
-            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_before_op: #{@target.inspect}" })
+            return call_mutating_method(method, unwrapped_args, block) if MUTATING_METHODS.include?(method)
+
+            # Any other method (key?, each_pair, ...) may or may not change the
+            # container. It is saved, as this session's copy, only if it did.
+            before = dump_of_target
             result = @target.send(method, *unwrapped_args, &block)
-            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
-            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   calling save_proxy_changes on settings module" })
-            @settings_module.save_proxy_changes(self)
+            if before.nil? || dump_of_target != before
+              @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed the target; saving this session's copy" })
+              @settings_module.save_proxy_changes(self)
+            end
             return handle_method_result(result)
           end
         else
           super
         end
+      end
+
+      # Applies a MUTATING_METHODS call to this session's copy, then replays it
+      # on the stored row. When it was replayed, the result is the one from the
+      # stored container (what pop or delete took from what was saved), and
+      # this proxy now shows that container.
+      private def call_mutating_method(method, args, block)
+        result = @target.send(method, *args, &block)
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
+        replayed = @settings_module.save_proxy_changes(self, method, args, block)
+        return handle_method_result(result) unless replayed
+
+        stored_result, stored_container = replayed
+        take_stored_container(stored_container)
+        stored_result.equal?(stored_container) ? self : handle_method_result(stored_result)
+      end
+
+      # After a write was replayed on the stored row, shows that container
+      # (with whatever other sessions saved in it) through this proxy and
+      # through every view sharing this proxy's container. A detached view
+      # keeps its own contents.
+      private def take_stored_container(stored_container)
+        return if detached?
+        return unless stored_container.instance_of?(@target.class)
+        return if stored_container.equal?(@target)
+
+        @target.replace(stored_container)
+      end
+
+      # Marshal bytes of the target, or nil when it can't be dumped.
+      private def dump_of_target
+        Marshal.dump(@target)
+      rescue StandardError
+        nil
       end
 
       # Minimal change: keep path (not []), and tag view proxies as detached.

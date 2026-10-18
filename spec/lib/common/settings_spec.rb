@@ -728,6 +728,407 @@ RSpec.describe Lich::Common::Settings do
     end
   end
 
+  # A proxy holds this process's copy of one container. These examples play
+  # another session by writing to the adapter directly between the read that
+  # made the proxy and the write through it.
+  describe "Writes through a proxy when another session changed the row" do
+    let(:settings) { Lich::Common::Settings }
+
+    def game_read(key)
+      settings.get_scoped_setting("GSIV", key)
+    end
+
+    def their_write(row, scope = "GSIV", script = "test_script")
+      @mock_db.save_settings(script, row, scope)
+    end
+
+    def stored(scope = "GSIV", script = "test_script")
+      @mock_db.get_settings(script, scope)
+    end
+
+    before do
+      settings.instance_variable_set(:@settings_cache, {})
+      settings.instance_variable_set(:@cache_versions, {})
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    describe "replaying the operation on the stored container" do
+      it "keeps the other session's keys in the container and the row when writing one key" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => { "x" => 0, "theirs" => 1 }, "top" => true)
+
+        opts['mine'] = 2
+
+        expect(stored).to eq("opts" => { "x" => 0, "theirs" => 1, "mine" => 2 }, "top" => true)
+      end
+
+      it "returns the assigned value, not the stored one" do
+        their_write("opts" => {})
+        expect(game_read('opts').send(:[]=, 'k', 'v')).to eq('v')
+      end
+
+      it "replays each in-place Hash method on the stored hash" do
+        {
+          [:store, 'k', 1]         => { "a" => 1, "b" => 2, "k" => 1 },
+          [:delete, 'a']           => { "b" => 2 },
+          [:merge!, { "m" => 3 }]  => { "a" => 1, "b" => 2, "m" => 3 },
+          [:update, { "a" => 9 }]  => { "a" => 9, "b" => 2 },
+          [:replace, { "r" => 1 }] => { "r" => 1 },
+          [:clear]                 => {},
+          [:shift]                 => { "b" => 2 },
+          [:compact!]              => { "a" => 1, "b" => 2 },
+          [:transform_values!]     => { "a" => 1, "b" => 2 }
+        }.each do |(method, *args), expected|
+          their_write("h" => { "a" => 1 })
+          proxy = game_read('h')
+          their_write("h" => { "a" => 1, "b" => 2 })
+
+          proxy.public_send(method, *args)
+
+          expect(stored["h"]).to eq(expected), "#{method}: #{stored["h"].inspect}"
+        end
+      end
+
+      it "replays each in-place Array method on the stored array" do
+        {
+          [:push, 9]      => [1, 2, 3, 9],
+          [:<<, 9]        => [1, 2, 3, 9],
+          [:append, 9]    => [1, 2, 3, 9],
+          [:unshift, 0]   => [0, 1, 2, 3],
+          [:prepend, 0]   => [0, 1, 2, 3],
+          [:insert, 1, 7] => [1, 7, 2, 3],
+          [:concat, [8]]  => [1, 2, 3, 8],
+          [:delete, 2]    => [1, 3],
+          [:delete_at, 0] => [2, 3],
+          [:pop]          => [1, 2],
+          [:shift]        => [2, 3],
+          [:slice!, 0, 2] => [3],
+          [:reverse!]     => [3, 2, 1],
+          [:rotate!]      => [2, 3, 1],
+          [:fill, 0]      => [0, 0, 0],
+          [:clear]        => [],
+          [:replace, [5]] => [5],
+          [:compact!]     => [1, 2, 3],
+          [:flatten!]     => [1, 2, 3],
+          [:uniq!]        => [1, 2, 3],
+          [:sort!]        => [1, 2, 3]
+        }.each do |(method, *args), expected|
+          their_write("arr" => [1])
+          proxy = game_read('arr')
+          their_write("arr" => [1, 2, 3])
+
+          proxy.public_send(method, *args)
+
+          expect(stored["arr"]).to eq(expected), "#{method}: #{stored["arr"].inspect}"
+        end
+      end
+
+      it "runs a block given to an in-place method on the stored elements too" do
+        their_write("arr" => [1, 2])
+        arr = game_read('arr')
+        their_write("arr" => [1, 2, 3, 4])
+
+        arr.delete_if(&:even?)
+        expect(stored["arr"]).to eq([1, 3])
+
+        arr.map! { |n| n * 10 }
+        expect(stored["arr"]).to eq([10, 30])
+
+        their_write("h" => { "a" => 1 })
+        h = game_read('h')
+        their_write("h" => { "a" => 1, "b" => 2 })
+        h.select! { |_k, v| v > 1 }
+        expect(stored["h"]).to eq("b" => 2)
+      end
+
+      it "returns what the operation returned on the stored container" do
+        their_write("arr" => ["mine"])
+        arr = game_read('arr')
+        their_write("arr" => ["mine", "theirs"])
+
+        expect(arr.pop).to eq("theirs")
+        expect(stored["arr"]).to eq(["mine"])
+
+        their_write("h" => {})
+        h = game_read('h')
+        their_write("h" => { "k" => "theirs" })
+        expect(h.delete("k")).to eq("theirs")
+
+        their_write("u" => [1])
+        u = game_read('u')
+        their_write("u" => [1, 2])
+        expect(u.uniq!).to be_nil # nothing to remove from the stored array
+      end
+
+      it "returns the proxy when the operation returns its container, so chained calls are saved too" do
+        their_write("scripts" => ["a"])
+        scripts = game_read('scripts')
+        their_write("scripts" => ["a", "b"])
+
+        result = scripts.push("b")
+        expect(result.proxy_details).to include('path=["scripts"]')
+        result.uniq!
+
+        expect(stored["scripts"]).to eq(["a", "b"])
+      end
+
+      it "keeps this session's own earlier write when writing through a proxy kept from before it" do
+        their_write("list" => [1])
+        kept = game_read('list')
+        their_write("list" => [1], "other" => true) # any commit: the next read re-reads the row
+
+        game_read('list').push(2)
+        kept.push(3)
+
+        expect(stored["list"]).to eq([1, 2, 3])
+      end
+
+      it "shows the stored container through the proxy and through a parent proxy's view of it" do
+        their_write("outer" => { "inner" => { "x" => 0 } })
+        outer = game_read('outer')
+        inner = outer['inner']
+        their_write("outer" => { "inner" => { "x" => 0, "theirs" => 1 } })
+
+        inner['mine'] = 2
+
+        expect(inner.to_h).to eq("x" => 0, "theirs" => 1, "mine" => 2)
+        expect(outer['inner'].to_h).to eq("x" => 0, "theirs" => 1, "mine" => 2)
+      end
+
+      it "stores copies of the arguments, so later changes to the caller's objects are not saved or cached" do
+        their_write("arr" => [])
+        jar = { "gem" => "ruby" }
+        game_read('arr').push(jar)
+        jar["count"] = 5
+
+        expect(stored["arr"]).to eq([{ "gem" => "ruby" }])
+        expect(game_read('arr').to_a).to eq([{ "gem" => "ruby" }])
+      end
+
+      it "stores the plain value when the argument is a proxy" do
+        their_write("src" => { "x" => [1] }, "arr" => [])
+
+        game_read('arr').push(game_read('src'))
+
+        expect(stored["arr"]).to eq([{ "x" => [1] }])
+        expect(stored["arr"].first).to be_an_instance_of(Hash)
+      end
+
+      it "creates the containers on the way that the stored row does not have" do
+        their_write("outer" => { "inner" => { "x" => 0 } })
+        inner = game_read('outer')['inner']
+        their_write("other" => 1)
+
+        inner['y'] = 1
+
+        expect(stored).to eq("other" => 1, "outer" => { "inner" => { "x" => 0, "y" => 1 } })
+      end
+
+      it "addresses an element found in an array by its position" do
+        their_write("jars" => [{ "gem" => "ruby", "count" => 1 }, { "gem" => "onyx", "count" => 1 }])
+        jar = game_read('jars').find { |j| j["gem"] == "onyx" }
+        their_write("jars" => [{ "gem" => "ruby", "count" => 1 }, { "gem" => "onyx", "count" => 1, "full" => true }])
+
+        jar["count"] = 2
+
+        expect(stored["jars"]).to eq([{ "gem" => "ruby", "count" => 1 }, { "gem" => "onyx", "count" => 2, "full" => true }])
+      end
+
+      it "writes through a root proxy (InstanceSettings.game) into the right script's row" do
+        root = settings.root_proxy_for("DR", script_name: "core")
+        their_write({ "Beta" => 2 }, "DR", "core")
+
+        root["Alpha"] = 1
+
+        expect(stored("DR", "core")).to eq("Beta" => 2, "Alpha" => 1)
+        expect(stored("DR", "test_script")).to eq({})
+      end
+
+      it "takes the stored row into the cache, then reads the row again once" do
+        their_write("opts" => {})
+        opts = game_read('opts')
+        their_write("opts" => { "theirs" => 1 })
+        opts['mine'] = 2
+        allow(@mock_db).to receive(:get_settings).and_call_original
+
+        2.times { expect(game_read('opts').to_h).to eq("theirs" => 1, "mine" => 2) }
+        expect(@mock_db).to have_received(:get_settings).once
+      end
+
+      it "uses the row of the attempt that was stored when the adapter has to start over" do
+        their_write("arr" => ["a"])
+        arr = game_read('arr')
+        attempts = 0
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, script, scope, &block|
+          block.call({ "arr" => ["stale"] }) # an attempt whose store found the row changed
+          attempts += 1
+          their_write("arr" => ["a", "theirs"])
+          original.call(script, scope) do |row|
+            attempts += 1
+            block.call(row)
+          end
+        end
+
+        expect(arr.pop).to eq("theirs")
+        expect(attempts).to eq(2)
+        expect(stored["arr"]).to eq(["a"])
+        expect(arr.to_a).to eq(["a"])
+      end
+    end
+
+    describe "storing this session's copy instead" do
+      it "stores the proxy's copy when another session removed the container" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => nil, "other" => 1)
+
+        opts['y'] = 1
+
+        expect(stored).to eq("opts" => { "x" => 0, "y" => 1 }, "other" => 1)
+      end
+
+      it "stores the proxy's copy when another session put a different kind of value there" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => [1, 2])
+
+        opts['y'] = 1
+
+        expect(stored).to eq("opts" => { "x" => 0, "y" => 1 })
+      end
+
+      it "stores the proxy's copy when the operation raises on the stored container" do
+        their_write("arr" => [2, 1])
+        arr = game_read('arr')
+        their_write("arr" => [2, 1, nil]) # sort! raises on nil
+
+        expect { arr.sort! }.not_to raise_error
+
+        expect(stored["arr"]).to eq([1, 2])
+      end
+
+      it "stores the view's copy at its path for a detached view, as before" do
+        their_write("opts" => { "a" => 1, "b" => 2 })
+        view = game_read('opts').select { |_k, v| v > 1 }
+        their_write("opts" => { "a" => 1, "b" => 2 }, "other" => 1)
+
+        view['c'] = 3
+
+        expect(stored).to eq("opts" => { "b" => 2, "c" => 3 }, "other" => 1)
+      end
+
+      it "places the copy at an Array index past the end of the stored array, padding with nil" do
+        their_write("rows" => [{}, {}, { "x" => 0 }])
+        row = game_read('rows')[2]
+        their_write("rows" => [{}])
+
+        row['y'] = 1
+
+        expect(stored["rows"]).to eq([{}, nil, { "x" => 0, "y" => 1 }])
+      end
+    end
+
+    describe "not storing" do
+      it "stores nothing for an element yielded by each (a detached view without a path)" do
+        their_write("rows" => [{ "x" => 0 }])
+        allow(@mock_db).to receive(:update_settings).and_call_original
+
+        game_read('rows').each { |row| row['y'] = 1 }
+
+        expect(@mock_db).not_to have_received(:update_settings)
+        expect(stored).to eq("rows" => [{ "x" => 0 }])
+      end
+
+      it "does not write for a method that changes nothing, and runs its block once" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write("opts" => { "x" => 0, "theirs" => 1 })
+        allow(@mock_db).to receive(:update_settings).and_call_original
+        seen = []
+
+        expect(opts.key?("x")).to be(true)
+        opts.each_pair { |k, _v| seen << k }
+
+        expect(seen).to eq(["x"])
+        expect(@mock_db).not_to have_received(:update_settings)
+        expect(stored["opts"]).to eq("x" => 0, "theirs" => 1)
+      end
+
+      it "stores nothing and says so when the path runs through a value that is not a container" do
+        their_write("outer" => { "inner" => { "x" => 0 } })
+        inner = game_read('outer')['inner']
+        their_write("outer" => "replaced")
+
+        inner['y'] = 1
+
+        expect(stored).to eq("outer" => "replaced")
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", '["outer", "inner"]'))
+      end
+
+      it "stores nothing and says so for a negative Array index in the path" do
+        their_write("rows" => [{ "x" => 0 }])
+        last = game_read('rows')[-1]
+
+        last['y'] = 1
+
+        expect(stored).to eq("rows" => [{ "x" => 0 }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved"))
+      end
+
+      it "stores nothing and says so when the stored row is not a Hash" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        their_write([1, 2])
+
+        opts['y'] = 1
+
+        expect(stored).to eq([1, 2])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("stored as Array, not a Hash"))
+      end
+
+      it "stores nothing without a script name" do
+        their_write("opts" => { "x" => 0 })
+        opts = game_read('opts')
+        Lich::Common::MockScript.current_name = nil
+        allow(@mock_db).to receive(:update_settings).and_call_original
+
+        opts['y'] = 1
+
+        expect(@mock_db).not_to have_received(:update_settings)
+      ensure
+        Lich::Common::MockScript.current_name = "test_script"
+      end
+
+      it "keeps this session's change in the proxy and returns its own result when the save fails" do
+        their_write("arr" => ["a", "b"])
+        arr = game_read('arr')
+        allow(@mock_db).to receive(:update_settings).and_return(nil)
+
+        expect(arr.pop).to eq("b")
+        expect(arr.to_a).to eq(["a"])
+        expect(stored["arr"]).to eq(["a", "b"])
+      end
+    end
+
+    describe "SettingsProxy::MUTATING_METHODS" do
+      it "lists every in-place method of Hash and Array" do
+        bang = (Hash.public_instance_methods + Array.public_instance_methods).grep(/\w!\z/).uniq
+        others = %i[<< []= append clear compare_by_identity concat default= default_proc= delete delete_at
+                    delete_if fill insert keep_if pop prepend push rehash replace shift store unshift update]
+
+        expect(Lich::Common::SettingsProxy::MUTATING_METHODS).to include(*bang, *others)
+      end
+
+      it "lists only methods that Hash or Array has, none of them treated as non-destructive" do
+        Lich::Common::SettingsProxy::MUTATING_METHODS.each do |method|
+          expect(Hash.method_defined?(method) || Array.method_defined?(method)).to be(true), method.inspect
+        end
+        expect(Lich::Common::SettingsProxy::MUTATING_METHODS & Lich::Common::SettingsProxy::NON_DESTRUCTIVE_METHODS).to be_empty
+      end
+    end
+  end
+
   # Another Lich session is another process. These examples play it by writing
   # to the adapter directly, which (like a commit by another connection)
   # changes the adapter's data_version.
@@ -864,7 +1265,7 @@ RSpec.describe Lich::Common::Settings do
 
     it "does not show a nested change whose save failed once the database can be read" do
       their_write("opts" => { "x" => 0 })
-      allow(@mock_db).to receive(:save_settings).and_return(false) # the lock outlasted the busy timeout
+      allow(@mock_db).to receive(:update_settings).and_return(nil) # the lock outlasted the busy timeout
 
       game_read('opts')['y'] = 1
 
@@ -1137,63 +1538,37 @@ describe 'SettingsProxy#rebind_to_live!' do
   end
 end
 
-describe 'Settings#save_proxy_changes refresh-before-save' do
+describe 'Settings#save_proxy_changes for a detached view without a path' do
   # Use RSpec stubs to ensure Script.current.name works regardless of other specs
   before do
     script_double = double('Script', name: 'test_script')
     allow(Script).to receive(:current).and_return(script_double)
+    @saved_adapter = Lich::Common::Settings.instance_variable_get(:@db_adapter)
+    @saved_cache = Lich::Common::Settings.instance_variable_get(:@settings_cache)
   end
 
-  it 'refreshes from DB to prevent stale-cache overwrites' do
+  after do
+    Lich::Common::Settings.instance_variable_set(:@db_adapter, @saved_adapter)
+    Lich::Common::Settings.instance_variable_set(:@settings_cache, @saved_cache)
+  end
+
+  it 'stores nothing and leaves the cached root alone' do
     settings_module = Lich::Common::Settings
-    script_name = 'test_script'
-    scope = ':'
-    cache_key = "#{script_name}::#{scope}"
-
-    fresh = { refreshed: true }
-    dbl = double('DBAdapter', get_settings: fresh, save_settings: true)
-    settings_module.instance_variable_set(:@db_adapter, dbl)
-    settings_module.instance_variable_set(:@settings_cache, { cache_key => { old: true } })
-
-    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], {})
-    proxy.instance_variable_set(:@detached, true)
-    expect {
-      settings_module.save_proxy_changes(proxy)
-    }.not_to raise_error
-
-    cache_after = settings_module.instance_variable_get(:@settings_cache)[cache_key]
-    expect(cache_after).to be_a(Hash)
-  end
-end
-
-describe 'Settings#save_proxy_changes detached view behavior' do
-  # Use RSpec stubs to ensure Script.current.name works regardless of other specs
-  before do
-    script_double = double('Script', name: 'test_script')
-    allow(Script).to receive(:current).and_return(script_double)
-  end
-
-  it 'persists the current root when called on a detached proxy' do
-    settings_module = Lich::Common::Settings
-    script_name = 'test_script'
-    scope = ':'
-    cache_key = "#{script_name}::#{scope}"
+    cache_key = 'test_script::' + ':'
 
     root = { jars: [] }
     settings_module.instance_variable_set(:@settings_cache, { cache_key => root })
-    settings_module.instance_variable_set(:@db_adapter, double('DBAdapter', get_settings: root, save_settings: true))
+    # A double with no methods: any call to the adapter fails the example.
+    settings_module.instance_variable_set(:@db_adapter, double('DBAdapter'))
 
-    detached_target = { jars: [{ gem: 'ruby' }] }
-    detached_proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], detached_target)
-    detached_proxy.instance_variable_set(:@detached, true)
+    detached_proxy = Lich::Common::SettingsProxy.new(settings_module, ':', [], { jars: [{ gem: 'ruby' }] }, detached: true)
 
-    expect {
-      settings_module.save_proxy_changes(detached_proxy)
-    }.not_to raise_error
+    expect(settings_module.save_proxy_changes(detached_proxy)).to be_nil
+    expect(settings_module.save_proxy_changes(detached_proxy, :[]=, [:jars, []])).to be_nil
 
     cache = settings_module.instance_variable_get(:@settings_cache)[cache_key]
-    expect(cache).to eq(root)
-    expect(cache).to eq(root)
+    expect(cache).to equal(root)
+    expect(cache).to eq(jars: [])
   end
 end
 
