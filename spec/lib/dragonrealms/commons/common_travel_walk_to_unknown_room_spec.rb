@@ -11,7 +11,7 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 # below is a small fake map: rooms with title/description/paths arrays and
 # wayto edges, a character position, and a set of rooms Room.current can
 # resolve. move and StringProc exits change the position; the live room text
-# (XMLData) always follows the position.
+# and live UID (XMLData) always follow the position.
 module WalkToUnknownRoomSpec
   FakeRoom = Struct.new(:id, :title, :description, :paths, :wayto, :uid, keyword_init: true)
 
@@ -19,7 +19,7 @@ module WalkToUnknownRoomSpec
   # the room a move actually lands in (defaults to following the wayto).
   class World
     attr_accessor :position, :resolvable, :fog, :blank_description
-    attr_reader :rooms, :sent, :overrides
+    attr_reader :rooms, :sent, :overrides, :live_uids
 
     def initialize(rooms, position:, resolvable: [])
       @rooms = rooms.to_h { |room| [room.id, room] }
@@ -29,6 +29,8 @@ module WalkToUnknownRoomSpec
       @overrides = {}
       @fog = false
       @blank_description = false
+      # room id -> the UID the game shows there; 0 (none) when absent
+      @live_uids = Hash.new(0)
     end
 
     def room(id)
@@ -51,16 +53,20 @@ module WalkToUnknownRoomSpec
       @fog ? 'Obvious paths: obscured by a thick fog.' : room(@position).paths.first
     end
 
-    # Plain breadth-first search over wayto, like the map's own pathfinding
-    # returns it: the rooms after +source+, ending at +destination+.
-    def findpath(source, destination)
-      return nil if destination.nil?
+    def live_uid
+      @live_uids[@position]
+    end
 
+    # Plain breadth-first search over wayto, like the map's own pathfinding
+    # returns it: the rooms after +source+, ending at +destination+. Like the
+    # real Map.findpath, a nil destination is searched for as room 0.
+    def findpath(source, destination)
+      destination_id = destination.nil? ? 0 : destination.id
       previous = { source.id => nil }
       queue = [source.id]
       until queue.empty?
         id = queue.shift
-        break if id == destination.id
+        break if id == destination_id
 
         room(id).wayto.each_key do |key|
           next_id = key.to_i
@@ -70,9 +76,9 @@ module WalkToUnknownRoomSpec
           queue << next_id
         end
       end
-      return nil unless previous.key?(destination.id)
+      return nil unless previous.key?(destination_id)
 
-      path = [destination.id]
+      path = [destination_id]
       path.unshift(previous[path.first]) until previous[path.first].nil?
       path.drop(1)
     end
@@ -122,6 +128,7 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
     allow(XMLData).to receive(:room_title) { world.live_title }
     allow(XMLData).to receive(:room_description) { world.live_description }
     allow(XMLData).to receive(:room_exits_string) { world.live_exits }
+    allow(XMLData).to receive(:room_id) { world.live_uid }
     allow(DRCT).to receive(:move) { |dir| world.move(dir) }
     # go2: walks straight to its target and exits at once.
     allow(DRCT).to receive(:start_script) do |_name, args, **_opts|
@@ -158,17 +165,21 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(world.sent).to eq(['north'])
     end
 
-    it 'prefers the direct edge over a different first hop of the map path' do
+    it 'follows the map path instead of a direct edge the pathfinder skips' do
       rooms = [
         make_room(101, { '102' => 'east', '103' => 'go gate' }),
         make_room(102, { '103' => 'north' }),
         make_room(103, {})
       ]
       world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
-      allow(Map).to receive(:findpath).and_return([102, 103])
+      # The pathfinder skips the 'go gate' edge (as it does one without a
+      # usable timeto) and routes through 102, which go2 would also do.
+      allow(Map).to receive(:findpath) do |source, destination|
+        source.id == 101 ? [102, 103] : world.findpath(source, destination)
+      end
 
       expect(DRCT.walk_to(103)).to be(true)
-      expect(world.sent).to eq(['go gate'])
+      expect(world.sent).to eq(%w[east north])
     end
   end
 
@@ -298,6 +309,70 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
     end
   end
 
+  describe 'a live UID the map rejects' do
+    it 'does not take a look-alike the map rejects by UID as arrival after go2' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(4), position: 101, resolvable: [102])
+      world.room(105).uid = [1105]
+      world.live_uids[105] = 7777
+      install(world)
+
+      expect(DRCT.walk_to(105, false)).to be(false)
+      expect(world.position).to eq(105)
+    end
+
+    it 'fails without moving when the only matching start room is rejected by its UID' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+      world.room(101).uid = [1101]
+      world.live_uids[101] = 9101
+      install(world)
+
+      expect(DRCT.walk_to(102)).to be(false)
+      expect(world.sent).to be_empty
+      expect(bold_messages).to include('DRCT: Failed to find a matching room from unknown location.')
+    end
+
+    it 'does not count a move into a room the map rejects by UID as arrival' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+      world.room(102).uid = [1102]
+      world.live_uids[102] = 7777
+      install(world)
+
+      expect(DRCT.walk_to(102, false)).to be(false)
+      expect(world.sent).to eq(['north'])
+    end
+
+    it 'finds the real room behind an earlier look-alike the map rejects by UID' do
+      # Map.current resolves only the first title/description/exits match;
+      # when that look-alike's stored UID excludes the live one, Room.current
+      # is nil although room 101 (no stored UID) is the room we stand in.
+      look_alike = make_room(100, {}, title: '[Room 101]', description: 'Room 101 description.', uid: [1100])
+      world = WalkToUnknownRoomSpec::World.new([look_alike, *corridor(1)], position: 101)
+      world.live_uids[101] = 5555
+      install(world)
+
+      expect(DRCT.walk_to(102)).to be(true)
+      expect(world.sent).to eq(['north'])
+    end
+
+    it 'still matches a room with stored UIDs when the game shows no UID' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+      world.room(101).uid = [1101]
+      install(world)
+
+      expect(DRCT.walk_to(102)).to be(true)
+      expect(world.sent).to eq(['north'])
+    end
+
+    it 'matches a room whose stored UIDs include the live UID' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+      world.room(101).uid = [1101, 2101]
+      world.live_uids[101] = 2101
+      install(world)
+
+      expect(DRCT.walk_to(102)).to be(true)
+    end
+  end
+
   describe 'StringProc exits' do
     it 'calls a StringProc direct edge instead of sending it as a command' do
       world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
@@ -330,6 +405,17 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(DRCT.walk_to(999)).to be(false)
       expect(world.sent).to be_empty
+      expect(bold_messages.last).to include('No map path from room 101 to room 999')
+    end
+
+    it 'does not walk toward room 0 when the target is not in the map' do
+      rooms = corridor(2) << make_room(0, { '103' => 'east' })
+      rooms[2].wayto['0'] = 'west'
+      world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+
+      expect(DRCT.walk_to(999)).to be(false)
+      expect(world.sent).to be_empty
+      expect(Map).not_to have_received(:findpath)
       expect(bold_messages.last).to include('No map path from room 101 to room 999')
     end
 

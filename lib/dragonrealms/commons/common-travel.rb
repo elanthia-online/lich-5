@@ -266,10 +266,20 @@ module Lich
       end
 
       # Find the map room the character is standing in when Room.current could
-      # not resolve it (no usable UID). Without a UID a room is only identified
-      # when its title, description AND exits all match the live room, and
-      # exactly one map room does. A title and description match alone is not
-      # enough, and fogged-over exits match nothing.
+      # not resolve it. A room is only identified when its title, description
+      # AND exits all match the live room, and exactly one map room does. A
+      # title and description match alone is not enough, and fogged-over exits
+      # match nothing.
+      #
+      # A stored UID vetoes the match the same way the map's own resolver does
+      # (Map.resolve_matched_room): when the game shows a live UID and the room
+      # carries UIDs that do not include it, that room is a different room that
+      # only looks the same (a day/night variant or a look-alike cell), not the
+      # one the character stands in. This matters because Map.current resolves
+      # the FIRST title/description/exits match only; when that first room is
+      # vetoed by its UID, Room.current is nil even if a later look-alike with no
+      # stored UID is the real room. A room the map rejects by UID is never
+      # accepted here.
       #
       # @return [Lich::Common::Map, nil] the single matching room; nil when no
       #   room or more than one room matches, or the live room text is missing
@@ -279,18 +289,33 @@ module Lich
         exits = XMLData.room_exits_string.to_s.strip
         return nil if title.empty? || description.empty? || exits.empty?
 
+        live_uid = XMLData.room_id.to_i
         rooms = Map.list.select do |room|
           room &&
             room.title.include?(title) &&
             room.description.include?(description) &&
-            room.paths.include?(exits)
+            room.paths.include?(exits) &&
+            !uid_excludes?(room, live_uid)
         end
         rooms.length == 1 ? rooms.first : nil
       end
 
+      # Whether +room+'s stored UIDs rule out the live UID: the game shows one
+      # (non-zero) and the room has UIDs that do not include it.
+      #
+      # @param room [Lich::Common::Map] a map room
+      # @param live_uid [Integer] XMLData.room_id (0 when the game shows none)
+      # @return [Boolean]
+      def uid_excludes?(room, live_uid)
+        return false if live_uid.zero?
+
+        uids = Array(room.uid)
+        uids.any? && !uids.include?(live_uid)
+      end
+
       # Walk toward +room_num+ from a room Room.current cannot resolve, one map
-      # edge at a time: the direct edge when the map has one, otherwise the
-      # first hop of the map path. As soon as Room.current resolves again the
+      # edge at a time, always the first hop of the map path (as go2 would
+      # take it). As soon as Room.current resolves again the
       # walk hands back to walk_to (and go2).
       #
       # Arrival is checked after every move. A move that lands in the expected
@@ -325,15 +350,20 @@ module Lich
           end
           return true if room.id == room_num
 
-          path = Map.findpath(room, Map[room_num])
-          next_id = room.wayto.key?(room_num.to_s) ? room_num : path&.first
+          target = Map[room_num]
+          # Map.findpath(room, nil) searches for room 0, so a target the map
+          # does not know would walk toward whatever room 0 is.
+          path = target.nil? ? nil : Map.findpath(room, target)
+          # Follow the map path like go2 does. A direct edge the pathfinder
+          # skips (no usable timeto) is one go2 would not take either.
+          next_id = path&.first
           way = next_id.nil? ? nil : room.wayto[next_id.to_s]
           if way.nil?
             Lich::Messaging.msg('bold', "DRCT: No map path from room #{room.id} to room #{room_num}, giving up.")
             return false
           end
 
-          max_moves ||= (path&.length || 1) + MAX_WALK_TO_RETRIES
+          max_moves ||= path.length + MAX_WALK_TO_RETRIES
           if moves >= max_moves
             Lich::Messaging.msg('bold', "DRCT: Did not reach room #{room_num} from an unknown room within #{max_moves} moves, giving up.")
             return false
@@ -361,6 +391,10 @@ module Lich
           retries += 1
         end
       end
+
+      # Internal helpers of walk_to; module_function would otherwise make
+      # them public DRCT methods.
+      private_class_method :arrived_at?, :match_unknown_room, :uid_excludes?, :walk_from_unknown_room
 
       def tag_to_id(target)
         start_room = Room.current.id
