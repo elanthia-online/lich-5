@@ -876,6 +876,7 @@ RSpec.describe 'do_client command dispatch' do
         require 'dragonrealms/drinfomon/drvariables'
         require 'dragonrealms/drinfomon/drskill'
         require 'dragonrealms/drinfomon/drexpmonitor'
+        Lich::DragonRealms::DRExpMonitor.class_variable_set(:@@report_interval, 0.05)
         Object.send(:define_method, :running?) { |_| false }
         reporters = lambda do
           Thread.list.select do |t|
@@ -889,7 +890,7 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';display expgains off')
         do_client(';display expgains on')
         first.each { |t| t.join(2) }
-        sleep 1.1 # past the survivor's next loop check
+        sleep 0.2 # several of the survivor's loop checks
         puts "ACTIVE=\#{DRExpMonitor.active?}"
         puts "REPORTERS=\#{reporters.call.size}"
         puts "SETTING=\#{Lich.display_expgains}"
