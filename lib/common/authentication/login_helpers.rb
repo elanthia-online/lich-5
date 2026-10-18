@@ -622,8 +622,10 @@ module Lich
         # Formats the game instance launch flag for a spawned Lich session.
         #
         # Always emits the generalized `--GAMECODE` form that
-        # {resolve_instance} parses. Every Lich release that ships this
-        # method (5.13.0 and later) accepts that form.
+        # {resolve_instance} parses. Every Lich that ships this method
+        # (5.13.0-beta.3 and later) accepts that form. A non-blank code is
+        # upcased and passed through unvalidated; the child Lich reports an
+        # invalid instance itself.
         #
         # @param game_code [String, Symbol, nil] the game instance code (e.g., 'GS3', 'GST', 'DRX')
         # @return [String, nil] the upcased launch flag (e.g., '--GS3', '--GST'), or nil when game_code is blank

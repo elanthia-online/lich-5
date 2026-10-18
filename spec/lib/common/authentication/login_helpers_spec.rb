@@ -779,6 +779,11 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.format_launch_flag(:drt)).to eq('--DRT')
     end
 
+    it 'passes a non-blank code that is not an accepted game code through upcased' do
+      expect(described_class::VALID_GAME_CODES).not_to include('GSX')
+      expect(described_class.format_launch_flag('gsx')).to eq('--GSX')
+    end
+
     it 'emits a flag that resolve_login_args resolves back to the same instance' do
       described_class::VALID_GAME_CODES.each do |code|
         argv = ['--login', 'Tsetem', described_class.format_launch_flag(code.downcase)]
