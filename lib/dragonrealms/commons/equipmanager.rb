@@ -152,7 +152,9 @@ module Lich
       # fails is reported as missing (with a check-your-hands line) rather than
       # retried. The hands are checked again just before each put-away; a held
       # item that has left the hand by then joins the unheld items, which are
-      # then fetched and worn. Returns, in gear-set order, every item that
+      # then fetched and worn in gear-set order. When two set descriptions
+      # resolve to the same gear item, a held item that failed is not tried
+      # again. Returns, in gear-set order and without repeats, every item that
       # could not be worn or put away.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
@@ -167,21 +169,29 @@ module Lich
         end
 
         not_worn = target_items.reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
-        held, missing_items = not_worn.partition { |item| item_in_hand?(item) }
+        # Tracked by position: two set descriptions can resolve to the same gear item.
+        held = not_worn.map { |item| item_in_hand?(item) }
+        to_wear = held.map(&:!)
 
         # Put held items away first so the hands are free for the wears below.
         # stow_weapon already sent the WEAR for a worn item, so a failure here
         # is final: wearing it again would only repeat the same refusal or
-        # timeout. An item that is no longer in hand by its turn (an earlier
-        # put-away took the hand it matched) is fetched and worn instead.
+        # timeout, so a second entry for an item that already failed is
+        # skipped. An item that is no longer in hand by its turn (an earlier
+        # put-away took the hand it matched) is fetched and worn instead, in
+        # its gear-set position.
         held_failures = []
-        held.each do |item|
+        not_worn.each_with_index do |item, index|
+          next unless held[index]
+          next if held_failures.include?(item)
+
           if !item_in_hand?(item)
-            missing_items << item
+            to_wear[index] = true
           elsif !stow_weapon(item.short_name)
             held_failures << item
           end
         end
+        missing_items = not_worn.select.with_index { |_item, index| to_wear[index] }
         Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{held_failures.map(&:short_name).join(', ')}") unless held_failures.empty?
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
@@ -192,7 +202,7 @@ module Lich
         end
 
         failures = held_failures + wear_failures
-        not_worn.select { |item| failures.include?(item) }
+        not_worn.select { |item| failures.include?(item) }.uniq
       end
 
       # Whether either hand holds something matching the item.

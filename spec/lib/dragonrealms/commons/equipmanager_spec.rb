@@ -1430,6 +1430,75 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(DRCI).to have_received(:wear_item?).with('iron.helm').once
         expect(missing_warning?).to be false
       end
+
+      context 'with an unheld item after them in the set' do
+        let(:gear_sets) { { 'standard' => ['iron chain helm', 'iron helm', 'steel shield'] } }
+
+        before do
+          allow(em).to receive(:items).and_return([chain_helm, helm, shield])
+          allow(em).to receive(:get_item?) do |item|
+            sent << "get #{item.short_name}"
+            true
+          end
+          allow(DRCI).to receive(:wear_item?) do |name|
+            sent << "wear #{name}"
+            true
+          end
+        end
+
+        it 'fetches and wears the re-queued item in its gear-set position, before the later unheld item' do
+          expect(em.wear_equipment_set?('standard')).to be true
+          expect(sent).to eq(['wear my iron.chain.helm', 'get iron.helm', 'wear iron.helm', 'get steel.shield', 'wear steel.shield'])
+        end
+      end
+    end
+
+    context 'when two set descriptions resolve to the same gear item' do
+      # item_by_desc returns the first gear item whose regex matches, so both
+      # 'cloak' and 'iron cloak' resolve to the plain cloak here.
+      let(:cloak) { gear_class.new(short_name: 'cloak', short_regex: /\bcloak/i, worn: true) }
+      let(:iron_cloak) { gear_class.new(short_name: 'iron.cloak', short_regex: /\biron.*\bcloak/i, worn: true) }
+      let(:gear_sets) { { 'standard' => ['cloak', 'iron cloak'] } }
+
+      before { allow(em).to receive(:items).and_return([cloak, iron_cloak]) }
+
+      context 'and it is held and refused by WEAR' do
+        let(:right_hand) { 'iron cloak' }
+        let(:replies) { { 'wear my cloak' => "You can't wear that right now." } }
+
+        it 'sends WEAR once and names the item once in each warning line' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(sent).to eq(['wear my cloak'])
+          expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: cloak')
+          expect(missing_list).to eq('EquipmentManager: cloak')
+        end
+      end
+
+      context 'and it is held and its put-away empties the hand' do
+        let(:right_hand) { 'iron cloak' }
+        let(:replies) { { 'wear my cloak' => 'You put on an iron cloak.' } }
+
+        before do
+          allow(DRC).to receive(:right_hand) { sent.empty? ? 'iron cloak' : nil }
+          allow(em).to receive(:get_item?).and_return(true)
+          allow(DRCI).to receive(:wear_item?).with('cloak').and_return(true)
+        end
+
+        it 'fetches and wears the second entry, as before' do
+          expect(em.wear_equipment_set?('standard')).to be true
+          expect(sent).to eq(['wear my cloak'])
+          expect(DRCI).to have_received(:wear_item?).with('cloak').once
+        end
+      end
+
+      context 'and it is not held and cannot be fetched' do
+        before { allow(em).to receive(:get_item?).and_return(false) }
+
+        it 'lists it once' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(missing_list).to eq('EquipmentManager: cloak')
+        end
+      end
     end
 
     context 'when every set item is already worn' do
