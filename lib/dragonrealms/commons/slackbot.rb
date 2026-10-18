@@ -561,6 +561,11 @@ module Lich
       # open connection, never in net/http's connect or close, so it cannot
       # leave a socket open.
       #
+      # With http_proxy set, net/http first resolves the target host to decide
+      # whether to use the proxy. That lookup has no timeout of its own, so it
+      # runs under the deadline before anything is opened, and the steps
+      # below share what is left.
+      #
       # Connecting has two steps, each bounded on its own by net/http: the TCP
       # connect and the TLS handshake (open_timeout). Through a proxy (taken
       # from http_proxy, which net/http always reaches without TLS) there is a
@@ -577,15 +582,23 @@ module Lich
       # @param deadline [Float] monotonic deadline
       # @return [Net::HTTPResponse]
       # @raise [NetworkError] if the deadline has passed before the request is sent
-      # @raise [Timeout::Error] if connecting times out (Net::OpenTimeout, or
-      #   Net::ReadTimeout for a proxy's CONNECT reply) or the request is still
-      #   running at the deadline
+      # @raise [Timeout::Error] if the proxy lookup runs into the deadline,
+      #   connecting times out (Net::OpenTimeout, or Net::ReadTimeout for a
+      #   proxy's CONNECT reply) or the request is still running at the deadline
       def request_before(http, req, deadline)
         remaining = seconds_left(deadline)
         raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
 
+        # With http_proxy set, deciding whether to use it resolves the target
+        # host, which has no timeout of its own. No socket is open yet, so
+        # the interrupt cannot leak one. net/http keeps the answer for its
+        # connect.
+        proxied = Timeout.timeout(remaining) { http.proxy? }
+        remaining = seconds_left(deadline)
+        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+
         # TCP connect and TLS handshake, plus the CONNECT reply through a proxy.
-        share = remaining / (http.proxy? ? 3.0 : 2.0)
+        share = remaining / (proxied ? 3.0 : 2.0)
         http.open_timeout = share
         http.read_timeout = share
         http.write_timeout = share
