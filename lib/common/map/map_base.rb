@@ -645,6 +645,9 @@ module Lich
         # that backup cannot be made the save is abandoned with an error rather
         # than overwriting the only copy; callers such as a mapdb upload ignore
         # the return value, so failing quietly would let them act on a stale map.
+        # Each temp file is written while the file it replaces still exists, so
+        # replacing a file needs free space for the backup and the new map
+        # alongside the old one; with less, the save raises with the file unchanged.
         #
         # @param filename [String, nil] destination; nil writes a new
         #   map-<epoch>.json in the game's data directory
@@ -705,7 +708,7 @@ module Lich
         # dangles), as the in-place write this replaces did.
         # @param path [String] destination
         # @param mode_of [String] existing file whose permissions the result
-        #   keeps, as the in-place write it replaces did
+        #   takes (the map file for both the map and its backup)
         # @yieldparam io [File] the open temp file
         # @return [void]
         def publish_map_file(path, mode_of:)
