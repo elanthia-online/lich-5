@@ -389,9 +389,10 @@ module Lich
       # @param retries [Integer] remaining retries for the transient "slips away" case
       # @return [String, false] the matched prep message; or +''+ (truthy) when no
       #   prep message matched within the DRC.bput timeout; or false on one of
-      #   the failure replies prepare? itself checks for (its +when+ arms), a nil
-      #   +abbrev+, or exhausted retries. Any other matched reply is returned
-      #   as is, even one that reads like a failure.
+      #   the failure replies prepare? itself checks for (its +when+ arms other
+      #   than the retried "slips away" one, which returns the retry's result),
+      #   a nil +abbrev+, or exhausted retries. Any other matched reply is
+      #   returned as is, even one that reads like a failure.
       #
       # @note A timeout is not a failure. When nothing in prep_messages (or
       #   invoke_messages for a runestone) arrives before bput gives up, bput
