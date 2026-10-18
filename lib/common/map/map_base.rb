@@ -263,14 +263,15 @@ module Lich
         #
         # @param array [Array<Integer, String>] room ids along the path
         # @param from [Integer, String, Map] the room the path starts from when
-        #   +array+ leaves it out: a room id, a numeric id String, or a room.
+        #   +array+ leaves it out: a non-negative room id, a numeric id
+        #   String, or a room.
         #   Leave it out to treat +array.first+ as the start. An explicit nil
         #   is refused, since it usually means the start room was unknown.
         # @return [Float] total estimated time in seconds; 0.0 for a path with
         #   fewer than two rooms
         # @raise [ArgumentError] when +array+ is not an Array (for example the
         #   nil Room#path_to returns for an unreachable room), or +from:+ is
-        #   given but is not a room id or room (nil included)
+        #   given but is not a room id or room (nil and negative ids included)
         def estimate_time(array, from: ESTIMATE_NO_ORIGIN)
           self.load unless loaded?
           unless array.is_a?(Array)
@@ -305,7 +306,9 @@ module Lich
           # test against the Map class, not self.
           origin = if from.is_a?(tag_cache_host)
                      from.id
-                   elsif from.is_a?(Integer)
+                   elsif from.is_a?(Integer) && !from.negative?
+                     # A negative id would index Map.[]'s room list from the
+                     # end; DR's Map.current_room_id is -1 for an unknown room.
                      from
                    elsif from.is_a?(String) && from.match?(/\A[0-9]+\z/)
                      from.to_i
@@ -313,7 +316,8 @@ module Lich
                      # A String that is not an id would reach the fuzzy title
                      # search in Map.[], which is no way to name a start room.
                      # nil lands here too: a start room that could not be found
-                     # would otherwise silently drop the first leg.
+                     # would otherwise silently drop the first leg, and so
+                     # does a negative Integer.
                      raise ArgumentError, "Map.estimate_time was given an invalid from: room (#{from.class})"
                    end
           return array.dup if array.first.to_s == origin.to_s

@@ -532,6 +532,16 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect { map_class.estimate_time([2], from: :'1') }.to raise_error(ArgumentError, /invalid from: room/)
       expect { map_class.estimate_time([2], from: 1.0) }.to raise_error(ArgumentError, /invalid from: room/)
     end
+
+    it 'rejects a negative from: instead of indexing from the end of the room list' do
+      # DR's Map.current_room_id is -1 when the room is unknown, and Map.[]
+      # indexes the room list, so -1 would name the last room.
+      expect { map_class.estimate_time([2, 3], from: -1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Integer)')
+      expect { map_class.estimate_time([2], from: -2) }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: '-1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
+    end
   end
 
   describe 'pathfinding' do
