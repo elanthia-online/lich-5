@@ -381,7 +381,7 @@ describe DRCC do
       expect(sent.count('look in cruc')).to eq(4)
       expect(sent.grep(/^get /)).to be_empty
       expect(Lich::Messaging.messages.last).to include(type: 'bold')
-      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 tries')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
     end
 
     it 'gives up after 3 passes when the clutter cannot be removed' do
@@ -390,7 +390,19 @@ describe DRCC do
       expect(DRCC.empty_crucible?).to be(false)
       expect(sent.count('get nugget from crucible')).to eq(3)
       expect(sent.count('look in cruc')).to eq(4)
-      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 tries')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'counts a tilt and the clears after it against the same 3-pass budget' do
+      look_replies.push(molten, nugget)
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc'])
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
     end
 
     it 'does not dispose of clutter it failed to pick up from the crucible' do

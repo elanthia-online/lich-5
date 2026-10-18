@@ -150,7 +150,7 @@ module Lich
           false
         when /crucible you see/
           if pass >= EMPTY_CRUCIBLE_MAX_PASSES
-            Lich::Messaging.msg('bold', "DRCC: The crucible is still not empty after #{pass} tries to clear it.")
+            Lich::Messaging.msg('bold', "DRCC: The crucible is still not empty after #{pass} attempts to tilt or clear it.")
             return false
           end
 
