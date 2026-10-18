@@ -28,6 +28,15 @@ module Lich
       # Maximum retry attempts for stow_helper before giving up.
       STOW_HELPER_MAX_RETRIES = 10
 
+      # The game's reply to a command while the character is held or rooted.
+      IMMOBILE_PATTERN = /^You don't seem to be able to move/.freeze
+
+      # GET attempts, about 1 s apart, for picking up an item this class
+      # lowered to the ground when a hold starts after the lowering.
+      #
+      # @see #pick_up_lowered_item?
+      LOWERED_ITEM_PICKUP_ATTEMPTS = 15
+
       # Creates a new EquipmentManager and loads gear configuration.
       #
       # @param settings [OpenStruct, nil] user settings from get_settings, or nil to load automatically
@@ -239,7 +248,7 @@ module Lich
           # may have a timer on them that prevents you removing them.
           Lich::Messaging.msg("bold", "EquipmentManager: The #{item.short_name} is not ready to be removed yet. Try again later.")
           return false
-        when /^You don't seem to be able to move/
+        when IMMOBILE_PATTERN
           # Held or rooted: emptying the hands won't help, and what is lowered
           # might not be picked up again while held.
           Lich::Messaging.msg("bold", "EquipmentManager: Unable to move to remove #{item.short_name}. Try again later.")
@@ -259,8 +268,11 @@ module Lich
           end
           # Pick up the items in reverse order you lowered them
           # so that they end up in the correct hands again.
-          DRCI.get_item_if_not_held?(temp_right_item) if temp_right_item
-          DRCI.get_item_if_not_held?(temp_left_item) if temp_left_item
+          [temp_right_item, temp_left_item].compact.each do |lowered|
+            next if pick_up_lowered_item?(lowered)
+
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{lowered} after removing #{item.short_name}")
+          end
           # In case they end up in different hands, swap.
           if DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item
             swap_result = DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
@@ -810,7 +822,7 @@ module Lich
             return
           end
           DRCI.put_away_item?(ammo)
-          unless DRCI.get_item?(name)
+          unless pick_up_lowered_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
         elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
@@ -906,6 +918,34 @@ module Lich
       # @see STOW_RECOVERY_PATTERNS
       # @see STOW_HELPER_MAX_RETRIES
       # @api private
+      # Picks up an item this class lowered to the ground.
+      #
+      # A hold that starts after the lowering draws the immobile reply to GET,
+      # and the item would stay on the ground. On that reply this pauses 1 s
+      # and tries again, up to {LOWERED_ITEM_PICKUP_ATTEMPTS} GETs. Any other
+      # reply ends the attempts at once.
+      #
+      # @param item [String] the lowered item's name or noun
+      # @return [Boolean] true if the item is in a hand afterwards
+      # @api private
+      def pick_up_lowered_item?(item)
+        return true if DRCI.in_hands?(item)
+
+        LOWERED_ITEM_PICKUP_ATTEMPTS.times do |attempt|
+          pause 1 if attempt.positive?
+          result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
+          break unless IMMOBILE_PATTERN.match?(result)
+        end
+
+        # As in DRCI.get_item_unsafe: allow for the hand update to lag the reply.
+        10.times do
+          return true if DRCI.in_hands?(item)
+
+          pause 0.1
+        end
+        false
+      end
+
       def stow_helper(action, weapon_name, *accept_strings, failure_patterns: [], retries: STOW_HELPER_MAX_RETRIES)
         if retries <= 0
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper exceeded max retries for '#{action}'")

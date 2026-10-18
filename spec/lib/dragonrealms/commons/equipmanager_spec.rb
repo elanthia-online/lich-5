@@ -598,7 +598,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       allow(DRC).to receive(:left_hand).and_return('sword', 'shield')
       allow(DRC).to receive(:right_hand).and_return('shield', 'sword')
       allow(DRCI).to receive(:lower_item?).and_return(true)
-      allow(DRCI).to receive(:get_item_if_not_held?)
+      allow(em).to receive(:pick_up_lowered_item?).and_return(true)
       # Recursive call (retries=0) terminates at retry check
       allow(Lich::Messaging).to receive(:msg)
       # Swap fails when trying to restore hand order
@@ -679,7 +679,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         .and_return('As you release the string, the arrow tumbles to the ground.')
       expect(DRCI).to receive(:lower_item?).with('longbow').and_return(true)
       expect(DRCI).to receive(:put_away_item?).with('arrow')
-      expect(DRCI).to receive(:get_item?).with('longbow').and_return(true)
+      expect(em).to receive(:pick_up_lowered_item?).with('longbow').and_return(true)
       em.unload_weapon('longbow')
     end
   end

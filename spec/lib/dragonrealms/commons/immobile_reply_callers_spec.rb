@@ -28,7 +28,7 @@ RSpec.describe 'Callers that list the immobile reply' do
     allow(drc).to receive(:pause) { sleep(0.001) }
     allow(drc).to receive(:put) do |message|
       sent << message
-      raise "#{message.inspect} sent #{sent.count(message)} times" if sent.count(message) > 12
+      raise "#{message.inspect} sent #{sent.count(message)} times" if sent.count(message) > 20
 
       reply = replies.fetch(message) { replies.fetch(:default) }
       buffer.concat(Array(reply.respond_to?(:call) ? reply.call : reply))
@@ -156,6 +156,113 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(em.remove_item(item)).to be false
         expect(sent).to eq(['remove my helm'])
         expect(messages).to include('EquipmentManager: Unable to move to remove helm. Try again later.')
+      end
+
+      # The first REMOVE needs both hands free, so both items are lowered;
+      # then a hold starts, and the retried REMOVE and the pick-ups draw the
+      # immobile reply until it ends.
+      context 'when a hold starts after the hands are lowered' do
+        let(:hands) { { 'left' => 'longbow', 'right' => 'shield' } }
+        let(:ground) { [] }
+        let(:attempts) { Lich::DragonRealms::EquipmentManager::LOWERED_ITEM_PICKUP_ATTEMPTS }
+
+        before do
+          allow(drc).to receive(:left_hand) { hands['left'] }
+          allow(drc).to receive(:right_hand) { hands['right'] }
+        end
+
+        def lower(hand)
+          lambda do
+            ground << hands[hand]
+            hands[hand] = nil
+            "You lower the #{ground.last}."
+          end
+        end
+
+        # Replies `immobile` to the first hold[:gets] GETs, then `free_reply` (a
+        # pick-up when nil).
+        def pick_up(noun, hold, free_reply = nil)
+          lambda do
+            next immobile if (hold[:gets] -= 1) >= 0
+            next free_reply if free_reply
+
+            ground.delete(noun)
+            hands[hands['right'] ? 'left' : 'right'] = noun
+            "You pick up the #{noun}."
+          end
+        end
+
+        def remove_game(gets_held:, free_reply: nil)
+          hold = { gets: gets_held }
+          game('remove my helm'     => -> { sent.size == 1 ? "You'll need both hands free to remove that." : immobile },
+               'lower ground left'  => lower('left'),
+               'lower ground right' => lower('right'),
+               'get my shield'      => pick_up('shield', hold, free_reply),
+               'get my longbow'     => pick_up('longbow', hold, free_reply),
+               'swap'               => 'Will alone cannot conquer the paralysis.')
+        end
+
+        it 'keeps trying the pick-ups until the hold ends' do
+          remove_game(gets_held: 3)
+          em.remove_item(item)
+          expect(hands).to eq('left' => 'longbow', 'right' => 'shield')
+          expect(ground).to be_empty
+          expect(sent).to eq(['remove my helm', 'lower ground left', 'lower ground right', 'remove my helm'] +
+                             ['get my shield'] * 4 + ['get my longbow'])
+          expect(em).to have_received(:pause).with(1).exactly(3).times
+          expect(messages.grep(/Unable to pick up/)).to be_empty
+        end
+
+        it 'gives up and reports each item after its attempts while the hold lasts' do
+          remove_game(gets_held: 1000)
+          em.remove_item(item)
+          expect(ground).to eq(%w[longbow shield])
+          expect(sent.count('get my shield')).to eq(attempts)
+          expect(sent.count('get my longbow')).to eq(attempts)
+          expect(messages).to include('EquipmentManager: Unable to pick up shield after removing helm',
+                                      'EquipmentManager: Unable to pick up longbow after removing helm')
+          expect(messages.grep(/No match was found/)).to be_empty
+        end
+
+        it 'does not retry a pick-up that fails for another reason' do
+          remove_game(gets_held: 0, free_reply: 'What were you referring to?')
+          em.remove_item(item)
+          expect(sent.count('get my shield')).to eq(1)
+          expect(sent.count('get my longbow')).to eq(1)
+          expect(em).not_to have_received(:pause).with(1)
+          expect(messages).to include('EquipmentManager: Unable to pick up shield after removing helm')
+        end
+      end
+    end
+
+    describe '#unload_weapon' do
+      let(:hands) { { 'left' => 'longbow', 'right' => 'shield' } }
+
+      before do
+        allow(drc).to receive(:left_hand) { hands['left'] }
+        allow(drc).to receive(:right_hand) { hands['right'] }
+      end
+
+      it 'picks the lowered weapon up again once a hold that started after the lowering ends' do
+        gets_held = 3
+        lower = lambda do
+          hands['left'] = nil
+          'You lower the longbow.'
+        end
+        pick_up = lambda do
+          next immobile if (gets_held -= 1) >= 0
+
+          hands['left'] = 'longbow'
+          'You pick up the longbow.'
+        end
+        game('unload my longbow' => 'Your arrow falls from your longbow to your feet.',
+             'lower ground left' => lower,
+             'stow my arrow'     => immobile,
+             'get my longbow'    => pick_up)
+        em.unload_weapon('longbow')
+        expect(hands['left']).to eq('longbow')
+        expect(sent).to eq(['unload my longbow', 'lower ground left', 'stow my arrow'] + ['get my longbow'] * 4)
+        expect(messages.grep(/Unable to pick longbow back up/)).to be_empty
       end
     end
 

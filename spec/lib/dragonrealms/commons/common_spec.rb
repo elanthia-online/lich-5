@@ -730,10 +730,12 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'handles a line held during the wait like any other reply' do
-        allow(described_class).to receive(:fix_standing)
+        allow(described_class).to receive(:fix_standing).and_return(true)
         game(['...wait 1 seconds.', 'You must be standing to do that.'], ['You get a gem from inside your pouch.'])
         expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
         expect(described_class).to have_received(:fix_standing).once
+        # Resent once for the wait line, then once more after standing.
+        expect(sent.size).to eq(3)
       end
 
       it 'lists the wait lines it skipped when reporting no match' do
