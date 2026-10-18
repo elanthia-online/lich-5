@@ -889,16 +889,23 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when the token line arrives after the timeout' do
-      it 'leaves the late line unread and returns false' do
+      it 'returns false before the line arrives and leaves it unread' do
         stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 0.2)
+        started = monotonic
         waiter = request_in_thread
+        feeder = Thread.new do
+          sleep 1.0
+          downstream.push(token_line)
+        end
 
         finished = waiter.join(3)
+        elapsed = monotonic - started
         waiter.kill unless finished
+        feeder.join
 
-        expect(finished).not_to be_nil, 'request_token still blocked on an idle stream after 3 s'
+        expect(finished).not_to be_nil, 'request_token still blocked after 3 s'
         expect(waiter.value).to be false
-        downstream.push(token_line)
+        expect(elapsed).to be < 0.9
         expect(downstream.try_shift).to eq(token_line)
       end
     end
