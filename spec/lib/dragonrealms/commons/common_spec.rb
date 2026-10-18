@@ -970,6 +970,7 @@ RSpec.describe Lich::DragonRealms::DRC do
           script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
           described_class.collect('rock', true)
           expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
         end
 
         it 'keeps practice off across repeated cluttered retries' do
