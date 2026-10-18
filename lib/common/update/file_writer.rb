@@ -128,13 +128,16 @@ module Lich
         # +existing+ is the same file as +path+, it is renamed to +path+'s
         # exact name. That is a case-only rename of one file, so the script
         # never goes missing. On a case-sensitive file system the two names
-        # are different files and nothing is renamed. Never raises.
+        # are different directory entries and nothing is renamed: either a
+        # different file, or a user's symlink to +path+. File.identical?
+        # follows symlinks, so a symlink is skipped first; renaming it over
+        # +path+ would replace the script with a link to itself. Never raises.
         #
         # @param existing [String] directory entry whose name case-matches +path+
         # @param path [String] target file path, with the wanted name
         # @return [void]
         def self.fix_name_case(existing, path)
-          File.rename(existing, path) if File.identical?(existing, path)
+          File.rename(existing, path) if !File.symlink?(existing) && File.identical?(existing, path)
         rescue StandardError
           nil
         end

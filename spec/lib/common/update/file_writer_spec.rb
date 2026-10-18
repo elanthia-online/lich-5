@@ -486,6 +486,32 @@ RSpec.describe Lich::Util::Update::FileWriter do
       end
     end
 
+    context 'when a symlink whose name differs only in case points at the written file' do
+      let(:case_insensitive) do
+        probe = File.join(tmpdir, 'CaseProbe')
+        File.binwrite(probe, '')
+        File.exist?(File.join(tmpdir, 'caseprobe')).tap { File.delete(probe) }
+      end
+      let(:path) { File.join(tmpdir, 'buff.lic') }
+      let(:link) { File.join(tmpdir, 'Buff.lic') }
+
+      { 'relative' => 'buff.lic', 'absolute' => :path }.each do |kind, target|
+        it "keeps the written file a regular file and the #{kind} symlink in place" do
+          skip 'needs a case-sensitive file system' if case_insensitive
+          File.binwrite(path, "# old\n")
+          File.symlink(target == :path ? path : target, link)
+
+          described_class.safe_write(path, "# new\n")
+
+          expect(File.symlink?(path)).to be(false)
+          expect(File.binread(path)).to eq("# new\n")
+          expect(File.symlink?(link)).to be(true)
+          expect(File.binread(link)).to eq("# new\n")
+          expect { described_class.build_local_sha_map(tmpdir) }.not_to raise_error
+        end
+      end
+    end
+
     it 'lets a second writer finish inside the first one without either failing' do
       path = File.join(tmpdir, 'shared.lic')
       File.binwrite(path, "# original\n")
