@@ -1265,19 +1265,26 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     let(:replies) { {} }
     let(:sent) { [] }
     let(:bold) { [] }
+    # Beeps, pauses and bold lines in the order they happened.
+    let(:alert) { [] }
 
     before do
       allow(em).to receive(:items).and_return([shield, helm, sword])
       allow(em).to receive(:get_combat_items).and_return(worn_now)
-      allow(em).to receive(:pause)
+      allow(em).to receive(:pause) { alert << :pause }
       allow(DRC).to receive(:right_hand) { right_hand }
       allow(DRC).to receive(:left_hand) { left_hand }
-      allow(DRC).to receive(:beep)
+      allow(DRC).to receive(:beep) { alert << :beep }
       allow(DRC).to receive(:bput) do |command, *_patterns|
         sent << command
         replies.fetch(command, '')
       end
-      allow(Lich::Messaging).to receive(:msg) { |type, text| bold << text if type == 'bold' }
+      allow(Lich::Messaging).to receive(:msg) do |type, text|
+        next unless type == 'bold'
+
+        bold << text
+        alert << text
+      end
     end
 
     def missing_warning?
@@ -1295,6 +1302,12 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       bold.find { |line| line.include?('check your hands') }
     end
 
+    # The alert from its first beep on (earlier bold lines, e.g. a
+    # stow_helper failure, are not part of it).
+    def alert_block
+      alert.drop_while { |event| event != :beep }
+    end
+
     context 'when a held worn item is refused by WEAR' do
       let(:gear_sets) { { 'standard' => ['steel shield'] } }
       let(:left_hand) { 'steel shield' }
@@ -1304,12 +1317,15 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(em.wear_equipment_set?('standard')).to be false
       end
 
-      it 'raises the MISSING EQUIPMENT warning naming the held item, with beep and pause' do
+      it 'alerts with beep and pause, naming the held item in the check-your-hands line only' do
         em.wear_equipment_set?('standard')
-        expect(missing_warning?).to be true
-        expect(missing_list).to eq('EquipmentManager: steel.shield')
-        expect(DRC).to have_received(:beep).twice
-        expect(em).to have_received(:pause)
+        expect(alert_block).to eq([:beep, 'EquipmentManager: could not wear or put away, check your hands: steel.shield', :pause, :beep])
+      end
+
+      it 'does not tell the user to look in their containers for an item that is in their hand' do
+        em.wear_equipment_set?('standard')
+        expect(missing_warning?).to be false
+        expect(missing_list).to be_nil
       end
 
       it 'sends WEAR exactly once (no second attempt through the fetch-and-wear path)' do
@@ -1329,7 +1345,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
       it 'returns false, warns, and does not resend WEAR' do
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(missing_warning?).to be true
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.shield')
         expect(sent).to eq(['wear my steel.shield'])
       end
     end
@@ -1362,8 +1378,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       it 'returns false and warns, without a pointless WEAR, when the put-away fails' do
         replies['put my bronze.sword in my scabbard'] = "There isn't any more room in your scabbard."
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(missing_warning?).to be true
-        expect(missing_list).to eq('EquipmentManager: bronze.sword')
+        expect(alert_block).to eq([:beep, 'EquipmentManager: could not wear or put away, check your hands: bronze.sword', :pause, :beep])
         expect(sent.grep(/^wear /)).to be_empty
       end
     end
@@ -1389,15 +1404,14 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         end
       end
 
-      it 'treats the nil result as a failure: returns false, lists the item, and names it in the check-your-hands line' do
+      it 'treats the nil result as a failure: returns false and names the item in the check-your-hands line' do
         expect(em.stow_weapon('silver orb')).to be_nil
         sent.clear
         @hand = 'silver orb'
 
         expect(em.wear_equipment_set?('standard')).to be false
         expect(sent).to eq(['turn my silver.orb'])
-        expect(missing_warning?).to be true
-        expect(missing_list).to eq('EquipmentManager: silver.orb')
+        expect(missing_warning?).to be false
         expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: silver.orb')
       end
     end
@@ -1411,10 +1425,11 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         allow(DRCI).to receive(:wear_item?).with('iron.helm').and_return(true)
       end
 
-      it 'wears the unheld item, lists only the held failure, and returns false' do
+      it 'wears the unheld item, names only the held failure, and returns false' do
         expect(em.wear_equipment_set?('standard')).to be false
         expect(DRCI).to have_received(:wear_item?).with('iron.helm').once
-        expect(missing_list).to eq('EquipmentManager: steel.shield')
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.shield')
+        expect(missing_warning?).to be false
         expect(sent.count('wear my steel.shield')).to eq(1)
       end
 
@@ -1433,14 +1448,35 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         allow(em).to receive(:get_item?).with(having_attributes(short_name: 'steel.shield')).and_return(false)
       end
 
-      it 'lists both failures in gear-set order' do
+      it 'lists the unheld failure as missing and names the held one in the check-your-hands line, in one alert' do
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(missing_list).to eq('EquipmentManager: steel.shield, iron.helm')
+        expect(alert_block).to eq(
+          [
+            :beep,
+            'EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:',
+            'EquipmentManager: steel.shield',
+            'EquipmentManager: could not wear or put away, check your hands: iron.helm',
+            :pause,
+            :beep
+          ]
+        )
+      end
+    end
+
+    context 'when two held and one unheld item fail' do
+      let(:gear_sets) { { 'standard' => ['iron helm', 'bronze sword', 'steel shield'] } }
+      let(:right_hand) { 'iron helm' }
+      let(:left_hand) { 'steel shield' }
+      let(:replies) do
+        { 'wear my iron.helm' => "You can't wear that right now.", 'wear my steel.shield' => "You can't wear that right now." }
       end
 
-      it 'names only the held failure in the check-your-hands line' do
-        em.wear_equipment_set?('standard')
-        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: iron.helm')
+      before { allow(em).to receive(:get_item?).and_return(false) }
+
+      it 'keeps gear-set order within each line and names each item in exactly one' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_list).to eq('EquipmentManager: bronze.sword')
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: iron.helm, steel.shield')
       end
     end
 
@@ -1504,11 +1540,11 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         let(:right_hand) { 'iron cloak' }
         let(:replies) { { 'wear my cloak' => "You can't wear that right now." } }
 
-        it 'sends WEAR once and names the item once in each warning line' do
+        it 'sends WEAR once and names the item once, in the check-your-hands line only' do
           expect(em.wear_equipment_set?('standard')).to be false
           expect(sent).to eq(['wear my cloak'])
           expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: cloak')
-          expect(missing_list).to eq('EquipmentManager: cloak')
+          expect(missing_warning?).to be false
         end
       end
 
@@ -1556,8 +1592,15 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       it 'returns false and warns, without a check-your-hands line' do
         allow(em).to receive(:get_item?).and_return(false)
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(missing_list).to eq('EquipmentManager: iron.helm')
-        expect(hands_line).to be_nil
+        expect(alert_block).to eq(
+          [
+            :beep,
+            'EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:',
+            'EquipmentManager: iron.helm',
+            :pause,
+            :beep
+          ]
+        )
       end
     end
   end

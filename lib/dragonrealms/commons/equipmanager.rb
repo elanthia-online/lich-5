@@ -106,8 +106,8 @@ module Lich
 
         remove_unmatched_items(combat_items, gear_set_items)
 
-        lost_items = wear_missing_items(gear_set_items, combat_items)
-        notify_missing(lost_items)
+        lost_items, held_items = wear_missing_items(gear_set_items, combat_items)
+        notify_missing(lost_items, held_items)
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
 
@@ -130,17 +130,29 @@ module Lich
         items.find { |item| item.short_regex =~ description }
       end
 
-      # Alerts the user about equipment items that could not be found.
+      # Alerts the user about equipment items that could not be worn.
       #
-      # @param lost_items [Array<DRC::Item>, nil] items that were not located
+      # Items that could not be found get the MISSING EQUIPMENT listing, which
+      # asks the user to check their containers. Items still in hand after a
+      # failed wear or put-away are named in a check-your-hands line instead,
+      # so one item never gets both instructions. Either way the alert is
+      # bracketed by a beep and a pause.
+      #
+      # @param lost_items [Array<DRC::Item>, nil] every item that could not be worn or put away
+      # @param held_items [Array<DRC::Item>] the subset of lost_items still in hand
       # @return [void]
       # @api private
-      def notify_missing(lost_items)
+      def notify_missing(lost_items, held_items)
         return unless lost_items && !lost_items.empty?
 
+        in_hand, not_found = lost_items.partition { |item| held_items.include?(item) }
+
         DRC.beep
-        Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
-        Lich::Messaging.msg("bold", "EquipmentManager: #{lost_items.map(&:short_name).join(', ')}")
+        unless not_found.empty?
+          Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
+          Lich::Messaging.msg("bold", "EquipmentManager: #{not_found.map(&:short_name).join(', ')}")
+        end
+        Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{in_hand.map(&:short_name).join(', ')}") unless in_hand.empty?
         pause
         DRC.beep
       end
@@ -149,17 +161,18 @@ module Lich
       #
       # Target items already in a hand are put away first via {#stow_weapon},
       # which sends the WEAR itself for worn items; a held item whose put-away
-      # fails is reported as missing (with a check-your-hands line) rather than
+      # fails is reported as missing (for a check-your-hands line) rather than
       # retried. The hands are checked again just before each put-away; a held
       # item that has left the hand by then joins the unheld items, which are
       # then fetched and worn in gear-set order. When two set descriptions
       # resolve to the same gear item, a held item that failed is not tried
       # again. Returns, in gear-set order and without repeats, every item that
-      # could not be worn or put away.
+      # could not be worn or put away, and the subset of those still in hand.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
-      # @return [Array<DRC::Item>] items that could not be worn or put away
+      # @return [Array(Array<DRC::Item>, Array<DRC::Item>)] items that could not
+      #   be worn or put away, and the ones among them whose put-away failed in hand
       # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
@@ -177,9 +190,9 @@ module Lich
         # stow_weapon already sent the WEAR for a worn item, so a failure here
         # is final: the item is reported for the user to check rather than
         # sent the same command again, so a second entry for an item that
-        # already failed is skipped. An item that is no longer in hand by its turn (an earlier
-        # put-away took the hand it matched) is fetched and worn instead, in
-        # its gear-set position.
+        # already failed is skipped. An item that is no longer in hand by its
+        # turn (an earlier put-away took the hand it matched) is fetched and
+        # worn instead, in its gear-set position.
         held_failures = []
         not_worn.each_with_index do |item, index|
           next unless held[index]
@@ -192,7 +205,6 @@ module Lich
           end
         end
         missing_items = not_worn.select.with_index { |_item, index| to_wear[index] }
-        Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{held_failures.map(&:short_name).join(', ')}") unless held_failures.empty?
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
         wear_failures = missing_items.reject do |item|
@@ -202,7 +214,7 @@ module Lich
         end
 
         failures = held_failures + wear_failures
-        not_worn.select { |item| failures.include?(item) }.uniq
+        [not_worn.select { |item| failures.include?(item) }.uniq, held_failures]
       end
 
       # Whether either hand holds something matching the item.
