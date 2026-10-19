@@ -25,12 +25,177 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
   let(:messages) { [] }
 
   before do
+    # Other spec files define LICH_VERSION differently, and the installer
+    # reads it on construction, so pin it before the subject is built.
+    stub_const('LICH_VERSION', '5.15.1')
     allow(client).to receive(:fetch_github_json).and_return(release)
     allow(installer).to receive(:respond) { |message = ''| messages << message }
     allow(installer).to receive(:_respond) { |message| messages << message }
     allow(installer).to receive(:monsterbold_start).and_return('')
     allow(installer).to receive(:monsterbold_end).and_return('')
     stub_const('RUBY_VERSION', '3.4.7')
+  end
+
+  # The real installer is memoized for the whole Lich session, so one instance
+  # serves every `lich5-update` command. These examples drive one instance
+  # through consecutive commands, the way a player would.
+  describe 'release target across consecutive commands' do
+    def stable_release(version)
+      release.merge(
+        'tag_name' => "v#{version}",
+        'assets'   => [
+          {
+            'name'                 => Lich::Util::Update::ASSET_TARBALL_NAME,
+            'browser_download_url' => "https://example.test/lich-#{version}.tar.gz"
+          }
+        ]
+      )
+    end
+
+    # A structurally valid release archive whose version.rb demands a newer
+    # Ruby, so the real Ruby check aborts the install after the download.
+    def ruby_floor_archive(required_ruby)
+      tar = StringIO.new
+      Gem::Package::TarWriter.new(tar) do |writer|
+        writer.mkdir('lich-5', 0o755)
+        writer.mkdir('lich-5/lib', 0o755)
+        writer.add_file('lich-5/lib/version.rb', 0o644) { |f| f.write("REQUIRED_RUBY = '#{required_ruby}'\n") }
+        %w[lich.rbw Gemfile LICENSE].each do |name|
+          writer.add_file("lich-5/#{name}", 0o644) { |f| f.write("# #{name}\n") }
+        end
+      end
+      gz = StringIO.new
+      writer = Zlib::GzipWriter.new(gz)
+      writer.write(tar.string)
+      writer.close
+      gz.string
+    end
+
+    let(:latest) { [stable_release('5.19.0')] }
+    let(:downloaded) { [] }
+
+    before do
+      allow(client).to receive(:fetch_github_json) { latest.first }
+      allow(client).to receive(:http_get).and_return(nil)
+      allow(client).to receive(:last_error).and_return(nil)
+      allow(snapshot_manager).to receive(:snapshot).and_return(nil)
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| messages << msg }
+      archive = ruby_floor_archive('9.0')
+      allow(URI).to receive(:parse).and_wrap_original do |original, url|
+        next original.call(url) unless url.to_s.start_with?('https://example.test/')
+
+        downloaded << url
+        double('download', open: StringIO.new(archive))
+      end
+    end
+
+    it 'installs the release published after an announcement, not the announced one' do
+      installer.announce
+      latest.replace([stable_release('5.19.1')])
+
+      installer.download_release_update
+
+      expect(downloaded).to eq(['https://example.test/lich-5.19.1.tar.gz'])
+      expect(messages).to include('Downloading Lich5 version 5.19.1')
+    end
+
+    it 'checks GitHub again after an aborted update instead of retrying the old target' do
+      installer.download_release_update
+      latest.replace([stable_release('5.19.1')])
+
+      installer.download_release_update
+
+      expect(messages).to include('*** UPDATE ABORTED ***')
+      expect(downloaded).to eq(%w[https://example.test/lich-5.19.0.tar.gz https://example.test/lich-5.19.1.tar.gz])
+    end
+
+    it 'checks GitHub again after a download that raised' do
+      archive = ruby_floor_archive('9.0')
+      corrupt = true
+      allow(URI).to receive(:parse).and_wrap_original do |original, url|
+        next original.call(url) unless url.to_s.start_with?('https://example.test/')
+
+        downloaded << url
+        double('download', open: StringIO.new(corrupt ? 'not a gzip archive' : archive))
+      end
+
+      expect { installer.download_release_update }.to raise_error(Zlib::GzipFile::Error)
+      corrupt = false
+      latest.replace([stable_release('5.19.1')])
+
+      installer.download_release_update
+
+      expect(downloaded).to eq(%w[https://example.test/lich-5.19.0.tar.gz https://example.test/lich-5.19.1.tar.gz])
+    end
+
+    it 'does not install a previously announced release when the next check fails' do
+      installer.announce
+      latest.replace([nil])
+
+      installer.download_release_update
+
+      expect(snapshot_manager).not_to have_received(:snapshot)
+      expect(downloaded).to be_empty
+      expect(messages.grep(/Downloading/)).to be_empty
+    end
+
+    it 'does not repeat a previous announcement when the next check fails' do
+      installer.announce
+      messages.clear
+      latest.replace([nil])
+
+      installer.announce
+
+      expect(messages.grep(/NEW VERSION AVAILABLE|Release notes/)).to be_empty
+      expect(messages.grep(/GitHub check failed/).size).to eq(1)
+    end
+
+    it 'does not call the installation current when the release check fails' do
+      latest.replace([nil])
+
+      installer.download_release_update
+
+      expect(messages.grep(/is good/)).to be_empty
+      expect(messages.grep(/GitHub check failed/).size).to eq(1)
+      expect(snapshot_manager).not_to have_received(:snapshot)
+    end
+
+    it 'does not call the installation current when the release has no tarball' do
+      latest.replace([release.merge('assets' => [])])
+
+      installer.download_release_update
+
+      expect(messages.grep(/is good/)).to be_empty
+      expect(messages).to include('Update notice: no release tarball found in assets (prep_update).')
+      expect(snapshot_manager).not_to have_received(:snapshot)
+    end
+
+    it 'takes no snapshot and downloads nothing on a branch install when the release check fails' do
+      stub_const('LICH_BRANCH', 'some-branch')
+      latest.replace([nil])
+
+      expect { installer.download_release_update }.not_to raise_error
+
+      expect(snapshot_manager).not_to have_received(:snapshot)
+      expect(downloaded).to be_empty
+    end
+
+    it 'checks GitHub on every update command' do
+      installer.download_release_update
+      installer.download_release_update
+
+      expect(downloaded).to eq(%w[https://example.test/lich-5.19.0.tar.gz https://example.test/lich-5.19.0.tar.gz])
+      expect(client).to have_received(:fetch_github_json).with(%r{/releases/latest$}).twice
+    end
+
+    it 'reports the installation current when GitHub has nothing newer' do
+      latest.replace([stable_release('5.15.1')])
+
+      installer.download_release_update
+
+      expect(messages).to include('Lich version 5.15.1 is good.  Enjoy!')
+      expect(downloaded).to be_empty
+    end
   end
 
   describe '#announce' do

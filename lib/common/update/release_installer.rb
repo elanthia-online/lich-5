@@ -89,12 +89,17 @@ module Lich
           else
             respond "This script does not support Lich #{LICH_VERSION}."
           end
+        ensure
+          clear_release_target
         end
 
-        # Fetches latest stable release metadata from GitHub.
+        # Fetches latest stable release metadata from GitHub. Any target left
+        # from an earlier command is dropped first, so a failed check leaves no
+        # target rather than the previous one.
         #
         # @return [void]
         def prep_update
+          clear_release_target
           latest = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases/latest")
           if latest.is_a?(Hash) && latest['prerelease']
             all = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases")
@@ -119,6 +124,21 @@ module Lich
           @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
           @zipfile = release_asset.fetch('browser_download_url')
         end
+
+        # Forgets the release chosen by the current command. The installer
+        # lives for the whole session, so a target that outlived its command
+        # would be installed by the next `--update` without checking GitHub.
+        #
+        # @return [void]
+        def clear_release_target
+          @update_to = nil
+          @holder = nil
+          @new_features = nil
+          @zipfile = nil
+          @release_tag = nil
+          @required_ruby = nil
+        end
+        private :clear_release_target
 
         # Reads the target release's Ruby floor without downloading its archive.
         # A failed metadata read must not suppress an otherwise valid update notice.
@@ -190,9 +210,16 @@ module Lich
 
         # Downloads and installs latest stable release.
         #
+        # Also installs the beta target that the beta install set up just
+        # before calling this. The target is cleared when this returns or
+        # raises, so it never carries over into the next command.
+        #
         # @return [void]
         def download_release_update
           prep_update if @update_to.nil? || @update_to.empty?
+          # prep_update has already reported why there is nothing to install.
+          return if @update_to.nil? || @update_to.empty? || @zipfile.nil?
+
           if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !defined?(LICH_BRANCH)
             respond ''
             respond "Lich version #{LICH_VERSION} is good.  Enjoy!"
@@ -244,6 +271,8 @@ module Lich
             respond "You should exit the game, then log back in.  This will start the game"
             respond "with your updated Lich.  Enjoy!"
           end
+        ensure
+          clear_release_target
         end
 
         # Copies lib files and lich.rbw from extracted source to install dirs.
