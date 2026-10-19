@@ -72,6 +72,12 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('RACIAL_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::RACIAL_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('FLAVOR_TEXT_PATTERN is frozen') { expect(described_class::FLAVOR_TEXT_PATTERN).to be_frozen }
     it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
+    it('IMMOBILE_PATTERN is frozen') { expect(described_class::IMMOBILE_PATTERN).to be_frozen }
+
+    it 'CANNOT_STAND_PATTERN matches the immobile reply only at the start of the line' do
+      expect("You don't seem to be able to move to do that.").to match(described_class::CANNOT_STAND_PATTERN)
+      expect("Bob says, \"You don't seem to be able to move to do that.\"").not_to match(described_class::CANNOT_STAND_PATTERN)
+    end
 
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
       match = "...wait 3 seconds.".match(described_class::WAIT_RESPONSE_PATTERN)
@@ -866,7 +872,9 @@ RSpec.describe Lich::DragonRealms::DRC do
         let(:log) { [] }
         let(:clock) { { now: 0.0 } }
 
-        def held_game(hold_for:, stand_refusal: immobile)
+        # posture_line_at delays the reply to the first send of the command,
+        # a posture line that arrives late.
+        def held_game(hold_for:, stand_refusal: immobile, posture_line_at: nil)
           standing = false
           queue = []
           allow(Time).to receive(:now) { Time.at(1_000_000 + clock[:now]) }
@@ -888,6 +896,7 @@ RSpec.describe Lich::DragonRealms::DRC do
                       standing = true
                       'You stand back up.'
                     else
+                      at = posture_line_at if posture_line_at && log.size == 1
                       standing ? 'You get a gem.' : 'You must be standing to do that.'
                     end
             queue << [at, reply]
@@ -913,14 +922,34 @@ RSpec.describe Lich::DragonRealms::DRC do
           expect(sent_at('get my gem').size).to eq(2)
         end
 
+        # The posture line comes 1.1 s before the timeout and the hold ends
+        # 0.5 s after it, so the next STAND has to go out at the deadline.
+        [[13.9, 14.4], [14.2, 14.7]].each do |posture_at, hold_end|
+          it "resends when a late posture line (#{posture_at} s) leaves under 1 s of a hold that ends at #{hold_end} s" do
+            held_game(hold_for: hold_end, posture_line_at: posture_at)
+            expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+            expect(sent_at('get my gem').size).to eq(2)
+            expect(sent_at('stand').size).to eq(2)
+            expect(sent_at('stand').last).to be_within(0.001).of(15)
+          end
+        end
+
+        it 'sends no STAND after the deadline when a late posture line comes as the timeout runs out' do
+          held_game(hold_for: 1_000, posture_line_at: 14.8)
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          expect(sent_at('stand').size).to eq(1)
+          expect(sent_at('get my gem').size).to eq(1)
+        end
+
         it 'tries about once a second until the timeout, then gives up without resending' do
           held_game(hold_for: 1_000)
           expect(described_class.bput('get my gem', 'You get')).to eq('')
           stands = sent_at('stand')
           expect(sent_at('get my gem').size).to eq(1)
           expect(stands.size).to be_between(10, 16)
-          expect(stands.each_cons(2).map { |a, b| b - a }.min).to be >= 1
-          expect(stands.last).to be < 15
+          # Only the last STAND, sent at the deadline, may come sooner.
+          expect(stands[0..-2].each_cons(2).map { |a, b| b - a }.min).to be >= 1
+          expect(stands.last).to be <= 15
           expect(clock[:now]).to be < 17
           expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(a_string_including('No match was found'))
         end
