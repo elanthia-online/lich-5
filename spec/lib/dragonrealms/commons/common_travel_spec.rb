@@ -1367,7 +1367,7 @@ RSpec.describe DRCT do
       expect(walks).to eq([100, 200, 100, 200, 300, 100, 200, 300, 100, 200])
     end
 
-    it 'does not count a search that relaxed the mana check' do
+    it 'still takes a low-mana room on the relaxed retry, without idling' do
       # 100 is reachable and empty but low on mana; the relaxed retry takes it.
       allow(DRStats).to receive(:moon_mage?).and_return(false)
       allow(DRStats).to receive(:trader?).and_return(false)

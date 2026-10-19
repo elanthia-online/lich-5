@@ -172,11 +172,6 @@ module Lich
       # game server connection is lost or go2 repeatedly fails.
       MAX_WALK_TO_RETRIES = 3
 
-      # find_empty_room gives up after this many searches in a row in which
-      # walk_to reached none of the search rooms. Searches that reach a room
-      # but find it occupied are not counted: those wait for max_search_attempts.
-      MAX_UNREACHABLE_SEARCHES = 3
-
       # Navigate to +target_room+ using the go2 script.
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
@@ -318,6 +313,11 @@ module Lich
 
         DRC.retreat(ignored_npcs)
       end
+
+      # find_empty_room gives up after this many searches in a row in which
+      # walk_to reached none of the search rooms. Searches that reach a room
+      # but find it occupied are not counted: those wait for max_search_attempts.
+      MAX_UNREACHABLE_SEARCHES = 3
 
       def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, prioritize_buddies = false)
         # With an idle room and no max_search_attempts, an empty list would
