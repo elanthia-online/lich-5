@@ -267,9 +267,10 @@ module Lich
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end
           # Pick up the items in reverse order you lowered them
-          # so that they end up in the correct hands again.
+          # so that they end up in the correct hands again. An item still in
+          # a hand was not lowered (the lowering stopped partway).
           [temp_right_item, temp_left_item].compact.each do |lowered|
-            next if pick_up_lowered_item?(lowered)
+            next if DRCI.in_hands?(lowered) || pick_up_lowered_item?(lowered)
 
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{lowered} after removing #{item.short_name}")
           end
@@ -909,12 +910,19 @@ module Lich
       # and tries again, up to {LOWERED_ITEM_PICKUP_ATTEMPTS} GETs. Any other
       # reply ends the attempts at once.
       #
+      # It always sends the first GET, without checking the hands first: a
+      # check by name also matches an item in the other hand whose name
+      # contains this one's noun (a crossbow and "crossbow bolts"), and the
+      # lowered item would stay on the ground. Callers that may not have
+      # lowered the item check the hands themselves.
+      #
+      # It does not use {DRCI.get_item_unsafe}, which drops the GET reply
+      # this needs to decide on a retry.
+      #
       # @param item [String] the lowered item's name or noun
       # @return [Boolean] true if the item is in a hand afterwards
       # @api private
       def pick_up_lowered_item?(item)
-        return true if DRCI.in_hands?(item)
-
         LOWERED_ITEM_PICKUP_ATTEMPTS.times do |attempt|
           pause 1 if attempt.positive?
           result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)

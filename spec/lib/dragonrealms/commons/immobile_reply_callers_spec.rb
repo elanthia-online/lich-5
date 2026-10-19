@@ -224,6 +224,18 @@ RSpec.describe 'Callers that list the immobile reply' do
           expect(messages.grep(/No match was found/)).to be_empty
         end
 
+        it 'picks up only what was lowered when a hold stops the lowering partway' do
+          hold = { gets: 0 }
+          game('remove my helm'     => "You'll need both hands free to remove that.",
+               'lower ground left'  => lower('left'),
+               'lower ground right' => immobile,
+               'get my longbow'     => pick_up('longbow', hold))
+          em.remove_item(item)
+          expect(sent).to eq(['remove my helm', 'lower ground left', 'lower ground right', 'get my longbow'])
+          expect(hands).to eq('left' => 'longbow', 'right' => 'shield')
+          expect(messages).to include('EquipmentManager: Unable to empty your hands to remove helm')
+        end
+
         it 'does not retry a pick-up that fails for another reason' do
           remove_game(gets_held: 0, free_reply: 'What were you referring to?')
           em.remove_item(item)
@@ -263,6 +275,19 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(hands['left']).to eq('longbow')
         expect(sent).to eq(['unload my longbow', 'lower ground left', 'stow my arrow'] + ['get my longbow'] * 4)
         expect(messages.grep(/Unable to pick longbow back up/)).to be_empty
+      end
+
+      # The weapon's noun is part of the name in the other hand, so a
+      # held-check by name would match it and skip the GET.
+      it 'sends the GET even when the other hand holds an item whose name contains the weapon noun' do
+        hands.replace('left' => 'crossbow', 'right' => 'crossbow bolts')
+        game('unload my crossbow' => 'Your bolt falls from your crossbow to your feet.',
+             'lower ground left'  => -> { hands['left'] = nil; 'You lower the crossbow.' },
+             'stow my bolt'       => 'You put your bolt in your quiver.',
+             'get my crossbow'    => -> { hands['left'] = 'crossbow'; 'You pick up the crossbow.' })
+        em.unload_weapon('crossbow')
+        expect(sent).to eq(['unload my crossbow', 'lower ground left', 'stow my bolt', 'get my crossbow'])
+        expect(hands).to eq('left' => 'crossbow', 'right' => 'crossbow bolts')
       end
     end
 
