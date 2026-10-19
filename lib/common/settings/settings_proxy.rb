@@ -16,13 +16,13 @@ module Lich
       # view (view.first) can be found in it and saved where it is.
       #
       # +unlocated+ marks a proxy (detached, without a path) for an element
-      # of a view, or of an element yielded by each, that can't be found in
-      # the settings: a write through it is refused with a message instead
-      # of being saved somewhere else.
+      # of a view that can't be found in the settings: a write through it is
+      # refused with a message instead of being saved somewhere else.
       #
-      # +refusals+, shared by the elements one call to #each yields (and the
-      # containers taken from them), counts the writes through them that were
-      # refused, so that the user is told once per loop (see #refusals).
+      # +refusals+, shared by the unlocated elements one call to #each
+      # yields (and the containers taken from them), counts the writes
+      # through them that were refused, so that the user is told once per
+      # loop (see #refusals).
       def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
@@ -38,9 +38,9 @@ module Lich
 
       attr_reader :target, :path, :scope, :script_name
 
-      # For an element yielded by #each, or a container taken from one: a
-      # Hash shared by everything that one call to #each yielded, whose
-      # :count is the number of writes through them that were refused
+      # For an unlocated element yielded by #each, or a container taken from
+      # one: a Hash shared by everything that one call to #each yielded,
+      # whose :count is the number of writes through them that were refused
       # (Settings.refuse_proxy_save tells the user about the first one only).
       # nil for any other proxy.
       attr_reader :refusals
@@ -217,25 +217,81 @@ module Lich
         @target.instance_of?(klass)
       end
 
+      # The implicit conversions this class defines for every target
+      # (to_ary, to_hash, ...). Whether a proxy has one is whether its
+      # target has it.
+      IMPLICIT_CONVERSIONS = [:to_str, :to_sym, :to_int, :to_r, :to_ary, :to_hash, :to_proc, :to_io, :to_path].freeze
+
+      # An implicit conversion (see IMPLICIT_CONVERSIONS) is reported only
+      # when the target has it, so that Ruby, which asks before converting,
+      # treats a proxy as it treats its target: a Hash proxy is not taken
+      # apart like an Array by |key, (a, b)| or a, b = proxy.
       def respond_to?(method, include_private = false)
+        return @target.respond_to?(method, include_private) if IMPLICIT_CONVERSIONS.include?(method.to_sym)
+
         super || @target.respond_to?(method, include_private)
       end
 
-      # Minimal change: items yielded from #each are "views" over the container.
-      # Mark them detached so mutations during a derived iteration won't clobber root.
-      def each(&_block)
-        return enum_for(:each) unless block_given?
-        if @target.respond_to?(:each)
-          refusals = { count: 0 }
-          @target.each do |item|
-            if @settings_module.container?(item)
-              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true, script_name: @script_name, refusals: refusals)
-            else
-              yield item
-            end
-          end
+      # Yields each element as Array#each and Hash#each do, a container
+      # element as a proxy with that element's path, so that a write through
+      # it (rows.each { |row| row[:count] = 1 }) is stored at that element,
+      # as for rows[i] or rows.find { ... }. A Hash yields one [key, value]
+      # Array per entry, value proxied, which a |key, value| block takes
+      # apart, exactly as Hash#each's own blocks do.
+      #
+      # For a detached view (what select or sort returned), an element is
+      # proxied with the path it has in the container the view was taken
+      # from (see #view_element_proxy). One the settings don't hold (an
+      # element of what map returned) is yielded detached and unlocated, so
+      # a write through it is refused, and the user is told once per loop
+      # (see #refusals).
+      def each(&block)
+        return enum_for(:each) unless block
+
+        each_element(&block)
+      end
+
+      # As Enumerable#each_with_index, with the elements #each yields.
+      def each_with_index
+        return enum_for(:each_with_index) unless block_given?
+
+        index = 0
+        each_element do |element|
+          yield element, index
+          index += 1
+        end
+      end
+
+      # As Enumerable#each_with_object, with the elements #each yields.
+      def each_with_object(memo)
+        return enum_for(:each_with_object, memo) unless block_given?
+
+        each_element { |element| yield element, memo }
+        memo
+      end
+
+      # Yields one object per element of the target (see #each); returns self.
+      private def each_element
+        refusals = { count: 0 }
+        case @target
+        when Hash
+          @target.each_pair { |key, value| yield [key, element_for(key, value, refusals)] }
+        when Array
+          @target.each_with_index { |value, index| yield element_for(index, value, refusals) }
+        else
+          @target.each { |item| yield item } if @target.respond_to?(:each)
         end
         self
+      end
+
+      # +value+, the target's element at +key+ (a Hash key or an Array
+      # index), or for a container the proxy that writes to it where the
+      # settings hold it (see #each).
+      private def element_for(key, value, refusals)
+        return value unless @settings_module.container?(value)
+        return view_element_proxy([key], value, refusals) if detached?
+
+        SettingsProxy.new(@settings_module, @scope, @path + [key], value, script_name: @script_name)
       end
 
       NON_DESTRUCTIVE_METHODS = [
@@ -265,8 +321,8 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
         if @settings_module.container?(value)
-          # In a detached view (what select or sort returned, or an element
-          # yielded by each), a position is not the element's position in
+          # In a detached view (what select or sort returned), a position is
+          # not the element's position in
           # the settings, so the element is looked up in the container the
           # view was taken from. A negative Array index is made positive, as
           # for at and dig.
@@ -326,13 +382,12 @@ module Lich
             # NEW (5.12.7+): auto-reattach derived views before mutating
             # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
             #
-            # A detached proxy without a path (an element yielded by each, a
-            # view's element not found in the settings, a view of a root
-            # proxy, the default fetch returned, or a container built from
-            # one) is never reattached: with an empty path that would bind it
-            # to the whole row. The call runs on its copy, and the save that
-            # follows stores nothing and tells the user
-            # (Settings.save_proxy_changes).
+            # A detached proxy without a path (a view's element not found in
+            # the settings, a view of a root proxy, the default fetch
+            # returned, or a container built from one) is never reattached:
+            # with an empty path that would bind it to the whole row. The
+            # call runs on its copy, and the save that follows stores nothing
+            # and tells the user (Settings.save_proxy_changes).
             if detached? && !@path.empty?
               unless @settings_module._reattach_live!(self)
                 @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
@@ -738,8 +793,8 @@ module Lich
       end
 
       # True for the proxy of an element that has no path in the settings:
-      # an element yielded by each, or a view's element not found in the
-      # settings (detached, without a path, and not a view of a root proxy,
+      # a view's element not found in the settings, or the default fetch
+      # returned (detached, without a path, and not a view of a root proxy,
       # which has the root as its source).
       private def pathless_element?
         detached? && @path.empty? && @source.nil?
@@ -795,13 +850,13 @@ module Lich
       # For a detached view: the proxy for +value+ when it is one of the
       # view's elements (or, along +keys+, one further down). Its path is
       # where that element is in the container the view was taken from. When
-      # the element is not there (a view of an element yielded by each, or
-      # the container has since taken a stored row that has no container of
+      # the element is not there (an element of what map returned, or the
+      # container has since taken a stored row that has no container of
       # the element's kind at its key or index, see #take_stored_container), the proxy
       # is detached and unlocated, so a write through it is refused instead
       # of being saved by position somewhere else. nil when +value+ is not an
       # element of the view (a new container, such as what merge returns).
-      private def view_element_proxy(keys, value)
+      private def view_element_proxy(keys, value, refusals = @refusals)
         segments = segments_to(keys, value, @target)
         return nil unless segments
 
@@ -810,7 +865,7 @@ module Lich
           SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name)
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
-          SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true, refusals: @refusals)
+          SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true, refusals: refusals)
         end
       end
 

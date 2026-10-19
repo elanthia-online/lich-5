@@ -528,6 +528,37 @@ RSpec.describe 'Settings writes across Lich processes' do
       )
     end
 
+    it 'keeps the other session\'s field and element when each element of a kept array is written in an each loop' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G rows [{"name":"a","count":0},{"name":"b","count":0}]')
+      alpha.call('keep rows G rows')
+      beta.call('keepfind row G rows name "a"')
+
+      beta.call('kset row theirs 1')
+      beta.call('push G rows {"name":"c","count":0}')
+      alpha.call('keach rows count 1')
+
+      expect(stored_row('sloot', 'DR')).to eq(
+        'rows' => [{ 'name' => 'a', 'count' => 1, 'theirs' => 1 }, { 'name' => 'b', 'count' => 1 }, { 'name' => 'c', 'count' => 0 }]
+      )
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
+    it 'keeps the other session\'s entry when each value of a kept hash is written in a |key, value| loop' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G by_name {"a":{"n":0},"b":{"n":1}}')
+      alpha.call('keep by_name G by_name')
+
+      beta.call('nset G by_name c {"n":2}')
+      alpha.call('kveach by_name seen true')
+
+      expect(stored_row('sloot', 'DR')).to eq(
+        'by_name' => { 'a' => { 'n' => 0, 'seen' => true }, 'b' => { 'n' => 1, 'seen' => true }, 'c' => { 'n' => 2 } }
+      )
+    end
+
     it 'does not write when a method that changes nothing is called through a kept proxy' do
       alpha = start('DR', 'Alpha', 'go2')
       beta = start('DR', 'Beta', 'go2')

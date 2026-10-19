@@ -238,8 +238,8 @@ module Lich
       # container of the proxy's class at its path (another session removed or
       # replaced it), or when the operation raises on the stored container.
       # Nothing is stored, and the user is told, for a detached proxy without
-      # a path (an element yielded by each, a view of a root proxy, the
-      # default fetch returned, or a container built from one), nor for the
+      # a path (a view of a root proxy, the default fetch returned, or a
+      # container built from one), nor for the
       # proxy of a view's element that can't be found in the settings
       # (SettingsProxy#unlocated?). Nothing is stored either, and the user is
       # told, when +block+ leaves early (break, throw or return), is
@@ -308,7 +308,7 @@ module Lich
             return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
           end
           if path.empty?
-            return refuse_proxy_save(script_name, proxy, "this is not part of the settings (an element yielded by each, a view of the whole settings, the default fetch returned, or a container built from one)")
+            return refuse_proxy_save(script_name, proxy, "this is not part of the settings (a view of the whole settings, the default fetch returned, or a container built from one)")
           end
           label ||= method
           method = nil
