@@ -52,6 +52,10 @@ module Lich
       # Roundtime line. commune_ready is then false so the result never reads as
       # ready; treat it as "unknown". After a timeout the lists are empty; after
       # a cut-off reply they hold what arrived, which may not be everything.
+      # +captured+ true means a complete reply was read; it does not prove the
+      # reply was sent in answer to this call (the tail of a reply that arrives
+      # after an earlier call timed out can still be read by the next call,
+      # since COMMUNE_SENSE_START also matches lines from the middle of a reply).
       class CommuneSenseResult
         attr_reader :active_communes, :recent_communes, :commune_ready, :captured
 

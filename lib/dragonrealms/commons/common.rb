@@ -692,7 +692,9 @@ module Lich
       # A reply cut off before its Roundtime line prints a "cut off" message and
       # returns the classes that did arrive, which may not be all of them. A
       # "no one is teaching" or "you are teaching" reply returns {} with no
-      # message, whether or not its Roundtime line arrived.
+      # message, whether or not its Roundtime line arrived. A complete reply
+      # does not prove it was sent in answer to this call: a reply that arrives
+      # after an earlier call timed out can still be read by the next call.
       #
       # @return [Hash{String => String}] teacher name => skill
       def assess_teach
