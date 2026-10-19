@@ -389,9 +389,12 @@ module Lich
       # @param retries [Integer] remaining retries for the transient "slips away" case
       # @return [String, false] the matched prep message; or +''+ (truthy) when
       #   bput matched nothing: normally because no prep message arrived before
-      #   bput gave up (it keeps reading past its timeout while lines keep
-      #   arriving), or at once when a custom message pattern can match an
-      #   empty string, such as +'You chant|'+; or false on one of
+      #   bput gave up (it still reads any lines already waiting when its
+      #   timeout passes, and restarts its timer on the replies it retries,
+      #   such as a wait or a stun), or at once when a custom message pattern
+      #   can match an empty string, such as +'You chant|'+, on the first line
+      #   read that no built-in message matches (a line that starts with the
+      #   custom text returns that text instead); or false on one of
       #   the failure replies prepare? itself checks for (its +when+ arms other
       #   than the retried "slips away" one, which returns the retry's result),
       #   a nil +abbrev+, or exhausted retries. Any other matched reply is
@@ -536,8 +539,9 @@ module Lich
       # @return [Boolean] true if the spell cast without a failure flag being set,
       #   including when no cast message arrived before DRC.bput gave up, and
       #   when a custom cast message that can match an empty string, such as
-      #   +'You gesture|'+, made bput return +''+ at once on the first line that
-      #   arrived; false if the +spell-fail+ flag was set or a retry limit ran
+      #   +'You gesture|'+, made bput return +''+ at once on the first line
+      #   read that no built-in message matches; false if the +spell-fail+
+      #   flag was set or a retry limit ran
       #   out. In both +''+ cases the result rests on +spell-fail+ at the moment
       #   it is read (see the note).
       #
