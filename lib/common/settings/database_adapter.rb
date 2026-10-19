@@ -137,9 +137,13 @@ module Lich
       # that nothing was written.
       #
       # @return [Hash, nil] what the block returned
-      # @raise [Sequel::DatabaseError] if the database is locked or the write fails
-      # @raise [TypeError] if the stored row can't be loaded, or the block
-      #   returns something other than a Hash or nil
+      # @raise [Sequel::DatabaseError] if the database is locked or the write
+      #   fails, or if loading the stored row raises ArgumentError (truncated
+      #   Marshal data, for example; Sequel re-raises an ArgumentError from
+      #   the block as Sequel::DatabaseError, with the ArgumentError as cause)
+      # @raise [StandardError] whatever else Marshal.load raises on a stored
+      #   row that can't be loaded (usually TypeError), without yielding
+      # @raise [TypeError] if the block returns something other than a Hash or nil
       def update_settings!(script_name, scope)
         transaction do
           updated = yield(get_settings(script_name, scope))

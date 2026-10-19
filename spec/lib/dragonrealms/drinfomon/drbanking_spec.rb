@@ -504,10 +504,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
-  # Logging writes to $stderr, which lets other threads run. Inside a write
-  # transaction that would let a write through a connection on SQLite's C
-  # busy timeout (GVL held) stall the whole process, so row problems are
-  # logged once the transaction has ended.
+  # Logging writes to $stderr, which lets other threads run. Row problems are
+  # logged once the transaction has ended (defence in depth: every connection
+  # Lich opens to lich.db3 waits for the lock in Ruby, but a connection left on
+  # SQLite's C busy timeout, GVL held, would stall the whole process if it
+  # started a write while the lock is held).
   describe 'logging a row problem' do
     # Records each logged line, and whether the settings write lock was held
     # when it was logged (another connection can't take it without waiting).

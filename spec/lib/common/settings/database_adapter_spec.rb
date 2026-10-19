@@ -116,6 +116,15 @@ RSpec.describe Lich::Common::DatabaseAdapter do
         expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => :unreadable)
       end
 
+      it "raises Sequel::DatabaseError, caused by ArgumentError, without yielding when the stored row is truncated" do
+        SettingsSpecDB.write_raw(tmp_dir, 's', 'x', Marshal.dump({ 'a' => 'bbbbbb' })[0..-3])
+        yielded = false
+        expect { @adapter.update_settings!('s', 'x') { yielded = true; {} } }
+          .to raise_error(Sequel::DatabaseError) { |e| expect(e.cause).to be_a(ArgumentError) }
+        expect(yielded).to be(false)
+        expect(SettingsSpecDB.rows(tmp_dir)).to eq(%w[s x] => :unreadable)
+      end
+
       it 'raises, instead of reporting and returning nil, when the database refuses the write' do
         SettingsSpecDB.fail_writes_to(tmp_dir, 'x')
         expect { @adapter.update_settings!('s', 'x') { { 'a' => 1 } } }
