@@ -776,6 +776,42 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(sent.count('cast')).to eq(1)
       end
     end
+
+    describe '.ritual' do
+      it 'carries on to the focus invoke and the cast after a timed-out prep' do
+        settings = OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil)
+        data = { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] }
+        expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
+        expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
+        expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent).to eq(['prepare fb 10', 'cast'])
+      end
+    end
+
+    describe '.crafting_prepare_spell' do
+      it "returns prepare?'s '' unchanged" do
+        allow(DRCMM).to receive(:set_moon_data).and_return(true)
+        allow(DRCA).to receive(:checkprep).and_return('None')
+        settings = OpenStruct.new(custom_spell_prep: nil)
+        silent_game(sent)
+        expect(DRCA.crafting_prepare_spell({ 'abbrev' => 'fb', 'mana' => 10 }, settings)).to eq('')
+        expect(sent).to eq(['release mana', 'prep fb 10'])
+      end
+    end
+
+    describe '.crafting_cast_spell' do
+      it "returns cast?'s true for a cast that timed out with no failure flag" do
+        allow(DRCA).to receive(:normalize_cambrinth_items)
+        allow(DRCA).to receive(:check_to_harness).and_return(false)
+        expect(DRCA).to receive(:charge_cambrinth_items)
+        silent_game(sent)
+        data = { 'cast' => 'cast', 'cambrinth' => [5], 'before' => [], 'after' => [] }
+        expect(DRCA.crafting_cast_spell(data, OpenStruct.new(use_harness_when_arcana_locked: false))).to be true
+        expect(sent).to eq(['cast'])
+      end
+    end
   end
 
   # ----------------------------------------------
