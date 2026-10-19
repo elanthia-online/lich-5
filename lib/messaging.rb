@@ -18,6 +18,10 @@ module Lich
       return msg_format("monster", msg, encode: encode)
     end
 
+    # Sends msg to a stream window, or to the main window with a marker where
+    # the frontend has no such window.
+    #
+    # @return [nil]
     def self.stream_window(msg, window = "familiar", encode: true)
       msg = xml_encode(msg) if encode
       if XMLData.game =~ /^GS/
@@ -124,6 +128,12 @@ module Lich
       return (preset_color_before + msg + preset_color_after)
     end
 
+    # Sends msg to the frontends in the preset style for type. A debug
+    # message is sent only while debug messaging is on.
+    #
+    # @return [nil] always, so a method whose last expression is
+    #   Lich::Messaging.msg returns nil: test for success before it, as in
+    #   `return data if found; Lich::Messaging.msg("bold", "not found")`
     def self.msg(type = "info", msg = "", encode: true)
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false" || Lich.debug_messaging == false)
       _respond msg_format(type, msg, encode: encode)
@@ -135,6 +145,9 @@ module Lich
 
     # defaulting encoding here to false instead of true like other methods due to backwards compatibility that it never encoded before
     # whereas all the other methods were already encoding and therefor should default to allow for them.
+    #
+    # @return [nil]
+    # @raise [StandardError] when msg is not a String
     def self.mono(msg, encode: false)
       return raise StandardError.new 'Lich::Messaging.mono only works with String parameters!' unless msg.is_a?(String)
       msg = xml_encode(msg) if encode
