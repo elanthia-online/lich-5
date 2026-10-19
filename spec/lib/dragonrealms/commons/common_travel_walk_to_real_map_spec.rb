@@ -103,6 +103,9 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     real_map.class_variable_set(:@@list, [])
     real_map.class_variable_set(:@@uids, {})
     real_map.class_variable_set(:@@current_room_id, nil)
+    # tagged_corridor sets tags, which builds a tag index on the class. Drop it
+    # so a later spec does not get rooms_by_tag answers for rooms now gone.
+    real_map.clear_tags_cache
   end
 
   def bold_messages
