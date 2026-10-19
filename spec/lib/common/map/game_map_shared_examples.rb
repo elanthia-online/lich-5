@@ -1471,5 +1471,42 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(File.stat(target).mode & 0o777).to eq(0o640)
       expect(File.stat(backup).mode & 0o777).to eq(0o640)
     end
+
+    # The mode and the bytes must both be in place before the rename makes a
+    # temp file visible under the real name. Only events on each temp file
+    # are recorded, so other File.chmod or File.rename calls do not matter.
+    it 'flushes each temp file to disk and sets its mode before renaming it into place' do
+      File.binwrite(target, existing_bytes)
+      events = []
+      allow(File).to receive(:open).and_wrap_original do |original, path, *args, **kwargs, &block|
+        next original.call(path, *args, **kwargs, &block) unless block && path.to_s.end_with?('.tmp')
+
+        original.call(path, *args, **kwargs) do |io|
+          allow(io).to receive(:fsync).and_wrap_original do |fsync|
+            events << [:fsync, path]
+            fsync.call
+          end
+          block.call(io)
+        end
+      end
+      allow(File).to receive(:chmod).and_wrap_original do |original, mode, *paths|
+        paths.each { |path| events << [:chmod, path] }
+        original.call(mode, *paths)
+      end
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        events << [:rename, from, to]
+        original.call(from, to)
+      end
+
+      map_class.save_json(target)
+
+      [backup, target].each do |destination|
+        rename = events.index { |event| event[0] == :rename && event[2] == destination }
+        expect(rename).not_to be_nil
+        tmp = events[rename][1]
+        expect(events.map(&:first).values_at(*events.each_index.select { |i| events[i][1] == tmp }))
+          .to eq(%i[fsync chmod rename])
+      end
+    end
   end
 end
