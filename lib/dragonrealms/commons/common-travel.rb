@@ -82,10 +82,12 @@ module Lich
       #
       # The item is referenced through {DRCI.item_ref}, like the DRCI verbs: a
       # noun gets "my ", while "my sword" and "#<id>" are sent unchanged.
+      #
+      # Returns false without selling when the item is not in hand or the
+      # walk to +room+ fails, so the item is never offered in another room.
       def sell_item(room, item)
         return false unless DRCI.in_hands?(item)
-
-        walk_to(room)
+        return false unless walk_to_merchant(room, "selling #{item}")
 
         case DRC.bput("sell #{DRCI.item_ref(item)}", *SELL_SUCCESS_PATTERNS, *SELL_FAILURE_PATTERNS)
         when *SELL_SUCCESS_PATTERNS
@@ -97,8 +99,11 @@ module Lich
 
       # Visit a merchant and buy an item by offering their asking price.
       # Usually for restocking ammunition or other misc items.
+      #
+      # Returns nil without buying when the walk to +room+ fails, so nothing
+      # is bought from whichever merchant stands in another room.
       def buy_item(room, item)
-        walk_to(room)
+        return unless walk_to_merchant(room, "buying #{item}")
 
         all_patterns = BUY_PRICE_PATTERNS + BUY_NON_PRICE_PATTERNS
         result = DRC.bput("buy #{item}", *all_patterns)
@@ -111,8 +116,10 @@ module Lich
 
       # Visit a merchant and ask for an item.
       # Usually this is for bundling ropes or gem pouches.
+      #
+      # Returns false without asking when the walk to +room+ fails.
       def ask_for_item?(room, name, item)
-        walk_to(room)
+        return false unless walk_to_merchant(room, "asking #{name} for #{item}")
 
         case DRC.bput("ask #{name} for #{item}", *ASK_SUCCESS_PATTERNS, *ASK_FAILURE_PATTERNS)
         when *ASK_SUCCESS_PATTERNS
@@ -123,12 +130,35 @@ module Lich
       end
 
       # Visit a merchant and order from a menu.
+      #
+      # Returns nil without ordering when the walk to +room+ fails: ORDER takes
+      # a menu number, so the same ORDER in another shop could buy another item.
       def order_item(room, item_number)
-        walk_to(room)
+        return unless walk_to_merchant(room, "ordering #{item_number}")
 
         return if DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins') == 'you don\'t have enough coins'
 
         DRC.bput("order #{item_number}", 'takes some coins from you')
+      end
+
+      # Internal to the merchant helpers above; not meant for scripts.
+      # Walks to the merchant's +room+ (a room id or map tag; this can take
+      # minutes, like walk_to) and returns walk_to's result. When the walk
+      # fails it says which purchase or sale was skipped, because walk_to is
+      # silent on some failures, e.g. a nil room or a locked shop door.
+      # @api private
+      def walk_to_merchant(room, action)
+        return true if walk_to(room)
+
+        where = if room.nil?
+                  'the shop (no room given)'
+                elsif room.is_a?(String) && room.count('a-zA-Z') > 0
+                  "a room tagged #{room}"
+                else
+                  "room #{room}"
+                end
+        Lich::Messaging.msg('bold', "DRCT: Could not reach #{where}, so not #{action}.")
+        false
       end
 
       def dispose(item, trash_room = nil, worn_trashcan = nil, worn_trashcan_verb = nil)

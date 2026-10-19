@@ -230,6 +230,135 @@ RSpec.describe DRCT do
     end
   end
 
+  # --- merchant helpers after a failed walk --------------------------
+  #
+  # Each helper walks to the merchant first. When walk_to reports that the
+  # character did not arrive, the helper must not send its SELL / BUY / ASK /
+  # ORDER in whatever room the character is standing in.
+
+  describe 'merchant helpers when walk_to fails' do
+    # helper name => [call, value returned on a failed walk, action words]
+    helpers = {
+      sell_item: [->(room) { DRCT.sell_item(room, 'sword') }, false, 'not selling sword'],
+      buy_item: [->(room) { DRCT.buy_item(room, 'arrow') }, nil, 'not buying arrow'],
+      ask_for_item?: [->(room) { DRCT.ask_for_item?(room, 'merchant', 'bundling rope') }, false, 'not asking merchant for bundling rope'],
+      order_item: [->(room) { DRCT.order_item(room, 5) }, nil, 'not ordering 5']
+    }
+
+    before(:each) do
+      allow(DRCI).to receive(:in_hands?).with('sword').and_return(true)
+      allow(DRC).to receive(:bput).and_return('hands you 50 kronars')
+      allow(DRCT).to receive(:fput)
+    end
+
+    def failure_messages
+      Lich::Messaging.messages.select { |m| m[:type] == 'bold' && m[:message].include?('Could not reach') }
+    end
+
+    helpers.each do |name, (call, failed_value, action)|
+      describe ".#{name}" do
+        context 'when walk_to returns false' do
+          before(:each) { allow(DRCT).to receive(:walk_to).with(100).and_return(false) }
+
+          it 'sends nothing to the game' do
+            call.call(100)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).not_to have_received(:fput)
+          end
+
+          it "returns #{failed_value.inspect}" do
+            expect(call.call(100)).to equal(failed_value)
+          end
+
+          it 'says which room it could not reach and what it skipped' do
+            call.call(100)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach room 100, so #{action}."])
+          end
+        end
+
+        context 'when walk_to returns true' do
+          before(:each) { allow(DRCT).to receive(:walk_to).with(100).and_return(true) }
+
+          it 'talks to the merchant and reports no failure' do
+            call.call(100)
+            expect(DRC).to have_received(:bput).at_least(:once)
+            expect(failure_messages).to be_empty
+          end
+        end
+
+        # No walk_to stub from here on: the real walk_to decides.
+        context 'with no room (nil), through the real walk_to' do
+          it 'sends nothing to the game and says no room was given' do
+            expect(call.call(nil)).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(failure_messages.map { |m| m[:message] })
+              .to eq(["DRCT: Could not reach the shop (no room given), so #{action}."])
+          end
+        end
+
+        context 'with a map tag that has no reachable room, through the real walk_to' do
+          it 'sends nothing to the game' do
+            allow(Map).to receive(:rooms_by_tag).with('pawnshop').and_return([])
+            expect(call.call('pawnshop')).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach a room tagged pawnshop, so #{action}."])
+          end
+        end
+
+        context 'when go2 never arrives, through the real walk_to' do
+          before(:each) do
+            allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+            allow(DRC).to receive(:fix_standing)
+            allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+            allow(Script).to receive(:running).and_return([])
+            allow(Script).to receive(:running?).and_return(false)
+            allow(XMLData).to receive(:room_description).and_return('A room')
+            allow(XMLData).to receive(:room_title).and_return('[Room]')
+          end
+
+          it 'gives up on the walk and sends nothing to the game' do
+            expect(call.call(999)).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).to have_received(:start_script).exactly(DRCT::MAX_WALK_TO_RETRIES + 1).times
+          end
+        end
+
+        # A shop locked for the night: walk_to gives up without retrying and
+        # without a message of its own, so the helper's message is the only one.
+        context 'when the shop door is locked, through the real walk_to' do
+          before(:each) do
+            allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+            allow(DRC).to receive(:fix_standing)
+            allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+            allow(DRCT).to receive(:kill_script)
+            allow(Script).to receive(:running).and_return([:go2_handle])
+            allow(Script).to receive(:running?).and_return(false)
+            allow(XMLData).to receive(:room_description).and_return('A room')
+            allow(XMLData).to receive(:room_title).and_return('[Room]')
+            allow(Flags).to receive(:[]).and_call_original
+            allow(Flags).to receive(:[]).with('travel-closed-shop').and_return(true)
+            allow(DRC).to receive(:bput).with('open door', any_args).and_return('It is locked')
+          end
+
+          it 'tries the door once, then sends nothing else to the game' do
+            expect(call.call(999)).to equal(failed_value)
+            expect(DRC).to have_received(:bput).once
+            expect(DRC).to have_received(:bput).with('open door', any_args)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach room 999, so #{action}."])
+          end
+        end
+      end
+    end
+
+    it 'sell_item still checks the hands before walking' do
+      allow(DRCI).to receive(:in_hands?).with('sword').and_return(false)
+      allow(DRCT).to receive(:walk_to)
+      expect(DRCT.sell_item(100, 'sword')).to eq(false)
+      expect(DRCT).not_to have_received(:walk_to)
+      expect(failure_messages).to be_empty
+    end
+  end
+
   # --- dispose -------------------------------------------------------
 
   describe '.dispose' do
