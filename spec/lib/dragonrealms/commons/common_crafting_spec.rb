@@ -227,7 +227,7 @@ describe DRCC do
         DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
 
         expect(Lich::Messaging.messages.map { |m| m[:message] })
-          .to eq(['DRCC: Cannot repair hammer, moving to the next tool.'])
+          .to eq(['DRCC: Cannot repair hammer, skipping it.'])
       end
     end
 
@@ -241,7 +241,7 @@ describe DRCC do
       end
     end
 
-    context 'when the pour reply goes wrong after a successful rub' do
+    context 'when the pour reply says the character is engaged after a successful rub' do
       before { stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_ENGAGED) }
 
       it 'stows the brush, the oil and the tool once each and skips the next tool' do

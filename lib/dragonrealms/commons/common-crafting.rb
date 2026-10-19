@@ -465,7 +465,7 @@ module Lich
               stop_repairs = true
               break
             when REPAIR_CONFUSED # this tool can't be repaired this way; the others may still be
-              Lich::Messaging.msg('bold', "DRCC: Cannot repair #{tool_name}, moving to the next tool.")
+              Lich::Messaging.msg('bold', "DRCC: Cannot repair #{tool_name}, skipping it.")
               DRCC.stow_crafting_item(x, bag, belt) # the tool itself is stowed once, below
               break
             end
