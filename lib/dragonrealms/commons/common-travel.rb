@@ -186,8 +186,10 @@ module Lich
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure
       # @param retry_depth [Integer] internal counter -- callers should not set this
+      # @param move_budget [Integer, nil] internal -- callers should not set
+      #   this; the moves {walk_from_unknown_room} has left when it hands back
       # @return [Boolean] true if the character is now in the target room
-      def walk_to(target_room, restart_on_fail = true, retry_depth: 0)
+      def walk_to(target_room, restart_on_fail = true, retry_depth: 0, move_budget: nil)
         target_room = tag_to_id(target_room) if target_room.is_a?(String) && target_room.count("a-zA-Z") > 0
 
         return false if target_room.nil?
@@ -199,7 +201,7 @@ module Lich
 
         DRC.fix_standing
 
-        return walk_from_unknown_room(room_num, restart_on_fail, retry_depth) if Room.current&.id.nil?
+        return walk_from_unknown_room(room_num, restart_on_fail, retry_depth, move_budget) if Room.current&.id.nil?
 
         script_handle = start_script('go2', [room_num.to_s], force: true)
 
@@ -339,7 +341,11 @@ module Lich
       # +restart_on_fail+ is false. A move the game reports as a wrong exit
       # (move returned false) ends the walk. Moves are capped at the first
       # path's length plus MAX_WALK_TO_RETRIES so a map that loops cannot walk
-      # forever.
+      # forever. A hand-back passes the moves left on to walk_to, so when the
+      # room reads as unresolved again and the walk comes straight back here,
+      # the cap carries on instead of starting over. go2 does not use it, so a
+      # go2 failure that walk_to retries from an unresolved room starts a
+      # fresh cap; that retry is bounded by MAX_WALK_TO_RETRIES.
       #
       # The "manually attempting to navigate" line is logged only once the
       # start room is identified. Under the map's own resolver the walk
@@ -349,11 +355,15 @@ module Lich
       # @param room_num [Integer] target room id
       # @param restart_on_fail [Boolean] retry a move that made no progress
       # @param retry_depth [Integer] retries already spent by walk_to
+      # @param move_budget [Integer, nil] moves left from an earlier call that
+      #   handed back; nil to size the cap from the first path
       # @return [Boolean] true if the character is now in the target room
-      def walk_from_unknown_room(room_num, restart_on_fail, retry_depth)
+      def walk_from_unknown_room(room_num, restart_on_fail, retry_depth, move_budget)
         retries = retry_depth
+        # Moves made by this call. The free hand-back below depends on it, so
+        # it starts at zero even when a cap is carried over.
         moves = 0
-        max_moves = nil
+        max_moves = move_budget
 
         loop do
           current_id = Room.current&.id
@@ -376,7 +386,7 @@ module Lich
               # appear to skip the retry spent here.
               Lich::Messaging.msg('plain', "DRCT: Room #{current_id} resolved again without a move, handing back (retry #{retries}/#{MAX_WALK_TO_RETRIES}).")
             end
-            return walk_to(room_num, restart_on_fail, retry_depth: retries)
+            return walk_to(room_num, restart_on_fail, retry_depth: retries, move_budget: max_moves && (max_moves - moves))
           end
 
           room = match_unknown_room
@@ -403,7 +413,7 @@ module Lich
 
           max_moves ||= path.length + MAX_WALK_TO_RETRIES
           if moves >= max_moves
-            Lich::Messaging.msg('bold', "DRCT: Did not reach room #{room_num} from an unknown room within #{max_moves} moves, giving up.")
+            Lich::Messaging.msg('bold', "DRCT: Ran out of moves walking from an unknown room to room #{room_num}, giving up.")
             return false
           end
           moves += 1

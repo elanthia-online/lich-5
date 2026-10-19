@@ -701,7 +701,56 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
 
       expect(result).to be(false)
       expect(world.sent.size).to eq(2 + DRCT::MAX_WALK_TO_RETRIES)
-      expect(bold_messages.last).to include('within 5 moves')
+      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104, giving up.')
+    end
+
+    # Room.current resolves only on the walker's own check after a move (the
+    # second read after it), so every move hands back to walk_to for free and
+    # walk_to sends the walk straight back to a new walker call.
+    def resolve_only_after_moves(world)
+      # Starts past 2 so that nothing resolves before the first move.
+      reads_since_move = 2
+      allow(Room).to receive(:current) do
+        reads_since_move += 1
+        reads_since_move == 2 ? world.room(world.position) : nil
+      end
+      allow(DRCT).to receive(:move) do |dir|
+        raise 'runaway walk' if world.sent.size >= 50
+
+        reads_since_move = 0
+        world.move(dir)
+      end
+    end
+
+    it 'keeps the move cap across hand-backs that come straight back to the walker' do
+      rooms = [
+        make_room(101, { '102' => 'north' }),
+        make_room(102, { '103' => 'north' }),
+        make_room(103, { '101' => 'north' }),
+        make_room(104, {})
+      ]
+      world = install(WalkToUnknownRoomSpec::World.new(rooms, position: 101))
+      allow(Map).to receive(:findpath) do |source, _destination|
+        [source.wayto.keys.first.to_i, 104]
+      end
+      resolve_only_after_moves(world)
+
+      result = Timeout.timeout(5) { DRCT.walk_to(104) }
+
+      expect(result).to be(false)
+      expect(world.sent).to eq(['north'] * (2 + DRCT::MAX_WALK_TO_RETRIES))
+      expect(DRCT).not_to have_received(:start_script)
+      expect(bold_messages.last).to eq('DRCT: Ran out of moves walking from an unknown room to room 104, giving up.')
+    end
+
+    it 'still arrives when a walk that keeps making progress hands back after every move' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(6), position: 101))
+      resolve_only_after_moves(world)
+
+      expect(Timeout.timeout(5) { DRCT.walk_to(107) }).to be(true)
+      expect(world.sent).to eq(['north'] * 6)
+      expect(DRCT).not_to have_received(:start_script)
+      expect(bold_messages).to be_empty
     end
   end
 end
