@@ -640,10 +640,12 @@ module Lich
             # The last STAND goes out at the deadline at the latest, so a
             # hold that ends just before it still lets bput resend. Waiting
             # for that STAND's reply can take bput up to one round trip past
-            # its timeout.
-            return false if Time.now >= deadline
+            # its timeout. The clock is read once, so the pause can't be
+            # negative (pause raises on a negative interval).
+            remaining = deadline - Time.now
+            return false if remaining <= 0
 
-            pause [1, deadline - Time.now].min
+            pause [1, remaining].min
           else
             return false
           end

@@ -1096,6 +1096,46 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
   end
 
+  describe '.stand_before?' do
+    let(:deadline) { Time.at(1_000_000) }
+
+    before { allow(described_class).to receive(:stand_result).and_return(:immobile) }
+
+    # The deadline passes between the check and the pause. A pause of a
+    # negative interval raises ArgumentError, as Kernel#sleep does.
+    it 'gives up without a negative pause when the deadline passes during the check' do
+      reads = [deadline - 1e-6, deadline + 1e-6]
+      allow(Time).to receive(:now) { reads.shift || deadline + 1 }
+      paused = []
+      allow(described_class).to receive(:pause) do |seconds|
+        raise ArgumentError, 'time interval must not be negative' if seconds.negative?
+
+        paused << seconds
+      end
+      result = nil
+      expect { result = described_class.stand_before?(deadline) }.not_to raise_error
+      expect(paused).to all(be >= 0)
+      expect(result).to be false
+    end
+
+    it 'gives up at once at the deadline, without a pause' do
+      allow(Time).to receive(:now).and_return(deadline)
+      allow(described_class).to receive(:pause)
+      expect(described_class.stand_before?(deadline)).to be false
+      expect(described_class).not_to have_received(:pause)
+      expect(described_class).to have_received(:stand_result).once
+    end
+
+    it 'pauses only the time left when the deadline is under 1 s away' do
+      now = deadline - 0.25
+      allow(Time).to receive(:now) { now }
+      allow(described_class).to receive(:pause) { |seconds| now += seconds }
+      expect(described_class.stand_before?(deadline)).to be false
+      expect(described_class).to have_received(:pause).once.with(be_within(1e-9).of(0.25))
+      expect(described_class).to have_received(:stand_result).twice
+    end
+  end
+
   describe '.hide?' do
     it('returns true when already hiding') { allow(described_class).to receive(:hiding?).and_return(true); expect(described_class.hide?).to be true }
 
