@@ -793,15 +793,29 @@ module Lich
         $ENC_MAP[encumbrance]
       end
 
+      # Retreats until out of combat, standing first when the game asks.
+      #
+      # Gives up when retreating can't succeed now: on the immobile reply
+      # (held or rooted) it pauses 1 s, as fix_standing does, so a caller
+      # that calls it again at once sends at most about one RETREAT a second
+      # while the hold lasts. It also gives up when the character must stand
+      # but can't (overburdened, unconscious, held, ...).
+      #
+      # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
+      # @return [Boolean, nil] nil when no other NPC is in the room, true once
+      #   out of combat, false when retreating can't succeed now
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
         loop do
-          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, *RETREAT_MESSAGES)
+          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, IMMOBILE_PATTERN, *RETREAT_MESSAGES)
           when *RETREAT_ESCAPE_MESSAGES
             return true
+          when IMMOBILE_PATTERN
+            pause 1
+            return false
           else
-            DRC.fix_standing
+            return false unless DRC.fix_standing
           end
         end
       end

@@ -11,6 +11,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-items.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'equipmanager.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-arcana.rb')
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
 
 RSpec.describe 'Callers that list the immobile reply' do
   let(:drc) { Lich::DragonRealms::DRC }
@@ -473,6 +474,91 @@ RSpec.describe 'Callers that list the immobile reply' do
           expect(messages.grep(/No response from game|No match was found/)).to be_empty
         end
       end
+    end
+  end
+
+  describe 'DRC.retreat' do
+    let(:standing) { [true] }
+    let(:must_stand) { 'You must stand first.' }
+
+    before do
+      allow(DRRoom).to receive(:npcs).and_return(['goblin'])
+      allow(drc).to receive(:standing?) { standing.first }
+    end
+
+    it 'returns false on the first reply, with one RETREAT and no timeout' do
+      game('retreat' => immobile)
+      expect(drc.retreat).to be false
+      expect(sent).to eq(['retreat'])
+      expect(messages.grep(/No match was found/)).to be_empty
+    end
+
+    # A caller that calls retreat again at once while the hold lasts sends at
+    # most about one RETREAT a second, as with fix_standing.
+    it 'pauses 1 s before returning false' do
+      game('retreat' => immobile)
+      drc.retreat
+      expect(drc).to have_received(:pause).with(1).once
+    end
+
+    it 'does not send STAND when held while standing' do
+      game('retreat' => immobile)
+      drc.retreat
+      expect(sent).not_to include('stand')
+    end
+
+    it 'stops when a hold starts after a first step back to pole range' do
+      game('retreat' => -> { sent.size == 1 ? 'You retreat back to pole range.' : immobile })
+      expect(drc.retreat).to be false
+      expect(sent).to eq(%w[retreat retreat])
+    end
+
+    it 'returns true on a later call once the hold has ended' do
+      game('retreat' => -> { sent.size == 1 ? immobile : 'You retreat from combat.' })
+      expect(drc.retreat).to be false
+      expect(drc.retreat).to be true
+      expect(sent).to eq(%w[retreat retreat])
+    end
+
+    it 'still retreats in two steps when not held' do
+      game('retreat' => -> { sent.size == 1 ? 'You retreat back to pole range.' : 'You retreat from combat.' })
+      expect(drc.retreat).to be true
+      expect(sent).to eq(%w[retreat retreat])
+      expect(drc).not_to have_received(:pause).with(1)
+    end
+
+    it 'returns false when sitting and held, sending one STAND' do
+      standing.replace([false])
+      game('retreat' => must_stand, 'stand' => immobile)
+      expect(drc.retreat).to be false
+      expect(sent).to eq(%w[retreat stand])
+      expect(drc).to have_received(:pause).with(1).once
+    end
+
+    # Overburdened, unconscious and the like: standing can't succeed, so the
+    # RETREAT would draw "You must stand first." again at once. Before, retreat
+    # sent RETREAT and STAND in turn for as long as the state lasted.
+    ["You are overburdened and cannot manage to stand.", "You're unconscious!",
+     "There's no room to do much of anything here."].each do |reply|
+      it "returns false when sitting and STAND draws #{reply.inspect}" do
+        standing.replace([false])
+        game('retreat' => must_stand, 'stand' => reply)
+        expect(drc.retreat).to be false
+        expect(sent).to eq(%w[retreat stand])
+      end
+    end
+
+    it 'stands and retreats when sitting and able to stand' do
+      standing.replace([false])
+      game('retreat' => -> { sent.count('retreat') == 1 ? must_stand : 'You retreat from combat.' },
+           'stand'   => -> { standing.replace([true]); 'You stand back up.' })
+      expect(drc.retreat).to be true
+      expect(sent).to eq(%w[retreat stand retreat])
+    end
+
+    it 'DRCT.retreat passes the false through' do
+      game('retreat' => immobile)
+      expect(Lich::DragonRealms::DRCT.retreat).to be false
     end
   end
 
