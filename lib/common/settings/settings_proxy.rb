@@ -22,7 +22,8 @@ module Lich
       # +refusals+, shared by the container elements one call to #each
       # yields (and the containers taken from them), counts the writes
       # through them that were refused, so that the user is told once per
-      # loop for each reason (see #refusals).
+      # loop for each kind of reason (see #refusals and
+      # Settings.refuse_proxy_save).
       #
       # +copy+ marks a new container built from an element #each yielded
       # (row.merge(..), row.select { ... }, row.first(2)): like a plain

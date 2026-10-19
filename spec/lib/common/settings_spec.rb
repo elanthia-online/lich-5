@@ -2341,6 +2341,29 @@ RSpec.describe Lich::Common::Settings do
         expect(logged.grep(/not saved/).size).to eq(9)
       end
 
+      it "tells the user once per each loop when the refusals name each element's own position, and logs every one" do
+        logged = []
+        allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
+          logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
+          original.call(level, prefix, message)
+        end
+        their_write("rows" => [{ "n" => 1 }, { "n" => 2 }, { "n" => 3 }, { "n" => 4 }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "n" => 1 }]) # another session removed three
+
+        yielded = 0
+        rows.each do |row|
+          yielded += 1
+          row['k'] = 1
+        end
+
+        expect(yielded).to eq(4)
+        expect(stored).to eq("rows" => [{ "n" => 1, "k" => 1 }])
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including('["rows", 1] is no longer there', "the same goes for any other such write in this each loop, which is only logged"))
+        expect(logged.grep(/is no longer there/).size).to eq(3)
+      end
+
       it "reads an element yielded by each with a method in neither list, without storing anything" do
         their_write("rows" => [{ "x" => 0 }])
         allow(@mock_db).to receive(:update_settings).and_call_original

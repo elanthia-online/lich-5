@@ -108,7 +108,7 @@ module Lich
         unless live.instance_of?(proxy.target.class)
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: failed to resolve live target for path=#{path.inspect} scope=#{scope.inspect}" })
           what = live.nil? ? "nothing there" : "#{live.class} there, and the view is #{proxy.target.class}"
-          refuse_proxy_save(script_name, proxy, "#{method || "the call"} on a view (sort, select, values, ...) of #{path.inspect} was not applied: the settings hold #{what}")
+          refuse_proxy_save(script_name, proxy, "#{method || "the call"} on a view (sort, select, values, ...) of #{path.inspect} was not applied: the settings hold #{what}", kind: :view_not_applied)
           return false
         end
 
@@ -352,7 +352,7 @@ module Lich
           stored_args = stored_copy(args)
         rescue TypeError => e
           what = method == REPLAY_ENTRY_CHANGES ? "a value changed by #{label || "a method"}" : "an argument of #{label || method}"
-          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})")
+          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})", kind: :argument_not_storable)
         end
         replayed = nil
         # The adapter updates the cache as part of the store (on_stored), as
@@ -379,7 +379,7 @@ module Lich
       def self.apply_to_stored_row(root, proxy, method, args, block, script_name, label = nil)
         path = proxy.path
         unless root.is_a?(Hash)
-          return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash")
+          return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash", kind: :row_not_hash)
         end
 
         # An element of an Array is addressed by its position. When the stored
@@ -387,12 +387,12 @@ module Lich
         # there has moved or gone, so storing this session's copy there would
         # pad the Array with nil or store an element twice.
         if (array_path = position_gone(root, path))
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})", kind: :position_gone)
         end
 
         parent = path.empty? ? nil : container_at(root, path[0...-1])
         unless path.empty? || parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer) && path.last >= 0)
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container", kind: :no_container)
         end
 
         existing = path.empty? ? root : parent[path.last]
@@ -415,18 +415,18 @@ module Lich
             return root
           rescue PositionGoneError
             finished = true
-            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)")
+            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)", kind: :changed_position_gone)
           rescue StandardError => e
             finished = true
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{label || method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
           rescue Exception => e # rubocop:disable Lint/RescueException -- reported, then raised again
             finished = true
-            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings")
+            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings", kind: :interrupted)
             raise
           ensure
             unless finished
               how = Thread.current.status == "aborting" ? "was stopped (its thread was killed)" : "left early (break, throw or return)"
-              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings")
+              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings", kind: :left_early)
             end
           end
         end
@@ -434,12 +434,12 @@ module Lich
         begin
           copy = stored_copy(proxy.target)
         rescue TypeError => e
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})", kind: :copy_not_storable)
         end
         if path.empty?
           return copy if copy.is_a?(Hash)
 
-          return refuse_proxy_save(script_name, proxy, "a #{copy.class} can't be the whole row")
+          return refuse_proxy_save(script_name, proxy, "a #{copy.class} can't be the whole row", kind: :copy_not_hash)
         end
 
         parent[path.last] = copy
@@ -565,19 +565,21 @@ module Lich
       #
       # For writes through what one call to SettingsProxy#each yielded
       # (SettingsProxy#refusals), the user is told about the first one
-      # refused for each reason, and that any other refused for it in the
-      # loop is only logged; each of them is still logged. A loop can also
-      # yield elements whose writes are stored (an element of a view that is
-      # found in the settings), so the message speaks of the refused ones
-      # only.
+      # refused for each +kind+ of reason, and that any other refused for it
+      # in the loop is only logged; each of them is still logged. A reason
+      # that names a path or a method passes a +kind+, so that the writes
+      # through each element of one loop (each with its own path) count as
+      # one kind. A loop can also yield elements whose writes are stored (an
+      # element of a view that is found in the settings), so the message
+      # speaks of the refused ones only.
       #
       # @return nil
-      def self.refuse_proxy_save(script_name, proxy, reason)
+      def self.refuse_proxy_save(script_name, proxy, reason, kind: reason)
         refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
         tell = true
         if refusals
-          refusals[reason] = refusals.fetch(reason, 0) + 1
-          tell = refusals[reason] == 1
+          refusals[kind] = refusals.fetch(kind, 0) + 1
+          tell = refusals[kind] == 1
           reason = "#{reason}; the same goes for any other such write in this each loop, which is only logged" if tell
         end
         message = "--- Error: settings for #{script_name} (#{proxy.scope}) not saved: #{reason} ---"
