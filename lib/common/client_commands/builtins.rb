@@ -17,6 +17,9 @@ require File.join(LIB_DIR, 'common', 'client_commands.rb')
 module Lich
   module Common
     module ClientCommands
+      # Total ;set write attempts, each subject to Lich.db's busy timeout.
+      SET_MAX_ATTEMPTS = 2 unless const_defined?(:SET_MAX_ATTEMPTS, false)
+
       define do
         # ---- script control ---------------------------------------------
 
@@ -211,9 +214,12 @@ module Lich
 
         # ---- settings ---------------------------------------------------
 
-        # Retry once after contention, then release command dispatch with a
-        # visible failure. Each attempt already waits up to Lich.db's busy
-        # timeout (5000 ms by default): two attempts plus one 100 ms pause.
+        # Retry once after contention, then fail visibly and release dispatch.
+        # Lich.db retains SQLite's C busy_timeout, which holds the GVL and can
+        # stall every Ruby thread for each attempt (5000 ms by default). The
+        # 100 ms retry pause lets an in-process lock holder run between attempts.
+        # Default lock waiting is about 10.1 seconds plus execution overhead;
+        # a lock still busy on the final attempt intentionally fails visibly.
         command(/^set\s(.+)\s(on|off)/) do |m|
           toggle_var = m[1]
           set_state = m[2]
@@ -225,7 +231,7 @@ module Lich
                             [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
             did_something = true
           rescue SQLite3::BusyException
-            if attempts < 2
+            if attempts < SET_MAX_ATTEMPTS
               sleep 0.1
               retry
             end
