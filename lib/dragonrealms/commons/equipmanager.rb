@@ -170,15 +170,18 @@ module Lich
       #
       # Target items already in a hand are put away first via {#stow_weapon},
       # which sends the WEAR itself for worn items; a held item whose put-away
-      # fails is reported as missing (for a check-your-hands line) rather than
-      # retried. The hands are checked again just before each put-away; a held
-      # item that has left the hand by then joins the unheld items, which are
-      # then fetched and worn in gear-set order. When two set descriptions
-      # resolve to the same gear item, a held item that failed is not tried
-      # again. Returns, in gear-set order and without repeats, every item that
-      # could not be worn or put away, and the subset of those left in hand:
-      # every held item whose put-away failed, plus every fetched item whose
-      # WEAR failed and that still matches a hand afterwards.
+      # fails is reported rather than retried. The hands are checked again just
+      # before each put-away; a held item that has left the hand by then joins
+      # the unheld items, which are then fetched and worn in gear-set order.
+      # When two set descriptions resolve to the same gear item, a held item
+      # that failed is not tried again. After the wears, a held failure that is
+      # no longer in hand (and is not a transform item) is looked for in one
+      # INV COMBAT: if it is worn it is not a failure, otherwise it is reported
+      # missing but not in hand. Returns, in gear-set order and without
+      # repeats, every item that could not be worn or put away, and the subset
+      # of those left in hand: every held failure still in hand (or a transform
+      # item), plus every fetched item whose WEAR failed and that still matches
+      # a hand afterwards.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
@@ -224,11 +227,20 @@ module Lich
           wear_item?(item_copy)
         end
 
-        failures = held_failures + wear_failures
-        # A held put-away failure is reported as in hand even if a transform
-        # changed what the hand shows; a refused fetch is in hand only if it
-        # still matches a hand.
-        in_hand = held_failures + wear_failures.select { |item| DRCI.in_hands?(item) }
+        # Held put-away failures are checked again now that every wear has
+        # been tried. One still in hand, or a transform item (the hand shows
+        # the transformed form), is left in hand. One that has left the hand
+        # may have been worn after all (a WEAR whose reply never arrived), so a
+        # single INV COMBAT settles it: an item now worn is not a failure, and
+        # any other is reported missing rather than in hand. A refused fetch is
+        # in hand only if it still matches a hand.
+        held_in_hand, held_gone = held_failures.partition { |item| item.transforms_to || DRCI.in_hands?(item) }
+        unless held_gone.empty?
+          worn_now = get_combat_items
+          held_gone.reject! { |item| worn_now.any? { |c_item| item.short_regex =~ c_item } }
+        end
+        failures = held_in_hand + held_gone + wear_failures
+        in_hand = held_in_hand + wear_failures.select { |item| DRCI.in_hands?(item) }
         [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
       end
 

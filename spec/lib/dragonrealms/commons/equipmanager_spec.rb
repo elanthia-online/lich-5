@@ -1337,6 +1337,11 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         em.wear_equipment_set?('standard')
         expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.shield (holding: steel shield)')
       end
+
+      it 'does not send a second INV COMBAT, since the item is still in hand' do
+        em.wear_equipment_set?('standard')
+        expect(em).to have_received(:get_combat_items).once
+      end
     end
 
     context 'when the WEAR for a held worn item gets no reply (bput timeout)' do
@@ -1347,6 +1352,82 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(em.wear_equipment_set?('standard')).to be false
         expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.shield (holding: steel shield)')
         expect(sent).to eq(['wear my steel.shield'])
+      end
+    end
+
+    context 'when the WEAR for a held worn item gets no reply and the item leaves the hand' do
+      let(:gear_sets) { { 'standard' => ['steel shield'] } }
+
+      before do
+        @hand = 'steel shield'
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @hand = nil if command == 'wear my steel.shield'
+          ''
+        end
+      end
+
+      context 'and INV COMBAT shows it worn' do
+        before { allow(em).to receive(:get_combat_items).and_return([], ['a steel shield']) }
+
+        it 'returns true without an alert, after one confirming INV COMBAT and no resend' do
+          expect(em.wear_equipment_set?('standard')).to be true
+          expect(alert_block).to be_empty
+          expect(sent).to eq(['wear my steel.shield'])
+          expect(em).to have_received(:get_combat_items).twice
+        end
+      end
+
+      context 'and INV COMBAT does not show it' do
+        before { allow(em).to receive(:get_combat_items).and_return([], ['an iron helm']) }
+
+        it 'returns false and lists it under MISSING EQUIPMENT, not in the check-your-hands line' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(alert_block).to eq(
+            [
+              :beep,
+              'EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:',
+              'EquipmentManager: steel.shield',
+              :pause,
+              :beep
+            ]
+          )
+          expect(sent).to eq(['wear my steel.shield'])
+        end
+      end
+
+      context 'and INV COMBAT gets no usable reply' do
+        before { allow(em).to receive(:get_combat_items).and_return([], []) }
+
+        it 'still fails loudly: returns false and lists it under MISSING EQUIPMENT' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(missing_list).to eq('EquipmentManager: steel.shield')
+          expect(hands_line).to be_nil
+        end
+      end
+    end
+
+    context 'when two held items fail and only one of them is still in hand afterwards' do
+      before do
+        @right = 'iron helm'
+        @left = 'steel shield'
+        allow(DRC).to receive(:right_hand) { @right }
+        allow(DRC).to receive(:left_hand) { @left }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @left = nil if command == 'wear my steel.shield'
+          command == 'wear my iron.helm' ? "You can't wear that right now." : ''
+        end
+        allow(em).to receive(:get_combat_items).and_return([], ['a steel shield'])
+      end
+
+      it 'drops the one INV COMBAT shows worn and names the other in the check-your-hands line' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(alert_block).to eq(
+          [:beep, 'EquipmentManager: could not wear or put away, check your hands: iron.helm (holding: iron helm)', :pause, :beep]
+        )
+        expect(sent).to eq(['wear my steel.shield', 'wear my iron.helm'])
       end
     end
 
@@ -1670,7 +1751,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
 
-    context 'when a held put-away fails but the hands are empty by the time of the alert' do
+    context 'when a held put-away fails but the item is no longer in hand by the time of the alert' do
       let(:gear_sets) { { 'standard' => ['bronze sword'] } }
 
       before do
@@ -1683,9 +1764,39 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         end
       end
 
-      it 'says the hands hold nothing rather than implying the item is there' do
+      it 'lists it under MISSING EQUIPMENT instead of telling the user to check empty hands' do
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: bronze.sword (holding: nothing)')
+        expect(missing_list).to eq('EquipmentManager: bronze.sword')
+        expect(hands_line).to be_nil
+        expect(sent).to eq(['put my bronze.sword in my scabbard'])
+      end
+    end
+
+    context 'when a held transform item fails and the hands are empty by the time of the alert' do
+      # The hand no longer matches a transform item's gear name by design, so
+      # it stays in the check-your-hands line, which shows the real hands.
+      let(:orb) do
+        gear_class.new(short_name: 'silver.orb', short_regex: /\bsilver.*\borb/i, worn: false,
+                       transforms_to: 'silver armband', transform_verb: 'turn', transform_text: 'You turn')
+      end
+      let(:gear_sets) { { 'standard' => ['silver orb'] } }
+
+      before do
+        @hand = 'silver orb'
+        allow(em).to receive(:items).and_return([orb])
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @hand = nil
+          'You turn your silver orb.'
+        end
+      end
+
+      it 'names it in the check-your-hands line with holding: nothing, without a second INV COMBAT' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: silver.orb (holding: nothing)')
+        expect(missing_warning?).to be false
+        expect(em).to have_received(:get_combat_items).once
       end
     end
   end
