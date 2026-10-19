@@ -333,12 +333,30 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           expect(result).to be_nil
           expect(elapsed).to be >= 0.2
           expect(elapsed).to be < 2
-          expect(calls).to be > described_class::MIN_UPDATE_ATTEMPTS
+          expect(calls).to be >= described_class::MIN_UPDATE_ATTEMPTS
           expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
           expect(messages).to include(['error', a_string_including("kept changing, gave up after #{calls} attempts")])
         end
 
+        it 'stops at MIN_UPDATE_ATTEMPTS when slow attempts use up the busy timeout first' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+          calls = 0
+
+          result = @adapter.update_settings('go2', 'DR') do |fresh|
+            calls += 1
+            sleep 0.08
+            put_row('go2', 'DR', { 'theirs' => calls })
+            fresh.merge('mine' => calls)
+          end
+
+          expect(result).to be_nil
+          expect(calls).to eq(described_class::MIN_UPDATE_ATTEMPTS)
+          expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
+          expect(messages).to include(['error', a_string_including("gave up after #{calls} attempts")])
+        end
+
         it 'keeps trying past 20 attempts while within the busy timeout' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(60_000)
           calls = 0
 
           result = @adapter.update_settings('go2', 'DR') do |fresh|
