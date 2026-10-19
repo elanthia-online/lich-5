@@ -79,6 +79,18 @@ module Lich
       # never wait out the full network or rate-limit backoff.
       SEND_REQUEST_BUDGET = 5
 
+      # Hard cap, in seconds, on each Slack API step (token check, users.list)
+      # while the bot starts. SlackBot.new runs on the calling script's thread
+      # (afk.lic creates it before its health watch starts), so startup must
+      # not wait out the full network or rate-limit backoff either. A bot that
+      # gives up here retries on the next message.
+      STARTUP_REQUEST_BUDGET = 10
+
+      # Most seconds the startup waits before users.list, so characters that
+      # log in together let the first one fill the shared cache. Not counted
+      # against STARTUP_REQUEST_BUDGET.
+      STARTUP_JITTER_SECONDS = 5.0
+
       # Part of a deadline request's remaining budget that net/http's own
       # connect timeouts share out. The rest is headroom before the hard
       # Timeout on the whole connect, so the two do not fire together.
@@ -92,6 +104,11 @@ module Lich
 
       USERS_LIST_UNAVAILABLE = 'Slack user list unavailable'
 
+      # Connects at once: checks (or discovers) the token and loads the users
+      # list, capping each Slack API step at STARTUP_REQUEST_BUDGET. If a step
+      # fails or runs out of time, the bot is left uninitialized and the next
+      # #direct_message tries again. The LNet token discovery keeps its own
+      # timeouts.
       def initialize
         @initialized = false
         @error_message = nil
@@ -101,7 +118,7 @@ module Lich
         @restore_mutex = Mutex.new
         @restore_attempts = 0
 
-        connect
+        connect(budget: STARTUP_REQUEST_BUDGET, jitter: true)
       end
 
       # @return [Boolean] true if the bot has a valid token and a non-empty users list
@@ -204,12 +221,13 @@ module Lich
       # The bot is initialized only when a non-empty users list is loaded.
       #
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
+      # @param jitter [Boolean] wait a random moment before calling users.list
       # @return [Boolean] the new initialized? state
-      def connect(budget: nil)
+      def connect(budget: nil, jitter: budget.nil?)
         return false unless verify_token(budget)
 
         @token_verified = true
-        load_users_list(budget)
+        load_users_list(budget, jitter: jitter)
       end
 
       # Checks the stored token and, only if Slack rejects it (or there is
@@ -253,9 +271,10 @@ module Lich
       # Loads the users list and updates initialized? and error_message.
       #
       # @param budget [Numeric, nil] seconds allowed, or nil for the full retry policy
+      # @param jitter [Boolean] wait a random moment before calling users.list
       # @return [Boolean] the new initialized? state
-      def load_users_list(budget)
-        fetch_users_list(deadline_for(budget))
+      def load_users_list(budget, jitter: false)
+        fetch_users_list(budget, jitter: jitter)
         @initialized = users_list_loaded?
         @error_message = @initialized ? nil : USERS_LIST_UNAVAILABLE
         @initialized
@@ -391,23 +410,25 @@ module Lich
       # Loads the users list from shared DB cache or Slack API.
       # On failure the current list (if any) is left untouched.
       #
-      # @param deadline [Float, nil] monotonic deadline for the API attempt; when
-      #   set, the startup jitter is skipped
+      # @param budget [Numeric, nil] seconds allowed for the API attempt, counted
+      #   after the jitter, or nil for the full retry policy
+      # @param jitter [Boolean] wait up to STARTUP_JITTER_SECONDS, then re-check
+      #   the cache, before calling the API
       # @return [Boolean] true if a non-empty users list was loaded
-      def fetch_users_list(deadline = nil)
+      def fetch_users_list(budget, jitter:)
         return true if load_users_from_cache('Using cached users list')
 
-        unless deadline
-          sleep rand(0.0..5.0)
+        if jitter
+          sleep rand(0.0..STARTUP_JITTER_SECONDS)
           return true if load_users_from_cache('Using cached users list after jitter')
         end
 
-        if deadline && users_list_cooling_down?
+        if budget && users_list_cooling_down?
           Lich.log 'SlackBot: Skipping users.list until the retry cooldown ends'
           return false
         end
 
-        members = fetch_users_from_api(deadline)
+        members = fetch_users_from_api(deadline_for(budget))
         return false unless members
 
         @users_list = { 'members' => members }

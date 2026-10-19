@@ -120,9 +120,11 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     UserVars.slack_token = nil
   end
 
-  # Number of users.list attempts each failure shape takes under the full
-  # (startup) retry policy before the bot gives up.
-  startup_attempts = { http500: 1, ok_false: 1, econnreset: 6, throttle: 11 }
+  # Number of users.list attempts each failure shape takes within the
+  # startup budget (STARTUP_REQUEST_BUDGET, 10 s) before the bot gives up.
+  # A network retry waits 30 s, so ECONNRESET gets one try; Retry-After 1
+  # fits nine 1 s waits.
+  startup_attempts = { http500: 1, ok_false: 1, econnreset: 1, throttle: 10 }
   startup_attempts.each do |kind, attempts|
     context "when users.list fails at startup (#{kind})" do
       before do
@@ -169,6 +171,158 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
   end
 
+  # SlackBot.new runs on the calling script's thread (dr-scripts'
+  # register_slackbot, e.g. afk.lic before its health watch starts), so
+  # every Slack call it makes is capped by STARTUP_REQUEST_BUDGET. A bot
+  # that gives up retries on the next message.
+  describe 'startup time budget' do
+    # The documented startup cap per Slack API step (SlackBot::STARTUP_REQUEST_BUDGET).
+    let(:startup_budget) { 10 }
+    # Most the startup jitter before users.list can sleep.
+    let(:max_jitter) { 5 }
+
+    def start_bot
+      measure { described_class.new }
+    end
+
+    {
+      econnreset: 1,
+      http500: 1,
+      throttle_long: 1, # Retry-After 30 overruns the budget at once
+      throttle: 10      # Retry-After 1: nine 1 s waits fit in the 10 s budget
+    }.each do |kind, attempts|
+      it "gives up on users.list within the budget (#{kind})" do
+        plan['users.list'] << failure(kind)
+
+        bot, elapsed, delta = start_bot
+
+        expect(bot.initialized?).to be false
+        expect(bot.error_message).to eq('Slack user list unavailable')
+        expect(elapsed).to be < max_jitter + startup_budget
+        expect(delta['users.list']).to eq(attempts)
+        expect(delta['auth.test']).to eq(1)
+      end
+    end
+
+    it 'gives up on users.list within the budget when Slack sends no Retry-After' do
+      plan['users.list'] << -> { http_response(429, '') }
+
+      bot, elapsed, delta = start_bot
+
+      expect(bot.initialized?).to be false
+      expect(elapsed).to be < max_jitter + startup_budget
+      expect(delta['users.list']).to eq(1)
+    end
+
+    it 'delivers on the first message after the cooldown once Slack is back' do
+      plan['users.list'] << failure(:econnreset)
+      bot, = start_bot
+      plan['users.list'].clear
+      plan['users.list'] << users_ok
+      wait_out_cooldown
+
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls).to include('auth.test' => 1, 'users.list' => 2)
+      expect(posted.map { |p| p['channel'] }).to eq(['U1'])
+    end
+
+    it 'caps the check of the stored token' do
+      allow(Script).to receive(:exists?).with('lnet').and_return(false)
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:econnreset)
+
+      bot, elapsed, delta = start_bot
+
+      expect(bot.initialized?).to be false
+      expect(bot.error_message).to include('Slack unavailable')
+      expect(elapsed).to be < startup_budget
+      expect(delta['auth.test']).to eq(1)
+      expect(calls['users.list']).to eq(0)
+    end
+
+    it 'caps the check of a token found over LNet' do
+      lnet = double('lnet script', name: 'lnet', unique_buffer: [])
+      stub_const('LNet', Module.new)
+      allow(LNet).to receive(:server).and_return(double('server', closed?: false))
+      allow(Script).to receive(:running).and_return([lnet])
+      allow(Script).to receive(:hidden).and_return([])
+      allow_any_instance_of(described_class).to receive(:pause)
+      allow_any_instance_of(described_class).to receive(:get)
+        .and_return('[Private]-X:Quilsilgas: "slack_token: found-token"')
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:ok_false)   # the stored token
+      plan['auth.test'] << failure(:econnreset) # the token found over LNet
+
+      bot, elapsed, delta = start_bot
+
+      expect(bot.error_message).to include('Slack unavailable')
+      expect(elapsed).to be < startup_budget
+      expect(delta['auth.test']).to eq(2)
+      expect(calls['users.list']).to eq(0)
+    end
+
+    it 'abandons a hung users.list request at the deadline' do
+      stub_const("#{described_class}::STARTUP_REQUEST_BUDGET", 0.2)
+      # The stubbed jitter sleep moves the monotonic clock this spec reads.
+      allow_any_instance_of(described_class).to receive(:rand).and_return(0.0)
+      plan['users.list'] << -> { Kernel.sleep(5) }
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      bot = described_class.new
+      wall = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(bot.initialized?).to be false
+      expect(wall).to be < 2
+    end
+
+    it 'abandons a hung token check at the deadline' do
+      stub_const("#{described_class}::STARTUP_REQUEST_BUDGET", 0.2)
+      allow(Script).to receive(:exists?).with('lnet').and_return(false)
+      plan['auth.test'].clear
+      plan['auth.test'] << -> { Kernel.sleep(5) }
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      bot = described_class.new
+      wall = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(bot.initialized?).to be false
+      expect(wall).to be < 2
+    end
+
+    it 'keeps the jitter before users.list and starts the users.list budget after it' do
+      # Jitter pinned at its 5 s maximum. A Retry-After of 6 plus its pinned
+      # 3 s backoff jitter fits in the 10 s budget only when the budget
+      # starts after the startup jitter.
+      allow_any_instance_of(described_class).to receive(:rand) { |_bot, range| range.max }
+      plan['users.list'] << -> { http_response(429, '', 'Retry-After' => '6') }
+      plan['users.list'] << users_ok
+
+      bot, = start_bot
+
+      expect(sleeps).to eq([5.0, 9])
+      expect(bot.initialized?).to be true
+      expect(calls['users.list']).to eq(2)
+    end
+
+    it 'still uses a list another character cached during the jitter' do
+      plan['users.list'] << -> { raise 'users.list called with a fresh cache' }
+      allow_any_instance_of(described_class).to receive(:sleep) do |_bot, seconds|
+        sleeps << seconds
+        clock[:offset] += seconds
+        fresh_cache
+      end
+
+      bot, = start_bot
+
+      expect(bot.initialized?).to be true
+      expect(calls['users.list']).to eq(0)
+    end
+
+    it 'defines STARTUP_REQUEST_BUDGET as a short cap' do
+      expect(described_class::STARTUP_REQUEST_BUDGET).to eq(startup_budget)
+    end
+  end
+
   describe 'a message sent while users.list is still failing' do
     {
       http500: 1, ok_false: 1, econnreset: 1, throttle_long: 1,
@@ -212,33 +366,33 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     it 'waits out a Retry-After longer than the cooldown before calling again' do
       plan['users.list'] << -> { http_response(429, '', 'Retry-After' => '120') }
       bot = described_class.new
-      expect(calls['users.list']).to eq(11)
+      expect(calls['users.list']).to eq(1)
 
       plan['users.list'].clear
       plan['users.list'] << users_ok
-      advance(60)
+      advance(119)
       expect(bot.direct_message('alice', 'help')).to be_nil
-      expect(calls['users.list']).to eq(11)
+      expect(calls['users.list']).to eq(1)
 
-      advance(61)
+      advance(2)
       expect(bot.direct_message('alice', 'help')).to include('ok' => true)
-      expect(calls['users.list']).to eq(12)
+      expect(calls['users.list']).to eq(2)
     end
 
     it 'caps the cooldown at MAX_RETRY_DELAY_SECONDS when Retry-After is outsized' do
       plan['users.list'] << -> { http_response(429, '', 'Retry-After' => '7200') }
       bot = described_class.new
-      expect(calls['users.list']).to eq(11)
+      expect(calls['users.list']).to eq(1)
 
       plan['users.list'].clear
       plan['users.list'] << users_ok
       advance(299)
       expect(bot.direct_message('alice', 'help')).to be_nil
-      expect(calls['users.list']).to eq(11)
+      expect(calls['users.list']).to eq(1)
 
       advance(2)
       expect(bot.direct_message('alice', 'help')).to include('ok' => true)
-      expect(calls['users.list']).to eq(12)
+      expect(calls['users.list']).to eq(2)
     end
 
     it 'caps the cooldown when a Retry-After overruns the send budget' do
@@ -376,26 +530,33 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
   end
 
-  describe 'a startup throttled with an unusable Retry-After' do
-    it 'waits at least 1 s between the retries when Retry-After is 0' do
+  describe 'a throttle with an unusable Retry-After' do
+    it 'waits at least 1 s between the startup retries when Retry-After is 0' do
       plan['users.list'] << failure(:throttle_zero)
 
       bot = described_class.new
 
       expect(bot.initialized?).to be false
-      expect(calls['users.list']).to eq(11)
+      expect(calls['users.list']).to eq(10)
       throttle_waits = sleeps.drop(1) # the first sleep is the startup jitter
-      expect(throttle_waits.length).to eq(10)
+      expect(throttle_waits.length).to eq(9)
       expect(throttle_waits).to all(be >= 1)
     end
 
     it 'falls back to the exponential backoff when Retry-After is not a number' do
       plan['users.list'] << -> { http_response(429, '', 'Retry-After' => 'soon') }
+      plan['users.list'] << -> { http_response(429, '', 'Retry-After' => 'soon') }
       plan['users.list'] << users_ok
 
+      # The 30 s backoff does not fit in the startup budget.
       bot = described_class.new
+      expect(bot.initialized?).to be false
+      expect(calls['users.list']).to eq(1)
+      expect(sleeps.drop(1)).to be_empty
 
-      expect(bot.initialized?).to be true
+      # A manual reconnect! keeps the full retry policy.
+      sleeps.clear
+      expect(bot.reconnect!).to be true
       expect(sleeps.drop(1).first).to be >= 30
     end
   end
@@ -474,16 +635,17 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(posted.map { |p| p['channel'] }).to eq(['U1'])
     end
 
-    it 'keeps the full retry policy for the token check at startup' do
+    it 'keeps the full retry policy for the token check of a manual reconnect!' do
+      plan['users.list'] << users_ok
+      bot = described_class.new
+      expect(bot.initialized?).to be true
       plan['auth.test'].clear
       plan['auth.test'] << failure(:econnreset)
       plan['auth.test'] << ok({})
-      plan['users.list'] << users_ok
+      sleeps.clear
 
-      bot = described_class.new
-
-      expect(bot.initialized?).to be true
-      expect(calls['auth.test']).to eq(2)
+      expect(bot.reconnect!).to be true
+      expect(calls['auth.test']).to eq(3)
       expect(sleeps.first).to be >= 30
     end
 
