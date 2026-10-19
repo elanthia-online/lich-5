@@ -1453,21 +1453,55 @@ RSpec.describe Lich::Common::Settings do
         expect(@mock_db).not_to have_received(:get_settings)
       end
 
-      it "does not cache a row re-read while another thread's write is in progress, and caches the next one" do
+      it "caches a row re-read while another thread's write is in progress without a version, and records one on the next read" do
         game_write('k', 1)
         expect(game_read('k')).to eq(1)
         release = hold_entry_lock
         their_write("k" => 2)
 
         expect(Thread.new { game_read('k') }.value).to eq(2)
-        expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to eq("k" => 1) # not cached
+        expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to eq("k" => 2)
+        expect(settings.instance_variable_get(:@cache_versions)).not_to have_key("test_script::GSIV")
+
+        allow(@mock_db).to receive(:get_settings).and_call_original
+        expect(Thread.new { game_read('k') }.value).to eq(2) # no version: read again
+        expect(@mock_db).to have_received(:get_settings).once
         release << true
         @holder.join(5)
 
-        allow(@mock_db).to receive(:get_settings).and_call_original
+        expect(game_read('k')).to eq(2) # read again, now with the version recorded
         expect(game_read('k')).to eq(2)
+        expect(@mock_db).to have_received(:get_settings).twice
+      end
+
+      it "does not go back to the older cached row when the version can't be read during another thread's write" do
+        game_write('k', 1)
+        expect(game_read('k')).to eq(1)
+        release = hold_entry_lock
+        their_write("k" => 2)
+
+        expect(Thread.new { game_read('k') }.value).to eq(2)
+        @mock_db.data_version_unknown = true # another process now holds the lock
+        expect(Thread.new { game_read('k') }.value).to eq(2)
+        expect(game_read('k')).to eq(2) # the holder is another thread; this one too
+        release << true
+        @holder.join(5)
         expect(game_read('k')).to eq(2)
-        expect(@mock_db).to have_received(:get_settings).once
+      end
+
+      it "does not cache a row re-read during another thread's write when the cache entry changed meanwhile" do
+        game_write('k', 1)
+        expect(game_read('k')).to eq(1)
+        release = hold_entry_lock
+        their_write("k" => 2)
+        @reader, go = start_paused_reader { game_read('k') }
+        newer = { "k" => 3 }
+        settings.send(:store_in_cache, "test_script::GSIV", newer) # as the writer would
+        go << true
+
+        expect(@reader.value).to eq(2)
+        expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to equal(newer)
+        release << true
       end
 
       # Starts a nested write (game_read(key)[...] = ... through the block) in
@@ -1591,6 +1625,44 @@ RSpec.describe Lich::Common::Settings, "reads through the real DatabaseAdapter" 
     expect(game_read('k')).to eq(1) # the version can't be read: the cached row is used
 
     expect(game_read('k')).to eq(2)
+  end
+
+  it "keeps showing a newer row read during another thread's write when another session then holds the lock" do
+    their_write("ext" => 1)
+    expect(game_read('ext')).to eq(1)
+    paused = Queue.new
+    release = Queue.new
+    first = true
+    allow(@adapter).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+      original.call(*args) do |fresh|
+        if first
+          first = false
+          paused << true
+          release.pop
+        end
+        block.call(fresh)
+      end
+    end
+    writer = Thread.new { settings.set_script_settings("GSIV", 'mine', 5) }
+    Timeout.timeout(5) { paused.pop }
+
+    their_write("ext" => 2)
+    expect(game_read('ext')).to eq(2)
+    locker = SQLite3::Database.new(db_file)
+    begin
+      locker.execute('BEGIN EXCLUSIVE') # another session holds the lock
+      expect(@adapter.data_version).to be_nil
+      expect(game_read('ext')).to eq(2)
+    ensure
+      locker.rollback if locker.transaction_active?
+      locker.close
+      release << true
+    end
+    expect(writer.join(5)).to eq(writer)
+    expect(game_read('ext')).to eq(2)
+    expect(game_read('mine')).to eq(5)
+  ensure
+    writer&.kill
   end
 
   it "shows another session's commit and then stops reading the row" do
