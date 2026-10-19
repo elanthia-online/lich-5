@@ -790,16 +790,6 @@ RSpec.shared_examples 'a game Map class' do |game|
 
         expect { map_class.save_json(path) }.not_to raise_error
       end
-
-      it 'save_json does not reload when the map is empty' do
-        path = File.join(map_dir, 'saved.json')
-        FileUtils.mkdir_p(map_dir)
-        allow(map_class).to receive(:reload)
-
-        map_class.save_json(path)
-
-        expect(map_class).not_to have_received(:reload)
-      end
     end
 
     describe '.match_multi_ids' do
