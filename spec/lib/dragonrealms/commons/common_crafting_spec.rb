@@ -308,6 +308,8 @@ describe DRCC do
     let(:untied) { 'You untie' }
     let(:untie_what) { 'Untie what' }
     let(:wounded) { 'Your wounds hinder your ability to do that' }
+    let(:pickup) { 'You pick up' }
+    let(:already) { 'You are already' }
 
     let(:sent) { [] }
 
@@ -320,9 +322,12 @@ describe DRCC do
       queue = replies.dup
       allow(drc).to receive(:bput) do |command, *patterns|
         sent << command
-        reply = queue.size > 1 ? queue.shift : queue.first
-        patterns.flatten.map { |pattern| reply.match(pattern) }.compact.first.to_a.first || ''
+        bput_result(queue.size > 1 ? queue.shift : queue.first, patterns)
       end
+    end
+
+    def bput_result(reply, patterns)
+      patterns.flatten.map { |pattern| reply.match(pattern) }.compact.first.to_a.first || ''
     end
 
     # An exit that escapes an example ends rspec early with status 0, which
@@ -486,6 +491,17 @@ describe DRCC do
         expect(result).to be false
         expect(sent).to eq(['untie my mallet from my toolbelt', 'untie my mallet from my toolbelt', 'get my mallet'])
       end
+
+      # The belt untie and the plain untie each get one safe-room visit, so
+      # this call makes two; neither untie is sent more than twice.
+      it 'visits safe-room once per untie command when the belt falls through to a tied GET' do
+        reply_with(wounded, untie_what, tied, wounded)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, belt, true)).to be false
+        expect(drc).to have_received(:wait_for_script_to_complete).with('safe-room', ['force']).twice
+        expect(sent).to eq(['untie my mallet from my toolbelt'] * 2 + ['get my mallet'] + ['untie my mallet'] * 2)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Your wounds still hinder untying: mallet')
+      end
     end
 
     context 'when the GET says the item is tied' do
@@ -612,31 +628,56 @@ describe DRCC do
     end
 
     # Every ordered sequence of four replies (the last one repeats), from the
-    # belt and without it: the method always ends with a boolean or, without
-    # skip_exit, an exit. It sends each command at most twice (the GET once),
-    # and visits safe-room at most once per untie command.
+    # belt and without it, with the item in hand afterwards and without: the
+    # method always ends with a boolean or, without skip_exit, an exit. It
+    # sends each command at most twice (the GET once), and visits safe-room at
+    # most once per untie command. With the item in hand, only a GET answered
+    # "can't quite lift it" ends in anything but true.
     context 'across every sequence of four replies' do
-      let(:replies) { [got, heavy, not_found, tied, untied, untie_what, wounded, ''] }
+      let(:replies) { [got, pickup, already, heavy, not_found, tied, untied, untie_what, wounded, ''] }
 
+      # Stubbed once, reading the loop's state, as re-stubbing in every one of
+      # the 80,000 iterations would dominate the run time.
       it 'is bounded and honours skip_exit' do
+        queue = []
+        exchanges = []
+        held = false
+        trips = 0
+        allow(drc).to receive(:bput) do |command, *patterns|
+          sent << command
+          reply = queue.size > 1 ? queue.shift : queue.first
+          exchanges << [command, reply]
+          bput_result(reply, patterns)
+        end
+        allow(drci).to receive(:in_hands?) { held }
+        allow(drc).to receive(:wait_for_script_to_complete) { trips += 1 }
+
         replies.product(replies, replies, replies).each do |sequence|
           [nil, belt].each do |which_belt|
             [true, false].each do |skip_exit|
-              sent.clear
-              reply_with(*sequence)
-              trips = 0
-              allow(drc).to receive(:wait_for_script_to_complete) { trips += 1 }
-              label = "#{sequence.inspect} belt=#{!which_belt.nil?} skip_exit=#{skip_exit}"
+              [true, false].each do |held_after|
+                sent.clear
+                exchanges.clear
+                queue = sequence.dup
+                held = held_after
+                trips = 0
+                label = "#{sequence.inspect} belt=#{!which_belt.nil?} skip_exit=#{skip_exit} held=#{held_after}"
 
-              begin
-                result = DRCC.get_crafting_item('mallet', 'backpack', nil, which_belt, skip_exit)
-                expect(result).to(satisfy(label) { |value| [true, false].include?(value) })
-              rescue SystemExit
-                expect(skip_exit).to be(false), "exited despite skip_exit: #{label}"
+                result = :exited
+                begin
+                  result = DRCC.get_crafting_item('mallet', 'backpack', nil, which_belt, skip_exit)
+                  expect(result).to(satisfy(label) { |value| [true, false].include?(value) })
+                rescue SystemExit
+                  expect(skip_exit).to be(false), "exited despite skip_exit: #{label}"
+                end
+                expect(trips).to be <= sent.uniq.count { |command| command.start_with?('untie') }, label
+                expect(sent.tally.values.max).to be <= 2, label
+                expect(sent.count { |command| command.start_with?('get') }).to be <= 1, label
+                next unless held_after
+
+                lifted = exchanges.none? { |command, reply| command.start_with?('get') && reply == heavy }
+                expect(result == true).to eq(lifted), label
               end
-              expect(trips).to be <= sent.uniq.count { |command| command.start_with?('untie') }, label
-              expect(sent.tally.values.max).to be <= 2, label
-              expect(sent.count { |command| command.start_with?('get') }).to be <= 1, label
             end
           end
         end
