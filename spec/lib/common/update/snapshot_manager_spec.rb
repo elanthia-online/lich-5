@@ -60,10 +60,12 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
   end
 
   # Writes a snapshot directory by hand. +omit+ drops parts to model the
-  # incomplete directories older Lich versions left behind.
-  def make_snapshot(stamp, version, omit: [])
+  # incomplete directories older Lich versions left behind. With +staged+
+  # it carries the marker #snapshot writes, as one this version published.
+  def make_snapshot(stamp, version, omit: [], staged: false)
     dir = File.join(BACKUP_DIR, "L5-snapshot-#{stamp}")
     FileUtils.mkdir_p(dir)
+    File.write(File.join(dir, described_class::STAGED_MARKER_NAME), '') if staged
     write(File.join(dir, lich_name), "# lich #{version}\n") unless omit.include?(:lich)
     write(File.join(dir, 'lib', 'version.rb'), "LICH_VERSION = '#{version}'\n") unless omit.include?(:version)
     write(File.join(dir, 'lib', 'common', 'util.rb'), "# util #{version}\n") unless omit.include?(:lib)
@@ -179,6 +181,57 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     end
   end
 
+  # Runs +action+ in its own thread and parks it just after the +nth+ call
+  # of +owner+'s method +meth+ (a private SnapshotManager method). Yields
+  # while it is parked, then lets it finish and returns its value (or the
+  # error it raised).
+  def while_parked_after(action, owner, meth, nth: 1)
+    parked = Queue.new
+    resume = Queue.new
+    real = owner.method(meth)
+    calls = 0
+    owner.define_singleton_method(meth) do |*args, **kwargs, &block|
+      result = real.call(*args, **kwargs, &block)
+      calls += 1
+      if calls == nth
+        parked << true
+        resume.pop
+      end
+      result
+    end
+    worker = Thread.new do
+      action.call
+    rescue StandardError => e
+      e
+    end
+    begin
+      expect(parked.pop(timeout: 30)).to be(true)
+      yield
+    ensure
+      resume << true
+    end
+    expect(worker.join(30)).to eq(worker)
+    worker.value
+  end
+
+  def revert_lock_path
+    File.join(BACKUP_DIR, described_class::REVERT_LOCK_NAME)
+  end
+
+  # Takes the revert lock with +mode+ through a separate open file, as
+  # another process would. flock locks belong to the open file, so this
+  # conflicts with the manager's own open even within one process.
+  def hold_revert_lock(mode)
+    File.open(revert_lock_path, File::RDWR | File::CREAT, 0o644) do |lock|
+      expect(lock.flock(mode | File::LOCK_NB)).to be_truthy
+      yield
+    end
+  end
+
+  def revert_lock_free?
+    File.open(revert_lock_path, File::RDWR | File::CREAT, 0o644) { |lock| lock.flock(File::LOCK_EX | File::LOCK_NB) ? true : false }
+  end
+
   describe '#snapshot' do
     before { install('5.22.0') }
 
@@ -198,7 +251,135 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       dir = manager.snapshot
 
       expect(tree(File.join(dir, 'lib'))).to eq(tree(LIB_DIR))
-      expect(Dir.children(dir).sort).to eq([lich_name, 'lib', 'scripts'].sort)
+      expect(Dir.children(dir).sort).to eq([lich_name, 'lib', 'scripts', described_class::STAGED_MARKER_NAME].sort)
+    end
+
+    it 'marks the snapshot as staged, so #revert never treats it as an older Lich\'s' do
+      FileUtils.rm_f(File.join(SCRIPT_DIR, 'map.lic'))
+      dir = manager.snapshot
+      write(File.join(SCRIPT_DIR, 'map.lic'), "# map installed later\n")
+      messages = capture_responses
+
+      manager.revert
+
+      expect(File.file?(File.join(dir, described_class::STAGED_MARKER_NAME))).to be(true)
+      expect(messages.join("\n")).to include('reverted to Lich5 version 5.22.0')
+      expect(messages).to include('    map.lic')
+    end
+
+    context 'when a revert on the same installation is running' do
+      let(:refusal) { 'A revert is running on this installation, so no snapshot was saved and nothing was changed.' }
+
+      it 'raises, says so and copies nothing while the lock is held exclusively' do
+        messages = capture_responses
+        error = nil
+
+        hold_revert_lock(File::LOCK_EX) do
+          manager.snapshot
+        rescue StandardError => e
+          error = e
+        end
+
+        expect(published).to be_empty
+        expect(staging).to be_empty
+        expect(messages).to include(refusal)
+        expect(error).to be_a(described_class::RevertRunningError)
+        expect(messages.join("\n")).not_to include('backed up to')
+      end
+
+      # A snapshot copying lib/ while a revert in another session has it
+      # half swapped would publish a mix of the two versions that can pass
+      # #revert's completeness check.
+      it 'publishes nothing at any point of a revert\'s swap' do
+        total = nil
+        nth = 0
+        while total.nil? || nth < total
+          nth += 1
+          FileUtils.rm_rf(Dir.glob(File.join(BACKUP_DIR, 'L5-*')))
+          install('5.22.0')
+          older = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+          reverting = described_class.new
+          allow(reverting).to receive(:respond)
+          second = described_class.new
+          allow(second).to receive(:respond)
+          renames = 0
+          real_move = reverting.method(:move_entry)
+          reverting.define_singleton_method(:move_entry) do |*args|
+            renames += 1
+            real_move.call(*args)
+          end
+          outcome = nil
+
+          while_parked_after(-> { reverting.revert }, reverting, :move_entry, nth: nth) do
+            outcome = begin
+              second.snapshot
+            rescue StandardError => e
+              e
+            end
+          end
+
+          expect(published).to eq([older]), "after swap rename #{nth}: #{outcome.inspect}"
+          expect(staging).to be_empty
+          expect(outcome).to be_a(described_class::RevertRunningError)
+          expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+          total ||= renames
+        end
+        expect(total).to be >= 10
+      end
+
+      it 'does not wait for or block another snapshot' do
+        dir = nil
+
+        hold_revert_lock(File::LOCK_SH) { dir = manager.snapshot }
+
+        expect(published).to eq([dir])
+      end
+
+      it 'stops a revert started while it is copying, and still publishes' do
+        reverting = described_class.new
+        messages = []
+        allow(reverting).to receive(:respond) { |msg = ''| messages << msg.to_s }
+        older = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        before = live_state
+
+        dir = while_parked_after(-> { manager.snapshot }, manager, :copy_core_files) do
+          reverting.revert
+        end
+
+        expect(messages).to include('Another revert or a snapshot is running on this installation. Nothing was changed.')
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(published.sort).to eq([older, dir].sort)
+      end
+
+      it 'releases the lock when it publishes and when a copy fails' do
+        manager.snapshot
+        expect(revert_lock_free?).to be(true)
+
+        allow(FileUtils).to receive(:cp_r).and_raise(Errno::EIO)
+        expect { manager.snapshot }.to raise_error(Errno::EIO)
+        expect(revert_lock_free?).to be(true)
+      end
+
+      it 'still takes the snapshot when the filesystem does not support flock' do
+        allow(File).to receive(:open).and_wrap_original do |original, *args, **kwargs, &block|
+          file = original.call(*args, **kwargs)
+          allow(file).to receive(:flock).and_raise(Errno::ENOLCK) if args.first == revert_lock_path
+          next file unless block
+
+          begin
+            block.call(file)
+          ensure
+            file.close
+          end
+        end
+        messages = capture_responses
+
+        dir = manager.snapshot
+
+        expect(published).to eq([dir])
+        expect(messages.grep(/continuing without the lock/)).not_to be_empty
+      end
     end
 
     it 'produces a snapshot that #revert accepts and restores' do
@@ -865,11 +1046,11 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       kept.each { |path| expect(messages).to include("    #{path}") }
     end
 
+    # A snapshot this version published was copied in full, so a core
+    # script it lacks was not installed when it was taken.
     context 'when the snapshot lacks core scripts that are installed' do
       it 'restores it, keeps them and names them as kept at the current version' do
-        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts])
-        # Older versions created scripts/ before copying the core scripts
-        # into it one by one, so an interrupted one left it empty.
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts], staged: true)
         FileUtils.mkdir_p(File.join(dir, 'scripts'))
         write(File.join(SCRIPT_DIR, 'jinx.lic'), "# jinx 5.22.0\n")
         messages = capture_responses
@@ -885,7 +1066,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       end
 
       it 'names only the ones missing when the snapshot has some of them' do
-        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
         File.delete(File.join(dir, 'scripts', 'map.lic'))
         messages = capture_responses
 
@@ -906,7 +1087,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       end
 
       it 'does not claim scripts were kept when the revert fails' do
-        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts])
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts], staged: true)
         FileUtils.mkdir_p(File.join(dir, 'scripts'))
         allow(File).to receive(:rename).and_wrap_original do |original, from, to|
           raise Errno::EACCES, to if to == File.join(LICH_DIR, lich_name) && from.include?('.lich5-revert-new-')
@@ -918,6 +1099,115 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect { manager.revert }.to raise_error(Errno::EACCES)
 
         expect(messages.grep(/kept at the current version/)).to be_empty
+      end
+    end
+
+    # Older Lich versions copied straight into L5-snapshot-<DATE-TIME>,
+    # the core scripts last and one at a time in CORE_SCRIPTS order (go2.lic
+    # before jinx.lic before map.lic), so one interrupted while copying them
+    # left the rest out and the last one possibly cut short.
+    context 'when an older Lich was interrupted while copying the core scripts' do
+      let!(:complete) { make_snapshot('2026-10-01-00-00-00', '5.20.0') }
+
+      def refuses(bad, problem)
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('The newest snapshot is incomplete, so nothing was changed:')
+        expect(messages).to include("    #{bad}")
+        expect(messages).to include("  - #{problem}")
+        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+        expect(messages).to include('The next complete snapshot is Lich5 version 5.20.0:')
+        expect(messages.join("\n")).not_to include('has been reverted')
+      end
+
+      it 'refuses one whose scripts/ is empty although core scripts are installed' do
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[scripts])
+        FileUtils.mkdir_p(File.join(bad, 'scripts'))
+
+        refuses(bad, 'scripts/ has none of the installed core scripts (go2.lic map.lic), so copying them stopped early')
+      end
+
+      it 'refuses one that stops before an installed core script, naming the one that may be cut short' do
+        write(File.join(SCRIPT_DIR, 'version.lic'), "# version 5.22.0\n")
+        write(File.join(complete, 'scripts', 'version.lic'), "# version 5.20.0\n")
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.delete(File.join(bad, 'scripts', 'map.lic'))
+
+        refuses(bad, 'scripts/ ends at go2.lic and has none of the installed core scripts after it ' \
+                     '(map.lic version.lic), so copying them stopped early and go2.lic may be cut short')
+      end
+
+      it 'refuses one with an empty core script' do
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.write(File.join(bad, 'scripts', 'map.lic'), '')
+
+        refuses(bad, 'scripts/map.lic is empty')
+      end
+
+      it 'restores the complete snapshot once the user removes the cut-off one' do
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[scripts])
+        FileUtils.mkdir_p(File.join(bad, 'scripts'))
+        manager.revert
+        FileUtils.remove_entry(bad)
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.20.0'\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("# map 5.20.0\n")
+      end
+
+      it 'restores one that lacks a core script between two it has, keeping that script' do
+        write(File.join(SCRIPT_DIR, 'jinx.lic'), "# jinx 5.22.0\n")
+        make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("# map 5.21.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'jinx.lic'))).to eq("# jinx 5.22.0\n")
+        expect(messages).to include('    jinx.lic')
+      end
+
+      it 'restores one whose missing core scripts are not installed now either' do
+        File.delete(File.join(SCRIPT_DIR, 'map.lic'))
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.delete(File.join(bad, 'scripts', 'map.lic'))
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(messages.grep(/kept at the current version/)).to be_empty
+      end
+
+      it 'accepts the same layouts from a snapshot this version published' do
+        dir = make_snapshot('2026-10-17-00-00-00', '5.21.0', staged: true)
+        File.delete(File.join(dir, 'scripts', 'map.lic'))
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("# map 5.22.0\n")
+        expect(messages).to include('    map.lic')
+      end
+
+      it 'names the problem alongside a missing lib/version.rb' do
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[version scripts])
+        FileUtils.mkdir_p(File.join(bad, 'scripts'))
+        messages = capture_responses
+
+        manager.revert
+
+        problems = messages.grep(/^  - /)
+        expect(problems).to include('  - lib/version.rb is missing')
+        expect(problems.grep(/copying them stopped early/).size).to eq(1)
       end
     end
 
@@ -993,35 +1283,31 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     end
 
     context 'when another revert on the same installation is running' do
-      let(:lock_path) { File.join(BACKUP_DIR, described_class::REVERT_LOCK_NAME) }
-      let(:refusal) { 'Another revert is already running on this installation. Nothing was changed.' }
+      let(:lock_path) { revert_lock_path }
+      let(:refusal) { 'Another revert or a snapshot is running on this installation. Nothing was changed.' }
 
       before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
-
-      # Takes the revert lock through a separate open file, as another
-      # process would. flock locks belong to the open file, so this
-      # conflicts with the manager's own open even within one process.
-      def hold_lock
-        File.open(lock_path, File::RDWR | File::CREAT, 0o644) do |lock|
-          expect(lock.flock(File::LOCK_EX | File::LOCK_NB)).to be_truthy
-          yield
-        end
-      end
-
-      def lock_free?
-        File.open(lock_path, File::RDWR | File::CREAT, 0o644) { |lock| lock.flock(File::LOCK_EX | File::LOCK_NB) ? true : false }
-      end
 
       it 'changes nothing and says so while the lock is held' do
         before = live_state
         messages = capture_responses
 
-        hold_lock { manager.revert }
+        hold_revert_lock(File::LOCK_EX) { manager.revert }
 
         expect(live_state).to eq(before)
         expect(revert_temp_dirs).to be_empty
         expect(messages).to include(refusal)
         expect(messages).not_to include('Restoring Lich5 version 5.21.0 from:')
+      end
+
+      it 'changes nothing while a snapshot holds the lock shared' do
+        before = live_state
+        messages = capture_responses
+
+        hold_revert_lock(File::LOCK_SH) { manager.revert }
+
+        expect(live_state).to eq(before)
+        expect(messages).to include(refusal)
       end
 
       it 'refuses while a revert in another process is part way through swapping files' do
@@ -1080,7 +1366,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
       it 'releases the lock when it finishes and when it fails' do
         manager.revert
-        expect(lock_free?).to be(true)
+        expect(revert_lock_free?).to be(true)
 
         install('5.22.0')
         allow(File).to receive(:rename).and_wrap_original do |original, from, to|
@@ -1089,7 +1375,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
           original.call(from, to)
         end
         expect { manager.revert }.to raise_error(Errno::EACCES)
-        expect(lock_free?).to be(true)
+        expect(revert_lock_free?).to be(true)
       end
 
       it 'creates BACKUP_DIR for the lock and still reports when there is no snapshot' do
