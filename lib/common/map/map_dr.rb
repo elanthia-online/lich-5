@@ -22,6 +22,11 @@ module Lich
       @@current_location_count ||= -1
       @@current_room_uid       ||= -1
       @@previous_room_id       ||= -1
+      # The last two room resolutions, each [room_count, room id, live UID,
+      # nav_count]. See {note_resolution} and {anchor_room}.
+      @@resolution_mutex         = Mutex.new
+      @@last_resolution        ||= nil
+      @@prior_resolution       ||= nil
       @@uids                     = {}
 
       attr_reader :id
@@ -80,7 +85,10 @@ module Lich
           @@current_room_id
         end
 
+        # Every resolution goes through here (set_current and set_fuzzy), so it
+        # is also noted for {anchor_room}.
         def current_room_id=(id)
+          note_resolution(id)
           @@current_room_id = id
         end
 
@@ -136,6 +144,50 @@ module Lich
 
       def self.previous
         @@list[@@previous_room_id]
+      end
+
+      # Remember which room the live display at the current room count resolved
+      # to, the UID the game showed with it, and how many arrivals the game had
+      # reported by then. A later resolution of the same display replaces the
+      # record only with a room, never with nil: scriptless matching declines a
+      # peer-tagged room that a script resolves.
+      #
+      # @param id [Integer, nil] the resolved room id
+      # @return [void]
+      def self.note_resolution(id)
+        count = XMLData.room_count
+        record = [count, id, XMLData.room_id.to_i, XMLData.nav_count]
+        @@resolution_mutex.synchronize do
+          if @@last_resolution && @@last_resolution[0] == count
+            @@last_resolution = record unless id.nil?
+          else
+            @@prior_resolution = @@last_resolution
+            @@last_resolution = record
+          end
+        end
+      end
+
+      # Forget the noted resolutions, so no room carries over as an anchor.
+      #
+      # @return [void]
+      def self.reset_resolutions
+        @@resolution_mutex.synchronize do
+          @@last_resolution = nil
+          @@prior_resolution = nil
+        end
+      end
+
+      # The newest noted resolution made for a room count before the live one.
+      # A resolution of the live display itself is never returned: it would make
+      # the room its own anchor.
+      #
+      # @return [Array, nil] [room_count, room id, live UID, nav_count]
+      def self.earlier_resolution
+        count = XMLData.room_count
+        records = @@resolution_mutex.synchronize { [@@last_resolution, @@prior_resolution] }
+        records.find do |record|
+          record && record[0].is_a?(Integer) && count.is_a?(Integer) && record[0] < count
+        end
       end
 
       def self.current
@@ -251,20 +303,51 @@ module Lich
         end
       end
 
+      # The room the character was in before the live display, to judge which
+      # of several identical rooms it can have reached.
+      #
+      # DR resolves a room only on demand, so the last resolved room can be
+      # several moves old (go2 walks its whole path without asking) or can be
+      # the live room itself (resolved a moment ago for the same display). The
+      # game's own record of the room it left comes first: the UID of the
+      # previous <nav>, when exactly one room has it. Otherwise the room
+      # resolved for an earlier display is used, but only when it was resolved
+      # in the room just left (one arrival ago, and shown with the UID the game
+      # says that room had) or in the live room before any further arrival
+      # (shown with the live UID). An older resolution is never used. Before
+      # the first <nav> there is no previous room to check against, so no
+      # earlier resolution is trusted.
+      #
+      # @return [Lich::Common::Map, nil] the anchor room, or +nil+ when none can
+      #   be trusted
+      def self.anchor_room
+        previous_uid = XMLData.previous_nav_rm
+        ids = previous_uid.to_i.positive? ? ids_from_uid(previous_uid.to_i) : []
+        return @@list[ids.first] if ids.size == 1
+
+        return nil if previous_uid.nil?
+
+        _count, id, uid, nav = earlier_resolution
+        return nil unless id.is_a?(Integer) && id >= 0 && nav.is_a?(Integer)
+
+        arrivals = XMLData.nav_count.to_i - nav
+        return @@list[id] if arrivals == 1 && uid == previous_uid.to_i
+        return @@list[id] if arrivals.zero? && uid == XMLData.room_id.to_i
+
+        nil
+      end
+
       # Of +candidates+, the single one the character can be standing in after
-      # leaving the last resolved room: that room itself, or a room it has a
-      # wayto to. The last resolved room counts because a fresh room display
+      # leaving the anchor room (see {anchor_room}): that room itself, or a room
+      # it has a wayto to. The anchor itself counts because a fresh room display
       # does not always mean a move, so an identical neighbour must not win over
       # it.
       #
       # @param candidates [Array<Lich::Common::Map>]
       # @return [Lich::Common::Map, nil] the one reachable candidate; +nil+ with
-      #   no resolved last room, or when none or several are reachable
+      #   no anchor room, or when none or several are reachable
       def self.adjacent_candidate(candidates)
-        from_id = @@current_room_id
-        return nil unless from_id.is_a?(Integer) && from_id >= 0
-
-        from = @@list[from_id]
+        from = anchor_room
         return nil if from.nil?
 
         wayto = from.wayto || {}
@@ -276,7 +359,7 @@ module Lich
       #
       # Every candidate the live UID vetoes is dropped. A lone survivor is the
       # room. Otherwise the room resolves only when exactly one candidate is
-      # reachable from the last resolved room (see {adjacent_candidate}) and
+      # reachable from the anchor room (see {adjacent_candidate}) and
       # that candidate survived the veto; in every other case it is unresolved
       # rather than the first of them.
       #
@@ -389,6 +472,14 @@ module Lich
           return nil
         end
 
+        # Several rooms fit the live text and none could be told apart from the
+        # room before it. The room may be one of them or a new one; mapping it
+        # as new keeps identical rooms with no UID mappable, so say so.
+        twins = text_candidates.size
+        if twins > 1
+          echo "Map: #{twins} mapped rooms match this room and none can be told apart from the room before it; mapping it as a new room"
+        end
+
         id = get_free_id
         title = [XMLData.room_title]
         description = [XMLData.room_description.strip]
@@ -424,6 +515,7 @@ module Lich
         @@load_mutex.synchronize do
           @@list.clear
           clear_tags_cache
+          reset_resolutions
           @@loaded = false
           GC.start
         end

@@ -45,7 +45,8 @@ XMLData = OpenStruct.new(
   room_description: 'A test room description.',
   room_exits_string: 'Obvious paths: north, south',
   room_window_disabled: false,
-  previous_nav_rm: 11111
+  previous_nav_rm: 11111,
+  nav_count: 0
 ) unless defined?(XMLData)
 
 # When the shared spec_helper XMLData module wins (the usual case), it does not
@@ -109,6 +110,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     map_class.class_variable_set(:@@previous_room_id, -1)
     map_class.class_variable_set(:@@current_room_id, -1)
     map_class.class_variable_set(:@@current_room_count, -1)
+    map_class.reset_resolutions
   end
 
   describe 'class structure' do
@@ -677,6 +679,7 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
     map_class.class_variable_set(:@@current_room_count, -1)
     map_class.class_variable_set(:@@fuzzy_room_count, -1)
     map_class.class_variable_set(:@@loaded, true)
+    map_class.reset_resolutions
     Script.current = nil
   end
 
@@ -1009,8 +1012,20 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
                 room_id: room_id, room_count: room_count)
     end
 
+    # The game reports an arrival: a <nav> after leaving a room it showed with
+    # +uid+ (0 for none).
+    def arrive_from(uid)
+      XMLData.previous_nav_rm = uid
+      XMLData.nav_count = XMLData.nav_count.to_i + 1
+    end
+
+    # Record +id+ as the room resolved for an earlier display (room count 0;
+    # the live helpers default to 1), as Map.current does when it resolves it,
+    # then arrive from it.
     def came_from(id)
-      map_class.current_room_id = id
+      XMLData.room_count = 0
+      map_class.set_current(id)
+      arrive_from(XMLData.room_id)
     end
 
     context 'with several identical rooms and no UID to tell them apart' do
@@ -1319,6 +1334,7 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         map_class.load_uids
         live_room(title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', room_id: 400, room_count: 1)
         expect(map_class.current&.id).to eq(1)
+        arrive_from(400)
         live(room_count: 2)
         expect(map_class.current&.id).to eq(11)
         expect(map_class.previous&.id).to eq(1)
@@ -1343,6 +1359,271 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         expect(map_class.current&.id).to eq(11)
         expect(map_class).not_to receive(:text_candidates)
         expect(map_class.current&.id).to eq(11)
+      end
+    end
+
+    # DR resolves a room only when asked, so the room resolved last can be
+    # several moves old, or the live room itself resolved a moment ago. The
+    # identical rooms are told apart from the room the character was in before
+    # the live display.
+    describe 'the room the character was in before' do
+      let(:bank) { { title: '[Bank]', description: 'B.', exits: 'Obvious paths: east.' } }
+
+      def bank_room(id, uid:, wayto:)
+        build_room(id, **bank, uid: uid, wayto: wayto)
+      end
+
+      def live_bank(uid, room_count)
+        live_room(**bank, room_id: uid, room_count: room_count)
+      end
+
+      it 'gives the same answer when a scriptless hook and a script resolve the same display' do
+        bank_room(1, uid: [9], wayto: { '10' => 'east' })
+        twin(10, wayto: { '11' => 'north', '1' => 'west' })
+        twin(11, wayto: { '10' => 'south' })
+        map_class.load_uids
+        live_bank(9, 1)
+        expect(map_class.current&.id).to eq(1)
+        arrive_from(9)
+        live(room_count: 2)
+        Script.current = nil
+        expect(map_class.current&.id).to eq(10)
+        Script.current = :test_script
+        expect(map_class.current&.id).to eq(10)
+        Script.current = nil
+        expect(map_class.current&.id).to eq(10)
+      end
+
+      it 'trusts no earlier resolution before the game has reported a previous room' do
+        bank_room(1, uid: [9], wayto: { '10' => 'east' })
+        twin(10, wayto: { '11' => 'north', '1' => 'west' })
+        twin(11, wayto: { '10' => 'south' })
+        map_class.load_uids
+        live_bank(9, 1)
+        expect(map_class.current&.id).to eq(1)
+        live(room_count: 2)
+        expect(XMLData.previous_nav_rm).to be_nil
+        expect(map_class.current).to be_nil
+        Script.current = :test_script
+        expect(map_class.current).to be_nil
+      end
+
+      it 'uses the room resolved for an earlier display when the room left showed no UID' do
+        bank_room(1, uid: [], wayto: { '10' => 'east' })
+        twin(10, wayto: { '11' => 'north', '1' => 'west' })
+        twin(11, wayto: { '10' => 'south' })
+        live_bank(0, 1)
+        expect(map_class.current&.id).to eq(1)
+        arrive_from(0)
+        live(room_count: 2)
+        expect(map_class.current&.id).to eq(10)
+        Script.current = :test_script
+        expect(map_class.current&.id).to eq(10)
+      end
+
+      it 'does not use the room resolved for an earlier display when the game showed it with a UID the room left lacks' do
+        bank_room(1, uid: [9], wayto: { '10' => 'east' })
+        twin(10)
+        twin(11)
+        map_class.load_uids
+        live_bank(9, 1)
+        expect(map_class.current&.id).to eq(1)
+        arrive_from(0)
+        live(room_count: 2)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'resolves the destination of a walk that never asked for the rooms on the way' do
+        # A start room resolved, two moves with no resolution, then arrival in
+        # a room with an identical copy elsewhere in the map.
+        build_room(5, title: '[Start]', description: 'S.', exits: 'Obvious paths: east.', uid: [100], wayto: { '7' => 'east' })
+        build_room(7, title: '[Mid]', description: 'M.', exits: 'Obvious paths: east, west.', uid: [101],
+                      wayto: { '10' => 'east', '5' => 'west' })
+        twin(10, wayto: { '7' => 'west' })
+        twin(30)
+        map_class.load_uids
+        live_room(title: '[Start]', description: 'S.', exits: 'Obvious paths: east.', room_id: 100, room_count: 1)
+        expect(map_class.current&.id).to eq(5)
+        arrive_from(101)
+        live(room_count: 3)
+        expect(map_class.current&.id).to eq(10)
+      end
+
+      it 'does not take the copy an old resolution leads to when the game names the room it left' do
+        # S leads to 20; S -> M -> 10 was walked without asking. 10 and 20 are identical.
+        build_room(5, title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', uid: [100],
+                      wayto: { '20' => 'east', '7' => 'west' })
+        build_room(7, title: '[Mid]', description: 'M.', exits: 'Obvious paths: east.', uid: [101], wayto: { '10' => 'north' })
+        twin(10)
+        twin(20)
+        map_class.load_uids
+        live_room(title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', room_id: 100, room_count: 1)
+        expect(map_class.current&.id).to eq(5)
+        arrive_from(101)
+        live(room_count: 3)
+        expect(map_class.current&.id).to eq(10)
+      end
+
+      it 'is unresolved, not the copy an old resolution leads to, when the room left had no UID' do
+        # S leads to 20; S -> M -> 10 was walked without asking, and M has no UID.
+        build_room(5, title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', uid: [100],
+                      wayto: { '20' => 'east', '7' => 'west' })
+        build_room(7, title: '[Mid]', description: 'M.', exits: 'Obvious paths: east.', wayto: { '10' => 'north' })
+        twin(10)
+        twin(20)
+        map_class.load_uids
+        live_room(title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', room_id: 100, room_count: 1)
+        expect(map_class.current&.id).to eq(5)
+        arrive_from(0)
+        live(room_count: 3)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'uses an earlier resolution shown with the UID the game names when several rooms share it' do
+        bank_room(1, uid: [9], wayto: { '10' => 'east' })
+        bank_room(2, uid: [9], wayto: { '11' => 'east' })
+        twin(10)
+        twin(11)
+        map_class.load_uids
+        XMLData.room_id = 9
+        came_from(2)
+        live(room_count: 1)
+        expect(XMLData.previous_nav_rm).to eq(9)
+        expect(map_class.current&.id).to eq(11)
+      end
+
+      it 'does not use an earlier resolution shown with another UID when several rooms share the named one' do
+        bank_room(1, uid: [9], wayto: { '10' => 'east' })
+        bank_room(2, uid: [9], wayto: { '11' => 'east' })
+        twin(10)
+        twin(11)
+        map_class.load_uids
+        XMLData.room_id = 8
+        came_from(2)
+        XMLData.previous_nav_rm = 9
+        live(room_count: 1)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'does not use a resolution made two arrivals ago, even when no room on the way had a UID' do
+        # S leads to 20; S -> M -> 10 was walked without asking. No room has a UID.
+        build_room(5, title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', wayto: { '20' => 'east', '7' => 'west' })
+        build_room(7, title: '[Mid]', description: 'M.', exits: 'Obvious paths: east.', wayto: { '10' => 'north' })
+        twin(10)
+        twin(20)
+        arrive_from(0)
+        live_room(title: '[Start]', description: 'S.', exits: 'Obvious paths: east, west.', room_id: 0, room_count: 1)
+        expect(map_class.current&.id).to eq(5)
+        arrive_from(0)
+        arrive_from(0)
+        live(room_count: 5)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'uses a resolution of the live room made before a later display with no arrival between' do
+        twin(10)
+        twin(11)
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '10' => 'north' })
+        came_from(1)
+        live(room_count: 1)
+        expect(map_class.current&.id).to eq(10)
+        live(room_count: 2) # a second display of the same room, no <nav>
+        map_class.class_variable_set(:@@current_room_count, -1)
+        map_class.class_variable_set(:@@fuzzy_room_count, -1)
+        expect(map_class.anchor_room&.id).to eq(10)
+        expect(map_class.current&.id).to eq(10)
+      end
+
+      it 'does not reach past a display that resolved to nothing' do
+        bank_room(1, uid: [], wayto: { '10' => 'east' })
+        twin(10)
+        twin(11)
+        came_from(1)
+        XMLData.room_count = 1
+        map_class.set_current(nil)
+        live(room_count: 2)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'keeps a resolved room when a later resolution of the same display finds nothing' do
+        # A script resolves a peer-tagged room that scriptless matching declines.
+        bank_room(1, uid: [9], wayto: { '11' => 'east' })
+        twin(10)
+        twin(11, tags: ['peer north =~ /a dock/'], wayto: { '12' => 'north' })
+        build_room(12, title: '[Dock]', description: 'Planks.', exits: 'Obvious paths: south.', wayto: { '11' => 'south' })
+        build_room(13, title: '[Dock]', description: 'Planks.', exits: 'Obvious paths: south.')
+        map_class.load_uids
+        Script.current = :test_script
+        live_bank(9, 1)
+        expect(map_class.current&.id).to eq(1)
+        arrive_from(9)
+        live(room_count: 2)
+        expect(map_class.current&.id).to eq(11)
+        Script.current = nil
+        expect(map_class.current).to be_nil
+        Script.current = :test_script
+        arrive_from(0)
+        live_room(title: '[Dock]', description: 'Planks.', exits: 'Obvious paths: south.', room_id: 0, room_count: 3)
+        expect(map_class.current&.id).to eq(12)
+      end
+
+      it 'forgets earlier resolutions when the map is cleared' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        came_from(1)
+        map_class.clear
+        map_class.class_variable_set(:@@loaded, true)
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10)
+        twin(11)
+        live(room_count: 1)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'ignores a resolution noted with a later room count' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10)
+        twin(11)
+        XMLData.room_count = 5
+        map_class.set_current(1)
+        arrive_from(0)
+        live(room_count: 2)
+        expect(map_class.current).to be_nil
+      end
+    end
+
+    describe '.current_or_new in an ambiguous room' do
+      before(:each) { Script.current = :test_script }
+
+      it 'mints one room for repeated displays, not a new copy on every display' do
+        allow(map_class).to receive(:echo)
+        twin(10)
+        twin(11)
+        arrive_from(0)
+        ids = (1..3).map do |count|
+          live(room_count: count)
+          map_class.current_or_new&.id
+        end
+        expect(ids).to eq([12, 12, 12])
+        expect(map_class.list.compact.size).to eq(3)
+      end
+
+      it 'says when the room it maps as new matches several mapped rooms' do
+        messages = []
+        allow(map_class).to receive(:echo) { |msg| messages << msg }
+        twin(10)
+        twin(11)
+        live(room_count: 1)
+        expect(map_class.current_or_new&.id).to eq(12)
+        expect(messages).to include(a_string_matching(/2 mapped rooms match this room/))
+      end
+
+      it 'does not warn when the room it maps matches no mapped room' do
+        messages = []
+        allow(map_class).to receive(:echo) { |msg| messages << msg }
+        twin(10)
+        live(room_count: 1, description: 'Something new.')
+        expect(map_class.current_or_new&.id).to eq(11)
+        expect(messages.grep(/mapped rooms match/)).to be_empty
       end
     end
   end
