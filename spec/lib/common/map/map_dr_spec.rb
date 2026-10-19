@@ -3,6 +3,7 @@
 require_relative '../../../spec_helper'
 require 'json'
 require 'fileutils'
+require 'timeout'
 require_relative 'game_map_shared_examples'
 
 # Mock StringProc
@@ -651,9 +652,9 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
 
   # Build and register a room. Ids need not be dense: the matchers and load_uids
   # both skip nil holes.
-  def build_room(id, title:, description:, exits:, uid: [], tags: [])
+  def build_room(id, title:, description:, exits:, uid: [], tags: [], wayto: {})
     map_class.new(id, [title], [description], [exits], uid,
-                  nil, nil, nil, {}, {}, nil, nil, tags)
+                  nil, nil, nil, wayto, {}, nil, nil, tags)
   end
 
   # Point the live XMLData room fields at a single room reading.
@@ -865,17 +866,22 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
       expect(map_class.match_current(nil)).to eq(0)
     end
 
-    it 'falls back to the punctuation-tolerant regex description branch and applies the fix' do
-      # Stored description ends with a period; live reading drops it, so the exact
-      # include? fails and the regex branch must carry the match.
+    it 'requires the whole description: a live reading missing the final period matches nothing' do
       build_room(0, title: 'Garden Path', description: 'A winding path.', exits: 'Obvious paths: east', uid: [150013])
       live_room(title: 'Garden Path', description: 'A winding path', exits: 'Obvious paths: east', room_id: 0)
-      expect(map_class.match_current(nil)).to eq(0)
+      expect(map_class.match_current(nil)).to be_nil
     end
 
-    it 'matches on title and paths alone when the room window is disabled' do
+    it 'no longer matches on title and paths alone when the room window is disabled' do
       build_room(0, title: 'Dim Cellar', description: 'The stored cellar description.', exits: 'Obvious paths: up', uid: [])
       live_room(title: 'Dim Cellar', description: 'A completely different live description',
+                exits: 'Obvious paths: up', room_id: 0, window_disabled: true)
+      expect(map_class.match_current(nil)).to be_nil
+    end
+
+    it 'still matches a disabled room window by its full description' do
+      build_room(0, title: 'Dim Cellar', description: 'The stored cellar description.', exits: 'Obvious paths: up', uid: [])
+      live_room(title: 'Dim Cellar', description: 'The stored cellar description.',
                 exits: 'Obvious paths: up', room_id: 0, window_disabled: true)
       expect(map_class.match_current(nil)).to eq(0)
     end
@@ -981,6 +987,363 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
       map_class.load_uids
       live_room(title: 'Unknown Void', description: 'Nothing here.', exits: 'Obvious paths: none', room_id: 0)
       expect(map_class.current).to be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Without a usable UID a room is identified by title, description and exits
+  # together, and only when one room fits. Several rooms that fit are told apart
+  # only by which one the last resolved room leads to; otherwise the room is
+  # unresolved rather than the first of them.
+  describe 'strict text fallback' do
+    let(:title) { '[Segoltha River, In The Water]' }
+    let(:desc)  { 'The murky water swirls around you.' }
+    let(:exits) { 'Obvious paths: north, south.' }
+
+    def twin(id, uid: [], wayto: {}, tags: [], exits: nil)
+      build_room(id, title: title, description: desc, exits: exits || self.exits, uid: uid, wayto: wayto, tags: tags)
+    end
+
+    def live(room_id: 0, exits: nil, description: nil, room_count: 1)
+      live_room(title: title, description: description || desc, exits: exits || self.exits,
+                room_id: room_id, room_count: room_count)
+    end
+
+    def came_from(id)
+      map_class.current_room_id = id
+    end
+
+    context 'with several identical rooms and no UID to tell them apart' do
+      it 'is unresolved when nothing was resolved before' do
+        twin(10)
+        twin(11)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'is unresolved when the live UID is one the map does not have' do
+        twin(10)
+        twin(11)
+        live(room_id: 777_001)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'takes the only one the last resolved room leads to, not the first' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10)
+        twin(11)
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to eq(11)
+        expect(map_class.match_fuzzy).to eq(11)
+      end
+
+      it 'is unresolved when the last resolved room leads to more than one' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.',
+                      wayto: { '10' => 'north', '11' => 'south' })
+        twin(10)
+        twin(11)
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'is unresolved when the last resolved room leads to none of them' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '5' => 'north' })
+        twin(10)
+        twin(11)
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'is unresolved when the last resolved room is one of them and leads to another' do
+        # A fresh display of identical text cannot say whether the character
+        # stayed in 10 or moved to its neighbour 11.
+        twin(10, wayto: { '11' => 'north' })
+        twin(11, wayto: { '10' => 'south' })
+        came_from(10)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'stays in the last resolved room when it is one of them and leads to none of the others' do
+        twin(10)
+        twin(11)
+        came_from(11)
+        live
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+
+      it 'ignores the -1 sentinel and a hole as the last resolved room' do
+        twin(10)
+        twin(11, wayto: {})
+        came_from(-1)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+        came_from(500)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'treats a room whose wayto is nil as leading nowhere' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.').wayto = nil
+        twin(10)
+        twin(11)
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+    end
+
+    context 'when a stored UID vetoes one of several identical rooms' do
+      it 'is unresolved when the survivor cannot be reached from the last resolved room' do
+        # A UID room and a no-UID copy of it elsewhere in the map: the live UID
+        # belongs to neither, so the copy is not taken for the live room.
+        twin(10, uid: [500])
+        twin(11)
+        live(room_id: 999)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'takes the survivor when the last resolved room leads to it' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10, uid: [500])
+        twin(11)
+        came_from(1)
+        live(room_id: 999)
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+
+      it 'is unresolved when the last resolved room leads to both the vetoed room and the survivor' do
+        # A copy that shares the UID room's neighbours: the live room may be the
+        # UID room under a UID the map lacks, so the copy is not taken for it.
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.',
+                      wayto: { '10' => 'north', '11' => 'go door' })
+        twin(10, uid: [500])
+        twin(11)
+        came_from(1)
+        live(room_id: 999)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'is unresolved when every candidate is vetoed, even the reachable one' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '10' => 'north' })
+        twin(10, uid: [500])
+        twin(11, uid: [501])
+        came_from(1)
+        live(room_id: 999)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'does not take the survivor because the vetoed room is the one reachable' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '10' => 'north' })
+        twin(10, uid: [500])
+        twin(11)
+        came_from(1)
+        live(room_id: 999)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+    end
+
+    context 'when the game shows no UID and a UID room has a no-UID copy' do
+      it 'is unresolved without a last resolved room' do
+        twin(10)
+        twin(11, uid: [500])
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'takes the UID room when it is the one reached, even though the copy is listed first' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10)
+        twin(11, uid: [500])
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+    end
+
+    context 'under fog' do
+      let(:fog) { 'Obvious paths: obscured by a thick fog' }
+
+      it 'resolves a title and description that only one room has' do
+        twin(10, exits: 'Obvious paths: north.')
+        build_room(11, title: title, description: 'Other water.', exits: 'Obvious paths: south.')
+        live(exits: fog)
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      it 'is unresolved when rooms with different exits share the title and description' do
+        twin(10, exits: 'Obvious paths: north.')
+        twin(11, exits: 'Obvious paths: south.')
+        live(exits: fog)
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'takes the one of them the last resolved room leads to' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10, exits: 'Obvious paths: north.')
+        twin(11, exits: 'Obvious paths: south.')
+        came_from(1)
+        live(exits: fog)
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+
+      it 'recognises the "Obvious exits" form of the fog line' do
+        twin(10, exits: 'Obvious exits: out.')
+        twin(11, exits: 'Obvious exits: north.')
+        live(exits: 'Obvious exits: obscured by a thick fog')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+    end
+
+    context 'with a description that only resembles the stored one' do
+      it 'does not match a live description sharing one sentence with the stored one' do
+        build_room(10, title: title, description: 'The murky water swirls around you.  Reeds sway nearby.', exits: exits)
+        live(description: 'The murky water swirls around you.  A heron watches.')
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'does not match on title and exits when the live description is empty' do
+        twin(10)
+        live(description: '')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'does not match when the live description has a double period' do
+        twin(10)
+        live(description: 'Something else entirely.. Really.')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+    end
+
+    it 'resolves a no-UID room the game shows with a UID the map lacks (as at a private forge)' do
+      twin(10)
+      live(room_id: 777_002)
+      expect(map_class.match_current(nil)).to eq(10)
+      expect(map_class.match_fuzzy).to eq(10)
+    end
+
+    it 'treats a stored UID of 0 as no UID' do
+      twin(10, uid: [0])
+      live(room_id: 777_003)
+      expect(map_class.match_current(nil)).to eq(10)
+    end
+
+    it 'still lets a live UID veto a room storing 0 alongside a real UID' do
+      twin(10, uid: [0, 500])
+      live(room_id: 777_004)
+      expect(map_class.match_current(nil)).to be_nil
+    end
+
+    it 'does not resolve a peer-tagged room picked by adjacency without a script' do
+      build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+      twin(10)
+      twin(11, tags: ['peer north =~ /a dock/'])
+      came_from(1)
+      live
+      expect(map_class.match_fuzzy).to be_nil
+      expect(map_class.match_current(nil)).to eq(11)
+    end
+
+    it 'leaves the scanned rooms untouched' do
+      twin(10, uid: [500])
+      twin(11)
+      live(room_id: 999)
+      map_class.match_current(nil)
+      expect(map_class[10].uid).to eq([500])
+      expect(map_class[11].uid).to eq([])
+    end
+
+    describe 'a room display that changes mid-match' do
+      it 'match_fuzzy re-reads the room instead of spinning' do
+        twin(10)
+        build_room(11, title: '[Riverbank]', description: 'Mud.', exits: 'Obvious paths: north.')
+        live
+        reads = 0
+        allow(XMLData).to receive(:room_count) do
+          reads += 1
+          if reads == 1
+            1
+          else
+            XMLData.room_title = '[Riverbank]'
+            XMLData.room_description = 'Mud.'
+            XMLData.room_exits_string = 'Obvious paths: north.'
+            2
+          end
+        end
+        result = Timeout.timeout(5) { map_class.match_fuzzy }
+        expect(result).to eq(11)
+      end
+
+      it 'match_current re-reads the room' do
+        twin(10)
+        build_room(11, title: '[Riverbank]', description: 'Mud.', exits: 'Obvious paths: north.')
+        live
+        reads = 0
+        allow(XMLData).to receive(:room_count) do
+          reads += 1
+          if reads == 1
+            1
+          else
+            XMLData.room_title = '[Riverbank]'
+            XMLData.room_description = 'Mud.'
+            XMLData.room_exits_string = 'Obvious paths: north.'
+            2
+          end
+        end
+        result = Timeout.timeout(5) { map_class.match_current(nil) }
+        expect(result).to eq(11)
+      end
+    end
+
+    describe 'through Map.current' do
+      before(:each) { Script.current = :test_script }
+
+      it 'still resolves a UID the map has to its room, whatever rooms share its text' do
+        twin(10)
+        twin(11, uid: [500])
+        map_class.load_uids
+        live(room_id: 500)
+        expect(map_class.current&.id).to eq(11)
+      end
+
+      it 'resolves an ambiguous room after walking into it from a resolved room' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', uid: [400],
+                      wayto: { '11' => 'north' })
+        twin(10)
+        twin(11)
+        map_class.load_uids
+        live_room(title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', room_id: 400, room_count: 1)
+        expect(map_class.current&.id).to eq(1)
+        live(room_count: 2)
+        expect(map_class.current&.id).to eq(11)
+        expect(map_class.previous&.id).to eq(1)
+      end
+
+      it 'stays unresolved in an ambiguous room entered with no resolved room behind it' do
+        twin(10)
+        twin(11)
+        map_class.load_uids
+        live(room_count: 1)
+        expect(map_class.current).to be_nil
+        live(room_count: 2)
+        expect(map_class.current).to be_nil
+      end
+
+      it 'returns the cached room while the room count is unchanged' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        twin(10)
+        twin(11)
+        came_from(1)
+        live(room_count: 7)
+        expect(map_class.current&.id).to eq(11)
+        expect(map_class).not_to receive(:text_candidates)
+        expect(map_class.current&.id).to eq(11)
+      end
     end
   end
 end

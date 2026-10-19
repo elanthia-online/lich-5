@@ -154,6 +154,11 @@ module Lich
         match_no_uid
       end
 
+      # Pattern for the live exits line when fog hides the exits. The exits
+      # cannot be compared in that state, so text matching uses the title and
+      # description alone.
+      FOG_EXITS_PATTERN = /^Obvious (?:exits|paths): obscured by a thick fog$/
+
       # Pattern identifying a room whose disambiguation depends on a manual
       # +peer+ action (for example peering through a doorway to read an adjacent
       # room before committing to a match). Such rooms cannot be told apart
@@ -172,6 +177,28 @@ module Lich
         room.tags.any? { |tag| tag =~ PEER_TAG_PATTERN }
       end
 
+      # The UIDs stored on +room+ that can identify it. A stored 0 is not a UID:
+      # the parser reads 0 for a room the game shows without one (a bare
+      # <nav/>), and {ids_from_uid} and {current} already treat it as none.
+      #
+      # @param room [Lich::Common::Map]
+      # @return [Array<Integer>]
+      def self.stored_uids(room)
+        Array(room.uid) - [0]
+      end
+
+      # Whether the live game UID rules +room+ out: the game reports a UID and
+      # the room stores UIDs, none of which is the live one.
+      #
+      # @param room [Lich::Common::Map]
+      # @return [Boolean]
+      def self.uid_vetoes?(room)
+        return false if XMLData.room_id.zero?
+
+        uids = stored_uids(room)
+        uids.any? && !uids.include?(XMLData.room_id)
+      end
+
       # Resolve a room that already matched on title/description/paths down to a
       # final room id, applying UID disambiguation.
       #
@@ -180,139 +207,144 @@ module Lich
       #
       # * When the game exposes a live UID (+XMLData.room_id+ is non-zero) and the
       #   matched room carries one or more UIDs, the match only stands if the live
-      #   UID is among them. This is what keeps distinct rooms that share a
-      #   title/description/paths (day/night variants, look-alike maze cells) from
-      #   collapsing onto one another.
-      # * When the game exposes *no* UID (+XMLData.room_id+ is zero, a room the
-      #   server does not surface a UID for), UID disambiguation is skipped and the
-      #   title/description/paths match is trusted regardless of any UID stored on
-      #   the room. Previously such a room returned +nil+ here (a stored UID can
-      #   never include the zero live id), so a UID accidentally or provisionally
-      #   stamped onto a no-UID room made that room permanently unresolvable
-      #   (+Map.current+ became +nil+). Trusting the text match in the no-UID case
-      #   removes that failure mode without weakening disambiguation when the game
-      #   does expose a UID.
+      #   UID is among them (see {uid_vetoes?}). A stored UID of 0 counts as no
+      #   UID (see {stored_uids}).
+      # * When the game exposes *no* UID (+XMLData.room_id+ is zero), UID
+      #   disambiguation is skipped and the title/description/paths match is
+      #   trusted regardless of any UID stored on the room, so a UID stamped onto
+      #   a room the game shows without one cannot make it unresolvable.
       #
       # @param room [Lich::Common::Map] the room matched on title/description/paths
       # @param honor_peer_tags [Boolean] when +true+, a room requiring a manual
-      #   peer to disambiguate (see {peer_disambiguation_tag?}) resolves to +nil+;
-      #   used by scriptless fuzzy matching, which cannot perform the peer. Exact
-      #   ({match_current}) matching passes +false+ and never consults peer tags.
-      # @return [Integer, nil] the resolved room id; +nil+ when a UID'd room's
-      #   stored UIDs exclude the live game UID, or when a peer-tagged room cannot
-      #   be disambiguated
+      #   peer to disambiguate (see {peer_disambiguation_tag?}) resolves to +nil+
+      #   unless the live UID confirms it; used by scriptless fuzzy matching,
+      #   which cannot perform the peer. Exact ({match_current}) matching passes
+      #   +false+ and never consults peer tags.
+      # @return [Integer, nil] the resolved room id; +nil+ when the live UID
+      #   vetoes the room, or when a peer-tagged room cannot be disambiguated
       def self.resolve_matched_room(room, honor_peer_tags:)
-        if room.uid.any? && !XMLData.room_id.zero?
-          return room.uid.include?(XMLData.room_id) ? room.id : nil
-        end
+        return nil if uid_vetoes?(room)
+        return room.id if !XMLData.room_id.zero? && stored_uids(room).any?
         return nil if honor_peer_tags && peer_disambiguation_tag?(room)
 
         room.id
       end
 
+      # Every room whose title, description and exits all match the live room.
+      # Under fog the live exits line carries no exits, so title and description
+      # alone must match. The description is compared whole; a live description
+      # that differs from every stored one in any way matches nothing.
+      #
+      # @return [Array<Lich::Common::Map>] the matching rooms, in id order
+      def self.text_candidates
+        title = XMLData.room_title
+        description = XMLData.room_description.to_s.strip
+        exits = XMLData.room_exits_string.to_s
+        foggy = exits.match?(FOG_EXITS_PATTERN)
+        exits = exits.strip
+        @@list.select do |r|
+          # Skip nil holes without relying on Lich's NilClass patch.
+          r &&
+            r.title.include?(title) &&
+            r.description.include?(description) &&
+            (foggy || r.paths.include?(exits))
+        end
+      end
+
+      # Of +candidates+, the single one the character can be standing in after
+      # leaving the last resolved room: that room itself, or a room it has a
+      # wayto to. The last resolved room counts because a fresh room display
+      # does not always mean a move, so an identical neighbour must not win over
+      # it.
+      #
+      # @param candidates [Array<Lich::Common::Map>]
+      # @return [Lich::Common::Map, nil] the one reachable candidate; +nil+ with
+      #   no resolved last room, or when none or several are reachable
+      def self.adjacent_candidate(candidates)
+        from_id = @@current_room_id
+        return nil unless from_id.is_a?(Integer) && from_id >= 0
+
+        from = @@list[from_id]
+        return nil if from.nil?
+
+        wayto = from.wayto || {}
+        reachable = candidates.select { |r| r.id == from.id || wayto.key?(r.id.to_s) }
+        reachable.size == 1 ? reachable.first : nil
+      end
+
+      # Pick the live room from the rooms matching its text.
+      #
+      # Every candidate the live UID vetoes is dropped. A lone survivor is the
+      # room. Otherwise the room resolves only when exactly one candidate is
+      # reachable from the last resolved room (see {adjacent_candidate}) and
+      # that candidate survived the veto; in every other case it is unresolved
+      # rather than the first of them.
+      #
+      # When the veto dropped any candidate, reachability is judged over all the
+      # candidates, vetoed ones included, and even a lone survivor must be the
+      # one reachable. The game's UID then belongs to no candidate, so the live
+      # room may be the vetoed room under a UID the map lacks: a look-alike copy
+      # elsewhere in the map, or one sharing the vetoed room's neighbours, is not
+      # taken for it.
+      #
+      # @param candidates [Array<Lich::Common::Map>] rooms matching the live text
+      # @return [Lich::Common::Map, nil]
+      def self.pick_text_candidate(candidates)
+        survivors = candidates.reject { |r| uid_vetoes?(r) }
+        return survivors.first if survivors.size == 1 && survivors.size == candidates.size
+
+        room = adjacent_candidate(candidates)
+        survivors.include?(room) ? room : nil
+      end
+
+      # Resolve the live room from its title, description and exits.
+      #
+      # @param honor_peer_tags [Boolean] see {resolve_matched_room}
+      # @return [Integer, nil] the resolved room id, or +nil+ when no room, or
+      #   more than one, can be the live room
+      def self.match_live_text(honor_peer_tags:)
+        room = pick_text_candidate(text_candidates)
+        return nil if room.nil?
+
+        resolve_matched_room(room, honor_peer_tags: honor_peer_tags)
+      end
+
       # Resolve the current room by exact title/description/paths matching.
       #
-      # Used when a script is running (see {match_no_uid}). Tries an exact
-      # description match first, then a punctuation-tolerant regex description
-      # match, re-reading the room whenever the live +room_count+ changes
-      # mid-match. Final UID disambiguation is delegated to
-      # {resolve_matched_room} (peer tags are not honored on this path).
+      # Used when a script is running (see {match_no_uid}). Re-reads the room
+      # whenever the live +room_count+ changes mid-match. See
+      # {match_live_text}; peer tags are not honored on this path.
       #
       # @param _script [Object] the running script (unused; retained for the
       #   historical call signature)
-      # @return [Integer, nil] the resolved room id, or +nil+ when nothing matches
-      #   or UID disambiguation rejects the match
+      # @return [Integer, nil] the resolved room id, or +nil+ when no single
+      #   room matches
       def self.match_current(_script)
         @@current_room_mutex.synchronize do
-          need_set_desc_off = false
-          begin
-            loop do
-              @@current_room_count = XMLData.room_count
-              foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
-              room = @@list.find do |r|
-                # Skip nil holes without relying on Lich's NilClass patch.
-                r &&
-                  r.title.include?(XMLData.room_title) &&
-                  r.description.include?(XMLData.room_description.strip) &&
-                  (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
-              end
-
-              if room
-                redo unless @@current_room_count == XMLData.room_count
-                return resolve_matched_room(room, honor_peer_tags: false)
-              else
-                redo unless @@current_room_count == XMLData.room_count
-                desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
-                room = @@list.find do |r|
-                  # Skip nil holes without relying on Lich's NilClass patch.
-                  r &&
-                    r.title.include?(XMLData.room_title) &&
-                    (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
-                    (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
-                end
-
-                if room
-                  redo unless @@current_room_count == XMLData.room_count
-                  return resolve_matched_room(room, honor_peer_tags: false)
-                else
-                  redo unless @@current_room_count == XMLData.room_count
-                  return nil
-                end
-              end
-            end
-          ensure
-            put 'set description off' if need_set_desc_off
+          loop do
+            @@current_room_count = XMLData.room_count
+            id = match_live_text(honor_peer_tags: false)
+            return id if @@current_room_count == XMLData.room_count
           end
         end
       end
 
-      # Resolve the current room by fuzzy title/description/paths matching.
+      # Resolve the current room by title/description/paths matching without a
+      # script.
       #
       # Used when no script is running (see {match_no_uid}). Mirrors
       # {match_current} but honors peer-disambiguation tags: a room that would
       # need a manual peer to tell apart cannot be resolved without a script, so
-      # it yields +nil+. Final UID disambiguation is delegated to
-      # {resolve_matched_room} with +honor_peer_tags: true+.
+      # it yields +nil+.
       #
-      # @return [Integer, nil] the resolved room id, or +nil+ when nothing
-      #   matches, UID disambiguation rejects the match, or the room needs a peer
+      # @return [Integer, nil] the resolved room id, or +nil+ when no single
+      #   room matches or the room needs a peer
       def self.match_fuzzy
         @@fuzzy_room_mutex.synchronize do
-          @@fuzzy_room_count = XMLData.room_count
           loop do
-            foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
-            room = @@list.find do |r|
-              # Skip nil holes without relying on Lich's NilClass patch.
-              r &&
-                r.title.include?(XMLData.room_title) &&
-                r.description.include?(XMLData.room_description.strip) &&
-                (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
-            end
-
-            if room
-              redo unless @@fuzzy_room_count == XMLData.room_count
-
-              return resolve_matched_room(room, honor_peer_tags: true)
-            else
-              redo unless @@fuzzy_room_count == XMLData.room_count
-              desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
-              room = @@list.find do |r|
-                # Skip nil holes without relying on Lich's NilClass patch.
-                r &&
-                  r.title.include?(XMLData.room_title) &&
-                  (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
-                  (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
-              end
-
-              if room
-                redo unless @@fuzzy_room_count == XMLData.room_count
-
-                return resolve_matched_room(room, honor_peer_tags: true)
-              else
-                redo unless @@fuzzy_room_count == XMLData.room_count
-                return nil
-              end
-            end
+            @@fuzzy_room_count = XMLData.room_count
+            id = match_live_text(honor_peer_tags: true)
+            return id if @@fuzzy_room_count == XMLData.room_count
           end
         end
       end
