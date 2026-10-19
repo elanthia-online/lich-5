@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'tempfile'
+
 require_relative '../gui/state'
 require_relative '../gui/password_cipher'
 require_relative '../gui/master_password_manager'
@@ -67,6 +69,8 @@ module Lich
         # Converts and serializes entry data to the entry.yaml file with encryption support
         # Preserves master_password_validation_test from existing YAML during round-trip conversion
         # Encrypts passwords based on the file's encryption_mode before writing
+        # Publishes the backup and replacement through protected temporary files.
+        # A failed publication leaves the previous entry file unchanged.
         #
         # @param data_dir [String] Directory to save entry data
         # @param entry_data [Array] Array of entry data in legacy format
@@ -116,14 +120,9 @@ module Lich
             end
           end
 
-          # Create backup of existing file if it exists
-          if File.exist?(yaml_file)
-            backup_file = "#{yaml_file}.bak"
-            FileUtils.cp(yaml_file, backup_file)
-          end
-
           # Write YAML data to file with secure permissions
           begin
+            write_file_atomically("#{yaml_file}.bak", File.binread(yaml_file)) if File.exist?(yaml_file)
             write_yaml_file(yaml_file, yaml_data)
             true
           rescue StandardError => e
@@ -336,6 +335,9 @@ module Lich
         # Re-encrypts all passwords from current mode to new mode
         # Automatically retrieves old master password from keychain if leaving Enhanced mode
         # Requires new_master_password if entering Enhanced mode (caller must check keychain first and prompt if needed)
+        # Restores the previous observable keychain value on handled failures before
+        # atomic file publication. File and keychain updates are not one transaction:
+        # process death or a failed keychain rollback still requires manual recovery.
         #
         # @param data_dir [String] Directory containing account data
         # @param new_mode [Symbol] Target encryption mode (:plaintext, :standard, :enhanced)
@@ -360,34 +362,25 @@ module Lich
             return true
           end
 
-          # Determine old_master_password
-          old_master_password = nil
-          if current_mode == :enhanced
-            # Auto-retrieve from keychain when leaving Enhanced
-            old_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
-            if old_master_password.nil?
-              Lich.log "error: Master password not found in keychain for encryption mode change"
-              return false
-            end
-          end
-
           # Validate new_master_password if entering Enhanced mode
           if new_mode == :enhanced && new_master_password.nil?
             Lich.log "error: New master password required for Enhanced mode encryption"
             return false
           end
 
-          # Create backup
+          keychain_touched = false
+          previous_master_password = nil
           backup_file = "#{yaml_file}.bak"
           begin
-            FileUtils.cp(yaml_file, backup_file)
-            Lich.log "info: Backup created for encryption mode change: #{backup_file}"
-          rescue StandardError => e
-            Lich.log "error: Failed to create backup: #{e.message}"
-            return false
-          end
+            if current_mode == :enhanced || new_mode == :enhanced
+              previous_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
+            end
+            if current_mode == :enhanced && previous_master_password.nil?
+              raise StandardError, "Master password not found in keychain for encryption mode change"
+            end
 
-          begin
+            write_file_atomically(backup_file, File.binread(yaml_file))
+
             # Re-encrypt all accounts
             accounts = yaml_data['accounts'] || {}
             accounts.each do |account_name, account_data|
@@ -396,12 +389,11 @@ module Lich
                 account_data['password'],
                 mode: current_mode,
                 account_name: account_name,
-                master_password: old_master_password
+                master_password: previous_master_password
               )
 
               if plaintext.nil?
-                Lich.log "error: Failed to decrypt password for #{account_name}"
-                return restore_backup_and_return_false(backup_file, yaml_file)
+                raise StandardError, "Failed to decrypt password for #{account_name}"
               end
 
               # Encrypt with new mode
@@ -413,8 +405,7 @@ module Lich
               )
 
               if encrypted.nil?
-                Lich.log "error: Failed to encrypt password for #{account_name}"
-                return restore_backup_and_return_false(backup_file, yaml_file)
+                raise StandardError, "Failed to encrypt password for #{account_name}"
               end
 
               account_data['password'] = encrypted
@@ -427,43 +418,67 @@ module Lich
             if new_mode == :enhanced
               # Create validation test
               validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_master_password)
+              raise StandardError, "Failed to create master password validation test" if validation_test.nil?
               yaml_data['master_password_validation_test'] = validation_test
 
-              # Store in keychain
+              # A failed store may already have removed or changed the old value.
+              keychain_touched = true
               unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_master_password)
-                Lich.log "error: Failed to store master password in keychain"
-                return restore_backup_and_return_false(backup_file, yaml_file)
+                raise StandardError, "Failed to store master password in keychain"
               end
             elsif current_mode == :enhanced
               # Remove validation test and keychain when leaving Enhanced
               yaml_data.delete('master_password_validation_test')
-              Lich::Common::GUI::MasterPasswordManager.delete_master_password
+              keychain_touched = true
+              unless Lich::Common::GUI::MasterPasswordManager.delete_master_password
+                raise StandardError, "Failed to delete master password from keychain"
+              end
             end
 
             # Save YAML with headers
             write_yaml_file(yaml_file, yaml_data)
-
-            # Clean up backup on success
-            FileUtils.rm(backup_file) if File.exist?(backup_file)
-
-            Lich.log "info: Encryption mode changed successfully: #{current_mode} -> #{new_mode}"
-            true
           rescue StandardError => e
+            restore_master_password(previous_master_password) if keychain_touched
             Lich.log "error: Encryption mode change failed: #{e.class}: #{e.message}"
-            restore_backup_and_return_false(backup_file, yaml_file)
+            return false
           end
+
+          # Publication succeeded; a backup cleanup failure must not roll back the
+          # keychain while the entry file already uses the new encryption mode.
+          begin
+            FileUtils.rm(backup_file) if File.exist?(backup_file)
+          rescue StandardError => e
+            Lich.log "warning: Could not remove encryption mode backup: #{e.class}: #{e.message}"
+          end
+          Lich.log "info: Encryption mode changed successfully: #{current_mode} -> #{new_mode}"
+          true
         end
 
         # @api private
-        # Restores backup and returns false
-        def self.restore_backup_and_return_false(backup_file, yaml_file)
-          if File.exist?(backup_file)
-            FileUtils.cp(backup_file, yaml_file)
-            FileUtils.rm(backup_file)
-            Lich.log "info: Backup restored after encryption mode change failure"
+        # Restores the keychain value observed before an encryption mode change.
+        # Reports unsuccessful rollback without including password values.
+        #
+        # @param previous_password [String, nil] previous value, or nil for absence
+        # @return [Boolean] whether the previous observable state was restored
+        def self.restore_master_password(previous_password)
+          manager = Lich::Common::GUI::MasterPasswordManager
+          return true if manager.retrieve_master_password == previous_password
+
+          restored = if previous_password.nil?
+                       manager.delete_master_password
+                     else
+                       manager.store_master_password(previous_password)
+                     end
+          unless restored && manager.retrieve_master_password == previous_password
+            Lich.log "error: Could not restore previous master password; manual keychain recovery is required"
+            return false
           end
+          true
+        rescue StandardError => e
+          Lich.log "error: Could not restore previous master password: #{e.class}; manual keychain recovery is required"
           false
         end
+        private_class_method :restore_master_password
 
         # @api private
         # Migrates YAML data to support encryption format
@@ -1042,19 +1057,66 @@ module Lich
         # @api private
         # Writes YAML data to file with standard headers and secure permissions
         # Handles preparation and formatting of YAML data for all save operations
+        # Serializes before publication so serialization errors cannot truncate data.
         #
         # @param yaml_file [String] Path to YAML file to write
         # @param yaml_data [Hash] YAML data structure to save
         # @return [void]
         def self.write_yaml_file(yaml_file, yaml_data)
-          prepared_yaml = prepare_yaml_for_serialization(yaml_data)
+          write_file_atomically(yaml_file, generate_yaml_content(yaml_data))
+        end
 
-          File.open(yaml_file, 'w', 0o600) do |file|
-            file.puts "# Lich 5 Login Entries - YAML Format"
-            file.puts "# Generated: #{Time.now}"
-            file.write(YAML.dump(prepared_yaml, permitted_classes: [Symbol]))
+        # Publishes prepared credentials with a new keychain password. On handled
+        # failure, restores the previously observed keychain value; file publication
+        # is atomic, but process death between resources is not recoverable here.
+        #
+        # @param yaml_file [String] credential destination
+        # @param yaml_data [Hash] already re-encrypted credentials and validation data
+        # @param password [String] new master password
+        # @return [void]
+        # @raise [StandardError] on publication failure or incomplete rollback
+        def self.write_yaml_with_master_password(yaml_file, yaml_data, password)
+          content = generate_yaml_content(yaml_data)
+          manager = Lich::Common::GUI::MasterPasswordManager
+          previous_password = manager.retrieve_master_password
+          begin
+            unless manager.store_master_password(password)
+              raise StandardError, "Failed to update keychain"
+            end
+            write_file_atomically(yaml_file, content)
+          rescue StandardError
+            unless restore_master_password(previous_password)
+              raise StandardError, "Credential update failed; manual keychain recovery is required"
+            end
+            raise
           end
         end
+
+        # Publishes bytes by renaming a flushed, closed file in the same directory.
+        # Temporary files start owner-only; existing owner read/write restrictions
+        # are retained while group, other, and executable access is removed.
+        # Failures before rename leave the destination untouched and remove the temp.
+        #
+        # @param path [String] destination path, including backup paths
+        # @param content [String] complete serialized bytes to publish
+        # @return [void]
+        # @raise [StandardError] when preparation or atomic replacement fails
+        # @api private
+        def self.write_file_atomically(path, content)
+          mode = File.exist?(path) ? File.stat(path).mode & 0o600 : 0o600
+          Tempfile.create(['.entry-', '.tmp'], File.dirname(path)) do |file|
+            file.binmode
+            written = file.write(content)
+            raise IOError, "Incomplete entry file write" unless written == content.bytesize
+
+            file.flush
+            file.fsync
+            file.chmod(mode)
+            file.close
+            File.rename(file.path, path)
+          end
+        end
+        private_class_method :write_file_atomically
 
         # @api private
         # Ensures master password exists for master_password mode conversions

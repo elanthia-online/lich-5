@@ -39,7 +39,7 @@ module Lich
                           YAML.load_file(yaml_file)
                         rescue StandardError => e
                           Lich.log "error: Error loading YAML entry file: #{e.message}"
-                          { 'accounts' => {} }
+                          return false
                         end
                       else
                         { 'accounts' => {} }
@@ -66,6 +66,8 @@ module Lich
             account_name: normalized_username,
             master_password: master_password
           )
+
+          return false if encrypted_password.nil?
 
           # Normalize character data if provided
           normalized_characters = characters.map do |char|
@@ -528,15 +530,11 @@ module Lich
         # @param yaml_data [Hash] YAML data structure
         # @return [Boolean] True if write succeeded
         def self.write_yaml_with_headers(yaml_file, yaml_data)
-          # Prepare YAML with password preservation (clones to avoid mutation)
-          prepared_yaml = Lich::Common::Authentication::EntryStore.prepare_yaml_for_serialization(yaml_data)
-
-          content = "# Lich 5 Login Entries - YAML Format\n"
-          content += "# Generated: #{Time.now}\n"
-          # Use YAML dump with options to prevent multiline formatting of long strings
-          content += YAML.dump(prepared_yaml, permitted_classes: [Symbol])
-
-          Utilities.verified_file_operation(yaml_file, :write, content)
+          Lich::Common::Authentication::EntryStore.write_yaml_file(yaml_file, yaml_data)
+          true
+        rescue StandardError => e
+          Lich.log "error: Could not save account data: #{e.class}"
+          false
         end
         private_class_method :write_yaml_with_headers
       end

@@ -83,13 +83,13 @@ module Lich
                           return 1
                         end
 
+            raise StandardError, "Failed to encrypt account password" if encrypted.nil?
+
             # Update account password
             yaml_data['accounts'][account]['password'] = encrypted
 
             # Save YAML
-            File.open(yaml_file, 'w', 0o600) do |file|
-              file.write(YAML.dump(yaml_data))
-            end
+            Lich::Common::Authentication::EntryStore.write_yaml_file(yaml_file, yaml_data)
 
             puts "success: Password changed for account '#{account}'"
             Lich.log "info: Password changed successfully for account '#{account}'"
@@ -478,6 +478,8 @@ module Lich
                 master_password: old_password
               )
 
+              raise StandardError, "Failed to decrypt account password" if plaintext.nil?
+
               # Encrypt with new password
               new_encrypted = Lich::Common::GUI::PasswordCipher.encrypt(
                 plaintext,
@@ -485,24 +487,20 @@ module Lich
                 master_password: new_password
               )
 
+              raise StandardError, "Failed to encrypt account password" if new_encrypted.nil?
+
               account_data['password'] = new_encrypted
             end
 
             # Update validation test
             new_validation = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_password)
+            raise StandardError, "Failed to create master password validation test" if new_validation.nil?
             yaml_data['master_password_validation_test'] = new_validation
 
-            # Update keychain
-            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_password)
-              puts 'error: Failed to update keychain'
-              Lich.log 'error: CLI change master password failed - keychain update failed'
-              return 1
-            end
-
-            # Save YAML
-            File.open(yaml_file, 'w', 0o600) do |file|
-              file.write(YAML.dump(yaml_data))
-            end
+            # Publish through the shared writer, restoring keychain state on failure.
+            Lich::Common::Authentication::EntryStore.write_yaml_with_master_password(
+              yaml_file, yaml_data, new_password
+            )
 
             puts 'success: Master password changed'
             Lich.log 'info: Master password changed successfully via CLI'

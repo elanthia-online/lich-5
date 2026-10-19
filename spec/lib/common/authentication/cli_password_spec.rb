@@ -80,12 +80,128 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     allow(Lich).to receive(:datadir).and_return(temp_dir)
     # Mock YamlState.yaml_file_path
     allow(Lich::Common::Authentication::EntryStore).to receive(:yaml_file_path).and_return(yaml_file)
+    # All credential-store access is synthetic, including rollback snapshots.
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password).and_return(nil)
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(false)
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:delete_master_password).and_return(false)
     # Mock keychain availability
     allow(Lich::Common::GUI::MasterPasswordManager).to receive(:keychain_available?).and_return(true)
   end
 
   after do
     FileUtils.rm_rf(temp_dir)
+  end
+
+  describe 'atomic CLI credential updates' do
+    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:cipher) { Lich::Common::GUI::PasswordCipher }
+    let(:old_master) { 'SyntheticOldMaster123!' }
+    let(:new_master) { 'SyntheticNewMaster456!' }
+    let(:keychain) { { password: old_master } }
+    let(:passwords) { { 'ALPHA' => 'SyntheticAlpha123!', 'BETA' => 'SyntheticBeta456!' } }
+    let(:original_bytes) { File.binread(yaml_file) }
+
+    before do
+      allow(manager).to receive(:retrieve_master_password) { keychain[:password] }
+      allow(manager).to receive(:store_master_password) { |value| keychain[:password] = value; true }
+      allow(manager).to receive(:delete_master_password) { keychain[:password] = nil; true }
+      accounts = passwords.to_h do |name, password|
+        [name, { 'password' => cipher.encrypt(password, mode: :enhanced, master_password: old_master) }]
+      end
+      File.write(yaml_file, YAML.dump({
+        'encryption_mode' => 'enhanced', 'accounts' => accounts,
+        'master_password_validation_test' => manager.create_validation_test(old_master)
+      }))
+      File.chmod(0o600, yaml_file)
+      original_bytes
+    end
+
+    # Assert both accounts remain readable, using the production cipher.
+    # @param master [String] synthetic decryption password
+    # @return [void]
+    def expect_cli_passwords(master)
+      data = YAML.safe_load_file(yaml_file)
+      actual = data['accounts'].to_h do |name, account|
+        [name, cipher.decrypt(account['password'], mode: :enhanced, master_password: master)]
+      end
+      expect(actual).to eq(passwords)
+      expect(manager.validate_master_password(master, data['master_password_validation_test'])).to be(true)
+    end
+
+    it 'publishes both accounts and the matching keychain value on success' do
+      expect(described_class.change_master_password(old_master, new_master)).to eq(0)
+      expect(keychain[:password]).to eq(new_master)
+      expect_cli_passwords(new_master)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+    end
+
+    [nil, 'SyntheticStaleKeychain789!'].each do |previous|
+      it "restores #{previous.nil? ? 'absent' : 'preexisting'} keychain state when publication fails" do
+        keychain[:password] = previous
+        allow(File).to receive(:rename).and_raise(IOError, 'synthetic publication failure')
+        expect { expect(described_class.change_master_password(old_master, new_master)).to eq(1) }
+          .not_to output(/success:/).to_stdout
+        expect(keychain[:password]).to eq(previous)
+        expect(File.binread(yaml_file)).to eq(original_bytes)
+        expect_cli_passwords(old_master)
+        expect(Dir.children(temp_dir)).to eq(['entry.yaml'])
+      end
+    end
+
+    [:returns_false, :raise].each do |failure|
+      it "restores a partially mutated keychain after a #{failure} store failure" do
+        allow(manager).to receive(:store_master_password) do |value|
+          keychain[:password] = value
+          if value == new_master
+            raise IOError, 'synthetic keychain failure' if failure == :raise
+            false
+          else
+            true
+          end
+        end
+        expect(described_class.change_master_password(old_master, new_master)).to eq(1)
+        expect(keychain[:password]).to eq(old_master)
+        expect(File.binread(yaml_file)).to eq(original_bytes)
+        expect_cli_passwords(old_master)
+      end
+    end
+
+    [:decrypt, :encrypt, :create_validation_test].each do |operation|
+      it "leaves credentials untouched when #{operation} returns nil" do
+        target = operation == :create_validation_test ? manager : cipher
+        allow(target).to receive(operation).and_return(nil)
+        expect(manager).not_to receive(:store_master_password)
+        expect(described_class.change_master_password(old_master, new_master)).to eq(1)
+        expect(File.binread(yaml_file)).to eq(original_bytes)
+        expect(keychain[:password]).to eq(old_master)
+      end
+    end
+
+    it 'reports manual recovery when keychain rollback also fails' do
+      allow(File).to receive(:rename).and_raise(IOError, 'synthetic publication failure')
+      allow(manager).to receive(:store_master_password) do |value|
+        next false if value == old_master
+        keychain[:password] = value
+        true
+      end
+      expect { expect(described_class.change_master_password(old_master, new_master)).to eq(1) }
+        .to output(/manual keychain recovery is required/).to_stdout
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+    end
+
+    it 'preserves the account file and reports failure when a password update cannot publish' do
+      allow(File).to receive(:rename).and_raise(IOError, 'synthetic publication failure')
+      expect { expect(described_class.change_account_password('ALPHA', 'SyntheticUpdated123!')).to eq(1) }
+        .not_to output(/success:/).to_stdout
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect_cli_passwords(old_master)
+    end
+
+    it 'rejects failed account encryption without publishing nil' do
+      allow(cipher).to receive(:encrypt).and_return(nil)
+      expect(described_class.change_account_password('ALPHA', 'SyntheticUpdated123!')).to eq(1)
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+    end
   end
 
   describe '.change_account_password' do
