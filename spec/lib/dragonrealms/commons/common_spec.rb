@@ -1011,6 +1011,72 @@ RSpec.describe Lich::DragonRealms::DRC do
         end
       end
 
+      context 'when the room stays cluttered after every successful kick' do
+        # Every collect is refused, a pile is always in the room and every kick lands.
+        # The cap is the only thing that can stop it; the guard turns a runaway loop
+        # into a plain failure instead of a SystemStackError.
+        before do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          allow(described_class).to receive(:fix_standing)
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        def endless_clutter(success_on_attempt: nil)
+          attempts = 0
+          allow(described_class).to receive(:bput) do |command, *_patterns|
+            sent << command
+            raise "runaway collect: #{sent.length} commands sent" if sent.length > 50
+
+            if command.start_with?('kick')
+              'take a step back and run up to'
+            else
+              attempts += 1
+              attempts == success_on_attempt ? 'You begin to forage around,' : 'The room is too cluttered'
+            end
+          end
+        end
+
+        it 'gives up after the fifth refused collect without a fifth kick' do
+          endless_clutter
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(sent.last).to eq('collect rock practice')
+          expect(described_class).not_to have_received(:waitrt?)
+        end
+
+        it 'keeps the caller mode on every capped attempt' do
+          endless_clutter
+          described_class.collect('rock', false)
+          expect(sent.uniq).to eq(['collect rock', 'kick pile'])
+          expect(sent.length).to eq(9)
+        end
+
+        it 'says why it gave up' do
+          endless_clutter
+          described_class.collect('rock')
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+        end
+
+        it 'still collects when the last allowed attempt goes through' do
+          endless_clutter(success_on_attempt: 5)
+          allow(described_class).to receive(:waitrt?).and_return(true)
+          expect(described_class.collect('rock')).to be(true)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(described_class).to have_received(:waitrt?).once
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'gives every call its own budget' do
+          endless_clutter
+          described_class.collect('rock')
+          sent.clear
+          described_class.collect('rock')
+          expect(sent.count('collect rock practice')).to eq(5)
+        end
+      end
+
       context 'when the pile is gone on a later attempt' do
         before do
           room_states = [['a pile of rocks'], []]
