@@ -136,6 +136,36 @@ RSpec.describe GlobalDefsSpecSource do
       end
     end
 
+    it 'parses an unchanged file once across lookups' do
+      with_source("def first_probe\n", "  1\n", "end\n", "def second_probe\n", "  2\n", "end\n") do |path|
+        allow(Prism).to receive(:parse).and_call_original
+        allow(Prism).to receive(:parse_file).and_call_original
+
+        described_class.define(Class.new, 'first_probe', 'second_probe', path: path)
+        described_class.line_of('first_probe', path: path)
+
+        expect(Prism).to have_received(:parse).once
+        expect(Prism).not_to have_received(:parse_file)
+      end
+    end
+
+    it 'rereads a file rewritten in place, even with the same size and mtime' do
+      with_source("def rewritten\n", "  :old\n", "end\n") do |path|
+        target = Class.new
+        described_class.define(target, 'rewritten', path: path)
+        expect(target.new.send(:rewritten)).to eq(:old)
+
+        stat = File.stat(path)
+        File.write(path, "def rewritten\n  :new\nend\n")
+        File.utime(stat.atime, stat.mtime, path)
+        expect([File.size(path), File.mtime(path)]).to eq([stat.size, stat.mtime])
+
+        target = Class.new
+        described_class.define(target, 'rewritten', path: path)
+        expect(target.new.send(:rewritten)).to eq(:new)
+      end
+    end
+
     it 'leaves Script calls alone by default' do
       code, = described_class.method_source('wait_until')
 
@@ -176,7 +206,7 @@ RSpec.describe GlobalDefsSpecSource do
       Object.send(:remove_const, :GlobalDefsSpecSourceProbe) if Object.const_defined?(:GlobalDefsSpecSourceProbe, false)
     end
 
-    it 'evaluates from the marker line to the next column-0 end, and no further' do
+    it 'evaluates only the top-level statement after the marker' do
       with_source("# probe marker\n", "module GlobalDefsSpecSourceProbe\n", "  VALUE = 1\n", "end\n",
                   "raise 'read past the block'\n") do |path|
         described_class.eval_toplevel_block('probe marker', path: path)

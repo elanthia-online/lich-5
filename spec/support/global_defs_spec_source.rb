@@ -87,14 +87,26 @@ module GlobalDefsSpecSource
     found.first
   end
 
+  # Parses are cached per path and reused only while the file's bytes are
+  # unchanged, so one example can look up every def without reparsing the
+  # file each time, and a spec that rewrites a file still sees the new source
+  # (mtime and size alone can miss a same-length rewrite within one tick).
+  @parsed = {}
+
   def self.toplevel_statements(path)
-    result = Prism.parse_file(path)
+    source = File.binread(path)
+    cached_source, cached_statements = @parsed[path]
+    return cached_statements if cached_source == source
+
+    result = Prism.parse(source, filepath: path)
     unless result.success?
       error = result.errors.first
       raise "#{File.basename(path)} does not parse: line #{error.location.start_line}: #{error.message}"
     end
 
-    result.value.statements.body
+    statements = result.value.statements.body
+    @parsed[path] = [source, statements]
+    statements
   end
   private_class_method :def_node, :toplevel_statements
 end
