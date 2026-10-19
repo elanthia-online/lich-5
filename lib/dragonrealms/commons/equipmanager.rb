@@ -260,8 +260,8 @@ module Lich
           # Only what was lowered is picked up again: the lowering stops at
           # the first failure.
           lowered = []
-          did_lower = [temp_left_item, temp_right_item].compact.all? do |item_in_hand|
-            DRCI.lower_item?(item_in_hand).tap { |ok| lowered << item_in_hand if ok }
+          did_lower = { 'left' => temp_left_item, 'right' => temp_right_item }.compact.all? do |hand, item_in_hand|
+            DRCI.lower_item?(item_in_hand).tap { |ok| lowered << [item_in_hand, hand] if ok }
           end
           if did_lower
             remove_item(item, retries: retries - 1)
@@ -813,12 +813,14 @@ module Lich
           # Ammo ended up on the GROUND (hands were full, or it tumbled). Lower the
           # weapon, stow the ammo from your feet, then pick the weapon back up.
           ammo = (ammo_match || ground_match)[:ammo]
+          # The hand DRCI.lower_item? lowers from.
+          weapon_hand = DRCI.in_left_hand?(name) ? 'left' : 'right'
           unless DRCI.lower_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
             return
           end
           DRCI.put_away_item?(ammo)
-          unless pick_up_lowered_item?(name)
+          unless pick_up_lowered_item?(name, from_hand: weapon_hand)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
         elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
@@ -913,17 +915,34 @@ module Lich
       # holds it ({#newly_in_hand?}), whatever the GET's reply: like
       # {DRCI.get_item_unsafe}, it doesn't trust the success text, which a
       # stray line can match ("You get down on one knee."). Callers pass only
-      # items they lowered, after the lowering has settled.
+      # items they lowered.
+      #
+      # The hand update for the lowering can lag its reply. Until it arrives,
+      # from_hand still shows the item, and picking it up into that hand would
+      # look like no change. So before taking the snapshot of the hands it
+      # waits, up to 1 s, for from_hand to stop showing the item. If the update
+      # lags longer than that, a successful pick-up into that hand is reported
+      # as a failure (a warning and, from {#pick_up_lowered_items}, one more
+      # GET); the item is never counted as picked up while it is on the ground.
       #
       # It does not use {DRCI.get_item_unsafe}, which drops the GET reply
       # this needs to decide on a retry.
       #
       # @param item [String] the lowered item's name or noun
+      # @param from_hand [String, nil] "left" or "right", the hand the item
+      #   was lowered from; nil to take the snapshot at once
       # @param attempts [Integer] most GETs to send while the reply is the
       #   immobile one
       # @return [Boolean] true if the item was picked up
       # @api private
-      def pick_up_lowered_item?(item, attempts: LOWERED_ITEM_PICKUP_ATTEMPTS)
+      def pick_up_lowered_item?(item, from_hand: nil, attempts: LOWERED_ITEM_PICKUP_ATTEMPTS)
+        if from_hand
+          10.times do
+            break unless DRCI.in_hand?(item, from_hand)
+
+            pause 0.1
+          end
+        end
         hands_before = { 'left' => DRC.left_hand, 'right' => DRC.right_hand }
         attempts.times do |attempt|
           pause 1 if attempt.positive?
@@ -945,20 +964,21 @@ module Lich
       # attempts and end during the next one's, so when an item is picked up,
       # each earlier item given up on gets one more GET.
       #
-      # @param lowered [Array<String>] the lowered items, in the order lowered
+      # @param lowered [Array<Array(String, String)>] the lowered items, each
+      #   as [name, hand lowered from], in the order lowered
       # @param removed_name [String] the removed item's name, for the warning
       # @return [void]
       # @api private
       def pick_up_lowered_items(lowered, removed_name)
         left_down = []
-        lowered.reverse_each do |name|
-          if pick_up_lowered_item?(name)
-            left_down.reject! { |earlier| pick_up_lowered_item?(earlier, attempts: 1) }
+        lowered.reverse_each do |name, hand|
+          if pick_up_lowered_item?(name, from_hand: hand)
+            left_down.reject! { |earlier, earlier_hand| pick_up_lowered_item?(earlier, from_hand: earlier_hand, attempts: 1) }
           else
-            left_down << name
+            left_down << [name, hand]
           end
         end
-        left_down.each do |name|
+        left_down.each do |name, _hand|
           Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{name} after removing #{removed_name}")
         end
       end

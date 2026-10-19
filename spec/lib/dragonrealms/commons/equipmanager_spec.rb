@@ -677,9 +677,10 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       allow(DRC).to receive(:bput)
         .with('unload my longbow', any_args)
         .and_return('As you release the string, the arrow tumbles to the ground.')
+      allow(DRC).to receive(:left_hand).and_return('longbow')
       expect(DRCI).to receive(:lower_item?).with('longbow').and_return(true)
       expect(DRCI).to receive(:put_away_item?).with('arrow')
-      expect(em).to receive(:pick_up_lowered_item?).with('longbow').and_return(true)
+      expect(em).to receive(:pick_up_lowered_item?).with('longbow', from_hand: 'left').and_return(true)
       em.unload_weapon('longbow')
     end
   end

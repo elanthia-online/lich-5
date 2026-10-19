@@ -279,6 +279,68 @@ RSpec.describe 'Callers that list the immobile reply' do
           expect(hands).to eq('left' => 'crossbow', 'right' => 'crossbow bolts')
         end
 
+        # The hand updates lag the replies: until the first 0.1 s pause, both
+        # hands still show what they held before the lowering. A pick-up into
+        # the hand an item was lowered from must still count.
+        context 'when the hand update for the lowering lags its reply' do
+          let(:helm) { double('item', short_name: 'helm', transforms_to: nil, tie_to: nil, wield: nil, container: nil) }
+
+          def lagging_game(get_reply: nil)
+            get = lambda do |noun|
+              lambda do
+                next get_reply if get_reply
+                next 'You are already holding that.' unless ground.delete(noun)
+
+                hands[hands['right'] ? 'left' : 'right'] = noun
+                "You pick up the #{noun}."
+              end
+            end
+            game('remove my helm'     => -> { sent.size == 1 ? "You'll need both hands free to remove that." : 'You remove a helm.' },
+                 'stow my helm'       => 'You put your helm in your pack.',
+                 'lower ground left'  => lower('left'),
+                 'lower ground right' => lower('right'),
+                 'get my shield'      => get.call('shield'),
+                 'get my longbow'     => get.call('longbow'),
+                 'swap'               => 'You move things around.')
+          end
+
+          it 'waits for the update and counts each pick-up' do
+            stale = hands.dup
+            allow(drc).to receive(:left_hand) { (stale || hands)['left'] }
+            allow(drc).to receive(:right_hand) { (stale || hands)['right'] }
+            allow(em).to receive(:pause) { stale = nil }
+            lagging_game
+            em.remove_item(helm)
+            expect(hands).to eq('left' => 'longbow', 'right' => 'shield')
+            expect(ground).to be_empty
+            expect(sent.drop(4)).to eq(['stow my helm', 'get my shield', 'get my longbow'])
+            expect(messages.grep(/Unable to pick up/)).to be_empty
+          end
+
+          # The view never catches up and the GETs fail: an item still on the
+          # ground must not count as picked up because its hand shows it.
+          it 'waits at most 1 s, then reports an item left on the ground' do
+            stale = hands.dup
+            allow(drc).to receive(:left_hand) { stale['left'] }
+            allow(drc).to receive(:right_hand) { stale['right'] }
+            lagging_game(get_reply: 'What were you referring to?')
+            em.remove_item(helm)
+            expect(ground).to eq(%w[longbow shield])
+            expect(messages).to include('EquipmentManager: Unable to pick up shield after removing helm',
+                                        'EquipmentManager: Unable to pick up longbow after removing helm')
+            # Per GET: up to 10 pauses waiting for the update, and 10 for
+            # the hand to gain the item.
+            expect(em).to have_received(:pause).with(0.1).exactly(sent.count { |m| m.start_with?('get ') } * 20).times
+          end
+
+          it 'does not wait when the update has already arrived' do
+            lagging_game
+            em.remove_item(helm)
+            expect(hands).to eq('left' => 'longbow', 'right' => 'shield')
+            expect(em).not_to have_received(:pause)
+          end
+        end
+
         it 'does not retry a pick-up that fails for another reason' do
           remove_game(gets_held: 0, free_reply: 'What were you referring to?')
           em.remove_item(item)
@@ -359,6 +421,23 @@ RSpec.describe 'Callers that list the immobile reply' do
         em.unload_weapon('crossbow')
         expect(hands).to eq('left' => nil, 'right' => 'crossbow bolts')
         expect(messages).to include('EquipmentManager: Unable to pick crossbow back up after unloading')
+      end
+
+      # The hand update for the lowering lags its reply until the first 0.1 s
+      # pause, so the weapon hand still shows the weapon when the pick-up
+      # starts.
+      it 'counts the weapon as picked up when the hand update for the lowering lags' do
+        stale = hands.dup
+        allow(drc).to receive(:left_hand) { (stale || hands)['left'] }
+        allow(drc).to receive(:right_hand) { (stale || hands)['right'] }
+        allow(em).to receive(:pause) { stale = nil }
+        game('unload my longbow' => 'Your arrow falls from your longbow to your feet.',
+             'lower ground left' => -> { hands['left'] = nil; 'You lower the longbow.' },
+             'stow my arrow'     => 'You put your arrow in your quiver.',
+             'get my longbow'    => -> { hands['left'] = 'longbow'; 'You pick up the longbow.' })
+        em.unload_weapon('longbow')
+        expect(sent).to eq(['unload my longbow', 'lower ground left', 'stow my arrow', 'get my longbow'])
+        expect(messages.grep(/Unable to pick longbow back up/)).to be_empty
       end
 
       # A stray failure-like line answers the GET, but the hand gains the
