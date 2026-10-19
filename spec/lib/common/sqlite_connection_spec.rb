@@ -503,6 +503,35 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
           other.busy_timeout = 1000
           other.execute('INSERT INTO rows (n) VALUES (3)')
           sleep 1.6
+        when 'raise_kill_in_begin', 'raise_raise_in_begin', 'raise_kill_in_insert'
+          # Two interrupts arrive during one lock wait: in BEGIN IMMEDIATE, or
+          # in the first INSERT of a deferred transaction.
+          holder.execute('BEGIN IMMEDIATE')
+          k = Thread.new do
+            Thread.current.report_on_exception = false
+            mode = how.end_with?('_in_insert') ? :deferred : :immediate
+            db.transaction(mode: mode) { db[:rows].insert(n: 1) }
+          end
+          sleep 0.1
+          k.raise(RuntimeError, 'first')
+          sleep 0.01
+          how.start_with?('raise_kill') ? k.kill : k.raise(RuntimeError, 'second')
+          sleep 0.1
+          holder.execute('COMMIT')
+          outcome = begin
+            k.join(2) ? 'ended' : 'stuck'
+          rescue Exception => e
+            e.message
+          end
+          puts outcome
+          other = SQLite3::Database.new(path)
+          other.busy_timeout = 1000
+          puts(begin
+            other.execute('INSERT INTO rows (n) VALUES (3)')
+            'other process can write'
+          rescue SQLite3::BusyException
+            'locked'
+          end)
         end
         puts db[:rows].select_order_map(:n).inspect
       RUBY
@@ -542,6 +571,235 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
 
     it 'rolls back and releases the lock when a thread is killed while COMMIT waits for readers' do
       expect(run_harness('kill_in_commit')).to eq(['dead', 'not rescued', 'false', '[3]'])
+    end
+
+    # The second interrupt is delivered as the next interrupt mask ends; that
+    # must not be one inside ROLLBACK, before ROLLBACK runs.
+    it 'rolls back when a thread waiting in BEGIN IMMEDIATE gets Thread#raise and then Thread#kill' do
+      expect(run_harness('raise_kill_in_begin')).to eq(['ended', 'other process can write', '[3]'])
+    end
+
+    it 'rolls back when a thread waiting in BEGIN IMMEDIATE gets Thread#raise twice' do
+      expect(run_harness('raise_raise_in_begin')).to eq(['first', 'other process can write', '[3]'])
+    end
+
+    it 'rolls back when a thread waiting in the first write of a transaction gets Thread#raise and then Thread#kill' do
+      expect(run_harness('raise_kill_in_insert')).to eq(['ended', 'other process can write', '[3]'])
+    end
+  end
+
+  it 'does not track a statement that is closed at birth (comment-only SQL)' do
+    db = open_db
+    20.times { db.run('UPDATE rows SET n = n; -- trailing comment') }
+    shared = Lich.open_sqlite_db(path)
+    @raw << shared
+    20.times { shared.execute_batch('UPDATE rows SET n = n; -- trailing comment') }
+
+    db.synchronize { |conn| expect(conn.instance_variable_get(:@lich_open_statements)).to be_empty }
+    expect(shared.instance_variable_get(:@lich_open_statements)).to be_empty
+  end
+
+  # Lich.db and the session summary connection: one SQLite3::Database that
+  # several threads use.
+  describe 'a connection from Lich.open_sqlite_db' do
+    def c_methods(klass)
+      (klass.public_instance_methods(false) + klass.private_instance_methods(false)).select do |name|
+        meth = klass.instance_method(name)
+        meth = meth.super_method while meth && meth.owner != klass
+        meth && meth.source_location.nil?
+      end
+    end
+
+    # Runs the block on a thread while another thread holds the connection's
+    # Monitor for 0.3 s, and returns how long the block took.
+    def time_while_monitor_held(conn)
+      monitor = conn.instance_variable_get(:@lich_monitor)
+      expect(monitor).to be_a(Monitor)
+      held = Queue.new
+      blocker = Thread.new do
+        monitor.synchronize do
+          held << true
+          sleep 0.3
+        end
+      end
+      expect(held.pop(timeout: 5)).to be(true)
+      started = monotonic
+      yield
+      elapsed = monotonic - started
+      blocker.join
+      elapsed
+    end
+
+    it 'gets the Ruby busy handler and a Monitor around every sqlite3 C method on it and its statements' do
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      stmt = shared.prepare('SELECT n FROM rows WHERE n = ?')
+
+      expect(shared).to be_a(Lich::SQLiteBusyWait::Connection)
+      expect(shared.get_first_value('PRAGMA busy_timeout')).to eq(0)
+      expect(stmt).to be_a(Lich::SQLiteBusyWait::SerializedStatement)
+      wrapped_db = Lich::SQLiteBusyWait::SerializedDatabase.instance_methods(false) +
+                   Lich::SQLiteBusyWait::SerializedDatabase.private_instance_methods(false)
+      wrapped_stmt = Lich::SQLiteBusyWait::SerializedStatement.instance_methods(false) +
+                     Lich::SQLiteBusyWait::SerializedStatement.private_instance_methods(false)
+      expect(wrapped_db).to match_array(c_methods(SQLite3::Database) - Lich::SQLiteBusyWait::UNSERIALIZED_DATABASE_METHODS)
+      expect(wrapped_stmt).to match_array(c_methods(SQLite3::Statement) - Lich::SQLiteBusyWait::UNSERIALIZED_STATEMENT_METHODS)
+      # Private sqlite3 methods stay private.
+      expect(shared.respond_to?(:exec_batch)).to be(false)
+      expect(stmt.respond_to?(:stats_as_hash)).to be(false)
+      stmt.close
+    end
+
+    it 'makes other threads wait for the Monitor before entering SQLite on the connection or its statements' do
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      stmt = shared.prepare('SELECT n FROM rows WHERE n = ?')
+      waits = {
+        changes: time_while_monitor_held(shared) { shared.changes },
+        prepare: time_while_monitor_held(shared) { shared.prepare('SELECT 1').close },
+        bind_param: time_while_monitor_held(shared) { stmt.bind_param(1, 1) },
+        step: time_while_monitor_held(shared) { stmt.step },
+        reset: time_while_monitor_held(shared) { stmt.reset! },
+        execute_batch2: time_while_monitor_held(shared) { shared.execute_batch2('SELECT 1') }
+      }
+      free = {
+        interrupt: time_while_monitor_held(shared) { shared.interrupt },
+        closed: time_while_monitor_held(shared) { shared.closed? }
+      }
+      stmt.close
+
+      expect(waits.values).to all(be >= 0.2)
+      expect(free.values).to all(be < 0.2)
+    end
+
+    it 'leaves plain connections and their statements unserialized' do
+      open_db
+      Lich.open_sqlite_db(path).tap { |c| @raw << c }
+      plain = SQLite3::Database.new(path)
+      @raw << plain
+      stmt = plain.prepare('SELECT n FROM rows')
+
+      expect(plain).not_to be_a(Lich::SQLiteBusyWait::SerializedDatabase)
+      expect(stmt).not_to be_a(Lich::SQLiteBusyWait::SerializedStatement)
+      stmt.close
+    end
+
+    # A pooled connection waits at COMMIT, in the Ruby handler, for another
+    # connection's read lock to go. A thread that reads through the shared
+    # connection meanwhile waits for the pooled writer's pending lock. With the
+    # C busy timeout it would spin with the GVL held, and nothing else could
+    # run until it gave up.
+    it 'lets a pooled writer waiting at COMMIT and a reader on it both finish once the read lock goes' do
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(1500)
+      db = open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      reader_conn = SQLite3::Database.new(path)
+      @raw << reader_conn
+      reader_conn.execute('BEGIN')
+      reader_conn.execute('SELECT count(*) FROM rows') # read lock until COMMIT
+      started = monotonic
+      pooled = writer(db, 1)
+      sleep 0.2
+      shared_reader = Thread.new do
+        [shared.get_first_value('SELECT count(*) FROM rows'), monotonic - started]
+      rescue SQLite3::BusyException => e
+        [e.class, monotonic - started]
+      end
+      sleep 0.2
+      reader_conn.execute('COMMIT')
+      committed_at = monotonic - started
+
+      expect(committed_at).to be < 0.8
+      expect(pooled.value.first).to eq(:ok)
+      expect(shared_reader.value.first).to eq(1)
+      expect(shared_reader.value.last).to be < 1.2
+    end
+  end
+
+  # Two threads on one shared connection, one waiting for the lock. Without
+  # the Monitor the second thread blocks on SQLite's connection mutex with
+  # the GVL held and the process hangs, so these run in a child process.
+  describe 'two threads on a connection from Lich.open_sqlite_db' do
+    let(:harness) do
+      <<~'RUBY'
+        require 'sqlite3'
+        module Lich; end
+        require ARGV[0]
+        path, how = ARGV[1], ARGV[2]
+        Lich.define_singleton_method(:sqlite_busy_timeout_ms) { 1500 }
+        mono = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+        setup = SQLite3::Database.new(path)
+        setup.execute('CREATE TABLE rows (n INTEGER)')
+        setup.close
+        shared = Lich.open_sqlite_db(path)
+        holder = SQLite3::Database.new(path)
+        holder.execute('BEGIN IMMEDIATE')
+        holder.execute('INSERT INTO rows (n) VALUES (0)')
+        started = mono.call
+        waiter = Thread.new do
+          Thread.current.report_on_exception = false
+          shared.execute('INSERT INTO rows (n) VALUES (1)')
+          :ok
+        end
+        sleep 0.1
+        other = Thread.new do
+          shared.get_first_value('SELECT count(*) FROM rows')
+        rescue SQLite3::BusyException => e
+          e.class.name
+        end
+        ticks = 0
+        deadline = mono.call + 0.3
+        while mono.call < deadline
+          sleep 0.01
+          ticks += 1
+        end
+        waiter.kill if how == 'kill'
+        holder.execute('COMMIT')
+        waited = begin
+          waiter.value.to_s
+        rescue Exception => e
+          e.class.name
+        end
+        puts ticks >= 10, waiter.status.inspect, waited, other.value.inspect, mono.call - started < 1.2
+        shared.execute('INSERT INTO rows (n) VALUES (2)')
+        puts shared.execute('SELECT n FROM rows ORDER BY n').flatten.inspect
+      RUBY
+    end
+
+    def run_harness(how)
+      lib = File.expand_path('../../../lib/common/sqlite_connection.rb', __dir__)
+      stdout = +''
+      stderr = +''
+      status = nil
+      Open3.popen3(RbConfig.ruby, '-e', harness, lib, path, how) do |_in, out, err, wait|
+        unless wait.join(20)
+          Process.kill(:KILL, wait.pid)
+          wait.join
+        end
+        stdout = out.read
+        stderr = err.read
+        status = wait.value
+      end
+      expect(status.success?).to be(true), "child hung or failed: #{stderr}"
+      stdout.lines.map(&:strip)
+    end
+
+    it 'lets the second thread run once the first one\'s lock wait ends, and other threads keep running' do
+      # The reader may run before or after the write lands.
+      lines = run_harness('wait')
+
+      expect(lines.values_at(0, 1, 2, 4, 5)).to eq(['true', 'false', 'ok', 'true', '[0, 1, 2]'])
+      expect(%w[1 2]).to include(lines[3])
+    end
+
+    it 'delivers a kill to the waiting thread after its lock wait and leaves the connection usable' do
+      lines = run_harness('kill')
+
+      expect(lines.values_at(0, 1, 4, 5)).to eq(['true', 'false', 'true', '[0, 1, 2]'])
+      expect(%w[1 2]).to include(lines[3])
     end
   end
 end
