@@ -1287,6 +1287,26 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         expect(map_class.match_current(nil)).to be_nil
       end
 
+      it 'does not match on a shared sentence of three words, one short of the threshold' do
+        drifted(10, 'Reeds sway gently.  Mud covers everything here.')
+        live(description: 'Reeds sway gently.  A heron watches from the shallows.')
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'matches on a shared sentence of exactly four words' do
+        drifted(10, 'Reeds sway very gently.  Mud covers everything here.')
+        live(description: 'Reeds sway very gently.  A heron watches from the shallows.')
+        expect(map_class.match_current(nil)).to eq(10)
+        expect(map_class.match_fuzzy).to eq(10)
+      end
+
+      it 'matches a live sentence that ends partway through a stored word' do
+        drifted(10, 'The gate stands tall over the roadway.  Inns line it.')
+        live(description: 'The gate stands tall over the road.  Rain falls.')
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
       it 'is unresolved when two rooms share the sentence and nothing tells them apart' do
         drifted(10, stored)
         drifted(11, 'The murky water swirls around you.  Driftwood bobs past.')
