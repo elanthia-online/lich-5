@@ -544,7 +544,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'JSON parse error' do
-      it 'raises ApiError' do
+      it 'raises MalformedResponseError, still an ApiError' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -553,7 +553,8 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
-        }.to raise_error(described_class::ApiError, /Failed to parse/)
+        }.to raise_error(described_class::MalformedResponseError, /Failed to parse/)
+        expect(described_class::MalformedResponseError.superclass).to eq(described_class::ApiError)
       end
     end
 

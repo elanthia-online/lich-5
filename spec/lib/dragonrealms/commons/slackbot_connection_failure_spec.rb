@@ -87,6 +87,12 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       ssl.write("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
       return ssl.sysclose
     end
+    if token == 'html-token'
+      # A 200 page that is not JSON, as a proxy or captive portal might send.
+      page = '<html><body>Access denied</body></html>'
+      ssl.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: #{page.bytesize}\r\nConnection: close\r\n\r\n#{page}")
+      return ssl.sysclose
+    end
     if mode[:value] == :drop_mid_response || token == 'drop-token'
       ssl.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"ok\":")
       return # closes the TCP socket below with no TLS close_notify
@@ -353,6 +359,24 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       expect(UserVars.slack_token).to eq('throttle-token')
       expect(bot.authed?('throttle-token')).to be false
       expect(logs).to include('SlackBot: Could not check a Slack token: Throttled by Slack API')
+    end
+    it 'treats a token check answered with a page that is not JSON as Slack unavailable, not as a rejected token' do
+      install_lnet(token: 'valid-token')
+      UserVars.slack_token = 'html-token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(lnet_chats).to be_empty
+      expect(bot.error_message).to start_with('Slack unavailable: Failed to parse Slack API response')
+      expect(UserVars.slack_token).to eq('html-token')
+
+      3.times { expect(bot.direct_message('alice', 'help')).to be_nil }
+      expect(lnet_chats).to be_empty
+
+      expect(bot.authed?('html-token')).to be false
+      expect(logs).to include(a_string_starting_with('SlackBot: Could not check a Slack token: Failed to parse Slack API response'))
+      expect(logs).not_to include(a_string_including('Slack token not accepted'))
     end
   end
 

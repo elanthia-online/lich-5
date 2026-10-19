@@ -26,6 +26,11 @@ module Lich
       # Raised when the Slack API returns a non-ok response.
       class ApiError < Error; end
 
+      # Raised when a reply cannot be parsed as JSON, such as an HTML page
+      # from a proxy or captive portal. Slack did not answer, so a token
+      # check treats this as Slack being unavailable, not as a rejected token.
+      class MalformedResponseError < ApiError; end
+
       # Raised on HTTP 429 responses from Slack.
       class ThrottlingError < ApiError
         # @return [Integer, nil] seconds to wait before retrying
@@ -131,8 +136,8 @@ module Lich
       # Tests whether a Slack API token is valid.
       #
       # Answers false both when Slack rejects the token and when Slack cannot
-      # be asked (a network failure or a rate limit); the cause of the latter
-      # is logged.
+      # be asked (a network failure, a rate limit or a reply that is not
+      # JSON); the cause of the latter is logged.
       #
       # @param token [String, nil] the token to test
       # @param budget [Numeric, nil] seconds allowed for the check, or nil for
@@ -140,7 +145,7 @@ module Lich
       # @return [Boolean]
       def authed?(token, budget: nil)
         token_accepted?(token, budget)
-      rescue NetworkError, ThrottlingError => e
+      rescue NetworkError, ThrottlingError, MalformedResponseError => e
         Lich.log "SlackBot: Could not check a Slack token: #{e.message}"
         false
       end
@@ -200,16 +205,17 @@ module Lich
 
       # Checks the stored token and, only if Slack rejects it (or there is
       # none), looks for a new one over LNet. When Slack cannot be asked (a
-      # network failure or a rate limit) the token is neither judged nor
-      # replaced: the cause is logged and kept in error_message, no LNet
-      # discovery runs, and the next message checks again.
+      # network failure, a rate limit or a reply that is not JSON) the token
+      # is neither judged nor replaced: the cause is logged and kept in
+      # error_message, no LNet discovery runs, and the next message checks
+      # again.
       #
       # @param budget [Numeric, nil] seconds allowed for each token check
       # @return [Boolean] true if a token Slack accepts is in UserVars.slack_token
       def verify_token(budget)
         ensure_slack_token(budget) unless token_accepted?(UserVars.slack_token, budget)
         @error_message.nil?
-      rescue NetworkError, ThrottlingError => e
+      rescue NetworkError, ThrottlingError, MalformedResponseError => e
         Lich.log "SlackBot: Slack unavailable while checking the token: #{e.message}"
         set_error("Slack unavailable: #{e.message}")
         false
@@ -222,12 +228,13 @@ module Lich
       #   the full retry policy
       # @return [Boolean] true if Slack accepts the token; false if there is no
       #   token or Slack rejects it
-      # @raise [NetworkError, ThrottlingError] when Slack could not be asked
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack could not be asked
       def token_accepted?(token, budget)
         return false unless token
 
         post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
-      rescue ThrottlingError
+      rescue ThrottlingError, MalformedResponseError
         raise
       rescue ApiError => e
         Lich.log "SlackBot: Slack token not accepted: #{e.message}"
@@ -333,8 +340,8 @@ module Lich
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [void]
-      # @raise [NetworkError, ThrottlingError] when Slack cannot be asked about
-      #   a token found over LNet
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack cannot be asked about a token found over LNet
       def ensure_slack_token(budget = nil)
         unless lnet_connected?
           unless Script.exists?(LNET_SCRIPT_NAME)
@@ -547,8 +554,8 @@ module Lich
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [Boolean] true if a valid token was found and stored
-      # @raise [NetworkError, ThrottlingError] when Slack cannot be asked about
-      #   a token found
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack cannot be asked about a token found
       def find_token(budget = nil)
         return false unless lnet_available?
 
@@ -587,20 +594,24 @@ module Lich
 
       # Posts to the Slack API with retry and exponential backoff on network errors.
       #
-      # Timeouts, resets, EOF, malformed responses and DNS failures are retried
-      # with backoff. Any other socket error (a refused connection, an
-      # unreachable host or network, ...) and any TLS error (a rejected
+      # Timeouts, resets, EOF, malformed HTTP responses and DNS failures are
+      # retried with backoff. Any other socket error (a refused connection,
+      # an unreachable host or network, ...) and any TLS error (a rejected
       # certificate, a failed handshake, a connection dropped mid-response)
-      # is raised as NetworkError at once, without retrying: these come back
-      # immediately from the OS or the peer, and the backoff would only hold
-      # the calling script. The next call tries again.
+      # is raised as NetworkError without retrying: most come back at once
+      # from the OS or the peer, and the backoff would only hold the calling
+      # script. The next call tries again.
       #
       # The split is by exception class, not by what happened on the wire. A
       # dropped connection is retried when it arrives as ECONNRESET or
       # EOFError, but raised at once when it arrives as ECONNABORTED, EPIPE or
       # an OpenSSL error (OpenSSL 3 reports a connection closed without a TLS
       # close_notify as "unexpected eof while reading"). Which class a drop
-      # arrives as depends on the platform and the OpenSSL version.
+      # arrives as depends on the platform and the OpenSSL version. Likewise
+      # a host that never answers is retried when open_timeout fires first
+      # (Net::OpenTimeout), but raised without a retry when the OS gives up
+      # first (Errno::ETIMEDOUT), which takes as long as the OS connect
+      # timeout.
       #
       # @param method [String] Slack API method name (e.g. 'chat.postMessage')
       # @param params [Hash] request parameters including token
@@ -610,7 +621,8 @@ module Lich
       # @raise [ThrottlingError] on HTTP 429
       # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, when the deadline is reached,
       #   or at once on a socket or TLS error that is not retried
-      # @raise [ApiError] on non-ok Slack responses or JSON parse errors
+      # @raise [MalformedResponseError] when the reply is not JSON
+      # @raise [ApiError] on non-ok Slack responses
       def post(method, params, deadline: nil)
         retries = 0
 
@@ -637,7 +649,7 @@ module Lich
 
           body
         rescue JSON::ParserError => e
-          raise ApiError, "Failed to parse Slack API response: #{e.message}"
+          raise MalformedResponseError, "Failed to parse Slack API response: #{e.message}"
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
           raise NetworkError, "Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
