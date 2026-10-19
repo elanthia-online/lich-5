@@ -488,8 +488,48 @@ RSpec.shared_examples 'a game Map class' do |game|
 
     it 'accepts room 0 as from: when the map has it' do
       shared_room(0, title: '[Room 0]', description: 'room 0')
+      map_class[0].wayto['2'] = 'south'
 
+      # An exit with no timeto counts the 0.2 default, as any other leg does.
       expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
+    end
+
+    it 'refuses a from: room with no exit to the first room of the path' do
+      # A stale start room (Room.current read again after a move) would
+      # otherwise count the first leg as the 0.2 default.
+      expect { map_class.estimate_time([3, 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (3)')
+      expect { map_class.estimate_time([4], from: map_class[2]) }
+        .to raise_error(ArgumentError, /from: room \(2\) with no exit to the path start \(4\)/)
+      expect { map_class.estimate_time(%w[3 4], from: '1') }
+        .to raise_error(ArgumentError, /no exit to the path start \(3\)/)
+    end
+
+    it 'checks the exit, not the timeto, so an exit with no timeto still counts 0.2' do
+      map_class[4].wayto['1'] = 'climb down'
+
+      expect(map_class.estimate_time([1], from: 4)).to be_within(0.001).of(0.2)
+      expect(map_class.estimate_time([1, 2], from: 4)).to be_within(0.001).of(12.2)
+    end
+
+    it 'accepts a StringProc exit to the first room of the path' do
+      map_class[4].wayto['2'] = StringProc.new('nil')
+      map_class[4].timeto['2'] = 2.5
+
+      expect(map_class.estimate_time([2, 3], from: 4)).to be_within(0.001).of(3.5)
+    end
+
+    it 'matches a zero-padded first id to the from: room numerically' do
+      expect(map_class.estimate_time(%w[01 2 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3], from: '01')).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses a zero-padded first id the walk would look up as a missing exit' do
+      # The legs are looked up by the id as written, so '02' is not the '2'
+      # exit and that leg would count the 0.2 default instead of 12.
+      expect { map_class.estimate_time(%w[02 3], from: 1) }
+        .to raise_error(ArgumentError, /no exit to the path start \(02\)/)
     end
 
     it 'still counts a gone room inside the path as 0.2' do

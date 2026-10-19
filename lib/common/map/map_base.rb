@@ -257,7 +257,8 @@ module Lich
         # so a second read can name a different room than the path starts from.
         #
         # When +array+ already begins with the +from:+ room it is not counted
-        # twice, so a full path is safe to pass with +from:+ as well.
+        # twice, so a full path is safe to pass with +from:+ as well. Otherwise
+        # the +from:+ room must have an exit (a +wayto+) to +array.first+.
         #
         # The argument is never modified.
         #
@@ -272,7 +273,8 @@ module Lich
         # @raise [ArgumentError] when +array+ is not an Array (for example the
         #   nil Room#path_to returns for an unreachable room), or +from:+ is
         #   given but is not a room id or room (nil and negative ids included),
-        #   or names an id with no room in the map
+        #   names an id with no room in the map, or names a room with no exit
+        #   to the first room of +array+
         def estimate_time(array, from: ESTIMATE_NO_ORIGIN)
           self.load unless loaded?
           unless array.is_a?(Array)
@@ -301,8 +303,9 @@ module Lich
         # @param array [Array<Integer, String>] room ids along the path
         # @param from [Integer, String, Map] the starting room
         # @return [Array<Integer, String>] a new Array; +array+ is untouched
-        # @raise [ArgumentError] when +from+ is not a room id or room, or no
-        #   room in the map has that id
+        # @raise [ArgumentError] when +from+ is not a room id or room, no
+        #   room in the map has that id, or that room has no exit to the first
+        #   room of +array+
         def estimate_time_path_from(array, from)
           origin = if from.is_a?(room_class)
                      from.id
@@ -330,7 +333,22 @@ module Lich
           if origin >= rooms.size || rooms[origin].nil?
             raise ArgumentError, "Map.estimate_time was given a from: room id that is not in the map (#{origin})"
           end
-          return array.dup if array.first.to_s == origin.to_s
+          return array.dup if array.empty?
+
+          first = array.first.to_s
+          # Compared as numbers, so a zero-padded '012' still names room 12.
+          # A stale origin that happens to equal the path start cannot be told
+          # apart from a full path, so it is taken as one.
+          return array.dup if first.match?(/\A[0-9]+\z/) && first.to_i == origin
+
+          # A start room with no exit to the path start (a stale Room.current
+          # read after a move) would count the first leg as the 0.2 default.
+          # Check wayto, not timeto: an exit with no timeto is a real leg that
+          # counts 0.2. The key is the id as written, the same key the walk
+          # looks the leg up by.
+          unless rooms[origin].wayto.key?(first)
+            raise ArgumentError, "Map.estimate_time was given a from: room (#{origin}) with no exit to the path start (#{first})"
+          end
 
           [origin] + array
         end

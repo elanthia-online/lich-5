@@ -34,11 +34,19 @@ the short estimate again. A negative id is refused too: on DragonRealms,
 `nil` for an unmapped room after that). A non-numeric String is refused, not
 looked up by title. An id with no room in the map also raises `ArgumentError`
 rather than counting the first leg as 0.2 seconds; a GemStone uid passed as a
-bare Integer (instead of a `"u123"` String or a Lich room id) would otherwise
-give a quietly wrong estimate. Rooms missing from inside the path still count
-0.2 seconds per leg, as before. If the path already begins with the `from:`
-room, that room is not added a second time, so a full path is also safe to pass
-with `from:`.
+bare Integer where a Lich room id belongs would otherwise give a quietly wrong
+estimate. A `"u123"` uid String is refused as well: pass the Lich room id or
+the room. Rooms missing from inside the path still count 0.2 seconds per leg,
+as before.
+
+If the path already begins with the `from:` room (compared as numbers, so
+`"012"` matches room 12), that room is not added a second time, so a full path
+is also safe to pass with `from:`. Otherwise the `from:` room must have an exit
+to the first room of the path, or `estimate_time` raises `ArgumentError`. This
+catches a start room read again after the character moved. An exit with no
+`timeto` still counts 0.2 seconds. A stale start room that happens to be the
+first room of the path can't be told apart from a full path, so it is taken as
+one; reading `Room.current` once avoids both cases.
 
 Leave `from:` out and `estimate_time` behaves as it always has.
 
