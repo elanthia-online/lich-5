@@ -209,8 +209,14 @@ module Lich
       # {.tie_item_result} reports it as +:already_tied+.
       TIE_ITEM_ALREADY_TIED_PATTERN = /has already been tied off/.freeze
 
+      # Success replies: "You tie up the soft gem pouch.", "You carefully tie
+      # ...", "You attach <item> to a strap on your <belt>." The verb must come
+      # right after "You" (one -ly adverb allowed) and be the whole word, so
+      # lines that only contain "tie" ("You untie ...", "...tactical
+      # abilities...", "...tied with...") can't pass for the reply while bput
+      # waits for it.
       TIE_ITEM_SUCCESS_PATTERNS = [
-        /^You .*tie/,
+        /^You (?:\w+ly )?tie\b/,
         /^You attach/,
         TIE_ITEM_ALREADY_TIED_PATTERN
       ].freeze

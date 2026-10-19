@@ -845,7 +845,10 @@ RSpec.describe Lich::DragonRealms::DRCI do
       'The soft gem pouch has already been tied off.' => :already_tied,
       "Tie it off when it's empty?  Why?"             => :empty,
       'Tie what?'                                     => :failed,
-      ''                                              => :failed
+      ''                                              => :failed,
+      # What bput returned on main when a combat line beat the real reply:
+      # the matched text of "You must be closer to use tactical abilities...".
+      'You must be closer to use tactical abilitie'   => :failed
     }.each do |reply, result|
       it "is #{result.inspect} for #{reply.empty? ? 'no reply (timeout)' : reply.inspect}" do
         stub_bput(reply)
@@ -1715,6 +1718,39 @@ RSpec.describe Lich::DragonRealms::DRCI do
         patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
         expect(patterns.any? { |p| "Tie it off when it's empty?  Why?".match?(p) }).to be false
         expect("Tie it off when it's empty?  Why?").to match(described_class::TIE_ITEM_EMPTY_PATTERN)
+      end
+
+      # Real TIE success replies (game logs, plus the "You carefully tie" form
+      # other scripts wait for).
+      [
+        'You tie up the soft gem pouch.',
+        'You attach a loimic slender awl to a strap on your tailor\'s toolbelt.',
+        'You attach a soft gem pouch to your belt.',
+        'You carefully tie your rope to your belt.',
+        'You carefully tie your knobby stick and rock together.',
+        'The soft gem pouch has already been tied off.'
+      ].each do |reply|
+        it "matches the real reply #{reply.inspect}" do
+          expect(described_class::TIE_ITEM_SUCCESS_PATTERNS.any? { |p| reply.match?(p) }).to be true
+        end
+      end
+
+      # Lines from real logs that can arrive while a TIE waits for its reply
+      # (combat, spell wear-off, other scripts' commands). bput returns the
+      # first line any pattern matches, so none of these may match.
+      [
+        'You must be closer to use tactical abilities on your opponent.',
+        "You feel the divinity seep from your bones as the previous blessing of Urrem'tier wanes.",
+        'You untie a steel carving knife from the straps of your cotton odaj.',
+        'You untie your skates and slip them off of your feet.',
+        'You slide your ice skates on your feet and tightly tie the laces.',
+        'You get a darkstone foil tied with an ornamental winterweave sword knot from inside your kirmiko pocket.',
+        'You catch sight of a parchment detailing the facilities and a series of disclaimers.',
+        'You get a firestained agonite bola with braided onyx-hide ties from inside your kirmiko pocket.'
+      ].each do |line|
+        it "does not match the unrelated line #{line.inspect}" do
+          expect(described_class::TIE_ITEM_SUCCESS_PATTERNS.select { |p| line.match?(p) }).to be_empty
+        end
       end
     end
   end
