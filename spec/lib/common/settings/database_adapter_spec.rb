@@ -116,6 +116,73 @@ RSpec.describe Lich::Common::DatabaseAdapter do
         expect(messages).to include(['error', a_string_including('failed to serialize settings')])
       end
 
+      describe 'on_stored' do
+        it 'is called once with the stored row, after the row is committed' do
+          @adapter.save_settings('go2', { 'keep' => 1 }, 'DR')
+          calls = []
+
+          result = @adapter.update_settings('go2', 'DR', on_stored: ->(row) { calls << [row, stored_row('go2', 'DR')] }) { |fresh| fresh.merge('new' => 2) }
+
+          expect(calls.size).to eq(1)
+          expect(calls.first[0]).to equal(result)
+          expect(calls.first[1]).to eq('keep' => 1, 'new' => 2)
+        end
+
+        it 'is not called when nothing is stored' do
+          @adapter.save_settings('go2', { 'keep' => 1 }, 'DR')
+          calls = []
+
+          expect(@adapter.update_settings('go2', 'DR', on_stored: ->(row) { calls << row }) { |_fresh| nil }).to be_nil
+          expect(@adapter.update_settings('go2', 'DR', on_stored: ->(row) { calls << row }) { |_fresh| [1] }).to be_nil
+          expect(calls).to be_empty
+        end
+
+        it 'still runs when Thread#kill lands while the store is in progress, and the kill takes effect after it' do
+          committed = Queue.new
+          seen = nil
+          allow(@adapter).to receive(:store_if_unchanged).and_wrap_original do |original, *args|
+            result = original.call(*args)
+            committed << true
+            sleep 0.3 # Thread#kill arrives here, between the commit and on_stored
+            result
+          end
+
+          writer = Thread.new do
+            Thread.current.report_on_exception = false
+            @adapter.update_settings('go2', 'DR', on_stored: ->(row) { seen = row }) { |fresh| fresh.merge('k' => 1) }
+            :returned
+          end
+          committed.pop(timeout: 2)
+          writer.kill
+
+          expect(writer.join(2)).to eq(writer)
+          expect(writer.value).to be_nil # killed: it never returned
+          expect(stored_row('go2', 'DR')).to eq('k' => 1)
+          expect(seen).to eq('k' => 1)
+        end
+
+        it 'does not hold back Thread#kill while the block builds the row' do
+          building = Queue.new
+          seen = nil
+          writer = Thread.new do
+            Thread.current.report_on_exception = false
+            @adapter.update_settings('go2', 'DR', on_stored: ->(row) { seen = row }) do |fresh|
+              building << true
+              sleep 5
+              fresh.merge('k' => 1)
+            end
+          end
+          building.pop(timeout: 2)
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          writer.kill
+
+          expect(writer.join(2)).to eq(writer)
+          expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 2
+          expect(stored_row('go2', 'DR')).to be_nil
+          expect(seen).to be_nil
+        end
+      end
+
       it 're-raises an ArgumentError from the block as itself, not as a database error' do
         @adapter.save_settings('go2', { 'keep' => 1 }, 'DR')
 
@@ -159,6 +226,28 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           expect { @adapter.get_settings('go2', 'DR') }.to raise_error(ArgumentError, /marshal data too short/)
           expect(yielded).to be(false)
           expect(raw_row.b).to eq("\x04\x08".b)
+          expect(messages).to include(['error', a_string_including('settings for go2 (DR) cannot be read (ArgumentError: marshal data too short); nothing was saved')])
+        end
+
+        it 'leaves a NULL row untouched and reports it before raising' do
+          db = SQLite3::Database.new(db_file)
+          db.execute("INSERT OR REPLACE INTO script_auto_settings (script, scope, hash) VALUES ('go2', 'DR', NULL)")
+          db.close
+          stored = nil
+
+          expect { @adapter.update_settings('go2', 'DR', on_stored: ->(row) { stored = row }) { |fresh| fresh } }.to raise_error(TypeError)
+          expect(raw_row).to be_nil
+          expect(stored).to be_nil
+          expect(messages).to include(['error', a_string_including('settings for go2 (DR) cannot be read (TypeError')])
+          expect(Lich).to have_received(:log).with(a_string_including('settings for go2 (DR) cannot be read'))
+        end
+
+        it 'leaves a row holding a class this process lacks untouched and reports it before raising' do
+          store_raw("\x04\bo:\x18NoSuchSettingsClass\x00".b)
+
+          expect { @adapter.update_settings('go2', 'DR') { |fresh| fresh } }.to raise_error(ArgumentError, /NoSuchSettingsClass/)
+          expect(raw_row.b).to eq("\x04\bo:\x18NoSuchSettingsClass\x00".b)
+          expect(messages).to include(['error', a_string_including('cannot be read (ArgumentError: undefined class/module NoSuchSettingsClass)')])
         end
 
         it 'leaves a row in a foreign format untouched and raises like a read does' do
@@ -167,6 +256,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           expect { @adapter.update_settings('go2', 'DR') { |fresh| fresh } }.to raise_error(TypeError)
           expect { @adapter.get_settings('go2', 'DR') }.to raise_error(TypeError)
           expect(raw_row).to eq('not marshal')
+          expect(messages).to include(['error', a_string_including('settings for go2 (DR) cannot be read (TypeError')])
         end
 
         it 'updates a row whose bytes were stored as TEXT, comparing them as bytes' do
@@ -334,12 +424,30 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           expect(result).to be_nil
           expect(elapsed).to be >= 0.2
           expect(elapsed).to be < 2
-          expect(calls).to be > described_class::MIN_UPDATE_ATTEMPTS
+          expect(calls).to be >= described_class::MIN_UPDATE_ATTEMPTS
           expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
           expect(messages).to include(['error', a_string_including("kept changing, gave up after #{calls} attempts")])
         end
 
+        it 'stops at MIN_UPDATE_ATTEMPTS when slow attempts use up the busy timeout first' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+          calls = 0
+
+          result = @adapter.update_settings('go2', 'DR') do |fresh|
+            calls += 1
+            sleep 0.08
+            put_row('go2', 'DR', { 'theirs' => calls })
+            fresh.merge('mine' => calls)
+          end
+
+          expect(result).to be_nil
+          expect(calls).to eq(described_class::MIN_UPDATE_ATTEMPTS)
+          expect(stored_row('go2', 'DR')).to eq('theirs' => calls)
+          expect(messages).to include(['error', a_string_including("gave up after #{calls} attempts")])
+        end
+
         it 'keeps trying past 20 attempts while within the busy timeout' do
+          allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(60_000)
           calls = 0
 
           result = @adapter.update_settings('go2', 'DR') do |fresh|
@@ -511,7 +619,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       before do
         allow(Lich).to receive(:log)
         @adapter.data_version # opens the version connection
-        @adapter.send(:close_version_connection)
+        @adapter.send(:close_version_connection, @adapter.instance_variable_get(:@version_db))
         allow(SQLite3::Database).to receive(:new).and_call_original
         allow(SQLite3::Database).to receive(:new).with(db_file).and_raise(SQLite3::CantOpenException, 'unable to open database file')
       end
@@ -630,6 +738,47 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(answer).to eq(first)
     end
 
+    describe 'closing the version connection' do
+      before { @adapter.data_version } # opens the version connection
+
+      it 'needs to be told which connection to close' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect { @adapter.send(:close_version_connection) }.to raise_error(ArgumentError)
+        expect(current).not_to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to equal(current)
+      end
+
+      it 'closes the connection it is given while that is still the current one' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, current)).to be(true)
+        expect(current).to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to be_nil
+      end
+
+      it 'leaves the current connection open when given one that was already replaced' do
+        old = @adapter.instance_variable_get(:@version_db)
+        @adapter.send(:close_version_connection, old)
+        @adapter.data_version # opens a new one
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, old)).to be(false)
+        expect(current).not_to be_closed
+        expect(@adapter.instance_variable_get(:@version_db)).to equal(current)
+        expect(@adapter.data_version).to be_a(Integer)
+      end
+
+      it 'counts a connection that failed to open (nil) as current only while none is open' do
+        current = @adapter.instance_variable_get(:@version_db)
+
+        expect(@adapter.send(:close_version_connection, nil)).to be(false)
+        expect(current).not_to be_closed
+        @adapter.send(:close_version_connection, current)
+        expect(@adapter.send(:close_version_connection, nil)).to be(true)
+      end
+    end
+
     context 'when another thread replaces the connection during a check' do
       before do
         allow(Lich).to receive(:log)
@@ -643,7 +792,7 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       def replace_connection_from_another_thread
         value = nil
         Thread.new do
-          @adapter.send(:close_version_connection)
+          @adapter.send(:close_version_connection, @old)
           value = @adapter.data_version
         end.join(2)
         value
@@ -682,15 +831,43 @@ RSpec.describe Lich::Common::DatabaseAdapter do
   end
 
   describe '#save_settings' do
+    let(:messages) { [] }
+
     before do
+      captured = messages
       allow(Lich).to receive(:log)
-      stub_const('Lich::Messaging', Module.new { def self.msg(*); end })
+      stub_const('Lich::Messaging', Module.new { define_singleton_method(:msg) { |kind, text| captured << [kind, text] } })
     end
 
     it 'still refuses a non-Hash and returns false' do
       @adapter = described_class.new(tmp_dir, :script_auto_settings)
 
       expect(@adapter.save_settings('go2', [1], 'DR')).to be(false)
+    end
+
+    # update_settings reports these as database errors; save_settings must too.
+    it 'reports a Sequel error that is not a database error (a full connection pool) as a database error' do
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+      allow(@adapter.instance_variable_get(:@db)).to receive(:synchronize).and_raise(Sequel::PoolTimeout, 'timeout: 5.0')
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Database error while saving settings ---']])
+    end
+
+    it 'reports a database error (the upsert fails) as a database error' do
+      # The adapter's own table has no (script, scope) key, so the upsert fails.
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Database error while saving settings ---']])
+    end
+
+    it 'still reports any other error as unexpected and returns false' do
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+      allow(@adapter.instance_variable_get(:@db)).to receive(:synchronize).and_raise(IOError, 'boom')
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Unexpected error while saving settings ---']])
     end
   end
 end

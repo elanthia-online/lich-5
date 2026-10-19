@@ -57,6 +57,10 @@
 # <api> is G (GameSettings), C (CharSettings), S (Settings), I (InstanceSettings)
 # or IG (InstanceSettings.game, which reads and writes through a root proxy).
 # Set LICH_SPEC_BUSY_TIMEOUT_MS to shorten the SQLite busy timeout.
+# Set LICH_SPEC_STORE_LOG to a file path to have the worker append one line to
+# it each time update_settings is about to try its conditional store (after it
+# has read the row), so a spec can tell that a write has read the row and is
+# waiting for the lock.
 
 require 'json'
 require 'sequel'
@@ -116,6 +120,17 @@ Lich.init_db
 require File.join(LIB_ROOT, 'common/settings')
 require File.join(LIB_ROOT, 'common/settings/gamesettings')
 require File.join(LIB_ROOT, 'common/settings/charsettings')
+
+if ENV['LICH_SPEC_STORE_LOG']
+  Lich::Common::DatabaseAdapter.prepend(Module.new do
+    private
+
+    def store_if_unchanged(*args)
+      File.open(ENV['LICH_SPEC_STORE_LOG'], 'a') { |f| f.puts('store') }
+      super
+    end
+  end)
+end
 
 APIS = {
   'G'  => Lich::Common::GameSettings,

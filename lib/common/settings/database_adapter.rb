@@ -98,10 +98,10 @@ module Lich
         return false unless blob
 
         begin
-          upsert_settings(script_name, scope, blob)
+          statement { upsert_settings(script_name, scope, blob) }
           return true
-        rescue Sequel::DatabaseError => db_err
-          report_database_error(db_err)
+        rescue StatementFailed => e
+          report_database_error(e.cause)
         rescue => e
           Lich::Messaging.msg("error", "--- Unexpected error while saving settings ---")
           Lich.log("--- Unexpected error while saving settings ---")
@@ -124,8 +124,9 @@ module Lich
       MAX_RETRY_PAUSE = 0.05
 
       # Raised internally to carry a Sequel error out of a statement, so that
-      # update_settings reports database failures but lets the block's own
-      # exceptions through unchanged.
+      # save_settings and update_settings report every database failure (a
+      # lock timeout, a full connection pool) the same way, and update_settings
+      # lets the block's own exceptions through unchanged.
       class StatementFailed < StandardError; end
       private_constant :StatementFailed
 
@@ -147,8 +148,23 @@ module Lich
       # there would make every other writer in this process wait out its busy
       # timeout inside SQLite, which keeps the GVL and stalls every thread.
       #
+      # on_stored, when given, is called with the stored row right after the
+      # store succeeds, with Thread#kill and Thread#raise held back from the
+      # store until on_stored returns. A caller that caches the row passes its
+      # cache update here: a script killed (Script#kill) just after the row was
+      # committed still leaves its cache holding what the database holds. Only
+      # the store is covered, not the block or the pauses between attempts, so
+      # a kill waits at most for that one statement (which SQLite already
+      # runs without letting other Ruby code in).
+      #
+      # A stored row that cannot be read (NULL, truncated, or holding a class
+      # this process does not have) is never overwritten: another session may
+      # still be able to read it. The error is reported and raised, as a read
+      # of that row (get_settings) raises it.
+      #
       # @param script_name [String] the script namespace
       # @param scope [String] the settings scope
+      # @param on_stored [#call, nil] called with the stored row (see above)
       # @yieldparam fresh [Object] the stored row ({} when there is none). The
       #   block may be called more than once and must only build the new row.
       # @yieldreturn [Hash, nil] the row to store, or nil to store nothing
@@ -156,7 +172,7 @@ module Lich
       #   returned nil or nothing could be stored (reported, nothing written)
       # @raise whatever the block raises, and what get_settings raises for a
       #   stored row it cannot read (such as TypeError or ArgumentError)
-      def update_settings(script_name, scope = ":")
+      def update_settings(script_name, scope = ":", on_stored: nil)
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         budget = Lich.sqlite_busy_timeout_ms.to_f / 1000
         attempts = 0
@@ -165,13 +181,19 @@ module Lich
           attempts += 1
           row = statement { read_row_in_one_call(script_name, scope) }
           old_blob = row && row[:hash]
-          updated = yield(row.nil? ? {} : Marshal.load(old_blob))
+          updated = yield(row.nil? ? {} : load_stored_row(script_name, scope, old_blob))
           return nil if updated.nil?
 
           new_blob = serialize_settings(script_name, updated)
           return nil unless new_blob
 
-          return updated if statement { store_if_unchanged(script_name, scope, old_blob, row.nil?, new_blob) }
+          stored = Thread.handle_interrupt(Object => :never) do
+            next false unless statement { store_if_unchanged(script_name, scope, old_blob, row.nil?, new_blob) }
+
+            on_stored&.call(updated)
+            true
+          end
+          return updated if stored
 
           elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
           break if attempts >= MIN_UPDATE_ATTEMPTS && elapsed >= budget
@@ -203,10 +225,14 @@ module Lich
 
       # Closes the version connection if it is still +db+, so that the next
       # check opens a new one. A thread whose read failed on a connection
-      # another thread has already replaced leaves the new one alone.
+      # another thread has already replaced leaves the new one alone. +db+ is
+      # required, so no caller can skip that check by closing "whatever is
+      # current". It is nil when opening the connection failed; with no
+      # connection open, that counts as current.
       #
+      # @param db [SQLite3::Database, nil] the connection the failed read used
       # @return [Boolean] whether +db+ was the current connection
-      def close_version_connection(db = @version_db)
+      def close_version_connection(db)
         @version_mutex.synchronize do
           return false unless @version_db.equal?(db)
 
@@ -218,6 +244,17 @@ module Lich
           nil
         end
         true
+      end
+
+      # Unmarshals a stored row for update_settings, reporting a row that
+      # cannot be read before raising its error.
+      def load_stored_row(script_name, scope, blob)
+        Marshal.load(blob)
+      rescue StandardError => e
+        message = "--- Error: settings for #{script_name} (#{scope}) cannot be read (#{e.class}: #{e.message}); nothing was saved ---"
+        Lich::Messaging.msg("error", message)
+        Lich.log(message)
+        raise
       end
 
       def serialize_settings(script_name, settings)
