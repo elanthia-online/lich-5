@@ -29,11 +29,12 @@ module Lich
   # Sequel sets first; it stays in force if the Ruby handler can't be installed.
   def Lich.open_sequel_sqlite(path)
     timeout_ms = sqlite_busy_timeout_ms.to_i
-    Sequel.sqlite(
+    db = Sequel.sqlite(
       path,
       timeout: timeout_ms,
       after_connect: ->(conn) { SQLiteBusyWait.install(conn, timeout_ms) }
     )
+    db.extend(SQLiteBusyWait::Transactions)
   end
 
   # Lock waits that let the rest of the process keep running.
@@ -62,6 +63,19 @@ module Lich
   # finishes or the busy timeout expires, as it was with the C busy timeout.
   # SQLite3::Backup#step is not covered; nothing in Lich backs up into a
   # pooled connection.
+  #
+  # While one thread sleeps in the handler, SQLite holds that connection's
+  # mutex and other threads run, garbage collection included. GC finalizes an
+  # unclosed SQLite3::Statement with sqlite3_finalize, which needs the same
+  # mutex and waits for it with the GVL held: the sleeping thread can never
+  # wake and the process freezes. So every open statement on these
+  # connections is kept referenced by its connection until it is closed (see
+  # SQLiteBusyWait::Statement); GC never finalizes one while it is open. A
+  # statement nobody closes is freed with its connection.
+  #
+  # Deferring interrupts moves where a Thread#kill lands inside
+  # Sequel::Database#transaction to the end of BEGIN or COMMIT; see
+  # SQLiteBusyWait::Transactions.
   module SQLiteBusyWait
     POLL_INTERVAL_S = 0.001 unless const_defined?(:POLL_INTERVAL_S)
 
@@ -69,7 +83,20 @@ module Lich
     # for SQLiteBusyWait::Statement and wraps the Database methods that call
     # SQLite directly.
     module Connection
+      def self.extended(conn)
+        conn.instance_variable_set(:@lich_open_statements, {}.compare_by_identity)
+      end
+
       private
+
+      # Called by SQLiteBusyWait::Statement only.
+      def hold_open_statement(stmt)
+        @lich_open_statements[stmt] = true
+      end
+
+      def release_open_statement(stmt)
+        @lich_open_statements.delete(stmt)
+      end
 
       # sqlite3's private C method behind #execute_batch2. It runs
       # sqlite3_exec, which calls the busy handler without going through
@@ -83,10 +110,25 @@ module Lich
     # change behaviour.
     module Statement
       def initialize(db, *args)
-        if db.is_a?(Connection)
-          Thread.handle_interrupt(Object => :never) { super }
-        else
+        unless db.is_a?(Connection)
           super
+          return
+        end
+
+        prepared = false
+        returned = false
+        begin
+          Thread.handle_interrupt(Object => :never) do
+            super
+            db.__send__(:hold_open_statement, self)
+            prepared = true
+          end
+          returned = true
+        ensure
+          # An interrupt deferred during a lock wait in prepare is delivered as
+          # the block exits. The caller never gets this statement, so nothing
+          # else would close it.
+          close if prepared && !returned && !closed?
         end
       end
 
@@ -94,6 +136,52 @@ module Lich
         return super unless @connection.is_a?(Connection)
 
         Thread.handle_interrupt(Object => :never) { super }
+      end
+
+      def close
+        super
+      ensure
+        @connection.__send__(:release_open_statement, self) if @connection.is_a?(Connection)
+      end
+    end
+
+    # Extended onto the Sequel::Database that Lich.open_sequel_sqlite returns.
+    #
+    # With interrupts deferred, a Thread#kill that arrives while BEGIN or
+    # COMMIT waits for the lock is delivered the moment that statement
+    # returns. Thread#kill skips Sequel's rescue clauses and runs only its
+    # ensure, so Sequel's own recovery for a failed BEGIN or COMMIT would not
+    # run:
+    #
+    # - a COMMIT that timed out would leave the transaction open on the pooled
+    #   connection, holding the write lock until the process exits;
+    # - after a BEGIN that timed out, Sequel's ensure rolls back a transaction
+    #   that never started. SQLite raises "cannot rollback - no transaction is
+    #   active", and an exception raised in an ensure replaces the kill: the
+    #   thread keeps running, and its later transactions are rolled back.
+    module Transactions
+      private
+
+      # Rolls back a failed COMMIT before any deferred interrupt is delivered,
+      # as Sequel does when the COMMIT raises.
+      def commit_transaction(conn, opts = Sequel::OPTS)
+        Thread.handle_interrupt(Object => :never) do
+          super
+        rescue Exception => e # rubocop:disable Lint/RescueException -- re-raised below
+          begin
+            rollback_transaction(conn, opts)
+          rescue Exception # rubocop:disable Lint/RescueException -- keep the COMMIT error, as Sequel does
+            nil
+          end
+          raise e
+        end
+      end
+
+      # ROLLBACK with no transaction open can only raise; skip it.
+      def rollback_transaction(conn, opts = Sequel::OPTS)
+        return if conn.respond_to?(:transaction_active?) && !conn.transaction_active?
+
+        super
       end
     end
 

@@ -263,6 +263,54 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     end
   end
 
+  it 'keeps an unclosed statement on a pooled connection from being freed until it is closed' do
+    db = open_db
+    refs = ObjectSpace::WeakMap.new
+    db.synchronize do |conn|
+      # Dropped without close, as a statement whose caller was interrupted is.
+      2.times { |i| refs[i] = conn.prepare('SELECT n FROM rows') }
+      closed = conn.prepare('SELECT n FROM rows')
+      closed.close
+      refs[:closed] = closed
+    end
+    GC.start(full_mark: true, immediate_sweep: true)
+
+    expect(refs.key?(0) && refs.key?(1)).to be(true)
+    expect([refs[0], refs[1]]).to all(satisfy { |st| !st.closed? })
+    db.synchronize do |conn|
+      expect(conn.instance_variable_get(:@lich_open_statements).keys).to contain_exactly(refs[0], refs[1])
+    end
+  end
+
+  it 'does not hold a statement on a plain sqlite3 connection open after it is dropped' do
+    open_db
+    plain = SQLite3::Database.new(path)
+    @raw << plain
+    plain.prepare('SELECT n FROM rows').close
+
+    expect(plain.instance_variable_defined?(:@lich_open_statements)).to be(false)
+  end
+
+  it 'rolls back and raises when COMMIT times out waiting for readers' do
+    allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+    db = open_db
+    reader = SQLite3::Database.new(path)
+    @raw << reader
+    reader.execute('BEGIN')
+    reader.execute('SELECT count(*) FROM rows') # holds a read lock until COMMIT
+    error = nil
+    begin
+      db.transaction { db[:rows].insert(n: 1) }
+    rescue Sequel::DatabaseError => e
+      error = e
+    end
+    reader.execute('COMMIT')
+
+    expect(error&.message).to match(/locked/)
+    expect(db.synchronize(&:transaction_active?)).to be(false)
+    expect(db[:rows].select_order_map(:n)).to eq([])
+  end
+
   it 'falls back to the C busy timeout when the connection has no busy handler API' do
     plain = SQLite3::Database.new(path)
     @raw << plain
@@ -376,6 +424,124 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       lines = run_harness('kill_in_prepare')
 
       expect(lines).to eq(['joined', 'true', '[0, 2, 3, 4, 5]'])
+    end
+  end
+
+  # Child-process cases for what an interrupted or sleeping lock wait leaves
+  # behind. Each child prints one line per check.
+  describe 'after a lock wait' do
+    let(:harness) do
+      <<~'RUBY'
+        require 'sqlite3'
+        require 'sequel'
+        module Lich; end
+        require ARGV[0]
+        path, how = ARGV[1], ARGV[2]
+        Lich.define_singleton_method(:sqlite_busy_timeout_ms) { 300 } if how.start_with?('kill_in_')
+        $stdout.sync = true
+        db = Lich.open_sequel_sqlite(path)
+        db.create_table?(:rows) { Integer :n }
+        holder = SQLite3::Database.new(path)
+        mono = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+        # No GC first: freeing a leaked statement here would hide the leak.
+        open_statements = -> { ObjectSpace.each_object(SQLite3::Statement).count { |st| !st.closed? } }
+        case how
+        when 'gc_unclosed', 'gc_after_kill_in_prepare'
+          if how == 'gc_after_kill_in_prepare'
+            # The kill arrives while a new connection waits inside prepare,
+            # and is delivered once prepare succeeds.
+            db.disconnect
+            holder.execute('BEGIN EXCLUSIVE')
+            k = Thread.new { db[:rows].count }
+            sleep 0.2
+            k.kill
+            sleep 0.2
+            holder.execute('COMMIT')
+            k.join
+            puts open_statements.call
+          end
+          holder.execute('BEGIN EXCLUSIVE')
+          writer = Thread.new do
+            db.synchronize do |conn|
+              # Statements dropped without close on the connection that waits.
+              20.times { conn.prepare('SELECT n FROM rows') } if how == 'gc_unclosed'
+              conn.execute('INSERT INTO rows (n) VALUES (1)')
+            end
+          end
+          sleep 0.3
+          started = mono.call
+          GC.start(full_mark: true, immediate_sweep: true)
+          puts(mono.call - started < 1.0)
+          holder.execute('COMMIT')
+          writer.join
+        when 'kill_in_begin', 'kill_in_commit'
+          if how == 'kill_in_begin'
+            holder.execute('BEGIN EXCLUSIVE')
+          else
+            holder.execute('BEGIN')
+            holder.execute('SELECT count(*) FROM rows') # a read lock blocks COMMIT
+          end
+          rescued = Queue.new
+          k = Thread.new do
+            Thread.current.report_on_exception = false
+            begin
+              db.transaction(mode: :immediate) { db[:rows].insert(n: 1) }
+            rescue StandardError => e
+              rescued << e.class.name
+            end
+            sleep 1.5
+            db.transaction { db[:rows].insert(n: 2) }
+          end
+          sleep 0.1
+          k.kill
+          dead = k.join(1)
+          holder.execute('COMMIT')
+          puts(dead ? 'dead' : "alive #{k.status}")
+          puts(rescued.empty? ? 'not rescued' : rescued.pop)
+          puts db.synchronize(&:transaction_active?)
+          other = SQLite3::Database.new(path)
+          other.busy_timeout = 1000
+          other.execute('INSERT INTO rows (n) VALUES (3)')
+          sleep 1.6
+        end
+        puts db[:rows].select_order_map(:n).inspect
+      RUBY
+    end
+
+    def run_harness(how)
+      lib = File.expand_path('../../../lib/common/sqlite_connection.rb', __dir__)
+      stdout = +''
+      stderr = +''
+      status = nil
+      Open3.popen3(RbConfig.ruby, '-e', harness, lib, path, how) do |_in, out, err, wait|
+        unless wait.join(20)
+          Process.kill(:KILL, wait.pid)
+          wait.join
+        end
+        stdout = out.read
+        stderr = err.read
+        status = wait.value
+      end
+      expect(status.success?).to be(true), "child hung or failed: #{stderr}"
+      stdout.lines.map(&:strip)
+    end
+
+    # GC frees an unclosed statement with sqlite3_finalize, which waits with
+    # the GVL held for the connection mutex that the sleeping waiter holds.
+    it 'lets GC run while a pooled connection with unclosed statements waits for the lock' do
+      expect(run_harness('gc_unclosed')).to eq(['true', '[1]'])
+    end
+
+    it 'closes a statement whose preparation was cut short by a kill, and GC then runs during a lock wait' do
+      expect(run_harness('gc_after_kill_in_prepare')).to eq(['0', 'true', '[1]'])
+    end
+
+    it 'lets a thread killed while BEGIN IMMEDIATE waits for the lock die' do
+      expect(run_harness('kill_in_begin')).to eq(['dead', 'not rescued', 'false', '[3]'])
+    end
+
+    it 'rolls back and releases the lock when a thread is killed while COMMIT waits for readers' do
+      expect(run_harness('kill_in_commit')).to eq(['dead', 'not rescued', 'false', '[3]'])
     end
   end
 end
