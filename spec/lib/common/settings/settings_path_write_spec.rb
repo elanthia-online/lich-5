@@ -92,12 +92,24 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(@errors).to be_empty
   end
 
-  it "creates missing containers on the way, an Array where the next segment is an Integer" do
+  it "creates missing containers on the way as Hashes, an Integer segment included" do
     settings[:top] = 0
 
     write_under([:list, 0], :k, 1)
 
-    expect(stored).to eq(top: 0, list: [{ k: 1 }])
+    expect(stored).to eq(top: 0, list: { 0 => { k: 1 } })
+    expect(@errors).to be_empty
+  end
+
+  it "keeps a room-id style Integer key a Hash key, without padding, and lets a Symbol key join it" do
+    write_under([:rooms], 12_345, 'x')
+    write_under([:rooms], :note, 'y')
+    write_under([:by_room, 54_321], :seen, true)
+
+    expect(stored).to eq(rooms: { 12_345 => 'x', note: 'y' }, by_room: { 54_321 => { seen: true } })
+    blob = SQLite3::Database.new(db_file).then { |db| db.get_first_value('SELECT LENGTH(hash) FROM script_auto_settings').tap { db.close } }
+    expect(blob).to be < 200
+    expect(@errors).to be_empty
   end
 
   it "writes into an element of an Array and at a position of an Array" do
@@ -225,24 +237,25 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     end
   end
 
-  it "creates a missing container at the last segment as an Array when the key written into it is an Integer" do
+  it "creates a missing container at the last segment as a Hash, whatever the key written into it" do
     settings[:top] = 0
 
     write_under([:list], 0, 'x')
     write_under([:nested, :list], 0, 'y')
     write_under([:hash], :k, 1)
 
-    expect(stored).to eq(top: 0, list: ['x'], nested: { list: ['y'] }, hash: { k: 1 })
+    expect(stored).to eq(top: 0, list: { 0 => 'x' }, nested: { list: { 0 => 'y' } }, hash: { k: 1 })
     expect(@errors).to be_empty
   end
 
-  it "replaces a nil at the last segment with a container chosen by the key written into it" do
-    their_write(a: nil, b: nil)
+  it "replaces a nil on the path with a Hash" do
+    their_write(a: nil, b: nil, c: [nil])
 
     write_under([:a], 0, 'x')
     write_under([:b], :k, 1)
+    write_under([:c, 0], 1, 'z')
 
-    expect(stored).to eq(a: ['x'], b: { k: 1 })
+    expect(stored).to eq(a: { 0 => 'x' }, b: { k: 1 }, c: [{ 1 => 'z' }])
   end
 
   it "writes at a position past the end of an Array, padding it with nil as Array#[]= does" do
@@ -274,7 +287,14 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
       other = Thread.new { settings[:t] = 2 } # another script's top-level write
       # The other write takes the row's cache lock, which the path write
       # holds; it must not be sent under [:x] whichever way it ends up waiting.
-      sleep 0.1
+      # Wait until it is blocked on that lock, so it is inside []= before the
+      # path write goes on.
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until other.status == 'sleep' && other.backtrace.to_a.any? { |frame| frame.include?('with_cache_lock') }
+        raise 'the other write never waited on the cache lock' if !other.alive? || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+        sleep 0.005
+      end
     ensure
       go << true
       [writer, other].compact.each { |t| t.join(10) }
@@ -310,6 +330,21 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(stored).to eq(nested: { a: 1 })
     expect(settings.to_hash).to eq(nested: { a: 1 })
     expect(@errors).to include(a_string_including("not saved", "can't be stored"))
+    expect(navigator_path).to be_empty
+  end
+
+  it "stores nothing, and tells the user, for a value that refers to itself" do
+    settings[:nested] = { a: 1 }
+    looped = {}
+    looped[:self] = looped
+
+    result = nil
+    expect { result = write_under([:nested], :k, looped) }.not_to raise_error
+
+    expect(result).to be_nil
+    expect(stored).to eq(nested: { a: 1 })
+    expect(settings.to_hash).to eq(nested: { a: 1 })
+    expect(@errors).to include(a_string_including("not saved", "can't be stored", "Circular reference"))
     expect(navigator_path).to be_empty
   end
 

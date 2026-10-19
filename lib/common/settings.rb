@@ -546,21 +546,20 @@ module Lich
 
       # The container at +segments+ under +root+, creating missing (or nil)
       # Hash and Array entries on the way, as nested saves always have. An
-      # Integer segment that comes next makes an Array, anything else a Hash.
-      # +last_next+ is the segment that comes after the last one (the key a
-      # caller writes into the container returned); nil makes a Hash.
+      # Integer segment that comes next makes an Array, anything else a Hash;
+      # the last one is a Hash. With +arrays+ false, every container created
+      # is a Hash.
       #
       # @return [Object, nil] what is at the last segment, which is not a
       #   container when a value that is not one is stored there (callers
       #   check); nil when a segment can't be followed: a value that is not
       #   a container on the way, or an Array index that is not a
       #   non-negative Integer
-      def self.container_at(root, segments, last_next = nil)
+      def self.container_at(root, segments, arrays: true)
         segments.each_with_index.reduce(root) do |node, (seg, idx)|
           return nil unless node.is_a?(Hash) || (node.is_a?(Array) && seg.is_a?(Integer) && seg >= 0)
 
-          following = idx + 1 < segments.size ? segments[idx + 1] : last_next
-          node[seg] = following.is_a?(Integer) ? [] : {} if node[seg].nil?
+          node[seg] = arrays && segments[idx + 1].is_a?(Integer) ? [] : {} if node[seg].nil?
           node[seg]
         end
       end
@@ -841,6 +840,12 @@ module Lich
         @path_navigator.reset_path_and_return(value)
       end
 
+      # The value at the navigation path in this process's copy of the row,
+      # and that copy. Lich itself only reads through it (create_missing
+      # false, from Settings.[]). With create_missing true it creates missing
+      # containers in place, in a shallow copy whose containers the cache
+      # shares, and stores nothing; a write under a navigation path goes
+      # through write_key_under_path instead.
       def self.navigate_to_path(create_missing = true, scope = DEFAULT_SCOPE)
         root_for_scope = current_script_settings(scope)
         return [root_for_scope, root_for_scope] if @path_navigator.path.empty?
@@ -985,9 +990,12 @@ module Lich
       # top-level key: the key is applied to the row as it is in the database
       # right now, and stored only if no one changed the row in between
       # (DatabaseAdapter#update_settings retries otherwise). Missing (or nil)
-      # containers on the way are created, as for a write through a proxy;
-      # the last one is an Array when +name+ is an Integer, a Hash otherwise.
-      # A non-negative Integer +name+ past the end of an Array pads it with
+      # containers on the way are created as Hashes, an Integer segment or
+      # +name+ included: the path names keys the script chose (room ids, for
+      # example), not positions read from the stored row, so a new Array
+      # padded with nil up to such a key would be wrong. An Array already
+      # stored is written into by position. A non-negative Integer +name+
+      # past the end of an Array pads it with
       # nil, as Array#[]= does. The cache then takes the row as stored. If
       # nothing is stored, the cache is left as it was: the key is never put
       # in this session's copy.
@@ -1012,7 +1020,7 @@ module Lich
 
         begin
           stored_value = stored_copy(value)
-        rescue TypeError => e
+        rescue TypeError, CircularReferenceError => e
           return refuse_path_write(script_name, scope, path, name, "the value can't be stored (#{e.message})")
         end
 
@@ -1037,14 +1045,14 @@ module Lich
       private_class_method :write_key_under_path
 
       # The container at +path+ in +root+, a stored row, that +name+ is
-      # written into, creating missing containers on the way (see
+      # written into, creating missing containers on the way as Hashes (see
       # container_at); or the reason it can't be.
       #
       # @return [Array(Hash|Array, nil), Array(nil, String)]
       def self.container_for_path_write(root, path, name)
         return [nil, "settings are stored as #{root.class}, not a Hash"] unless root.is_a?(Hash)
 
-        container = container_at(root, path, name)
+        container = container_at(root, path, arrays: false)
         if !container?(container)
           [nil, "#{path.inspect} does not lead to a container"]
         elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)
