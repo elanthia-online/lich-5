@@ -1077,6 +1077,48 @@ RSpec.describe Lich::DragonRealms::DRC do
         end
       end
 
+      context 'when the last pile is kicked just before the cap' do
+        # Four piles, each destroyed by its kick, and every collect refused. The fifth
+        # refusal hits the cap before kick_pile? would find the room empty, so the
+        # give-up is the loud one.
+        before do
+          room_states = Array.new(4) { ['a pile of rocks'] }
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        it 'gives up at the cap with the message and without looking for a fifth pile' do
+          script_replies(*(['The room is too cluttered', 'take a step back and run up to'] * 4), 'The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(DRRoom).to have_received(:room_objs).exactly(4).times
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+          expect(described_class).not_to have_received(:waitrt?)
+        end
+      end
+
+      context 'when it gives up before the cap' do
+        # Only the cap prints a message; a missing pile or a missed kick stays silent.
+        before { allow(Lich::Messaging).to receive(:msg) }
+
+        it 'prints nothing when there is no pile to kick' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder'])
+          script_replies('The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'prints nothing when the kick misses' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+      end
+
       context 'when the pile is gone on a later attempt' do
         before do
           room_states = [['a pile of rocks'], []]
