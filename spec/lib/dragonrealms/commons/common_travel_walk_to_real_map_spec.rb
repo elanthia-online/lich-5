@@ -14,10 +14,12 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 # resolves it, both for the start room and for arrival, and adds no matching
 # of its own. It is therefore exactly as strict as that resolver, including
 # the resolver's own looseness (in fog it ignores exits, it takes the first
-# match with no uniqueness check, its second pass matches a single shared
-# description sentence, and with the room window disabled it matches title
-# and exits only). From a room the map cannot resolve, even after a short
-# wait, walk_to fails without moving, for numeric and tag targets alike.
+# match with no uniqueness check, its second pass accepts a stored
+# description containing any one sentence of the live one, an empty live
+# description (or one with a double period) makes that pass match any stored
+# description, and with the room window disabled it matches title and exits
+# only). From a room the map cannot resolve, even after a one-second wait,
+# walk_to fails without moving, for numeric and tag targets alike.
 RSpec.describe DRCT, '.walk_to with the map resolver' do
   let(:real_map) { Lich::Common::Map }
 
