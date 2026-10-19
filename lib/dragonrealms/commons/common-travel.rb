@@ -400,7 +400,8 @@ module Lich
           # max_search_attempts is unbounded.
           unreachable_searches = reached_any ? 0 : unreachable_searches + 1
           if unreachable_searches >= MAX_UNREACHABLE_SEARCHES
-            Lich::Messaging.msg('bold', "DRCT: Could not reach any of the #{search_rooms.size} search rooms in #{unreachable_searches} searches, stopping the search.")
+            rooms = search_rooms.size == 1 ? 'the search room' : "any of the #{search_rooms.size} search rooms"
+            Lich::Messaging.msg('bold', "DRCT: Could not reach #{rooms} in #{unreachable_searches} searches, stopping the search.")
             return false
           end
 

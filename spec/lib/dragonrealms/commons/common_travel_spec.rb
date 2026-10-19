@@ -1306,6 +1306,7 @@ RSpec.describe DRCT do
       result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
       expect(result).to eq(false)
       expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
     end
 
     it 'keeps waiting while a room can be reached but is occupied' do
@@ -1355,6 +1356,15 @@ RSpec.describe DRCT do
       expect(result).to eq(false)
       expect(walks).to eq([100, 300, 100])
       expect(messages).to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops with the unreachable message when max_search_attempts equals the bound' do
+      unreachable.replace([100])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 3) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
+      expect(messages).not_to include('DRCT: Failed to find an empty room, stopping the search.')
     end
 
     it 'stops after the buddy pass and three empty-room searches reach no room' do
