@@ -387,8 +387,10 @@ module Lich
       # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
-      # @return [String, false] the matched prep message; or +''+ (truthy) when no
-      #   prep message matched within the DRC.bput timeout; or false on one of
+      # @return [String, false] the matched prep message; or +''+ (truthy) when
+      #   bput matched nothing, normally because no prep message arrived within
+      #   its timeout (a custom message pattern that can match an empty string,
+      #   such as +'You chant|'+, also yields +''+ at once); or false on one of
       #   the failure replies prepare? itself checks for (its +when+ arms other
       #   than the retried "slips away" one, which returns the retry's result),
       #   a nil +abbrev+, or exhausted retries. Any other matched reply is
@@ -405,7 +407,8 @@ module Lich
       #   server stall, and returning false there would abort a real prep. It
       #   can also mean nothing was prepared at all. Callers that would
       #   otherwise charge cambrinth, harness mana or cast on the strength of
-      #   this result can compare it against +''+ first.
+      #   this result can compare it against +''+ first, which catches every
+      #   empty match, not only a timeout.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
