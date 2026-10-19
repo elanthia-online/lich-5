@@ -10,11 +10,14 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 # resolver (Lich::Common::Map.current with a script running) instead of a
 # fake one.
 #
-# The map resolves a room by its title, description and exits, and a stored
-# UID that excludes the live one vetoes the room. walk_to treats the
-# character as being in a room only when Room.current resolves it, so from a
-# room the map cannot resolve, even after a short wait, it fails without
-# moving.
+# walk_to treats the character as being in a room only when Room.current
+# resolves it, both for the start room and for arrival, and adds no matching
+# of its own. It is therefore exactly as strict as that resolver, including
+# the resolver's own looseness (in fog it ignores exits, it takes the first
+# match with no uniqueness check, its second pass matches a single shared
+# description sentence, and with the room window disabled it matches title
+# and exits only). From a room the map cannot resolve, even after a short
+# wait, walk_to fails without moving, for numeric and tag targets alike.
 RSpec.describe DRCT, '.walk_to with the map resolver' do
   let(:real_map) { Lich::Common::Map }
 
@@ -79,6 +82,7 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     allow(Map).to receive(:[]) { |id| real_map[id] }
     allow(Map).to receive(:findpath) { |source, destination| real_map.findpath(source, destination) }
     allow(Map).to receive(:resolve_matched_room) { |room, **opts| real_map.resolve_matched_room(room, **opts) }
+    allow(Map).to receive(:rooms_by_tag) { |tag| real_map.rooms_by_tag(tag) }
 
     allow(DRCT).to receive(:move) do |dir|
       sent << dir
@@ -107,6 +111,44 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
 
   def unresolved_message(target)
     "DRCT: Unable to resolve the current room, cannot walk to room #{target}."
+  end
+
+  def unresolved_tag_message(tag)
+    "DRCT: Unable to resolve the current room, cannot walk to a room tagged '#{tag}'."
+  end
+
+  # Runs the block in a forked child that has loaded Lich's NilClass patch
+  # (lib/common/class_exts/nilclass.rb), which the Lich runtime always loads
+  # and rspec does not. The patch makes nil answer any method with nil, so
+  # this is the behaviour players actually get. Forking keeps the patch out of
+  # this process. Returns [:ok, block value] or [:raised, "Class: message"].
+  def with_nilclass_patch
+    skip 'needs Process.fork' unless Process.respond_to?(:fork)
+
+    reader, writer = IO.pipe
+    pid = fork do
+      reader.close
+      load File.join(LIB_DIR, 'common', 'class_exts', 'nilclass.rb')
+      outcome = begin
+        [:ok, yield]
+      rescue Exception => e # rubocop:disable Lint/RescueException
+        [:raised, "#{e.class}: #{e.message}"]
+      end
+      writer.write(Marshal.dump(outcome))
+      writer.close
+      exit!(0)
+    end
+    writer.close
+    data = reader.read
+    reader.close
+    Process.wait(pid)
+    Marshal.load(data)
+  end
+
+  # The corridor with room 3 tagged 'bank'.
+  def tagged_corridor
+    corridor
+    real_map[3].tags = ['bank']
   end
 
   describe 'starting in a room the map does not resolve' do
@@ -290,6 +332,27 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     end
   end
 
+  describe 'where the resolver itself is first-match' do
+    # Pins the resolver's existing behaviour, which walk_to inherits: rooms 2
+    # and 4 share title, description and exits; room 2, listed first, stores
+    # a UID and room 4 has none. With a live UID the map does not know, the
+    # resolver takes room 2, vetoes it and returns nil without trying room 4,
+    # so walk_to fails even though only room 4 could be the live room. A
+    # stricter per-candidate rule belongs in the resolver, not in walk_to.
+    it 'fails without moving when a vetoed room hides an identical room with no stored UID' do
+      build_room(1, { '4' => 'up' }, uid: [1001])
+      build_room(2, { '1' => 'down' }, uid: [2002], title: '[Twin Loft]', description: 'A dusty loft.')
+      build_room(4, { '1' => 'down' }, title: '[Twin Loft]', description: 'A dusty loft.')
+      live[:uids][4] = 4777
+      place(4)
+      expect(Room.current).to be_nil
+
+      expect(DRCT.walk_to(1)).to be(false)
+      expect(sent).to be_empty
+      expect(bold_messages).to eq([unresolved_message(1)])
+    end
+  end
+
   describe 'go2 ending in the target' do
     it 'returns true when the target has no stored UID, because the map resolves it by text' do
       corridor
@@ -354,6 +417,117 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
         expect(DRCT.walk_to(3, restart)).to be(false)
         expect(sent).to be_empty
       end
+    end
+  end
+
+  describe 'tag targets' do
+    def walk_outcome(target)
+      pauses = 0
+      allow(DRCT).to receive(:pause) { pauses += 1 }
+      result = DRCT.walk_to(target)
+      { result: result, sent: sent.dup, bold: bold_messages, pauses: pauses, go2: go2_targets.dup }
+    end
+
+    # The rooms go2 was started toward, in order.
+    let(:go2_targets) { [] }
+
+    before do
+      allow(DRCT).to receive(:start_script) do |_name, args, **_opts|
+        go2_targets << args.first
+        place(args.first.to_i)
+        :go2_handle
+      end
+    end
+
+    context 'from a room the map does not resolve' do
+      before do
+        tagged_corridor
+        live[:uids][1] = 1777
+        place(1)
+      end
+
+      it 'fails with the unresolved-room message after one wait, sending nothing' do
+        expect(Room.current).to be_nil
+
+        expect(walk_outcome('bank')).to eq(result: false, sent: [], bold: [unresolved_tag_message('bank')], pauses: 1, go2: [])
+        expect(DRC).not_to have_received(:fix_standing)
+      end
+
+      it 'fails the same way with the NilClass patch loaded' do
+        expect(with_nilclass_patch { walk_outcome('bank') })
+          .to eq([:ok, { result: false, sent: [], bold: [unresolved_tag_message('bank')], pauses: 1, go2: [] }])
+      end
+
+      it 'tag_to_id returns nil with the unresolved-room message after one wait' do
+        expect(DRCT.tag_to_id('bank')).to be_nil
+        expect(bold_messages).to eq([unresolved_tag_message('bank')])
+        expect(DRCT).to have_received(:pause).with(DRCT::WALK_TO_UNRESOLVED_WAIT).once
+      end
+
+      it 'tag_to_id returns nil with the unresolved-room message with the NilClass patch loaded' do
+        expect(with_nilclass_patch { [DRCT.tag_to_id('bank'), bold_messages] })
+          .to eq([:ok, [nil, [unresolved_tag_message('bank')]]])
+      end
+
+      it 'waits on every call, so a caller looping on a tag target does not spin' do
+        outcomes = Array.new(3) { DRCT.walk_to('bank') }
+        expect(outcomes).to all(be(false))
+        expect(DRCT).to have_received(:pause).with(DRCT::WALK_TO_UNRESOLVED_WAIT).exactly(3).times
+        expect(bold_messages).to eq([unresolved_tag_message('bank')] * 3)
+        expect(sent).to be_empty
+      end
+
+      it 'reports an unknown tag without waiting' do
+        expect(walk_outcome('nowhere'))
+          .to eq(result: false, sent: [], bold: ["DRCT: No go2 targets matching 'nowhere' found."], pauses: 0, go2: [])
+      end
+
+      it 'reports an unknown tag without waiting with the NilClass patch loaded' do
+        expect(with_nilclass_patch { walk_outcome('nowhere') })
+          .to eq([:ok, { result: false, sent: [], bold: ["DRCT: No go2 targets matching 'nowhere' found."], pauses: 0, go2: [] }])
+      end
+
+      it 'walks to the tagged room with go2 when the room resolves during the wait' do
+        allow(DRCT).to receive(:pause) do
+          live[:uids][1] = 1001
+          live[:count] += 1
+        end
+
+        expect(DRCT.walk_to('bank')).to be(true)
+        expect(go2_targets).to eq(['3'])
+        expect(bold_messages).to be_empty
+        expect(sent).to be_empty
+      end
+    end
+
+    it 'returns true without go2 when the room resolves to the tagged room during the wait' do
+      tagged_corridor
+      live[:uids][3] = 3777
+      place(3)
+      allow(DRCT).to receive(:pause) do
+        live[:uids][3] = 1003
+        live[:count] += 1
+      end
+
+      expect(DRCT.walk_to('bank')).to be(true)
+      expect(go2_targets).to be_empty
+      expect(bold_messages).to be_empty
+    end
+
+    it 'does not take an unresolved room carrying the tag as already there' do
+      tagged_corridor
+      live[:uids][3] = 3777
+      place(3)
+      expect(Room.current).to be_nil
+
+      expect(walk_outcome('bank')).to eq(result: false, sent: [], bold: [unresolved_tag_message('bank')], pauses: 1, go2: [])
+    end
+
+    it 'walks to the nearest tagged room from a resolved room without waiting' do
+      tagged_corridor
+      place(1)
+
+      expect(walk_outcome('bank')).to eq(result: true, sent: [], bold: [], pauses: 0, go2: ['3'])
     end
   end
 end

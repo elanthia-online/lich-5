@@ -181,9 +181,11 @@ module Lich
       # Navigate to +target_room+ using the go2 script.
       #
       # Room.current (the map's resolver, Map.current) is the only rule for
-      # where the character is, both for the start room and for arrival. From
-      # a room it cannot resolve, even after waiting WALK_TO_UNRESOLVED_WAIT
-      # seconds, walk_to sends nothing and returns false.
+      # where the character is, both for the start room and for arrival, so
+      # walk_to is exactly as strict as that resolver and no stricter. From a
+      # room it cannot resolve, even after waiting WALK_TO_UNRESOLVED_WAIT
+      # seconds, walk_to sends nothing and returns false; this holds for tag
+      # targets too (see tag_to_id).
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure
@@ -262,25 +264,36 @@ module Lich
         arrived
       end
 
-      # The id of the room Room.current resolves, or nil when it still cannot
-      # resolve the room after waiting WALK_TO_UNRESOLVED_WAIT seconds.
-      # Room.current is nil for an unresolved room; under Lich's NilClass patch
-      # nil.id is nil too, so this reads the same with or without the patch.
-      def walk_to_current_room_id
-        current_id = Room.current&.id
-        return current_id if current_id
+      # The room Room.current resolves, or nil when it still cannot resolve
+      # the room after waiting WALK_TO_UNRESOLVED_WAIT seconds. Room.current
+      # is nil for an unresolved room, and nil is falsy with or without Lich's
+      # NilClass patch, so this reads the same either way.
+      def walk_to_current_room
+        room = Room.current
+        return room if room
 
         pause WALK_TO_UNRESOLVED_WAIT
-        Room.current&.id
+        Room.current
+      end
+
+      # The id of walk_to_current_room, or nil when it is unresolved.
+      def walk_to_current_room_id
+        walk_to_current_room&.id
       end
 
       def walk_to_unresolved_failure(room_num)
-        Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to room #{room_num}.")
+        walk_to_unresolved_message("room #{room_num}")
         false
       end
 
+      def walk_to_unresolved_message(destination)
+        Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to #{destination}.")
+      end
+
+      # The id of the nearest room tagged +target+, measured from the room
+      # Room.current resolves, or nil (with a message) when there is none or
+      # the current room is still unresolved after walk_to_current_room's wait.
       def tag_to_id(target)
-        start_room = Room.current.id
         target_list = Map.rooms_by_tag(target)
 
         if target_list.empty?
@@ -288,11 +301,18 @@ module Lich
           return nil
         end
 
+        start = walk_to_current_room
+        if start.nil?
+          walk_to_unresolved_message("a room tagged '#{target}'")
+          return nil
+        end
+
+        start_room = start.id
         if target_list.include?(start_room)
           Lich::Messaging.msg('plain', "DRCT: You're already here.")
           return start_room
         end
-        _previous, shortest_distances = Room.current.dijkstra(target_list)
+        _previous, shortest_distances = start.dijkstra(target_list)
         if shortest_distances.nil?
           Lich::Messaging.msg('bold', "DRCT: Pathfinding failed while looking for a '#{target}' tag.")
           return nil
