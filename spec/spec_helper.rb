@@ -1534,6 +1534,10 @@ module Lich; module DragonRealms; end; end
 # DRC - Common module (bput, hands, messaging)
 # -----------------------------------------------------------------------------
 module DRC
+  # Same as Lich::DragonRealms::DRC::IMMOBILE_PATTERN, for code that matches
+  # the immobile reply when the real DRC isn't loaded.
+  IMMOBILE_PATTERN = /^You don't seem to be able to move/.freeze
+
   @right_hand = nil
   @left_hand = nil
 
