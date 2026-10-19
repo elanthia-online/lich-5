@@ -201,6 +201,89 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(navigator_path).to be_empty
   end
 
+  [
+    [{ s: 'foobar' }, [:s], 'foo', 'X'],  # String#[]= would replace the substring
+    [{ s: 'abc' }, [:s], 0, 'Z'],         # ... or the character at a position
+    [{ s: 'text' }, [:s], :k, 1],         # TypeError
+    [{ s: 'text' }, [:s], 'zz', 1],       # IndexError (no such substring)
+    [{ n: 5 }, [:n], :k, 1],              # NoMethodError
+    [{ f: false }, [:f], :k, 1],          # NoMethodError
+    [{ y: :sym }, [:y], :k, 1],           # NoMethodError
+    [{ deep: { s: 'abc' } }, [:deep, :s], 1, 'Z']
+  ].each do |row, path, name, value|
+    it "refuses #{row.inspect} with #{name.inspect} written under #{path.inspect}, whose last segment holds a value that is not a container" do
+      their_write(row)
+
+      result = :unset
+      expect { result = write_under(path, name, value) }.not_to raise_error
+
+      expect(result).to be_nil
+      expect(stored).to eq(row)
+      expect(settings.to_hash).to eq(row)
+      expect(@errors).to include(a_string_including("not saved", "#{path.inspect} does not lead to a container"))
+      expect(navigator_path).to be_empty
+    end
+  end
+
+  it "creates a missing container at the last segment as an Array when the key written into it is an Integer" do
+    settings[:top] = 0
+
+    write_under([:list], 0, 'x')
+    write_under([:nested, :list], 0, 'y')
+    write_under([:hash], :k, 1)
+
+    expect(stored).to eq(top: 0, list: ['x'], nested: { list: ['y'] }, hash: { k: 1 })
+    expect(@errors).to be_empty
+  end
+
+  it "replaces a nil at the last segment with a container chosen by the key written into it" do
+    their_write(a: nil, b: nil)
+
+    write_under([:a], 0, 'x')
+    write_under([:b], :k, 1)
+
+    expect(stored).to eq(a: ['x'], b: { k: 1 })
+  end
+
+  it "writes at a position past the end of an Array, padding it with nil as Array#[]= does" do
+    settings[:list] = [1]
+
+    write_under([:list], 3, 'x')
+
+    expect(stored).to eq(list: [1, nil, nil, 'x'])
+    expect(@errors).to be_empty
+  end
+
+  it "clears the path before the database write, so another script's top-level write meanwhile stays top-level" do
+    their_write(x: {}, top: 0)
+    writer = nil
+    paused = Queue.new
+    go = Queue.new
+    allow(@adapter).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
+      if Thread.current.equal?(writer)
+        paused << true
+        go.pop
+      end
+      original.call(*args, **opts, &block)
+    end
+
+    writer = Thread.new { write_under([:x], :k, 1) }
+    other = nil
+    begin
+      expect(paused.pop(timeout: 5)).to be(true) # the path write is inside the database write
+      other = Thread.new { settings[:t] = 2 } # another script's top-level write
+      # The other write takes the row's cache lock, which the path write
+      # holds; it must not be sent under [:x] whichever way it ends up waiting.
+      sleep 0.1
+    ensure
+      go << true
+      [writer, other].compact.each { |t| t.join(10) }
+    end
+
+    expect(stored).to eq(x: { k: 1 }, top: 0, t: 2)
+    expect(navigator_path).to be_empty
+  end
+
   it "refuses an Array indexed by a non-Integer on the way, creating nothing" do
     settings[:list] = [{ a: 1 }]
 

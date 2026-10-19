@@ -547,15 +547,20 @@ module Lich
       # The container at +segments+ under +root+, creating missing (or nil)
       # Hash and Array entries on the way, as nested saves always have. An
       # Integer segment that comes next makes an Array, anything else a Hash.
+      # +last_next+ is the segment that comes after the last one (the key a
+      # caller writes into the container returned); nil makes a Hash.
       #
-      # @return [Hash, Array, nil] nil when a segment can't be followed: a
-      #   value that is not a container, or an Array index that is not a
+      # @return [Object, nil] what is at the last segment, which is not a
+      #   container when a value that is not one is stored there (callers
+      #   check); nil when a segment can't be followed: a value that is not
+      #   a container on the way, or an Array index that is not a
       #   non-negative Integer
-      def self.container_at(root, segments)
+      def self.container_at(root, segments, last_next = nil)
         segments.each_with_index.reduce(root) do |node, (seg, idx)|
           return nil unless node.is_a?(Hash) || (node.is_a?(Array) && seg.is_a?(Integer) && seg >= 0)
 
-          node[seg] = segments[idx + 1].is_a?(Integer) ? [] : {} if node[seg].nil?
+          following = idx + 1 < segments.size ? segments[idx + 1] : last_next
+          node[seg] = following.is_a?(Integer) ? [] : {} if node[seg].nil?
           node[seg]
         end
       end
@@ -966,14 +971,12 @@ module Lich
         else
           # A navigation path left on the shared navigator (Settings.set_path
           # reaches it through method_missing). The key is written into the
-          # container at that path, and the path is cleared whatever happens,
-          # so that it can't send the next Settings[] call somewhere else.
+          # container at that path. The path is cleared before the write, so
+          # that it can't send another Settings[] call (from any script) under
+          # it while the write waits on the database, or after it raises.
           path = @path_navigator.path.dup
-          begin
-            write_key_under_path(scope_to_use, path, name, value) ? value : nil
-          ensure
-            @path_navigator.reset_path
-          end
+          @path_navigator.reset_path
+          write_key_under_path(scope_to_use, path, name, value) ? value : nil
         end
       end
 
@@ -982,9 +985,12 @@ module Lich
       # top-level key: the key is applied to the row as it is in the database
       # right now, and stored only if no one changed the row in between
       # (DatabaseAdapter#update_settings retries otherwise). Missing (or nil)
-      # containers on the way are created, as for a write through a proxy.
-      # The cache then takes the row as stored. If nothing is stored, the
-      # cache is left as it was: the key is never put in this session's copy.
+      # containers on the way are created, as for a write through a proxy;
+      # the last one is an Array when +name+ is an Integer, a Hash otherwise.
+      # A non-negative Integer +name+ past the end of an Array pads it with
+      # nil, as Array#[]= does. The cache then takes the row as stored. If
+      # nothing is stored, the cache is left as it was: the key is never put
+      # in this session's copy.
       #
       # Nothing is stored, and the user is told, when +path+ does not lead to
       # a container (a value that is not one is on the way, or an Array is
@@ -992,9 +998,11 @@ module Lich
       # is not a non-negative Integer and the container is an Array, when the
       # stored row is not a Hash, or when +value+ can't be stored.
       #
-      # @return [Boolean] whether the key was written into a container: true
-      #   also when the database could not store the row (that is reported by
-      #   the adapter), false when it was refused for one of the reasons above
+      # @return [Boolean] false when the write was refused for one of the
+      #   reasons above (and the user was told); true otherwise, including
+      #   when the database could not store the row (the adapter reports
+      #   that) and when there is no script name to store it under (only
+      #   logged, as for a top-level write)
       def self.write_key_under_path(scope, path, name, value, script_name: nil)
         script_name ||= Script.current.name
         if script_name.nil? || script_name.empty?
@@ -1036,8 +1044,8 @@ module Lich
       def self.container_for_path_write(root, path, name)
         return [nil, "settings are stored as #{root.class}, not a Hash"] unless root.is_a?(Hash)
 
-        container = container_at(root, path)
-        if container.nil?
+        container = container_at(root, path, name)
+        if !container?(container)
           [nil, "#{path.inspect} does not lead to a container"]
         elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)
           [nil, "#{path.inspect} holds an Array, which #{name.inspect} can't index"]
