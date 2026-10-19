@@ -6,13 +6,13 @@
 #   - Preserve only the RP credit footer (not the full RP block) to keep credit intact.
 #
 # CONTRACT (ALL CHANNELS)
-#   1) Our sections first (Markdown headers, generated dynamically — no files):
+#   1) Our sections first (Markdown headers, generated dynamically -- no files):
 #        ### Features (general|dr|gs)
 #        ### Features (dr|gs)
 #        ### Bug Fixes (general|dr|gs)
 #      - Include ONLY type=feat|fix with scope=all|dr|gs.
 #      - Bullet format: "* <Title stripped of type(scope):> ([#<N>](https://github.com/<owner>/<repo>/issues/<N>))".
-#      - Sort within each section: PR number ascending (oldest → newest).
+#      - Sort within each section: PR number ascending (oldest -> newest).
 #   2) RP credit footer next (verbatim, two lines), not the RP block:
 #        ---
 #        This PR was generated with [Release Please](https://github.com/googleapis/release-please#release-please). See [documentation](https://github.com/googleapis/release-please#release-please).

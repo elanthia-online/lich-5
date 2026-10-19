@@ -1,5 +1,5 @@
 ## -----------------------------------------------------------------------------
-## Format Release PR Body (Stable) — Documentation
+## Format Release PR Body (Stable) -- Documentation
 ##
 ## Why two triggers:
 ## - pull_request path handles human edits/labels to the Release Please PR.
