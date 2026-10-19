@@ -40,10 +40,10 @@ module Lich
   # Sequel's default pool timeout (5 s, the same as the busy timeout) a thread
   # queued behind them timed out on the pool at about the moment they gave up
   # or got the lock, and failed with Sequel::PoolTimeout without ever having
-  # waited for the lock itself. A connection holder keeps its connection
-  # waiting for locks for at most two busy timeouts in one transaction (BEGIN
-  # and COMMIT); a third leaves room for holders that start waiting after the
-  # queued thread does. A queued thread then usually gets a connection once
+  # waited for the lock itself. A connection holder usually keeps its
+  # connection waiting for locks for at most two busy timeouts in one
+  # transaction (BEGIN IMMEDIATE or its first write, and COMMIT); a third
+  # leaves room for holders that start waiting after the queued thread does. A queued thread then usually gets a connection once
   # those holders finish, and its own full busy timeout after that. Sequel's
   # pool is not strictly first come, first served: a thread that releases a
   # connection and asks again at once can take it back before a queued thread
@@ -52,10 +52,12 @@ module Lich
   #
   # A caller that defers interrupts around a database call
   # (Thread.handle_interrupt(Object => :never)) and is killed while queued
-  # holds the kill back for up to this long plus one busy timeout: the pool
-  # wait does not end on an interrupt, and the call that follows starts with
-  # the kill pending, so it waits out its lock wait (see
-  # SQLiteBusyWait.wait_uninterrupted). That is 20 s with the defaults.
+  # holds the kill back for up to this long plus one busy timeout for each
+  # statement that then waits for a lock: the pool wait does not end on an
+  # interrupt, and each statement that follows starts with the kill pending,
+  # so it waits out its lock wait (see SQLiteBusyWait.wait_uninterrupted).
+  # That is 20 s with the defaults for a single statement, and 25 s for a
+  # transaction, which usually waits twice (its first write and COMMIT).
   def Lich.sqlite_pool_timeout_s
     SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS * sqlite_busy_timeout_ms.to_i / 1000.0
   end
