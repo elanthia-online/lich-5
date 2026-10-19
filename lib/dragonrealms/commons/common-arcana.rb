@@ -327,14 +327,21 @@ module Lich
         return false
       end
 
+      # Probe text for {#zero_width_pattern?}: word and non-word characters, upper
+      # and lower case, a digit and spaces, so word-boundary and lookaround
+      # assertions find a position to match at.
+      ZERO_WIDTH_PROBE = 'You a. 1!'
+
       # Compiles a single player-supplied message into a case-insensitive Regexp
       # for use as a bput pattern, matching how bput treats the built-in string
       # patterns; leading/trailing whitespace is trimmed so an accidental space in
       # yaml does not silently break matching. Returns nil -- so the entry is
       # dropped rather than applied -- when the message is not a String, is
       # blank/whitespace-only (an empty pattern compiles to //, matching every
-      # line), or is not a valid regular expression (which would otherwise raise
-      # inside bput). Shared guard for every custom_*_message key.
+      # line), is not a valid regular expression (which would otherwise raise
+      # inside bput), or can match without consuming any text (see
+      # {#zero_width_pattern?}; like //, such a pattern matches every line).
+      # Shared guard for every custom_*_message key.
       #
       # @param message [String, nil] the player-supplied message
       # @return [Regexp, nil] a case-insensitive pattern, or nil if not a usable string
@@ -344,9 +351,31 @@ module Lich
         stripped = message.strip
         return nil if stripped.empty?
 
-        Regexp.new(stripped, Regexp::IGNORECASE)
+        pattern = Regexp.new(stripped, Regexp::IGNORECASE)
+        return nil if zero_width_pattern?(pattern)
+
+        pattern
       rescue RegexpError
         nil
+      end
+
+      # Whether +pattern+ can succeed without consuming any text -- e.g. '.*',
+      # 'You|', '(foo)?', '^', '\b' or '(?=.)'. bput returns on the first line a
+      # pattern matches, so such a pattern accepts whatever line arrives first
+      # (returning it, or '') as though it were the expected message. Detected by
+      # an empty-string match, or a zero-length match at any position of
+      # {ZERO_WIDTH_PROBE}. A lookaround that needs specific text the probe lacks
+      # is not detected; it also cannot match every line.
+      #
+      # @param pattern [Regexp] a compiled custom message pattern
+      # @return [Boolean] true if the pattern can match zero characters
+      def zero_width_pattern?(pattern)
+        return true if pattern.match?('')
+
+        (0..ZERO_WIDTH_PROBE.length).any? do |position|
+          match = pattern.match(ZERO_WIDTH_PROBE, position)
+          match && match[0].empty?
+        end
       end
 
       # Appends the player's validated custom message patterns to a built-in
