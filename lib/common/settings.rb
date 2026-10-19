@@ -69,25 +69,46 @@ module Lich
 
       # Internal non-destructive correction method (issue from Lich 5.12.6)
       # non-destructive methods (.sort) cannot own a proxy that requires update (.push)
-      def self._reattach_live!(proxy)
-        script_name = Script.current.name
+      #
+      # Binds +proxy+, a detached view with a path (what sort or select
+      # returned), to the container at its path in the row of the proxy's
+      # own script (InstanceSettings has its own) as stored now, so that the
+      # destructive +method+ about to be called through it changes that
+      # container and is stored there (list.sort.push(4) appends 4 to list).
+      # A missing container on the way is created, as before.
+      #
+      # The path is passed to the navigator, not set on it: the navigator is
+      # shared by every script's Settings[] calls, and a path left on it
+      # would send the next top-level write somewhere else.
+      #
+      # Returns false, binding nothing, and tells the user, when there is no
+      # container there of the view's kind (a Hash where values returned an
+      # Array) or the path leads through something else.
+      def self._reattach_live!(proxy, method = nil)
+        script_name = proxy_script_name(proxy)
         scope       = proxy.scope
         path        = proxy.path
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "reattach_live!: scope=#{scope.inspect} path=#{path.inspect}" })
 
-        @path_navigator.reset_path
-        @path_navigator.set_path(path)
-        live, _root = @path_navigator.navigate_to_path(script_name, true, scope)
+        begin
+          live, _root = @path_navigator.navigate_to_path(script_name, true, scope, path)
+        rescue ArgumentError => e
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: #{e.message}" })
+          live = nil
+        end
 
-        if live.nil?
+        unless live.instance_of?(proxy.target.class)
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: failed to resolve live target for path=#{path.inspect} scope=#{scope.inspect}" })
+          what = live.nil? ? "nothing it can be applied to" : "#{live.class} there, and the view is #{proxy.target.class}"
+          refuse_proxy_save(script_name, proxy, "#{method || "the call"} on a view (sort, select, values, ...) of #{path.inspect} was not applied: the settings hold #{what}")
           return false
         end
 
         # Swap the proxy onto the live object via SettingsProxy API (encapsulated)
-        # Centralizes invariants/logging within SettingsProxy itself.
-        proxy.rebind_to_live!(live)
+        # Centralizes invariants/logging within SettingsProxy itself. The
+        # rebinding is private to SettingsProxy; this is its one caller.
+        proxy.__send__(:rebind_to_live!, live)
         true
       end
 

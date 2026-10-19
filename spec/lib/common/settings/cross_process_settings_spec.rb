@@ -559,6 +559,20 @@ RSpec.describe 'Settings writes across Lich processes' do
       )
     end
 
+    it 'pushes through a sort view onto the stored array, then stores an unrelated top-level key' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G items [3,1,2]')
+      alpha.call('keep items G items')
+
+      beta.call('push G items 9')
+      expect(alpha.call('ksortpush items 4')).to eq('ok')
+      expect(alpha.call('set G other 1')).to eq('ok')
+
+      expect(stored_row('sloot', 'DR')).to eq('items' => [3, 1, 2, 9, 4], 'other' => 1)
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
     it 'does not write when a method that changes nothing is called through a kept proxy' do
       alpha = start('DR', 'Alpha', 'go2')
       beta = start('DR', 'Beta', 'go2')

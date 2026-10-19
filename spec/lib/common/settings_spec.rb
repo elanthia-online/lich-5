@@ -871,9 +871,9 @@ RSpec.describe Lich::Common::Settings do
         expect(settings[:list].to_a).to eq(['x'])
       end
 
-      # Settings[k] = v with a navigation path left over (for example by a
-      # destructive call on a detached view, see _reattach_live!) saves the
-      # whole row it navigated. Its read and its save must be one step.
+      # Settings[k] = v with a navigation path left over (Settings.set_path
+      # reaches the shared navigator through method_missing) saves the whole
+      # row it navigated. Its read and its save must be one step.
       it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
         settings[:k0] = 0
         navigated = Queue.new

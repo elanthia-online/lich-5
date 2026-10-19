@@ -8,10 +8,11 @@ require 'common/settings/instance_settings'
 require 'tmpdir'
 require 'fileutils'
 
-# Writes made while iterating a Settings container, through the public API
-# and the real DatabaseAdapter (Sequel on a throwaway SQLite file). "Stored"
-# is the row as a second connection reads it from the file; "reloaded" is
-# what Settings reads after Settings.load.
+# Writes made while iterating a Settings container, and destructive calls
+# through what sort or select returned, through the public API and the real
+# DatabaseAdapter (Sequel on a throwaway SQLite file). "Stored" is the row as
+# a second connection reads it from the file; "reloaded" is what Settings
+# reads after Settings.load.
 RSpec.describe Lich::Common::Settings, "writes made while iterating, through the real DatabaseAdapter" do
   let(:settings) { Lich::Common::Settings }
   let(:tmp_dir) { Dir.mktmpdir('settings-iteration-spec') }
@@ -249,6 +250,60 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(stored).to eq(before_write)
       expect(error_messages.size).to eq(1)
       expect(error_messages.first).to include("not saved", "not found in the settings", "later writes through what this each loop yields are not saved either")
+    end
+  end
+
+  describe "a destructive call on a sort or select view" do
+    before { settings[:items] = [3, 1, 2] }
+
+    it "stores the call on the container at the view's path, and a later top-level write as well" do
+      view = settings[:items].sort
+      expect { view.push(4) }.not_to raise_error
+
+      settings[:other] = 1
+
+      expect(stored).to eq(items: [3, 1, 2, 4], other: 1)
+      expect(view.to_a).to eq([3, 1, 2, 4])
+      expect(reloaded(:items)).to eq([3, 1, 2, 4])
+      expect(reloaded(:other)).to eq(1)
+    end
+
+    it "stores a select view's call on the container at a nested path, not at the top of the row" do
+      settings[:cfg] = { items: [1, 2, 3] }
+
+      settings[:cfg][:items].select(&:odd?).push(5)
+      settings[:top] = true
+
+      expect(stored).to eq(items: [3, 1, 2], cfg: { items: [1, 2, 3, 5] }, top: true)
+    end
+
+    it "stores the call on the stored container, keeping what another session saved there" do
+      view = settings[:items].sort
+      their_write({ items: [3, 1, 2, 9], theirs: 1 })
+
+      view.push(4)
+
+      expect(stored).to eq(items: [3, 1, 2, 9, 4], theirs: 1)
+    end
+
+    it "stores nothing, and says so, when the container at the view's path is not of the view's kind" do
+      settings[:opts] = { "a" => 1 }
+
+      expect { settings[:opts].values.push(2) }.not_to raise_error
+      settings[:after] = 1
+
+      expect(stored).to eq(items: [3, 1, 2], opts: { "a" => 1 }, after: 1)
+      expect(error_messages).to include(a_string_including("not saved", "push on a view", "[:opts]", "hold Hash there, and the view is Array"))
+    end
+
+    it "stores the call in the row of the proxy's own script (InstanceSettings)" do
+      Lich::Common::InstanceSettings[:list] = [2, 1]
+
+      Lich::Common::InstanceSettings[:list].sort.push(3)
+      Lich::Common::InstanceSettings[:other] = 1
+
+      expect(stored('core', 'GSIV:TestCharacter')).to eq(list: [2, 1, 3], other: 1)
+      expect(stored).to eq(items: [3, 1, 2])
     end
   end
 end

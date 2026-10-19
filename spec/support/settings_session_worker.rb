@@ -56,6 +56,7 @@
 #   keach <name> <field> <json> kept[name].each { |e| e[field] = value } => "ok"
 #   kveach <name> <field> <json>
 #                               kept[name].each { |_k, v| v[field] = value } => "ok"
+#   ksortpush <name> <json>     kept[name].sort.push(value)     => "ok"
 #
 # <api> is G (GameSettings), C (CharSettings), S (Settings), I (InstanceSettings)
 # or IG (InstanceSettings.game, which reads and writes through a root proxy).
@@ -250,6 +251,9 @@ while (line = $stdin.gets)
     when 'kveach'
       value = JSON.parse(rest)
       KEPT.fetch(api).each { |_k, v| v[key] = value }
+      'ok'
+    when 'ksortpush'
+      KEPT.fetch(api).sort.push(JSON.parse([key, rest].compact.join(' ')))
       'ok'
     when 'row'
       row_for(api)

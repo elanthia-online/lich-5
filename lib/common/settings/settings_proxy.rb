@@ -95,6 +95,8 @@ module Lich
 
       # Internal: rebind this proxy to the live container and clear detached state.
       # This centralizes target swaps so invariants/logging stay consistent.
+      # Private: Settings._reattach_live! is its one caller, and calls it
+      # with __send__.
       # @param new_target [Hash, Array] the live container resolved from root+path
       # @return [self]
       private def rebind_to_live!(new_target)
@@ -103,6 +105,7 @@ module Lich
         })
         @target = new_target
         @detached = false if instance_variable_defined?(:@detached)
+        @source = nil
         self
       end
 
@@ -382,6 +385,11 @@ module Lich
             # NEW (5.12.7+): auto-reattach derived views before mutating
             # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
             #
+            # The view is bound to the container at its path, as the stored
+            # row holds it (Settings._reattach_live!), and the call is made on
+            # that container and stored there. When there is none of the
+            # view's kind, nothing is changed or stored, and the user is told.
+            #
             # A detached proxy without a path (a view's element not found in
             # the settings, a view of a root proxy, the default fetch
             # returned, or a container built from one) is never reattached:
@@ -389,7 +397,7 @@ module Lich
             # call runs on its copy, and the save that follows stores nothing
             # and tells the user (Settings.save_proxy_changes).
             if detached? && !@path.empty?
-              unless @settings_module._reattach_live!(self)
+              unless @settings_module._reattach_live!(self, method)
                 @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
                 return self
               end
