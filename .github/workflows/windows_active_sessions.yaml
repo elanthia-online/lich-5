@@ -10,6 +10,8 @@ on:
       - "spec/lib/internal_api/active_sessions*_spec.rb"
       - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
+      - "lib/common/frontend_settings.rb"
+      - "spec/lib/common/frontend_settings_spec.rb"
       - ".github/workflows/windows_active_sessions.yaml"
   pull_request:
     paths:
@@ -18,6 +20,8 @@ on:
       - "spec/lib/internal_api/active_sessions*_spec.rb"
       - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
+      - "lib/common/frontend_settings.rb"
+      - "spec/lib/common/frontend_settings_spec.rb"
       - ".github/workflows/windows_active_sessions.yaml"
   workflow_dispatch:
 
@@ -38,3 +42,6 @@ jobs:
           bundler-cache: true
       - name: Run ActiveSessions ownership and handoff specs
         run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb spec/lib/internal_api/active_sessions/server_client_spec.rb
+      - name: Run frontend settings persistence specs
+        if: ${{ !cancelled() }}
+        run: bundle exec rspec spec/lib/common/frontend_settings_spec.rb -e "atomic persistence on platforms that refuse to rename open files"
