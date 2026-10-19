@@ -306,13 +306,17 @@ module Lich
         # @param array [Array<Integer, String>] room ids along the path
         # @param from [Integer, String, Map] the starting room
         # @return [Array<Integer, String>] a new Array; +array+ is untouched
-        # @raise [ArgumentError] when +from+ is not a room id or room, no
-        #   room in the map has that id, or that room has no exit to the first
-        #   room of +array+
+        # @raise [ArgumentError] when +from+ is not a room id or a room with
+        #   one, no room in the map has that id, or that room has no exit to
+        #   the first room of +array+
         def estimate_time_path_from(array, from)
-          origin = if from.is_a?(room_class)
+          origin = if from.is_a?(room_class) && valid_room_id?(from.id)
                      from.id
-                   elsif from.is_a?(Integer) && !from.negative?
+                   elsif from.is_a?(room_class)
+                     # Only a hand-built room (Map.allocate) lacks an Integer
+                     # id; every room the loader builds has one.
+                     raise ArgumentError, "Map.estimate_time was given a from: room with an invalid id (#{from.id.class})"
+                   elsif valid_room_id?(from)
                      # A negative id would index Map.[]'s room list from the
                      # end. DR's Map.current_room_id is -1 until the first room
                      # match after load (and nil for an unmapped room later).
@@ -331,9 +335,11 @@ module Lich
           # Integer, a room gone since a reload) would count the first leg as
           # the 0.2 default and quietly return a wrong estimate. Compare with
           # the list size first: indexing with an id past a long raises
-          # RangeError.
+          # RangeError. Read the room once: Map.clear or a reload on another
+          # thread can empty the list between two reads.
           rooms = list
-          if origin >= rooms.size || rooms[origin].nil?
+          start = origin < rooms.size ? rooms[origin] : nil
+          if start.nil?
             raise ArgumentError, "Map.estimate_time was given a from: room id that is not in the map (#{origin})"
           end
           return array.dup if array.empty?
@@ -352,7 +358,7 @@ module Lich
           # Check wayto, not timeto: an exit with no timeto is a real leg that
           # counts 0.2. The key is the id as written, the same key the walk
           # looks the leg up by.
-          unless rooms[origin].wayto.key?(first)
+          unless start.wayto.key?(first)
             # Name only the class of a non-id start: a room's to_s is its
             # whole multi-line description.
             shown = numeric_first ? first : array.first.class
@@ -360,6 +366,13 @@ module Lich
           end
 
           [origin] + array
+        end
+
+        # Whether +id+ can index the room list as a room id.
+        # @param id [Object]
+        # @return [Boolean]
+        def valid_room_id?(id)
+          id.is_a?(Integer) && !id.negative?
         end
 
         # The class rooms are instances of. Rooms are built as Map objects even
@@ -370,7 +383,7 @@ module Lich
         def room_class
           tag_cache_host
         end
-        private :estimate_time_path_from, :room_class
+        private :estimate_time_path_from, :room_class, :valid_room_id?
 
         # Tag name => Array of room ids. Private: callers must go through
         # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.

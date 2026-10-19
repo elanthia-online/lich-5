@@ -486,6 +486,32 @@ RSpec.shared_examples 'a game Map class' do |game|
         .to raise_error(ArgumentError, /not in the map \(1\)/)
     end
 
+    it 'reads the from: room once, so a map cleared mid-call cannot crash the exit check' do
+      # Map.clear on another thread can empty the list after the room is found.
+      # An Array whose #first clears it lands that clear between the two reads.
+      list = map_class.class_variable_get(:@@list)
+      path = Class.new(Array) do
+        define_method(:first) do
+          list.clear
+          super()
+        end
+      end.new([2])
+
+      expect { map_class.estimate_time(path, from: 1) }.not_to raise_error
+    end
+
+    it 'refuses a from: room whose id is not a room id' do
+      # Rooms the loader builds always have an Integer id; a hand-built one
+      # may not, and must not reach the list lookup.
+      [nil, -1, '1'].each do |bad|
+        room = map_class.allocate
+        room.instance_variable_set(:@id, bad)
+
+        expect { map_class.estimate_time([2], from: room) }
+          .to raise_error(ArgumentError, "Map.estimate_time was given a from: room with an invalid id (#{bad.class})")
+      end
+    end
+
     it 'accepts room 0 as from: when the map has it' do
       shared_room(0, title: '[Room 0]', description: 'room 0')
       map_class[0].wayto['2'] = 'south'
