@@ -326,6 +326,15 @@ module Lich
           Lich.log 'SlackBot: No calling script to read a token reply from'
           return false
         end
+        # LNet delivers the reply through Script.new_downstream and
+        # Script.new_downstream_xml only, so a script that reads neither
+        # stream (one reading only script output, say) can never see it.
+        # Check before sending, so the request is not sent and the wait
+        # does not run for nothing.
+        unless script.want_downstream || script.want_downstream_xml
+          Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
+          return false
+        end
 
         deadline = monotonic_now + TOKEN_REQUEST_TIMEOUT
         @lnet.unique_buffer.push("chat to #{lichbot} RequestSlackToken")
@@ -336,8 +345,8 @@ module Lich
           return false if remaining <= 0
 
           line = script.gets(remaining)
-          # Script#gets returns false when the script reads no downstream at
-          # all, so no reply can ever arrive.
+          # Script#gets returns false when the script stopped reading
+          # downstream during the wait, so no reply can arrive any more.
           if line == false
             Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
             return false

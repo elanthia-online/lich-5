@@ -940,14 +940,65 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       end
     end
 
+    # LNet delivers the reply through Script.new_downstream and
+    # Script.new_downstream_xml only.
     context 'when the calling script reads no downstream' do
       let(:want_downstream) { false }
 
-      it 'returns false instead of raising on the false read' do
+      before do
+        allow(calling_script).to receive(:echo)
         allow(calling_script).to receive(:execution_sleep)
+      end
+
+      it 'returns false at once without sending the request or reading' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+        started = monotonic
 
         expect(bot.send(:request_token, 'Quilsilgas')).to be false
-        expect(calling_script).to have_received(:execution_sleep).once
+        expect(monotonic - started).to be < 1
+        expect(lnet_buffer).to be_empty
+        expect(calling_script).not_to have_received(:echo)
+        expect(calling_script).not_to have_received(:execution_sleep)
+        expect(Lich).to have_received(:log).with(/caller reads no downstream/)
+      end
+
+      it 'returns false at once when the script reads only script output' do
+        calling_script.instance_variable_set(:@want_script_output, true)
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+        started = monotonic
+        waiter = request_in_thread
+
+        finished = waiter.join(3)
+        elapsed = monotonic - started
+        waiter.kill unless finished
+
+        expect(finished).not_to be_nil, 'request_token waited for a reply that cannot arrive'
+        expect(waiter.value).to be false
+        expect(elapsed).to be < 1
+        expect(lnet_buffer).to be_empty
+        expect(Lich).to have_received(:log).with(/caller reads no downstream/)
+      end
+
+      it 'sends the request and reads the reply when the script reads only XML downstream' do
+        calling_script.instance_variable_set(:@want_downstream_xml, true)
+        downstream.push(token_line)
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+        expect(lnet_buffer).to eq(['chat to Quilsilgas RequestSlackToken'])
+      end
+    end
+
+    context 'when a false is pushed into the downstream buffer during the wait' do
+      # Script#gets also returns false when downstream reading stops, so a
+      # false read ends the wait.
+      it 'returns false at once and logs it' do
+        downstream.push(false)
+        downstream.push(token_line)
+        started = monotonic
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect(monotonic - started).to be < 1
+        expect(lnet_buffer).to eq(['chat to Quilsilgas RequestSlackToken'])
         expect(Lich).to have_received(:log).with(/caller reads no downstream/)
       end
     end
