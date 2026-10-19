@@ -303,8 +303,9 @@ module Lich
         true
       end
 
-      # KICK PILE destroys a pile, so each refused collect kicks one
-      # pile and tries again, up to COLLECT_CLUTTER_ATTEMPTS collects per call.
+      # Each refused collect kicks one pile (KICK PILE destroys it) and tries
+      # again. Capped at COLLECT_CLUTTER_ATTEMPTS collects per call so a room
+      # that stays cluttered cannot loop forever.
       # Returns nil when it gives up (no pile, missed kick, or still cluttered
       # after the last attempt), otherwise the result of waitrt?.
       def collect(item, practice = true)
