@@ -643,9 +643,12 @@ module Lich
       private_class_method :write_top_level_key
 
       # write_top_level_key's database write and cache update, under the cache
-      # entry's lock (see with_cache_lock).
+      # entry's lock (see with_cache_lock). The adapter updates the cache as
+      # part of the store (on_stored), so a script killed right after the row
+      # was committed does not leave the cache without it.
       def self.store_top_level_key(script_name, cache_key, scope, name, value)
-        stored = @db_adapter.update_settings(script_name, scope) do |fresh_root|
+        cache_stored_row = ->(row) { store_in_cache(cache_key, row) }
+        stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
           if fresh_root.is_a?(Hash)
             fresh_root[name] = value
             fresh_root
@@ -657,7 +660,6 @@ module Lich
         end
 
         if stored
-          store_in_cache(cache_key, stored)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "write_top_level_key: Saved '#{name}' for #{cache_key}; cache now holds the stored row." })
         else
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache left as it was." })
