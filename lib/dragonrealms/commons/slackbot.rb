@@ -82,6 +82,8 @@ module Lich
         @token_verified = false
         @users_list = nil
         @users_list_retry_at = nil
+        @restore_mutex = Mutex.new
+        @restore_attempts = 0
 
         connect
       end
@@ -210,11 +212,35 @@ module Lich
       # #reconnect! whose token checks and users-list step are capped the same
       # way. The LNet token discovery keeps its own timeouts.
       #
+      # Scripts share one bot from their own threads, so only one restore runs
+      # at a time. A message that arrives while another message's restore is
+      # running waits for it and takes its result instead of starting a second
+      # one, so a burst of messages makes one users.list try (or one token
+      # check and LNet discovery), and the later messages wait no longer than
+      # the restore already under way.
+      #
       # Never raises: a message is often sent right before an emergency logout,
       # and an unexpected error here must not stop the calling script.
       #
       # @return [Boolean] the new initialized? state
       def restore_connection
+        attempts_seen = @restore_attempts
+        @restore_mutex.synchronize do
+          # Another message finished a restore while this one waited: share it.
+          return initialized? if @restore_attempts != attempts_seen
+
+          begin
+            restore_connection_once
+          ensure
+            @restore_attempts += 1
+          end
+        end
+      end
+
+      # One restore attempt for #restore_connection. Never raises.
+      #
+      # @return [Boolean] the new initialized? state
+      def restore_connection_once
         return load_users_list(SEND_REQUEST_BUDGET) if @token_verified
 
         reconnect!(budget: SEND_REQUEST_BUDGET)

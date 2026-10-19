@@ -522,6 +522,101 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
   end
 
+  # Scripts share one bot from their own threads. The second message starts
+  # while the first one's restore is stuck inside its Slack call.
+  describe 'two messages sent at once while the connection is restored' do
+    let(:entered) { Queue.new }
+    let(:gate) { Queue.new }
+
+    # A transport response that first reports it was reached, then blocks
+    # until the spec opens the gate.
+    def blocking(response)
+      lambda do
+        entered << true
+        gate.pop
+        response.call
+      end
+    end
+
+    def wait_until_blocked(thread)
+      200.times do
+        break if thread.status == 'sleep'
+
+        Kernel.sleep(0.01)
+      end
+      expect(thread.status).to eq('sleep')
+    end
+
+    # @return [Array] both direct_message results
+    def two_messages(bot)
+      first = Thread.new { bot.direct_message('alice', 'one') }
+      expect(entered.pop(timeout: 5)).to be(true), 'the first message never reached its Slack call'
+      second = Thread.new { bot.direct_message('alice', 'two') }
+      wait_until_blocked(second)
+      2.times { gate << true }
+      [first, second].map { |t| t.join(10) && t.value }
+    end
+
+    it 'makes one users.list call during an outage' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << blocking(failure(:http500))
+
+      results, _elapsed, delta = measure { two_messages(bot) }
+
+      expect(results).to eq([nil, nil])
+      expect(delta['users.list']).to eq(1)
+      expect(posted).to be_empty
+      expect(messages.grep(/not connected/).size).to eq(2)
+    end
+
+    it 'delivers both messages from one successful users.list call' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << blocking(users_ok)
+
+      results, _elapsed, delta = measure { two_messages(bot) }
+
+      expect(results).to all(include('ok' => true))
+      expect(delta['users.list']).to eq(1)
+      expect(posted.map { |p| p['channel'] }).to eq(%w[U1 U1])
+    end
+
+    it 'makes one token check when the token was never verified' do
+      allow(Script).to receive(:exists?).with('lnet').and_return(false)
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:ok_false)
+      bot = described_class.new
+      plan['auth.test'].clear
+      plan['auth.test'] << blocking(failure(:ok_false))
+
+      results, _elapsed, delta = measure { two_messages(bot) }
+
+      expect(results).to eq([nil, nil])
+      expect(delta['auth.test']).to eq(1)
+      expect(bot.error_message).to include('lnet.lic not found')
+    end
+
+    it 'lets a later message make its own attempt once the shared one ended' do
+      plan['users.list'] << failure(:http500)
+      bot = described_class.new
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << blocking(failure(:http500))
+      two_messages(bot)
+      wait_out_cooldown
+      plan['users.list'].clear
+      plan['users.list'] << users_ok
+
+      expect(bot.direct_message('alice', 'three')).to include('ok' => true)
+      expect(calls['users.list']).to eq(3)
+    end
+  end
+
   describe 'an initialized bot that does not know the user' do
     before do
       plan['users.list'] << users_ok
