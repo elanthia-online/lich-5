@@ -84,10 +84,12 @@ module Lich
       #
       # Compares currently worn combat items against the target gear set,
       # removes items not in the set, and wears any missing items.
-      # Notifies the user about items that could not be found.
+      # Alerts the user about items that could not be found, worn, or put away.
       #
       # @param set_name [String, nil] gear set name from settings (e.g., "standard", "swimming")
-      # @return [Boolean] true if all items in the set are now worn
+      # @return [Boolean] false if the set is unknown or any set item could not be
+      #   found, worn, or put away; true otherwise (a non-worn set item that was
+      #   in hand counts once it is put away)
       #
       # @example
       #   @equipment_manager.wear_equipment_set?("standard")
@@ -106,8 +108,8 @@ module Lich
 
         remove_unmatched_items(combat_items, gear_set_items)
 
-        lost_items, held_items = wear_missing_items(gear_set_items, combat_items)
-        notify_missing(lost_items, held_items)
+        lost_items, in_hand_items = wear_missing_items(gear_set_items, combat_items)
+        notify_missing(lost_items, in_hand_items)
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
 
@@ -132,28 +134,34 @@ module Lich
 
       # Alerts the user about equipment items that could not be worn.
       #
-      # Held items whose put-away failed are named in a check-your-hands line;
+      # Items left in hand are named in a check-your-hands line, followed by
+      # what the hands actually hold (a transformed item, or one matched by a
+      # shorter gear description, can look different from its gear name);
       # every other item that could not be found or worn gets the MISSING
       # EQUIPMENT listing, which asks the user to check their containers. One
       # item never gets both instructions. Either way the alert is bracketed
       # by a beep and a pause.
       #
       # @param lost_items [Array<DRC::Item>, nil] every item that could not be worn or put away
-      # @param held_items [Array<DRC::Item>] the subset of lost_items whose put-away
-      #   failed in hand; when omitted, every item gets the MISSING EQUIPMENT listing
+      # @param in_hand_items [Array<DRC::Item>] the subset of lost_items left in hand;
+      #   when omitted, every item gets the MISSING EQUIPMENT listing
       # @return [void]
       # @api private
-      def notify_missing(lost_items, held_items = [])
+      def notify_missing(lost_items, in_hand_items = [])
         return unless lost_items && !lost_items.empty?
 
-        in_hand, not_found = lost_items.partition { |item| held_items.include?(item) }
+        in_hand, not_found = lost_items.partition { |item| in_hand_items.include?(item) }
 
         DRC.beep
         unless not_found.empty?
           Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
           Lich::Messaging.msg("bold", "EquipmentManager: #{not_found.map(&:short_name).join(', ')}")
         end
-        Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{in_hand.map(&:short_name).join(', ')}") unless in_hand.empty?
+        unless in_hand.empty?
+          holding = [DRC.right_hand, DRC.left_hand].compact
+          holding_text = holding.empty? ? 'nothing' : holding.join(', ')
+          Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{in_hand.map(&:short_name).join(', ')} (holding: #{holding_text})")
+        end
         pause
         DRC.beep
       end
@@ -168,12 +176,14 @@ module Lich
       # then fetched and worn in gear-set order. When two set descriptions
       # resolve to the same gear item, a held item that failed is not tried
       # again. Returns, in gear-set order and without repeats, every item that
-      # could not be worn or put away, and the subset of those still in hand.
+      # could not be worn or put away, and the subset of those left in hand:
+      # every held item whose put-away failed, plus every fetched item whose
+      # WEAR failed and that still matches a hand afterwards.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
       # @return [Array(Array<DRC::Item>, Array<DRC::Item>)] items that could not
-      #   be worn or put away, and the ones among them whose put-away failed in hand
+      #   be worn or put away, and the ones among them left in hand
       # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
@@ -184,7 +194,7 @@ module Lich
 
         not_worn = target_items.reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
         # Tracked by position: two set descriptions can resolve to the same gear item.
-        held = not_worn.map { |item| item_in_hand?(item) }
+        held = not_worn.map { |item| DRCI.in_hands?(item) }
         to_wear = held.map(&:!)
 
         # Put held items away first so the hands are free for the wears below.
@@ -199,7 +209,7 @@ module Lich
           next unless held[index]
           next if held_failures.include?(item)
 
-          if !item_in_hand?(item)
+          if !DRCI.in_hands?(item)
             to_wear[index] = true
           elsif !stow_weapon(item.short_name)
             held_failures << item
@@ -215,16 +225,11 @@ module Lich
         end
 
         failures = held_failures + wear_failures
-        [not_worn.select { |item| failures.include?(item) }.uniq, held_failures]
-      end
-
-      # Whether either hand holds something matching the item.
-      #
-      # @param item [DRC::Item] gear item to look for
-      # @return [Boolean]
-      # @api private
-      def item_in_hand?(item)
-        [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any?
+        # A held put-away failure is reported as in hand even if a transform
+        # changed what the hand shows; a refused fetch is in hand only if it
+        # still matches a hand.
+        in_hand = held_failures + wear_failures.select { |item| DRCI.in_hands?(item) }
+        [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
       end
 
       # Removes currently worn combat items that are not in the target gear set.
