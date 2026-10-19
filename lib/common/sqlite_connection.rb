@@ -29,15 +29,37 @@ module Lich
     configure_sqlite_connection(SQLite3::Database.new(path))
   end
 
+  # How many busy timeouts a thread waits for a free pooled connection before
+  # Sequel raises Sequel::PoolTimeout; see Lich.sqlite_pool_timeout_s.
+  SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS = 3 unless const_defined?(:SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS)
+
+  # Seconds a thread waits for a free connection from the lich.db3 Sequel pool.
+  #
+  # Threads holding pooled connections wait for the lock side by side, each
+  # for up to the busy timeout, and keep their connections meanwhile. With
+  # Sequel's default pool timeout (5 s, the same as the busy timeout) a thread
+  # queued behind them timed out on the pool at about the moment they gave up
+  # or got the lock, and failed with Sequel::PoolTimeout without ever having
+  # waited for the lock itself. A connection holder keeps its connection
+  # waiting for locks for at most two busy timeouts in one transaction (BEGIN
+  # and COMMIT); a third leaves room for holders that start waiting after the
+  # queued thread does. A queued thread then gets a connection once those
+  # holders finish, and its own full busy timeout after that.
+  def Lich.sqlite_pool_timeout_s
+    SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS * sqlite_busy_timeout_ms.to_i / 1000.0
+  end
+
   # Opens lich.db3 through Sequel. Sequel's pool hands each thread its own
   # connection, and every connection it creates gets a busy handler that waits
   # with Ruby's sleep (see SQLiteBusyWait). `timeout:` is the C busy timeout
   # Sequel sets first; it stays in force if the Ruby handler can't be installed.
+  # `pool_timeout:` is Lich.sqlite_pool_timeout_s.
   def Lich.open_sequel_sqlite(path)
     timeout_ms = sqlite_busy_timeout_ms.to_i
     db = Sequel.sqlite(
       path,
       timeout: timeout_ms,
+      pool_timeout: sqlite_pool_timeout_s,
       after_connect: ->(conn) { SQLiteBusyWait.install(conn, timeout_ms) }
     )
     db.extend(SQLiteBusyWait::Transactions)
