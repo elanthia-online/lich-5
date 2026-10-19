@@ -19,9 +19,21 @@ module Lich
   module Common
     # Mock database adapter that simulates database operations using in-memory storage
     class MockDatabaseAdapter
+      # One clock for every instance, so that data_version only ever grows,
+      # even across the fresh adapter each example creates: the real
+      # adapter's values grow across reopened connections too, and Settings
+      # keeps versions recorded with rows that may still be cached from an
+      # earlier example.
+      @version_clock = 0
+      @version_clock_mutex = Mutex.new
+
+      def self.next_version
+        @version_clock_mutex.synchronize { @version_clock += 1 }
+      end
+
       def initialize
         @storage = {}
-        @version = 0
+        @version = self.class.next_version
         @data_version_unknown = false
       end
 
@@ -54,7 +66,7 @@ module Lich
         key = "#{script_name}:#{scope}"
         # Store a deep copy to prevent unintended modifications
         @storage[key] = deep_copy(settings)
-        @version += 1
+        @version = self.class.next_version
         true
       end
 
@@ -76,7 +88,7 @@ module Lich
       # This is useful for resetting the state between tests
       def clear
         @storage = {}
-        @version += 1
+        @version = self.class.next_version
       end
 
       # Get a copy of the entire storage hash
