@@ -236,6 +236,49 @@ RSpec.describe 'Callers that list the immobile reply' do
           expect(messages).to include('EquipmentManager: Unable to empty your hands to remove helm')
         end
 
+        # The shield's GETs run out during the hold, which then ends during
+        # the longbow's.
+        it 'tries an item given up on once more after a later item is picked up' do
+          remove_game(gets_held: attempts + 3)
+          em.remove_item(item)
+          expect(ground).to be_empty
+          expect(sent.drop(4)).to eq(['get my shield'] * attempts + ['get my longbow'] * 4 + ['get my shield', 'swap'])
+          expect(messages.grep(/Unable to pick up/)).to be_empty
+        end
+
+        it 'reports an item whose extra GET fails too' do
+          hold = { gets: 3 }
+          shield_gets = 0
+          game('remove my helm'     => -> { sent.size == 1 ? "You'll need both hands free to remove that." : immobile },
+               'lower ground left'  => lower('left'),
+               'lower ground right' => lower('right'),
+               'get my shield'      => -> { (shield_gets += 1) <= attempts ? immobile : 'What were you referring to?' },
+               'get my longbow'     => pick_up('longbow', hold),
+               'swap'               => 'Will alone cannot conquer the paralysis.')
+          em.remove_item(item)
+          expect(sent.count('get my shield')).to eq(attempts + 1)
+          expect(ground).to eq(['shield'])
+          expect(messages).to include('EquipmentManager: Unable to pick up shield after removing helm')
+          expect(messages.grep(/Unable to pick up longbow/)).to be_empty
+        end
+
+        # The lowered items' names collide: a held-check by name for the
+        # crossbow matches "crossbow bolts" once the bolts are picked up.
+        it 'picks up both items when one name contains the other noun' do
+          hands.replace('left' => 'crossbow', 'right' => 'crossbow bolts')
+          game('remove my helm'        => -> { sent.size == 1 ? "You'll need both hands free to remove that." : 'You remove a helm.' },
+               'stow my helm'          => 'You put your helm in your pack.',
+               'lower ground left'     => lower('left'),
+               'lower ground right'    => lower('right'),
+               'get my crossbow bolts' => pick_up('crossbow bolts', { gets: 0 }),
+               'get my crossbow'       => pick_up('crossbow', { gets: 0 }))
+          helm = double('item', short_name: 'helm', transforms_to: nil, tie_to: nil, wield: nil, container: nil)
+          em.remove_item(helm)
+          expect(ground).to be_empty
+          expect(sent.last(2)).to eq(['get my crossbow bolts', 'get my crossbow'])
+          expect(hands).to eq('left' => 'crossbow', 'right' => 'crossbow bolts')
+        end
+
         it 'does not retry a pick-up that fails for another reason' do
           remove_game(gets_held: 0, free_reply: 'What were you referring to?')
           em.remove_item(item)
@@ -288,6 +331,32 @@ RSpec.describe 'Callers that list the immobile reply' do
         em.unload_weapon('crossbow')
         expect(sent).to eq(['unload my crossbow', 'lower ground left', 'stow my bolt', 'get my crossbow'])
         expect(hands).to eq('left' => 'crossbow', 'right' => 'crossbow bolts')
+      end
+
+      # The other hand's "crossbow bolts" matches the noun before and after
+      # the GETs; it must not count as picking the crossbow up.
+      it 'reports the weapon left on the ground when the hold outlasts the GETs and the other hand holds a name containing its noun' do
+        hands.replace('left' => 'crossbow', 'right' => 'crossbow bolts')
+        game('unload my crossbow' => 'Your bolt falls from your crossbow to your feet.',
+             'lower ground left'  => -> { hands['left'] = nil; 'You lower the crossbow.' },
+             'stow my bolt'       => immobile,
+             'get my crossbow'    => immobile)
+        em.unload_weapon('crossbow')
+        expect(sent.count('get my crossbow')).to eq(Lich::DragonRealms::EquipmentManager::LOWERED_ITEM_PICKUP_ATTEMPTS)
+        expect(hands).to eq('left' => nil, 'right' => 'crossbow bolts')
+        expect(messages).to include('EquipmentManager: Unable to pick crossbow back up after unloading')
+      end
+
+      it 'counts the weapon as picked up on a success reply even when the hands were stale before the GET' do
+        # The hand update for the lowering lags: the left hand still shows the
+        # crossbow when the GET is sent.
+        game('unload my crossbow' => 'Your bolt falls from your crossbow to your feet.',
+             'lower ground left'  => 'You lower the crossbow.',
+             'stow my bolt'       => 'You put your bolt in your quiver.',
+             'get my crossbow'    => 'You pick up the crossbow.')
+        hands.replace('left' => 'crossbow', 'right' => nil)
+        em.unload_weapon('crossbow')
+        expect(messages.grep(/Unable to pick crossbow back up/)).to be_empty
       end
     end
 

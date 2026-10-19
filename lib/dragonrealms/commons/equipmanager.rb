@@ -260,20 +260,18 @@ module Lich
           temp_right_item = DRC.right_hand
           # Lower the items because that preserves loaded bows.
           # Stowing them in a container would require unloading.
-          did_lower = [temp_left_item, temp_right_item].compact.all? { |item_in_hand| DRCI.lower_item?(item_in_hand) }
+          # Only what was lowered is picked up again: the lowering stops at
+          # the first failure.
+          lowered = []
+          did_lower = [temp_left_item, temp_right_item].compact.all? do |item_in_hand|
+            DRCI.lower_item?(item_in_hand).tap { |ok| lowered << item_in_hand if ok }
+          end
           if did_lower
             remove_item(item, retries: retries - 1)
           else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end
-          # Pick up the items in reverse order you lowered them
-          # so that they end up in the correct hands again. An item still in
-          # a hand was not lowered (the lowering stopped partway).
-          [temp_right_item, temp_left_item].compact.each do |lowered|
-            next if DRCI.in_hands?(lowered) || pick_up_lowered_item?(lowered)
-
-            Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{lowered} after removing #{item.short_name}")
-          end
+          pick_up_lowered_items(lowered, item.short_name)
           # In case they end up in different hands, swap.
           if DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item
             swap_result = DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
@@ -913,29 +911,75 @@ module Lich
       # It always sends the first GET, without checking the hands first: a
       # check by name also matches an item in the other hand whose name
       # contains this one's noun (a crossbow and "crossbow bolts"), and the
-      # lowered item would stay on the ground. Callers that may not have
-      # lowered the item check the hands themselves.
+      # lowered item would stay on the ground. For the same reason, unless
+      # the GET drew a success reply, it counts the item as picked up only
+      # when a hand whose contents changed now holds it ({#newly_in_hand?}).
+      # Callers pass only items they lowered.
       #
       # It does not use {DRCI.get_item_unsafe}, which drops the GET reply
       # this needs to decide on a retry.
       #
       # @param item [String] the lowered item's name or noun
-      # @return [Boolean] true if the item is in a hand afterwards
+      # @param attempts [Integer] most GETs to send while the reply is the
+      #   immobile one
+      # @return [Boolean] true if the item was picked up
       # @api private
-      def pick_up_lowered_item?(item)
-        LOWERED_ITEM_PICKUP_ATTEMPTS.times do |attempt|
+      def pick_up_lowered_item?(item, attempts: LOWERED_ITEM_PICKUP_ATTEMPTS)
+        hands_before = { 'left' => DRC.left_hand, 'right' => DRC.right_hand }
+        result = nil
+        attempts.times do |attempt|
           pause 1 if attempt.positive?
           result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
           break unless IMMOBILE_PATTERN.match?(result)
         end
+        picked_up = DRCI::GET_ITEM_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
 
         # As in DRCI.get_item_unsafe: allow for the hand update to lag the reply.
         10.times do
-          return true if DRCI.in_hands?(item)
+          return true if picked_up ? DRCI.in_hands?(item) : newly_in_hand?(item, hands_before)
 
           pause 0.1
         end
         false
+      end
+
+      # Picks up the items {#remove_item} lowered, in reverse order so they
+      # end up in the same hands again. A long hold can use up one item's
+      # attempts and end during the next one's, so when an item is picked up,
+      # each earlier item given up on gets one more GET.
+      #
+      # @param lowered [Array<String>] the lowered items, in the order lowered
+      # @param removed_name [String] the removed item's name, for the warning
+      # @return [void]
+      # @api private
+      def pick_up_lowered_items(lowered, removed_name)
+        left_down = []
+        lowered.reverse_each do |name|
+          if pick_up_lowered_item?(name)
+            left_down.reject! { |earlier| pick_up_lowered_item?(earlier, attempts: 1) }
+          else
+            left_down << name
+          end
+        end
+        left_down.each do |name|
+          Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{name} after removing #{removed_name}")
+        end
+      end
+
+      # Whether a hand whose contents changed since hands_before now holds
+      # the item. A hand that still holds the same thing doesn't count, even
+      # when its item's name contains the noun (a crossbow and "crossbow
+      # bolts").
+      #
+      # @param item [String] the item's name, noun or "#<id>"
+      # @param hands_before [Hash{String => String, nil}] hand contents
+      #   before the GET, keyed "left" and "right"
+      # @return [Boolean]
+      # @api private
+      def newly_in_hand?(item, hands_before)
+        { 'left' => DRC.left_hand, 'right' => DRC.right_hand }.any? do |hand, now|
+          now != hands_before[hand] && DRCI.in_hand?(item, hand)
+        end
       end
 
       # Executes a stow action with automatic recovery on common failure conditions.
