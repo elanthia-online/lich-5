@@ -72,6 +72,38 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     ticks
   end
 
+  # Records the interrupt masks this thread sets while the block runs.
+  def masks_set_during
+    masks = []
+    me = Thread.current
+    allow(Thread).to receive(:handle_interrupt).and_wrap_original do |original, *args, &block|
+      masks << args.first if Thread.current.equal?(me)
+      original.call(*args, &block)
+    end
+    result = yield
+    [result, masks]
+  end
+
+  # Runs the block on a thread while another thread holds the connection's
+  # Monitor for 0.3 s, and returns how long the block took.
+  def time_while_monitor_held(conn)
+    monitor = conn.instance_variable_get(:@lich_monitor)
+    expect(monitor).to be_a(Monitor)
+    held = Queue.new
+    blocker = Thread.new do
+      monitor.synchronize do
+        held << true
+        sleep 0.3
+      end
+    end
+    expect(held.pop(timeout: 5)).to be(true)
+    started = monotonic
+    yield
+    elapsed = monotonic - started
+    blocker.join
+    elapsed
+  end
+
   before do
     @dbs = []
     @raw = []
@@ -366,18 +398,6 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
   end
 
   describe 'which statements defer interrupts' do
-    # Records the interrupt masks this thread sets while the block runs.
-    def masks_set_during
-      masks = []
-      me = Thread.current
-      allow(Thread).to receive(:handle_interrupt).and_wrap_original do |original, *args, &block|
-        masks << args.first if Thread.current.equal?(me)
-        original.call(*args, &block)
-      end
-      result = yield
-      [result, masks]
-    end
-
     it 'defers interrupts while preparing and stepping statements on a pooled connection' do
       db = open_db
       db.synchronize do |conn|
@@ -916,26 +936,6 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       end
     end
 
-    # Runs the block on a thread while another thread holds the connection's
-    # Monitor for 0.3 s, and returns how long the block took.
-    def time_while_monitor_held(conn)
-      monitor = conn.instance_variable_get(:@lich_monitor)
-      expect(monitor).to be_a(Monitor)
-      held = Queue.new
-      blocker = Thread.new do
-        monitor.synchronize do
-          held << true
-          sleep 0.3
-        end
-      end
-      expect(held.pop(timeout: 5)).to be(true)
-      started = monotonic
-      yield
-      elapsed = monotonic - started
-      blocker.join
-      elapsed
-    end
-
     it 'gets the Ruby busy handler and a Monitor around every sqlite3 C method on it and its statements' do
       open_db
       shared = Lich.open_sqlite_db(path)
@@ -1109,6 +1109,221 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
 
       expect(lines.values_at(0, 1, 4, 5)).to eq(['true', 'false', 'true', '[0, 2]'])
       expect(%w[0 1]).to include(lines[3])
+    end
+  end
+
+  # sqlite3_backup_step waits for locks through the busy handler of the
+  # connection at either end of the backup.
+  describe 'SQLite3::Backup with a lich.db3 connection at one end' do
+    let(:copy_path) { File.join(tmp_dir, 'copy.db3') }
+
+    # Child process, so a regression that hangs can't hang the suite.
+    # Another connection holds an EXCLUSIVE lock on lich.db3 while a thread
+    # backs up from Lich.open_sqlite_db's connection ('src_*') or from a plain
+    # database into a pooled connection ('dst_*'). In 'src_*' a second thread
+    # reads through the shared connection during the wait.
+    let(:harness) do
+      <<~'RUBY'
+        require 'sqlite3'
+        require 'sequel'
+        module Lich; end
+        require ARGV[0]
+        path, copy, how = ARGV[1], ARGV[2], ARGV[3]
+        Lich.define_singleton_method(:sqlite_busy_timeout_ms) { 1500 }
+        mono = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+        to_lich = how.start_with?('dst_')
+        setup = SQLite3::Database.new(path)
+        setup.execute('CREATE TABLE rows (n INTEGER)')
+        setup.execute('INSERT INTO rows (n) VALUES (1)')
+        setup.close
+        plain = SQLite3::Database.new(copy)
+        if to_lich
+          plain.execute('CREATE TABLE rows (n INTEGER)')
+          plain.execute('INSERT INTO rows (n) VALUES (7)')
+          pooled = Lich.open_sequel_sqlite(path)
+          pooled.synchronize { |conn| conn.get_first_value('SELECT 1') }
+        else
+          shared = Lich.open_sqlite_db(path)
+          shared.get_first_value('SELECT 1')
+        end
+        backup = lambda do
+          run = lambda do |dst, src|
+            b = SQLite3::Backup.new(dst, 'main', src, 'main')
+            begin
+              b.step(-1)
+            ensure
+              b.finish
+            end
+          end
+          to_lich ? pooled.synchronize { |conn| run.call(conn, plain) } : run.call(plain, shared)
+        end
+        holder = SQLite3::Database.new(path)
+        holder.execute('BEGIN EXCLUSIVE')
+        waiter = Thread.new do
+          Thread.current.report_on_exception = false
+          backup.call
+        rescue RuntimeError => e
+          "rescued #{e.message}"
+        end
+        sleep 0.1
+        reader = Thread.new { shared.get_first_value('SELECT count(*) FROM rows') } unless to_lich
+        ticks = 0
+        deadline = mono.call + 0.3
+        while mono.call < deadline
+          sleep 0.01
+          ticks += 1
+        end
+        if how.end_with?('_kill')
+          waiter.kill
+        elsif how.end_with?('_raise')
+          waiter.raise(RuntimeError, 'stop')
+        end
+        # An interrupted backup has to end while the lock is still held.
+        ended = how.end_with?('_wait') ? waiter.alive? : waiter.join(1).nil?
+        holder.execute('COMMIT')
+        result = begin
+          waiter.value.inspect
+        rescue Exception => e
+          e.class.name
+        end
+        puts ticks >= 10, ended, result, reader ? reader.value.inspect : 'none'
+        # Every connection involved still works.
+        puts backup.call
+        puts SQLite3::Database.new(to_lich ? path : copy).get_first_value('SELECT group_concat(n) FROM rows')
+      RUBY
+    end
+
+    def run_harness(how)
+      lib = File.expand_path('../../../lib/common/sqlite_connection.rb', __dir__)
+      stdout = +''
+      stderr = +''
+      status = nil
+      Open3.popen3(RbConfig.ruby, '-e', harness, lib, path, copy_path, how) do |_in, out, err, wait|
+        unless wait.join(20)
+          Process.kill(:KILL, wait.pid)
+          wait.join
+        end
+        stdout = out.read
+        stderr = err.read
+        status = wait.value
+      end
+      expect(status.success?).to be(true), "child hung or failed: #{stderr}"
+      stdout.lines.map(&:strip)
+    end
+
+    let(:done) { SQLite3::Constants::ErrorCode::DONE.to_s }
+
+    it 'keeps other threads running while it waits, and a thread using the shared connection waits for it' do
+      lines = run_harness('src_wait')
+
+      # ticks, still waiting before the commit, backup result, read, second backup, copy
+      expect(lines).to eq(['true', 'true', done, '1', done, '1'])
+    end
+
+    it 'ends the wait on Thread#kill and leaves the shared connection usable' do
+      lines = run_harness('src_kill')
+
+      expect(lines).to eq(['true', 'false', 'nil', '1', done, '1'])
+    end
+
+    it 'ends the wait on Thread#raise and leaves the shared connection usable' do
+      lines = run_harness('src_raise')
+
+      expect(lines).to eq(['true', 'false', '"rescued stop"', '1', done, '1'])
+    end
+
+    it 'ends a wait on a pooled destination on Thread#kill and leaves the pooled connection usable' do
+      lines = run_harness('dst_kill')
+
+      expect(lines).to eq(['true', 'false', 'nil', 'none', done, '7'])
+    end
+
+    def plain_source
+      src = SQLite3::Database.new(copy_path)
+      @raw << src
+      src.execute('CREATE TABLE IF NOT EXISTS rows (n INTEGER)')
+      src
+    end
+
+    it 'defers interrupts in #step when lich.db3 is either end, and not between plain connections' do
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      plain = plain_source
+      other = SQLite3::Database.new(':memory:')
+      @raw << other
+
+      _, from_lich = masks_set_during { SQLite3::Backup.new(other, 'main', shared, 'main').tap { |b| b.step(-1) }.finish }
+      _, to_lich = masks_set_during { SQLite3::Backup.new(shared, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
+      _, plain_only = masks_set_during { SQLite3::Backup.new(other, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
+
+      expect(SQLite3::Backup.ancestors).to include(Lich::SQLiteBusyWait::Backup)
+      expect(from_lich).to eq([{ Object => :never }])
+      expect(to_lich).to eq([{ Object => :never }])
+      expect(plain_only).to be_empty
+    end
+
+    it 'gives up and returns BUSY once the lock has been held for the busy timeout' do
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      holder = SQLite3::Database.new(path)
+      @raw << holder
+      holder.execute('BEGIN EXCLUSIVE')
+      backup = SQLite3::Backup.new(SQLite3::Database.new(':memory:').tap { |c| @raw << c }, 'main', shared, 'main')
+      started = monotonic
+      result = backup.step(-1)
+      waited = monotonic - started
+      backup.finish
+      holder.execute('COMMIT')
+
+      expect(result).to eq(SQLite3::Constants::ErrorCode::BUSY)
+      expect(waited).to be >= 0.2
+      expect(waited).to be < 2.0
+    end
+
+    it 'makes #initialize, #step and #finish wait for the shared connection\'s Monitor, but not #remaining or #pagecount' do
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      dst = SQLite3::Database.new(':memory:')
+      @raw << dst
+      backup = nil
+      waits = { initialize: time_while_monitor_held(shared) { backup = SQLite3::Backup.new(dst, 'main', shared, 'main') } }
+      waits[:step] = time_while_monitor_held(shared) { backup.step(1) }
+      free = {
+        remaining: time_while_monitor_held(shared) { backup.remaining },
+        pagecount: time_while_monitor_held(shared) { backup.pagecount }
+      }
+      waits[:finish] = time_while_monitor_held(shared) { backup.finish }
+
+      expect(waits.values).to all(be >= 0.2)
+      expect(free.values).to all(be < 0.2)
+    end
+
+    it 'takes both Monitors in the same order whichever way two shared connections are backed up' do
+      open_db
+      first = Lich.open_sqlite_db(path)
+      second = Lich.open_sqlite_db(copy_path)
+      @raw << first << second
+      taken = []
+      { first => :first, second => :second }.each do |conn, name|
+        allow(conn.instance_variable_get(:@lich_monitor)).to receive(:synchronize).and_wrap_original do |original, *args, &block|
+          taken << name
+          original.call(*args, &block)
+        end
+      end
+
+      orders = [[first, second], [second, first]].map do |dst, src|
+        taken.clear
+        backup = SQLite3::Backup.new(dst, 'main', src, 'main')
+        backup.finish
+        taken.dup
+      end
+
+      expect(orders[0]).to eq(orders[1])
+      expect(orders[0].first(2)).to contain_exactly(:first, :second)
     end
   end
 end

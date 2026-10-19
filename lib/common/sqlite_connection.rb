@@ -101,7 +101,9 @@ module Lich
   # - SQLite3::Statement#initialize (sqlite3_prepare) and #step (sqlite3_step),
   #   which carry #execute, #query, #prepare, #execute_batch, #transaction and
   #   everything Sequel sends;
-  # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2.
+  # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2;
+  # - SQLite3::Backup#step (sqlite3_backup_step), when either end of the
+  #   backup is one of these connections (see SQLiteBusyWait::Backup).
   #
   # An interrupt that arrives during a lock wait ends the wait: the handler
   # gives up at its next poll (within about 1 ms), SQLite returns SQLITE_BUSY,
@@ -115,6 +117,16 @@ module Lich
   # cleanup makes once the kill returns. With the C busy timeout none of this
   # could happen, because nothing else ran until the wait ended.
   #
+  # Two interrupts that both arrive before the waiting thread runs again
+  # (about a millisecond, plus any wait for the GVL) still queue up, as they
+  # do for a thread blocked anywhere in Ruby (sleep, Queue#pop, IO): Ruby
+  # delivers the first as the call returns and the second only at the
+  # thread's next blocking call or interrupt-mask boundary, which can be
+  # outside the scope the second was meant for (a Timeout::ExitException
+  # after its block). Ruby can't drop a queued interrupt without delivering
+  # it, and dropping one would lose a Timeout or a Thread#raise, so this is
+  # left as Ruby does it.
+  #
   # Two exceptions keep waiting until the lock frees or the busy timeout
   # expires, and deliver the interrupt afterwards:
   #
@@ -125,8 +137,6 @@ module Lich
   #
   # A caller that defers interrupts itself and is interrupted during the
   # wait gets the BusyException; the interrupt stays deferred, as it asked.
-  # SQLite3::Backup#step is not covered; nothing in Lich backs up into or out
-  # of lich.db3.
   #
   # While one thread sleeps in the handler, SQLite holds that connection's
   # mutex and other threads run, garbage collection included. GC finalizes an
@@ -268,6 +278,54 @@ module Lich
       end
     end
 
+    # Prepended to SQLite3::Backup. Only backups with a marked connection at
+    # either end change behaviour.
+    #
+    # sqlite3_backup_step takes both connections' mutexes and can wait for a
+    # lock on either database through that connection's busy handler. With
+    # the Ruby handler that wait sleeps inside SQLite like a statement's, so:
+    #
+    # - #step defers interrupts as Statement#step does: an interrupt ends the
+    #   wait, #step returns SQLITE_BUSY and the interrupt is delivered in its
+    #   place, and the connections' mutexes are released first;
+    # - on a shared connection, #initialize (sqlite3_backup_init), #step and
+    #   #finish (sqlite3_backup_finish), which all take its mutex, run under
+    #   its Monitor, so another thread waits for the Monitor instead of
+    #   blocking on the mutex with the GVL held. A backup between two shared
+    #   connections takes both Monitors, always in the same order, so two
+    #   backups running in opposite directions can't deadlock.
+    #
+    # #remaining and #pagecount only read the backup's own counters.
+    #
+    # The other end of a backup, if it is a plain connection, is not tracked:
+    # a statement dropped unclosed on it can still be finalized by GC while
+    # #step waits holding its mutex, which freezes the process. Close
+    # statements on a connection before backing up to or from it.
+    module Backup
+      def initialize(dstdb, dstname, srcdb, srcname)
+        marked = [dstdb, srcdb].grep(Connection)
+        unless marked.empty?
+          @lich_busy_wait = true
+          @lich_monitors = marked.grep(SerializedDatabase)
+                                 .map { |conn| conn.instance_variable_get(:@lich_monitor) }
+                                 .uniq.sort_by(&:object_id)
+        end
+        SQLiteBusyWait.synchronize_all(@lich_monitors) { super }
+      end
+
+      def step(pages)
+        return super unless @lich_busy_wait
+
+        SQLiteBusyWait.synchronize_all(@lich_monitors) do
+          SQLiteBusyWait.wait_uninterrupted { super }
+        end
+      end
+
+      def finish
+        SQLiteBusyWait.synchronize_all(@lich_monitors) { super }
+      end
+    end
+
     # Extended onto the Sequel::Database that Lich.open_sequel_sqlite returns.
     #
     # With interrupts deferred, a Thread#kill that arrives while BEGIN or
@@ -341,6 +399,14 @@ module Lich
       end
     end
 
+    # Runs the block holding every Monitor in `monitors` (nil or empty: none),
+    # taken in the order given.
+    def self.synchronize_all(monitors, index = 0, &block)
+      return yield if monitors.nil? || index >= monitors.size
+
+      monitors[index].synchronize { synchronize_all(monitors, index + 1, &block) }
+    end
+
     # Runs the block with the busy handler waiting through pending
     # interrupts. Callers defer interrupts around it, so the thread variable
     # is always restored.
@@ -395,9 +461,9 @@ module Lich
       Thread.pending_interrupt? && !Thread.current.thread_variable_get(KEEP_WAITING_KEY)
     end
 
-    # Prepends Statement to SQLite3::Statement and defines the Monitor
-    # wrappers for every C method of SQLite3::Database and SQLite3::Statement
-    # not listed as unserialized. Runs once.
+    # Prepends Statement to SQLite3::Statement and Backup to SQLite3::Backup,
+    # and defines the Monitor wrappers for every C method of SQLite3::Database
+    # and SQLite3::Statement not listed as unserialized. Runs once.
     def self.prepare_sqlite3
       SETUP_LOCK.synchronize do
         return if @sqlite3_prepared
@@ -405,6 +471,8 @@ module Lich
         serialize_c_methods(SerializedDatabase, ::SQLite3::Database, UNSERIALIZED_DATABASE_METHODS)
         serialize_c_methods(SerializedStatement, ::SQLite3::Statement, UNSERIALIZED_STATEMENT_METHODS)
         ::SQLite3::Statement.prepend(Statement) unless ::SQLite3::Statement <= Statement
+        # SQLite3::Backup exists only when sqlite3 was built with the backup API.
+        ::SQLite3::Backup.prepend(Backup) if defined?(::SQLite3::Backup) && !(::SQLite3::Backup <= Backup)
         @sqlite3_prepared = true
       end
     end
