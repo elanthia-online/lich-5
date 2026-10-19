@@ -397,10 +397,11 @@ module Lich
       #   a nil +abbrev+, or exhausted retries. Any other matched reply is
       #   returned as is, even one that reads like a failure.
       #
-      # @note A timeout is not a failure. When nothing in prep_messages (or
-      #   invoke_messages for a runestone) arrives before bput gives up, bput
-      #   returns +''+ and prepare? returns it unchanged, after still sending
-      #   the tattoo/runestone +target+. {#cast_spell} and {#ritual} test the
+      # @note A timeout is not a failure. When nothing prepare? accepts (the
+      #   prep_messages plus the custom prep messages, or {#invoke_messages}
+      #   for a runestone) arrives before bput gives up, bput returns +''+
+      #   and prepare? returns it unchanged, after still sending the
+      #   tattoo/runestone +target+. {#cast_spell} and {#ritual} test the
       #   result for truthiness and carry on as if the spell were prepared;
       #   {#crafting_prepare_spell} returns it as is. A timeout is ambiguous:
       #   the prep may have succeeded with a message that is not in the list
