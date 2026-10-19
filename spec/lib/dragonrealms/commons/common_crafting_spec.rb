@@ -156,6 +156,148 @@ describe DRCC do
     end
   end
 
+  describe '.repair_own_tools' do
+    let(:info) { { 'finisher-room' => 8776, 'finisher-number' => 6 } }
+    let(:bag) { 'backpack' }
+    let(:bag_items) { [] }
+    let(:belt) { nil }
+    let(:sent) { [] }
+    let(:stowed) { [] }
+
+    # Replies keyed by the repair command; any command not listed succeeds.
+    # DRC.bput returns the matched text, so the stubs return the pattern constants.
+    def stub_repair_replies(replies = {})
+      allow(DRC).to receive(:bput) do |command, *_patterns|
+        sent << command
+        replies.fetch(command, DRCC::REPAIR_SUCCESS)
+      end
+    end
+
+    before(:each) do
+      allow(DRCC).to receive(:check_consumables)
+      allow(DRCC).to receive(:get_crafting_item)
+      allow(DRCC).to receive(:stow_crafting_item) { |name, *_rest| stowed << name }
+      allow(DRC).to receive(:right_hand).and_return('hammer')
+    end
+
+    context 'when the rub reply says the character is engaged' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED) }
+
+      it 'stows the tool once and the wire brush once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed.count('hammer')).to eq(1)
+        expect(stowed.count('wire brush')).to eq(1)
+      end
+
+      it 'does not fetch or work on the remaining tools' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRCC).not_to have_received(:get_crafting_item).with('tongs', any_args)
+        expect(sent).to eq(['rub my hammer with my wire brush'])
+        expect(stowed).to eq(['wire brush', 'hammer'])
+      end
+
+      it 'tells the user why repairs stopped' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to eq(['DRCC: Cannot repair in combat.'])
+      end
+    end
+
+    context 'when the rub reply says the character cannot figure out how' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_CONFUSED) }
+
+      it 'stows each held item once and stops' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'hammer'])
+        expect(sent).to eq(['rub my hammer with my wire brush'])
+      end
+    end
+
+    context 'when the pour reply goes wrong after a successful rub' do
+      before { stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_ENGAGED) }
+
+      it 'stows the brush, the oil and the tool once each and skips the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer'])
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer'])
+      end
+    end
+
+    context 'when the last tool hits a stop reply' do
+      before { stub_repair_replies('rub my tongs with my wire brush' => DRCC::REPAIR_ENGAGED) }
+
+      it 'keeps the earlier repairs and stows the last tool once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'tongs'])
+      end
+    end
+
+    context 'when every reply succeeds' do
+      before { stub_repair_replies }
+
+      it 'rubs and oils every tool and stows each once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+    end
+
+    context 'when a tool is not damaged enough' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_NOT_NEEDED) }
+
+      it 'skips the oil for that tool and still repairs the next one' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+    end
+
+    context 'when the repair is a Proper Forging Tool Care success before a stop reply' do
+      before do
+        stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_CONFUSED)
+        # Stubbed rather than set: depending on load order Flags is the spec mock or the production class.
+        allow(Flags).to receive(:[]).and_call_original
+        allow(Flags).to receive(:[]).with('proper-repair').and_return(true)
+        allow(Flags).to receive(:reset)
+      end
+
+      it 'still records the immunity and clears the flag' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(UserVars.immune_list.keys).to eq(['hammer'])
+        expect(Flags).to have_received(:reset).with('proper-repair').once
+      end
+    end
+
+    context 'with the real stow_crafting_item and a belt tool' do
+      let(:belt) { { 'name' => 'forging belt', 'items' => ['hammer'] } }
+
+      before do
+        allow(DRCC).to receive(:stow_crafting_item).and_call_original
+        allow(DRCI).to receive(:tie_item?).and_return(true)
+        allow(DRC).to receive(:wait_for_script_to_complete)
+        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED)
+      end
+
+      it 'ties the tool to the belt once and never sends it to the safe room' do
+        DRCC.repair_own_tools(info, %w[hammer], bag, bag_items, belt)
+
+        expect(DRCI).to have_received(:tie_item?).with('hammer', 'forging belt').once
+        expect(DRC).not_to have_received(:wait_for_script_to_complete)
+        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack'])
+      end
+    end
+  end
+
   describe '.crafting_hometown' do
     it 'prefers force_crafting_town when set' do
       settings = OpenStruct.new(force_crafting_town: 'Shard', hometown: 'Crossing')
