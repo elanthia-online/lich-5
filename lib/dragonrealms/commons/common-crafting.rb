@@ -137,9 +137,11 @@ module Lich
       # disposed of when it was actually picked up from the crucible, and
       # clutter whose noun matches something already in hand (DRCI.in_hands?
       # matches any held word starting with the noun) is left alone, so a held
-      # item cannot stand in for clutter that was not picked up.
-      # pass: is an internal recursion counter -- callers should not set it.
-      def empty_crucible?(pass: 0)
+      # item cannot stand in for clutter that was not picked up. Each held
+      # noun is reported once per call, not once per entry or per pass.
+      # pass: and warned: are internal recursion state -- callers should not
+      # set them.
+      def empty_crucible?(pass: 0, warned: [])
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
                                LOOK_CRUCIBLE_EMPTY,
@@ -172,7 +174,10 @@ module Lich
               # get_item_unsafe and dispose_trash only check that the noun is in
               # hand, so a held matching item would be the one thrown away.
               if DRCI.in_hands?(junk)
-                Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding something that matches it.")
+                unless warned.include?(junk)
+                  Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding something that matches it.")
+                  warned += [junk]
+                end
                 next
               end
 
@@ -183,7 +188,7 @@ module Lich
             end
             return false unless attempted
           end
-          DRCC.empty_crucible?(pass: pass + 1)
+          DRCC.empty_crucible?(pass: pass + 1, warned: warned)
         else
           false
         end

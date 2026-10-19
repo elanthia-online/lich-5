@@ -540,6 +540,42 @@ describe DRCC do
       expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
     end
 
+    it 'prints the held-noun message once, not again on the next pass' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints the held-noun message once when two entries share the held noun' do
+      look_replies << 'In the large crucible you see a steel bar and an iron bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'prints the held-noun message on a later pass when it first shows up there' do
+      look_replies.push(molten, 'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints one held-noun message per distinct noun' do
+      look_replies << 'In the large crucible you see a steel bar and a bronze nugget.'
+      held.push('bar', 'nugget')
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.map { |m| m[:message] }.grep(/Not clearing the/)
+      expect(held_messages).to eq(['DRCC: Not clearing the bar from the crucible while you are holding something that matches it.',
+                                   'DRCC: Not clearing the nugget from the crucible while you are holding something that matches it.'])
+    end
+
     it 'still tilts molten metal while holding an item with the same noun' do
       look_replies.push(molten, empty)
       held << 'bronze'
