@@ -528,13 +528,10 @@ module Lich
         # cached row and its recorded version stay as they were.
         settings = with_cache_lock(cache_key) do
           root = @db_adapter.get_settings(script_name, scope)
-          # The recorded version is forgotten, so the next read checks the
-          # database again (see cached_root).
-          @cache_mutex.synchronize do
-            @settings_cache[cache_key] = root
-            @cache_versions.delete(cache_key)
-          end
-          root
+          # The version recorded for the old root no longer matches the
+          # cached object, so the next read checks the database again (see
+          # cached_root).
+          store_in_cache(cache_key, root)
         end
         settings.dup
       end
