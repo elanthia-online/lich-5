@@ -140,6 +140,12 @@ module Lich
     # Base module containing shared map functionality
     # Include this in game-specific Map classes
     module MapBase
+      # The exits line the game shows when fog hides a room's exits. The
+      # resolvers then match a room by title and description alone, since the
+      # live exits say nothing about the room. Shared so every caller treats
+      # the same lines as fog.
+      FOGGY_EXITS_PATTERN = /^Obvious (?:exits|paths): obscured by a thick fog$/
+
       def self.included(base)
         base.extend(ClassMethods)
         base.include(InstanceMethods)

@@ -265,7 +265,7 @@ module Lich
           begin
             loop do
               @@current_room_count = XMLData.room_count
-              foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
+              foggy_exits = XMLData.room_exits_string =~ MapBase::FOGGY_EXITS_PATTERN
               room = @@list.find do |r|
                 # Skip nil holes without relying on Lich's NilClass patch.
                 r &&
@@ -311,7 +311,7 @@ module Lich
         @@fuzzy_room_mutex.synchronize do
           @@fuzzy_room_count = XMLData.room_count
           loop do
-            foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
+            foggy_exits = XMLData.room_exits_string =~ MapBase::FOGGY_EXITS_PATTERN
             room = @@list.find do |r|
               # Skip nil holes without relying on Lich's NilClass patch.
               r &&

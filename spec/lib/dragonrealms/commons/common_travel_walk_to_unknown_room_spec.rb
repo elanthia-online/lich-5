@@ -53,7 +53,7 @@ module WalkToUnknownRoomSpec
     def live_exits
       return '' if @blank == :exits
 
-      @fog ? 'Obvious paths: obscured by a thick fog.' : room(@position).paths.first
+      @fog ? 'Obvious paths: obscured by a thick fog' : room(@position).paths.first
     end
 
     def live_uid

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../../common/map/map_base'
+
 module Lich
   module DragonRealms
     module DRCT
@@ -273,8 +275,11 @@ module Lich
       # Find the map room the character is standing in when Room.current could
       # not resolve it. A room is only identified when its title, description
       # AND exits all match the live room, and exactly one map room does. A
-      # title and description match alone is not enough, and fogged-over exits
-      # match nothing.
+      # title and description match alone is not enough. When fog hides the
+      # live exits (MapBase::FOGGY_EXITS_PATTERN, the line the map's resolvers
+      # treat as fog) nothing matches, even a room whose stored exits are that
+      # same fog line: rooms first mapped in fog store it, so it cannot tell
+      # look-alike rooms apart.
       #
       # A stored UID vetoes the match through the map's own resolver rule
       # (Map.resolve_matched_room, as Map.current applies it with a script
@@ -289,19 +294,22 @@ module Lich
       # nothing sent, so the match fails instead.
       #
       # With a script running, Map.current takes the first title, description
-      # and exits match unless its UIDs veto it, so a room this method accepts
-      # is normally one Room.current resolves as well. It returns a room
+      # and exits match unless its UIDs veto it (in fog, the first title and
+      # description match), so a room this method accepts is normally one
+      # Room.current resolves as well. It returns a room
       # Room.current did not resolve only when the live room changed between
       # the two reads.
       #
       # @return [Lich::Common::Map, nil] the single matching room; nil when no
       #   room or more than one room matches, when the single match is vetoed
-      #   by its UID, or when the live room text is missing
+      #   by its UID, when fog hides the live exits, or when the live room text
+      #   is missing
       def match_unknown_room
         title = XMLData.room_title.to_s
         description = XMLData.room_description.to_s.strip
         exits = XMLData.room_exits_string.to_s.strip
         return nil if title.empty? || description.empty? || exits.empty?
+        return nil if exits.match?(Lich::Common::MapBase::FOGGY_EXITS_PATTERN)
 
         rooms = Map.list.select do |room|
           room &&

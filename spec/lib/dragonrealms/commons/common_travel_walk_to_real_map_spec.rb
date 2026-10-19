@@ -128,6 +128,44 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     end
   end
 
+  # The real DR fog line, which has no closing period. Lich mints a room with
+  # the live exits string, so a room first mapped in fog stores this as its
+  # paths.
+  fog_lines = ['Obvious paths: obscured by a thick fog', 'Obvious exits: obscured by a thick fog']
+
+  describe 'starting in fog' do
+    fog_lines.each do |fog|
+      it "fails without moving when a look-alike room stores the fogged exits (#{fog})" do
+        # Room 1: where the character stands, with a stale stored UID.
+        build_room(1, { '2' => 'north' }, uid: [7001], title: '[Fog Path]', description: 'A misty trail.')
+        # Room 2: same text, mapped once in fog, no stored UID.
+        build_room(2, { '1' => 'south' }, title: '[Fog Path]', description: 'A misty trail.', paths: fog)
+        live[:uids][1] = 1001
+        live[:exits][1] = fog
+        place(1)
+        expect(Room.current).to be_nil
+
+        expect(DRCT.walk_to(2)).to be(false)
+        expect(sent).to be_empty
+        expect(bold_messages).to include('DRCT: Failed to find a matching room from unknown location.')
+      end
+
+      it "matches no room when the only title, description and exits match stores the fogged exits (#{fog})" do
+        build_room(1, {}, title: '[Fog Path]', description: 'A misty trail.', paths: fog)
+        place(1)
+
+        expect(DRCT.send(:match_unknown_room)).to be_nil
+      end
+    end
+
+    it 'still matches a room whose stored exits merely mention fog' do
+      build_room(1, {}, title: '[Fog Path]', description: 'A misty trail.', paths: 'Obvious paths: fog.')
+      place(1)
+
+      expect(DRCT.send(:match_unknown_room)&.id).to eq(1)
+    end
+  end
+
   describe 'go2 ending in the target' do
     it 'returns true when the target has no stored UID, because the map resolves it by text' do
       corridor
@@ -152,12 +190,13 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
 
   # The property the walk_to docs rest on: with a script running, a room
   # match_unknown_room accepts is always one Room.current resolves. Small random
-  # worlds with look-alike text, missing, correct and stale stored UIDs, a live
-  # UID or none, and a random cached previous room.
+  # worlds with look-alike text, rooms stored with fogged exits, missing,
+  # correct and stale stored UIDs, a live UID or none, and a random cached
+  # previous room.
   it 'never accepts a room by its own match that Room.current leaves unresolved' do
     titles = ['[A]', '[B]']
     descriptions = ['Desc one.', 'Desc two.']
-    exits = ['Obvious paths: north.', 'Obvious paths: south.']
+    exits = ['Obvious paths: north.', 'Obvious paths: south.', fog_lines.first]
     rng = Random.new(20_261_018)
     matched = 0
 
