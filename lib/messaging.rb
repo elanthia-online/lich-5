@@ -18,8 +18,8 @@ module Lich
       return msg_format("monster", msg, encode: encode)
     end
 
-    # Sends msg to a stream window, or to the main window with a marker where
-    # the frontend has no such window.
+    # Sends msg to a stream window, or to the main window (with a marker for
+    # familiar, thoughts and voln) where the frontend can't show that window.
     #
     # @return [nil]
     def self.stream_window(msg, window = "familiar", encode: true)
