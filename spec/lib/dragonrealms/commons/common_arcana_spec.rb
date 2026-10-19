@@ -299,16 +299,44 @@ RSpec.describe Lich::DragonRealms::DRCA do
       end
     end
 
+    # A lookaround for a common letter or punctuation mark still matches
+    # almost every line with an empty match, so the probe must contain them.
+    it 'drops lookarounds for common letters, digits and punctuation' do
+      ['(?=e)', 'zzz|(?=e)', '(?=th)', '(?=,)', '(?<=,)', "(?=')", '(?=-)', '(?=\\d)', 'You|(?=Y)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    it 'drops a lookahead or lookbehind for any printable ASCII character' do
+      (33..126).map(&:chr).each do |char|
+        ["(?=#{Regexp.escape(char)})", "(?<=#{Regexp.escape(char)})"].each do |zero_width|
+          expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+          # Case-sensitive too, as a player can write (?-i) in the message.
+          expect(DRCA.zero_width_pattern?(Regexp.new(zero_width))).to be(true), "expected case-sensitive #{zero_width.inspect} to be flagged"
+        end
+      end
+    end
+
+    # A non-ASCII probe would raise Encoding::CompatibilityError (not a
+    # RegexpError) against a binary pattern carrying high bytes.
+    it 'keeps a binary pattern with high bytes without raising' do
+      expect(DRCA::ZERO_WIDTH_PROBE).to be_ascii_only
+      message = "caf#{0xE9.chr} hums".b
+      pattern = DRCA.custom_message_pattern(message)
+      expect(pattern).to be_a(Regexp)
+      expect(message).to match(pattern)
+    end
+
     it 'keeps anchored, bounded and optional-suffix patterns that always consume text' do
       {
-        '^You murmur'        => 'You murmur softly',
-        'hums$'              => 'Your focus hums',
-        '\bfocus\b'          => 'Your focus hums',
-        'Your focus( hums)?' => 'Your focus glows',
-        'You (cup|wave)?'    => 'You raise a hand',
-        'x+'                 => 'a box',
-        '(?=Your)Your focus' => 'Your focus hums',
-        '.'                  => 'a'
+        '^You murmur'                => 'You murmur softly',
+        'hums$'                      => 'Your focus hums',
+        '\bfocus\b'                  => 'Your focus hums',
+        'Your focus( hums)?'         => 'Your focus glows',
+        'You (cup|wave)?'            => 'You raise a hand',
+        'x+'                         => 'a box',
+        '(?=Your)Your focus'         => 'Your focus hums',
+        'Flames wreathe your hands.' => 'Flames wreathe your hands.'
       }.each do |message, line|
         pattern = DRCA.custom_message_pattern(message)
         expect(pattern).to be_a(Regexp), "expected #{message.inspect} to be kept"

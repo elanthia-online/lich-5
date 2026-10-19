@@ -327,10 +327,13 @@ module Lich
         return false
       end
 
-      # Probe text for {#zero_width_pattern?}: word and non-word characters, upper
-      # and lower case, a digit and spaces, so word-boundary and lookaround
-      # assertions find a position to match at.
-      ZERO_WIDTH_PROBE = 'You a. 1!'
+      # Probe text for {#zero_width_pattern?}: a short sentence, a pangram in both
+      # cases, every digit and every ASCII punctuation mark, so word-boundary
+      # assertions and lookarounds for any common character or word find a
+      # position to match at. Must stay ASCII-only: a non-ASCII probe raises
+      # Encoding::CompatibilityError (not a RegexpError) against a binary pattern
+      # that carries high bytes.
+      ZERO_WIDTH_PROBE = %q(You a. 1! The quick brown fox jumps over the lazy dog, THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG 0123456789 !"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~)
 
       # Compiles a single player-supplied message into a case-insensitive Regexp
       # for use as a bput pattern, matching how bput treats the built-in string
@@ -365,7 +368,8 @@ module Lich
       # (returning it, or '') as though it were the expected message. Detected by
       # an empty-string match, or a zero-length match at any position of
       # {ZERO_WIDTH_PROBE}. A lookaround that needs specific text the probe lacks
-      # is not detected; it also cannot match every line.
+      # (e.g. '(?=You feel a surge)') is not detected; it matches only lines that
+      # contain that text.
       #
       # @param pattern [Regexp] a compiled custom message pattern
       # @return [Boolean] true if the pattern can match zero characters
