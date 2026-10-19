@@ -117,8 +117,8 @@ module Lich
       # reads miss the newer keys until the row is written again. Cache hits
       # do not take the lock, and neither does re-reading a cached row after a
       # commit (see cached_root): that re-read is cached only if the entry is
-      # unchanged, checked under @cache_mutex, so it never needs to wait for a
-      # write in progress.
+      # unchanged and its lock is free (taken without waiting, then
+      # @cache_mutex), so it never waits for a write in progress.
       #
       # Lock order: an entry's lock, then @cache_mutex. @cache_mutex is never
       # held while taking an entry's lock.
@@ -134,10 +134,15 @@ module Lich
       # the same thread does not deadlock. No code takes two entries' locks at
       # once.
       def self.with_cache_lock(cache_key, &block)
-        lock = @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
-        lock.synchronize(&block)
+        cache_lock(cache_key).synchronize(&block)
       end
       private_class_method :with_cache_lock
+
+      # The Monitor behind with_cache_lock for cache_key, created on first use.
+      def self.cache_lock(cache_key)
+        @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
+      end
+      private_class_method :cache_lock
 
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
@@ -424,8 +429,10 @@ module Lich
       # that lock, so a write in progress in this process doesn't hold up the
       # read; it is cached only if no other thread changed the cache entry
       # while it was read, so a later row (a write, a newer re-read,
-      # Settings.load) is never replaced by an older one. The row is returned
-      # either way.
+      # Settings.load) is never replaced by an older one, and only if no write
+      # to the entry is in progress, so a write that changes the cached root
+      # in place never leaves it with a version it doesn't match. The row is
+      # returned either way.
       #
       # @return [Hash, Array, Object] the cached root itself (not a copy), or
       #   a freshly read row that another thread's change kept out of the cache
@@ -454,7 +461,7 @@ module Lich
 
       # Reads the row for cached_root and caches it, recording version, if the
       # cache entry is still cached (the root cached_root saw, nil after a
-      # miss). Returns the row read; on a database error, returns cached, or
+      # miss) and no other thread holds the entry's lock. Returns the row read; on a database error, returns cached, or
       # raises when cached is nil.
       def self.read_into_cache(script_name, scope, cache_key, version, cached)
         begin
@@ -470,14 +477,31 @@ module Lich
         # was reading (its own write, a re-read that began later, or
         # Settings.load). This row is cached only if the entry is still the one
         # seen before the read; otherwise it is returned without caching.
-        cached_now = @cache_mutex.synchronize do
-          next false unless @settings_cache[cache_key].equal?(cached)
+        #
+        # It is also not cached while another thread holds the entry's lock: a
+        # write in progress may change the cached root in place
+        # (save_proxy_changes refreshes it from a row it read earlier), and a
+        # version recorded for that root now would vouch for whatever the
+        # write leaves in it, even when the write saves nothing. Taking the
+        # lock without waiting here (a miss fill already holds it) means no
+        # write starts between this check and the caching, and every write
+        # drops or replaces what is recorded here once it has the lock.
+        lock = cache_lock(cache_key)
+        cached_now = false
+        if lock.try_enter
+          begin
+            cached_now = @cache_mutex.synchronize do
+              next false unless @settings_cache[cache_key].equal?(cached)
 
-          @settings_cache[cache_key] = root
-          @cache_versions[cache_key] = [version, root]
-          true
+              @settings_cache[cache_key] = root
+              @cache_versions[cache_key] = [version, root]
+              true
+            end
+          ensure
+            lock.exit
+          end
         end
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: #{cache_key} changed in the cache while it was read; not caching this copy" }) unless cached_now
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: #{cache_key} changed in the cache, or is being written, while it was read; not caching this copy" }) unless cached_now
         root
       end
       private_class_method :read_into_cache

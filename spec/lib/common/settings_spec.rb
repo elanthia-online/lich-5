@@ -1452,6 +1452,85 @@ RSpec.describe Lich::Common::Settings do
         expect(game_read('k')).to eq(1)
         expect(@mock_db).not_to have_received(:get_settings)
       end
+
+      it "does not cache a row re-read while another thread's write is in progress, and caches the next one" do
+        game_write('k', 1)
+        expect(game_read('k')).to eq(1)
+        release = hold_entry_lock
+        their_write("k" => 2)
+
+        expect(Thread.new { game_read('k') }.value).to eq(2)
+        expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to eq("k" => 1) # not cached
+        release << true
+        @holder.join(5)
+
+        allow(@mock_db).to receive(:get_settings).and_call_original
+        expect(game_read('k')).to eq(2)
+        expect(game_read('k')).to eq(2)
+        expect(@mock_db).to have_received(:get_settings).once
+      end
+
+      # Starts a nested write (game_read(key)[...] = ... through the block) in
+      # another thread and stops it inside save_proxy_changes, right after its
+      # refresh read of the row. With pause_save, it stops again just before
+      # its database write. Returns [thread, paused, release]: pop paused to
+      # wait for each stop, push to release to go on.
+      def start_paused_write(pause_save: false, &write)
+        paused = Queue.new
+        release = Queue.new
+        pause = lambda do |flag|
+          next unless Thread.current[flag]
+
+          Thread.current[flag] = false
+          paused << flag
+          release.pop
+        end
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          original.call(*args).tap { pause.call(:pause_after_read) }
+        end
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          pause.call(:pause_before_save)
+          original.call(*args)
+        end
+        writer = Thread.new do
+          Thread.current[:pause_after_read] = true
+          Thread.current[:pause_before_save] = pause_save
+          write.call
+        end
+        expect(Timeout.timeout(5) { paused.pop }).to eq(:pause_after_read)
+        [writer, paused, release]
+      end
+
+      after { @writer&.kill }
+
+      it "does not keep serving an older row after a write that changed nothing returns" do
+        their_write("list" => [{ "a" => 1 }], "ext" => 1)
+        list = game_read('list')
+        @writer, _paused, release = start_paused_write { list[-1]['a'] = 2 } # a negative index: not saved
+
+        their_write("list" => [{ "a" => 1 }], "ext" => 2)
+        expect(game_read('ext')).to eq(2)
+        release << true
+        @writer.join(5)
+
+        expect(game_read('ext')).to eq(2)
+        expect(game_read('ext')).to eq(2)
+      end
+
+      it "does not serve the writing thread's older row to other threads while its write is in progress" do
+        their_write("opts" => { "c" => 0 }, "ext" => 1)
+        opts = game_read('opts')
+        @writer, paused, release = start_paused_write(pause_save: true) { opts['c'] = 5 }
+
+        their_write("opts" => { "c" => 0 }, "ext" => 2)
+        expect(game_read('ext')).to eq(2)
+        release << true
+        expect(Timeout.timeout(5) { paused.pop }).to eq(:pause_before_save)
+
+        expect(game_read('ext')).to eq(2)
+        release << true
+        @writer.join(5)
+      end
     end
   end
 end
