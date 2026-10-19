@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -10,10 +11,12 @@ module Lich
   module DragonRealms
     # Slack API client for sending direct messages via DragonRealms LNet.
     #
-    # Caches the Slack users list in a shared SQLite store (DB_Store) so all
-    # characters on the same game instance share a single cached copy with
-    # a 1-hour TTL. Randomized startup jitter prevents thundering herd on
-    # simultaneous character logins.
+    # Caches the Slack users list in a shared SQLite store (DB_Store) with a
+    # 1-hour TTL. The cache is kept per token, so characters on the same game
+    # instance that use the same token share one cached copy, and a character
+    # with a token for another workspace never reads that workspace's users.
+    # Randomized startup jitter prevents thundering herd on simultaneous
+    # character logins.
     class SlackBot
       # Base error for all SlackBot failures.
       class Error < StandardError; end
@@ -370,10 +373,11 @@ module Lich
       end
 
       # Called by #direct_message when an initialized bot does not know the
-      # user: looks the user up in the shared cache in case another character
-      # refreshed it, and adds that one entry to the current list. The list is
-      # never replaced here, so a mistyped name or a cache written under
-      # another token cannot drop users the bot already knows.
+      # user: looks the user up in the shared cache for the current token in
+      # case another character refreshed it, and adds that one entry to the
+      # current list. The list is never replaced here, so a mistyped name or a
+      # cache refreshed after users left cannot drop users the bot already
+      # knows.
       # Never raises; a cache read error (e.g. a locked database) is logged and
       # the current list is kept, so the message still ends in "user not found"
       # rather than an exception in the calling script.
@@ -408,23 +412,26 @@ module Lich
         nil
       end
 
+      # @param token [String, nil] the token whose cache to read
       # @return [Array<Hash>, nil] members from a fresh, non-empty shared cache
-      def cached_members
-        cached = read_users_cache
+      def cached_members(token = UserVars.slack_token)
+        cached = read_users_cache(token)
         members = cached && cached['members']
         members.is_a?(Array) && !members.empty? ? members : nil
       end
 
       # Fetches the users list from the Slack API with throttle retry, and
-      # writes a successful result to the shared cache.
+      # writes a successful result to the shared cache. The token is read
+      # once, so the list is cached under the token that fetched it.
       #
       # @param deadline [Float, nil] monotonic deadline; retries that would
       #   overrun it are skipped
       # @return [Array<Hash>, nil] members, or nil on failure
       def fetch_users_from_api(deadline = nil)
+        token = UserVars.slack_token
         retries = 0
         begin
-          members = post('users.list', { 'token' => UserVars.slack_token }, deadline: deadline)['members']
+          members = post('users.list', { 'token' => token }, deadline: deadline)['members']
           unless members.is_a?(Array) && !members.empty?
             Lich.log 'SlackBot: users.list returned no members'
             Lich::Messaging.msg('bold', 'SlackBot: Failed to fetch Slack user list: Slack returned no members')
@@ -432,10 +439,10 @@ module Lich
           end
 
           @users_list_retry_at = nil
-          write_users_cache(members)
+          write_users_cache(members, token)
           members
         rescue ThrottlingError => e
-          members = cached_members
+          members = cached_members(token)
           if members
             Lich.log "SlackBot: Throttled, but another character cached the users list"
             return members
@@ -475,11 +482,28 @@ module Lich
         end
       end
 
+      # DB_Store script name of the users cache for a token. Each token has
+      # its own entry, so a list fetched with one workspace's token is never
+      # used with another's. The key holds a SHA-256 digest, not the token.
+      #
+      # @param token [String, nil] Slack API token
+      # @return [String, nil] the cache key, or nil when there is no token
+      def users_cache_key(token)
+        return nil unless token.is_a?(String) && !token.empty?
+
+        "#{USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
+      end
+
       # Reads cached users list from DB_Store.
       #
-      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil if missing/expired
-      def read_users_cache
-        data = Lich::Common::DB_Store.get_data(XMLData.game, USERS_CACHE_SCRIPT)
+      # @param token [String, nil] the token whose cache to read
+      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil
+      #   if missing/expired or there is no token
+      def read_users_cache(token = UserVars.slack_token)
+        key = users_cache_key(token)
+        return nil unless key
+
+        data = Lich::Common::DB_Store.get_data(XMLData.game, key)
         return nil if data.nil? || data.empty?
         return nil unless data['fetched_at']
         return nil if (Time.now.to_i - data['fetched_at']) > USERS_CACHE_TTL
@@ -490,14 +514,19 @@ module Lich
       # Writes users list to DB_Store cache with a timestamp.
       #
       # @param members [Array<Hash>] Slack user objects to cache
+      # @param token [String, nil] the token that fetched the list; nothing is
+      #   written without one
       # @return [void]
-      def write_users_cache(members)
+      def write_users_cache(members, token = UserVars.slack_token)
+        key = users_cache_key(token)
+        return unless key
+
         Lich::Common::DB_Store.store_data(
           XMLData.game,
-          USERS_CACHE_SCRIPT,
+          key,
           { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
-        Lich.log "SlackBot: Cached #{members.length} Slack users for all characters"
+        Lich.log "SlackBot: Cached #{members.length} Slack users for characters using this token"
       end
 
       # Searches LICHBOTS for a valid Slack token via LNet chat.

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -56,12 +57,17 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
   end
 
+  # DB_Store script name of the users cache kept for a token.
+  def users_cache_script(token = 'valid-token')
+    "#{described_class::USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
+  end
+
   def fresh_cache(list = members)
-    Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'members' => list, 'fetched_at' => Time.now.to_i })
+    Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'members' => list, 'fetched_at' => Time.now.to_i })
   end
 
   def cache
-    Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+    Lich::Common::DB_Store.get_data('DR', users_cache_script)
   end
 
   # Moves the monotonic clock forward without running any SlackBot code.
@@ -666,7 +672,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
 
     it 'keeps its list when the shared cache holds an empty list' do
       bot = described_class.new
-      Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache',
+      Lich::Common::DB_Store.store_data('DR', users_cache_script,
                                         { 'members' => [], 'fetched_at' => Time.now.to_i })
 
       bot.direct_message('bob', 'help')
@@ -715,7 +721,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
 
     it 'ignores a fresh cache entry whose members are missing and fetches from the API' do
-      Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'fetched_at' => Time.now.to_i })
+      Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'fetched_at' => Time.now.to_i })
       plan['users.list'] << users_ok
 
       bot = described_class.new
@@ -742,7 +748,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       fill_after.times { plan['users.list'] << failure(:throttle) }
       plan['users.list'].last.then do |throttled|
         plan['users.list'][-1] = lambda do
-          Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache',
+          Lich::Common::DB_Store.store_data('DR', users_cache_script,
                                             { 'members' => members, 'fetched_at' => written_at })
           throttled.call
         end
