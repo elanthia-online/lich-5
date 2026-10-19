@@ -72,7 +72,7 @@ module Lich
         [:drag,       /try to drag/i],
         [:denied,     /may not pass|unseen force prevents|aren't allowed to enter|only performers|see your ticket|registered groups|reputation precedes|"Abandoned\."|leave promptly|open to invitees|unable to follow you|check in/i],
         [:map,        /can't go there|can't (?:go|swim) in that direction|could not find what you were referring|what were you referring|where are you trying to go|plan to do that here|can't go to|become impassable|too far away|too far above/i],
-        [:roundtime,  /^\.{3}wait \d|^wait \d/i]
+        [:roundtime,  WAIT_RESPONSE_PATTERN]
       ].freeze
 
       LAST_FAILURE_KEY = :lich_move_last_failure

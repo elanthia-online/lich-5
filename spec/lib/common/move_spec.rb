@@ -337,6 +337,7 @@ RSpec.describe Lich::Common::Move do
       "You can't swim in that direction."                        => :map,
       'You flounder around in the water.'                        => :swim,
       '...wait 3 seconds.'                                       => :roundtime,
+      'You slip....wait 1 seconds.'                              => :roundtime,
       'Something new the game said.'                             => :unknown,
       nil                                                        => :unknown
     }.each { |line, cause| expect(described_class.classify(line)).to eq(cause), line.inspect }
