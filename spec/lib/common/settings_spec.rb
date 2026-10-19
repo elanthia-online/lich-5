@@ -2364,6 +2364,78 @@ RSpec.describe Lich::Common::Settings do
         expect(logged.grep(/is no longer there/).size).to eq(3)
       end
 
+      it "tells the user once per each loop when the refusals come through a container inside each element, and logs every one" do
+        logged = []
+        allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
+          logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
+          original.call(level, prefix, message)
+        end
+        # A list of four rows read, then shortened to one by another session.
+        shortened = lambda do
+          their_write("rows" => Array.new(4) { |i| { "n" => i, "tags" => [], "sub" => {} } })
+          rows = game_read('rows')
+          their_write("rows" => [{ "n" => 0, "tags" => [], "sub" => {} }])
+          rows
+        end
+
+        shortened.call.each { |row| row['tags'] << 1 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [1], "sub" => {} }])
+        shortened.call.each { |row| row['sub']['k'] = 1 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [], "sub" => { "k" => 1 } }])
+        shortened.call.each { |row| row.dig('sub')['k'] = 2 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [], "sub" => { "k" => 2 } }])
+        shortened.call.each { |row| row.fetch('tags').push(3) }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [3], "sub" => {} }])
+
+        expect(Lich::Messaging).to have_received(:msg).exactly(4).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including('["rows", 1, ', "is no longer there", "the same goes for any other such write in this each loop, which is only logged")).exactly(4).times
+        expect(logged.grep(/is no longer there/).size).to eq(12)
+      end
+
+      it "tells the user once per each loop when refusals that an element's position is gone come both before and during the replay" do
+        their_write("rows" => [{ "tags" => %w[a b c] }, { "tags" => %w[a b c] }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "tags" => ["a"] }]) # another session shortened both lists
+
+        rows.each { |row| row['tags'][2] = 'z' }
+
+        expect(stored).to eq("rows" => [{ "tags" => ["a"] }])
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "the same goes for any other such write in this each loop, which is only logged"))
+      end
+
+      it "stores nothing, and says so once per loop, for a new container built from a container inside an element each yields" do
+        their_write("rows" => [{ "sub" => { "a" => 1 }, "tags" => [1] }, { "sub" => { "a" => 2 }, "tags" => [2] }])
+
+        game_read('rows').each { |row| row['sub'].merge({}).clear }
+        game_read('rows').each { |row| row['tags'].first(1).push(9) }
+        game_read('rows').each { |row| row['tags'].sort.push(9) }
+
+        expect(stored).to eq("rows" => [{ "sub" => { "a" => 1 }, "tags" => [1] }, { "sub" => { "a" => 2 }, "tags" => [2] }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded", "the same goes for any other such write in this each loop, which is only logged")).exactly(3).times
+        expect(Lich::Messaging).to have_received(:msg).exactly(3).times
+      end
+
+      it "tells the user about each refused write through an element, or a container inside one, kept after its each loop ended" do
+        their_write("rows" => [{ "n" => 0, "sub" => {} }, { "n" => 1, "sub" => {} }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "n" => 0, "sub" => {} }]) # another session removed one
+        kept = []
+        rows.each do |row|
+          row['k'] = 1
+          kept << row
+        end
+        expect(Lich::Messaging).to have_received(:msg).once
+
+        kept[1]['j'] = 2
+        kept[1]['sub']['j'] = 2
+
+        expect(stored).to eq("rows" => [{ "n" => 0, "sub" => {}, "k" => 1 }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_matching(/\["rows", 1\] is no longer there(?!.*each loop)/)).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_matching(/\["rows", 1, "sub"\] is no longer there(?!.*each loop)/)).once
+        expect(Lich::Messaging).to have_received(:msg).exactly(3).times
+      end
+
       it "reads an element yielded by each with a method in neither list, without storing anything" do
         their_write("rows" => [{ "x" => 0 }])
         allow(@mock_db).to receive(:update_settings).and_call_original

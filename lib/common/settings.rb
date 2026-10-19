@@ -415,7 +415,7 @@ module Lich
             return root
           rescue PositionGoneError
             finished = true
-            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)", kind: :changed_position_gone)
+            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)", kind: :position_gone)
           rescue StandardError => e
             finished = true
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{label || method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
@@ -563,10 +563,12 @@ module Lich
 
       # Tells the user that a write through a proxy could not be saved.
       #
-      # For writes through what one call to SettingsProxy#each yielded
-      # (SettingsProxy#refusals), the user is told about the first one
-      # refused for each +kind+ of reason, and that any other refused for it
-      # in the loop is only logged; each of them is still logged. A reason
+      # For writes through what one call to SettingsProxy#each yielded, or a
+      # container taken from it (SettingsProxy#refusals), made while the
+      # loop runs, the user is told about the first one refused for each
+      # +kind+ of reason, and that any other refused for it in the loop is
+      # only logged; each of them is still logged. After the loop, each
+      # refused write is told (the loop's refusals are frozen then). A reason
       # that names a path or a method passes a +kind+, so that the writes
       # through each element of one loop (each with its own path) count as
       # one kind. A loop can also yield elements whose writes are stored (an
@@ -577,7 +579,7 @@ module Lich
       def self.refuse_proxy_save(script_name, proxy, reason, kind: reason)
         refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
         tell = true
-        if refusals
+        if refusals && !refusals.frozen?
           refusals[kind] = refusals.fetch(kind, 0) + 1
           tell = refusals[kind] == 1
           reason = "#{reason}; the same goes for any other such write in this each loop, which is only logged" if tell

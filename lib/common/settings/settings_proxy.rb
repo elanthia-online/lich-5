@@ -20,10 +20,11 @@ module Lich
       # refused with a message instead of being saved somewhere else.
       #
       # +refusals+, shared by the container elements one call to #each
-      # yields (and the containers taken from them), counts the writes
-      # through them that were refused, so that the user is told once per
-      # loop for each kind of reason (see #refusals and
-      # Settings.refuse_proxy_save).
+      # yields and every container taken from them ([], dig, fetch, find,
+      # first, and the copies and views built from them, at any depth),
+      # counts the writes through them that were refused while the loop
+      # runs, so that the user is told once per loop for each kind of reason
+      # (see #refusals and Settings.refuse_proxy_save).
       #
       # +copy+ marks a new container built from an element #each yielded
       # (row.merge(..), row.select { ... }, row.first(2)): like a plain
@@ -47,14 +48,17 @@ module Lich
       attr_reader :target, :path, :scope, :script_name
 
       # For a container element yielded by #each, or a container taken from
-      # one: a Hash shared by everything that one call to #each yielded,
-      # counting, for each reason, the writes through them that were refused
-      # (Settings.refuse_proxy_save tells the user about the first one for
-      # each reason only). nil for any other proxy.
+      # one (at any depth): a Hash shared by everything that one call to
+      # #each yielded, counting, for each kind of reason, the writes through
+      # them that were refused (Settings.refuse_proxy_save tells the user
+      # about the first one for each kind only). It is frozen when the loop
+      # ends; after that every refused write is told. nil for any other
+      # proxy.
       attr_reader :refusals
 
-      # True for a proxy #each yielded, or a container taken from one (see
-      # #refusals).
+      # True for a proxy #each yielded, or a container taken from one at any
+      # depth (see #refusals). A new container built from such a proxy is a
+      # copy (see #copy?).
       private def yielded?
         !@refusals.nil?
       end
@@ -318,6 +322,9 @@ module Lich
       end
 
       # Yields one object per element of the target (see #each); returns self.
+      # The loop's +refusals+ are frozen when it ends (however it ends), so
+      # that a refused write through an element kept after the loop is told
+      # to the user again (see Settings.refuse_proxy_save).
       private def each_element
         refusals = {}
         case @target
@@ -329,6 +336,8 @@ module Lich
           @target.each { |item| yield item } if @target.respond_to?(:each)
         end
         self
+      ensure
+        refusals&.freeze
       end
 
       # The size of the Enumerators #each, #each_with_index and
@@ -392,7 +401,7 @@ module Lich
           # up in the container it was taken from. A negative Array index is
           # made positive, as for at and dig.
           (built_from_source? && view_element_proxy([key], value)) ||
-            SettingsProxy.new(@settings_module, @scope, @path + (segment_in(@target, key) || [key]), value, script_name: @script_name)
+            SettingsProxy.new(@settings_module, @scope, @path + (segment_in(@target, key) || [key]), value, script_name: @script_name, refusals: @refusals)
         else
           value
         end
@@ -681,7 +690,7 @@ module Lich
         return result unless @settings_module.container?(result)
 
         element_path = element_path_for(method, args, result)
-        element_path ? SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name) : result
+        element_path ? SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals) : result
       end
 
       # After a write was replayed on the stored row, shows that container
@@ -836,7 +845,7 @@ module Lich
           if @settings_module.container?(result) && built_from_source? && (element = view_element_proxy(keys_for(method, args), result))
             element
           elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
-            SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+            SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals)
           elsif @settings_module.container?(result) && (pathless_element? || fetch_default?(method, args))
             pathless_derived_proxy(result)
           elsif @settings_module.container?(result) && yielded?
@@ -877,7 +886,7 @@ module Lich
         if result.equal?(@target)
           self # Return self if the method modified the target in-place and returned it
         elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
-          SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+          SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals)
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
