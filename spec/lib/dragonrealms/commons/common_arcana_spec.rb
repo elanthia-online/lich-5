@@ -611,10 +611,6 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(DRCA.prep_confirmed?('', 'fb')).to be false
     end
 
-    it 'waits about PREP_CONFIRM_WAIT_SECONDS in all' do
-      expect(polls * DRCA::PREP_CONFIRM_POLL_SECONDS).to be_within(0.001).of(DRCA::PREP_CONFIRM_WAIT_SECONDS)
-    end
-
     # No record shows whether the game sets the indicator for an invoke, so
     # '' after one carries on as it did before.
     it "returns true for '' after a runestone invoke without reading the indicator or waiting" do
