@@ -872,20 +872,23 @@ RSpec.describe Lich::Common::Settings do
       end
 
       # Settings[k] = v with a navigation path left over (Settings.set_path
-      # reaches the shared navigator through method_missing) saves the whole
-      # row it navigated. Its read and its save must be one step.
+      # reaches the shared navigator through method_missing) changes the row
+      # it read. A top-level write another thread makes after that read must
+      # not be erased.
       it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
         settings[:k0] = 0
         navigated = Queue.new
         top_done = Queue.new
         path_writer = nil
-        allow(settings).to receive(:navigate_to_path).and_wrap_original do |original, *args|
-          result = original.call(*args)
-          if Thread.current.equal?(path_writer)
-            navigated << true
-            top_done.pop(timeout: pause)
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
+          original.call(*args, **opts) do |fresh|
+            row = block.call(fresh)
+            if Thread.current.equal?(path_writer)
+              navigated << true
+              top_done.pop(timeout: pause)
+            end
+            row
           end
-          result
         end
 
         path_writer = in_thread do

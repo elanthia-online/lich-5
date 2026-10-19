@@ -678,8 +678,8 @@ module Lich
         #
         # While another thread holds the entry's lock, the row is cached with
         # no version: a write in progress may change the cached root in place
-        # (Settings.[]= under a path changes a container it shares with the
-        # cached root before it saves the row), and a version recorded for
+        # (a write through a SettingsProxy changes its target, a container of
+        # the cached root, before it saves the row), and a version recorded for
         # that root now would vouch for whatever the write leaves in it, even
         # when the write saves nothing. Without a version, the next read
         # checks the database again, and while the
@@ -964,23 +964,100 @@ module Lich
         if @path_navigator.path.empty?
           set_script_settings(scope_to_use, name, value)
         else
-          # This saves the whole row it navigated, so the read and the save run
-          # under one hold of the entry's lock (see with_cache_lock). Otherwise
-          # a write another thread stores in between is erased by the save.
-          with_cache_lock("#{Script.current.name || ""}::#{scope_to_use}") do
-            target, root_settings = navigate_to_path(true, scope_to_use)
-            if target && (target.is_a?(Hash) || target.is_a?(Array))
-              actual_value = value.is_a?(SettingsProxy) ? unwrap_proxies(value) : value
-              target[name] = actual_value
-              save_to_database(root_settings, scope_to_use)
-              reset_path_and_return(value)
-            else
-              _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: Cannot assign to non-container or nil target at path #{@path_navigator.path.inspect}" })
-              reset_path_and_return(nil)
-            end
+          # A navigation path left on the shared navigator (Settings.set_path
+          # reaches it through method_missing). The key is written into the
+          # container at that path, and the path is cleared whatever happens,
+          # so that it can't send the next Settings[] call somewhere else.
+          path = @path_navigator.path.dup
+          begin
+            write_key_under_path(scope_to_use, path, name, value) ? value : nil
+          ensure
+            @path_navigator.reset_path
           end
         end
       end
+
+      # Stores +value+ under +name+ in the container at +path+, without
+      # rewriting the rest of the row, as write_top_level_key does for a
+      # top-level key: the key is applied to the row as it is in the database
+      # right now, and stored only if no one changed the row in between
+      # (DatabaseAdapter#update_settings retries otherwise). Missing (or nil)
+      # containers on the way are created, as for a write through a proxy.
+      # The cache then takes the row as stored. If nothing is stored, the
+      # cache is left as it was: the key is never put in this session's copy.
+      #
+      # Nothing is stored, and the user is told, when +path+ does not lead to
+      # a container (a value that is not one is on the way, or an Array is
+      # indexed by something other than a non-negative Integer), when +name+
+      # is not a non-negative Integer and the container is an Array, when the
+      # stored row is not a Hash, or when +value+ can't be stored.
+      #
+      # @return [Boolean] whether the key was written into a container: true
+      #   also when the database could not store the row (that is reported by
+      #   the adapter), false when it was refused for one of the reasons above
+      def self.write_key_under_path(scope, path, name, value, script_name: nil)
+        script_name ||= Script.current.name
+        if script_name.nil? || script_name.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_key_under_path: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
+          return true
+        end
+
+        begin
+          stored_value = stored_copy(value)
+        rescue TypeError => e
+          return refuse_path_write(script_name, scope, path, name, "the value can't be stored (#{e.message})")
+        end
+
+        cache_key = "#{script_name}::#{scope}"
+        with_cache_lock(cache_key) do
+          refusal = nil
+          cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+          @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
+            # fresh_root is read anew for each attempt, so containers created
+            # in it on the way to a refusal are never stored.
+            container, refusal = container_for_path_write(fresh_root, path, name)
+            next nil if refusal
+
+            container[name] = stored_value
+            fresh_root
+          end
+          next refuse_path_write(script_name, scope, path, name, refusal) if refusal
+
+          true
+        end
+      end
+      private_class_method :write_key_under_path
+
+      # The container at +path+ in +root+, a stored row, that +name+ is
+      # written into, creating missing containers on the way (see
+      # container_at); or the reason it can't be.
+      #
+      # @return [Array(Hash|Array, nil), Array(nil, String)]
+      def self.container_for_path_write(root, path, name)
+        return [nil, "settings are stored as #{root.class}, not a Hash"] unless root.is_a?(Hash)
+
+        container = container_at(root, path)
+        if container.nil?
+          [nil, "#{path.inspect} does not lead to a container"]
+        elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)
+          [nil, "#{path.inspect} holds an Array, which #{name.inspect} can't index"]
+        else
+          [container, nil]
+        end
+      end
+      private_class_method :container_for_path_write
+
+      # Tells the user that a Settings[]= under a navigation path was not
+      # saved.
+      #
+      # @return [false]
+      def self.refuse_path_write(script_name, scope, path, name, reason)
+        message = "--- Error: settings for #{script_name} (#{scope}) not saved: #{name.inspect} under #{path.inspect}: #{reason} ---"
+        _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: #{message}" })
+        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging)
+        false
+      end
+      private_class_method :refuse_path_write
 
       def self.get_scoped_setting(scope_string, key_name, script_name: nil)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "get_scoped_setting: scope: #{scope_string.inspect}, key: #{key_name.inspect}, script_name: #{script_name.inspect}" })
