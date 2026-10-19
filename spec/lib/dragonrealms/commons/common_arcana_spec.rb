@@ -1134,6 +1134,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'returns nil for nil settings' do
       expect(DRCA.cast_spell({}, nil)).to be_nil
     end
+
+    # cast? is not reached on these paths, so cast_spell? reports false even
+    # though the spell went off.
+    it 'returns nil without casting after a successful segue, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'prep' => 'segue' }
+      allow(DRCA).to receive(:segue?).with('ae', 10).and_return(true)
+      expect(DRCA).not_to receive(:cast?)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+    end
+
+    it 'returns nil after running a ritual spell, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'ritual' => true }
+      allow(DRCA).to receive(:ritual)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+      expect(DRCA).to have_received(:ritual).twice
+    end
   end
 
   # ----------------------------------------------

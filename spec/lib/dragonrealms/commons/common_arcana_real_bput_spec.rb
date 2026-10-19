@@ -119,6 +119,23 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You chant|')).to eq('You begin to')
       expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
     end
+
+    it "resends on a type-ahead reply rather than returning '' for it" do
+      replies = [['Sorry, you may only type ahead 1 command.'], ['You begin to chant.']]
+      allow(drc).to receive(:put) do |message|
+        sent << message
+        arrive(*(replies.shift || []))
+      end
+      allow(drc).to receive(:get?) { buffer.shift }
+      expect(drca.prepare?('fireball', 10, custom_spell_prep: '|You chant')).to eq('You begin to')
+      expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
+    end
+
+    it "skips the can't-move line rather than returning '' for it" do
+      game('prepare fireball 10' => ["You don't seem to be able to move to do that.", 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, custom_spell_prep: '|You chant')).to eq('You begin to')
+      expect(sent).to eq(['prepare fireball 10'])
+    end
   end
 
   describe '.cast?' do
@@ -146,6 +163,18 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       expect(sent).to eq(['cast'])
       arrive('Something is interfering with the spell')
       expect(Flags['spell-fail']).to be_truthy
+    end
+
+    it 'fails the next cast when a missed failure line arrives while that cast is running' do
+      replies = [['A goblin arrives.'], ['Something is interfering with the spell', 'You gesture.']]
+      allow(drc).to receive(:put) do |message|
+        sent << message
+        arrive(*(message == 'cast' ? replies.shift : ["You aren't harnessing any mana"]))
+      end
+      allow(drc).to receive(:get?) { buffer.shift }
+      expect(drca.cast?('cast', false, [], [], 'You gesture|')).to be true
+      expect(drca.cast?('cast', false, [], [], 'You gesture|')).to be false
+      expect(sent).to eq(['cast', 'cast', 'release mana'])
     end
   end
 end
