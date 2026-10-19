@@ -614,6 +614,38 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'waits about PREP_CONFIRM_WAIT_SECONDS in all' do
       expect(polls * DRCA::PREP_CONFIRM_POLL_SECONDS).to be_within(0.001).of(DRCA::PREP_CONFIRM_WAIT_SECONDS)
     end
+
+    # No record shows whether the game sets the indicator for an invoke, so
+    # '' after one carries on as it did before.
+    it "returns true for '' after a runestone invoke without reading the indicator or waiting" do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?('', 'fb', command: 'invoke', runestone_name: 'rune')).to be true
+      expect(DRCA.prep_confirmed?('', 'fb', runestone_name: 'rune')).to be true
+      expect(DRCA).not_to have_received(:pause)
+      expect(bold_messages).to be_empty
+    end
+
+    ['invoke', 'Invoke', ' invoke ', 'invoke my'].each do |command|
+      it "returns true for '' after the invoke command #{command.inspect} without reading the indicator or waiting" do
+        expect(XMLData).not_to receive(:prepared_spell)
+        expect(DRCA.prep_confirmed?('', 'my tattoo', command: command)).to be true
+        expect(DRCA).not_to have_received(:pause)
+        expect(bold_messages).to be_empty
+      end
+    end
+
+    it 'still returns false for a failed invoke' do
+      expect(DRCA.prep_confirmed?(false, 'my tattoo', command: 'invoke', runestone_name: 'rune')).to be false
+    end
+
+    ['prep', 'invoker', 'reinvoke', nil].each do |command|
+      it "applies the indicator rule to '' after the command #{command.inspect}" do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA.prep_confirmed?('', 'fb', command: command)).to be false
+        expect(DRCA).to have_received(:pause).exactly(polls).times
+        expect(bold_messages).to eq([not_casting])
+      end
+    end
   end
 
   # ----------------------------------------------
@@ -871,7 +903,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(bold_messages).to be_empty
       end
 
-      it 'still puts the runestone away when its invoke drew no reply and no spell shows as prepared' do
+      # An invoke is not checked against the indicator (see prep_confirmed?).
+      it 'puts the runestone away, then charges and casts as before, when its invoke drew no reply and no spell shows as prepared' do
         allow(XMLData).to receive(:prepared_spell).and_return('None')
         allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
         allow(DRCA).to receive(:prepare_to_cast_runestone?).and_return(true)
@@ -879,9 +912,19 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(DRCI).to receive(:put_away_item?).with('rune', 'pack')
         settings.runestone_storage = 'pack'
         silent_game(sent)
-        expect(DRCA.cast_spell(cast_data('runestone_name' => 'rune'), settings)).to be_nil
-        expect(DRCA).not_to have_received(:find_charge_invoke_stow)
-        expect(sent).not_to include('cast')
+        expect(DRCA.cast_spell?(cast_data('runestone_name' => 'rune', 'prep' => 'invoke'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'invoke my rune', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+
+      it 'charges and casts as before when a tattoo invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data('abbrev' => 'my tattoo', 'prep' => 'invoke'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'invoke my tattoo 10', 'cast'])
+        expect(bold_messages).to be_empty
       end
     end
 

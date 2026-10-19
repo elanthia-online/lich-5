@@ -420,7 +420,8 @@ module Lich
       #   also mean nothing was prepared at all. Callers that would otherwise
       #   charge cambrinth, harness mana or cast on the strength of this
       #   result should pass it to {#prep_confirmed?}, which accepts +''+
-      #   only when the game shows a spell being prepared. {#cast_spell} and
+      #   after a prep command only when the game shows a spell being
+      #   prepared (and after an invoke as is). {#cast_spell} and
       #   {#ritual} do; {#crafting_prepare_spell} returns the result as is.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
@@ -484,12 +485,21 @@ module Lich
       # just after an empty-matching custom prep message made bput return
       # early. Otherwise a bold message says so and the result is false.
       #
+      # The indicator rule covers preps made with a prep command. An invoke
+      # (a runestone, or a tattoo whose prep command is +invoke+) is not
+      # checked: there is no record of whether the game sets the indicator
+      # for those, and rejecting a real invoke would leave its spell
+      # prepared and uncast. For them +''+ counts, as it did before.
+      #
       # @param prep_result [String, false] what {#prepare?} returned
       # @param abbrev [String, nil] the spell's abbreviation, for the message
+      # @param command [String, nil] the prep command passed to {#prepare?}
+      # @param runestone_name [String, nil] the runestone passed to {#prepare?}
       # @return [Boolean]
-      def prep_confirmed?(prep_result, abbrev)
+      def prep_confirmed?(prep_result, abbrev, command: 'prepare', runestone_name: nil)
         return false unless prep_result
         return true unless prep_result == ''
+        return true if runestone_name || command.to_s.strip.match?(/\Ainvoke\b/i)
 
         polls = (PREP_CONFIRM_WAIT_SECONDS / PREP_CONFIRM_POLL_SECONDS).round
         polls.times do
@@ -513,7 +523,7 @@ module Lich
         command = data['prep_type'] if data['prep_type']
 
         prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
-        return unless prep_confirmed?(prepared, data['abbrev'])
+        return unless prep_confirmed?(prepared, data['abbrev'], command: command, runestone_name: data['runestone_name'])
 
         prepare_time = Time.now
         find_focus(data['focus'], data['worn_focus'], data['tied_focus'], data['sheathed_focus'])
@@ -978,7 +988,7 @@ module Lich
         return unless prepared
 
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
-        return unless prep_confirmed?(prepared, data['abbrev'])
+        return unless prep_confirmed?(prepared, data['abbrev'], command: command, runestone_name: data['runestone_name'])
 
         prepare_time = Time.now
 
