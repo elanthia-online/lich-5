@@ -1254,7 +1254,11 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       @raw << other
 
       _, from_lich = masks_set_during { SQLite3::Backup.new(other, 'main', shared, 'main').tap { |b| b.step(-1) }.finish }
-      _, to_lich = masks_set_during { SQLite3::Backup.new(shared, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
+      pooled = Lich.open_sequel_sqlite(File.join(tmp_dir, 'pooled.db3'))
+      @dbs << pooled
+      _, to_lich = pooled.synchronize do |conn|
+        masks_set_during { SQLite3::Backup.new(conn, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
+      end
       _, plain_only = masks_set_during { SQLite3::Backup.new(other, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
 
       expect(SQLite3::Backup.ancestors).to include(Lich::SQLiteBusyWait::Backup)
@@ -1302,28 +1306,51 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       expect(free.values).to all(be < 0.2)
     end
 
-    it 'takes both Monitors in the same order whichever way two shared connections are backed up' do
+    # SQLite requires that no other thread use a backup's destination
+    # between sqlite3_backup_init and sqlite3_backup_finish; doing so has
+    # corrupted the destination and crashed the process. A shared connection
+    # is there for other threads to use, so it is refused as a destination.
+    it 'refuses a shared connection as the destination before SQLite sees it, and leaves it usable' do
       open_db
-      first = Lich.open_sqlite_db(path)
-      second = Lich.open_sqlite_db(copy_path)
-      @raw << first << second
-      taken = []
-      { first => :first, second => :second }.each do |conn, name|
-        allow(conn.instance_variable_get(:@lich_monitor)).to receive(:synchronize).and_wrap_original do |original, *args, &block|
-          taken << name
-          original.call(*args, &block)
+      shared = Lich.open_sqlite_db(path)
+      other_shared = Lich.open_sqlite_db(copy_path)
+      @raw << shared << other_shared
+      shared.execute('CREATE TABLE mine (n INTEGER)')
+      shared.execute('INSERT INTO mine (n) VALUES (1)')
+      plain = plain_source
+      plain.execute('INSERT INTO rows (n) VALUES (7)')
+
+      expect { SQLite3::Backup.new(shared, 'main', plain, 'main') }.to raise_error(ArgumentError, /destination/)
+      expect { SQLite3::Backup.new(shared, 'main', other_shared, 'main') }.to raise_error(ArgumentError, /destination/)
+      # A write from another thread, which corrupted a destination mid-backup.
+      expect(Thread.new { shared.execute('INSERT INTO mine (n) VALUES (2)') }.join(5)).to be_a(Thread)
+      expect(shared.execute('SELECT n FROM mine ORDER BY n').flatten).to eq([1, 2])
+      expect(shared.get_first_value("SELECT count(*) FROM sqlite_master WHERE name = 'rows'")).to eq(1)
+    end
+
+    it 'takes only the source\'s Monitor when a shared connection is backed up into a pooled one' do
+      open_db
+      shared = Lich.open_sqlite_db(copy_path)
+      @raw << shared
+      shared.execute('CREATE TABLE IF NOT EXISTS copied (n INTEGER)')
+      shared.execute('INSERT INTO copied (n) VALUES (3)')
+      pooled = Lich.open_sequel_sqlite(path)
+      @dbs << pooled
+
+      result = pooled.synchronize do |conn|
+        waited = time_while_monitor_held(shared) do
+          backup = SQLite3::Backup.new(conn, 'main', shared, 'main')
+          begin
+            backup.step(-1)
+          ensure
+            backup.finish
+          end
         end
+        [waited, conn.get_first_value('SELECT group_concat(n) FROM copied')]
       end
 
-      orders = [[first, second], [second, first]].map do |dst, src|
-        taken.clear
-        backup = SQLite3::Backup.new(dst, 'main', src, 'main')
-        backup.finish
-        taken.dup
-      end
-
-      expect(orders[0]).to eq(orders[1])
-      expect(orders[0].first(2)).to contain_exactly(:first, :second)
+      expect(result[0]).to be >= 0.2
+      expect(result[1]).to eq('3')
     end
   end
 end

@@ -288,41 +288,57 @@ module Lich
     # - #step defers interrupts as Statement#step does: an interrupt ends the
     #   wait, #step returns SQLITE_BUSY and the interrupt is delivered in its
     #   place, and the connections' mutexes are released first;
-    # - on a shared connection, #initialize (sqlite3_backup_init), #step and
-    #   #finish (sqlite3_backup_finish), which all take its mutex, run under
-    #   its Monitor, so another thread waits for the Monitor instead of
-    #   blocking on the mutex with the GVL held. A backup between two shared
-    #   connections takes both Monitors, always in the same order, so two
-    #   backups running in opposite directions can't deadlock.
+    # - a shared connection can be the source. #initialize
+    #   (sqlite3_backup_init), #step and #finish (sqlite3_backup_finish), which
+    #   all take its mutex, run under its Monitor, so another thread that uses
+    #   it meanwhile waits for the Monitor instead of blocking on the mutex
+    #   with the GVL held. SQLite allows the source to be used between steps.
+    # - a shared connection can't be the destination: #initialize raises
+    #   ArgumentError. SQLite requires that nothing else use the destination
+    #   from sqlite3_backup_init to sqlite3_backup_finish, and a Monitor only
+    #   serializes single calls; a write from another thread between two
+    #   steps corrupted the destination and crashed the process. Back up into
+    #   a pooled connection (checked out for the whole backup) or a plain one.
     #
     # #remaining and #pagecount only read the backup's own counters.
     #
-    # The other end of a backup, if it is a plain connection, is not tracked:
-    # a statement dropped unclosed on it can still be finalized by GC while
-    # #step waits holding its mutex, which freezes the process. Close
-    # statements on a connection before backing up to or from it.
+    # The other end of a backup, if it is a plain connection, is not tracked
+    # or serialized. Until #finish returns, no other thread, and no other
+    # backup, may use it: #step waits holding its mutex, so another thread
+    # that calls into it blocks on that mutex with the GVL held, the lock
+    # holder never gets to commit, and the process freezes. For the same
+    # reason a statement dropped unclosed on it can freeze the process if GC
+    # finalizes it during the wait. Close statements on a connection before
+    # backing up to or from it.
     module Backup
       def initialize(dstdb, dstname, srcdb, srcname)
-        marked = [dstdb, srcdb].grep(Connection)
-        unless marked.empty?
-          @lich_busy_wait = true
-          @lich_monitors = marked.grep(SerializedDatabase)
-                                 .map { |conn| conn.instance_variable_get(:@lich_monitor) }
-                                 .uniq.sort_by(&:object_id)
+        if dstdb.is_a?(SerializedDatabase)
+          raise ArgumentError, 'a shared lich.db3 connection cannot be a backup destination: ' \
+                               'SQLite requires that no other thread use it until the backup finishes; ' \
+                               'back up into a pooled or plain connection'
         end
-        SQLiteBusyWait.synchronize_all(@lich_monitors) { super }
+
+        if dstdb.is_a?(Connection) || srcdb.is_a?(Connection)
+          @lich_busy_wait = true
+          @lich_monitor = srcdb.instance_variable_get(:@lich_monitor) if srcdb.is_a?(SerializedDatabase)
+        end
+        synchronize_source { super }
       end
 
       def step(pages)
         return super unless @lich_busy_wait
 
-        SQLiteBusyWait.synchronize_all(@lich_monitors) do
-          SQLiteBusyWait.wait_uninterrupted { super }
-        end
+        synchronize_source { SQLiteBusyWait.wait_uninterrupted { super } }
       end
 
       def finish
-        SQLiteBusyWait.synchronize_all(@lich_monitors) { super }
+        synchronize_source { super }
+      end
+
+      private
+
+      def synchronize_source(&block)
+        @lich_monitor ? @lich_monitor.synchronize(&block) : yield
       end
     end
 
@@ -397,14 +413,6 @@ module Lich
 
         keep_waiting_through_interrupts { yield }
       end
-    end
-
-    # Runs the block holding every Monitor in `monitors` (nil or empty: none),
-    # taken in the order given.
-    def self.synchronize_all(monitors, index = 0, &block)
-      return yield if monitors.nil? || index >= monitors.size
-
-      monitors[index].synchronize { synchronize_all(monitors, index + 1, &block) }
     end
 
     # Runs the block with the busy handler waiting through pending
