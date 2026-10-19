@@ -356,6 +356,173 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed.map(&:first)).to eq(["ox-1.2.3-#{platform}.gem"])
   end
 
+  describe 'native replacement rollback' do
+    let(:work_dir) { File.join(recovery_temp_dir, 'replacement work') }
+    let(:rollback_dir) { File.join(work_dir, 'previous-runtime') }
+    let(:runtime_specs) do
+      %w[f63_first f63_second].map do |name|
+        spec = Gem::Specification.new do |entry|
+          entry.name = name
+          entry.version = '1.2.3'
+          entry.platform = Gem::Platform.new('x64-mingw-ucrt')
+        end
+        spec.loaded_from = File.join(gem_home, 'specifications', "#{spec.full_name}.gemspec")
+        spec
+      end
+    end
+    let(:original_files) do
+      runtime_specs.flat_map do |spec|
+        [File.join(spec.full_gem_path, 'original.rb'), spec.loaded_from,
+         File.join(spec.extension_dir, 'original.dll')]
+      end
+    end
+    let(:packages) do
+      runtime_specs.map do |spec|
+        path = File.join(work_dir, "#{spec.full_name}.gem")
+        { 'name' => spec.name, 'version' => spec.version.to_s, 'filename' => File.basename(path),
+          'path' => path, 'sha256' => sha256(spec.name) }
+      end
+    end
+    let(:payload) do
+      { 'schema' => 1, 'parent_pid' => Process.pid, 'gem_home' => gem_home,
+        'temp_dir' => recovery_temp_dir, 'work_dir' => work_dir, 'packages' => packages,
+        'restart' => { 'program' => __FILE__, 'argv' => [], 'chdir' => work_dir } }
+    end
+    let(:installer) do
+      lambda do |path, _home|
+        spec = runtime_specs.find { |entry| File.basename(path) == "#{entry.full_name}.gem" }
+        [File.join(spec.full_gem_path, 'original.rb'), spec.loaded_from,
+         File.join(spec.extension_dir, 'original.dll')].each do |file|
+          FileUtils.mkdir_p(File.dirname(file))
+          File.write(file, 'replacement')
+        end
+      end
+    end
+    let(:subject) do
+      described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir, install_gem: installer)
+    end
+
+    before do
+      FileUtils.mkdir_p(work_dir)
+      original_files.each do |file|
+        FileUtils.mkdir_p(File.dirname(file))
+        File.write(file, 'original')
+      end
+      packages.each_with_index do |package, index|
+        File.write(package.fetch('path'), package.fetch('name'))
+        spec = runtime_specs[index]
+        allow(Gem::Specification).to receive(:find_all_by_name).with(spec.name).and_return([spec])
+        allow(Gem::Specification).to receive(:find_all_by_name).with(spec.name, anything).and_return([spec])
+        allow(Gem::Installer).to receive(:at).with(package.fetch('path'), install_dir: gem_home)
+                             .and_return(Gem::Installer.for_spec(spec, install_dir: gem_home))
+      end
+      allow(subject).to receive(:wait_for_parent_exit)
+      allow(subject).to receive(:restart_lich)
+    end
+
+    it 'restores completed moves and preserves untouched originals after a partial backup' do
+      blocked = runtime_specs.first.loaded_from
+      allow(FileUtils).to receive(:mv).and_wrap_original do |move, from, to|
+        raise Errno::EACCES, 'later backup denied' if from == blocked
+
+        move.call(from, to)
+      end
+      expect(installer).not_to receive(:call)
+      expect(subject).not_to receive(:restart_lich)
+
+      expect { subject.send(:run_windows_replacement!, payload) }
+        .to raise_error(described_class::Error, /later backup denied/)
+
+      expect(original_files.map { |file| File.read(file) }).to eq(['original'] * original_files.size)
+    end
+
+    it 'removes a partial installation before its gemspec exists and restores the original suite' do
+      allow(installer).to receive(:call).and_wrap_original do |install, path, home|
+        if path == packages.last.fetch('path')
+          file = File.join(runtime_specs.last.full_gem_path, 'partial.dll')
+          FileUtils.mkdir_p(File.dirname(file))
+          File.write(file, 'partial replacement')
+          raise IOError, 'second install failed before gemspec'
+        end
+        install.call(path, home)
+      end
+      expect(subject).not_to receive(:restart_lich)
+
+      expect { subject.send(:run_windows_replacement!, payload) }
+        .to raise_error(IOError, /second install failed before gemspec/)
+
+      expect(original_files.map { |file| File.read(file) }).to eq(['original'] * original_files.size)
+      expect(File).not_to exist(File.join(runtime_specs.last.full_gem_path, 'partial.dll'))
+    end
+
+    it 'retains a recoverable backup when replacement cleanup fails while restoring other originals' do
+      blocked = runtime_specs.first.full_gem_path
+      allow(installer).to receive(:call).and_wrap_original do |install, path, home|
+        install.call(path, home)
+        raise IOError, 'installation interrupted' if path == packages.last.fetch('path')
+      end
+      allow(FileUtils).to receive(:remove_entry).and_wrap_original do |remove, path|
+        raise Errno::EACCES, 'replacement locked' if path == blocked
+
+        remove.call(path)
+      end
+      expect(subject).not_to receive(:restart_lich)
+
+      expect { subject.send(:run_windows_replacement!, payload) }
+        .to raise_error(described_class::Error, /installation interrupted.*rollback incomplete.*backups retained/)
+
+      backup = File.join(rollback_dir, 'gems', runtime_specs.first.full_name, 'original.rb')
+      expect(File.read(backup)).to eq('original')
+      expect(File.read(File.join(blocked, 'original.rb'))).to eq('replacement')
+      expect(original_files.drop(1).map { |file| File.read(file) }).to eq(['original'] * (original_files.size - 1))
+    end
+
+    it 'continues restoring other originals when a backup restore move is denied' do
+      blocked = runtime_specs.last.loaded_from
+      allow(installer).to receive(:call).and_raise(IOError, 'install failed')
+      allow(FileUtils).to receive(:mv).and_wrap_original do |move, from, to|
+        raise Errno::EACCES, 'restore denied' if to == blocked
+
+        move.call(from, to)
+      end
+
+      expect { subject.send(:run_windows_replacement!, payload) }
+        .to raise_error(described_class::Error, /install failed.*rollback incomplete.*restore denied/)
+
+      backup = File.join(rollback_dir, 'specifications', "#{runtime_specs.last.full_name}.gemspec")
+      expect(File.read(backup)).to eq('original')
+      expect((original_files - [blocked]).map { |file| File.read(file) }).to all(eq('original'))
+      expect(File).not_to exist(blocked)
+    end
+
+    it 'preserves an unregistered existing replacement destination rather than overwriting it' do
+      orphan = File.join(runtime_specs.first.full_gem_path, 'unregistered.dll')
+      allow(Gem::Specification).to receive(:find_all_by_name).with(runtime_specs.first.name).and_return([])
+      File.write(orphan, 'untouched')
+      expect(installer).not_to receive(:call)
+
+      expect { subject.send(:run_windows_replacement!, payload) }
+        .to raise_error(described_class::Error, /replacement gem path already exists/)
+
+      expect(File.read(orphan)).to eq('untouched')
+      expect(original_files.map { |file| File.read(file) }).to all(eq('original'))
+    end
+
+    it 'keeps the verified replacement when old-backup cleanup is denied' do
+      allow(FileUtils).to receive(:remove_entry).and_wrap_original do |remove, path|
+        raise Errno::EACCES, 'backup cleanup denied' if [rollback_dir, work_dir].include?(path)
+
+        remove.call(path)
+      end
+
+      subject.send(:run_windows_replacement!, payload)
+
+      expect(original_files.map { |file| File.read(file) }).to all(eq('replacement'))
+      expect(subject).to have_received(:restart_lich).with(payload.fetch('restart'))
+      expect(Dir).to exist(rollback_dir)
+    end
+  end
+
   describe '#parse_https_uri!' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 

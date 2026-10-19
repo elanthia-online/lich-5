@@ -5,6 +5,8 @@ on:
     branches:
       - main
     paths:
+      - "lib/dependency_recovery.rb"
+      - "spec/lib/dependency_recovery_spec.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
@@ -13,6 +15,8 @@ on:
       - ".github/workflows/windows_active_sessions.yaml"
   pull_request:
     paths:
+      - "lib/dependency_recovery.rb"
+      - "spec/lib/dependency_recovery_spec.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
@@ -25,16 +29,70 @@ permissions:
   contents: read
 
 jobs:
+  authorize:
+    name: Authorize administrator-initiated Windows checks
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.permission.outputs.allowed }}
+    steps:
+      - name: Verify event and administrator identities before checkout
+        id: permission
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        with:
+          script: |
+            core.setOutput('allowed', 'false');
+            if (!['push', 'pull_request', 'workflow_dispatch'].includes(context.eventName)) {
+              return core.setFailed('Unsupported Windows validation event.');
+            }
+            if (context.eventName !== 'pull_request' && context.ref !== 'refs/heads/main') {
+              return core.setFailed('Push and dispatch checks must run from main.');
+            }
+            const repository = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
+            const source = context.payload.repository;
+            if (!Number.isSafeInteger(source?.id) || source.id <= 0 ||
+                source.full_name?.toLowerCase() !== repository) {
+              return core.setFailed('Repository identity is invalid.');
+            }
+            if (context.eventName === 'pull_request') {
+              const pr = context.payload.pull_request;
+              if (pr?.head?.repo?.id !== source.id || pr?.base?.repo?.id !== source.id ||
+                  pr.head.repo.full_name?.toLowerCase() !== repository ||
+                  pr.base.repo.full_name?.toLowerCase() !== repository) {
+                return core.setFailed('Only same-repository pull requests may run Windows checks.');
+              }
+            }
+            const actors = [context.actor, process.env.TRIGGERING_ACTOR];
+            if (actors.some(actor => typeof actor !== 'string' || !actor)) {
+              return core.setFailed('Original and triggering actors are required.');
+            }
+            for (const actor of new Set(actors.map(actor => actor.toLowerCase()))) {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                ...context.repo, username: actor
+              });
+              if (data.permission !== 'admin') {
+                return core.setFailed('Both original and triggering actors must be repository administrators.');
+              }
+            }
+            core.setOutput('allowed', 'true');
+
   active_sessions_handoff:
     name: Exercise native Windows file handoff
+    needs: authorize
+    if: ${{ needs.authorize.outputs.allowed == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 15
     env:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ruby/setup-ruby@e81a8fa391b11a595c1b7ed84177cc0fe02faf83 # v1.328.0
         with:
           bundler-cache: true
       - name: Run ActiveSessions ownership and handoff specs
         run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb spec/lib/internal_api/active_sessions/server_client_spec.rb
+      - name: Run isolated native dependency recovery rollback specs
+        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb -e 'native replacement rollback'

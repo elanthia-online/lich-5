@@ -390,7 +390,9 @@ module Lich
 
     # Performs the destructive portion only after the original Ruby process is
     # gone. Every old package is moved, not deleted, until the complete new suite
-    # is installed and its exact manifest versions are registered.
+    # is installed and its exact manifest versions are registered. Journals are
+    # updated before installation and after each successful backup move so a
+    # partial failure cannot discard ownership information needed for rollback.
     # @param payload [Hash]
     # @return [void]
     def run_windows_replacement!(payload)
@@ -399,20 +401,34 @@ module Lich
       with_install_lock do
         rollback_dir = File.join(payload.fetch('work_dir'), 'previous-runtime')
         moved = []
+        replacements = []
         begin
-          moved = backup_existing_packages(payload.fetch('packages'), rollback_dir)
+          backup_existing_packages(payload.fetch('packages'), rollback_dir, moved)
           refresh_rubygems!
           payload.fetch('packages').each do |package|
             verify_file!(package.fetch('path'), package.fetch('sha256'), "#{package.fetch('name')} gem")
+            paths = replacement_package_paths(package)
+            paths.each do |path|
+              raise Error, "replacement gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
+              raise Error, "replacement gem path already exists: #{path}" if File.exist?(path)
+            end
+            replacements.concat(paths)
             @install_gem.call(package.fetch('path'), @gem_home)
           end
           verify_replacement!(payload.fetch('packages'))
-          FileUtils.remove_entry(rollback_dir) if Dir.exist?(rollback_dir)
-        rescue StandardError
-          remove_replacement_packages(payload.fetch('packages'))
-          restore_backup(moved)
+        rescue StandardError => error
+          failures = []
+          [-> { remove_replacement_packages(replacements) }, -> { restore_backup(moved) }].each do |rollback|
+            rollback.call
+          rescue StandardError => rollback_error
+            failures << rollback_error.message
+          end
+          unless failures.empty?
+            raise Error, "#{error.message}; rollback incomplete: #{failures.join('; ')}; backups retained in #{rollback_dir}"
+          end
           raise
         end
+        cleanup_workspace(rollback_dir)
       end
       cleanup_workspace(payload.fetch('work_dir'))
       restart_lich(payload.fetch('restart'))
@@ -452,45 +468,68 @@ module Lich
 
     # @param packages [Array<Hash>]
     # @param rollback_dir [String]
+    # @param moved [Array<Array<String>>] caller-owned journal updated per move
     # @return [Array<Array<String>>] original and temporary paths
-    def backup_existing_packages(packages, rollback_dir)
+    def backup_existing_packages(packages, rollback_dir, moved)
       names = packages.map { |package| package.fetch('name') }.uniq
       specs = names.flat_map { |name| Gem::Specification.find_all_by_name(name) }.uniq(&:loaded_from)
-      specs.flat_map do |spec|
-        [spec.full_gem_path, spec.loaded_from, spec.extension_dir].filter_map do |path|
+      specs.each do |spec|
+        [spec.full_gem_path, spec.loaded_from, spec.extension_dir].each do |path|
           next unless File.exist?(path)
           raise Error, "installed gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
 
           destination = File.join(rollback_dir, path.delete_prefix(File.expand_path(@gem_home)).sub(%r{\A[\\/]}, ''))
           FileUtils.mkdir_p(File.dirname(destination))
           FileUtils.mv(path, destination)
-          [path, destination]
+          moved << [path, destination]
         end
       end
+      moved
     end
 
+    # Resolves the same paths RubyGems will replace, without installing. Record
+    # these before calling the installer, which may fail before writing a spec.
+    # @param package [Hash] verified local artifact
+    # @return [Array<String>] replacement-owned runtime paths
+    def replacement_package_paths(package)
+      installer = Gem::Installer.at(package.fetch('path'), install_dir: @gem_home)
+      installer.spec.loaded_from = installer.spec_file
+      [installer.gem_dir, installer.spec_file, installer.spec.extension_dir].uniq
+    end
+
+    # Restores every available backup even if another path cannot be restored.
+    # Never move into an occupied destination or delete a recoverable backup.
     # @param moved [Array<Array<String>>]
     # @return [void]
     def restore_backup(moved)
+      failures = []
       moved.reverse_each do |original, temporary|
-        next unless File.exist?(temporary)
+        raise Error, "backup is missing: #{temporary}" unless File.exist?(temporary)
+        raise Error, "restore destination is occupied: #{original}" if File.exist?(original)
 
         FileUtils.mkdir_p(File.dirname(original))
         FileUtils.mv(temporary, original)
+      rescue StandardError => error
+        failures << error.message
       end
       refresh_rubygems!
+      raise Error, failures.join('; ') unless failures.empty?
     end
 
-    # @param packages [Array<Hash>]
+    # Removes only paths claimed before attempted installs, not all registered
+    # versions of the requested gems. Continue so one locked path does not
+    # prevent other packages from being restored.
+    # @param paths [Array<String>] replacement-owned runtime paths
     # @return [void]
-    def remove_replacement_packages(packages)
-      names = packages.map { |package| package.fetch('name') }.uniq
-      names.flat_map { |name| Gem::Specification.find_all_by_name(name) }.uniq(&:loaded_from).each do |spec|
-        [spec.full_gem_path, spec.loaded_from, spec.extension_dir].each do |path|
-          FileUtils.remove_entry(path) if File.exist?(path) && path_within?(path, @gem_home)
-        end
+    def remove_replacement_packages(paths)
+      failures = []
+      paths.uniq.each do |path|
+        FileUtils.remove_entry(path) if File.exist?(path) && path_within?(path, @gem_home)
+      rescue StandardError => error
+        failures << error.message
       end
       refresh_rubygems!
+      raise Error, failures.join('; ') unless failures.empty?
     end
 
     # @param packages [Array<Hash>]
