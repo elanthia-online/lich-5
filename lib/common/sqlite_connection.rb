@@ -297,19 +297,25 @@ module Lich
     #   ArgumentError. SQLite requires that nothing else use the destination
     #   from sqlite3_backup_init to sqlite3_backup_finish, and a Monitor only
     #   serializes single calls; a write from another thread between two
-    #   steps corrupted the destination and crashed the process. Back up into
-    #   a pooled connection (checked out for the whole backup) or a plain one.
+    #   steps corrupted the destination and crashed the process. The
+    #   destination must be a pooled connection or a plain one, and nothing
+    #   may use it until #finish returns: not another thread, not another
+    #   backup, and not the backing-up thread itself. A pooled destination
+    #   stays checked out for the whole backup, so a Sequel call on the same
+    #   pool inside that #synchronize block reuses it; a write made that way
+    #   between two steps also corrupted the destination and crashed the
+    #   process in #step. Call #finish in an ensure.
     #
     # #remaining and #pagecount only read the backup's own counters.
     #
-    # The other end of a backup, if it is a plain connection, is not tracked
-    # or serialized. Until #finish returns, no other thread, and no other
-    # backup, may use it: #step waits holding its mutex, so another thread
-    # that calls into it blocks on that mutex with the GVL held, the lock
-    # holder never gets to commit, and the process freezes. For the same
-    # reason a statement dropped unclosed on it can freeze the process if GC
-    # finalizes it during the wait. Close statements on a connection before
-    # backing up to or from it.
+    # Neither a pooled nor a plain end of a backup is tracked or serialized.
+    # Until #finish returns, no other thread, and no other backup, may use
+    # it: #step waits holding its mutex, so another thread that calls into it
+    # blocks on that mutex with the GVL held, the lock holder never gets to
+    # commit, and the process freezes. For the same reason a statement
+    # dropped unclosed on it can freeze the process if GC finalizes it during
+    # the wait. Close statements on a connection before backing up to or from
+    # it.
     module Backup
       def initialize(dstdb, dstname, srcdb, srcname)
         if dstdb.is_a?(SerializedDatabase)

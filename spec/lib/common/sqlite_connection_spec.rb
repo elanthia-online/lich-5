@@ -1328,7 +1328,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       expect(shared.get_first_value("SELECT count(*) FROM sqlite_master WHERE name = 'rows'")).to eq(1)
     end
 
-    it 'takes only the source\'s Monitor when a shared connection is backed up into a pooled one' do
+    it 'waits for the shared source\'s Monitor when backing up into a pooled connection' do
       open_db
       shared = Lich.open_sqlite_db(copy_path)
       @raw << shared
