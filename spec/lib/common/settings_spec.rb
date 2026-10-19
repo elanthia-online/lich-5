@@ -1711,6 +1711,88 @@ RSpec.describe Lich::Common::Settings do
         expect(game_read('mine')).to eq(5)
         expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to eq("k" => 1, "mine" => 5)
       end
+
+      # Runs the proxy write in the block in another thread. Right after its
+      # save_to_database returns (the store and the cache update are done),
+      # another session commits and another thread re-reads; nothing the
+      # write does after that may put its older row over the re-read one.
+      def proxy_write_then_reread(&write)
+        seen = nil
+        allow(settings).to receive(:save_to_database).and_wrap_original do |original, *args, **opts|
+          result = original.call(*args, **opts)
+          if Thread.current[:gap]
+            Thread.current[:gap] = false
+            their_write(@mock_db.get_settings("test_script", "GSIV").merge("ext" => 2))
+            seen = reread_in_another_thread('ext')
+          end
+          result
+        end
+        writer = Thread.new do
+          Thread.current[:gap] = true
+          write.call
+        end
+        expect(writer.join(5)).to eq(writer)
+        seen
+      end
+
+      it "keeps a row another thread re-read after a nested write's save returned" do
+        their_write("opts" => { "c" => 0 })
+        opts = game_read('opts')
+        expect(proxy_write_then_reread { opts['c'] = 5 }).to eq(2)
+
+        @mock_db.data_version_unknown = true # another process now holds the lock
+        expect(reread_in_another_thread('ext')).to eq(2)
+        expect(game_read('ext')).to eq(2)
+        expect(game_read('opts').to_h).to eq("c" => 5) # the writing thread still sees its own write
+      end
+
+      it "keeps a row another thread re-read after a root proxy write's save returned" do
+        their_write("k" => 0)
+        root = settings.root_proxy_for("GSIV")
+        expect(proxy_write_then_reread { root['k'] = 5 }).to eq(2)
+
+        @mock_db.data_version_unknown = true
+        expect(reread_in_another_thread('ext')).to eq(2)
+        expect(game_read('k')).to eq(5)
+      end
+
+      it "still caches the saved row holding the nested write's own container" do
+        their_write("opts" => { "c" => 0 })
+        opts = game_read('opts')
+        opts['c'] = 5
+        cached = settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]
+        expect(cached).to eq("opts" => { "c" => 5 })
+        expect(cached["opts"]).to equal(opts.target) # the caller's proxy stays attached to the cache
+
+        opts['d'] = 6 # no commit in between: written through the same container
+        expect(game_read('opts').to_h).to eq("c" => 5, "d" => 6)
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq("opts" => { "c" => 5, "d" => 6 })
+      end
+    end
+
+    context "Settings.load" do
+      it "drops changes made only to the cached row when nothing was committed since it was read" do
+        settings[:opts] = { "a" => 1 }
+        their_write({ "other" => 1 }, "DR") # any commit: the next read re-reads the row
+        expect(settings[:opts].to_h).to eq("a" => 1)
+        settings[:opts].to_h["x"] = "local" # changes the cached row, never saved
+        expect(settings[:opts]["x"]).to eq("local")
+
+        expect(settings.load).to eq(opts: { "a" => 1 })
+        expect(settings[:opts]["x"]).to be_nil
+        expect(settings[:opts].to_h).to eq("a" => 1)
+      end
+
+      it "drops them when the version can't be read before its read" do
+        settings[:opts] = { "a" => 1 }
+        their_write({ "other" => 1 }, "DR")
+        expect(settings[:opts].to_h).to eq("a" => 1)
+        settings[:opts].to_h["x"] = "local"
+        @mock_db.data_version_unknown = true
+
+        settings.load
+        expect(settings[:opts]["x"]).to be_nil
+      end
     end
   end
 end
