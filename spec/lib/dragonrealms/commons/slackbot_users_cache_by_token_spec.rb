@@ -238,6 +238,11 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users cache keyed by token' do
     [nil, ''].each do |missing|
       it "reads no cache for #{missing.inspect}" do
         bot.send(:write_users_cache, members, token_one)
+        # A fresh row at the key an unguarded lookup of "" would use, so the
+        # read returns nil only because the guard skips it.
+        Lich::Common::DB_Store.store_data(
+          'DR', cache_key(''), { 'members' => members, 'fetched_at' => Time.now.to_i }
+        )
 
         expect(bot.send(:read_users_cache, missing)).to be_nil
         expect(bot.send(:cached_members, missing)).to be_nil
