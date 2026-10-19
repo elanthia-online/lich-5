@@ -14,7 +14,8 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'slackbot.rb')
 # certificate is trusted by adding it to each Net::HTTP's cert store, so the
 # client still runs with VERIFY_PEER exactly as in production. Only
 # SlackBot#sleep (recorded, never waited) and, for the unreachable cases,
-# TCPSocket.open stand in for the outside world.
+# TCPSocket.open stand in for the outside world, plus LNet and lnet.lic
+# where an example installs them.
 RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
   let(:key) { OpenSSL::PKey::EC.generate('prime256v1') }
   let(:cert) do
@@ -41,6 +42,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
   let(:requests) { Hash.new(0) }
   let(:sleeps) { [] }
   let(:messages) { [] }
+  let(:logs) { [] }
+  let(:lnet_chats) { [] }
   let(:members) { [{ 'name' => 'alice', 'id' => 'U1' }] }
   let(:clock) { { offset: 0.0 } }
 
@@ -57,7 +60,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
     headers, body = head.split("\r\n\r\n", 2)
     length = headers[/^content-length:\s*(\d+)/i, 1].to_i
     body << ssl.readpartial(65_536) while body.bytesize < length
-    headers[%r{\APOST /api/(\S+)}, 1]
+    [headers[%r{\APOST /api/(\S+)}, 1], URI.decode_www_form(body).to_h['token']]
   end
 
   def json_reply(ssl, payload)
@@ -78,14 +81,25 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
 
     ssl = OpenSSL::SSL::SSLSocket.new(conn, ssl_context)
     ssl.accept
-    method = read_request(ssl)
+    method, token = read_request(ssl)
     requests[method] += 1
-    if mode[:value] == :drop_mid_response
+    if token == 'throttle-token'
+      ssl.write("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+      return ssl.sysclose
+    end
+    if mode[:value] == :drop_mid_response || token == 'drop-token'
       ssl.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"ok\":")
       return # closes the TCP socket below with no TLS close_notify
     end
 
-    json_reply(ssl, method == 'users.list' ? { 'ok' => true, 'members' => members } : { 'ok' => true })
+    reply = if method == 'users.list'
+              { 'ok' => true, 'members' => members }
+            elsif token == 'stale-token'
+              { 'ok' => false, 'error' => 'invalid_auth' }
+            else
+              { 'ok' => true }
+            end
+    json_reply(ssl, reply)
     ssl.sysclose
   rescue StandardError
     nil # the client gave up (e.g. it rejected the certificate)
@@ -102,6 +116,28 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
     stub_const("#{described_class}::API_URL", "https://127.0.0.1:#{port_number}/api/")
   end
 
+  # Slack answers normally again after a failure set up by an example.
+  def make_slack_reachable
+    RSpec::Mocks.space.proxy_for(TCPSocket).reset
+    point_api_at(port)
+    mode[:value] = :ok
+    trust_server_cert[:value] = true
+  end
+
+  # lnet.lic installed, running and connected, with Quilsilgas answering a
+  # token request with +token+. Chats sent over LNet land in lnet_chats.
+  def install_lnet(token: 'valid-token')
+    stub_const('LNet', Module.new)
+    allow(LNet).to receive(:server).and_return(double('lnet server', closed?: false))
+    allow(Script).to receive(:exists?).with('lnet').and_return(true)
+    allow(Script).to receive(:running?).with('lnet').and_return(true)
+    allow(Script).to receive(:running).and_return([double('lnet script', name: 'lnet', unique_buffer: lnet_chats)])
+    allow(Script).to receive(:hidden).and_return([])
+    allow_any_instance_of(described_class).to receive(:pause)
+    allow_any_instance_of(described_class).to receive(:get)
+      .and_return(%([Private]-X:Quilsilgas: "slack_token: #{token}"))
+  end
+
   def initialized_bot
     bot = described_class.new
     expect(bot.initialized?).to be true
@@ -113,7 +149,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
   before do
     UserVars.slack_token = 'valid-token'
     allow(XMLData).to receive(:game).and_return('DR')
-    allow(Lich).to receive(:log)
+    allow(Lich).to receive(:log) { |text| logs << text }
     allow(Lich::Messaging).to receive(:msg) { |_type, text| messages << text }
     allow_any_instance_of(described_class).to receive(:sleep) { |_bot, seconds| sleeps << seconds }
     # lnet.lic is not installed, so a failed token check ends without LNet discovery.
@@ -221,6 +257,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
 
         expect(bot.authed?('some-token')).to be false
         expect(bot.authed?('some-token', budget: 5)).to be false
+        expect(logs.grep(/Could not check a Slack token: .*#{spec[:expected]}/).length).to eq(2)
       end
 
       it 'builds a bot that is not initialized when it happens at startup' do
@@ -229,7 +266,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
         bot = nil
         expect { bot = described_class.new }.not_to raise_error
         expect(bot.initialized?).to be false
-        expect(bot.error_message).to include('lnet.lic not found')
+        expect(bot.error_message).to start_with('Slack unavailable: ').and include(spec[:expected].to_s)
         expect(sleeps).to be_empty
       end
 
@@ -238,14 +275,82 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
         bot = described_class.new
         expect(bot.initialized?).to be false
 
-        RSpec::Mocks.space.proxy_for(TCPSocket).reset
-        point_api_at(port)
-        mode[:value] = :ok
-        trust_server_cert[:value] = true
+        make_slack_reachable
 
         expect(bot.direct_message('alice', 'help')).to include('ok' => true)
         expect(bot.initialized?).to be true
       end
+
+      context 'with lnet.lic installed and connected' do
+        before { install_lnet }
+
+        it 'reports Slack unavailable at startup with the cause, and asks LNet for no token' do
+          instance_exec(&spec[:setup])
+
+          bot = described_class.new
+
+          expect(bot.initialized?).to be false
+          expect(bot.error_message).to start_with('Slack unavailable: ').and include(spec[:expected].to_s)
+          expect(messages).to include("SlackBot: #{bot.error_message}")
+          expect(logs).to include(a_string_including(spec[:expected].to_s))
+          expect(lnet_chats).to be_empty
+          expect(sleeps).to be_empty
+        end
+
+        it 'asks LNet for no token while messages fail, and delivers once Slack is back' do
+          instance_exec(&spec[:setup])
+          bot = described_class.new
+
+          3.times { expect(bot.direct_message('alice', 'Detected low vitality')).to be_nil }
+          expect(lnet_chats).to be_empty
+          expect(bot.error_message).to start_with('Slack unavailable: ')
+
+          make_slack_reachable
+          expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+          expect(lnet_chats).to be_empty
+          expect(UserVars.slack_token).to eq('valid-token')
+        end
+      end
+    end
+  end
+
+  context 'with lnet.lic installed and connected' do
+    it 'still asks LNet for a token when Slack rejects the stored one' do
+      install_lnet(token: 'valid-token')
+      UserVars.slack_token = 'stale-token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be true
+      expect(lnet_chats).to eq(['chat to Quilsilgas RequestSlackToken'])
+      expect(UserVars.slack_token).to eq('valid-token')
+      expect(logs).to include(a_string_including('invalid_auth'))
+    end
+
+    it 'reports Slack unavailable, and keeps the stored token, when the token found over LNet cannot be checked' do
+      install_lnet(token: 'drop-token')
+      UserVars.slack_token = 'stale-token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(lnet_chats).to eq(['chat to Quilsilgas RequestSlackToken'])
+      expect(bot.error_message).to start_with('Slack unavailable: ').and include('OpenSSL::SSL::SSLError')
+      expect(UserVars.slack_token).to eq('stale-token')
+    end
+
+    it 'treats a rate-limited token check as Slack unavailable, not as a rejected token' do
+      install_lnet(token: 'valid-token')
+      UserVars.slack_token = 'throttle-token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(lnet_chats).to be_empty
+      expect(bot.error_message).to eq('Slack unavailable: Throttled by Slack API')
+      expect(UserVars.slack_token).to eq('throttle-token')
+      expect(bot.authed?('throttle-token')).to be false
+      expect(logs).to include('SlackBot: Could not check a Slack token: Throttled by Slack API')
     end
   end
 

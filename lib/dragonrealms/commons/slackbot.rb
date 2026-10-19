@@ -130,15 +130,18 @@ module Lich
 
       # Tests whether a Slack API token is valid.
       #
+      # Answers false both when Slack rejects the token and when Slack cannot
+      # be asked (a network failure or a rate limit); the cause of the latter
+      # is logged.
+      #
       # @param token [String, nil] the token to test
       # @param budget [Numeric, nil] seconds allowed for the check, or nil for
       #   the full retry policy
       # @return [Boolean]
       def authed?(token, budget: nil)
-        return false unless token
-
-        post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
-      rescue ApiError, NetworkError
+        token_accepted?(token, budget)
+      rescue NetworkError, ThrottlingError => e
+        Lich.log "SlackBot: Could not check a Slack token: #{e.message}"
         false
       end
 
@@ -189,11 +192,46 @@ module Lich
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
       # @return [Boolean] the new initialized? state
       def connect(budget: nil)
-        ensure_slack_token(budget) unless authed?(UserVars.slack_token, budget: budget)
-        return false if @error_message
+        return false unless verify_token(budget)
 
         @token_verified = true
         load_users_list(budget)
+      end
+
+      # Checks the stored token and, only if Slack rejects it (or there is
+      # none), looks for a new one over LNet. When Slack cannot be asked (a
+      # network failure or a rate limit) the token is neither judged nor
+      # replaced: the cause is logged and kept in error_message, no LNet
+      # discovery runs, and the next message checks again.
+      #
+      # @param budget [Numeric, nil] seconds allowed for each token check
+      # @return [Boolean] true if a token Slack accepts is in UserVars.slack_token
+      def verify_token(budget)
+        ensure_slack_token(budget) unless token_accepted?(UserVars.slack_token, budget)
+        @error_message.nil?
+      rescue NetworkError, ThrottlingError => e
+        Lich.log "SlackBot: Slack unavailable while checking the token: #{e.message}"
+        set_error("Slack unavailable: #{e.message}")
+        false
+      end
+
+      # Asks Slack whether a token is valid.
+      #
+      # @param token [String, nil] the token to test
+      # @param budget [Numeric, nil] seconds allowed for the check, or nil for
+      #   the full retry policy
+      # @return [Boolean] true if Slack accepts the token; false if there is no
+      #   token or Slack rejects it
+      # @raise [NetworkError, ThrottlingError] when Slack could not be asked
+      def token_accepted?(token, budget)
+        return false unless token
+
+        post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
+      rescue ThrottlingError
+        raise
+      rescue ApiError => e
+        Lich.log "SlackBot: Slack token not accepted: #{e.message}"
+        false
       end
 
       # Loads the users list and updates initialized? and error_message.
@@ -295,6 +333,8 @@ module Lich
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [void]
+      # @raise [NetworkError, ThrottlingError] when Slack cannot be asked about
+      #   a token found over LNet
       def ensure_slack_token(budget = nil)
         unless lnet_connected?
           unless Script.exists?(LNET_SCRIPT_NAME)
@@ -507,6 +547,8 @@ module Lich
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [Boolean] true if a valid token was found and stored
+      # @raise [NetworkError, ThrottlingError] when Slack cannot be asked about
+      #   a token found
       def find_token(budget = nil)
         return false unless lnet_available?
 
@@ -514,7 +556,7 @@ module Lich
 
         LICHBOTS.any? do |bot|
           token = request_token(bot)
-          authed = token && authed?(token, budget: budget)
+          authed = token && token_accepted?(token, budget)
           UserVars.slack_token = token if authed
           authed
         end

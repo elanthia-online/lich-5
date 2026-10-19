@@ -457,7 +457,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(result).to be_nil
       expect(elapsed).to be < send_budget
       expect(delta['auth.test']).to eq(2)
-      expect(bot.error_message).to include('Unable to locate a Slack token')
+      expect(bot.error_message).to start_with('Slack unavailable: ')
     end
 
     it 'delivers on the next message after an unexpected error in the token check' do
