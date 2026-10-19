@@ -137,6 +137,41 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     expect(db[:rows].select_order_map(:n)).to eq([0])
   end
 
+  it 'waits again for the full busy timeout on a later lock wait on the same connection' do
+    allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(300)
+    db = open_db
+    go = Queue.new
+    results = Queue.new
+    # One thread holds one pooled connection across both waits.
+    worker = Thread.new do
+      db.synchronize do |conn|
+        2.times do |i|
+          go.pop
+          begin
+            conn.execute('INSERT INTO rows (n) VALUES (?)', [i + 1])
+            results << :ok
+          rescue SQLite3::BusyException
+            results << :busy
+          end
+        end
+      end
+    end
+    outcomes = 2.times.map do
+      holder = hold_write_lock
+      go << true
+      sleep 0.1
+      holder.execute('COMMIT')
+      outcome = results.pop
+      # Start the next wait after the first one's deadline has passed.
+      sleep 0.4
+      outcome
+    end
+    worker.join
+
+    expect(outcomes).to eq(%i[ok ok])
+    expect(db[:rows].select_order_map(:n)).to eq([0, 0, 1, 2])
+  end
+
   it 'finishes a write before delivering an interrupt the caller had already deferred' do
     db = open_db
     holder = hold_write_lock
@@ -181,6 +216,26 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         expect(masks.size).to be >= 2
         expect(masks).to all(eq(Object => :never))
       end
+    end
+
+    it 'defers interrupts while execute_batch2 runs on a pooled connection' do
+      db = open_db
+      db.synchronize do |conn|
+        rows, masks = masks_set_during { conn.execute_batch2('SELECT count(*) AS c FROM rows') }
+
+        expect(rows).to eq([['0']])
+        expect(masks).to eq([{ Object => :never }])
+      end
+    end
+
+    it 'leaves execute_batch2 on other sqlite3 connections alone' do
+      open_db
+      plain = SQLite3::Database.new(path)
+      @raw << plain
+      rows, masks = masks_set_during { plain.execute_batch2('SELECT count(*) AS c FROM rows') }
+
+      expect(rows).to eq([['0']])
+      expect(masks).to be_empty
     end
 
     it 'leaves statements on other sqlite3 connections alone' do
@@ -259,12 +314,16 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
           case how
           when 'timeout' then Timeout.timeout(0.2) { db[:rows].insert(n: 1) }
           when 'kill_in_prepare' then db[:rows].count
+          # sqlite3_exec waits for the lock without going through
+          # SQLite3::Statement.
+          when 'kill_in_batch2'
+            db.synchronize { |conn| conn.execute_batch2('INSERT INTO rows (n) VALUES (1)') }
           else db[:rows].insert(n: 1)
           end
         end
         sleep 0.2
         case how
-        when 'kill', 'kill_in_prepare' then waiter.kill
+        when 'kill', 'kill_in_prepare', 'kill_in_batch2' then waiter.kill
         when 'raise' then waiter.raise(RuntimeError, 'interrupted')
         end
         sleep 0.2
@@ -300,7 +359,8 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       stdout.lines.map(&:strip)
     end
 
-    { 'kill' => 'joined', 'raise' => 'RuntimeError', 'timeout' => 'Timeout::Error' }.each do |how, expected_outcome|
+    { 'kill' => 'joined', 'raise' => 'RuntimeError', 'timeout' => 'Timeout::Error',
+      'kill_in_batch2' => 'joined' }.each do |how, expected_outcome|
       it "delivers #{how} after the lock wait and leaves the connection usable" do
         lines = run_harness(how)
 

@@ -45,19 +45,39 @@ module Lich
   # another process holds the lock.
   #
   # A busy handler written in Ruby sleeps between retries, which releases the
-  # GVL. SQLite calls it from inside sqlite3_prepare and sqlite3_step, though,
-  # so a Thread#kill, Thread#raise or Timeout delivered during that sleep would
-  # unwind through SQLite's C frames and leave the connection's mutex locked;
-  # the next thread to use that pooled connection would then block forever with
-  # the GVL held. Statements on these connections therefore defer interrupts
-  # until SQLite returns. An interrupt that arrives during a lock wait is
-  # delivered once the statement finishes or the busy timeout expires, as it
-  # was with the C busy timeout.
+  # GVL. SQLite calls it from inside the C call that is waiting for the lock,
+  # though, so a Thread#kill, Thread#raise or Timeout delivered during that
+  # sleep would unwind through SQLite's C frames and leave the connection's
+  # mutex locked; the next thread to use that pooled connection would then
+  # block forever with the GVL held. On these connections every sqlite3 entry
+  # point that can wait for a lock therefore defers interrupts until SQLite
+  # returns:
+  #
+  # - SQLite3::Statement#initialize (sqlite3_prepare) and #step (sqlite3_step),
+  #   which carry #execute, #query, #prepare, #execute_batch, #transaction and
+  #   everything Sequel sends;
+  # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2.
+  #
+  # An interrupt that arrives during a lock wait is delivered once that call
+  # finishes or the busy timeout expires, as it was with the C busy timeout.
+  # SQLite3::Backup#step is not covered; nothing in Lich backs up into a
+  # pooled connection.
   module SQLiteBusyWait
     POLL_INTERVAL_S = 0.001 unless const_defined?(:POLL_INTERVAL_S)
 
-    # Marks a connection that has the Ruby busy handler.
-    module Connection; end
+    # Extended onto each connection that has the Ruby busy handler; marks it
+    # for SQLiteBusyWait::Statement and wraps the Database methods that call
+    # SQLite directly.
+    module Connection
+      private
+
+      # sqlite3's private C method behind #execute_batch2. It runs
+      # sqlite3_exec, which calls the busy handler without going through
+      # SQLite3::Statement. On sqlite3 versions without it nothing calls this.
+      def exec_batch(*args)
+        Thread.handle_interrupt(Object => :never) { super }
+      end
+    end
 
     # Prepended to SQLite3::Statement. Only statements on marked connections
     # change behaviour.
