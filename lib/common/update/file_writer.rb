@@ -11,8 +11,10 @@ module Lich
   module Util
     module Update
       module FileWriter
-        # A staging file is only left behind when its writer was hard-killed
-        # (SIGKILL, power loss). One older than this is treated as such a
+        # A staging file is only left behind when its writer was hard-killed:
+        # SIGKILL, power loss, or a Process.exit! (which skips ensure blocks),
+        # such as the shutdown watchdog's forced exit when a shutdown overruns
+        # its deadline mid-write. One older than this is treated as such a
         # leftover and removed after the next successful write of the same
         # file. The age is large so that a writer stalled on a slow or hung
         # drive keeps its staging file; if one is removed anyway, that
@@ -37,7 +39,8 @@ module Lich
         # The temporary file is removed however safe_write exits: an
         # exception, a Thread#kill, or the process exiting while the
         # background login sync is mid-write. Only a hard kill (SIGKILL,
-        # power loss) can leave one; see STALE_STAGING_AGE.
+        # power loss, or a Process.exit! such as the shutdown watchdog's
+        # forced exit) can leave one; see STALE_STAGING_AGE.
         #
         # After a successful write, leftovers beside +path+ are removed (best
         # effort): a +.old+ left by an older version (unless it holds exactly
@@ -50,7 +53,9 @@ module Lich
         # @param content [String] file content to write
         # @return [void]
         # @raise [StandardError] if the write or rename fails; +path+ is left
-        #   untouched and the temporary file is removed
+        #   untouched and the temporary file is removed. Nothing else is
+        #   touched either: a +.old+ left by an interrupted older update is
+        #   not renamed back, even when +path+ is missing.
         def self.safe_write(path, content)
           tmp = "#{path}.#{Process.pid}.#{Thread.current.object_id}.tmp"
           begin
