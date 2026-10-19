@@ -202,14 +202,35 @@ module Lich
           respond "Restoring Lich5 version #{targetversion} from:"
           respond "    #{restore_snapshot}"
 
+          kept = core_scripts_not_in(restore_snapshot)
           restore_from(restore_snapshot)
 
           Lich::Util::Update.clear_branch_tracking
 
           respond
           respond "Lich5 has been reverted to Lich5 version #{targetversion}"
+          unless kept.empty?
+            respond 'These core scripts are not in the snapshot and were kept at the current version:'
+            respond "    #{kept.join(' ')}"
+          end
           respond "You should exit the game, then log back in.  This will start the game"
           respond "with your previous version of Lich.  Enjoy!"
+        end
+
+        # Core scripts installed now that +snapshot_dir+ has no copy of.
+        # #restore_from leaves them as they are. A snapshot lacks one when
+        # the script was not installed when it was taken (a core script
+        # added since), or when an older Lich was interrupted while copying
+        # the core scripts one by one into scripts/.
+        #
+        # @param snapshot_dir [String] snapshot directory
+        # @return [Array<String>] file names, in CORE_SCRIPTS order
+        def core_scripts_not_in(snapshot_dir)
+          CORE_SCRIPTS.select do |file|
+            live = File.join(SCRIPT_DIR, file)
+            saved = File.join(snapshot_dir, 'scripts', file)
+            (File.exist?(live) || File.symlink?(live)) && !(File.exist?(saved) || File.symlink?(saved))
+          end
         end
 
         # @return [String] file name of the running Lich launcher (lich.rbw)

@@ -722,6 +722,62 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       kept.each { |path| expect(messages).to include("    #{path}") }
     end
 
+    context 'when the snapshot lacks core scripts that are installed' do
+      it 'restores it, keeps them and names them as kept at the current version' do
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts])
+        # Older versions created scripts/ before copying the core scripts
+        # into it one by one, so an interrupted one left it empty.
+        FileUtils.mkdir_p(File.join(dir, 'scripts'))
+        write(File.join(SCRIPT_DIR, 'jinx.lic'), "# jinx 5.22.0\n")
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.22.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'jinx.lic'))).to eq("# jinx 5.22.0\n")
+        expect(messages).to include('These core scripts are not in the snapshot and were kept at the current version:')
+        expect(messages).to include('    go2.lic jinx.lic map.lic')
+        expect(messages.grep(/mine\.lic/)).to be_empty
+      end
+
+      it 'names only the ones missing when the snapshot has some of them' do
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        File.delete(File.join(dir, 'scripts', 'map.lic'))
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.21.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("# map 5.22.0\n")
+        expect(messages).to include('    map.lic')
+      end
+
+      it 'says nothing about kept scripts when the snapshot has every installed core script' do
+        make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages.grep(/kept at the current version/)).to be_empty
+      end
+
+      it 'does not claim scripts were kept when the revert fails' do
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts])
+        FileUtils.mkdir_p(File.join(dir, 'scripts'))
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          raise Errno::EACCES, to if to == File.join(LICH_DIR, lich_name) && from.include?('.lich5-revert-new-')
+
+          original.call(from, to)
+        end
+        messages = capture_responses
+
+        expect { manager.revert }.to raise_error(Errno::EACCES)
+
+        expect(messages.grep(/kept at the current version/)).to be_empty
+      end
+    end
+
     # The client thread that runs ;lich5-update is killed when Lich shuts
     # down (e.g. the game connection drops). Thread#kill runs ensure blocks
     # but skips rescue clauses.
