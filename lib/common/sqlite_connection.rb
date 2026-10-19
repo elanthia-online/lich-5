@@ -68,8 +68,28 @@ module Lich
   #   everything Sequel sends;
   # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2.
   #
-  # An interrupt that arrives during a lock wait is delivered once that call
-  # finishes or the busy timeout expires, as it was with the C busy timeout.
+  # An interrupt that arrives during a lock wait ends the wait: the handler
+  # gives up at its next poll (within about 1 ms), SQLite returns SQLITE_BUSY,
+  # and the interrupt is delivered as the call returns, in place of the
+  # BusyException. The interrupted statement does not run. Letting the wait go
+  # on until the lock freed would deliver the interrupt after the write had
+  # landed: a Timeout around the write reports a failure for a write that
+  # happened, a second interrupt can arrive meanwhile and land outside the
+  # scope it was meant for (a Timeout::ExitException after its Timeout block
+  # has returned), and a killed script's write can land after the writes its
+  # cleanup makes once the kill returns. With the C busy timeout none of this
+  # could happen, because nothing else ran until the wait ended.
+  #
+  # Two exceptions keep waiting until the lock frees or the busy timeout
+  # expires, and deliver the interrupt afterwards:
+  #
+  # - a call that starts with an interrupt already pending, which means the
+  #   caller deferred it with Thread.handle_interrupt to finish its writes
+  #   first (see SQLiteBusyWait.wait_uninterrupted);
+  # - ROLLBACK (see SQLiteBusyWait::Transactions).
+  #
+  # A caller that defers interrupts itself and is interrupted during the
+  # wait gets the BusyException; the interrupt stays deferred, as it asked.
   # SQLite3::Backup#step is not covered; nothing in Lich backs up into or out
   # of lich.db3.
   #
@@ -125,7 +145,7 @@ module Lich
       # sqlite3_exec, which calls the busy handler without going through
       # SQLite3::Statement. On sqlite3 versions without it nothing calls this.
       def exec_batch(*args)
-        Thread.handle_interrupt(Object => :never) { super }
+        SQLiteBusyWait.wait_uninterrupted { super }
       end
     end
 
@@ -173,7 +193,7 @@ module Lich
       def step
         return super unless @connection.is_a?(Connection)
 
-        Thread.handle_interrupt(Object => :never) { super }
+        SQLiteBusyWait.wait_uninterrupted { super }
       end
 
       def close
@@ -190,7 +210,7 @@ module Lich
         prepared = false
         returned = false
         begin
-          Thread.handle_interrupt(Object => :never) do
+          SQLiteBusyWait.wait_uninterrupted do
             yield
             # sqlite3 returns no statement for SQL that is only a comment or
             # whitespace; it is closed at birth and nobody will close it.
@@ -216,24 +236,25 @@ module Lich
     # Extended onto the Sequel::Database that Lich.open_sequel_sqlite returns.
     #
     # With interrupts deferred, a Thread#kill that arrives while BEGIN or
-    # COMMIT waits for the lock is delivered the moment that statement
-    # returns. Thread#kill skips Sequel's rescue clauses and runs only its
-    # ensure, so Sequel's own recovery for a failed BEGIN or COMMIT would not
-    # run:
+    # COMMIT waits for the lock ends the wait, and is delivered the moment
+    # that statement returns, in place of its BusyException. Thread#kill skips
+    # Sequel's rescue clauses and runs only its ensure, so Sequel's own
+    # recovery for a failed BEGIN or COMMIT would not run:
     #
-    # - a COMMIT that timed out would leave the transaction open on the pooled
+    # - a COMMIT that gave up would leave the transaction open on the pooled
     #   connection, holding the write lock until the process exits;
-    # - after a BEGIN that timed out, Sequel's ensure rolls back a transaction
+    # - after a BEGIN that gave up, Sequel's ensure rolls back a transaction
     #   that never started. SQLite raises "cannot rollback - no transaction is
     #   active", and an exception raised in an ensure replaces the kill: the
     #   thread keeps running, and its later transactions are rolled back.
     #
-    # Two interrupts that arrive during one lock wait are both deferred. The
+    # Two interrupts can be queued before the waiting thread runs again. The
     # first is delivered when the statement returns and Sequel rolls back; the
     # second is delivered as the next interrupt mask ends, which without
     # protection is the one around ROLLBACK's prepare, so ROLLBACK never runs
     # and the write transaction stays open. ROLLBACK therefore runs with
-    # interrupts deferred too.
+    # interrupts deferred too, and a lock wait inside it does not give up
+    # because those interrupts are pending.
     module Transactions
       private
 
@@ -253,17 +274,51 @@ module Lich
       end
 
       # ROLLBACK with no transaction open can only raise; skip it. Otherwise
-      # run it whole before delivering a deferred interrupt.
+      # run it whole before delivering a deferred interrupt, without giving
+      # up a lock wait because an interrupt is pending: an abandoned ROLLBACK
+      # would leave the write transaction open on the pooled connection.
       def rollback_transaction(conn, opts = Sequel::OPTS)
         Thread.handle_interrupt(Object => :never) do
           next if conn.respond_to?(:transaction_active?) && !conn.transaction_active?
 
-          super
+          SQLiteBusyWait.keep_waiting_through_interrupts { super }
         end
       end
     end
 
     SETUP_LOCK = Mutex.new unless const_defined?(:SETUP_LOCK)
+
+    # Thread variable: while set, the busy handler keeps waiting even though
+    # an interrupt is pending.
+    KEEP_WAITING_KEY = :lich_sqlite_keep_waiting unless const_defined?(:KEEP_WAITING_KEY)
+
+    # Runs one sqlite3 call that may wait for a lock with interrupts
+    # deferred. An interrupt already pending here was deferred by the caller
+    # (otherwise it would have been delivered before this call), so the
+    # caller wants its writes finished first: the busy handler keeps waiting
+    # for this call. Otherwise an interrupt that arrives during the wait makes
+    # the handler give up.
+    def self.wait_uninterrupted
+      Thread.handle_interrupt(Object => :never) do
+        next yield unless Thread.pending_interrupt?
+
+        keep_waiting_through_interrupts { yield }
+      end
+    end
+
+    # Runs the block with the busy handler waiting through pending
+    # interrupts. Callers defer interrupts around it, so the thread variable
+    # is always restored.
+    def self.keep_waiting_through_interrupts
+      thread = Thread.current
+      outer = thread.thread_variable_get(KEEP_WAITING_KEY)
+      thread.thread_variable_set(KEEP_WAITING_KEY, true)
+      begin
+        yield
+      ensure
+        thread.thread_variable_set(KEEP_WAITING_KEY, outer)
+      end
+    end
 
     # Installs the busy handler on a raw SQLite3::Database and returns it.
     # `shared: true` is for a connection that several threads use at once; it
@@ -276,16 +331,33 @@ module Lich
       timeout_s = timeout_ms / 1000.0
       deadline = nil
       conn.busy_handler do |count|
+        next false if give_up_for_interrupt?
+
         now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         deadline = now + timeout_s if count.zero? || deadline.nil?
         next false if now > deadline
 
-        sleep(POLL_INTERVAL_S) unless count.zero?
+        unless count.zero?
+          sleep(POLL_INTERVAL_S)
+          # An interrupt that arrived during the sleep woke it. Check again
+          # before SQLite retries: the retry runs in C with the GVL held, so
+          # once this check passes no other thread can interrupt before it,
+          # and a write that lands was never interrupted.
+          next false if give_up_for_interrupt?
+        end
         true
       end
       conn.extend(Connection)
       conn.extend(SerializedDatabase) if shared
       conn
+    end
+
+    # True when the busy handler should give up the current lock wait: an
+    # interrupt is pending for the waiting thread (the handler runs on it), it
+    # will be delivered as soon as the call returns, and nothing asked to keep
+    # waiting (see wait_uninterrupted).
+    def self.give_up_for_interrupt?
+      Thread.pending_interrupt? && !Thread.current.thread_variable_get(KEEP_WAITING_KEY)
     end
 
     # Prepends Statement to SQLite3::Statement and defines the Monitor

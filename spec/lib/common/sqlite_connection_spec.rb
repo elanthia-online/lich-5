@@ -4,6 +4,7 @@ require 'tmpdir'
 require 'fileutils'
 require 'open3'
 require 'rbconfig'
+require 'timeout'
 require 'sqlite3'
 require 'sequel'
 
@@ -50,6 +51,14 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         [e.class, monotonic - started]
       end
     end
+  end
+
+  # Waits until `thread` sleeps: in these examples, in the busy handler.
+  def wait_until_sleeping(thread)
+    deadline = monotonic + 5
+    sleep 0.01 until thread.status == 'sleep' || monotonic > deadline
+    expect(thread.status).to eq('sleep')
+    sleep 0.05
   end
 
   # Counts how often a thread that only sleeps gets to run for `seconds`.
@@ -193,6 +202,169 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     expect(db[:rows].select_order_map(:n)).to eq([0, 1])
   end
 
+  it 'gives up a write when an interrupt the caller defers arrives during the lock wait, and keeps it deferred' do
+    db = open_db
+    holder = hold_write_lock
+    outcome = Queue.new
+    caller_thread = Thread.new do
+      Thread.current.report_on_exception = false
+      Thread.handle_interrupt(RuntimeError => :never) do
+        started = monotonic
+        begin
+          db[:rows].insert(n: 1)
+          outcome << [:ok, monotonic - started, Thread.pending_interrupt?]
+        rescue Sequel::DatabaseError => e
+          outcome << [e.class, monotonic - started, Thread.pending_interrupt?]
+        end
+      end
+    end
+    wait_until_sleeping(caller_thread)
+    caller_thread.raise(RuntimeError, 'deferred by caller')
+    result = outcome.pop(timeout: 2)
+    holder.execute('COMMIT')
+
+    expect(result).not_to be_nil, 'the write kept waiting for the lock'
+    expect(result[0]).to eq(Sequel::DatabaseError)
+    expect(result[1]).to be < 2.0
+    expect(result[2]).to be(true)
+    expect { caller_thread.join(5) }.to raise_error(RuntimeError, 'deferred by caller')
+    expect(db[:rows].select_order_map(:n)).to eq([0])
+  end
+
+  # Two interrupts in one lock wait. If the wait went on until the lock freed,
+  # the inner Timeout's interrupt would be delivered after the outer one had
+  # unwound its block, as a bare Timeout::ExitException that `rescue => e`
+  # and `rescue Timeout::Error` do not catch.
+  it 'ends the lock wait on the first of two Timeouts, so the other cannot escape its block later' do
+    db = open_db
+    holder = hold_write_lock
+    log = Queue.new
+    worker = Thread.new do
+      Thread.current.report_on_exception = false
+      begin
+        begin
+          Timeout.timeout(0.2) { Timeout.timeout(0.4) { db[:rows].insert(n: 1) } }
+          log << :returned
+        rescue StandardError => e
+          log << e.class
+        end
+        sleep 0.5 # the caller's code after its rescue
+        log << :carried_on
+      rescue Exception => e # rubocop:disable Lint/RescueException -- what escapes is the point
+        log << e.class
+      end
+    end
+    sleep 0.8
+    holder.execute('COMMIT')
+    worker.join(5)
+
+    expect(Array.new(2) { log.pop(timeout: 2) }).to eq([Timeout::Error, :carried_on])
+    expect(db[:rows].select_order_map(:n)).to eq([0])
+  end
+
+  it 'ends a Lich.open_sqlite_db lock wait on Thread#raise, so a Timeout around the write cannot escape later' do
+    open_db
+    shared = Lich.open_sqlite_db(path)
+    @raw << shared
+    holder = hold_write_lock
+    log = Queue.new
+    worker = Thread.new do
+      Thread.current.report_on_exception = false
+      begin
+        begin
+          Timeout.timeout(0.4) { shared.execute('INSERT INTO rows (n) VALUES (1)') }
+          log << :returned
+        rescue StandardError => e
+          log << e.message
+        end
+        sleep 0.5
+        log << :carried_on
+      rescue Exception => e # rubocop:disable Lint/RescueException -- what escapes is the point
+        log << e.class
+      end
+    end
+    wait_until_sleeping(worker)
+    worker.raise(RuntimeError, 'raised during the wait')
+    sleep 0.6
+    holder.execute('COMMIT')
+    worker.join(5)
+
+    expect(Array.new(2) { log.pop(timeout: 2) }).to eq(['raised during the wait', :carried_on])
+    expect(shared.execute('SELECT n FROM rows ORDER BY n').flatten).to eq([0])
+  end
+
+  # Script cleanup kills a script's threads and runs its cleanup procs without
+  # joining them. The killed thread's write must not land after the cleanup's.
+  it 'abandons a killed thread\'s write before the kill returns, so later writes are not overwritten' do
+    db = open_db
+    holder = hold_write_lock
+    victim = writer(db, 1)
+    wait_until_sleeping(victim)
+    victim.kill
+    dead = victim.join(1)
+    cleanup = writer(db, 2)
+    sleep 0.05
+    holder.execute('COMMIT')
+
+    expect(dead).to be(victim)
+    expect(cleanup.value.first).to eq(:ok)
+    expect(db[:rows].select_order_map(:n)).to eq([0, 2])
+  end
+
+  it 'keeps waiting through an interrupt inside keep_waiting_through_interrupts, and restores the flag' do
+    db = open_db
+    holder = hold_write_lock
+    worker = Thread.new do
+      Thread.current.report_on_exception = false
+      Thread.handle_interrupt(Object => :never) do
+        Lich::SQLiteBusyWait.keep_waiting_through_interrupts { db[:rows].insert(n: 1) }
+      end
+    end
+    wait_until_sleeping(worker)
+    worker.raise(RuntimeError, 'after the write')
+    sleep 0.2
+    still_waiting = worker.alive?
+    holder.execute('COMMIT')
+
+    expect { worker.join(5) }.to raise_error(RuntimeError, 'after the write')
+    expect(still_waiting).to be(true)
+    expect(db[:rows].select_order_map(:n)).to eq([0, 1])
+    expect(worker.thread_variable_get(Lich::SQLiteBusyWait::KEEP_WAITING_KEY)).to be_nil
+  end
+
+  it 'restores the keep-waiting flag when the block raises' do
+    outer = Thread.new do
+      Thread.current.thread_variable_set(Lich::SQLiteBusyWait::KEEP_WAITING_KEY, :outer)
+      begin
+        Lich::SQLiteBusyWait.keep_waiting_through_interrupts { raise ArgumentError }
+      rescue ArgumentError
+        nil
+      end
+      Thread.current.thread_variable_get(Lich::SQLiteBusyWait::KEEP_WAITING_KEY)
+    end
+
+    expect(outer.value).to eq(:outer)
+  end
+
+  # ROLLBACK must run whole; an abandoned ROLLBACK would leave the write
+  # transaction open on the pooled connection.
+  it 'runs ROLLBACK with interrupts deferred and the busy handler waiting through them' do
+    db = open_db
+    seen = []
+    allow(Lich::SQLiteBusyWait).to receive(:keep_waiting_through_interrupts).and_wrap_original do |original, &block|
+      seen << db.synchronize(&:transaction_active?)
+      original.call(&block)
+    end
+    db.transaction do
+      db[:rows].insert(n: 1)
+      raise Sequel::Rollback
+    end
+
+    expect(seen).to eq([true])
+    expect(db.synchronize(&:transaction_active?)).to be(false)
+    expect(db[:rows].select_order_map(:n)).to eq([])
+  end
+
   describe 'which statements defer interrupts' do
     # Records the interrupt masks this thread sets while the block runs.
     def masks_set_during
@@ -334,7 +506,8 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
   # Timeout delivered while it sleeps would unwind through SQLite and leave the
   # connection locked, so the next thread to use it would block forever with
   # the GVL held. Run in a child process so a regression hangs only the child.
-  # The holder commits 0.2 s after the interrupt, well inside the 5 s timeout.
+  # The holder commits 0.2 s after the interrupt, well inside the 5 s timeout;
+  # the interrupt must have ended the wait by then.
   describe 'interrupting a thread that is waiting for the lock' do
     let(:harness) do
       <<~'RUBY'
@@ -375,6 +548,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         when 'raise' then waiter.raise(RuntimeError, 'interrupted')
         end
         sleep 0.2
+        ended_while_locked = !waiter.alive?
         holder.execute('COMMIT')
         outcome = begin
           waiter.join(5) ? 'joined' : 'stuck'
@@ -385,7 +559,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         # Use every pooled connection, including the interrupted one.
         writers = (2..5).map { |n| Thread.new { db[:rows].insert(n: n) } }
         writers.each(&:join)
-        puts outcome, (elapsed < 1.5), db[:rows].select_order_map(:n).inspect
+        puts outcome, ended_while_locked, (elapsed < 1.5), db[:rows].select_order_map(:n).inspect
       RUBY
     end
 
@@ -409,21 +583,22 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
 
     { 'kill' => 'joined', 'raise' => 'RuntimeError', 'timeout' => 'Timeout::Error',
       'kill_in_batch2' => 'joined' }.each do |how, expected_outcome|
-      it "delivers #{how} after the lock wait and leaves the connection usable" do
+      it "ends the lock wait on #{how}, abandons the write and leaves the connection usable" do
         lines = run_harness(how)
 
         expect(lines[0]).to eq(expected_outcome)
+        # The interrupt ended the wait while the lock was still held, and the
+        # interrupted write never ran, even after the lock freed.
         expect(lines[1]).to eq('true')
-        # The interrupted write finishes once the lock frees; the interrupt
-        # is delivered after it.
-        expect(lines[2]).to eq('[0, 1, 2, 3, 4, 5]')
+        expect(lines[2]).to eq('true')
+        expect(lines[3]).to eq('[0, 2, 3, 4, 5]')
       end
     end
 
-    it 'delivers kill after a lock wait inside statement preparation and leaves the connection usable' do
+    it 'ends a lock wait inside statement preparation on kill and leaves the connection usable' do
       lines = run_harness('kill_in_prepare')
 
-      expect(lines).to eq(['joined', 'true', '[0, 2, 3, 4, 5]'])
+      expect(lines).to eq(['joined', 'true', 'true', '[0, 2, 3, 4, 5]'])
     end
   end
 
@@ -513,8 +688,9 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
             db.transaction(mode: mode) { db[:rows].insert(n: 1) }
           end
           sleep 0.1
+          # Back to back, so both are queued before the waiting thread runs
+          # again: the first one ends the wait.
           k.raise(RuntimeError, 'first')
-          sleep 0.01
           how.start_with?('raise_kill') ? k.kill : k.raise(RuntimeError, 'second')
           sleep 0.1
           holder.execute('COMMIT')
@@ -757,6 +933,8 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
           ticks += 1
         end
         waiter.kill if how == 'kill'
+        # Commit at once: the killed thread must not retry its write even if
+        # the lock is free by the time it runs again.
         holder.execute('COMMIT')
         waited = begin
           waiter.value.to_s
@@ -795,11 +973,12 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       expect(%w[1 2]).to include(lines[3])
     end
 
-    it 'delivers a kill to the waiting thread after its lock wait and leaves the connection usable' do
+    it 'ends the waiting thread\'s lock wait on kill, abandons its write and leaves the connection usable' do
+      # The reader may run before or after the holder commits.
       lines = run_harness('kill')
 
-      expect(lines.values_at(0, 1, 4, 5)).to eq(['true', 'false', 'true', '[0, 1, 2]'])
-      expect(%w[1 2]).to include(lines[3])
+      expect(lines.values_at(0, 1, 4, 5)).to eq(['true', 'false', 'true', '[0, 2]'])
+      expect(%w[0 1]).to include(lines[3])
     end
   end
 end
