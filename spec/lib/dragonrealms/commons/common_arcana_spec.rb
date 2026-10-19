@@ -288,7 +288,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
     # the first unrelated line (or '') as if it were the expected message.
     it 'drops patterns that match the empty string (they match every line)' do
       ['.*', 'a*', 'You|', '|You', 'You||Me', '()', '(?:)', '^', '$', '\A', '\z', '\Z', '\B',
-       '(You)?', '\s*', ' .* ', '[a-z]*', 'x{0,3}', '(?i)x*'].each do |matches_empty|
+       '(You)?', '\s*', ' .* ', '[a-z]*', 'x{0,3}', '(?i)x*', '^$', '\A\z'].each do |matches_empty|
         expect(DRCA.custom_message_pattern(matches_empty)).to be_nil, "expected #{matches_empty.inspect} to be dropped"
       end
     end
@@ -303,6 +303,14 @@ RSpec.describe Lich::DragonRealms::DRCA do
     # almost every line with an empty match, so the probe must contain them.
     it 'drops lookarounds for common letters, digits and punctuation' do
       ['(?=e)', 'zzz|(?=e)', '(?=th)', '(?=,)', '(?<=,)', "(?=')", '(?=-)', '(?=\\d)', 'You|(?=Y)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    # Game lines usually end in a period and often hold a double space, so a
+    # lookaround for either context still makes an empty match on most lines.
+    it 'drops lookarounds for a line-final period or a double space' do
+      ['(?<=\\.)$', '(?=\\.$)', '(?=  )', 'zzz|(?<=\\.)$'].each do |zero_width|
         expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
       end
     end
