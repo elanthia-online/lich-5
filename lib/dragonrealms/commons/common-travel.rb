@@ -282,12 +282,14 @@ module Lich
       end
 
       def walk_to_unresolved_failure(room_num)
-        walk_to_unresolved_message("room #{room_num}")
+        walk_to_unresolved_message("cannot walk to room #{room_num}")
         false
       end
 
-      def walk_to_unresolved_message(destination)
-        Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to #{destination}.")
+      # Logs that the current room is unresolved, followed by +consequence+
+      # (what the caller could not do because of it).
+      def walk_to_unresolved_message(consequence)
+        Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, #{consequence}.")
       end
 
       # The id of the nearest room tagged +target+, measured from the room
@@ -303,7 +305,7 @@ module Lich
 
         start = walk_to_current_room
         if start.nil?
-          walk_to_unresolved_message("a room tagged '#{target}'")
+          walk_to_unresolved_message("cannot find the nearest room tagged '#{target}'")
           return nil
         end
 

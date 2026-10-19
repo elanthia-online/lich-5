@@ -119,7 +119,7 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
   end
 
   def unresolved_tag_message(tag)
-    "DRCT: Unable to resolve the current room, cannot walk to a room tagged '#{tag}'."
+    "DRCT: Unable to resolve the current room, cannot find the nearest room tagged '#{tag}'."
   end
 
   # Runs the block in a forked child that has loaded Lich's NilClass patch
