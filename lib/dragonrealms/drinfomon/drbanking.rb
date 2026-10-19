@@ -465,12 +465,15 @@ module Lich
         # Runs the block in one write transaction (adapter.transaction), and
         # holds back the row problems logged meanwhile (see log_row_problem)
         # until the transaction has ended. Logging writes to $stderr, which
-        # lets other threads run. Writes through Sequel connections then wait
-        # for the lock in Ruby, but a write through the shared Lich.db handle
-        # waits inside SQLite with the GVL held, so this thread couldn't run
-        # again to commit and the whole process would stall for the busy
-        # timeout. Nested calls share the outermost call's buffer. The
-        # held-back lines are written however the block ends, error or not.
+        # lets other threads run. Every connection Lich opens to lich.db3
+        # waits for the lock in Ruby (see Lich::SQLiteBusyWait), so their
+        # writes just wait for the commit. A connection left on SQLite's C
+        # busy timeout (sqlite3 without the busy_handler API) would wait with
+        # the GVL held instead, so this thread couldn't run again to commit
+        # and the whole process would stall for the busy timeout; holding the
+        # log lines back keeps the lock short either way. Nested calls share
+        # the outermost call's buffer. The held-back lines are written however
+        # the block ends, error or not.
         # @return [Object] what the block returned
         def in_transaction(db, &block)
           outer = Thread.current[DEFERRED_LOG_KEY]

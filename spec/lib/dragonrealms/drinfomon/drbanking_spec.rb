@@ -505,9 +505,9 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   # Logging writes to $stderr, which lets other threads run. Inside a write
-  # transaction that would let a write through the shared Lich.db handle
-  # (SQLite's C busy timeout, GVL held) stall the whole process, so row
-  # problems are logged once the transaction has ended.
+  # transaction that would let a write through a connection on SQLite's C
+  # busy timeout (GVL held) stall the whole process, so row problems are
+  # logged once the transaction has ended.
   describe 'logging a row problem' do
     # Records each logged line, and whether the settings write lock was held
     # when it was logged (another connection can't take it without waiting).
@@ -653,14 +653,15 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(message_strings.grep(/could not/)).to be_empty
     end
 
-    # The shared Lich.db handle keeps SQLite's C busy timeout, which waits
-    # with the GVL held, so nothing DRBanking does while it holds the lock may
-    # let such a write start: logging is held back until after the commit.
+    # A connection on SQLite's C busy timeout (what Lich.db falls back to
+    # when sqlite3 has no busy_handler API) waits with the GVL held, so
+    # nothing DRBanking does while it holds the lock may let such a write
+    # start: logging is held back until after the commit.
     it 'lets a write through a raw SQLite handle go through when a row problem is logged' do
       seed_row('CharA', { 'Crossings' => 1 })
       SettingsSpecDB.write_raw(data_dir, 'core', 'DR', 'garbage')
       raw = Lich.open_sqlite_db(SettingsSpecDB.path(data_dir))
-      raw.busy_timeout(1000) # shortened; production waits the full 5s
+      raw.busy_timeout(1000) # replaces the Ruby busy handler with a 1s C busy timeout
       logging = Queue.new
       # Like $stderr.puts, the log call lets other threads run for a moment.
       allow(Lich).to receive(:log) do
@@ -684,6 +685,40 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(error).to be_nil
       expect(elapsed).to be < 0.5
       expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+    end
+
+    # The connection Lich.db opens (Lich.open_sqlite_db) waits for the lock in
+    # Ruby, so a write through it that starts inside DRBanking's transaction
+    # waits for the commit instead of stalling the lock holder.
+    it 'lets a write through a Lich.db-style handle start inside the transaction and go through on commit' do
+      seed_row('CharA', { 'Crossings' => 1 })
+      shared = Lich.open_sqlite_db(SettingsSpecDB.path(data_dir))
+      locked = Queue.new
+      allow(adapter).to receive(:save_settings!).and_wrap_original do |original, *args|
+        locked << true
+        # Plain Ruby work, no IO: the thread can only be preempted.
+        spin_until = monotonic + 0.3
+        nil while monotonic < spin_until
+        original.call(*args)
+      end
+
+      banking = Thread.new { described_module.update_balance('Crossings', 7) }
+      locked.pop
+      started = monotonic
+      error = nil
+      begin
+        shared.execute("INSERT INTO script_auto_settings (script, scope, hash) VALUES ('rawscript', 'DR:CharA', x'00')")
+      rescue SQLite3::BusyException => e
+        error = e
+      end
+      elapsed = monotonic - started
+      banking.join
+      shared.close
+
+      expect(error).to be_nil
+      expect(elapsed).to be < 2
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 7)
+      expect(message_strings.grep(/could not/)).to be_empty
     end
 
     it 'waits for the migration transaction, then both are kept' do
