@@ -4,6 +4,7 @@
 # sadly adding global level script methods (2024-06-12)
 
 require_relative 'common/move'
+require_relative 'common/wait_response'
 
 # Sentinel constants for dependency.lic gating.
 # When these are defined, dependency.lic skips its inline versions.

@@ -5,6 +5,7 @@ require_relative '../../../lib/common/limitedarray'
 require_relative '../../../lib/common/feature_flags'
 require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/common/upstreamhook'
+require_relative '../../../lib/common/wait_response'
 
 # Load exact production definitions into an isolated receiver. Requiring all of
 # global_defs would replace shared helpers used by unrelated randomized specs.
