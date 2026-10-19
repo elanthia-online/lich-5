@@ -86,8 +86,11 @@ module Lich
         # #revert ignores. Only once every copy has succeeded is it renamed
         # to L5-snapshot-<DATE-TIME>. If a copy fails, the staging directory
         # is removed and the error is re-raised, so the caller's update
-        # aborts before changing anything. A process killed mid-copy leaves
-        # only an L5-staging-* directory, which #revert never restores from.
+        # aborts before changing anything. The staging directory is also
+        # removed when the thread is killed (Lich kills the client thread
+        # running ;lich5-update when it shuts down), since that clean-up is
+        # in an ensure. A process killed mid-copy leaves only an
+        # L5-staging-* directory, which #revert never restores from.
         #
         # @return [String] path to the published snapshot directory
         # @raise [SystemCallError] if any copy fails; no snapshot is published
@@ -100,19 +103,30 @@ module Lich
           respond 'additional requested updates are completed.'
 
           FileUtils.mkdir_p(BACKUP_DIR)
-          staging_dir = Dir.mktmpdir(STAGING_PREFIX, BACKUP_DIR)
-          begin
-            # Dir.mktmpdir creates 0700; a published snapshot keeps the
-            # permissions a plain mkdir would have given it.
-            File.chmod(0o777 & ~File.umask, staging_dir)
-            copy_core_files(staging_dir)
-            snapshot_subdir = publish_snapshot(staging_dir)
-          rescue StandardError => e
-            FileUtils.rm_rf(staging_dir)
-            respond
-            respond "Snapshot failed (#{e.class}: #{e.message})."
-            respond 'No snapshot was saved and nothing was changed.'
-            raise
+          snapshot_subdir = nil
+          # Interrupts are deferred except while copying and publishing, so a
+          # kill can never land between creating the staging directory and
+          # the ensure that removes it.
+          Thread.handle_interrupt(Object => :never) do
+            staging_dir = Dir.mktmpdir(STAGING_PREFIX, BACKUP_DIR)
+            begin
+              Thread.handle_interrupt(Object => :immediate) do
+                # Dir.mktmpdir creates 0700; a published snapshot keeps the
+                # permissions a plain mkdir would have given it.
+                File.chmod(0o777 & ~File.umask, staging_dir)
+                copy_core_files(staging_dir)
+                snapshot_subdir = publish_snapshot(staging_dir)
+              end
+            rescue StandardError => e
+              respond
+              respond "Snapshot failed (#{e.class}: #{e.message})."
+              respond 'No snapshot was saved and nothing was changed.'
+              raise
+            ensure
+              # Once published, staging_dir no longer exists, so this only
+              # ever removes this call's own unpublished copy.
+              FileUtils.rm_rf(staging_dir) unless snapshot_subdir
+            end
           end
 
           respond
@@ -424,12 +438,15 @@ module Lich
         # lich.rbw with the copies in +snapshot_dir+.
         #
         # Phase 1 copies everything from the snapshot into hidden working
-        # directories next to the targets; a failure there removes them and
-        # leaves the install untouched. Phase 2 swaps the copies in with
-        # renames only, recording each one, and undoes them in reverse if any
-        # rename fails. Core scripts that the snapshot does not contain are
-        # left in place rather than deleted, and so are working directories
-        # an earlier failed revert kept in LIB_DIR for recovery.
+        # directories next to the targets (for a symlinked lich.rbw, next to
+        # the file it points to; see #launcher_path); a failure there
+        # removes them and leaves the install untouched. Phase 2 swaps the
+        # copies in with renames only, recording each one, and undoes them
+        # in reverse if any rename fails. Every entry of LIB_DIR, hidden ones
+        # included, is replaced, so lib/ ends up exactly the snapshot's lib/.
+        # Core scripts that the snapshot does not contain are left in place
+        # rather than deleted, and so are working directories an earlier
+        # failed revert kept in LIB_DIR for recovery.
         #
         # The same clean-up runs when the thread is killed (Lich kills the
         # client thread running ;lich5-update when it shuts down) or gets
@@ -456,15 +473,15 @@ module Lich
             FileUtils.cp_r(File.join(snapshot_dir, 'lib', '.'), new_lib)
             new_scripts = revert_temp_dir(SCRIPT_DIR, 'new', temp_dirs)
             FileUtils.cp_r(File.join(snapshot_dir, 'scripts', '.'), new_scripts)
-            new_lich_dir = revert_temp_dir(LICH_DIR, 'new', temp_dirs)
-            new_lich = File.join(new_lich_dir, lich_file_name)
-            live_lich = File.join(LICH_DIR, lich_file_name)
+            live_lich = launcher_path
+            new_lich_dir = revert_temp_dir(File.dirname(live_lich), 'new', temp_dirs)
+            new_lich = File.join(new_lich_dir, File.basename(live_lich))
             FileUtils.cp(File.join(snapshot_dir, lich_file_name), new_lich)
             File.chmod(File.stat(live_lich).mode, new_lich) if File.exist?(live_lich)
 
             old_lib = revert_temp_dir(LIB_DIR, 'old', temp_dirs)
             old_scripts = revert_temp_dir(SCRIPT_DIR, 'old', temp_dirs)
-            old_lich_dir = revert_temp_dir(LICH_DIR, 'old', temp_dirs)
+            old_lich_dir = revert_temp_dir(File.dirname(live_lich), 'old', temp_dirs)
 
             stage = :swapping
             # This run's working directories, and any a previous failed
@@ -482,7 +499,7 @@ module Lich
               move_entry(File.join(new_scripts, name), live, journal)
             end
 
-            move_entry(live_lich, File.join(old_lich_dir, lich_file_name), journal) if File.exist?(live_lich)
+            move_entry(live_lich, File.join(old_lich_dir, File.basename(live_lich)), journal) if File.exist?(live_lich)
             move_entry(new_lich, live_lich, journal)
             stage = :done
           rescue StandardError => e
@@ -533,6 +550,20 @@ module Lich
               respond 'Seek assistance.'
             end
           end
+        end
+
+        # The file #restore_from replaces with the snapshot's launcher. When
+        # LICH_DIR/lich.rbw is a symlink, that is the file it points to, as
+        # an update writes the new launcher through the link, so the revert
+        # restores that file and keeps the link. A dangling link is replaced
+        # itself, so that Lich has a launcher to start from.
+        #
+        # @return [String] path of the launcher file to replace
+        def launcher_path
+          live_lich = File.join(LICH_DIR, lich_file_name)
+          return live_lich unless File.symlink?(live_lich) && File.exist?(live_lich)
+
+          File.realpath(live_lich)
         end
 
         # Creates a hidden working directory for #restore_from inside

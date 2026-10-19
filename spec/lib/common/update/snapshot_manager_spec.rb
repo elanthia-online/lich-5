@@ -135,6 +135,50 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     end
   end
 
+  # Runs +action+ in its own thread. The first call of +mod+.+meth+ in
+  # that thread for which the block is true parks the thread just before
+  # the call (just after it returns, with +after: true+); it is then killed
+  # and let go. With +then_raise_when+, the first later call of the same
+  # method that it matches parks the thread again and it gets an async
+  # Thread#raise, like the second terminate Ruby sends threads still
+  # running at exit.
+  def kill_during(action, mod, meth, then_raise_when: nil, after: false, &park_if)
+    events = Queue.new
+    resume = Queue.new
+    pending = [park_if, then_raise_when].compact
+    park = lambda do |args|
+      return unless Thread.current[:kill_under_test] && pending.first&.call(*args)
+
+      pending.shift
+      events << :parked
+      resume.pop
+    end
+    allow(mod).to receive(meth).and_wrap_original do |original, *args, **kwargs, &block|
+      park.call(args) unless after
+      result = original.call(*args, **kwargs, &block)
+      park.call(args) if after
+      result
+    end
+    victim = Thread.new do
+      Thread.current[:kill_under_test] = true
+      action.call
+    end
+    victim.report_on_exception = false
+    expect(events.pop(timeout: 30)).to eq(:parked)
+    victim.kill
+    resume << true
+    if then_raise_when
+      expect(events.pop(timeout: 10)).to eq(:parked), 'the undo never reached the second interruption'
+      victim.raise(RuntimeError, 'interrupted again')
+      resume << true
+    end
+    begin
+      expect(victim.join(30)).to eq(victim)
+    rescue RuntimeError => e
+      raise unless e.message == 'interrupted again'
+    end
+  end
+
   describe '#snapshot' do
     before { install('5.22.0') }
 
@@ -309,6 +353,32 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       end
     end
 
+    # The client thread that runs ;lich5-update is killed when Lich shuts
+    # down. Thread#kill runs ensure blocks but skips rescue clauses.
+    context 'when the thread running it is killed part way through' do
+      it 'removes its staging directory when killed while copying lib/' do
+        kill_during(-> { manager.snapshot }, FileUtils, :cp_r) { true }
+
+        expect(published).to be_empty
+        expect(staging).to be_empty
+      end
+
+      it 'removes its staging directory when killed just after creating it' do
+        kill_during(-> { manager.snapshot }, Dir, :mktmpdir, after: true) { |prefix, *| prefix == 'L5-staging-' }
+
+        expect(published).to be_empty
+        expect(staging).to be_empty
+      end
+
+      it 'keeps the snapshot when killed just after publishing it' do
+        kill_during(-> { manager.snapshot }, File, :rename, after: true) { |_from, to| to.include?('L5-snapshot-') }
+
+        expect(published.size).to eq(1)
+        expect(File.read(File.join(published.first, 'lib', 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+        expect(staging).to be_empty
+      end
+    end
+
     it 'leaves only an invisible staging directory when the process is killed mid-copy' do
       skip 'fork is not available on this platform' unless Process.respond_to?(:fork)
       older = make_snapshot('2026-01-01-00-00-00', '5.21.0')
@@ -411,6 +481,79 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       manager.revert
 
       expect(File.stat(File.join(LICH_DIR, lich_name)).mode & 0o777).to eq(0o755)
+    end
+
+    context 'when lich.rbw is a symlink (a launcher linked into a checkout)' do
+      let(:checkout) { File.join(root, 'checkout') }
+      let(:target) { File.join(checkout, lich_name) }
+      let(:live_lich) { File.join(LICH_DIR, lich_name) }
+
+      before do
+        skip 'symlinks are not available on this platform' unless symlinks_supported?
+        make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        write(target, "# lich 5.22.0\n")
+        File.delete(live_lich)
+        File.symlink(target, live_lich)
+      end
+
+      def checkout_temp_dirs
+        Dir.glob(File.join(checkout, '.lich5-revert-*'))
+      end
+
+      it 'restores the file the link points to and keeps the link, as an update writes through it' do
+        manager.revert
+
+        expect(File.symlink?(live_lich)).to be(true)
+        expect(File.readlink(live_lich)).to eq(target)
+        expect(File.read(target)).to eq("# lich 5.21.0\n")
+        expect(revert_temp_dirs + checkout_temp_dirs).to be_empty
+      end
+
+      it 'keeps the permissions of the file the link points to' do
+        skip 'POSIX modes only' if Gem.win_platform?
+        File.chmod(0o750, target)
+
+        manager.revert
+
+        expect(File.stat(target).mode & 0o777).to eq(0o750)
+      end
+
+      it 'leaves the link and the file it points to as they were when the swap fails' do
+        before = { lib: tree(LIB_DIR), scripts: tree(SCRIPT_DIR) }
+        real_target = File.realpath(target) # /var vs /private/var on macOS
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          raise Errno::EIO if to == real_target && from.include?('.lich5-revert-new-')
+
+          original.call(from, to)
+        end
+
+        expect { manager.revert }.to raise_error(Errno::EIO)
+
+        expect(File.readlink(live_lich)).to eq(target)
+        expect(File.read(target)).to eq("# lich 5.22.0\n")
+        expect(tree(LIB_DIR)).to eq(before[:lib])
+        expect(tree(SCRIPT_DIR)).to eq(before[:scripts])
+        expect(revert_temp_dirs + checkout_temp_dirs).to be_empty
+      end
+
+      it 'replaces a dangling link with the snapshot\'s launcher so Lich can start' do
+        File.delete(target)
+
+        manager.revert
+
+        expect(File.symlink?(live_lich)).to be(false)
+        expect(File.read(live_lich)).to eq("# lich 5.21.0\n")
+        expect(revert_temp_dirs).to be_empty
+      end
+    end
+
+    it 'makes lib/ exactly the snapshot\'s lib/, hidden top-level files included' do
+      dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+      write(File.join(LIB_DIR, '.hidden-after-snapshot'), "# hidden\n")
+
+      manager.revert
+
+      expect(tree(LIB_DIR)).to eq(tree(File.join(dir, 'lib')))
     end
 
     it 'ignores a newer plain file that matches the snapshot name pattern' do
@@ -784,42 +927,8 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     context 'when the thread running it is killed part way through' do
       before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
 
-      # Runs the revert in its own thread. The first call of +mod+.+meth+ in
-      # that thread for which the block is true parks the thread just
-      # before the call; it is then killed and let go. With
-      # +then_raise_when+, the first later call of the same method that it
-      # matches parks the thread again and it gets an async Thread#raise,
-      # like the second terminate Ruby sends threads still running at exit.
       def kill_revert_at(mod, meth, then_raise_when: nil, &park_if)
-        events = Queue.new
-        resume = Queue.new
-        pending = [park_if, then_raise_when].compact
-        allow(mod).to receive(meth).and_wrap_original do |original, *args, **kwargs, &block|
-          if Thread.current[:revert_under_test] && pending.first&.call(*args)
-            pending.shift
-            events << :parked
-            resume.pop
-          end
-          original.call(*args, **kwargs, &block)
-        end
-        victim = Thread.new do
-          Thread.current[:revert_under_test] = true
-          manager.revert
-        end
-        victim.report_on_exception = false
-        expect(events.pop(timeout: 30)).to eq(:parked)
-        victim.kill
-        resume << true
-        if then_raise_when
-          expect(events.pop(timeout: 10)).to eq(:parked), 'the undo never reached the second interruption'
-          victim.raise(RuntimeError, 'interrupted again')
-          resume << true
-        end
-        begin
-          expect(victim.join(30)).to eq(victim)
-        rescue RuntimeError => e
-          raise unless e.message == 'interrupted again'
-        end
+        kill_during(-> { manager.revert }, mod, meth, then_raise_when: then_raise_when, &park_if)
       end
 
       it 'undoes every rename when killed during the swap' do
