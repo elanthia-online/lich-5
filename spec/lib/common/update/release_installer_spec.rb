@@ -196,6 +196,143 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       expect(messages).to include('Lich version 5.15.1 is good.  Enjoy!')
       expect(downloaded).to be_empty
     end
+
+    let(:beta_url) { 'https://example.test/lich-5.20.0-beta.1.tar.gz' }
+
+    def beta_release
+      {
+        'tag_name'   => 'v5.20.0-beta.1',
+        'prerelease' => true,
+        'body'       => 'Beta notes',
+        'assets'     => [{ 'name' => Lich::Util::Update::ASSET_TARBALL_NAME, 'browser_download_url' => beta_url }]
+      }
+    end
+
+    # Resolves the beta channel to beta_release and serves the releases list
+    # the beta install reads, plus archives chosen per download URL.
+    def offer_beta(archive_for)
+      allow(resolver).to receive(:resolve_channel_ref).with(:beta).and_return('v5.20.0-beta.1')
+      allow(resolver).to receive(:last_error).and_return(nil)
+      releases_url = "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases"
+      allow(URI).to receive(:parse).and_wrap_original do |original, url|
+        if url.to_s == releases_url
+          double('releases', open: StringIO.new(JSON.generate([beta_release, latest.first])))
+        elsif url.to_s.start_with?('https://example.test/')
+          downloaded << url
+          double('download', open: StringIO.new(archive_for.call(url)))
+        else
+          original.call(url)
+        end
+      end
+    end
+
+    context 'after a beta install' do
+      it 'installs the stable release on the next update after a beta download that raised' do
+        archive = ruby_floor_archive('9.0')
+        offer_beta(->(url) { url == beta_url ? 'not a gzip archive' : archive })
+        installer.prep_betatest
+        expect { installer.confirm_betatest }.to raise_error(Zlib::GzipFile::Error)
+
+        installer.download_release_update
+
+        expect(downloaded).to eq([beta_url, 'https://example.test/lich-5.19.0.tar.gz'])
+        expect(messages).to include('Downloading Lich5 version 5.19.0')
+      end
+
+      it 'installs the stable release on the next update after an aborted beta install' do
+        archive = ruby_floor_archive('9.0')
+        offer_beta(->(_url) { archive })
+        installer.prep_betatest
+        installer.confirm_betatest
+
+        installer.download_release_update
+
+        expect(messages.grep(/UPDATE ABORTED/).size).to eq(2)
+        expect(downloaded).to eq([beta_url, 'https://example.test/lich-5.19.0.tar.gz'])
+      end
+    end
+
+    # GemStone's autostart runs `--announce` on a script thread at login,
+    # while `lich5-update` runs on the client thread, so the two can overlap.
+    context 'when another command runs during an install' do
+      let(:in_snapshot) { Queue.new }
+      let(:release_snapshot) { Queue.new }
+
+      before do
+        allow(snapshot_manager).to receive(:snapshot) do
+          in_snapshot << true
+          release_snapshot.pop
+          nil
+        end
+      end
+
+      # Runs the block on its own thread, recording anything it raises.
+      def on_thread(errors, &block)
+        Thread.new do
+          block.call
+        rescue Exception => e # rubocop:disable Lint/RescueException
+          errors << e
+        end
+      end
+
+      def wait_until_parked(thread)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+        Thread.pass until thread.status == 'sleep' || !thread.alive? ||
+                          Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      end
+
+      # Starts the install, parks it inside the snapshot step, starts
+      # `--announce` on a third thread, then lets the install finish.
+      def announce_during(errors, &install)
+        installer_thread = on_thread(errors, &install)
+        raise 'the install never reached its snapshot step' unless in_snapshot.pop(timeout: 10)
+
+        announcer = on_thread(errors) { installer.announce }
+        wait_until_parked(announcer)
+        announcer_status = announcer.status
+        release_snapshot << true
+        [installer_thread, announcer].each { |t| t.join(10) }
+        announcer_status
+      end
+
+      it 'keeps the version and download URL of an update in progress' do
+        errors = []
+        announcer_status = announce_during(errors) { installer.download_release_update }
+
+        expect(errors).to be_empty
+        # The announcement waited for the update instead of running alongside it.
+        expect(announcer_status).to eq('sleep')
+        expect(downloaded).to eq(['https://example.test/lich-5.19.0.tar.gz'])
+        expect(messages).to include('Downloading Lich5 version 5.19.0')
+        expect(messages.grep(/^Downloading Lich5 version $/)).to be_empty
+      end
+
+      it 'runs the announcement only after the update in progress has finished' do
+        errors = []
+        announce_during(errors) { installer.download_release_update }
+
+        expect(errors).to be_empty
+        aborted = messages.index('*** UPDATE ABORTED ***')
+        announced = messages.index('*** NEW VERSION AVAILABLE ***')
+        expect(aborted).not_to be_nil
+        expect(announced).not_to be_nil
+        expect(aborted).to be < announced
+        expect(client).to have_received(:fetch_github_json).with(%r{/releases/latest$}).twice
+      end
+
+      it 'keeps the beta target of a beta install in progress' do
+        archive = ruby_floor_archive('9.0')
+        offer_beta(->(_url) { archive })
+        installer.prep_betatest
+
+        errors = []
+        announce_during(errors) { installer.confirm_betatest }
+
+        expect(errors).to be_empty
+        expect(downloaded).to eq([beta_url])
+        expect(messages).to include('Downloading Lich5 version 5.20.0-beta.1')
+      end
+    end
   end
 
   describe '#announce' do
