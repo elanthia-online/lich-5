@@ -9,7 +9,9 @@ require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 # get? reads them back in order. common_arcana_spec.rb stubs DRC.bput, so this
 # file pins what only the real bput decides: a custom message pattern that can
 # match an empty string (a trailing '|') makes bput return '' on the first line
-# that arrives, whatever that line is.
+# read that no built-in message matches. bput tries the built-in messages
+# before the custom ones, and handles its own retry replies (a wait, a stun...)
+# before matching anything.
 RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
   let(:drc) { Lich::DragonRealms::DRC }
   let(:drca) { Lich::DragonRealms::DRCA }
@@ -64,6 +66,23 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
     it 'still returns false when the first line is a failure the built-in list matches' do
       game('prepare fireball 10' => ['Something in the area interferes with your spell preparations'])
       expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You chant|')).to be false
+    end
+
+    it "returns the custom text, not '', when the first line starts with it" do
+      game('prepare fireball 10' => ['You chant softly.', 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You chant|')).to eq('You chant')
+      expect(buffer).to eq(['You begin to chant.'])
+    end
+
+    it "resends on a wait reply rather than returning '' for it" do
+      replies = [['...wait 1 seconds.'], ['You begin to chant.']]
+      allow(drc).to receive(:put) do |message|
+        sent << message
+        buffer.concat(replies.shift || [])
+      end
+      allow(drc).to receive(:get?) { buffer.shift }
+      expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You chant|')).to eq('You begin to')
+      expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
     end
   end
 
