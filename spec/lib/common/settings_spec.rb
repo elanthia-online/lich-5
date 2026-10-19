@@ -1586,6 +1586,24 @@ RSpec.describe Lich::Common::Settings do
         expect(stored["m"]).to eq([[1, 9]])
       end
 
+      it "saves a write through an element that [] took by a negative index to that element" do
+        their_write("m" => [[1], [2], [[3]]])
+        game_read('m')[-2].push(9)
+        game_read('m')[-1][-1].push(8)
+        expect(stored["m"]).to eq([[1], [2, 9], [[3, 8]]])
+
+        their_write("m" => [{ "a" => 1 }, { "b" => 2 }])
+        row = game_read('m')[-2]
+        their_write("m" => [{ "a" => 1 }, { "b" => 2 }, { "c" => 3 }])
+        row['k'] = 1
+
+        # Like the element at(-2) returns, it is addressed by the position it
+        # had when it was read.
+        expect(row.path).to eq(["m", 0])
+        expect(stored["m"]).to eq([{ "a" => 1, "k" => 1 }, { "b" => 2 }, { "c" => 3 }])
+        expect(Lich::Messaging).not_to have_received(:msg)
+      end
+
       it "saves a write through what Hash#dig and Hash#fetch returned to that hash, keeping its siblings" do
         their_write("opts" => { "a" => { "x" => 0 }, "sib" => 1 })
         by_dig = game_read('opts').dig('a')
@@ -1845,9 +1863,48 @@ RSpec.describe Lich::Common::Settings do
         allow(@mock_db).to receive(:update_settings).and_call_original
 
         game_read('rows').each { |row| row['y'] = 1 }
+        game_read('rows').each { |row| row.delete('x') }
+        game_read('rows').each { |row| row.each_pair { |k, _v| row.target[k] = 5 } }
 
         expect(@mock_db).not_to have_received(:update_settings)
         expect(stored).to eq("rows" => [{ "x" => 0 }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).exactly(3).times
+      end
+
+      it "reads an element yielded by each with a method in neither list, without storing anything" do
+        their_write("rows" => [{ "x" => 0 }])
+        allow(@mock_db).to receive(:update_settings).and_call_original
+        found = []
+
+        game_read('rows').each { |row| found << row.key?('x') << row.each_pair.to_a }
+
+        expect(found).to eq([true, [["x", 0]]])
+        expect(@mock_db).not_to have_received(:update_settings)
+        expect(Lich::Messaging).not_to have_received(:msg)
+      end
+
+      it "stores nothing, and says so, for a destructive call on a view of a root proxy" do
+        their_write("a" => 1, "b" => 2)
+        root = settings.root_proxy_for("GSIV", script_name: "test_script")
+
+        root.select { true }.delete("a")
+        root.reject { false }.clear
+
+        expect(stored).to eq("a" => 1, "b" => 2)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).twice
+      end
+
+      it "stores nothing, and says so, for a write through the default fetch returned for a missing key" do
+        their_write("opts" => { "a" => 1 }, "l" => [1])
+
+        game_read('opts').fetch('list', []).push('x')
+        game_read('opts').fetch('m', {})['k'] = 1
+        game_read('opts').fetch('m') { {} }['k'] = 1
+        game_read('l').fetch(5, {})['k'] = 1
+        game_read('opts').fetch('m', {}).merge({})['k'] = 1
+
+        expect(stored).to eq("opts" => { "a" => 1 }, "l" => [1])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).exactly(5).times
       end
 
       it "stores nothing and says so for an element of a view once its container has taken the stored elements" do
@@ -1896,21 +1953,22 @@ RSpec.describe Lich::Common::Settings do
         mapped = game_read('l').map { |e| e.merge("m" => 1) }
 
         selected[0].except("nope")['k'] = 1
-        expect { selected[0].merge({}).delete("top") }.to raise_error(NoMethodError)
+        selected[0].merge({}).delete("top")
         mapped[0].merge({})['k'] = 1
-        expect { mapped[0].merge({}).clear }.to raise_error(NoMethodError)
+        mapped[0].merge({}).clear
 
         expect(stored).to eq("l" => [{ "on" => false }, { "on" => true }, { "z" => 1 }], "top" => 1)
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).twice
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).exactly(4).times
       end
 
       it "stores nothing for a new container built from an element yielded by each, instead of writing at the top of the row" do
         their_write("rows" => [{ "x" => 0 }], "top" => 1)
 
         game_read('rows').each { |row| row.merge({})['k'] = 1 }
-        expect { game_read('rows').each { |row| row.merge({}).clear } }.to raise_error(NoMethodError)
+        game_read('rows').each { |row| row.merge({}).clear }
 
         expect(stored).to eq("rows" => [{ "x" => 0 }], "top" => 1)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).twice
       end
 
       it "writes through an element of a new container built from a view of a root proxy into that element" do
@@ -1950,8 +2008,10 @@ RSpec.describe Lich::Common::Settings do
       end
 
       it "stores nothing and says so for a negative Array index in the path" do
+        # [], at and dig make a negative index positive, so only a proxy built
+        # with one directly has it in its path.
         their_write("rows" => [{ "x" => 0 }])
-        last = game_read('rows')[-1]
+        last = Lich::Common::SettingsProxy.new(settings, "GSIV", ["rows", -1], { "x" => 0 }, script_name: "test_script")
 
         last['y'] = 1
 
@@ -2075,6 +2135,50 @@ RSpec.describe Lich::Common::Settings do
           expect(stored["l"]).to eq([1, 2, 3, "stop"])
           expect(Lich::Messaging).to have_received(:msg)
             .with("error", a_string_including("not saved: delete_if was interrupted (Interrupt) while it ran on the stored settings")).once
+        end
+
+        it "says it left early, not that it was interrupted, when the call runs inside a rescue clause" do
+          begin
+            raise ArgumentError, "outer"
+          rescue ArgumentError
+            list.delete_if do |e|
+              break :stopped if e == "stop"
+
+              e == 1
+            end
+          end
+
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: delete_if left early (break, throw or return)")).once
+          expect(Lich::Messaging).not_to have_received(:msg).with("error", a_string_including("interrupted"))
+        end
+
+        it "names the exception the block raised, not one a surrounding rescue clause is handling" do
+          expect do
+            raise ArgumentError, "outer"
+          rescue ArgumentError
+            list.delete_if do |e|
+              raise Interrupt if e == "stop"
+
+              e == 1
+            end
+          end.to raise_error(Interrupt)
+
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: delete_if was interrupted (Interrupt)")).once
+        end
+
+        it "says the thread was killed when it was" do
+          killed = Thread.new do
+            list.delete_if do |e|
+              Thread.current.kill if e == "stop"
+
+              e == 1
+            end
+          end
+
+          expect(killed.join(5)).to eq(killed)
+          expect(stored["l"]).to eq([1, 2, 3, "stop"])
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved: delete_if was stopped (its thread was killed)")).once
         end
 
         it "still stores this session's copy, without a message, for a StandardError" do
@@ -2560,10 +2664,11 @@ RSpec.describe Lich::Common::Settings do
 
       it "does not keep serving an older row after a write that changed nothing returns" do
         their_write("list" => [{ "a" => 1 }], "ext" => 1)
-        list = game_read('list')
-        @writer, _paused, release = start_paused_write { list[-1]['a'] = 2 } # a negative index: not saved
+        row = game_read('list')[0]
+        their_write("list" => "gone", "ext" => 1)
+        @writer, _paused, release = start_paused_write { row['a'] = 2 } # no longer leads to a container: not saved
 
-        their_write("list" => [{ "a" => 1 }], "ext" => 2)
+        their_write("list" => "gone", "ext" => 2)
         expect(game_read('ext')).to eq(2)
         release << true
         @writer.join(5)

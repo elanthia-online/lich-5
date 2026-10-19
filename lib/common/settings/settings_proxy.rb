@@ -255,9 +255,10 @@ module Lich
           # In a detached view (what select or sort returned, or an element
           # yielded by each), a position is not the element's position in
           # the settings, so the element is looked up in the container the
-          # view was taken from.
+          # view was taken from. A negative Array index is made positive, as
+          # for at and dig.
           (detached? && view_element_proxy([key], value)) ||
-            SettingsProxy.new(@settings_module, @scope, @path.dup << key, value, script_name: @script_name)
+            SettingsProxy.new(@settings_module, @scope, @path + (segment_in(@target, key) || [key]), value, script_name: @script_name)
         else
           value
         end
@@ -307,7 +308,15 @@ module Lich
 
             # NEW (5.12.7+): auto-reattach derived views before mutating
             # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
-            if detached?
+            #
+            # A detached proxy without a path (an element yielded by each, a
+            # view's element not found in the settings, a view of a root
+            # proxy, the default fetch returned, or a container built from
+            # one) is never reattached: with an empty path that would bind it
+            # to the whole row. The call runs on its copy, and the save that
+            # follows stores nothing and tells the user
+            # (Settings.save_proxy_changes).
+            if detached? && !@path.empty?
               unless @settings_module._reattach_live!(self)
                 @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
                 return self
@@ -460,7 +469,7 @@ module Lich
             element
           elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
             SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
-          elsif @settings_module.container?(result) && pathless_element?
+          elsif @settings_module.container?(result) && (pathless_element? || fetch_default?(method, args))
             pathless_derived_proxy(result)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
@@ -513,10 +522,18 @@ module Lich
         detached? && @path.empty? && @source.nil?
       end
 
+      # True when fetch returned its default (its second argument or what its
+      # block gave) because the key is not in the container. The default is
+      # not part of the settings, so a write through it is not stored, as for
+      # a plain Hash, instead of being written into or over the container.
+      private def fetch_default?(method, args)
+        method == :fetch && segment_in(@target, args.first).nil?
+      end
+
       # The proxy for a new container (what merge or except return) built
-      # from a #pathless_element? proxy. It is detached and has no path
-      # either, so a write through it is not stored (and, for a view's
-      # element, is refused with a message) instead of landing at the top of
+      # from a #pathless_element? proxy, or for the default fetch returned
+      # (#fetch_default?). It is detached and has no path either, so a write
+      # through it is refused with a message instead of landing at the top of
       # the row.
       private def pathless_derived_proxy(result)
         SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?)

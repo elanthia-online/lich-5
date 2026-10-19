@@ -235,13 +235,15 @@ module Lich
       # (+method+ nil), when the proxy is a detached view with a path (its
       # contents are not the container's), when the stored row has no
       # container of the proxy's class at its path (another session removed or
-      # replaced it), or when the operation raises on the stored container. A
-      # detached view without a path (an element yielded by each) is not
-      # stored at all, as before. Nor is the proxy of a view's element that
-      # can't be found in the settings (SettingsProxy#unlocated?), and the
-      # user is told. Nothing is stored either, and the user is told, when
-      # +block+ leaves early (break, throw or return) or is interrupted while
-      # it runs on the stored container.
+      # replaced it), or when the operation raises on the stored container.
+      # Nothing is stored, and the user is told, for a detached proxy without
+      # a path (an element yielded by each, a view of a root proxy, the
+      # default fetch returned, or a container built from one), nor for the
+      # proxy of a view's element that can't be found in the settings
+      # (SettingsProxy#unlocated?). Nothing is stored either, and the user is
+      # told, when +block+ leaves early (break, throw or return), is
+      # interrupted or its thread is killed while it runs on the stored
+      # container.
       #
       # On success the cache takes the row as stored, unless another thread
       # has re-read a newer one after the store (see store_after_database). On
@@ -289,8 +291,7 @@ module Lich
             return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
           end
           if path.empty?
-            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Detached view without a path; nothing to save." })
-            return nil
+            return refuse_proxy_save(script_name, proxy, "this is not part of the settings (an element yielded by each, a view of the whole settings, the default fetch returned, or a container built from one)")
           end
           label ||= method
           method = nil
@@ -341,6 +342,8 @@ module Lich
           # stored container, leaves this method (and update_settings) before
           # anything is stored, and the rescue below can't catch it. So the
           # user is told that nothing was saved, as for an interrupt.
+          # The exception is taken from the rescue clause, not $!, which in a
+          # script's own rescue clause is the exception that clause handles.
           finished = false
           begin
             result = method == REPLAY_ENTRY_CHANGES ? replay_entry_changes(existing, *args) : existing.public_send(method, *args, &block)
@@ -350,9 +353,13 @@ module Lich
           rescue StandardError => e
             finished = true
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
+          rescue Exception => e # rubocop:disable Lint/RescueException -- reported, then raised again
+            finished = true
+            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings")
+            raise
           ensure
             unless finished
-              how = $! ? "was interrupted (#{$!.class})" : "left early (break, throw or return)"
+              how = Thread.current.status == "aborting" ? "was stopped (its thread was killed)" : "left early (break, throw or return)"
               refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings")
             end
           end
