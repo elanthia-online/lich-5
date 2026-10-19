@@ -28,9 +28,6 @@ module Lich
       # Maximum retry attempts for stow_helper before giving up.
       STOW_HELPER_MAX_RETRIES = 10
 
-      # The game's reply to a command while the character is held or rooted.
-      IMMOBILE_PATTERN = /^You don't seem to be able to move/.freeze
-
       # GET attempts, about 1 s apart, for picking up an item this class
       # lowered to the ground when a hold starts after the lowering.
       #
@@ -248,7 +245,7 @@ module Lich
           # may have a timer on them that prevents you removing them.
           Lich::Messaging.msg("bold", "EquipmentManager: The #{item.short_name} is not ready to be removed yet. Try again later.")
           return false
-        when IMMOBILE_PATTERN
+        when DRC::IMMOBILE_PATTERN
           # Held or rooted: emptying the hands won't help, and what is lowered
           # might not be picked up again while held.
           Lich::Messaging.msg("bold", "EquipmentManager: Unable to move to remove #{item.short_name}. Try again later.")
@@ -911,10 +908,12 @@ module Lich
       # It always sends the first GET, without checking the hands first: a
       # check by name also matches an item in the other hand whose name
       # contains this one's noun (a crossbow and "crossbow bolts"), and the
-      # lowered item would stay on the ground. For the same reason, unless
-      # the GET drew a success reply, it counts the item as picked up only
-      # when a hand whose contents changed now holds it ({#newly_in_hand?}).
-      # Callers pass only items they lowered.
+      # lowered item would stay on the ground. For the same reason it counts
+      # the item as picked up only when a hand whose contents changed now
+      # holds it ({#newly_in_hand?}), whatever the GET's reply: like
+      # {DRCI.get_item_unsafe}, it doesn't trust the success text, which a
+      # stray line can match ("You get down on one knee."). Callers pass only
+      # items they lowered, after the lowering has settled.
       #
       # It does not use {DRCI.get_item_unsafe}, which drops the GET reply
       # this needs to decide on a retry.
@@ -926,17 +925,15 @@ module Lich
       # @api private
       def pick_up_lowered_item?(item, attempts: LOWERED_ITEM_PICKUP_ATTEMPTS)
         hands_before = { 'left' => DRC.left_hand, 'right' => DRC.right_hand }
-        result = nil
         attempts.times do |attempt|
           pause 1 if attempt.positive?
           result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
-          break unless IMMOBILE_PATTERN.match?(result)
+          break unless DRC::IMMOBILE_PATTERN.match?(result)
         end
-        picked_up = DRCI::GET_ITEM_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
 
         # As in DRCI.get_item_unsafe: allow for the hand update to lag the reply.
         10.times do
-          return true if picked_up ? DRCI.in_hands?(item) : newly_in_hand?(item, hands_before)
+          return true if newly_in_hand?(item, hands_before)
 
           pause 0.1
         end

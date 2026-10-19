@@ -347,14 +347,28 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(messages).to include('EquipmentManager: Unable to pick crossbow back up after unloading')
       end
 
-      it 'counts the weapon as picked up on a success reply even when the hands were stale before the GET' do
-        # The hand update for the lowering lags: the left hand still shows the
-        # crossbow when the GET is sent.
+      # A stray line that matches a GET success pattern answers the GET, and
+      # the other hand's "crossbow bolts" contains the weapon's noun. Neither
+      # may count as picking the crossbow up.
+      it 'reports the weapon left on the ground when a stray success-like line answers the GET' do
+        hands.replace('left' => 'crossbow', 'right' => 'crossbow bolts')
         game('unload my crossbow' => 'Your bolt falls from your crossbow to your feet.',
-             'lower ground left'  => 'You lower the crossbow.',
+             'lower ground left'  => -> { hands['left'] = nil; 'You lower the crossbow.' },
              'stow my bolt'       => 'You put your bolt in your quiver.',
-             'get my crossbow'    => 'You pick up the crossbow.')
-        hands.replace('left' => 'crossbow', 'right' => nil)
+             'get my crossbow'    => ['You get down on one knee.', immobile])
+        em.unload_weapon('crossbow')
+        expect(hands).to eq('left' => nil, 'right' => 'crossbow bolts')
+        expect(messages).to include('EquipmentManager: Unable to pick crossbow back up after unloading')
+      end
+
+      # A stray failure-like line answers the GET, but the hand gains the
+      # weapon all the same.
+      it 'counts the weapon as picked up when its hand gains it, even on a failure-like reply' do
+        hands.replace('left' => 'crossbow', 'right' => 'crossbow bolts')
+        game('unload my crossbow' => 'Your bolt falls from your crossbow to your feet.',
+             'lower ground left'  => -> { hands['left'] = nil; 'You lower the crossbow.' },
+             'stow my bolt'       => 'You put your bolt in your quiver.',
+             'get my crossbow'    => -> { hands['left'] = 'crossbow'; 'What were you referring to?' })
         em.unload_weapon('crossbow')
         expect(messages.grep(/Unable to pick crossbow back up/)).to be_empty
       end
