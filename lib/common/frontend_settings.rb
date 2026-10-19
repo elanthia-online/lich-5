@@ -20,10 +20,11 @@ module Lich
       MAX_SCALAR_BYTES = 4096
       MAX_ARGUMENTS = 256
       MUTEX = Mutex.new
-      # Bounded backoff (0.63 s total) for publishing the saved document while
-      # Windows reports a sharing violation because another process briefly
-      # holds frontends.yml open.
-      RENAME_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32].freeze
+      # Bounded backoff (0.31 s total, the same schedule ActiveSessions uses for
+      # its discovery file) for publishing or removing a file while Windows
+      # reports a sharing violation because another process briefly holds it
+      # open.
+      SHARING_VIOLATION_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16].freeze
 
       # Raised when saving would overwrite a settings document created by a
       # newer, unsupported schema version.
@@ -162,7 +163,9 @@ module Lich
         # The temporary file is staged beside the destination so the rename
         # never crosses volumes, and it is closed before the rename because
         # Windows refuses to rename a file that still has an open handle.
-        # Tempfile.create removes the temporary file if publishing fails.
+        # If publishing fails, the temporary file is removed with the same
+        # bounded retry; a removal that still fails is logged and never
+        # replaces the publication error.
         #
         # @param path [String] destination settings path
         # @param configuration [Hash] normalized frontend configuration
@@ -172,36 +175,56 @@ module Lich
         def write_file(path, configuration)
           directory = File.dirname(path)
           FileUtils.mkdir_p(directory)
-          Tempfile.create(['frontends', '.yml.tmp'], directory) do |file|
+          file = Tempfile.create(['frontends', '.yml.tmp'], directory)
+          begin
             file.chmod(0o600)
             file.write(configuration.to_yaml)
             file.flush
             file.fsync
             file.close
-            rename_with_retry(file.path, path)
+            retry_sharing_violation { File.rename(file.path, path) }
+          ensure
+            remove_temp_file(file)
           end
         rescue SystemCallError => error
           raise IOError, "could not save #{FILE_NAME}: #{error.message}"
         end
 
-        # Renames a file, retrying the transient sharing violations Windows
-        # reports as EACCES while another process holds either path open.
+        # Best-effort removal of an unpublished temporary file. Every error is
+        # logged and swallowed so it cannot replace the error that caused the
+        # save to fail.
+        #
+        # @param file [File] temporary file created by write_file
+        # @return [void]
+        # @api private
+        def remove_temp_file(file)
+          file.close unless file.closed?
+          return unless File.exist?(file.path)
+
+          retry_sharing_violation { File.unlink(file.path) }
+        rescue Errno::ENOENT
+          nil
+        rescue StandardError => error
+          log_warning("could not remove temporary #{FILE_NAME} file #{file.path}: #{error.message}")
+        end
+
+        # Runs a filesystem mutation, retrying the transient sharing violations
+        # Windows reports as EACCES while another process holds the file open.
         # Every other error is raised immediately.
         #
-        # @param source [String] closed temporary file path
-        # @param destination [String] destination settings path
-        # @return [void]
+        # @yield the filesystem mutation to attempt
+        # @return [Object] the mutation result
         # @raise [Errno::EACCES] when every bounded retry is exhausted
-        # @raise [SystemCallError] for any other rename failure
+        # @raise [SystemCallError] for any other failure
         # @api private
-        def rename_with_retry(source, destination)
+        def retry_sharing_violation
           attempt = 0
           begin
-            File.rename(source, destination)
+            yield
           rescue Errno::EACCES
-            raise if attempt >= RENAME_RETRY_DELAYS.length
+            raise if attempt >= SHARING_VIOLATION_RETRY_DELAYS.length
 
-            sleep(RENAME_RETRY_DELAYS.fetch(attempt))
+            sleep(SHARING_VIOLATION_RETRY_DELAYS.fetch(attempt))
             attempt += 1
             retry
           end

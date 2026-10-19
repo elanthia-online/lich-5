@@ -501,6 +501,7 @@ RSpec.describe Lich::Common::FrontendSettings do
     # default, so the :windows mode refuses a rename while any live Ruby File on
     # either path is still open.
     let(:rename_sources) { [] }
+    let(:unlink_attempts) { [] }
     let(:previous_configuration) do
       described_class.replace!(
         data_dir: data_dir,
@@ -512,7 +513,9 @@ RSpec.describe Lich::Common::FrontendSettings do
     def held_open?(path)
       expanded = File.expand_path(path)
       ObjectSpace.each_object(File).any? do |file|
-        !file.closed? && File.expand_path(file.path) == expanded
+        next false if file.closed? || file.path.nil?
+
+        File.expand_path(file.path) == expanded
       rescue IOError, SystemCallError
         false
       end
@@ -530,9 +533,29 @@ RSpec.describe Lich::Common::FrontendSettings do
       )
     end
 
+    # Emulates Windows refusing to delete a temporary file that another process
+    # (an indexer or scanner) still holds open: the next +count+ unlinks of a
+    # staged temporary file raise Errno::EACCES, then the real unlink runs.
+    def refuse_temp_unlinks(count)
+      @unlink_refusals = count
+    end
+
     before do
       @rename_mode = nil
+      @unlink_refusals = 0
       allow(described_class).to receive(:sleep)
+      allow(Lich).to receive(:log)
+      %i[unlink delete].each do |name|
+        allow(File).to receive(name).and_wrap_original do |original, *paths|
+          if @unlink_refusals.positive? && paths.any? { |path| path.to_s.end_with?('.yml.tmp') }
+            unlink_attempts << paths
+            @unlink_refusals -= 1
+            raise Errno::EACCES, "unlink #{paths.join(', ')}"
+          end
+          unlink_attempts << paths if paths.any? { |path| path.to_s.end_with?('.yml.tmp') }
+          original.call(*paths)
+        end
+      end
       allow(File).to receive(:rename).and_wrap_original do |original, source, destination|
         case @rename_mode
         when :windows
@@ -548,8 +571,11 @@ RSpec.describe Lich::Common::FrontendSettings do
       end
     end
 
-    # Disarm the rename double before the outer hook restores an empty file.
-    after { @rename_mode = nil }
+    # Disarm the doubles before the outer hook restores an empty file.
+    after do
+      @rename_mode = nil
+      @unlink_refusals = 0
+    end
 
     it 'closes the temporary file before publishing it' do
       @rename_mode = :windows
@@ -593,7 +619,7 @@ RSpec.describe Lich::Common::FrontendSettings do
 
       expect { save_wrayth_override }.to raise_error(IOError, /\Acould not save frontends\.yml: Permission denied/)
 
-      delays = described_class::RENAME_RETRY_DELAYS
+      delays = described_class::SHARING_VIOLATION_RETRY_DELAYS
       expect(rename_sources.length).to eq(delays.length + 1)
       expect(rename_sources.uniq.length).to eq(1)
       delays.each { |delay| expect(described_class).to have_received(:sleep).with(delay).ordered }
@@ -614,6 +640,66 @@ RSpec.describe Lich::Common::FrontendSettings do
       expect(described_class).not_to have_received(:sleep)
       expect(described_class.current).to eq(previous_configuration)
       expect(leftover_temp_files).to be_empty
+    end
+
+    it 'keeps the publication error and logs when the temporary file cannot be removed either' do
+      previous_configuration
+      previous_bytes = File.binread(settings_file)
+      @rename_mode = Errno::EACCES
+      delays = described_class::SHARING_VIOLATION_RETRY_DELAYS
+      refuse_temp_unlinks(Float::INFINITY)
+
+      expect { save_wrayth_override }.to raise_error(IOError) { |error|
+        expect(error.message).to match(/\Acould not save frontends\.yml: Permission denied/)
+        expect(error.message).not_to include('unlink')
+      }
+
+      expect(rename_sources.length).to eq(delays.length + 1)
+      expect(unlink_attempts.length).to eq(delays.length + 1)
+      expect(unlink_attempts.flatten.uniq).to eq(rename_sources.uniq)
+      expect(described_class).to have_received(:sleep).exactly(delays.length * 2).times
+      expect(Lich).to have_received(:log).with(/\Awarning: could not remove temporary frontends\.yml file .*Permission denied/).once
+      expect(File.binread(settings_file)).to eq(previous_bytes)
+      expect(described_class.current).to eq(previous_configuration)
+      expect(leftover_temp_files.map { |path| File.basename(path) }).to eq(rename_sources.uniq.map { |path| File.basename(path) })
+    end
+
+    it 'retries removing a temporary file that another process briefly holds open' do
+      previous_configuration
+      @rename_mode = Errno::EXDEV
+      refuse_temp_unlinks(2)
+
+      expect { save_wrayth_override }.to raise_error(IOError, /\Acould not save frontends\.yml: #{Regexp.escape(Errno::EXDEV.new.message)}/)
+
+      expect(rename_sources.length).to eq(1)
+      expect(unlink_attempts.length).to eq(3)
+      expect(described_class).to have_received(:sleep).with(0.01).ordered
+      expect(described_class).to have_received(:sleep).with(0.02).ordered
+      expect(described_class).to have_received(:sleep).twice
+      expect(Lich).not_to have_received(:log)
+      expect(described_class.current).to eq(previous_configuration)
+      expect(leftover_temp_files).to be_empty
+    end
+
+    it 'follows the native rename rule when a reader holds the destination open' do
+      previous_configuration
+      reader = File.open(settings_file, 'r')
+      allow(described_class).to receive(:sleep) { reader.close unless reader.closed? }
+
+      configuration = save_wrayth_override
+
+      expect(YAML.safe_load_file(settings_file)).to eq(configuration)
+      expect(described_class.current).to eq(configuration)
+      expect(leftover_temp_files).to be_empty
+      if Gem.win_platform?
+        # Windows refuses to replace a file that a handle without
+        # FILE_SHARE_DELETE holds open, so the first rename must be retried.
+        expect(described_class).to have_received(:sleep).with(0.01).once
+      else
+        expect(described_class).not_to have_received(:sleep)
+      end
+    ensure
+      reader.close if reader && !reader.closed?
     end
 
     it 'stages the temporary file beside the destination with owner-only access' do
