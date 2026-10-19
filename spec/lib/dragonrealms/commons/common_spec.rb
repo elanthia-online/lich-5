@@ -730,10 +730,10 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'handles a line held during the wait like any other reply' do
-        allow(described_class).to receive(:fix_standing).and_return(true)
+        allow(described_class).to receive(:stand_before?).and_return(true)
         game(['...wait 1 seconds.', 'You must be standing to do that.'], ['You get a gem from inside your pouch.'])
         expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
-        expect(described_class).to have_received(:fix_standing).once
+        expect(described_class).to have_received(:stand_before?).once
         # Resent once for the wait line, then once more after standing.
         expect(sent.size).to eq(3)
       end
@@ -842,12 +842,6 @@ RSpec.describe Lich::DragonRealms::DRC do
       context 'when a command needs the character standing' do
         before { allow(described_class).to receive(:standing?).and_return(false) }
 
-        it 'stands once and does not resend the command when the stand is refused' do
-          game('get my gem' => 'You must be standing to do that.', 'stand' => immobile)
-          expect(described_class.bput('get my gem', { 'timeout' => 0.3 }, 'You get')).to eq('')
-          expect(sent).to eq(['get my gem', 'stand'])
-        end
-
         it 'does not resend the command when standing fails for being overburdened' do
           game('get my gem' => 'You must be standing to do that.',
                'stand'      => 'You are overburdened and cannot manage to stand.')
@@ -862,6 +856,80 @@ RSpec.describe Lich::DragonRealms::DRC do
                'stand'      => -> { standing = true; ['You stand back up.'] })
           expect(described_class.bput('get my gem', 'You get')).to eq('You get')
           expect(sent).to eq(['get my gem', 'stand', 'get my gem'])
+        end
+      end
+
+      # The command draws a posture line and the STAND draws the immobile
+      # reply until the hold ends. A virtual clock runs bput's 15 s timeout
+      # and the 1 s pauses at once; every reply arrives 0.3 s after its send.
+      context 'when a command needs the character standing and a hold refuses the STAND' do
+        let(:log) { [] }
+        let(:clock) { { now: 0.0 } }
+
+        def held_game(hold_for:, stand_refusal: immobile)
+          standing = false
+          queue = []
+          allow(Time).to receive(:now) { Time.at(1_000_000 + clock[:now]) }
+          allow(described_class).to receive(:pause) { |seconds = 1| clock[:now] += seconds.to_f }
+          allow(described_class).to receive(:standing?) { standing }
+          allow(described_class).to receive(:clear) { queue.reject! { |at, _| at <= clock[:now] } }
+          allow(described_class).to receive(:get?) do
+            index = queue.index { |at, _| at <= clock[:now] }
+            index && queue.delete_at(index).last
+          end
+          allow(described_class).to receive(:put) do |message|
+            log << [clock[:now], message]
+            raise "#{log.size} sends" if log.size > 100
+
+            at = clock[:now] + 0.3
+            reply = if message == 'stand'
+                      next queue << [at, stand_refusal] if at < hold_for
+
+                      standing = true
+                      'You stand back up.'
+                    else
+                      standing ? 'You get a gem.' : 'You must be standing to do that.'
+                    end
+            queue << [at, reply]
+          end
+        end
+
+        def sent_at(message) = log.select { |_, m| m == message }.map(&:first)
+
+        it 'keeps trying to stand and resends the command when the hold ends within the timeout' do
+          held_game(hold_for: 5)
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(log.map(&:last).uniq).to eq(['get my gem', 'stand', 'get my gem'].uniq)
+          expect(log.first.last).to eq('get my gem')
+          expect(log.last.last).to eq('get my gem')
+          expect(sent_at('get my gem').size).to eq(2)
+          expect(sent_at('stand').size).to be_between(4, 6)
+          expect(clock[:now]).to be < 7
+        end
+
+        it 'still resends when the hold ends 2 s before the timeout' do
+          held_game(hold_for: 13)
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(sent_at('get my gem').size).to eq(2)
+        end
+
+        it 'tries about once a second until the timeout, then gives up without resending' do
+          held_game(hold_for: 1_000)
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          stands = sent_at('stand')
+          expect(sent_at('get my gem').size).to eq(1)
+          expect(stands.size).to be_between(10, 16)
+          expect(stands.each_cons(2).map { |a, b| b - a }.min).to be >= 1
+          expect(stands.last).to be < 15
+          expect(clock[:now]).to be < 17
+          expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(a_string_including('No match was found'))
+        end
+
+        it 'stands only once over the whole timeout when unconscious' do
+          held_game(hold_for: 1_000, stand_refusal: "You're unconscious!")
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          expect(sent_at('stand').size).to eq(1)
+          expect(sent_at('get my gem').size).to eq(1)
         end
       end
     end

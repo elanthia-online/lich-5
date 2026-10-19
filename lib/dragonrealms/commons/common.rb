@@ -183,10 +183,11 @@ module Lich
             timer = Time.now
             next
           when /^You must be standing/, /^You should stand up first/, /^You'll need to stand up first/, /^You can't do that while (sitting|kneeling|lying)/, /^You should be sitting up/, /^You really should be standing to play/, /^After failing to draw a breath for what feels like forever/
-            # When standing can't succeed now (held, unconscious, overburdened),
-            # resending would draw the same reply again at once, so keep
-            # reading until the timeout instead.
-            next unless fix_standing
+            # Stand, then resend. When standing can't succeed (unconscious,
+            # overburdened, or a hold that outlasts the timeout), resending
+            # would draw the same reply again at once, so keep reading until
+            # the timeout instead.
+            next unless stand_before?(timer + timeout)
 
             waitrt?
             put message
@@ -602,14 +603,58 @@ module Lich
       # @return [Boolean] true once standing, false when the game says
       #   standing cannot succeed now
       def fix_standing
+        case stand_result
+        when :standing
+          true
+        when :immobile
+          pause 1
+          false
+        else
+          false
+        end
+      end
+
+      # Stands for bput's posture recovery. Like {fix_standing}, but while the
+      # STAND draws the immobile reply (held or rooted) it tries again about
+      # once a second until the deadline, so a hold that ends in time still
+      # lets bput resend the command. The other states that prevent standing
+      # (unconscious, overburdened, ...) give up at once, as there is no reply
+      # that says they have ended.
+      #
+      # @param deadline [Time] when bput's own timeout runs out
+      # @return [Boolean] true once standing, false when standing can't
+      #   succeed or the hold outlasts the deadline
+      # @api private
+      def stand_before?(deadline)
         loop do
-          return true if standing?
+          case stand_result
+          when :standing
+            return true
+          when :immobile
+            # No STAND after the deadline: bput would not wait for its reply.
+            return false if Time.now + 1 >= deadline
+
+            pause 1
+          else
+            return false
+          end
+        end
+      end
+
+      # Sends STAND until standing or until the game says standing can't
+      # succeed now.
+      #
+      # @return [Symbol] :standing; :immobile on the held-or-rooted reply;
+      #   :cannot_stand for the other replies in CANNOT_STAND_PATTERN
+      # @api private
+      def stand_result
+        loop do
+          return :standing if standing?
 
           result = bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
           next unless result =~ CANNOT_STAND_PATTERN
 
-          pause 1 if result.start_with?("You don't seem to be able to move")
-          return false
+          return result.start_with?("You don't seem to be able to move") ? :immobile : :cannot_stand
         end
       end
 
