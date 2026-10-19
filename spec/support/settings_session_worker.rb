@@ -53,6 +53,10 @@
 #                               kept[name].<method>(*args)      => result
 #   kdelete_if <name> <json>    kept[name].delete_if { |e| e == value } => "ok"
 #   kget  <name>                kept[name], unwrapped           => value
+#   keach <name> <field> <json> kept[name].each { |e| e[field] = value } => "ok"
+#   kveach <name> <field> <json>
+#                               kept[name].each { |_k, v| v[field] = value } => "ok"
+#   ksortpush <name> <json>     kept[name].sort.push(value)     => "ok"
 #
 # <api> is G (GameSettings), C (CharSettings), S (Settings), I (InstanceSettings)
 # or IG (InstanceSettings.game, which reads and writes through a root proxy).
@@ -240,6 +244,17 @@ while (line = $stdin.gets)
       'ok'
     when 'kget'
       plain(KEPT.fetch(api))
+    when 'keach'
+      value = JSON.parse(rest)
+      KEPT.fetch(api).each { |e| e[key] = value }
+      'ok'
+    when 'kveach'
+      value = JSON.parse(rest)
+      KEPT.fetch(api).each { |_k, v| v[key] = value }
+      'ok'
+    when 'ksortpush'
+      KEPT.fetch(api).sort.push(JSON.parse([key, rest].compact.join(' ')))
+      'ok'
     when 'row'
       row_for(api)
     when 'threads'
