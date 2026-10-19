@@ -1499,6 +1499,16 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(described_class).to have_received(:start_script).once
       end
 
+      it 'does not raise when another thread clears the cooldown while it is being checked' do
+        described_class.instance_variable_set(:@moonwatch_restart_blocked_until, monotonic + 60)
+        allow(Process).to receive(:clock_gettime).and_wrap_original do |original, *args|
+          # What another caller's moonwatch_data_ready! does, without the lock.
+          described_class.instance_variable_set(:@moonwatch_restart_blocked_until, nil)
+          original.call(*args)
+        end
+        expect(described_class.moonwatch_restart_blocked?).to be true
+      end
+
       it 'does not apply to a started moonwatch that keeps running without publishing' do
         starts = 0
         allow(described_class).to receive(:start_script).with('moonwatch') do

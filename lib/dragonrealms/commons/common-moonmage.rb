@@ -693,10 +693,13 @@ module Lich
       # Whether a recent failed start (see note_moonwatch_start_failure) still
       # blocks check_moonwatch from starting moonwatch.
       #
+      # Reads the deadline once: another thread's moonwatch_data_ready! may
+      # clear it at any moment.
+      #
       # @return [Boolean]
       def moonwatch_restart_blocked?
-        !@moonwatch_restart_blocked_until.nil? &&
-          Process.clock_gettime(Process::CLOCK_MONOTONIC) < @moonwatch_restart_blocked_until
+        blocked_until = @moonwatch_restart_blocked_until
+        !blocked_until.nil? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < blocked_until
       end
 
       # Called after a wait for moon data has failed. When moonwatch is still
