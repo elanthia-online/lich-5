@@ -595,6 +595,13 @@ module Lich
       # immediately from the OS or the peer, and the backoff would only hold
       # the calling script. The next call tries again.
       #
+      # The split is by exception class, not by what happened on the wire. A
+      # dropped connection is retried when it arrives as ECONNRESET or
+      # EOFError, but raised at once when it arrives as ECONNABORTED, EPIPE or
+      # an OpenSSL error (OpenSSL 3 reports a connection closed without a TLS
+      # close_notify as "unexpected eof while reading"). Which class a drop
+      # arrives as depends on the platform and the OpenSSL version.
+      #
       # @param method [String] Slack API method name (e.g. 'chat.postMessage')
       # @param params [Hash] request parameters including token
       # @param deadline [Float, nil] monotonic deadline; when set, each attempt
@@ -633,12 +640,12 @@ module Lich
           raise ApiError, "Failed to parse Slack API response: #{e.message}"
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
-          raise NetworkError, "SlackBot: Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
+          raise NetworkError, "Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
 
           delay = [BASE_RETRY_DELAY_SECONDS * (2**retries), MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.25).to_i)
           total_delay = delay + jitter
-          raise NetworkError, "SlackBot: Network error, no time left to retry: #{e.message}" if deadline && total_delay >= seconds_left(deadline)
+          raise NetworkError, "Network error, no time left to retry: #{e.message}" if deadline && total_delay >= seconds_left(deadline)
 
           retries += 1
           Lich.log "SlackBot: Network error: #{e.message}. Retry ##{retries} in #{total_delay}s..."
@@ -646,7 +653,7 @@ module Lich
           retry
         rescue SystemCallError, IOError, OpenSSL::OpenSSLError => e
           # EOFError (an IOError), ECONNRESET and EINVAL are retried above.
-          raise NetworkError, "SlackBot: Network error: #{e.message} (#{e.class})"
+          raise NetworkError, "Network error: #{e.message} (#{e.class})"
         end
       end
 
@@ -689,7 +696,7 @@ module Lich
       #   proxy's CONNECT reply) or the request is still running at the deadline
       def request_before(http, req, deadline)
         remaining = seconds_left(deadline)
-        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+        raise NetworkError, 'Time budget for the request is exhausted' if remaining <= 0
 
         # With http_proxy set, deciding whether to use it resolves the target
         # host, which has no timeout of its own. No socket is open yet, so
@@ -697,7 +704,7 @@ module Lich
         # connect.
         proxied = Timeout.timeout(remaining) { http.proxy? }
         remaining = seconds_left(deadline)
-        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+        raise NetworkError, 'Time budget for the request is exhausted' if remaining <= 0
 
         # TCP connect and TLS handshake, plus the CONNECT reply through a proxy.
         share = remaining * CONNECT_SHARE_OF_BUDGET / (proxied ? 3.0 : 2.0)
@@ -705,9 +712,9 @@ module Lich
         http.read_timeout = share
         http.write_timeout = share
         begin
-          Timeout.timeout(remaining, Net::OpenTimeout, 'SlackBot: connecting ran into the send deadline') { http.start }
+          Timeout.timeout(remaining, Net::OpenTimeout, 'connecting ran into the send deadline') { http.start }
           remaining = seconds_left(deadline)
-          raise NetworkError, 'SlackBot: Time budget for the request ran out while connecting' if remaining <= 0
+          raise NetworkError, 'Time budget for the request ran out while connecting' if remaining <= 0
 
           http.read_timeout = remaining
           http.write_timeout = remaining

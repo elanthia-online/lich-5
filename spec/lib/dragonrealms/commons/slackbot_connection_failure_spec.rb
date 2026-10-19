@@ -247,7 +247,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
         result = :not_called
         expect { result = bot.direct_message('alice', 'Detected low vitality') }.not_to raise_error
         expect(result).to be_nil
-        expect(messages).to include(/Failed to send Slack message to alice/)
+        expect(messages).to include(/Failed to send Slack message to alice: Network error: .*#{spec[:expected]}/)
+        expect(messages.grep(/SlackBot: .*SlackBot: /)).to be_empty
         expect(sleeps).to be_empty
       end
 
@@ -291,6 +292,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
 
           expect(bot.initialized?).to be false
           expect(bot.error_message).to start_with('Slack unavailable: ').and include(spec[:expected].to_s)
+          expect(bot.error_message).not_to include('SlackBot:')
           expect(messages).to include("SlackBot: #{bot.error_message}")
           expect(logs).to include(a_string_including(spec[:expected].to_s))
           expect(lnet_chats).to be_empty
