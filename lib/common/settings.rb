@@ -140,11 +140,12 @@ module Lich
       # A Monitor, so a write that calls another write for the same entry in
       # the same thread does not deadlock. Lich's own code never takes two
       # entries' locks at once. The block of an in-place method called through
-      # a SettingsProxy (delete_if { ... }) is replayed under its entry's lock
-      # (see save_proxy_changes); a block that reads another entry not yet
-      # cached takes that entry's lock as well. Such blocks must have no side
-      # effects (SettingsProxy::MUTATING_METHODS), and shipped scripts' are
-      # plain predicates.
+      # a SettingsProxy (delete_if { ... }) runs under its entry's lock, on
+      # this session's copy and again when it is replayed (see
+      # with_proxy_lock and save_proxy_changes); a block that reads another
+      # entry not yet cached takes that entry's lock as well. Such blocks must
+      # have no side effects (SettingsProxy::MUTATING_METHODS), and shipped
+      # scripts' are plain predicates.
       def self.with_cache_lock(cache_key, &block)
         cache_lock(cache_key).synchronize(&block)
       end
@@ -264,10 +265,26 @@ module Lich
       #   replayed and stored: its result on the stored container, and that
       #   container (part of the row now cached); nil otherwise
       def self.save_proxy_changes(proxy, method = nil, args = [], block = nil, label: nil)
-        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
-        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
+        script_name = proxy_script_name(proxy)
         with_cache_lock("#{script_name || ""}::#{proxy.scope}") { store_proxy_changes(proxy, script_name, method, args, block, label) }
       end
+
+      # Runs the block holding the lock of +proxy+'s cache entry, the one
+      # save_proxy_changes takes (see with_cache_lock). SettingsProxy holds
+      # it from the change to its copy until it shows the stored container,
+      # so that two threads writing through proxies of one entry show the
+      # stored containers in the order they were stored: a slower thread
+      # can't put an older one over a newer one.
+      def self.with_proxy_lock(proxy, &block)
+        with_cache_lock("#{proxy_script_name(proxy) || ""}::#{proxy.scope}", &block)
+      end
+
+      # The script whose row +proxy+ writes to: proxy.script_name if it has
+      # one (InstanceSettings), otherwise the current script's name.
+      def self.proxy_script_name(proxy)
+        proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
+      end
+      private_class_method :proxy_script_name
 
       # save_proxy_changes's database write and cache update, under the cache
       # entry's lock (see with_cache_lock). The replayed block runs under that
@@ -428,11 +445,21 @@ module Lich
 
       # Tells the user that a write through a proxy could not be saved.
       #
+      # For writes through the elements one call to SettingsProxy#each
+      # yielded (SettingsProxy#refusals), the user is told about the first
+      # one, and that the others are not saved either; each of them is still
+      # logged.
+      #
       # @return nil
       def self.refuse_proxy_save(script_name, proxy, reason)
+        refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
+        if refusals
+          refusals[:count] += 1
+          reason = "#{reason}; later writes through what this each loop yields are not saved either" if refusals[:count] == 1
+        end
         message = "--- Error: settings for #{script_name} (#{proxy.scope}) not saved: #{reason} ---"
         _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{message}" })
-        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging)
+        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && (refusals.nil? || refusals[:count] == 1)
         nil
       end
       private_class_method :refuse_proxy_save

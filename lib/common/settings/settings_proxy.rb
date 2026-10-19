@@ -19,7 +19,11 @@ module Lich
       # of a view, or of an element yielded by each, that can't be found in
       # the settings: a write through it is refused with a message instead
       # of being saved somewhere else.
-      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false)
+      #
+      # +refusals+, shared by the elements one call to #each yields (and the
+      # containers taken from them), counts the writes through them that were
+      # refused, so that the user is told once per loop (see #refusals).
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -28,10 +32,18 @@ module Lich
         @script_name = script_name
         @source = source
         @unlocated = unlocated
+        @refusals = refusals
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
       attr_reader :target, :path, :scope, :script_name
+
+      # For an element yielded by #each, or a container taken from one: a
+      # Hash shared by everything that one call to #each yielded, whose
+      # :count is the number of writes through them that were refused
+      # (Settings.refuse_proxy_save tells the user about the first one only).
+      # nil for any other proxy.
+      attr_reader :refusals
 
       # Minimal change: expose detached? status
       def detached?
@@ -214,9 +226,10 @@ module Lich
       def each(&_block)
         return enum_for(:each) unless block_given?
         if @target.respond_to?(:each)
+          refusals = { count: 0 }
           @target.each do |item|
             if @settings_module.container?(item)
-              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true, script_name: @script_name)
+              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true, script_name: @script_name, refusals: refusals)
             else
               yield item
             end
@@ -283,10 +296,15 @@ module Lich
       def []=(key, value)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, value: #{value.inspect}, target_object_id: #{@target.object_id}" })
         actual_value = value.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(value) : value # Corrected to use @settings_module
-        @target[key] = actual_value
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
-        replayed = @settings_module.save_proxy_changes(self, :[]=, [key, actual_value])
-        take_stored_container(replayed[1]) if replayed
+        # Under the entry's lock from the change to this session's copy until
+        # the proxy shows the stored container (see Settings.with_proxy_lock).
+        @settings_module.with_proxy_lock(self) do
+          key = positions_in_copy(:[]=, [key], nil).first
+          @target[key] = actual_value
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
+          replayed = @settings_module.save_proxy_changes(self, :[]=, [key, actual_value])
+          take_stored_container(replayed[1]) if replayed
+        end
         # rubocop:disable Lint/Void
         # This is Ruby expected behavior to return the value.
         value
@@ -342,15 +360,122 @@ module Lich
       # on the stored row. When it was replayed, the result is the one from the
       # stored container (what pop or delete took from what was saved), and
       # this proxy now shows that container.
+      #
+      # A negative Array index or range bound in +args+ is first made
+      # positive against this session's copy (see #positions_in_copy).
+      #
+      # All of it runs under the entry's lock (see Settings.with_proxy_lock).
       private def call_mutating_method(method, args, block)
-        result = @target.send(method, *args, &block)
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
-        replayed = @settings_module.save_proxy_changes(self, method, args, block)
-        return handle_mutating_result(result, method, args) unless replayed
+        @settings_module.with_proxy_lock(self) do
+          args = positions_in_copy(method, args, block)
+          result = @target.send(method, *args, &block)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
+          replayed = @settings_module.save_proxy_changes(self, method, args, block)
+          if replayed
+            stored_result, stored_container = replayed
+            stored_result = take_stored_container(stored_container, stored_result)
+            stored_result.equal?(stored_container) ? self : handle_mutating_result(stored_result, method, args)
+          else
+            handle_mutating_result(result, method, args)
+          end
+        end
+      end
 
-        stored_result, stored_container = replayed
-        take_stored_container(stored_container)
-        stored_result.equal?(stored_container) ? self : handle_mutating_result(stored_result, method, args)
+      # Array methods whose arguments include a position (an index, a start or
+      # a range): []=, delete_at, insert, fill and slice!.
+      POSITION_METHODS = [:[]=, :delete_at, :insert, :fill, :slice!].freeze
+
+      # An index no Array reaches: delete_at and slice! with it change
+      # nothing and return nil, whatever the size of the stored Array.
+      NO_POSITION = -(2**62)
+
+      # +args+ of a POSITION_METHODS call on an Array, with each position
+      # counted from the end (a negative index, start or range bound) turned
+      # into the position it has in this session's copy, so that the call
+      # replayed on the stored Array (Settings.save_proxy_changes) changes
+      # the elements this session saw there, as a proxy for an element
+      # (list[-1]['k'] = v) does, and not the stored Array's last elements.
+      # So list[-1] = v, list.delete_at(-1) or list.slice!(-2..) keep an
+      # element another session appended meanwhile. When such a call runs to
+      # the end from that position (fill without a length, an endless range,
+      # a slice! length past the end), it stops at this session's end too.
+      # (pop, shift, push and unshift still act on the stored Array's ends,
+      # and a position counted from the start is left as it is.)
+      #
+      # On this session's copy the call does exactly what it would with the
+      # original arguments. A position before the start that makes the call
+      # raise ([]=, insert, fill with a range) is left as it is, so the call
+      # raises before anything is saved; one that makes it do nothing
+      # (delete_at, slice!) becomes NO_POSITION, so it does nothing on the
+      # stored Array either.
+      private def positions_in_copy(method, args, block)
+        return args unless @target.is_a?(Array) && POSITION_METHODS.include?(method)
+
+        index = method == :fill && block.nil? ? 1 : 0
+        position = args[index]
+        return args unless args.size > index && (position.is_a?(Range) || (position.is_a?(Integer) && position.negative?))
+
+        size = @target.size
+        replaced = position.is_a?(Range) ? range_in_copy(method, position, size) : index_in_copy(method, position, size)
+        return args if replaced.nil?
+
+        replaced = replaced.first(1) if method == :fill && !args[index + 1].nil? # a length of its own
+
+        copy = args.dup
+        copy[index, replaced.size] = replaced
+        if [:[]=, :slice!].include?(method) && position.is_a?(Integer) && copy[index] >= 0 && copy[index + 1].is_a?(Integer)
+          copy[index + 1] = [copy[index + 1], size - copy[index]].min # a length past the end
+        end
+        copy
+      end
+
+      # The arguments that replace +position+, a negative Integer, in a
+      # +method+ call on an Array of +size+ elements (see
+      # #positions_in_copy); nil to leave it as it is.
+      private def index_in_copy(method, position, size)
+        case method
+        when :insert
+          # insert(-1, x) inserts after the last element.
+          [position + size + 1] if position + size + 1 >= 0
+        when :fill
+          # fill starts at the first element for a start before it, and with
+          # no length runs to the end.
+          start = [position + size, 0].max
+          [start, size - start]
+        else
+          if position + size >= 0
+            [position + size]
+          elsif method != :[]=
+            [NO_POSITION]
+          end
+        end
+      end
+
+      # [+range+ with each negative Integer bound turned into its position
+      # in this session's copy of +size+ elements], for a +method+ call (see
+      # #positions_in_copy). A range from a negative start that runs to the
+      # end (an endless one, or for []= and slice! one ending past the end)
+      # ends at that copy's end. A range whose end then comes before its
+      # start becomes an empty range at its start. A range that starts
+      # before the first element is left as it is (nil), or is
+      # [NO_POSITION] for slice!, which then does nothing.
+      private def range_in_copy(method, range, size)
+        first = range.begin
+        last = range.end
+        return nil unless (first.nil? || first.is_a?(Integer)) && (last.nil? || last.is_a?(Integer))
+        return nil unless first&.negative? || last&.negative?
+
+        if first&.negative?
+          first += size
+          return (method == :slice! ? [NO_POSITION] : nil) if first.negative?
+
+          past_end = last.nil? || (method != :fill && !last.negative? && (range.exclude_end? ? last : last + 1) > size)
+          return [Range.new(first, size, true)] if past_end
+        end
+        return [Range.new(first, last, range.exclude_end?)] unless last.negative?
+
+        last += size
+        [last.negative? ? Range.new(first || 0, first || 0, true) : Range.new(first, last, range.exclude_end?)]
       end
 
       # The result of a MUTATING_METHODS call. A container that is still one
@@ -369,22 +494,58 @@ module Lich
       # After a write was replayed on the stored row, shows that container
       # (with whatever other sessions saved in it) through this proxy and
       # through every view sharing this proxy's container. (A detached view
-      # is never replayed, so it keeps its own contents.)
+      # is never replayed, so it keeps its own contents.) Runs under the
+      # entry's lock, right after the store (see Settings.with_proxy_lock).
+      #
+      # The copy's containers are updated in place, not swapped for the
+      # stored ones, wherever the stored container has a container of the
+      # same class at the same key or index (see #show_stored), so a proxy
+      # kept for a container inside this one (opts and opts['sub']) still
+      # shows what this proxy shows, and the other way round.
       #
       # A Hash that is being iterated (opts.each_pair { |k, v| opts[k] = ... },
       # in this thread or another one) can't be replaced, so it keeps this
       # session's copy until the next read; the write is stored all the same.
-      private def take_stored_container(stored_container)
-        return unless stored_container.instance_of?(@target.class)
-        return if stored_container.equal?(@target)
+      #
+      # Returns +stored_result+, or, when it is one of the stored containers
+      # whose contents a container of the copy now shows, that container.
+      private def take_stored_container(stored_container, stored_result = nil)
+        return stored_result unless stored_container.instance_of?(@target.class)
+        return stored_result if stored_container.equal?(@target)
 
+        shown_by = {}.compare_by_identity
+        show_stored(@target, stored_container, shown_by, {}.compare_by_identity)
+        shown_by.fetch(stored_result, stored_result)
+      end
+
+      # Makes +mine+ (a container of this session's copy) hold what +stored+
+      # holds. Where +stored+ has a container at a key (or index) where
+      # +mine+ has one of the same class, +mine+ keeps its own and that one
+      # is made to hold the stored one's contents, and so on down. An Array
+      # is matched by position, as a proxy's path addresses it. Each
+      # container of the copy is used once (+used+). +shown_by+ maps each
+      # stored container to the container of the copy that now shows it.
+      private def show_stored(mine, stored, shown_by, used)
+        used[mine] = true
+        kept = (mine.is_a?(Hash) ? stored.keys : stored.each_index.to_a).filter_map do |at|
+          own = mine.is_a?(Hash) ? (mine.key?(at) ? mine[at] : nil) : mine[at]
+          theirs = stored[at]
+          next unless @settings_module.container?(theirs) && own.instance_of?(theirs.class) && !own.equal?(theirs) && !used.key?(own)
+
+          used[own] = true
+          [at, own, theirs]
+        end
         begin
-          @target.replace(stored_container)
+          mine.replace(stored)
         rescue FrozenError
           raise
         rescue RuntimeError => e
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "stored container not shown (#{e.message}); the proxy keeps this session's copy" })
+          return
         end
+        shown_by[stored] = mine
+        kept.each { |at, own, _theirs| mine[at] = own }
+        kept.each { |_at, own, theirs| show_stored(own, theirs, shown_by, used) }
       end
 
       # Saves what +method+ (one in neither method list) changed in the
@@ -411,8 +572,10 @@ module Lich
         return if changes.empty?
 
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed #{changes.size} entries; replaying them" })
-        replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes], label: method)
-        take_stored_container(replayed[1]) if replayed
+        @settings_module.with_proxy_lock(self) do
+          replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes], label: method)
+          take_stored_container(replayed[1]) if replayed
+        end
       end
 
       # The [operation, args] pairs that turn +old+ into the target, for a
@@ -536,7 +699,7 @@ module Lich
       # through it is refused with a message instead of landing at the top of
       # the row.
       private def pathless_derived_proxy(result)
-        SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?)
+        SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?, refusals: @refusals)
       end
 
       # The path of +result+ when it is an element of this proxy's container:
@@ -573,7 +736,8 @@ module Lich
       # view's elements (or, along +keys+, one further down). Its path is
       # where that element is in the container the view was taken from. When
       # the element is not there (a view of an element yielded by each, or
-      # the container has since taken the stored row's elements), the proxy
+      # the container has since taken a stored row that has no container of
+      # the element's kind at its key or index, see #take_stored_container), the proxy
       # is detached and unlocated, so a write through it is refused instead
       # of being saved by position somewhere else. nil when +value+ is not an
       # element of the view (a new container, such as what merge returns).
@@ -586,7 +750,7 @@ module Lich
           SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name)
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
-          SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true)
+          SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true, refusals: @refusals)
         end
       end
 

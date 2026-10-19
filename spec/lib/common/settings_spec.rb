@@ -1790,6 +1790,272 @@ RSpec.describe Lich::Common::Settings do
         expect(stored["arr"]).to eq([])
         expect(arr.to_a).to eq([])
       end
+
+      context "with proxies kept for a container and for a container inside it" do
+        it "shows, through the kept parent, a write made through a kept child after the parent wrote" do
+          their_write("opts" => { "sub" => { "y" => 0 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+          opts['x'] = 1
+
+          sub['y'] = 2
+
+          expect(opts['sub']['y']).to eq(2)
+          expect(opts.to_h).to eq("sub" => { "y" => 2 }, "x" => 1)
+        end
+
+        it "keeps a write made through a kept child when the kept parent then rewrites that child from what it shows" do
+          their_write("opts" => { "sub" => { "y" => 0 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+          opts['x'] = 1
+          sub['y'] = 2
+
+          opts['sub'] = opts['sub'].merge('z' => 1)
+
+          expect(stored).to eq("opts" => { "sub" => { "y" => 2, "z" => 1 }, "x" => 1 })
+        end
+
+        it "shows, through a kept child, what another session stored in it once the kept parent wrote" do
+          their_write("opts" => { "sub" => { "y" => 0 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+          their_write("opts" => { "sub" => { "y" => 0, "theirs" => 1 } })
+
+          opts['x'] = 1
+
+          expect(sub.to_h).to eq("y" => 0, "theirs" => 1)
+          sub['mine'] = 1
+          expect(opts['sub'].to_h).to eq("y" => 0, "theirs" => 1, "mine" => 1)
+        end
+
+        it "shows, through a kept root proxy, a write made through a kept child after the root wrote" do
+          their_write("sacks" => { "gem" => "old" })
+          root = settings.root_proxy_for("GSIV", script_name: "test_script")
+          sacks = root['sacks']
+          root['x'] = 1
+
+          sacks['gem'] = 'pouch'
+
+          expect(root['sacks']['gem']).to eq('pouch')
+          expect(stored).to eq("sacks" => { "gem" => "pouch" }, "x" => 1)
+        end
+
+        it "shows, through a kept Array, a write made through a kept element after the Array wrote, and the other way round" do
+          their_write("l" => [{ "n" => 1 }])
+          l = game_read('l')
+          first = l[0]
+          l.push({ "n" => 2 })
+
+          first['k'] = 1
+          expect(l[0].to_h).to eq("n" => 1, "k" => 1)
+
+          their_write("l" => [{ "n" => 1, "k" => 1, "theirs" => 1 }, { "n" => 2 }])
+          l.push({ "n" => 3 })
+          expect(first.to_h).to eq("n" => 1, "k" => 1, "theirs" => 1)
+        end
+
+        it "shows, through a kept element of an Array, the element now at its position, where a write through it goes" do
+          their_write("l" => [{ "n" => 1 }])
+          l = game_read('l')
+          first = l[0]
+          their_write("l" => [{ "n" => 0 }, { "n" => 1 }])
+          l.push({ "n" => 2 })
+
+          expect(first.to_h).to eq("n" => 0)
+          first['k'] = 1
+          expect(stored).to eq("l" => [{ "n" => 0, "k" => 1 }, { "n" => 1 }, { "n" => 2 }])
+        end
+
+        it "returns, from store, a proxy for the element the kept parent shows, through which a write is stored" do
+          their_write("opts" => { "sub" => { "old" => 1 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+
+          stored_sub = opts.store('sub', { "n" => 1 })
+          stored_sub['w'] = 2
+
+          expect(stored).to eq("opts" => { "sub" => { "n" => 1, "w" => 2 } })
+          expect(opts['sub'].to_h).to eq("n" => 1, "w" => 2)
+          expect(sub.to_h).to eq("old" => 1) # replaced by store, as in a plain Hash
+        end
+
+        it "lets a kept child go when another session put another kind of value at its key" do
+          their_write("opts" => { "sub" => { "y" => 0 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+          their_write("opts" => { "sub" => [1] })
+
+          opts['x'] = 1
+
+          expect(opts['sub'].to_a).to eq([1])
+          expect(sub.to_h).to eq("y" => 0)
+        end
+
+        it "stores a write made while a container inside the proxy's container is being iterated, which keeps its copy until the loop ends" do
+          their_write("opts" => { "sub" => { "a" => 1 } })
+          opts = game_read('opts')
+          sub = opts['sub']
+          their_write("opts" => { "sub" => { "a" => 1, "theirs" => 1 } })
+
+          expect { sub.each_pair { |_k, _v| opts['x'] = 1 } }.not_to raise_error
+
+          expect(stored).to eq("opts" => { "sub" => { "a" => 1, "theirs" => 1 }, "x" => 1 })
+          expect(opts['x']).to eq(1)
+        end
+
+        it "uses each container of the copy for one stored container only, when the copy holds one container at two keys" do
+          shared = { "v" => 0 }
+          opts = Lich::Common::SettingsProxy.new(settings, "GSIV", ["opts"], { "a" => shared, "b" => shared }, script_name: "test_script")
+
+          opts.send(:take_stored_container, { "a" => { "v" => 1 }, "b" => { "v" => 2 } })
+
+          expect(opts.to_h).to eq("a" => { "v" => 1 }, "b" => { "v" => 2 })
+          expect(opts.target['a']).to equal(shared)
+        end
+      end
+
+      context "with a position counted from the end of an Array" do
+        before do
+          their_write("l" => ["a", "b"])
+          @l = game_read('l')
+          their_write("l" => ["a", "b", "c"]) # another session appends
+        end
+
+        it "changes the element this session saw there, keeping the one another session appended" do
+          {
+            ->(l) { l[-1] = "B" }               => ["a", "B", "c"],
+            ->(l) { l[-1..] = "B" }             => ["a", "B", "c"],
+            ->(l) { l[-2..-1] = ["B"] }         => ["B", "c"],
+            ->(l) { l.delete_at(-1) }           => ["a", "c"],
+            ->(l) { l.insert(-1, "x") }         => ["a", "b", "x", "c"],
+            ->(l) { l.insert(-2, "x") }         => ["a", "x", "b", "c"],
+            ->(l) { l.slice!(-1) }              => ["a", "c"],
+            ->(l) { l.slice!(-1, 5) }           => ["a", "c"],
+            ->(l) { l.slice!(-2..) }            => ["c"],
+            ->(l) { l.slice!(-2..9) }           => ["c"],
+            ->(l) { l.fill("z", -1) }           => ["a", "z", "c"],
+            ->(l) { l.fill(-1) { |i| i * 10 } } => ["a", 10, "c"],
+            ->(l) { l.fill("z", -1..) }         => ["a", "z", "c"]
+          }.each_with_index do |(call, expected), i|
+            unless i.zero?
+              their_write("l" => ["a", "b"])
+              @l = game_read('l')
+              their_write("l" => ["a", "b", "c"])
+            end
+
+            call.call(@l)
+
+            expect(stored["l"]).to eq(expected), "case #{i}: #{stored["l"].inspect}"
+            expect(@l.to_a).to eq(expected), "case #{i}: the proxy shows #{@l.to_a.inspect}"
+          end
+        end
+
+        it "returns what the call took from the element this session saw there" do
+          expect(@l.delete_at(-1)).to eq("b")
+          their_write("l" => ["a", "b"])
+          l = game_read('l')
+          their_write("l" => ["a", "b", "c"])
+          expect(l.slice!(-2, 2)).to eq(["a", "b"])
+          expect(stored["l"]).to eq(["c"])
+        end
+
+        it "changes nothing for a position before the start of this session's copy, however long the stored Array is" do
+          [->(l) { l.delete_at(-5) }, ->(l) { l.slice!(-5) }, ->(l) { l.slice!(-5, 2) }, ->(l) { l.slice!(-5..-1) }].each_with_index do |call, i|
+            their_write("l" => ["a", "b"])
+            l = game_read('l')
+            their_write("l" => ["a", "b", "c", "d", "e"])
+
+            expect(call.call(l)).to be_nil, "case #{i}"
+            expect(stored["l"]).to eq(["a", "b", "c", "d", "e"]), "case #{i}: #{stored["l"].inspect}"
+          end
+        end
+
+        it "raises, storing nothing, where Ruby raises for a position before the start" do
+          expect { @l[-5] = "x" }.to raise_error(IndexError)
+          expect { @l.insert(-5, "x") }.to raise_error(IndexError)
+          expect { @l[-5..-1] = "x" }.to raise_error(RangeError)
+
+          expect(stored["l"]).to eq(["a", "b", "c"])
+        end
+
+        it "still takes from the stored Array's end with pop, and leaves a negative Hash key as a key" do
+          expect(@l.pop).to eq("c")
+          their_write(stored.merge("h" => { "k" => 1 }))
+          h = game_read('h')
+          h[-1] = 1
+          expect(stored).to eq("l" => ["a", "b"], "h" => { "k" => 1, -1 => 1 })
+        end
+
+        it "does on this session's copy exactly what the original arguments do" do
+          positions = (-6..6).to_a
+          ranges = positions.product(positions).flat_map { |b, e| [b..e, b...e] } + positions.flat_map { |n| [(n..), (..n), (...n)] }
+          calls = positions.flat_map do |n|
+            [[:[]=, [n, :v]], [:delete_at, [n]], [:insert, [n, :x]], [:slice!, [n]], [:fill, [:f, n]], [:fill, [:f, n, 1]], [:fill, [n], ->(j) { j }]] +
+              (-1..3).map { |len| [:slice!, [n, len]] }
+          end
+          calls += ranges.flat_map { |r| [[:[]=, [r, :v]], [:slice!, [r]], [:fill, [:f, r]], [:fill, [r], ->(j) { j }]] }
+          run = lambda do |array, method, args, block|
+            copy = array.dup
+            result = begin
+              copy.send(method, *args, &block)
+            rescue IndexError, RangeError => e
+              e.class
+            end
+            [result, copy]
+          end
+
+          [[], ["a"], ["a", "b"], ["a", "b", "c"]].each do |array|
+            proxy = Lich::Common::SettingsProxy.new(settings, "GSIV", ["l"], array.dup, script_name: "test_script")
+            calls.each do |method, args, block|
+              positions_in_copy = proxy.send(:positions_in_copy, method, args, block)
+              expect(run.call(array, method, positions_in_copy, block)).to eq(run.call(array, method, args, block)),
+                                                                           "#{array.inspect}.#{method}(#{args.inspect}) became #{positions_in_copy.inspect}"
+            end
+          end
+        end
+      end
+
+      it "keeps another thread's write when a slower thread finishes its own write through the same kept proxy" do
+        their_write("list" => ["a", "b"])
+        list = game_read('list')
+        paused = Queue.new
+        go = Queue.new
+        allow(settings).to receive(:save_proxy_changes).and_wrap_original do |original, *args, **opts|
+          original.call(*args, **opts).tap do
+            if Thread.current[:pause]
+              Thread.current[:pause] = false
+              paused << true
+              go.pop
+            end
+          end
+        end
+        slower = Thread.new do
+          Thread.current[:pause] = true
+          list[0] = "A"
+        end
+        Timeout.timeout(5) { paused.pop } # stored, not yet shown through the proxy
+        other = Thread.new { list[1] = "B" }
+        Timeout.timeout(5) { Thread.pass until other.stop? }
+
+        # A read with a method in neither list, while the slower thread finishes.
+        resumed = false
+        list.index do |_e|
+          unless resumed
+            resumed = true
+            go << true
+            slower.join(5)
+            other.join(5)
+          end
+          false
+        end
+
+        expect(stored["list"]).to eq(["A", "B"])
+        expect(list.to_a).to eq(["A", "B"])
+      ensure
+        go&.<<(true)
+        [slower, other].compact.each { |t| t.join(5) }
+      end
     end
 
     describe "storing this session's copy instead" do
@@ -1871,6 +2137,24 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).exactly(3).times
       end
 
+      it "tells the user once per each loop about writes through the elements it yields, and logs every one" do
+        their_write("rows" => [{ "x" => 0 }, { "x" => 0 }, { "x" => 0 }])
+        logged = []
+        allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
+          logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
+          original.call(level, prefix, message)
+        end
+
+        game_read('rows').each { |row| row['x'] = 1 }
+        game_read('rows').each { |row| row['sub'] = {} }
+        game_read('rows').each { |row| row.merge({})['k'] = 1 }
+
+        expect(stored).to eq("rows" => [{ "x" => 0 }, { "x" => 0 }, { "x" => 0 }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "later writes through what this each loop yields are not saved either")).exactly(3).times
+        expect(Lich::Messaging).to have_received(:msg).exactly(3).times
+        expect(logged.grep(/not saved/).size).to eq(9)
+      end
+
       it "reads an element yielded by each with a method in neither list, without storing anything" do
         their_write("rows" => [{ "x" => 0 }])
         allow(@mock_db).to receive(:update_settings).and_call_original
@@ -1907,17 +2191,18 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).exactly(5).times
       end
 
-      it "stores nothing and says so for an element of a view once its container has taken the stored elements" do
+      it "stores nothing and says so for an element of a view once its container no longer holds it" do
         their_write("l" => [{ "on" => false }, { "on" => true }])
         l = game_read('l')
         selected = l.select { |e| e['on'] }
+        their_write("l" => [{ "on" => false }, "gone"])
         l.push({ "on" => false })
         element = selected[0]
 
         element['k2'] = 1
         selected.first['k3'] = 1
 
-        expect(stored).to eq("l" => [{ "on" => false }, { "on" => true }, { "on" => false }])
+        expect(stored).to eq("l" => [{ "on" => false }, "gone", { "on" => false }])
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not found in the settings")).twice
         expect(element).to be_unlocated
       end
@@ -1949,15 +2234,16 @@ RSpec.describe Lich::Common::Settings do
         their_write("l" => [{ "on" => false }, { "on" => true }], "top" => 1)
         l = game_read('l')
         selected = l.select { |e| e['on'] }
+        their_write("l" => [{ "on" => false }, "gone"], "top" => 1)
         l.push({ "z" => 1 })
-        mapped = game_read('l').map { |e| e.merge("m" => 1) }
+        mapped = game_read('l').map { |e| e.is_a?(Hash) ? e.merge("m" => 1) : e }
 
         selected[0].except("nope")['k'] = 1
         selected[0].merge({}).delete("top")
         mapped[0].merge({})['k'] = 1
         mapped[0].merge({}).clear
 
-        expect(stored).to eq("l" => [{ "on" => false }, { "on" => true }, { "z" => 1 }], "top" => 1)
+        expect(stored).to eq("l" => [{ "on" => false }, "gone", { "z" => 1 }], "top" => 1)
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).exactly(4).times
       end
 
