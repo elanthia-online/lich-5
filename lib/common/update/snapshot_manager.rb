@@ -355,22 +355,20 @@ module Lich
         end
 
         # Lists what a snapshot directory lacks for #revert to restore it.
+        # Problems that may also mean the snapshot is complete (see
+        # #doubtful_problems) get a hint for using it then, unless it has
+        # another problem as well.
         #
         # @param dir [String] snapshot directory
         # @return [Array<String>] human-readable problems; empty if complete
         def snapshot_problems(dir)
           problems = interruption_problems(dir)
-          cut_off = legacy_cut_off(dir)
-          return problems unless cut_off
-
-          problems << cut_off_problem(*cut_off)
-          problems << cut_off_hint if problems.size == 1
-          problems
+          doubts, hints = doubtful_problems(dir)
+          problems + doubts + (problems.empty? ? hints : [])
         end
 
-        # Every problem #snapshot_problems lists except a missing tail of
-        # core scripts (see #legacy_cut_off), which may also mean those
-        # scripts were simply not installed when the snapshot was taken.
+        # Every problem #snapshot_problems lists except those
+        # #doubtful_problems lists.
         #
         # @param dir [String] snapshot directory
         # @return [Array<String>] human-readable problems; empty if none
@@ -385,41 +383,73 @@ module Lich
           end
           problems << "#{lich_file_name} is missing" unless File.file?(File.join(dir, lich_file_name))
           if File.directory?(File.join(dir, 'scripts'))
-            problems.concat(legacy_empty_scripts(dir).map { |file| "scripts/#{file} is empty" })
+            last = legacy_last_script(dir)
+            problems << "scripts/#{last} is empty" if legacy_empty_scripts(dir).include?(last)
           else
             problems << 'scripts/ is missing'
           end
           problems
         end
 
-        # True when the only thing keeping #revert from restoring +dir+ is a
-        # missing tail of core scripts, which #snapshot_problems words as
-        # either an interruption or scripts not installed back then.
+        # Problems of an older snapshot (see #legacy_cut_off) that may also
+        # mean it is complete: an empty core script before the last one it
+        # has, and a missing tail of core scripts. #revert refuses it either
+        # way, since nothing on disk tells the two causes apart.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Array(Array<String>, Array<String>)] the problems, each
+        #   naming both causes, and the hints for using the snapshot if it
+        #   is complete
+        def doubtful_problems(dir)
+          doubts = []
+          hints = []
+          empty = legacy_empty_scripts(dir) - [legacy_last_script(dir)]
+          unless empty.empty?
+            doubts.concat(empty.map { |file| empty_script_problem(file) })
+            hints << empty_script_hint
+          end
+          cut_off = legacy_cut_off(dir)
+          if cut_off
+            doubts << cut_off_problem(*cut_off)
+            hints << cut_off_hint
+          end
+          [doubts, hints]
+        end
+
+        # True when the only things keeping #revert from restoring +dir+ are
+        # problems that may also mean it is complete (see
+        # #doubtful_problems), which #snapshot_problems gives hints for.
         #
         # @param dir [String] snapshot directory
         # @return [Boolean]
-        def only_missing_tail?(dir)
-          interruption_problems(dir).empty? && !legacy_cut_off(dir).nil?
+        def only_doubtful_problems?(dir)
+          interruption_problems(dir).empty? && !doubtful_problems(dir).first.empty?
         end
 
         # Older Lich versions copied straight into L5-snapshot-<DATE-TIME>,
-        # the core scripts last and one at a time in CORE_SCRIPTS order, so
-        # one interrupted while copying them left only the first few in
-        # scripts/, the last of them possibly cut short, and passes every
-        # other check. A snapshot #snapshot published (it has
-        # STAGED_MARKER_NAME) was copied in full before publishing, so it is
-        # never checked this way.
+        # the core scripts last and one at a time, so one interrupted while
+        # copying them left only the first few in scripts/, the last of them
+        # possibly cut short, and passes every other check. A snapshot
+        # #snapshot published (it has STAGED_MARKER_NAME) was copied in full
+        # before publishing, so it is never checked this way.
         #
-        # An empty copy is a sure sign (see #legacy_empty_scripts). Core
-        # scripts installed now that come after every core script it has
-        # are not: either their copy never started, or they were not
+        # They copied in CORE_SCRIPTS order, except that versions from
+        # September 2023 to May 2024 copied map.lic after version.lic (and
+        # earlier ones xnarost.lic, no longer a core script). So an empty copy of
+        # the last core script it has is taken as an interruption (see
+        # #interruption_problems), while an empty one before it either was
+        # empty in the install then or is such a map.lic (see
+        # #doubtful_problems). Core scripts installed now that come after
+        # every core script it has either never started copying, or were not
         # installed when it was taken, and nothing on disk tells the two
         # apart. #revert refuses it either way, since the last script it has
         # may be cut short. One missing from between two it has was simply
         # not installed then, and is kept by #restore_from.
         #
         # Cannot tell a copy cut short part way through its bytes when it is
-        # the last core script installed (version.lic, normally).
+        # the last core script installed (version.lic, normally), or when it
+        # is a map.lic copied after version.lic. Does not check xnarost.lic
+        # at all.
         #
         # @param dir [String] snapshot directory
         # @return [Array(String, Array<String>), nil] the last core script it
@@ -429,15 +459,22 @@ module Lich
           return nil if File.exist?(File.join(dir, STAGED_MARKER_NAME))
           return nil unless File.directory?(File.join(dir, 'scripts'))
 
-          last = CORE_SCRIPTS.reverse.find { |file| entry?(File.join(dir, 'scripts', file)) }
+          last = legacy_last_script(dir)
           after = last ? CORE_SCRIPTS.drop(CORE_SCRIPTS.index(last) + 1) : CORE_SCRIPTS
           never_copied = after.select { |file| entry?(File.join(SCRIPT_DIR, file)) }
           never_copied.empty? ? nil : [last, never_copied]
         end
 
+        # @param dir [String] snapshot directory
+        # @return [String, nil] the last core script, in CORE_SCRIPTS order,
+        #   that +dir+ has in scripts/
+        def legacy_last_script(dir)
+          CORE_SCRIPTS.reverse.find { |file| entry?(File.join(dir, 'scripts', file)) }
+        end
+
         # Core scripts an older Lich left empty in +dir+ (see
-        # #legacy_cut_off): copying them was interrupted before any byte
-        # was written.
+        # #legacy_cut_off): either copying them was interrupted before any
+        # byte was written, or they were empty in the install then.
         #
         # @param dir [String] snapshot directory
         # @return [Array<String>] file names, in CORE_SCRIPTS order
@@ -449,6 +486,23 @@ module Lich
             path = File.join(dir, 'scripts', file)
             entry?(path) && File.zero?(path)
           end
+        end
+
+        # @param file [String] an empty core script before the last one the
+        #   snapshot has
+        # @return [String] the problem, naming both possible causes
+        def empty_script_problem(file)
+          "scripts/#{file} is empty: either it was empty when the snapshot was taken, or copying it was interrupted"
+        end
+
+        # Tells the user how to use a snapshot with empty core scripts
+        # before its last one, if they know those were empty then. Without
+        # them in the snapshot, #restore_from keeps the installed copies.
+        #
+        # @return [String] the hint
+        def empty_script_hint
+          'if the scripts named above as empty were also empty when it was taken, it is complete; ' \
+            'to use it, delete them from its scripts/ (a revert then leaves the installed ones as they are)'
         end
 
         # @param last [String, nil] last core script the snapshot has
@@ -568,8 +622,8 @@ module Lich
             problems.each { |problem| respond "  - #{problem}" }
           end
           # A snapshot with a hint is not blamed on an interruption: it may
-          # only need renaming, or only lack scripts not installed back then.
-          interrupted = incomplete.count { |path, _| legacy_lib_dir_name(path).nil? && !only_missing_tail?(path) }
+          # only need renaming, or be complete (see #doubtful_problems).
+          interrupted = incomplete.count { |path, _| legacy_lib_dir_name(path).nil? && !only_doubtful_problems?(path) }
           if interrupted == incomplete.size && interrupted == 1
             respond 'It was most likely left by a snapshot that was interrupted.'
           elsif interrupted == incomplete.size
