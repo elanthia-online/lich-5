@@ -918,6 +918,7 @@ module Lich
       def check_discern(data, settings, spell_is_sorcery = false, more_override = nil)
         UserVars.discerns = {} unless UserVars.discerns
         discern_data = UserVars.discerns[data['abbrev']] || {}
+        held = false
         if data['symbiosis'] || spell_is_sorcery
           if discern_data.empty? || discern_data['min'].nil? || more_override
             DRC.retreat
@@ -940,11 +941,11 @@ module Lich
             discern_data['mana'] = 1
             discern_data['cambrinth'] = nil
           when 'You don\'t seem to be able to move to do that'
-            # Held or rooted: the reply says nothing about the spell, so cast
-            # at the minimum this time and leave the time stamp alone so the
-            # next cast discerns again.
-            discern_data['mana'] = 1
-            discern_data['cambrinth'] = nil
+            # Held or rooted: the reply says nothing about the spell, so this
+            # cast is at the minimum. The stored entry is left alone: it keeps
+            # any earlier real answer, and its time stamp, so the next cast
+            # discerns again.
+            held = true
           else
             # Only a real answer is cached. A discern with no recognised reply
             # is tried again after DISCERN_RETRY_SECONDS, so each cast in
@@ -961,8 +962,8 @@ module Lich
         end
         waitrt?
         UserVars.discerns[data['abbrev']] = discern_data
-        data['mana'] = discern_data['mana']
-        data['cambrinth'] = discern_data['cambrinth']
+        data['mana'] = held ? 1 : discern_data['mana']
+        data['cambrinth'] = held ? nil : discern_data['cambrinth']
         data
       end
 

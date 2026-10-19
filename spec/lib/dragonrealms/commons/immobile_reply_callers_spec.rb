@@ -502,6 +502,27 @@ RSpec.describe 'Callers that list the immobile reply' do
       expect(UserVars.discerns['bs']['time_stamp']).to be > stale
     end
 
+    # Only a real answer is stored. The held cast's minimum is not, so an
+    # unrecognised reply to the next discern still finds the earlier answer.
+    it 'keeps the earlier real answer stored when held' do
+      game('discern bs' => -> { sent.size == 1 ? immobile : [] })
+      allow(drc).to receive(:bput).and_wrap_original do |bput, message, *patterns|
+        bput.call(message, { 'timeout' => 0.2 }, *patterns)
+      end
+      expect(drca.check_discern({ 'abbrev' => 'bs' }, settings)).to include('mana' => 1, 'cambrinth' => nil)
+      expect(UserVars.discerns['bs']).to eq('time_stamp' => stale, 'mana' => 7, 'cambrinth' => [[3]])
+
+      expect(drca.check_discern({ 'abbrev' => 'bs' }, settings)).to include('mana' => 7, 'cambrinth' => [[3]])
+      expect(sent).to eq(['discern bs'] * 2)
+    end
+
+    it 'casts at the minimum when held with nothing stored' do
+      UserVars.discerns = {}
+      game('discern bs' => immobile)
+      expect(drca.check_discern({ 'abbrev' => 'bs' }, settings)).to include('mana' => 1, 'cambrinth' => nil)
+      expect(UserVars.discerns['bs']).to eq({})
+    end
+
     it 'caches a reply that the spell cannot be cast' do
       game('discern bs' => 'You have no idea how to cast that spell.')
       data = drca.check_discern({ 'abbrev' => 'bs' }, settings)
