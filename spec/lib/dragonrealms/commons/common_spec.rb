@@ -952,10 +952,34 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(sent).to eq(['stand'])
       end
 
+      # A caller that loops on fix_standing with no delay of its own would
+      # otherwise send STAND as fast as the game answers for the whole hold.
+      it 'pauses 1 s before returning false on the immobile reply' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You don't seem to be able to move to do that.")
+        expect(described_class.fix_standing).to be false
+        expect(described_class).to have_received(:pause).with(1).once
+      end
+
+      it 'sends at most one STAND per 1 s pause to a caller that loops on it while held' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies(*["You don't seem to be able to move to do that."] * 5)
+        5.times { described_class.fix_standing }
+        expect(sent).to eq(['stand'] * 5)
+        expect(described_class).to have_received(:pause).with(1).exactly(5).times
+      end
+
       it 'returns false on another state that prevents standing' do
         allow(described_class).to receive(:standing?).and_return(false)
         stand_replies("You're unconscious!")
         expect(described_class.fix_standing).to be false
+      end
+
+      it 'does not pause on the other states that prevent standing' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You're unconscious!")
+        described_class.fix_standing
+        expect(described_class).not_to have_received(:pause).with(1)
       end
 
       it 'returns true once standing, after an unbalanced attempt' do

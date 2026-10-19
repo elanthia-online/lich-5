@@ -594,6 +594,11 @@ module Lich
       # the CANNOT_STAND_PATTERN guard these states loop forever spamming
       # STAND, because matching the message never makes standing? true
       # (issue #3668: safe-room spamming STAND while unconscious).
+      #
+      # On the immobile reply (held or rooted) this pauses 1 s before
+      # returning false, so a caller that loops on fix_standing with no delay
+      # of its own sends at most about one STAND a second while the hold
+      # lasts.
       # @return [Boolean] true once standing, false when the game says
       #   standing cannot succeed now
       def fix_standing
@@ -601,7 +606,10 @@ module Lich
           return true if standing?
 
           result = bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
-          return false if result =~ CANNOT_STAND_PATTERN
+          next unless result =~ CANNOT_STAND_PATTERN
+
+          pause 1 if result.start_with?("You don't seem to be able to move")
+          return false
         end
       end
 
