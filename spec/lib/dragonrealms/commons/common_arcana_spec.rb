@@ -1102,6 +1102,27 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
       end
 
+      it 'skips a book whose adjective is unknown and has no (N/M) figure, and says so' do
+        unknown = 'You reach out with your senses and see intense streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([lunar_book_lines[0], unknown, lunar_book_lines[2], 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'noematics' => 20)
+        expect(bold_messages.any? { |m| m.include?("unknown mana level 'intense'") && m.include?('Illusion') }).to be true
+      end
+
+      it 'returns nil, with the message, when the only book line has an unknown adjective and no figure' do
+        unknown = 'You reach out with your senses and see intense streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([unknown, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to be_nil
+        expect(bold_messages.any? { |m| m.include?("unknown mana level 'intense'") }).to be true
+      end
+
+      it 'still trusts the (N/M) figure when the adjective is unknown' do
+        line = 'You reach out with your senses and see intense (7/21) streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('illusion' => 7)
+        expect(bold_messages).to be_empty
+      end
+
       it 'reads the lowest level' do
         line = 'You reach out with your senses and see faint (1/21) streams of cold, white Lunar mana available for the Illusion book.'
         allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
@@ -1132,10 +1153,10 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(DRCA.perc_mana).to be_nil
       end
 
-      it 'does not call parse_mana_message when the (N/M) figure is present' do
-        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines + ['Roundtime: 3 sec.'])
-        expect(DRCA).not_to receive(:parse_mana_message)
-        DRCA.perc_mana
+      it 'takes the (N/M) figure over the adjective when they disagree' do
+        line = 'You reach out with your senses and see blinding (5/21) streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('illusion' => 5)
       end
     end
 

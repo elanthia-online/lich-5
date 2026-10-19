@@ -784,8 +784,10 @@ module Lich
       # result is a Hash of book name (downcased, spaces as underscores, e.g.
       # 'fabrication', 'illusion', 'noematics') to its level on the 21-step mana
       # scale (1 = faint, 21 = blinding). Only the books named in the reply are
-      # keys. A cut-off reply prints a bold message and returns the books that
-      # arrived. Returns nil when no book line was captured.
+      # keys. The level is the reply's (N/21) figure, or the adjective's place on
+      # the scale when the figure is missing; a book line with neither is skipped
+      # with a bold message. A cut-off reply prints a bold message and returns
+      # the books that arrived. Returns nil when no book line was captured.
       #
       # Other magic users send PERC and get a single Integer level.
       #
@@ -812,8 +814,17 @@ module Lich
             match = PERC_MANA_BOOK_PATTERN.match(line)
             next unless match
 
-            key = match[:book].downcase.tr(' ', '_')
-            levels[key] = match[:level] ? match[:level].to_i : parse_mana_message(match[:adj])
+            level = if match[:level]
+                      match[:level].to_i
+                    elsif (idx = $MANA_MAP['good'].index(match[:adj]))
+                      idx + 1
+                    end
+            unless level
+              Lich::Messaging.msg("bold", "DRCA: PERC MANA reported an unknown mana level '#{match[:adj]}' for the #{match[:book]} book; skipping it.")
+              next
+            end
+
+            levels[match[:book].downcase.tr(' ', '_')] = level
           end
           books.empty? ? nil : books
         else
