@@ -1408,6 +1408,50 @@ RSpec.describe Lich::Common::Settings do
 
         expect(settings.instance_variable_get(:@settings_cache)["test_script::GSIV"]).to eq("k" => 2)
       end
+
+      # Holds the entry's lock (as a write in progress does) in another thread
+      # until the returned queue is pushed to.
+      def hold_entry_lock
+        held = Queue.new
+        release = Queue.new
+        @holder = Thread.new do
+          settings.send(:with_cache_lock, "test_script::GSIV") do
+            held << true
+            release.pop
+          end
+        end
+        Timeout.timeout(5) { held.pop }
+        release
+      end
+
+      after { @holder&.kill }
+
+      it "re-reads a cached row after a commit without waiting for a write in progress" do
+        game_write('k', 1)
+        expect(game_read('k')).to eq(1)
+        release = hold_entry_lock
+        their_write("k" => 2)
+
+        reader = Thread.new { game_read('k') }
+        expect(reader.join(2)).to eq(reader)
+        expect(reader.value).to eq(2)
+        release << true
+      end
+
+      it "fills a cache miss after the write in progress and records the version seen after waiting" do
+        release = hold_entry_lock
+        reader = Thread.new { game_read('k') }
+        Timeout.timeout(5) { Thread.pass until reader.status == 'sleep' }
+        expect(reader.join(0.2)).to be_nil # waits for the entry's lock
+
+        their_write("k" => 1) # committed while the miss waited
+        release << true
+        expect(reader.value).to eq(1)
+
+        allow(@mock_db).to receive(:get_settings).and_call_original
+        expect(game_read('k')).to eq(1)
+        expect(@mock_db).not_to have_received(:get_settings)
+      end
     end
   end
 end
