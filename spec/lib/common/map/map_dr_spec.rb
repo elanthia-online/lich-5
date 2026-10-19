@@ -1579,6 +1579,59 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         expect(map_class.current).to be_nil
       end
 
+      it 'does not take the room the game says was just left for an identical live room' do
+        # Identical cells with no wayto between them; the game showed the room
+        # left with its UID and shows the live room without one.
+        twin(53, uid: [241_518])
+        twin(54, uid: [241_517])
+        map_class.load_uids
+        arrive_from(241_517)
+        live(room_count: 2)
+        expect(map_class.anchor_room&.id).to eq(54)
+        expect(map_class.current).to be_nil
+        Script.current = :test_script
+        expect(map_class.current).to be_nil
+      end
+
+      it 'takes the identical room the room just left leads to' do
+        twin(53, wayto: { '54' => 'south' })
+        twin(54, uid: [241_517], wayto: { '53' => 'north' })
+        map_class.load_uids
+        arrive_from(241_517)
+        live(room_count: 2)
+        expect(map_class.current&.id).to eq(53)
+        Script.current = :test_script
+        expect(map_class.current&.id).to eq(53)
+      end
+
+      it 'does not take the room just left when it was resolved one arrival ago under a shared UID' do
+        # Two cells share UID 9, so the game's UID does not name the room left;
+        # the earlier resolution does, and it is not the live room.
+        twin(53, uid: [9])
+        twin(54, uid: [9], wayto: { '55' => 'east' })
+        twin(55)
+        map_class.load_uids
+        XMLData.room_id = 9
+        came_from(54)
+        live(room_count: 1)
+        expect(map_class.anchor_room&.id).to eq(54)
+        expect(map_class.current&.id).to eq(55)
+      end
+
+      it 'keeps the anchor itself when it stores both the UID left and the live UID' do
+        # One map cell holds two game rooms (UIDs 7 and 8); a move between them
+        # stays in the cell. Another cell also stores 8, so the UID alone is
+        # ambiguous.
+        twin(10, uid: [7, 8])
+        twin(11, uid: [8])
+        map_class.load_uids
+        map_class.class_variable_set(:@@current_room_id, nil)
+        arrive_from(7)
+        live(room_id: 8, room_count: 2)
+        expect(map_class.anchor_room&.id).to eq(10)
+        expect(map_class.current&.id).to eq(10)
+      end
+
       it 'ignores a resolution noted with a later room count' do
         build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
         twin(10)

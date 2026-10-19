@@ -337,11 +337,28 @@ module Lich
         nil
       end
 
+      # Whether the game's own UIDs show the character has left +room+: the
+      # previous <nav> carried a UID that +room+ stores, and the live room shows
+      # another UID, or none, that +room+ does not store.
+      #
+      # @param room [Lich::Common::Map]
+      # @return [Boolean]
+      def self.left_room?(room)
+        previous_uid = XMLData.previous_nav_rm.to_i
+        live_uid = XMLData.room_id.to_i
+        return false unless previous_uid.positive? && previous_uid != live_uid
+
+        uids = stored_uids(room)
+        uids.include?(previous_uid) && !uids.include?(live_uid)
+      end
+
       # Of +candidates+, the single one the character can be standing in after
-      # leaving the anchor room (see {anchor_room}): that room itself, or a room
-      # it has a wayto to. The anchor itself counts because a fresh room display
+      # leaving the anchor room (see {anchor_room}): a room it has a wayto to,
+      # or the anchor itself. The anchor counts because a fresh room display
       # does not always mean a move, so an identical neighbour must not win over
-      # it.
+      # it; but not when the game's UIDs show the character has left it (see
+      # {left_room?}), so an identical room just left is never taken for the
+      # live one.
       #
       # @param candidates [Array<Lich::Common::Map>]
       # @return [Lich::Common::Map, nil] the one reachable candidate; +nil+ with
@@ -350,8 +367,9 @@ module Lich
         from = anchor_room
         return nil if from.nil?
 
+        stayed = !left_room?(from)
         wayto = from.wayto || {}
-        reachable = candidates.select { |r| r.id == from.id || wayto.key?(r.id.to_s) }
+        reachable = candidates.select { |r| (stayed && r.id == from.id) || wayto.key?(r.id.to_s) }
         reachable.size == 1 ? reachable.first : nil
       end
 
