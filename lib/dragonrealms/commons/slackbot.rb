@@ -14,7 +14,9 @@ module Lich
     # Caches the Slack users list in a shared SQLite store (DB_Store) with a
     # 1-hour TTL. The cache is kept per token, so characters on the same game
     # instance that use the same token share one cached copy, and a character
-    # with a token for another workspace never reads that workspace's users.
+    # never reads another workspace's users. Entries are never deleted:
+    # DB_Store has no delete and the TTL is checked on read, so lich.db keeps
+    # one row per token ever used.
     # Randomized startup jitter prevents thundering herd on simultaneous
     # character logins.
     class SlackBot
@@ -444,7 +446,7 @@ module Lich
         rescue ThrottlingError => e
           members = cached_members(token)
           if members
-            Lich.log "SlackBot: Throttled, but another character cached the users list"
+            Lich.log "SlackBot: Throttled, but another character using this token cached the users list"
             return members
           end
 
