@@ -263,6 +263,18 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         expect { bot.direct_message('testuser', 'hello') }.not_to raise_error
       end
     end
+
+    context 'when the in-game message call returns a value' do
+      it 'still returns nil on failure' do
+        bot = build_initialized_bot
+        allow(mock_http).to receive(:request) do
+          raise described_class::ApiError, 'test error'
+        end
+        # Lich's _respond returns the list of attached clients, not nil.
+        allow(Lich::Messaging).to receive(:msg).and_return([])
+        expect(bot.direct_message('testuser', 'hello')).to be_nil
+      end
+    end
   end
 
   # ---- Users Cache ----

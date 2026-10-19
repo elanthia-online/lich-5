@@ -52,7 +52,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     when :throttle then -> { http_response(429, '', 'Retry-After' => '1') }
     when :throttle_long then -> { http_response(429, '', 'Retry-After' => '30') }
     when :throttle_zero then -> { http_response(429, '', 'Retry-After' => '0') }
-    when :econnrefused then -> { raise Errno::ECONNREFUSED }
+    # An error post does not turn into a SlackBot::Error (a bug, say).
+    when :unexpected then -> { raise TypeError, 'unexpected transport failure' }
     end
   end
 
@@ -291,13 +292,13 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       bot = described_class.new
       wait_out_cooldown
       plan['users.list'].clear
-      plan['users.list'] << -> { raise Errno::ECONNREFUSED }
+      plan['users.list'] << failure(:unexpected)
 
       result = nil
       expect { result = bot.direct_message('alice', 'help') }.not_to raise_error
       expect(result).to be_nil
       expect(bot.initialized?).to be false
-      expect(bot.error_message).to include('Connection refused')
+      expect(bot.error_message).to include('unexpected transport failure')
     end
 
     it 'starts the cooldown after an unexpected transport error from users.list' do
@@ -305,7 +306,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       bot = described_class.new
       wait_out_cooldown
       plan['users.list'].clear
-      plan['users.list'] << failure(:econnrefused)
+      plan['users.list'] << failure(:unexpected)
       bot.direct_message('alice', 'help')
       expect(calls['users.list']).to eq(2)
 
@@ -461,12 +462,12 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
 
     it 'delivers on the next message after an unexpected error in the token check' do
       bot = unverified_bot
-      plan['auth.test'] << failure(:econnrefused)
+      plan['auth.test'] << failure(:unexpected)
       plan['auth.test'] << ok({})
       plan['users.list'] << users_ok
 
       expect(bot.direct_message('alice', 'help')).to be_nil
-      expect(bot.error_message).to include('Connection refused')
+      expect(bot.error_message).to include('unexpected transport failure')
 
       expect(bot.direct_message('alice', 'help')).to include('ok' => true)
       expect(calls['users.list']).to eq(1)

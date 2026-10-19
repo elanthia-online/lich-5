@@ -18,7 +18,9 @@ module Lich
       # Base error for all SlackBot failures.
       class Error < StandardError; end
 
-      # Raised on network-level failures (timeouts, connection resets).
+      # Raised on network-level failures: timeouts, connection resets, a
+      # refused connection, an unreachable host or network, and TLS errors.
+      # The original exception is kept as #cause.
       class NetworkError < Error; end
 
       # Raised when the Slack API returns a non-ok response.
@@ -176,6 +178,7 @@ module Lich
       rescue Error => e
         Lich.log "SlackBot: Failed to send Slack message to #{username}: #{e.message}"
         Lich::Messaging.msg('bold', "SlackBot: Failed to send Slack message to #{username}: #{e.message}")
+        nil
       end
 
       private
@@ -468,7 +471,7 @@ module Lich
           Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
           users_list_failed
         rescue StandardError
-          # An error post does not wrap (e.g. ECONNREFUSED) still counts as a
+          # An error post does not wrap (an unexpected one, e.g. a bug) still counts as a
           # failed users.list call; the caller decides whether to rescue it.
           users_list_failed
           raise
@@ -542,13 +545,22 @@ module Lich
 
       # Posts to the Slack API with retry and exponential backoff on network errors.
       #
+      # Timeouts, resets, EOF, malformed responses and DNS failures are retried
+      # with backoff. Any other socket error (a refused connection, an
+      # unreachable host or network, ...) and any TLS error (a rejected
+      # certificate, a failed handshake, a connection dropped mid-response)
+      # is raised as NetworkError at once, without retrying: these come back
+      # immediately from the OS or the peer, and the backoff would only hold
+      # the calling script. The next call tries again.
+      #
       # @param method [String] Slack API method name (e.g. 'chat.postMessage')
       # @param params [Hash] request parameters including token
       # @param deadline [Float, nil] monotonic deadline; when set, each attempt
       #   is cut off at the deadline and retries that would overrun it are skipped
       # @return [Hash] parsed JSON response body
       # @raise [ThrottlingError] on HTTP 429
-      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, or when the deadline is reached
+      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, when the deadline is reached,
+      #   or at once on a socket or TLS error that is not retried
       # @raise [ApiError] on non-ok Slack responses or JSON parse errors
       def post(method, params, deadline: nil)
         retries = 0
@@ -590,6 +602,9 @@ module Lich
           Lich.log "SlackBot: Network error: #{e.message}. Retry ##{retries} in #{total_delay}s..."
           sleep total_delay
           retry
+        rescue SystemCallError, IOError, OpenSSL::OpenSSLError => e
+          # EOFError (an IOError), ECONNRESET and EINVAL are retried above.
+          raise NetworkError, "SlackBot: Network error: #{e.message} (#{e.class})"
         end
       end
 
