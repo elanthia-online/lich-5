@@ -172,14 +172,18 @@ module Lich
       # game server connection is lost or go2 repeatedly fails.
       MAX_WALK_TO_RETRIES = 3
 
+      # Seconds walk_to waits for Room.current to resolve a room it could not
+      # resolve at first, before treating the room as unresolved. This also
+      # bounds how fast a caller that loops on walk_to without checking the
+      # result retries from such a room.
+      WALK_TO_UNRESOLVED_WAIT = 1
+
       # Navigate to +target_room+ using the go2 script.
       #
-      # The character is in a room only when Room.current resolves it: the
-      # map's resolver goes by a live UID that maps to one room, or else by the
-      # live title, description and exits, and a stored UID that excludes the
-      # live one vetoes the room. From a room Room.current cannot resolve, the
-      # walk fails at once without moving, since neither the start room nor
-      # arrival can be told apart from a look-alike room.
+      # Room.current (the map's resolver, Map.current) is the only rule for
+      # where the character is, both for the start room and for arrival. From
+      # a room it cannot resolve, even after waiting WALK_TO_UNRESOLVED_WAIT
+      # seconds, walk_to sends nothing and returns false.
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure
@@ -191,16 +195,11 @@ module Lich
         return false if target_room.nil?
 
         room_num = target_room.to_i
-        # Room.current is nil when the room could not be resolved. Under Lich's
-        # NilClass patch nil.id yielded nil, so the comparison simply failed.
-        return true if room_num == Room.current&.id
+        current_id = walk_to_current_room_id
+        return true if room_num == current_id
+        return walk_to_unresolved_failure(room_num) if current_id.nil?
 
         DRC.fix_standing
-
-        if Room.current&.id.nil?
-          Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to room #{room_num}.")
-          return false
-        end
 
         script_handle = start_script('go2', [room_num.to_s], force: true)
 
@@ -248,8 +247,11 @@ module Lich
           Flags.delete('travel-engaged')
         end
 
-        arrived = Room.current&.id == room_num
+        current_id = walk_to_current_room_id
+        arrived = current_id == room_num
         if !arrived && restart_on_fail
+          return walk_to_unresolved_failure(room_num) if current_id.nil?
+
           if retry_depth >= MAX_WALK_TO_RETRIES
             Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num} after #{MAX_WALK_TO_RETRIES} retries, giving up.")
             return false
@@ -258,6 +260,23 @@ module Lich
           return walk_to(room_num, true, retry_depth: retry_depth + 1)
         end
         arrived
+      end
+
+      # The id of the room Room.current resolves, or nil when it still cannot
+      # resolve the room after waiting WALK_TO_UNRESOLVED_WAIT seconds.
+      # Room.current is nil for an unresolved room; under Lich's NilClass patch
+      # nil.id is nil too, so this reads the same with or without the patch.
+      def walk_to_current_room_id
+        current_id = Room.current&.id
+        return current_id if current_id
+
+        pause WALK_TO_UNRESOLVED_WAIT
+        Room.current&.id
+      end
+
+      def walk_to_unresolved_failure(room_num)
+        Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to room #{room_num}.")
+        false
       end
 
       def tag_to_id(target)

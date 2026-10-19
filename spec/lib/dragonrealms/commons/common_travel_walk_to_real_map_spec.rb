@@ -13,7 +13,8 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 # The map resolves a room by its title, description and exits, and a stored
 # UID that excludes the live one vetoes the room. walk_to treats the
 # character as being in a room only when Room.current resolves it, so from a
-# room the map cannot resolve it fails at once without moving.
+# room the map cannot resolve, even after a short wait, it fails without
+# moving.
 RSpec.describe DRCT, '.walk_to with the map resolver' do
   let(:real_map) { Lich::Common::Map }
 
@@ -64,6 +65,7 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     allow(Script).to receive(:running).and_return([])
     allow(Script).to receive(:running?).and_return(false)
     allow(DRC).to receive(:fix_standing)
+    allow(DRCT).to receive(:pause)
 
     allow(XMLData).to receive(:room_title) { live_room.title.first }
     allow(XMLData).to receive(:room_description) { live_room.description.first }
@@ -117,6 +119,65 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
       expect(DRCT.walk_to(3)).to be(false)
       expect(sent).to be_empty
       expect(bold_messages).to eq([unresolved_message(3)])
+    end
+
+    it 'waits once for the room to resolve before failing' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+
+      expect(DRCT.walk_to(3)).to be(false)
+      expect(DRCT).to have_received(:pause).with(DRCT::WALK_TO_UNRESOLVED_WAIT).once
+    end
+
+    it 'does not stand the character up before failing' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+
+      expect(DRCT.walk_to(3)).to be(false)
+      expect(DRC).not_to have_received(:fix_standing)
+    end
+
+    it 'waits on every call, so a caller looping on walk_to without checking the result does not spin' do
+      corridor
+      live[:uids][2] = 2777
+      place(2)
+
+      results = Array.new(5) { [1, 3].map { |target| DRCT.walk_to(target) } }.flatten
+      expect(results).to all(be(false))
+      expect(DRCT).to have_received(:pause).with(DRCT::WALK_TO_UNRESOLVED_WAIT).exactly(10).times
+      expect(bold_messages.size).to eq(10)
+      expect(sent).to be_empty
+    end
+
+    it 'walks with go2 when the room resolves during the wait' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+      allow(DRCT).to receive(:pause) do
+        live[:uids][1] = 1001
+        live[:count] += 1
+      end
+
+      expect(DRCT.walk_to(3)).to be(true)
+      expect(DRCT).to have_received(:start_script).with('go2', ['3'], force: true).once
+      expect(sent).to be_empty
+      expect(bold_messages).to be_empty
+    end
+
+    it 'returns true without go2 when the room resolves to the target during the wait' do
+      corridor
+      live[:uids][3] = 3777
+      place(3)
+      allow(DRCT).to receive(:pause) do
+        live[:uids][3] = 1003
+        live[:count] += 1
+      end
+
+      expect(DRCT.walk_to(3)).to be(true)
+      expect(DRCT).not_to have_received(:start_script)
+      expect(bold_messages).to be_empty
     end
 
     it 'fails without moving when the target is a direct neighbour' do
@@ -258,14 +319,29 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
       expect(bold_messages).to be_empty
     end
 
-    it "returns false when the target's stored UID is stale, retrying once into the unresolved-room failure (restart_on_fail true)" do
+    it "returns false when the target's stored UID is stale, with only the unresolved-room message (restart_on_fail true)" do
       corridor
       live[:uids][3] = 3777
       place(1)
 
       expect(DRCT.walk_to(3, true)).to be(false)
       expect(DRCT).to have_received(:start_script).once
-      expect(bold_messages).to eq(['DRCT: Failed to navigate to room 3, attempting again (1/3).', unresolved_message(3)])
+      expect(DRCT).to have_received(:pause).with(DRCT::WALK_TO_UNRESOLVED_WAIT).once
+      expect(bold_messages).to eq([unresolved_message(3)])
+    end
+
+    it 'returns true when the target resolves during the wait after go2' do
+      corridor
+      live[:uids][3] = 3777
+      place(1)
+      allow(DRCT).to receive(:pause) do
+        live[:uids][3] = 1003
+        live[:count] += 1
+      end
+
+      expect(DRCT.walk_to(3, true)).to be(true)
+      expect(DRCT).to have_received(:start_script).once
+      expect(bold_messages).to be_empty
     end
 
     [true, false].each do |restart|
