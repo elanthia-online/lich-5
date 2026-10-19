@@ -3,6 +3,7 @@
 require 'open3'
 require 'rbconfig'
 require_relative '../../../spec_helper'
+require_relative '../../../support/drexpmonitor_reporters'
 
 # Load dependencies in correct order
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -396,13 +397,8 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
       described_class.class_variable_set(:@@report_interval, original)
     end
 
-    # Live reporter threads, found by their stack rather than by reading the
-    # module's class variables.
     def reporter_threads
-      Thread.list.select do |t|
-        t != Thread.current && t.alive? &&
-          t.backtrace&.any? { |l| l.include?('drinfomon/drexpmonitor.rb') }
-      end
+      DRExpMonitorReporters.threads
     end
 
     def wait_for(seconds = 5)
@@ -542,6 +538,7 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
           $VERBOSE = nil
           require './spec/spec_helper'
           require 'common/hmr'
+          require './spec/support/drexpmonitor_reporters'
           Object.send(:define_method, :respond) { |*| nil }
           # The reload resets @@report_interval to 1 s, so shorten the
           # reporter's pause with a prepend on the module, which survives it.
@@ -549,12 +546,7 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
           Lich::DragonRealms::DRExpMonitor.singleton_class.prepend(Module.new do
             private def sleep(*) = super(#{interval})
           end)
-          def reporters
-            Thread.list.count do |t|
-              t != Thread.current && t.alive? &&
-                t.backtrace&.any? { |l| l.include?('drinfomon/drexpmonitor.rb') }
-            end
-          end
+          def reporters = DRExpMonitorReporters.threads.size
           def wait_until(seconds = 5)
             deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
             sleep 0.02 until yield || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline

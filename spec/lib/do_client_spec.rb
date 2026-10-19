@@ -876,14 +876,10 @@ RSpec.describe 'do_client command dispatch' do
         require 'dragonrealms/drinfomon/drvariables'
         require 'dragonrealms/drinfomon/drskill'
         require 'dragonrealms/drinfomon/drexpmonitor'
+        require './spec/support/drexpmonitor_reporters'
         Lich::DragonRealms::DRExpMonitor.class_variable_set(:@@report_interval, 0.05)
         Object.send(:define_method, :running?) { |_| false }
-        reporters = lambda do
-          Thread.list.select do |t|
-            t != Thread.current && t.alive? &&
-              t.backtrace&.any? { |l| l.include?('drinfomon/drexpmonitor.rb') }
-          end
-        end
+        reporters = -> { DRExpMonitorReporters.threads }
         do_client(';display expgains on')
         sleep 0.2
         first = reporters.call
