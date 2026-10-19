@@ -177,4 +177,52 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       expect(sent).to eq(['cast', 'cast', 'release mana'])
     end
   end
+
+  # prep_confirmed? (used by ritual and cast_spell) reads the prepared-spell
+  # indicator, which the game sets on the same line as its prep reply. Here a
+  # prep reply can be held back until the script pauses, as a reply that lands
+  # just after bput returned would be, and it sets the indicator when it
+  # arrives.
+  describe '.ritual after an empty-matching custom prep message' do
+    let(:settings) { OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil) }
+    let(:data) do
+      { 'abbrev' => 'fireball', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast',
+        'before' => [], 'after' => [], 'custom_prep_message' => 'You chant|' }
+    end
+    let(:held_back) { [] }
+
+    before do
+      Lich::Messaging.clear_messages!
+      @indicator = 'None'
+      allow(XMLData).to receive(:prepared_spell) { @indicator }
+      allow(drc).to receive(:release_invisibility)
+      allow(drca).to receive(:find_focus)
+      allow(drca).to receive(:invoke)
+      allow(drca).to receive(:stow_focus)
+      allow(drca).to receive(:waitcastrt?)
+      allow(drca).to receive(:pause) do |_seconds|
+        line = held_back.shift
+        next unless line
+
+        @indicator = 'Fire Ball'
+        arrive(line)
+      end
+    end
+
+    it 'goes on to the focus and the cast when the prep reply lands during the wait' do
+      game('prepare fireball 10' => ['A goblin arrives.'], 'cast' => ['You gesture.'])
+      held_back << 'You begin to chant.'
+      drca.ritual(data, settings)
+      expect(drca).to have_received(:invoke).with('totem', nil, nil)
+      expect(sent).to eq(['prepare fireball 10', 'cast'])
+    end
+
+    it 'stops without touching the focus or casting when no prep reply lands' do
+      game('prepare fireball 10' => ['A goblin arrives.'])
+      expect(drca.ritual(data, settings)).to be_nil
+      expect(drca).not_to have_received(:find_focus)
+      expect(sent).to eq(['prepare fireball 10'])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }).to include("DRCA: no prep reply was recognised for 'fireball' and no spell is being prepared - not casting")
+    end
+  end
 end

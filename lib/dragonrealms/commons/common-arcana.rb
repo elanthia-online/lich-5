@@ -77,6 +77,10 @@ module Lich
       INFUSE_OM_MAX_RETRIES = 20
       PREPARE_MAX_RETRIES = 3
       CAST_MAX_RETRIES = 3
+      # How long, and how often, prep_confirmed? polls the prepared-spell
+      # indicator after prepare? returned '' (see prep_confirmed?).
+      PREP_CONFIRM_WAIT_SECONDS = 3
+      PREP_CONFIRM_POLL_SECONDS = 0.1
       BARB_BUFF_MAX_RETRIES = 3
       STOW_FOCUS_MAX_RETRIES = 3
 
@@ -409,16 +413,15 @@ module Lich
       #   prep_messages plus the custom prep messages, or {#invoke_messages}
       #   for a runestone) arrives before bput gives up, bput returns +''+
       #   and prepare? returns it unchanged, after still sending the
-      #   tattoo/runestone +target+. {#cast_spell} and {#ritual} test the
-      #   result for truthiness and carry on as if the spell were prepared;
-      #   {#crafting_prepare_spell} returns it as is. A timeout is ambiguous:
-      #   the prep may have succeeded with a message that is not in the list
-      #   (the reason custom_prep_message exists) or with a reply delayed by a
-      #   server stall, and returning false there would abort a real prep. It
-      #   can also mean nothing was prepared at all. Callers that would
-      #   otherwise charge cambrinth, harness mana or cast on the strength of
-      #   this result can compare it against +''+ first, which catches every
-      #   empty match, not only a timeout.
+      #   tattoo/runestone +target+. A timeout is ambiguous: the prep may
+      #   have succeeded with a message that is not in the list (the reason
+      #   custom_prep_message exists) or with a reply delayed by a server
+      #   stall, and returning false there would abort a real prep. It can
+      #   also mean nothing was prepared at all. Callers that would otherwise
+      #   charge cambrinth, harness mana or cast on the strength of this
+      #   result should pass it to {#prep_confirmed?}, which accepts +''+
+      #   only when the game shows a spell being prepared. {#cast_spell} and
+      #   {#ritual} do; {#crafting_prepare_spell} returns the result as is.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
@@ -470,6 +473,36 @@ module Lich
         name
       end
 
+      # Whether a {#prepare?} result means a spell is now being prepared, so a
+      # caller can go on to charge cambrinth, harness mana, invoke a focus or
+      # cast. A matched prep message counts and false does not. For +''+
+      # (bput matched nothing; see {#prepare?}) the answer comes from the
+      # game's prepared-spell indicator ({#spell_preparing?}), which the game
+      # sends with its prep reply (on the same line or just before it),
+      # listed or not: it counts if a spell shows as being prepared within
+      # PREP_CONFIRM_WAIT_SECONDS, which also covers a prep reply that lands
+      # just after an empty-matching custom prep message made bput return
+      # early. Otherwise a bold message says so and the result is false.
+      #
+      # @param prep_result [String, false] what {#prepare?} returned
+      # @param abbrev [String, nil] the spell's abbreviation, for the message
+      # @return [Boolean]
+      def prep_confirmed?(prep_result, abbrev)
+        return false unless prep_result
+        return true unless prep_result == ''
+
+        polls = (PREP_CONFIRM_WAIT_SECONDS / PREP_CONFIRM_POLL_SECONDS).round
+        polls.times do
+          return true if spell_preparing?
+
+          pause PREP_CONFIRM_POLL_SECONDS
+        end
+        return true if spell_preparing?
+
+        Lich::Messaging.msg("bold", "DRCA: no prep reply was recognised for '#{abbrev}' and no spell is being prepared - not casting")
+        false
+      end
+
       def ritual(data, settings)
         DRC.retreat(settings.ignored_npcs) unless data['skip_retreat']
         DRC.release_invisibility
@@ -479,7 +512,8 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        return unless prep_confirmed?(prepared, data['abbrev'])
 
         prepare_time = Time.now
         find_focus(data['focus'], data['worn_focus'], data['tied_focus'], data['sheathed_focus'])
@@ -572,7 +606,9 @@ module Lich
       #   mana (and any symbiosis) even if its own cast went off.
       #   {#cast_spell}, {#cast_spell?} and {#crafting_cast_spell} pass this
       #   result through ({#cast_spell} returns nil, and so {#cast_spell?}
-      #   returns false, for a ritual spell or after a successful segue).
+      #   returns false, for a ritual spell, after a successful segue, and
+      #   when the prep failed or {#prep_confirmed?} rejected it, in which
+      #   case cast? is not called).
       def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
@@ -938,9 +974,12 @@ module Lich
         DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
         DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        return unless prepared
 
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
+        return unless prep_confirmed?(prepared, data['abbrev'])
+
         prepare_time = Time.now
 
         normalize_cambrinth_items(settings)

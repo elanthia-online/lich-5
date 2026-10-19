@@ -560,6 +560,62 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
+  describe '.prep_confirmed?' do
+    let(:polls) { (DRCA::PREP_CONFIRM_WAIT_SECONDS / DRCA::PREP_CONFIRM_POLL_SECONDS).round }
+    let(:not_casting) { "DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting" }
+
+    before { allow(DRCA).to receive(:pause) }
+
+    it 'returns false for a failed prep without reading the indicator or waiting' do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?(false, 'fb')).to be false
+      expect(DRCA).not_to have_received(:pause)
+      expect(bold_messages).to be_empty
+    end
+
+    it 'returns true for a matched prep message without reading the indicator or waiting' do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?('You begin to', 'fb')).to be true
+      expect(DRCA).not_to have_received(:pause)
+    end
+
+    it "returns true for '' at once when a spell already shows as prepared" do
+      allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).not_to have_received(:pause)
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns true for '' when the spell shows as prepared partway through the wait" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None', 'None', 'None', 'Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).to have_received(:pause).with(DRCA::PREP_CONFIRM_POLL_SECONDS).exactly(3).times
+    end
+
+    it "returns true for '' when the spell shows as prepared only on the check after the last pause" do
+      allow(XMLData).to receive(:prepared_spell).and_return(*Array.new(polls, 'None'), 'Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).to have_received(:pause).exactly(polls).times
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns false for '' after a bounded wait, saying why, when no spell shows as prepared" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+      expect(DRCA).to have_received(:pause).with(DRCA::PREP_CONFIRM_POLL_SECONDS).exactly(polls).times
+      expect(bold_messages).to eq([not_casting])
+    end
+
+    it "treats an empty indicator like 'None'" do
+      allow(XMLData).to receive(:prepared_spell).and_return('')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+    end
+
+    it 'waits about PREP_CONFIRM_WAIT_SECONDS in all' do
+      expect(polls * DRCA::PREP_CONFIRM_POLL_SECONDS).to be_within(0.001).of(DRCA::PREP_CONFIRM_WAIT_SECONDS)
+    end
+  end
+
   # ----------------------------------------------
   # cast?
   # ----------------------------------------------
@@ -766,21 +822,88 @@ RSpec.describe Lich::DragonRealms::DRCA do
         )
       end
 
-      # An `until DRCA.cast_spell?(...)` retry loop stops after one attempt
-      # when both the prep and the cast go unanswered.
-      it 'reports success, preparing and casting once, when both prep and cast time out' do
+      # A prep that drew no recognised reply goes on only if the game shows a
+      # spell being prepared (see prep_confirmed?).
+      def cast_data(extra = {})
+        { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'before' => [], 'after' => [] }.merge(extra)
+      end
+
+      before do
+        allow(DRCA).to receive(:pause)
         allow(DRCA).to receive(:find_charge_invoke_stow)
+      end
+
+      it 'stops after the prep, charging and casting nothing, when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
         silent_game(sent)
-        expect(DRCA.cast_spell?({ 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'before' => [], 'after' => [] }, settings)).to be true
+        expect(DRCA.cast_spell?(cast_data, settings)).to be false
+        expect(DRCA).not_to have_received(:find_charge_invoke_stow)
+        expect(sent).to eq(['release mana', 'prep fb 10'])
+        expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
+      end
+
+      it 'harnesses nothing when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:check_to_harness).and_return(true)
+        expect(DRCA).not_to receive(:harness_mana)
+        silent_game(sent)
+        expect(DRCA.cast_spell(cast_data, settings)).to be_nil
+      end
+
+      it 'calls no post-prep, pre-cast or post-cast lifecycle hook when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        stages = []
+        silent_game(sent)
+        DRCA.cast_spell(cast_data, settings, false, ->(stage, _data, _settings) { stages << stage })
+        expect(stages).to eq(['pre-prep'])
+      end
+
+      # An `until DRCA.cast_spell?(...)` retry loop still stops after one
+      # attempt when the prep went through with an unlisted reply and the
+      # cast then went unanswered.
+      it 'charges and casts once, reporting success, when a spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None', 'Fire Ball')
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data, settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
         expect(sent.count('prep fb 10')).to eq(1)
         expect(sent.count('cast')).to eq(1)
+        expect(bold_messages).to be_empty
+      end
+
+      it 'still puts the runestone away when its invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        allow(DRCA).to receive(:prepare_to_cast_runestone?).and_return(true)
+        allow(DRCI).to receive(:in_hands?).with('rune').and_return(true)
+        expect(DRCI).to receive(:put_away_item?).with('rune', 'pack')
+        settings.runestone_storage = 'pack'
+        silent_game(sent)
+        expect(DRCA.cast_spell(cast_data('runestone_name' => 'rune'), settings)).to be_nil
+        expect(DRCA).not_to have_received(:find_charge_invoke_stow)
+        expect(sent).not_to include('cast')
       end
     end
 
     describe '.ritual' do
-      it 'carries on to the focus invoke and the cast after a timed-out prep' do
-        settings = OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil)
-        data = { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] }
+      let(:settings) { OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil) }
+      let(:data) { { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] } }
+
+      before { allow(DRCA).to receive(:pause) }
+
+      it 'stops after the prep, without touching the focus or casting, when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA).not_to receive(:find_focus)
+        expect(DRCA).not_to receive(:invoke)
+        expect(DRCA).not_to receive(:stow_focus)
+        silent_game(sent)
+        expect(DRCA.ritual(data, settings)).to be_nil
+        expect(sent).to eq(['prepare fb 10'])
+        expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
+      end
+
+      it 'carries on to the focus invoke and the cast when a spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
         expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
         expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
         expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
