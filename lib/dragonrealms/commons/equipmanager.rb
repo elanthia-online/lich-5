@@ -88,8 +88,11 @@ module Lich
       #
       # @param set_name [String, nil] gear set name from settings (e.g., "standard", "swimming")
       # @return [Boolean] false if the set is unknown or any set item could not be
-      #   found, worn, or put away; true otherwise (a non-worn set item that was
-      #   in hand counts once it is put away)
+      #   found, worn, or put away; true otherwise. A set item that was in hand
+      #   counts once its put-away is confirmed: by a recognised reply, or, for
+      #   one put away with WEAR, by INV COMBAT showing it worn. A non-worn one
+      #   whose put-away reply was not recognised and that has left the hand is
+      #   reported missing, since nothing confirms where it went.
       #
       # @example
       #   @equipment_manager.wear_equipment_set?("standard")
@@ -174,14 +177,16 @@ module Lich
       # before each put-away; a held item that has left the hand by then joins
       # the unheld items, which are then fetched and worn in gear-set order.
       # When two set descriptions resolve to the same gear item, a held item
-      # that failed is not tried again. After the wears, a held failure that is
-      # no longer in hand (and is not a transform item) is looked for in one
-      # INV COMBAT: if it is worn it is not a failure, otherwise it is reported
-      # missing but not in hand. Returns, in gear-set order and without
-      # repeats, every item that could not be worn or put away, and the subset
-      # of those left in hand: every held failure still in hand (or a transform
-      # item), plus every fetched item whose WEAR failed and that still matches
-      # a hand afterwards.
+      # that failed is not tried again. After the wears, a held failure counts
+      # as in hand if a hand matches the item or any form {#stow_weapon} turned
+      # it into (see {#put_away_forms}). One that has left the hand is looked
+      # for in one INV COMBAT if its put-away was a WEAR: if it is worn it is
+      # not a failure. Any other held failure that has left the hand, worn or
+      # not, is reported missing but not in hand, since nothing confirms where
+      # it went. Returns, in gear-set order and without repeats, every item
+      # that could not be worn or put away, and the subset of those left in
+      # hand: every held failure in hand as above, plus every fetched item
+      # whose WEAR failed and that still matches a hand afterwards.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
@@ -228,20 +233,53 @@ module Lich
         end
 
         # Held put-away failures are checked again now that every wear has
-        # been tried. One still in hand, or a transform item (the hand shows
-        # the transformed form), is left in hand. One that has left the hand
-        # may have been worn after all (a WEAR whose reply never arrived), so a
-        # single INV COMBAT settles it: an item now worn is not a failure, and
-        # any other is reported missing rather than in hand. A refused fetch is
-        # in hand only if it still matches a hand.
-        held_in_hand, held_gone = held_failures.partition { |item| item.transforms_to || DRCI.in_hands?(item) }
-        unless held_gone.empty?
+        # been tried. One whose hand still shows the item, or a form it was
+        # transformed into on the way, is left in hand. One that has left the
+        # hand after a put-away that ended in a WEAR may have been worn after
+        # all (a WEAR whose reply never arrived), so a single INV COMBAT
+        # settles those: an item now worn is not a failure. INV COMBAT cannot
+        # confirm any other put-away, so every other item that has left the
+        # hand is reported missing rather than in hand. A refused fetch is in
+        # hand only if it still matches a hand.
+        held_in_hand, held_gone = held_failures.partition do |item|
+          put_away_forms(item).any? { |form| DRCI.in_hands?(form) }
+        end
+        worn_forms = held_gone.to_h { |item| [item, put_away_forms(item).last] }
+                              .select { |_item, form| !form.is_a?(String) && form.worn }
+        unless worn_forms.empty?
           worn_now = get_combat_items
-          held_gone.reject! { |item| worn_now.any? { |c_item| item.short_regex =~ c_item } }
+          held_gone.reject! { |item| worn_forms.key?(item) && worn_now.any? { |c_item| worn_forms[item].short_regex =~ c_item } }
         end
         failures = held_in_hand + held_gone + wear_failures
         in_hand = held_in_hand + wear_failures.select { |item| DRCI.in_hands?(item) }
         [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
+      end
+
+      # Lists the forms {#stow_weapon} goes through to put a held item away:
+      # the item itself, then, for a non-worn transform item, each form it is
+      # transformed into, following +transforms_to+ at most +transform_depth+
+      # times as {#stow_weapon} does. The last form is the one whose put-away
+      # (a WEAR when it is worn) {#stow_weapon} sent. A transformed form that
+      # is not in the gear list ends the list as its description String.
+      #
+      # @param item [DRC::Item] held gear item
+      # @param transform_depth [Integer] transforms {#stow_weapon} follows
+      # @return [Array<DRC::Item, String>] forms in the order they are handled
+      # @api private
+      def put_away_forms(item, transform_depth: 3)
+        forms = [item]
+        form = item
+        while !form.worn && form.transforms_to && transform_depth > 0
+          next_form = item_by_desc(form.transforms_to)
+          unless next_form
+            forms << form.transforms_to
+            break
+          end
+          forms << next_form
+          form = next_form
+          transform_depth -= 1
+        end
+        forms
       end
 
       # Removes currently worn combat items that are not in the target gear set.

@@ -1772,9 +1772,31 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
 
+    context 'when a held put-away gets no reply and the item leaves the hand' do
+      let(:gear_sets) { { 'standard' => ['bronze sword'] } }
+
+      before do
+        @hand = 'bronze sword'
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          @hand = nil if command == 'put my bronze.sword in my scabbard'
+          ''
+        end
+      end
+
+      it 'returns false and lists it under MISSING EQUIPMENT, without an INV COMBAT that cannot confirm a non-worn item' do
+        expect(em.wear_equipment_set?('standard')).to be false
+        expect(missing_list).to eq('EquipmentManager: bronze.sword')
+        expect(hands_line).to be_nil
+        expect(sent).to eq(['put my bronze.sword in my scabbard'])
+        expect(em).to have_received(:get_combat_items).once
+      end
+    end
+
     context 'when a held transform item fails and the hands are empty by the time of the alert' do
-      # The hand no longer matches a transform item's gear name by design, so
-      # it stays in the check-your-hands line, which shows the real hands.
+      # The transformed form is not in the gear list, so nothing can confirm
+      # where it went: it is reported missing, not in hand.
       let(:orb) do
         gear_class.new(short_name: 'silver.orb', short_regex: /\bsilver.*\borb/i, worn: false,
                        transforms_to: 'silver armband', transform_verb: 'turn', transform_text: 'You turn')
@@ -1792,12 +1814,153 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         end
       end
 
-      it 'names it in the check-your-hands line with holding: nothing, without a second INV COMBAT' do
+      it 'lists it under MISSING EQUIPMENT, without a check-your-hands line or a second INV COMBAT' do
         expect(em.wear_equipment_set?('standard')).to be false
-        expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: silver.orb (holding: nothing)')
-        expect(missing_warning?).to be false
+        expect(missing_list).to eq('EquipmentManager: silver.orb')
+        expect(hands_line).to be_nil
         expect(em).to have_received(:get_combat_items).once
       end
+    end
+
+    # A gear pair that turns into each other, where only the worn form is
+    # put away by WEAR: stow_weapon sends a plain WEAR for the held tailband,
+    # and turns a held katavdar into the tailband and then WEARs that.
+    context 'with a transform pair whose worn form is put away by WEAR' do
+      let(:katavdar) do
+        gear_class.new(short_name: 'steel.katavdar', short_regex: /\bsteel.*\bkatavdar/i, worn: false,
+                       transforms_to: 'steel tailband', transform_verb: 'turn', transform_text: 'With a flick')
+      end
+      let(:tailband) do
+        gear_class.new(short_name: 'steel.tailband', short_regex: /\bsteel.*\btailband/i, worn: true,
+                       transforms_to: 'steel katavdar', transform_verb: 'turn', transform_text: 'With a flick')
+      end
+      let(:wear_reply) { '' }
+      let(:wear_leaves_hand) { true }
+
+      before do
+        allow(em).to receive(:items).and_return([katavdar, tailband])
+        allow(DRC).to receive(:right_hand) { @hand }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          sent << command
+          case command
+          when 'turn my steel.katavdar'
+            @hand = 'steel tailband'
+            'With a flick of your wrist, your katavdar becomes a tailband.'
+          when 'wear my steel.tailband'
+            @hand = nil if wear_leaves_hand
+            wear_reply
+          else
+            ''
+          end
+        end
+      end
+
+      context 'when the held tailband gets no WEAR reply and leaves the hand' do
+        let(:gear_sets) { { 'standard' => ['steel tailband'] } }
+
+        before { @hand = 'steel tailband' }
+
+        it 'returns true without an alert when INV COMBAT shows it worn' do
+          allow(em).to receive(:get_combat_items).and_return([], ['a steel tailband'])
+          expect(em.wear_equipment_set?('standard')).to be true
+          expect(alert_block).to be_empty
+          expect(sent).to eq(['wear my steel.tailband'])
+          expect(em).to have_received(:get_combat_items).twice
+        end
+
+        it 'lists it under MISSING EQUIPMENT, not in the check-your-hands line, when INV COMBAT does not show it' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(missing_list).to eq('EquipmentManager: steel.tailband')
+          expect(hands_line).to be_nil
+          expect(em).to have_received(:get_combat_items).twice
+        end
+      end
+
+      context 'when the held tailband is refused by WEAR and stays in hand' do
+        let(:gear_sets) { { 'standard' => ['steel tailband'] } }
+        let(:wear_reply) { "You can't wear that right now." }
+        let(:wear_leaves_hand) { false }
+
+        before { @hand = 'steel tailband' }
+
+        it 'names it in the check-your-hands line without a second INV COMBAT' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.tailband (holding: steel tailband)')
+          expect(em).to have_received(:get_combat_items).once
+        end
+      end
+
+      context 'when a held katavdar is turned into the tailband' do
+        let(:gear_sets) { { 'standard' => ['steel katavdar'] } }
+
+        before { @hand = 'steel katavdar' }
+
+        it 'returns true when the tailband WEAR gets no reply but INV COMBAT shows the tailband worn' do
+          allow(em).to receive(:get_combat_items).and_return([], ['a steel tailband'])
+          expect(em.wear_equipment_set?('standard')).to be true
+          expect(alert_block).to be_empty
+          expect(sent).to eq(['turn my steel.katavdar', 'wear my steel.tailband'])
+        end
+
+        it 'lists it under MISSING EQUIPMENT when the tailband WEAR gets no reply and INV COMBAT does not show it' do
+          expect(em.wear_equipment_set?('standard')).to be false
+          expect(missing_list).to eq('EquipmentManager: steel.katavdar')
+          expect(hands_line).to be_nil
+        end
+
+        context 'and the tailband is refused by WEAR' do
+          let(:wear_reply) { "You can't wear that right now." }
+          let(:wear_leaves_hand) { false }
+
+          it 'names it in the check-your-hands line with the transformed form held, without a second INV COMBAT' do
+            expect(em.wear_equipment_set?('standard')).to be false
+            expect(hands_line).to eq('EquipmentManager: could not wear or put away, check your hands: steel.katavdar (holding: steel tailband)')
+            expect(missing_warning?).to be false
+            expect(em).to have_received(:get_combat_items).once
+          end
+        end
+      end
+    end
+  end
+
+  describe '#put_away_forms' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    def gear(name, worn:, transforms_to: nil)
+      double(name, short_name: name, short_regex: /\b#{name}/i, worn: worn, transforms_to: transforms_to)
+    end
+
+    it 'is just the item for a worn item, even one with transforms_to' do
+      band = gear('tailband', worn: true, transforms_to: 'katavdar')
+      allow(em).to receive(:items).and_return([band, gear('katavdar', worn: false, transforms_to: 'tailband')])
+      expect(em.put_away_forms(band)).to eq([band])
+    end
+
+    it 'is just the item for a non-worn item without transforms_to' do
+      sword = gear('sword', worn: false)
+      allow(em).to receive(:items).and_return([sword])
+      expect(em.put_away_forms(sword)).to eq([sword])
+    end
+
+    it 'follows a non-worn transform item to the worn form it turns into' do
+      kat = gear('katavdar', worn: false, transforms_to: 'tailband')
+      band = gear('tailband', worn: true, transforms_to: 'katavdar')
+      allow(em).to receive(:items).and_return([kat, band])
+      expect(em.put_away_forms(kat)).to eq([kat, band])
+    end
+
+    it 'ends with the description when the transformed form is not in the gear list' do
+      orb = gear('orb', worn: false, transforms_to: 'silver armband')
+      allow(em).to receive(:items).and_return([orb])
+      expect(em.put_away_forms(orb)).to eq([orb, 'silver armband'])
+    end
+
+    it 'stops after three transforms for two non-worn items that turn into each other, as stow_weapon does' do
+      orb = gear('orb', worn: false, transforms_to: 'cube')
+      cube = gear('cube', worn: false, transforms_to: 'orb')
+      allow(em).to receive(:items).and_return([orb, cube])
+      expect(em.put_away_forms(orb)).to eq([orb, cube, orb, cube])
     end
   end
 
