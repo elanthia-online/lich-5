@@ -8,9 +8,10 @@
   and #restore_from describe how each leaves the installation as it was when
   it fails.
 
-  A revert killed during the swap cannot undo it. It can leave lib/, the core
-  scripts or lich.rbw missing, so that Lich will not start and cannot run the
-  revert again. The snapshot itself is untouched: copying its lib/, the core
+  A revert whose thread is killed (Lich shutting down) undoes the swap like
+  a failed one. A revert whose process is killed during the swap cannot
+  undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
+  Lich will not start and cannot run the revert again. The snapshot itself is untouched: copying its lib/, the core
   scripts in its scripts/ and its lich.rbw back by hand, or running the
   revert from another session of this installation that is still running,
   restores it. On Windows each rename of the swap that Windows refuses
@@ -409,6 +410,15 @@ module Lich
         # left in place rather than deleted, and so are working directories
         # an earlier failed revert kept in LIB_DIR for recovery.
         #
+        # The same clean-up runs when the thread is killed (Lich kills the
+        # client thread running ;lich5-update when it shuts down) or gets
+        # any other async exception: Thread#kill skips rescue clauses but
+        # runs ensure blocks, so the clean-up lives in an ensure. Each rename
+        # and its journal entry, and the whole clean-up, run with interrupts
+        # deferred, so the journal never misses a rename and a second
+        # interruption (Ruby re-signals threads still running at exit)
+        # cannot stop an undo half way. Only killing the process can.
+        #
         # @param snapshot_dir [String] a snapshot that passed #snapshot_problems
         # @return [void]
         # @raise [SystemCallError] if the restore fails; the install is left
@@ -417,6 +427,9 @@ module Lich
         #   lib/, core scripts and lich.rbw may then be part old, part restored)
         def restore_from(snapshot_dir)
           temp_dirs = []
+          journal = []
+          stage = :copying
+          failure = nil
           begin
             new_lib = revert_temp_dir(LIB_DIR, 'new', temp_dirs)
             FileUtils.cp_r(File.join(snapshot_dir, 'lib', '.'), new_lib)
@@ -431,16 +444,8 @@ module Lich
             old_lib = revert_temp_dir(LIB_DIR, 'old', temp_dirs)
             old_scripts = revert_temp_dir(SCRIPT_DIR, 'old', temp_dirs)
             old_lich_dir = revert_temp_dir(LICH_DIR, 'old', temp_dirs)
-          rescue StandardError => e
-            remove_revert_temp_dirs(temp_dirs)
-            respond
-            respond "Revert failed while copying the snapshot (#{e.class}: #{e.message})."
-            respond 'Nothing was changed.'
-            raise
-          end
 
-          journal = []
-          begin
+            stage = :swapping
             # This run's working directories, and any a previous failed
             # revert kept for recovery by hand, stay where they are.
             Dir.children(LIB_DIR).each do |name|
@@ -458,22 +463,55 @@ module Lich
 
             move_entry(live_lich, File.join(old_lich_dir, lich_file_name), journal) if File.exist?(live_lich)
             move_entry(new_lich, live_lich, journal)
+            stage = :done
           rescue StandardError => e
-            undone = undo_moves(journal)
+            failure = e
+            raise
+          ensure
+            Thread.handle_interrupt(Object => :never) { finish_restore(stage, temp_dirs, journal, failure) }
+          end
+        end
+
+        # Clean-up for #restore_from, whether it finished, failed or was
+        # interrupted (+failure+ is nil then). Removes the working
+        # directories, after undoing the swap if it did not finish, and
+        # reports what happened unless it finished.
+        #
+        # @param stage [Symbol] :copying, :swapping or :done
+        # @param temp_dirs [Array<String>] working directories created so far
+        # @param journal [Array<Array(String, String)>] renames done so far
+        # @param failure [StandardError, nil] the error that stopped it
+        # @return [void]
+        def finish_restore(stage, temp_dirs, journal, failure)
+          case stage
+          when :done
+            remove_revert_temp_dirs(temp_dirs)
+          when :copying
+            remove_revert_temp_dirs(temp_dirs)
             respond
-            respond "Revert failed while swapping files in (#{e.class}: #{e.message})."
+            if failure
+              respond "Revert failed while copying the snapshot (#{failure.class}: #{failure.message})."
+            else
+              respond 'Revert was interrupted while copying the snapshot.'
+            end
+            respond 'Nothing was changed.'
+          when :swapping
+            undone = undo_moves(journal)
+            remove_revert_temp_dirs(temp_dirs) if undone
+            respond
+            if failure
+              respond "Revert failed while swapping files in (#{failure.class}: #{failure.message})."
+            else
+              respond 'Revert was interrupted while swapping files in.'
+            end
             if undone
-              remove_revert_temp_dirs(temp_dirs)
               respond 'Every change was undone; your installation is as it was.'
             else
               respond 'Some changes could not be undone. Your previous files are kept in:'
               temp_dirs.each { |dir| respond "    #{dir}" }
               respond 'Seek assistance.'
             end
-            raise
           end
-
-          remove_revert_temp_dirs(temp_dirs)
         end
 
         # Creates a hidden working directory for #restore_from inside
@@ -482,9 +520,11 @@ module Lich
         #
         # @return [String] the new directory
         def revert_temp_dir(parent, role, temp_dirs)
-          dir = Dir.mktmpdir("#{REVERT_TEMP_PREFIX}#{role}-", parent)
-          temp_dirs << dir
-          dir
+          Thread.handle_interrupt(Object => :never) do
+            dir = Dir.mktmpdir("#{REVERT_TEMP_PREFIX}#{role}-", parent)
+            temp_dirs << dir
+            dir
+          end
         end
 
         # @param name [String] a directory entry name
@@ -494,9 +534,13 @@ module Lich
         end
 
         # Renames +from+ to +to+ and records the move so it can be undone.
+        # Interrupts are deferred until both are done, so a Thread#kill
+        # cannot land between the rename and its journal entry.
         def move_entry(from, to, journal)
-          rename_with_retry(from, to)
-          journal << [from, to]
+          Thread.handle_interrupt(Object => :never) do
+            rename_with_retry(from, to)
+            journal << [from, to]
+          end
         end
 
         # File.rename, retried on Windows while the refusal looks transient.

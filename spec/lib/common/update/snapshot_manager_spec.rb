@@ -722,6 +722,111 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       kept.each { |path| expect(messages).to include("    #{path}") }
     end
 
+    # The client thread that runs ;lich5-update is killed when Lich shuts
+    # down (e.g. the game connection drops). Thread#kill runs ensure blocks
+    # but skips rescue clauses.
+    context 'when the thread running it is killed part way through' do
+      before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
+
+      # Runs the revert in its own thread. The first call of +mod+.+meth+ in
+      # that thread for which the block is true parks the thread just
+      # before the call; it is then killed and let go. With
+      # +then_raise_when+, the first later call of the same method that it
+      # matches parks the thread again and it gets an async Thread#raise,
+      # like the second terminate Ruby sends threads still running at exit.
+      def kill_revert_at(mod, meth, then_raise_when: nil, &park_if)
+        events = Queue.new
+        resume = Queue.new
+        pending = [park_if, then_raise_when].compact
+        allow(mod).to receive(meth).and_wrap_original do |original, *args, **kwargs, &block|
+          if Thread.current[:revert_under_test] && pending.first&.call(*args)
+            pending.shift
+            events << :parked
+            resume.pop
+          end
+          original.call(*args, **kwargs, &block)
+        end
+        victim = Thread.new do
+          Thread.current[:revert_under_test] = true
+          manager.revert
+        end
+        victim.report_on_exception = false
+        expect(events.pop(timeout: 30)).to eq(:parked)
+        victim.kill
+        resume << true
+        if then_raise_when
+          expect(events.pop(timeout: 10)).to eq(:parked), 'the undo never reached the second interruption'
+          victim.raise(RuntimeError, 'interrupted again')
+          resume << true
+        end
+        begin
+          expect(victim.join(30)).to eq(victim)
+        rescue RuntimeError => e
+          raise unless e.message == 'interrupted again'
+        end
+      end
+
+      it 'undoes every rename when killed during the swap' do
+        before = live_state
+        renames = 0
+        messages = capture_responses
+
+        kill_revert_at(File, :rename) { (renames += 1) == 3 }
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('Revert was interrupted while swapping files in.')
+        expect(messages).to include('Every change was undone; your installation is as it was.')
+        expect(messages).not_to include('Lich5 has been reverted to Lich5 version 5.21.0')
+      end
+
+      it 'undoes the swap when killed just before the last rename' do
+        before = live_state
+        live_lich = File.join(LICH_DIR, lich_name)
+
+        kill_revert_at(File, :rename) { |from, to| to == live_lich && from.include?('.lich5-revert-new-') }
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+      end
+
+      it 'finishes the undo even if interrupted again while undoing' do
+        before = live_state
+        renames = 0
+        live_version = File.join(LIB_DIR, 'version.rb')
+
+        kill_revert_at(File, :rename,
+                       then_raise_when: ->(from, to) { to == live_version && from.include?('.lich5-revert-old-') }) do
+          (renames += 1) == 4
+        end
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+      end
+
+      it 'removes its working directories when killed while copying the snapshot' do
+        before = live_state
+        messages = capture_responses
+
+        kill_revert_at(FileUtils, :cp) { |_from, to| to.end_with?(lich_name) && to.include?('.lich5-revert-new-') }
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('Revert was interrupted while copying the snapshot.')
+        expect(messages).to include('Nothing was changed.')
+      end
+
+      it 'removes all its working directories when killed while removing them after the swap' do
+        snapshot_lib = tree(File.join(BACKUP_DIR, 'L5-snapshot-2026-10-01-00-00-00', 'lib'))
+
+        kill_revert_at(FileUtils, :rm_rf) { |path| File.basename(path).start_with?('.lich5-revert-') }
+
+        expect(tree(LIB_DIR)).to eq(snapshot_lib)
+        expect(File.read(File.join(LICH_DIR, lich_name))).to eq("# lich 5.21.0\n")
+        expect(revert_temp_dirs).to be_empty
+      end
+    end
+
     context 'when another revert on the same installation is running' do
       let(:lock_path) { File.join(BACKUP_DIR, described_class::REVERT_LOCK_NAME) }
       let(:refusal) { 'Another revert is already running on this installation. Nothing was changed.' }
