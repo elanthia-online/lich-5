@@ -325,8 +325,11 @@ module Lich
       # crafting belt is untied from it; anything else is fetched with
       # `get my <name>`, from +bag+ when +bag_items+ lists it.
       #
-      # When wounds hinder an untie, visits safe-room once and unties once
-      # more. Four failures are final, and no retry follows them:
+      # When wounds hinder an untie, visits safe-room once and sends that
+      # untie once more. The belt untie and the plain untie each get their
+      # own visit, so a call that falls from the belt to a GET that says to
+      # untie the item can visit safe-room twice, never more. Four failures
+      # are final, and no retry follows them:
       # - the item can't be found and isn't already in hand;
       # - the game says it "can't quite lift it";
       # - the GET says to untie the item, the untie finds nothing, and the
