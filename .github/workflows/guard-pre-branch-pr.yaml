@@ -1,68 +1,65 @@
-# =============================================================================
-# Workflow: guard-pre-branch-pr.yml
-# Purpose : Auto-close any PR that attempts to merge from pre/beta → main.
-#
-# Why pull_request_target?
-#   - Runs in the context of the base repo (safe tokens), without checking out
-#     the untrusted PR head. We only need PR metadata + permissions to comment/close.
-#
-# Triggers:
-#   - pull_request_target: opened, reopened, synchronize, ready_for_review, edited
-#
-# Behavior:
-#   - If head ref starts with 'pre/beta' and base ref == 'main', post a policy
-#     comment and close the PR immediately.
-#
-# Safety / Hardening:
-#   - Concurrency keyed by PR number to avoid duplicate comments on rapid updates.
-#   - Minimal permissions (pull-requests: write). Add actions:write only if you
-#     choose to cancel queued runs tied to the PR (not required).
-# =============================================================================
-name: guard pre/* PRs to main
+# An administrator may explicitly close a same-repository pre/beta PR to main.
+# PR activity never triggers writes. No PR code is checked out or executed.
+name: guard pre/beta PRs to main
 
 on:
-  pull_request_target:
-    types: [opened, reopened, synchronize, ready_for_review, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Same-repository pre/beta pull request to close
+        required: true
+        type: string
 
 concurrency:
-  group: guard-prepr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: guard-prepr-${{ inputs.pr_number }}
+  cancel-in-progress: false
 permissions:
-  actions: write
+  contents: read
   pull-requests: write
 
 jobs:
   block:
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'pre/beta') && github.event.pull_request.base.ref == 'main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Close with policy comment
-        if: ${{ startsWith(github.head_ref, 'pre/beta') && github.base_ref == 'main' }}
+      - name: Verify administrator and PR before closing
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         with:
           script: |
-            const {owner, repo} = context.repo;
-            const number = context.payload.pull_request.number;
+            if (context.eventName !== 'workflow_dispatch' || context.ref !== 'refs/heads/main') {
+              return core.setFailed('Only an explicit dispatch from main may close a PR.');
+            }
+            if (process.env.TRIGGERING_ACTOR !== context.actor) {
+              return core.setFailed('A different actor may not rerun this dispatch.');
+            }
+            const input = process.env.PR_NUMBER || '';
+            if (!/^[1-9][0-9]*$/.test(input) || !Number.isSafeInteger(Number(input))) {
+              return core.setFailed('A positive integer PR number is required.');
+            }
+            const number = Number(input);
+            const { owner, repo } = context.repo;
+            const permission = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner, repo, username: context.actor
+            });
+            if (permission.data.permission !== 'admin') {
+              return core.setFailed('Repository administrator permission is required.');
+            }
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const repository = `${owner}/${repo}`.toLowerCase();
+            const repositoryId = context.payload.repository.id;
+            if (pr.number !== number || pr.state !== 'open' || pr.merged ||
+                pr.base?.repo?.id !== repositoryId || pr.head?.repo?.id !== repositoryId ||
+                pr.base?.repo?.full_name?.toLowerCase() !== repository ||
+                pr.head?.repo?.full_name?.toLowerCase() !== repository ||
+                pr.base.ref !== 'main' || !pr.head.ref.startsWith('pre/beta') ||
+                !/^[0-9a-f]{40}$/i.test(pr.head.sha)) {
+              return core.setFailed('PR must be open, unmerged, and from this repository pre/beta to main.');
+            }
             await github.rest.issues.createComment({
               owner, repo, issue_number: number,
               body: "Direct merges from `pre/beta` to `main` are disallowed by policy. This PR will be closed unmerged."
             });
             await github.rest.pulls.update({ owner, repo, pull_number: number, state: "closed" });
-
-      - name: Cancel any queued/in-progress runs for this branch/SHA
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          for status in in_progress queued; do
-            gh api -X GET "repos/$REPO/actions/runs" \
-              -f status="$status" -f per_page=100 \
-              -q '.workflow_runs[] | select((.head_branch=="'"$HEAD_REF"'") or (.head_sha=="'"$HEAD_SHA"'")) | .id' |
-            while read -r id; do
-              echo "Cancelling run $id (status=$status)"
-              gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null
-            done
-          done
