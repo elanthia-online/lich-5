@@ -1162,8 +1162,14 @@ RSpec.describe Lich::Common::MapBase do
       end
 
       before do
-        @saved_settings_state = %i[@db_adapter @path_navigator @settings_cache].to_h do |ivar|
+        # Snapshot every Settings ivar, and give each Hash-valued one (caches,
+        # version stamps, locks) a copy, so entries these examples add never
+        # leak into the shared Settings state.
+        @saved_settings_state = settings_module.instance_variables.to_h do |ivar|
           [ivar, settings_module.instance_variable_get(ivar)]
+        end
+        @saved_settings_state.each do |ivar, value|
+          settings_module.instance_variable_set(ivar, value.dup) if value.is_a?(Hash)
         end
         settings_module.instance_variable_set(:@db_adapter, store)
         settings_module.instance_variable_set(:@path_navigator, Lich::Common::PathNavigator.new(store))
@@ -1175,6 +1181,9 @@ RSpec.describe Lich::Common::MapBase do
       end
 
       after do
+        (settings_module.instance_variables - @saved_settings_state.keys).each do |ivar|
+          settings_module.remove_instance_variable(ivar)
+        end
         @saved_settings_state.each { |ivar, value| settings_module.instance_variable_set(ivar, value) }
         store.instance_variable_get(:@db)&.disconnect
         FileUtils.remove_entry(store_dir) if Dir.exist?(store_dir)
@@ -1221,6 +1230,25 @@ RSpec.describe Lich::Common::MapBase do
         2.times { run_as('autostart') }
 
         expect(go2_custom_targets).to eq({ 'my_spot' => 10, 'Crossing' => [1, 2] })
+      end
+
+      it "does not create go2's row when personal_map_targets is empty" do
+        settings.personal_map_targets = {}
+
+        run_as('autostart')
+
+        expect(store.get_settings('go2', 'DR')).to be_empty
+      end
+
+      it "does not write go2's row again when it already holds the targets" do
+        settings.personal_map_targets = { 'my_spot' => 10 }
+        run_as('autostart')
+        allow(store).to receive(:save_settings).and_call_original
+
+        run_as('autostart')
+
+        expect(store).not_to have_received(:save_settings)
+        expect(go2_custom_targets).to eq({ 'my_spot' => 10 })
       end
 
       it 'stores them in the same row when go2 itself applies them' do

@@ -710,13 +710,18 @@ module Lich
         # would read and write the calling script's row (GameSettings keys rows by
         # Script.current.name), which go2 never reads, so this names go2's row.
         # The cached value is never mutated in place; the merge builds a new Hash.
+        # Nothing is written when the merge changes nothing (an empty profile
+        # hash, or targets already there from an earlier login), so a login does
+        # not rewrite the row other sessions' ;go2 save and delete also write.
         # @param targets [Hash] target name => room id or Array of room ids
         # @return [void]
         def merge_personal_map_targets(targets)
           scope = GameSettings.active_scope
-          stored = Settings.current_script_settings(scope, script_name: CUSTOM_TARGETS_SCRIPT)['custom targets']
-          Settings.set_script_settings(scope, 'custom targets', (stored || {}).merge(targets),
-                                       script_name: CUSTOM_TARGETS_SCRIPT)
+          stored = Settings.current_script_settings(scope, script_name: CUSTOM_TARGETS_SCRIPT)['custom targets'] || {}
+          merged = stored.merge(targets)
+          return if merged == stored
+
+          Settings.set_script_settings(scope, 'custom targets', merged, script_name: CUSTOM_TARGETS_SCRIPT)
         end
 
         private :merge_personal_map_targets
