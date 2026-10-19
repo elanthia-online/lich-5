@@ -922,6 +922,29 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(sent).to eq(['release mana', 'invoke my tattoo 10', 'cast'])
         expect(bold_messages).to be_empty
       end
+
+      # The runestone alone exempts the prep: with no 'prep' key the command
+      # is the default 'prep', which would otherwise get the indicator check.
+      it 'charges and casts as before when a runestone prep with the default command drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        allow(DRCA).to receive(:prepare_to_cast_runestone?).and_return(true)
+        allow(DRCI).to receive(:in_hands?).with('rune').and_return(false)
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data('runestone_name' => 'rune'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'prep my rune', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+
+      # cast?'s spell-fail branch used to release the symbiosis after the
+      # cast drew "You don't have a spell prepared!"; cast? is no longer run.
+      it 'leaves a symbiosis prepared when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        silent_game(sent, 'prepare symbiosis' => 'You recall the exact details of the')
+        expect(DRCA.cast_spell?(cast_data('symbiosis' => true), settings)).to be false
+        expect(sent).to eq(['release mana', 'prepare symbiosis', 'prep fb 10'])
+      end
     end
 
     describe '.ritual' do
@@ -949,6 +972,18 @@ RSpec.describe Lich::DragonRealms::DRCA do
         silent_game(sent)
         DRCA.ritual(data, settings)
         expect(sent).to eq(['prepare fb 10', 'cast'])
+      end
+
+      # An invoke is not checked against the indicator (see prep_confirmed?).
+      it 'carries on to the focus invoke and the cast when an invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
+        expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
+        expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
+        silent_game(sent)
+        DRCA.ritual(data.merge('prep' => 'invoke'), settings)
+        expect(sent).to eq(['invoke fb 10', 'cast'])
+        expect(bold_messages).to be_empty
       end
     end
 
