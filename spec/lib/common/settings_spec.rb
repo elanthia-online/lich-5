@@ -707,10 +707,10 @@ RSpec.describe Lich::Common::Settings do
       expect(@mock_db).not_to have_received(:get_settings)
     end
 
-    # Two threads of this process. Each test holds the first thread between
-    # its database call and its cache update for up to PAUSE seconds, or until
-    # the second thread is done, and checks that the cache ends on the newest
-    # row whichever way the threads are ordered.
+    # Two threads of this process. Each test holds the first thread just
+    # after its database call for up to PAUSE seconds, or until the second
+    # thread is done, and checks that the cache ends on the newest row
+    # whichever way the threads are ordered.
     describe "two threads of one process" do
       pause = 0.5
 
@@ -725,8 +725,8 @@ RSpec.describe Lich::Common::Settings do
         first_stored = Queue.new
         second_done = Queue.new
         first = nil
-        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
-          stored = original.call(*args, &block)
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
+          stored = original.call(*args, **opts, &block)
           if Thread.current.equal?(first)
             first_stored << true
             second_done.pop(timeout: pause)
@@ -971,12 +971,12 @@ RSpec.describe Lich::Common::Settings do
         write_started = Queue.new
         release = Queue.new
         writer = nil
-        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
           if Thread.current.equal?(writer)
             write_started << true
             release.pop(timeout: 2)
           end
-          original.call(*args, &block)
+          original.call(*args, **opts, &block)
         end
 
         writer = in_thread { game_write('a', 1) }
@@ -994,12 +994,12 @@ RSpec.describe Lich::Common::Settings do
         write_started = Queue.new
         release = Queue.new
         first = nil
-        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
           if Thread.current.equal?(first)
             write_started << true
             release.pop(timeout: 2)
           end
-          original.call(*args, &block)
+          original.call(*args, **opts, &block)
         end
 
         first = in_thread { game_write('a', 1) }
@@ -1023,6 +1023,22 @@ RSpec.describe Lich::Common::Settings do
 
         expect(writer.join(2)).to eq(writer)
         expect(@mock_db.get_settings("test_script", "GSIV")).to eq('b' => 2)
+      end
+
+      it "leaves the cache holding the stored row when the writing thread is killed right after the store" do
+        expect(game_read('a')).to be_nil # this process caches the empty row
+        # Script#kill is Thread#kill; here it lands as soon as the adapter returns.
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
+          original.call(*args, **opts, &block)
+          Thread.current.kill
+        end
+
+        writer = in_thread { game_write('a', 1) }
+        expect(writer.join(2)).to eq(writer)
+        allow(@mock_db).to receive(:get_settings).and_raise(RuntimeError, 'a read went to the database')
+
+        expect(@mock_db.dump["test_script:GSIV"]).to eq('a' => 1)
+        expect(game_read('a')).to eq(1)
       end
 
       it "makes Settings.load return and cache a row committed before it was called, over an older fill in progress" do
