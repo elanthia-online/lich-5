@@ -2708,9 +2708,10 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(model.trashed).to be_empty
       end
 
-      it 'says the item is no longer in hand' do
+      it 'says the item is no longer in hand without claiming it was not disposed of' do
         described_class.dispose_trash('rock')
-        expect(messages).to match(/'rock' is no longer in your hands/)
+        expect(messages).to match(/'rock' is no longer in your hands \(it may already have been disposed of\)/)
+        expect(messages).not_to match(/was not disposed of/)
       end
     end
 

@@ -845,7 +845,7 @@ module Lich
       # @return [false]
       # @api private
       def dispose_item_not_held(item)
-        Lich::Messaging.msg("bold", "DRCI: '#{item}' is no longer in your hands, so it was not disposed of. Not getting another to dispose of.")
+        Lich::Messaging.msg("bold", "DRCI: '#{item}' is no longer in your hands (it may already have been disposed of). Not getting another to dispose of.")
         false
       end
 
