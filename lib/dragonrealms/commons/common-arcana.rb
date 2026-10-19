@@ -778,19 +778,18 @@ module Lich
         return nil if DRStats.barbarian? || DRStats.thief? || DRStats.trader? || DRStats.commoner?
 
         if DRStats.moon_mage?
-          lines = Lich::Util.issue_command(
+          lines, complete = DRC.capture_reply(
             'perc mana',
             PERC_MANA_START_PATTERN,
             PERC_MANA_END_PATTERN,
             usexml: false,
-            include_end: false,
-            quiet: true,
             timeout: 5
           )
-          if lines.nil? || lines.empty?
+          if lines.empty?
             Lich::Messaging.msg("bold", "DRCA: Failed to capture PERC MANA output (timeout).")
             return nil
           end
+          Lich::Messaging.msg("bold", "DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.") unless complete
 
           mana_msgs = lines.map(&:strip).select { |line| line.include?('streams') }[0..3]
           return nil if mana_msgs.length < 4

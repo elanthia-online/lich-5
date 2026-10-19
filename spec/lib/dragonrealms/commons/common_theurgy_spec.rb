@@ -9,7 +9,11 @@ DRCT.define_singleton_method(:buy_item) { |*_args| nil } unless DRCT.respond_to?
 DRCA.define_singleton_method(:cast_spell) { |*_args| nil } unless DRCA.respond_to?(:cast_spell)
 
 # Load production code
+require 'ostruct'
+require 'timeout'
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require_relative '../../../../lib/dragonrealms/commons/common-theurgy'
+require File.join(LIB_DIR, 'util', 'util.rb')
 
 RSpec.describe Lich::DragonRealms::DRCTH do
   # --- Constants -------------------------------------------------------
@@ -946,20 +950,26 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(Lich::Util).to receive(:issue_command).and_return([
                                                                   "Tamsine's benevolent eyes are upon you.",
                                                                   '',
-                                                                  'You have been recently enlightened by Tamsine.'
+                                                                  'You have been recently enlightened by Tamsine.',
+                                                                  'Roundtime: 1 sec.'
                                                                 ])
       end
 
-      it 'passes correct parameters to issue_command' do
+      it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
         expect(Lich::Util).to receive(:issue_command).with(
           'commune sense',
           described_class::COMMUNE_SENSE_START,
           /Roundtime/,
           usexml: false,
           quiet: true,
-          include_end: false
+          include_end: true,
+          timeout: 5
         )
         described_class.commune_sense
+      end
+
+      it 'reads as ready when the complete reply has no "will not be able" line' do
+        expect(described_class.commune_sense.commune_ready?).to be true
       end
 
       it 'strips and filters empty lines before parsing' do
@@ -971,6 +981,112 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       it 'reports captured true and prints no timeout message' do
         expect(Lich::Messaging).not_to receive(:msg)
         expect(described_class.commune_sense.captured?).to be true
+      end
+    end
+
+    context 'when the reply is cut off before its Roundtime line' do
+      before do
+        allow(Lich::Util).to receive(:issue_command).and_return([
+                                                                  "Tamsine's benevolent eyes are upon you.",
+                                                                  'You have been recently enlightened by Tamsine.'
+                                                                ])
+        allow(Lich::Messaging).to receive(:msg)
+      end
+
+      it 'reports captured false and does not read as ready' do
+        result = described_class.commune_sense
+        expect(result.captured?).to be false
+        expect(result['captured']).to be false
+        expect(result.commune_ready?).to be false
+      end
+
+      it 'keeps the communes that did arrive' do
+        result = described_class.commune_sense
+        expect(result.active_communes).to eq(['Tamsine'])
+        expect(result.recent_communes).to eq(['Tamsine'])
+      end
+
+      it 'prints a cut-off message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCTH: COMMUNE SENSE output was cut off (timeout); the result is incomplete.')
+        described_class.commune_sense
+      end
+    end
+
+    context 'when a cut-off reply already says the conduit is not ready' do
+      it 'stays not ready and uncaptured' do
+        allow(Lich::Util).to receive(:issue_command).and_return(['You will not be able to open another divine conduit yet.'])
+        allow(Lich::Messaging).to receive(:msg)
+        result = described_class.commune_sense
+        expect(result.commune_ready?).to be false
+        expect(result.captured?).to be false
+      end
+    end
+  end
+
+  # Drives the REAL Lich::Util.issue_command (not a stub), so these examples
+  # pin the actual timeout contract: [] or the lines so far, never nil.
+  describe '.commune_sense through the real Lich::Util.issue_command' do
+    let(:full_reply) do
+      [
+        "Tamsine's benevolent eyes are upon you.",
+        'You have been recently enlightened by Tamsine.',
+        'Roundtime: 1 sec.'
+      ]
+    end
+    let(:replies) { [] }
+    let(:messages) { [] }
+
+    before do
+      allow(Lich::Messaging).to receive(:msg) { |_type, text| messages << text }
+      stub_const('DownstreamHook', Class.new do
+        def self.add(*_args, **_kwargs); end
+
+        def self.remove(*_args); end
+      end)
+      allow(Script).to receive(:current).and_return(
+        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+      )
+      allow(Lich::Util).to receive(:fput)
+      queue = replies.dup
+      # Hand out the scripted lines, then block like a quiet game would.
+      allow(Lich::Util).to receive(:get) { queue.empty? ? sleep(5) : queue.shift }
+      # Keep the real method but shorten its timeout so the examples run fast.
+      allow(Lich::Util).to receive(:issue_command).and_wrap_original do |original, *args, **kwargs|
+        original.call(*args, **kwargs, timeout: 0.2)
+      end
+    end
+
+    context 'when no reply arrives' do
+      it 'prints the timeout message and returns an uncaptured, not-ready result' do
+        result = described_class.commune_sense
+        expect(result.captured?).to be false
+        expect(result.commune_ready?).to be false
+        expect(messages).to eq(['DRCTH: Failed to capture COMMUNE SENSE output (timeout).'])
+      end
+    end
+
+    context 'when only the start line arrives' do
+      let(:replies) { full_reply.first(1) }
+
+      it 'prints the cut-off message and returns an uncaptured, not-ready result' do
+        result = described_class.commune_sense
+        expect(result.captured?).to be false
+        expect(result.commune_ready?).to be false
+        expect(result.active_communes).to eq(['Tamsine'])
+        expect(messages).to eq(['DRCTH: COMMUNE SENSE output was cut off (timeout); the result is incomplete.'])
+      end
+    end
+
+    context 'when the full reply arrives' do
+      let(:replies) { full_reply }
+
+      it 'parses it, reads as ready and prints nothing' do
+        result = described_class.commune_sense
+        expect(result.captured?).to be true
+        expect(result.commune_ready?).to be true
+        expect(result.active_communes).to eq(['Tamsine'])
+        expect(result.recent_communes).to eq(['Tamsine'])
+        expect(messages).to be_empty
       end
     end
   end

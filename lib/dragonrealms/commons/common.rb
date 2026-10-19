@@ -95,13 +95,50 @@ module Lich
       end
 
       # Sends a command with Lich::Util.issue_command and captures its reply up to
-      # the next prompt.
+      # and including the line that ends it.
       #
       # issue_command never returns nil. On a timeout it returns [] when the start
-      # line never arrived, or the lines collected so far when the prompt never
-      # arrived. Asking for the prompt line (include_end: true) is the only way to
+      # line never arrived, or the lines collected so far when the end line never
+      # arrived. Asking for the end line (include_end: true) is the only way to
       # tell a complete reply from a cut-off one, so it is requested here and then
       # dropped from the lines handed back.
+      #
+      # The start line is never taken as the end line (issue_command only looks
+      # for the end on the lines after it), so a reply needs at least two lines
+      # to count as complete.
+      #
+      # Used for replies that end on a game line such as Roundtime (COMMUNE SENSE,
+      # ASSESS TEACH, PERC MANA); see capture_to_prompt for replies that end on
+      # the prompt. Each caller prints its own timeout message.
+      #
+      # @param command [String] the game command to send
+      # @param start_pattern [Regexp] the first line of the reply
+      # @param end_pattern [Regexp] the line that ends the reply
+      # @param usexml [Boolean] capture the XML stream (true) or plain text (false)
+      # @param timeout [Integer] seconds to wait for the whole reply
+      # @return [Array(Array<String>, Boolean)] the reply lines without the end
+      #   line, and true when the end line arrived (the reply is complete)
+      # @api private
+      def capture_reply(command, start_pattern, end_pattern, usexml:, timeout: 5)
+        lines = Array(
+          Lich::Util.issue_command(
+            command,
+            start_pattern,
+            end_pattern,
+            usexml: usexml,
+            quiet: true,
+            include_end: true,
+            timeout: timeout
+          )
+        )
+        complete = lines.length > 1 && lines.last.match?(end_pattern)
+        lines = lines[0...-1] if complete
+        [lines, complete]
+      end
+
+      # Sends a command with Lich::Util.issue_command and captures its XML reply
+      # up to the next prompt, using capture_reply. The prompt line is dropped
+      # from the lines handed back.
       #
       # Shared by the commons for replies that end on the prompt (HEALTH,
       # PERCEIVE HEALTH, TOUCH, WEALTH); each caller prints its own timeout message.
@@ -113,20 +150,7 @@ module Lich
       #   line, and true when the prompt arrived (the reply is complete)
       # @api private
       def capture_to_prompt(command, start_pattern, timeout: 5)
-        lines = Array(
-          Lich::Util.issue_command(
-            command,
-            start_pattern,
-            /<prompt/,
-            usexml: true,
-            quiet: true,
-            include_end: true,
-            timeout: timeout
-          )
-        )
-        complete = lines.length > 1 && lines.last.match?(/<prompt/)
-        lines = lines[0...-1] if complete
-        [lines, complete]
+        capture_reply(command, start_pattern, /<prompt/, usexml: true, timeout: timeout)
       end
 
       # Like `fput` but better because will wait for RT
@@ -665,23 +689,27 @@ module Lich
       #
       # Lich::Util.issue_command returns [] (never nil) when the reply does not
       # arrive in time; that prints a bold message and returns {} like "no classes".
+      # A reply cut off before its Roundtime line prints a "cut off" message and
+      # returns the classes that did arrive, which may not be all of them. A
+      # "no one is teaching" or "you are teaching" reply returns {} with no
+      # message, whether or not its Roundtime line arrived.
       #
       # @return [Hash{String => String}] teacher name => skill
       def assess_teach
-        lines = Lich::Util.issue_command(
+        lines, complete = capture_reply(
           'assess teach',
           /is teaching a class|No one seems to be teaching|You are teaching a class/,
           /Roundtime/,
-          usexml: false,
-          quiet: true,
-          include_end: false
+          usexml: false
         )
         waitrt?
-        if lines.nil? || lines.empty?
+        if lines.empty?
           Lich::Messaging.msg("bold", "DRC: Failed to capture ASSESS TEACH output (timeout).")
           return {}
         end
         return {} if lines.any? { |l| l.match?(/No one seems to be teaching|You are teaching a class/) }
+
+        Lich::Messaging.msg("bold", "DRC: ASSESS TEACH output was cut off (timeout); the result is incomplete.") unless complete
 
         parse_assess_teach_lines(lines.map(&:strip).reject(&:empty?))
       end
