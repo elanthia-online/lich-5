@@ -493,4 +493,137 @@ RSpec.describe Lich::Common::FrontendSettings do
       'custom'   => {}
     )
   end
+
+  describe 'atomic persistence on platforms that refuse to rename open files' do
+    # Windows' MoveFileExW fails with a sharing violation, which Ruby raises as
+    # Errno::EACCES, while a handle opened without FILE_SHARE_DELETE is still
+    # open on the source or destination. Ruby opens files without that flag by
+    # default, so the :windows mode refuses a rename while any live Ruby File on
+    # either path is still open.
+    let(:rename_sources) { [] }
+    let(:previous_configuration) do
+      described_class.replace!(
+        data_dir: data_dir,
+        builtins: { 'stormfront' => { 'executable' => '/opt/previous' } },
+        custom: {}
+      )
+    end
+
+    def held_open?(path)
+      expanded = File.expand_path(path)
+      ObjectSpace.each_object(File).any? do |file|
+        !file.closed? && File.expand_path(file.path) == expanded
+      rescue IOError, SystemCallError
+        false
+      end
+    end
+
+    def leftover_temp_files
+      Dir.glob(File.join(data_dir, 'frontends*.yml.tmp'))
+    end
+
+    def save_wrayth_override
+      described_class.replace!(
+        data_dir: data_dir,
+        builtins: { 'wrayth' => { 'executable' => '/opt/wrayth' } },
+        custom: {}
+      )
+    end
+
+    before do
+      @rename_mode = nil
+      allow(described_class).to receive(:sleep)
+      allow(File).to receive(:rename).and_wrap_original do |original, source, destination|
+        case @rename_mode
+        when :windows
+          rename_sources << source
+          raise Errno::EACCES, "#{source} -> #{destination}" if held_open?(source) || held_open?(destination)
+        when Class
+          rename_sources << source
+          raise @rename_mode, source
+        when :spy
+          rename_sources << source
+        end
+        original.call(source, destination)
+      end
+    end
+
+    # Disarm the rename double before the outer hook restores an empty file.
+    after { @rename_mode = nil }
+
+    it 'closes the temporary file before publishing it' do
+      @rename_mode = :windows
+
+      configuration = save_wrayth_override
+
+      expect(configuration['builtins']).to eq('stormfront' => { 'executable' => '/opt/wrayth' })
+      expect(YAML.safe_load_file(settings_file)).to eq(configuration)
+      expect(rename_sources.length).to eq(1)
+      expect(described_class).not_to have_received(:sleep)
+      expect(leftover_temp_files).to be_empty
+    end
+
+    it 'retries while another reader briefly holds the destination open' do
+      previous_configuration
+      @rename_mode = :windows
+      reader = File.open(settings_file, 'r')
+      sleeps = 0
+      allow(described_class).to receive(:sleep) do
+        sleeps += 1
+        reader.close if sleeps == 2
+      end
+
+      configuration = save_wrayth_override
+
+      expect(described_class).to have_received(:sleep).with(0.01).ordered
+      expect(described_class).to have_received(:sleep).with(0.02).ordered
+      expect(rename_sources.length).to eq(3)
+      expect(rename_sources.uniq.length).to eq(1)
+      expect(YAML.safe_load_file(settings_file)).to eq(configuration)
+      expect(described_class.current).to eq(configuration)
+      expect(leftover_temp_files).to be_empty
+    ensure
+      reader.close if reader && !reader.closed?
+    end
+
+    it 'gives up after the bounded schedule and leaves the previous file, catalog, and directory intact' do
+      previous_configuration
+      previous_bytes = File.binread(settings_file)
+      @rename_mode = Errno::EACCES
+
+      expect { save_wrayth_override }.to raise_error(IOError, /\Acould not save frontends\.yml: Permission denied/)
+
+      delays = described_class::RENAME_RETRY_DELAYS
+      expect(rename_sources.length).to eq(delays.length + 1)
+      expect(rename_sources.uniq.length).to eq(1)
+      delays.each { |delay| expect(described_class).to have_received(:sleep).with(delay).ordered }
+      expect(described_class).to have_received(:sleep).exactly(delays.length).times
+      expect(delays.sum).to be < 1.0
+      expect(File.binread(settings_file)).to eq(previous_bytes)
+      expect(described_class.current).to eq(previous_configuration)
+      expect(leftover_temp_files).to be_empty
+    end
+
+    it 'does not retry failures other than sharing violations' do
+      previous_configuration
+      @rename_mode = Errno::EXDEV
+
+      expect { save_wrayth_override }.to raise_error(IOError, /\Acould not save frontends\.yml: /)
+
+      expect(rename_sources.length).to eq(1)
+      expect(described_class).not_to have_received(:sleep)
+      expect(described_class.current).to eq(previous_configuration)
+      expect(leftover_temp_files).to be_empty
+    end
+
+    it 'stages the temporary file beside the destination with owner-only access' do
+      @rename_mode = :spy
+
+      save_wrayth_override
+
+      expect(rename_sources.map { |source| File.dirname(source) }).to eq([data_dir])
+      expect(File.stat(settings_file).mode & 0o777).to eq(0o600) unless Gem.win_platform?
+      expect(leftover_temp_files).to be_empty
+    end
+  end
 end

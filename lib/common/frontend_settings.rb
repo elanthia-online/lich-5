@@ -20,6 +20,10 @@ module Lich
       MAX_SCALAR_BYTES = 4096
       MAX_ARGUMENTS = 256
       MUTEX = Mutex.new
+      # Bounded backoff (0.63 s total) for publishing the saved document while
+      # Windows reports a sharing violation because another process briefly
+      # holds frontends.yml open.
+      RENAME_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32].freeze
 
       # Raised when saving would overwrite a settings document created by a
       # newer, unsupported schema version.
@@ -155,6 +159,10 @@ module Lich
         end
 
         # Atomically writes a normalized settings document with owner-only access.
+        # The temporary file is staged beside the destination so the rename
+        # never crosses volumes, and it is closed before the rename because
+        # Windows refuses to rename a file that still has an open handle.
+        # Tempfile.create removes the temporary file if publishing fails.
         #
         # @param path [String] destination settings path
         # @param configuration [Hash] normalized frontend configuration
@@ -169,10 +177,34 @@ module Lich
             file.write(configuration.to_yaml)
             file.flush
             file.fsync
-            File.rename(file.path, path)
+            file.close
+            rename_with_retry(file.path, path)
           end
         rescue SystemCallError => error
           raise IOError, "could not save #{FILE_NAME}: #{error.message}"
+        end
+
+        # Renames a file, retrying the transient sharing violations Windows
+        # reports as EACCES while another process holds either path open.
+        # Every other error is raised immediately.
+        #
+        # @param source [String] closed temporary file path
+        # @param destination [String] destination settings path
+        # @return [void]
+        # @raise [Errno::EACCES] when every bounded retry is exhausted
+        # @raise [SystemCallError] for any other rename failure
+        # @api private
+        def rename_with_retry(source, destination)
+          attempt = 0
+          begin
+            File.rename(source, destination)
+          rescue Errno::EACCES
+            raise if attempt >= RENAME_RETRY_DELAYS.length
+
+            sleep(RENAME_RETRY_DELAYS.fetch(attempt))
+            attempt += 1
+            retry
+          end
         end
 
         # Converts an arbitrary settings document into the supported immutable schema.
