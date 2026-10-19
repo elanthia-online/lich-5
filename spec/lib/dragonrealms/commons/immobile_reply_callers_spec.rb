@@ -442,5 +442,60 @@ RSpec.describe 'Callers that list the immobile reply' do
       expect(data['mana']).to eq(7)
       expect(UserVars.discerns['bs']['time_stamp']).to eq(stale)
     end
+
+    # A discern with no recognised reply costs a retreat and bput's whole
+    # timeout, so it is not tried again on every cast.
+    context 'after a discern drew no recognised reply' do
+      let(:later) { { seconds: 0 } }
+      let(:answer) { 'The spell requires at minimum 5 mana streams and you think you can reinforce it with 10 more.' }
+
+      before do
+        allow(Time).to(receive(:now).and_wrap_original { |now| now.call + later[:seconds] })
+        allow(drc).to receive(:bput).and_wrap_original do |bput, message, *patterns|
+          bput.call(message, { 'timeout' => 0.2 }, *patterns)
+        end
+      end
+
+      def discern_after(seconds)
+        later[:seconds] = seconds
+        drca.check_discern({ 'abbrev' => 'bs' }, settings)
+      end
+
+      it 'does not discern again until the retry period has passed, then caches the answer' do
+        game('discern bs' => -> { sent.size == 1 ? 'Some other discern wording.' : answer })
+        discern_after(0)
+        expect(discern_after(1)['mana']).to eq(7)
+        expect(discern_after(299)['mana']).to eq(7)
+        expect(sent).to eq(['discern bs'])
+
+        expect(discern_after(301)['mana']).to eq(15)
+        expect(sent).to eq(['discern bs'] * 2)
+        expect(UserVars.discerns['bs']).not_to have_key('failed_at')
+        discern_after(1_000)
+        expect(sent).to eq(['discern bs'] * 2)
+      end
+
+      it 'tries again every retry period while the reply stays unrecognised' do
+        game('discern bs' => [])
+        [0, 100, 301, 400, 602].each { |seconds| discern_after(seconds) }
+        expect(sent).to eq(['discern bs'] * 3)
+        expect(messages.grep(/No match was found/).size).to eq(3)
+      end
+
+      it 'waits no longer than check_discern_timer_in_hours when that is shorter' do
+        settings.check_discern_timer_in_hours = 0.01 # 36 s
+        game('discern bs' => [])
+        [0, 30, 37].each { |seconds| discern_after(seconds) }
+        expect(sent).to eq(['discern bs'] * 2)
+      end
+
+      it 'still casts at the minimum and discerns on the next cast when held' do
+        game('discern bs' => -> { sent.size == 1 ? 'Some other discern wording.' : immobile })
+        discern_after(0)
+        expect(discern_after(301)).to include('mana' => 1, 'cambrinth' => nil)
+        discern_after(302)
+        expect(sent).to eq(['discern bs'] * 3)
+      end
+    end
   end
 end
