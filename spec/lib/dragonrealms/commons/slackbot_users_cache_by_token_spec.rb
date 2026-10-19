@@ -195,6 +195,28 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users cache keyed by token' do
       expect(Lich::Common::DB_Store.get_data('DR', cache_key(token_two))).to be_empty
     end
 
+    it 'is read under the token that made the users.list call when throttled, even if the token changes during the wait' do
+      # Workspace two has a fresh cache entry.
+      character_with(token_two)
+      users_list_calls.clear
+
+      # Workspace one's users.list is throttled. During the throttle wait
+      # (after the first users.list call, not the startup jitter) the
+      # character's token changes to workspace two's.
+      throttled_tokens << token_one
+      UserVars.slack_token = token_one
+      allow_any_instance_of(described_class).to receive(:sleep) do |_bot, seconds|
+        clock[:offset] += seconds
+        UserVars.slack_token = token_two unless users_list_calls.empty?
+      end
+      bot = described_class.new
+
+      expect(users_list_calls).not_to be_empty
+      expect(users_list_calls).to all(eq(token_one))
+      expect(bot).not_to be_initialized
+      expect(Lich).not_to have_received(:log).with(a_string_including('Throttled, but'))
+    end
+
     it 'written by an earlier Lich under the old shared key is ignored' do
       Lich::Common::DB_Store.store_data(
         'DR', '_slackbot_users_cache',
