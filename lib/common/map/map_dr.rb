@@ -284,22 +284,84 @@ module Lich
 
       # Every room whose title, description and exits all match the live room.
       # Under fog the live exits line carries no exits, so title and description
-      # alone must match. The description is compared whole; a live description
-      # that differs from every stored one in any way matches nothing.
+      # alone must match. The description is compared whole.
+      #
+      # @param rooms [Array<Lich::Common::Map>] rooms already matching the live
+      #   title and exits (see {rooms_matching_live_title_and_exits})
+      # @return [Array<Lich::Common::Map>] the matching rooms, in id order
+      def self.text_candidates(rooms = rooms_matching_live_title_and_exits)
+        description = XMLData.room_description.to_s.strip
+        rooms.select { |r| Array(r.description).include?(description) }
+      end
+
+      # Fewest words a live description sentence needs to identify a room in
+      # {tolerant_text_candidates}. Shorter fragments (a closing quote mark, an
+      # abbreviation cut at its period, a two-word aside) occur in many stored
+      # descriptions and say nothing about which room this is.
+      TOLERANT_SENTENCE_MIN_WORDS = 4
+
+      # The sentences of a live description that {tolerant_text_candidates}
+      # looks for: split at each run of periods, stripped, keeping only those of
+      # at least {TOLERANT_SENTENCE_MIN_WORDS} words. An empty description has
+      # none.
+      #
+      # @param description [String, nil]
+      # @return [Array<String>]
+      def self.description_sentences(description)
+        description.to_s.split(/\.+/).map(&:strip).select do |sentence|
+          sentence.split.size >= TOLERANT_SENTENCE_MIN_WORDS
+        end
+      end
+
+      # Every room whose title and exits match the live room exactly (title
+      # alone under fog) and one of whose stored descriptions contains, word for
+      # word, at least one sentence of the live description (see
+      # {description_sentences}). This tolerates a description that has drifted
+      # from the map: a typo fixed in one sentence, a sentence rewritten, a
+      # day/night variant the map lacks. A live description with no usable
+      # sentence, an empty one included, matches nothing.
+      #
+      # @param rooms [Array<Lich::Common::Map>] rooms already matching the live
+      #   title and exits (see {rooms_matching_live_title_and_exits})
+      # @return [Array<Lich::Common::Map>] the matching rooms, in id order
+      def self.tolerant_text_candidates(rooms = rooms_matching_live_title_and_exits)
+        sentences = description_sentences(XMLData.room_description)
+        return [] if sentences.empty?
+
+        rooms.select do |r|
+          Array(r.description).any? { |stored| sentences.any? { |sentence| stored.to_s.include?(sentence) } }
+        end
+      end
+
+      # The rooms that can be the live room by their text: those matching it
+      # exactly (see {text_candidates}), or, only when no room does, those whose
+      # description merely shares a sentence with it (see
+      # {tolerant_text_candidates}). The tolerant rooms are never mixed with an
+      # exact match, even an ambiguous or vetoed one.
+      #
+      # @return [Array<Lich::Common::Map>]
+      def self.live_text_candidates
+        rooms = rooms_matching_live_title_and_exits
+        candidates = text_candidates(rooms)
+        candidates.empty? ? tolerant_text_candidates(rooms) : candidates
+      end
+
+      # Every room whose title and exits match the live room, ignoring the
+      # exits under fog. The map is scanned once for both description passes.
+      # A room missing its title or exits (the map has a few) is skipped
+      # without relying on Lich's NilClass patch.
       #
       # @return [Array<Lich::Common::Map>] the matching rooms, in id order
-      def self.text_candidates
+      def self.rooms_matching_live_title_and_exits
         title = XMLData.room_title
-        description = XMLData.room_description.to_s.strip
         exits = XMLData.room_exits_string.to_s
         foggy = exits.match?(FOG_EXITS_PATTERN)
         exits = exits.strip
         @@list.select do |r|
           # Skip nil holes without relying on Lich's NilClass patch.
           r &&
-            r.title.include?(title) &&
-            r.description.include?(description) &&
-            (foggy || r.paths.include?(exits))
+            Array(r.title).include?(title) &&
+            (foggy || Array(r.paths).include?(exits))
         end
       end
 
@@ -398,19 +460,20 @@ module Lich
         survivors.include?(room) ? room : nil
       end
 
-      # Resolve the live room from its title, description and exits.
+      # Resolve the live room from its title, description and exits (see
+      # {live_text_candidates}).
       #
       # @param honor_peer_tags [Boolean] see {resolve_matched_room}
       # @return [Integer, nil] the resolved room id, or +nil+ when no room, or
       #   more than one, can be the live room
       def self.match_live_text(honor_peer_tags:)
-        room = pick_text_candidate(text_candidates)
+        room = pick_text_candidate(live_text_candidates)
         return nil if room.nil?
 
         resolve_matched_room(room, honor_peer_tags: honor_peer_tags)
       end
 
-      # Resolve the current room by exact title/description/paths matching.
+      # Resolve the current room by title/description/paths matching.
       #
       # Used when a script is running (see {match_no_uid}). Re-reads the room
       # whenever the live +room_count+ changes mid-match. See
@@ -493,7 +556,7 @@ module Lich
         # Several rooms fit the live text and none could be told apart from the
         # room before it. The room may be one of them or a new one; mapping it
         # as new keeps identical rooms with no UID mappable, so say so.
-        twins = text_candidates.size
+        twins = live_text_candidates.size
         if twins > 1
           echo "Map: #{twins} mapped rooms match this room and none can be told apart from the room before it; mapping it as a new room"
         end

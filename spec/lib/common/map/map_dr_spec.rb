@@ -869,10 +869,10 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
       expect(map_class.match_current(nil)).to eq(0)
     end
 
-    it 'requires the whole description: a live reading missing the final period matches nothing' do
-      build_room(0, title: 'Garden Path', description: 'A winding path.', exits: 'Obvious paths: east', uid: [150013])
-      live_room(title: 'Garden Path', description: 'A winding path', exits: 'Obvious paths: east', room_id: 0)
-      expect(map_class.match_current(nil)).to be_nil
+    it 'matches a live reading missing the final period through the tolerant pass' do
+      build_room(0, title: 'Garden Path', description: 'A winding garden path.', exits: 'Obvious paths: east', uid: [150013])
+      live_room(title: 'Garden Path', description: 'A winding garden path', exits: 'Obvious paths: east', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
     end
 
     it 'no longer matches on title and paths alone when the room window is disabled' do
@@ -1214,17 +1214,58 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
       end
     end
 
-    context 'with a description that only resembles the stored one' do
-      it 'does not match a live description sharing one sentence with the stored one' do
-        build_room(10, title: title, description: 'The murky water swirls around you.  Reeds sway nearby.', exits: exits)
-        live(description: 'The murky water swirls around you.  A heron watches.')
+    context 'with a description that has drifted from the map' do
+      def drifted(id, description, uid: [], wayto: {}, exits: nil, tags: [])
+        build_room(id, title: title, description: description, exits: exits || self.exits,
+                       uid: uid, wayto: wayto, tags: tags)
+      end
+
+      let(:stored) { 'The murky water swirls around you.  Reeds sway along the near bank.' }
+
+      it 'matches a live description sharing one whole sentence with the stored one' do
+        drifted(10, stored)
+        live(description: 'The murky water swirls around you.  A heron watches from the shallows.')
+        expect(map_class.match_current(nil)).to eq(10)
+        expect(map_class.match_fuzzy).to eq(10)
+      end
+
+      it 'matches a live sentence found inside a longer stored sentence' do
+        drifted(10, 'Brush flanks the road at the western end of a big clearing, near a stream.  Higher up is a meadow.')
+        live(description: 'Brush flanks the road at the western end of a big clearing.  Water flows downhill.')
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      it 'matches a day/night variant the map lacks through a sentence of a stored variant' do
+        map_class.new(10, [title], ['Sunlight glitters on the water.  The far bank is lined with willows.',
+                                    'Moonlight glints on the water.  The far bank is lined with willows.'],
+                      [exits], [])
+        live(description: 'Starlight barely touches the water.  The far bank is lined with willows.')
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      it 'still needs the exact title' do
+        drifted(10, stored)
+        live_room(title: '[Segoltha River, Near The Bank]', description: 'The murky water swirls around you.',
+                  exits: exits, room_id: 0)
         expect(map_class.match_current(nil)).to be_nil
-        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'still needs the exact exits' do
+        drifted(10, stored)
+        live(description: 'The murky water swirls around you.  A heron watches.', exits: 'Obvious paths: east.')
+        expect(map_class.match_current(nil)).to be_nil
       end
 
       it 'does not match on title and exits when the live description is empty' do
         twin(10)
         live(description: '')
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'does not match on title and exits when the live description is nil' do
+        twin(10)
+        live_room(title: title, description: nil, exits: exits, room_id: 0)
         expect(map_class.match_current(nil)).to be_nil
       end
 
@@ -1232,6 +1273,104 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         twin(10)
         live(description: 'Something else entirely.. Really.')
         expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'does not match on a fragment shorter than four words, such as a closing quote mark' do
+        drifted(10, 'A clerk says, "Welcome to the river ferry."  Ropes creak overhead.')
+        live(description: 'A painted sign reads, "Ferry closed until spring."')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'does not match on a short stored phrase the live text happens to contain' do
+        drifted(10, 'Something stirs.  Nothing else here resembles the live room.')
+        live(description: 'Something stirs.  Fish dart through the weeds below.')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'is unresolved when two rooms share the sentence and nothing tells them apart' do
+        drifted(10, stored)
+        drifted(11, 'The murky water swirls around you.  Driftwood bobs past.')
+        live(description: 'The murky water swirls around you.  A heron watches.')
+        expect(map_class.match_current(nil)).to be_nil
+        expect(map_class.match_fuzzy).to be_nil
+      end
+
+      it 'takes the one of them the previous room leads to' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        drifted(10, stored)
+        drifted(11, 'The murky water swirls around you.  Driftwood bobs past.')
+        came_from(1)
+        live(description: 'The murky water swirls around you.  A heron watches.')
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+
+      it 'lets the live UID veto a drifted room storing another UID' do
+        drifted(10, stored, uid: [500])
+        live(description: 'The murky water swirls around you.  A heron watches.', room_id: 777_010)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'drops a vetoed drifted room and keeps its no-UID copy only when the previous room leads to it' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '11' => 'north' })
+        drifted(10, stored, uid: [500])
+        drifted(11, 'The murky water swirls around you.  Driftwood bobs past.')
+        live(description: 'The murky water swirls around you.  A heron watches.', room_id: 777_011)
+        expect(map_class.match_current(nil)).to be_nil
+        came_from(1)
+        live(description: 'The murky water swirls around you.  A heron watches.', room_id: 777_011)
+        expect(map_class.match_current(nil)).to eq(11)
+      end
+
+      it 'is not tried when exact matches exist but cannot be told apart' do
+        build_room(1, title: 'Riverbank', description: 'Mud.', exits: 'Obvious paths: north.', wayto: { '12' => 'north' })
+        twin(10)
+        twin(11)
+        drifted(12, "#{desc}  Reeds sway along the near bank.")
+        came_from(1)
+        live
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'is not tried when the only exact match is vetoed by the live UID' do
+        twin(10, uid: [500])
+        drifted(11, "#{desc}  Reeds sway along the near bank.")
+        live(room_id: 777_012)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'skips a map room missing its description or title, exactly and tolerantly' do
+        map_class.new(10, [title], nil, [exits], [])
+        map_class.new(11, nil, nil, nil, [])
+        drifted(12, stored)
+        live(description: 'The murky water swirls around you.  A heron watches.')
+        expect(map_class.match_current(nil)).to eq(12)
+        live(description: 'Nothing here is like any stored room at all.', room_count: 2)
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
+      it 'without a script, refuses a peer-tagged room it matched' do
+        drifted(10, stored, tags: ['peer north =~ /a dock/'])
+        live(description: 'The murky water swirls around you.  A heron watches.')
+        expect(map_class.match_fuzzy).to be_nil
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      context 'under fog' do
+        let(:fog) { 'Obvious paths: obscured by a thick fog' }
+
+        it 'resolves a title and drifted description that only one room has' do
+          drifted(10, stored, exits: 'Obvious paths: north.')
+          drifted(11, 'Other water entirely, cold and green.', exits: 'Obvious paths: south.')
+          live(description: 'The murky water swirls around you.  A heron watches.', exits: fog)
+          expect(map_class.match_current(nil)).to eq(10)
+        end
+
+        it 'is unresolved when rooms with different exits share the sentence' do
+          drifted(10, stored, exits: 'Obvious paths: north.')
+          drifted(11, 'The murky water swirls around you.  Driftwood bobs past.', exits: 'Obvious paths: south.')
+          live(description: 'The murky water swirls around you.  A heron watches.', exits: fog)
+          expect(map_class.match_current(nil)).to be_nil
+        end
       end
     end
 
@@ -1666,6 +1805,16 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         twin(10)
         twin(11)
         live(room_count: 1)
+        expect(map_class.current_or_new&.id).to eq(12)
+        expect(messages).to include(a_string_matching(/2 mapped rooms match this room/))
+      end
+
+      it 'says so when the mapped rooms only share a sentence with it' do
+        messages = []
+        allow(map_class).to receive(:echo) { |msg| messages << msg }
+        twin(10)
+        twin(11)
+        live(room_count: 1, description: "#{desc}  A heron watches from the shallows.")
         expect(map_class.current_or_new&.id).to eq(12)
         expect(messages).to include(a_string_matching(/2 mapped rooms match this room/))
       end
