@@ -855,7 +855,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         [victim, started]
       end
 
-      it 'lands when the pool wait ends with Sequel::PoolTimeout' do
+      it 'dies without writing when the pool wait ends with Sequel::PoolTimeout' do
         allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
         db = open_db
         gate = Queue.new
@@ -872,7 +872,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
         expect(db[:rows].count).to eq(0)
       end
 
-      it 'lands after a full lock wait when a connection frees up while another process holds the lock' do
+      it 'dies without writing after a full lock wait when a connection frees up while another process holds the lock' do
         allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
         db = open_db
         holder = hold_write_lock
