@@ -462,12 +462,13 @@ describe DRCC do
       end
     end
 
-    # Every ordered pair of tie replies DRCI knows (and a timeout): the trip
-    # and the retry happen only for wounds, at most once, and anything that
-    # isn't a tie ends in the bag. DRCI's /^You don't seem to be able to move/
-    # is left out: the real bput skips that line, so the outcome is the
-    # timeout ('') case covered here.
-    describe 'for every pair of tie replies' do
+    # Every tie reply DRCI knows (and a timeout), alone and after wounds: the
+    # trip and the retry happen only for wounds, at most once, and anything
+    # that isn't a tie ends in the bag. A second reply is only read after
+    # wounds, so pairs that start with anything else add no behaviour.
+    # DRCI's /^You don't seem to be able to move/ is left out: the real bput
+    # skips that line, so the outcome is the timeout ('') case covered here.
+    describe 'for every tie reply, alone and after wounds' do
       success = ["You attach the tongs to your forger's belt.", 'You tie the tongs to the belt.',
                  'The tongs has already been tied off.']
       refusals = ["There's no more free ties on the belt.", 'Tie what?', 'You are a little too busy to do that.',
@@ -476,13 +477,14 @@ describe DRCC do
       wound = 'Your wounds hinder your ability to do that.'
       replies = success + refusals + [wound]
 
-      replies.product(replies).each do |first, second|
-        it "is bounded after #{first.inspect} then #{second.inspect}" do
-          tie_replies.push(first, second)
+      sequences = (success + refusals).map { |reply| [reply] } + replies.map { |reply| [wound, reply] }
+      sequences.each do |sequence|
+        it "is bounded after #{sequence.map(&:inspect).join(' then ')}" do
+          tie_replies.push(*sequence)
           result = DRCC.stow_crafting_item('tongs', 'backpack', belt)
 
-          retried = first == wound
-          tied = success.include?(retried ? second : first)
+          retried = sequence.first == wound
+          tied = success.include?(sequence.last)
           expected = [tie]
           expected += ['safe-room force', 'walk 8775', tie] if retried
           expected << bag_put unless tied
