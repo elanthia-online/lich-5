@@ -148,6 +148,105 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    describe 'WizardScript bodies' do
+      let(:source) { "# quiet\nLICH { SCRIPT_READ_EVENTS << :body } LICH\n" }
+
+      before do
+        @wizard_scripts = []
+        allow(Lich::Common::WizardScript).to receive(:new).and_wrap_original do |method, *args|
+          method.call(*args).tap do |script|
+            @wizard_scripts << script
+            script.at_exit_procs << proc { SCRIPT_READ_EVENTS << :cleanup }
+          end
+        end
+      end
+
+      %w[.cmd .wiz .cmd.gz .wiz.gz].each do |extension|
+        context "with #{extension}" do
+          let(:path) { File.join(SCRIPT_DIR, 'custom', "libwizard#{extension}") }
+
+          before do
+            if extension.end_with?('.gz')
+              Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+            else
+              File.write(path, source)
+            end
+          end
+
+          it 'successfully reads, executes and cleans up without retaining a fallback error' do
+            expect(script_class.loadlib('wizard')).to be(true)
+            expect(@wizard_scripts.last).to be_completed_successfully
+            expect(@wizard_scripts.last.exit_error).to be_nil
+            expect(script_class.libs).to include('libwizard')
+            expect([SCRIPT_READ_EVENTS.pop(true), SCRIPT_READ_EVENTS.pop(true)]).to eq([:body, :cleanup])
+            expect(SCRIPT_READ_EVENTS).to be_empty
+          end
+
+          %i[open readlines].each do |failure_point|
+            context "when the final plain #{failure_point} fails" do
+              let(:read_error) { Errno::EACCES.new(path) }
+
+              before do
+                @readable = false
+                allow(Zlib::GzipReader).to receive(:open).and_call_original
+                allow(Zlib::GzipReader).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                  raise Zlib::GzipFile::Error, 'gzip read failed' unless @readable
+
+                  method.call(*args, &block)
+                end
+                allow(File).to receive(:open).and_call_original
+                allow(File).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                  if @readable
+                    method.call(*args, &block)
+                  elsif failure_point == :open
+                    raise read_error
+                  else
+                    method.call(*args) do |reader|
+                      allow(reader).to receive(:readlines).and_raise(read_error)
+                      block.call(reader)
+                    end
+                  end
+                end
+              end
+
+              it 'retains the final error, fails start completion and runs cleanup' do
+                # Explicit arguments avoid the production NilClass extension.
+                started = script_class.start('libwizard', '')
+
+                expect(started).not_to be_nil
+                expect(started.join(2)).to equal(started)
+                expect(started.exit_error).to equal(read_error)
+                expect(started).not_to be_completed_successfully
+                expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:cleanup)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+                expect_read_failure_cleanup
+              end
+
+              it 'does not cache a failed library and executes after read recovery' do
+                expect { script_class.loadlib('wizard') }.to raise_error(LoadError, /script library failed: libwizard:.*Permission denied/)
+                expect(@wizard_scripts.last.exit_error).to equal(read_error)
+                expect(@wizard_scripts.last).not_to be_completed_successfully
+                expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:cleanup)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+                expect(script_class.libs).not_to include('libwizard')
+                expect_read_failure_cleanup
+
+                @readable = true
+                expect(script_class.loadlib('wizard')).to be(true)
+                expect(@wizard_scripts.last).to be_completed_successfully
+                expect(@wizard_scripts.last.exit_error).to be_nil
+                expect(script_class.libs).to include('libwizard')
+                expect([SCRIPT_READ_EVENTS.pop(true), SCRIPT_READ_EVENTS.pop(true)]).to eq([:body, :cleanup])
+                expect(script_class.loadlib('wizard')).to be(true)
+                expect(@wizard_scripts.size).to eq(2)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+              end
+            end
+          end
+        end
+      end
+    end
+
     it 'rejects a corrupt gzip library and loads its replacement after recovery' do
       path = File.join(SCRIPT_DIR, 'custom', 'libcorrupt.lic.gz')
       File.write(path, 'invalid gzip data')

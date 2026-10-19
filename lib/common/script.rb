@@ -3489,6 +3489,12 @@ module Lich
 
     class WizardScript < Script
       # FIXME: when modernized, ensure proper use of variables and init of parent class
+      # Reads gzip first, then plain text. Only a failed plain fallback records
+      # an exit error; the empty body still uses normal lifecycle cleanup.
+      #
+      # @param file_name [String] Wizard script path
+      # @param cli_vars [Array, String] script arguments
+      # @param publish [Boolean] whether to publish immediately
       # rubocop:disable Lint/MissingSuper
       # rubocop:disable Lint/UselessAssignment
       # rubocop:disable Lint/InterpolationCheck
@@ -3532,15 +3538,16 @@ module Lich
         @match_stack_strings = Array.new
         @label_order = Array.new
         @labels = Hash.new
-        data = nil
+        data = []
         begin
           Zlib::GzipReader.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-        rescue
+        rescue StandardError
           begin
             File.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{file_name}): #{$!}"
-            # return nil
+          rescue StandardError => error
+            data = []
+            __record_exit_error(error)
+            respond "--- Lich: error reading script file (#{file_name}): #{error}"
           end
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
