@@ -178,9 +178,10 @@ module Lich
       #
       # From a room Room.current cannot resolve, the walk goes to
       # {walk_from_unknown_room} instead of go2. In practice that fails at once
-      # without moving: any room {match_unknown_room} accepts is one the map's
-      # own resolver (Map.current) already resolves. The hand walker only moves
-      # when the live room changes between the Room.current read and the match.
+      # without moving: with a script running, any room {match_unknown_room}
+      # accepts is one the map's own resolver (Map.current) already resolves.
+      # The hand walker only moves when the live room changes between the
+      # Room.current read and the match.
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure

@@ -220,6 +220,27 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(DRCT).to have_received(:start_script).with('go2', ['105'], force: true)
     end
 
+    it 'passes restart_on_fail = false on to go2 when it hands the walk back' do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(4), position: 101, resolvable: [102]))
+      # go2 starts but never moves the character.
+      allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+
+      expect(DRCT.walk_to(105, false)).to be(false)
+      expect(world.sent).to eq(['north'])
+      expect(world.position).to eq(102)
+      expect(DRCT).to have_received(:start_script).with('go2', ['105'], force: true).once
+      expect(bold_messages.grep(/attempting again/)).to be_empty
+    end
+
+    it 'retries go2 after the hand-back when restart_on_fail is true' do
+      install(WalkToUnknownRoomSpec::World.new(corridor(4), position: 101, resolvable: [102]))
+      allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+
+      expect(DRCT.walk_to(105)).to be(false)
+      expect(DRCT).to have_received(:start_script).exactly(DRCT::MAX_WALK_TO_RETRIES + 1).times
+      expect(bold_messages.last).to eq("DRCT: Failed to navigate to room 105 after #{DRCT::MAX_WALK_TO_RETRIES} retries, giving up.")
+    end
+
     it 'recognises the target by its text when go2 arrives but the room does not resolve' do
       world = install(WalkToUnknownRoomSpec::World.new(corridor(4), position: 101, resolvable: [102]))
 
