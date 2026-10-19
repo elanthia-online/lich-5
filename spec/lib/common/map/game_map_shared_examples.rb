@@ -460,8 +460,42 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(map_class.estimate_time([], from: 1)).to eq(0.0)
     end
 
-    it 'applies the default to the first leg when the from: room is gone' do
-      expect(map_class.estimate_time([2, 3], from: 7777)).to be_within(0.001).of(1.2)
+    it 'refuses a from: id that names no room instead of guessing the first leg' do
+      # A GemStone uid passed as a bare Integer where a Lich id belongs lands
+      # here; counting the leg as 0.2 would hand back a quietly wrong estimate.
+      expect { map_class.estimate_time([2, 3], from: 7777) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room id that is not in the map (7777)')
+      expect { map_class.estimate_time([2, 3], from: '7777') }
+        .to raise_error(ArgumentError, /from: room id that is not in the map \(7777\)/)
+      # Room 0 is not built here, so list[0] is an empty slot, not a room.
+      expect { map_class.estimate_time([2], from: 0) }.to raise_error(ArgumentError, /not in the map \(0\)/)
+    end
+
+    it 'refuses a from: id far past the room list with ArgumentError, not RangeError' do
+      expect { map_class.estimate_time([2, 3], from: 2**70) }
+        .to raise_error(ArgumentError, /not in the map \(#{2**70}\)/)
+      expect { map_class.estimate_time([2, 3], from: (2**70).to_s) }
+        .to raise_error(ArgumentError, /not in the map/)
+    end
+
+    it 'refuses a from: room that is no longer in the map' do
+      gone = map_class[1]
+      map_class.class_variable_get(:@@list)[1] = nil
+
+      expect { map_class.estimate_time([2, 3], from: gone) }
+        .to raise_error(ArgumentError, /not in the map \(1\)/)
+    end
+
+    it 'accepts room 0 as from: when the map has it' do
+      shared_room(0, title: '[Room 0]', description: 'room 0')
+
+      expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
+    end
+
+    it 'still counts a gone room inside the path as 0.2' do
+      map_class.class_variable_get(:@@list)[3] = nil
+
+      expect(map_class.estimate_time([2, 3, 4], from: 1)).to be_within(0.001).of(13.2)
     end
 
     it 'matches the distance dijkstra found for every reachable room' do
@@ -534,13 +568,12 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     it 'rejects a negative from: instead of indexing from the end of the room list' do
-      # DR's Map.current_room_id is -1 when the room is unknown, and Map.[]
-      # indexes the room list, so -1 would name the last room.
+      # DR's Map.current_room_id is -1 until the first room match after load,
+      # and Map.[] indexes the room list, so -1 would name the last room.
       expect { map_class.estimate_time([2, 3], from: -1) }
         .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Integer)')
       expect { map_class.estimate_time([2], from: -2) }.to raise_error(ArgumentError, /invalid from: room/)
       expect { map_class.estimate_time([2], from: '-1') }.to raise_error(ArgumentError, /invalid from: room/)
-      expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
     end
   end
 

@@ -29,9 +29,14 @@ the one the path was built from.
 whether you call `Map.estimate_time` or `Room.estimate_time`. Anything else
 raises `ArgumentError`, including an explicit `nil` (what `Room.current` gives
 in an unmapped room), since quietly treating it as "no start room" would return
-the short estimate again. A negative id is refused too: DragonRealms reports
-`Map.current_room_id` as -1 when it doesn't know the room. A non-numeric String
-is refused, not looked up by title. If the path already begins with the `from:`
+the short estimate again. A negative id is refused too: on DragonRealms,
+`Map.current_room_id` is -1 until the first room match after the map loads (and
+`nil` for an unmapped room after that). A non-numeric String is refused, not
+looked up by title. An id with no room in the map also raises `ArgumentError`
+rather than counting the first leg as 0.2 seconds; a GemStone uid passed as a
+bare Integer (instead of a `"u123"` String or a Lich room id) would otherwise
+give a quietly wrong estimate. Rooms missing from inside the path still count
+0.2 seconds per leg, as before. If the path already begins with the `from:`
 room, that room is not added a second time, so a full path is also safe to pass
 with `from:`.
 

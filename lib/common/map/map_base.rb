@@ -263,15 +263,16 @@ module Lich
         #
         # @param array [Array<Integer, String>] room ids along the path
         # @param from [Integer, String, Map] the room the path starts from when
-        #   +array+ leaves it out: a non-negative room id, a numeric id
-        #   String, or a room.
+        #   +array+ leaves it out: the id of a room in the map, as an Integer
+        #   or a numeric String, or a room.
         #   Leave it out to treat +array.first+ as the start. An explicit nil
         #   is refused, since it usually means the start room was unknown.
         # @return [Float] total estimated time in seconds; 0.0 for a path with
         #   fewer than two rooms
         # @raise [ArgumentError] when +array+ is not an Array (for example the
         #   nil Room#path_to returns for an unreachable room), or +from:+ is
-        #   given but is not a room id or room (nil and negative ids included)
+        #   given but is not a room id or room (nil and negative ids included),
+        #   or names an id with no room in the map
         def estimate_time(array, from: ESTIMATE_NO_ORIGIN)
           self.load unless loaded?
           unless array.is_a?(Array)
@@ -300,13 +301,15 @@ module Lich
         # @param array [Array<Integer, String>] room ids along the path
         # @param from [Integer, String, Map] the starting room
         # @return [Array<Integer, String>] a new Array; +array+ is untouched
-        # @raise [ArgumentError] when +from+ is not a room id or room
+        # @raise [ArgumentError] when +from+ is not a room id or room, or no
+        #   room in the map has that id
         def estimate_time_path_from(array, from)
           origin = if from.is_a?(room_class)
                      from.id
                    elsif from.is_a?(Integer) && !from.negative?
                      # A negative id would index Map.[]'s room list from the
-                     # end; DR's Map.current_room_id is -1 for an unknown room.
+                     # end. DR's Map.current_room_id is -1 until the first room
+                     # match after load (and nil for an unmapped room later).
                      from
                    elsif from.is_a?(String) && from.match?(/\A[0-9]+\z/)
                      from.to_i
@@ -318,6 +321,15 @@ module Lich
                      # does a negative Integer.
                      raise ArgumentError, "Map.estimate_time was given an invalid from: room (#{from.class})"
                    end
+          # An id with no room behind it (a GemStone uid passed as a bare
+          # Integer, a room gone since a reload) would count the first leg as
+          # the 0.2 default and quietly return a wrong estimate. Compare with
+          # the list size first: indexing with an id past a long raises
+          # RangeError.
+          rooms = list
+          if origin >= rooms.size || rooms[origin].nil?
+            raise ArgumentError, "Map.estimate_time was given a from: room id that is not in the map (#{origin})"
+          end
           return array.dup if array.first.to_s == origin.to_s
 
           [origin] + array
