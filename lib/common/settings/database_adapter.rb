@@ -32,10 +32,10 @@ module Lich
         return false unless blob
 
         begin
-          upsert_settings(script_name, scope, blob)
+          statement { upsert_settings(script_name, scope, blob) }
           return true
-        rescue Sequel::DatabaseError => db_err
-          report_database_error(db_err)
+        rescue StatementFailed => e
+          report_database_error(e.cause)
         rescue => e
           Lich::Messaging.msg("error", "--- Unexpected error while saving settings ---")
           Lich.log("--- Unexpected error while saving settings ---")
@@ -58,8 +58,9 @@ module Lich
       MAX_RETRY_PAUSE = 0.05
 
       # Raised internally to carry a Sequel error out of a statement, so that
-      # update_settings reports database failures but lets the block's own
-      # exceptions through unchanged.
+      # save_settings and update_settings report every database failure (a
+      # lock timeout, a full connection pool) the same way, and update_settings
+      # lets the block's own exceptions through unchanged.
       class StatementFailed < StandardError; end
       private_constant :StatementFailed
 

@@ -425,15 +425,43 @@ RSpec.describe Lich::Common::DatabaseAdapter do
   end
 
   describe '#save_settings' do
+    let(:messages) { [] }
+
     before do
+      captured = messages
       allow(Lich).to receive(:log)
-      stub_const('Lich::Messaging', Module.new { def self.msg(*); end })
+      stub_const('Lich::Messaging', Module.new { define_singleton_method(:msg) { |kind, text| captured << [kind, text] } })
     end
 
     it 'still refuses a non-Hash and returns false' do
       @adapter = described_class.new(tmp_dir, :script_auto_settings)
 
       expect(@adapter.save_settings('go2', [1], 'DR')).to be(false)
+    end
+
+    # update_settings reports these as database errors; save_settings must too.
+    it 'reports a Sequel error that is not a database error (a full connection pool) as a database error' do
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+      allow(@adapter.instance_variable_get(:@db)).to receive(:synchronize).and_raise(Sequel::PoolTimeout, 'timeout: 5.0')
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Database error while saving settings ---']])
+    end
+
+    it 'reports a database error (the upsert fails) as a database error' do
+      # The adapter's own table has no (script, scope) key, so the upsert fails.
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Database error while saving settings ---']])
+    end
+
+    it 'still reports any other error as unexpected and returns false' do
+      @adapter = described_class.new(tmp_dir, :script_auto_settings)
+      allow(@adapter.instance_variable_get(:@db)).to receive(:synchronize).and_raise(IOError, 'boom')
+
+      expect(@adapter.save_settings('go2', { 'a' => 1 }, 'DR')).to be(false)
+      expect(messages).to eq([['error', '--- Unexpected error while saving settings ---']])
     end
   end
 end
