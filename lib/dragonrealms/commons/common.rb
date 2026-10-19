@@ -61,6 +61,11 @@ module Lich
         /You are already/
       ].freeze
 
+      # Seconds retreat keeps trying, about once a second, while held or
+      # rooted. bput's default timeout, so a hold costs no longer than one
+      # RETREAT that drew no recognised reply.
+      RETREAT_HOLD_TIMEOUT = 15
+
       # Assess teach parsing patterns
       ASSESS_TEACH_TEACHER_PATTERN = /(?<teacher>.*) is teaching a class on (?<skill>.*) which is still open to new students/.freeze
       ASSESS_TEACH_SKILL_FILTER_PATTERN = /.* \(compared to what you already know\) (?<filtered_skill>.*)/.freeze
@@ -795,11 +800,13 @@ module Lich
 
       # Retreats until out of combat, standing first when the game asks.
       #
-      # Gives up when retreating can't succeed now: on the immobile reply
-      # (held or rooted) it pauses 1 s, as fix_standing does, so a caller
-      # that calls it again at once sends at most about one RETREAT a second
-      # while the hold lasts. It also gives up when the character must stand
-      # but can't (overburdened, unconscious, held, ...).
+      # While held or rooted (the immobile reply, to RETREAT or to STAND) it
+      # pauses 1 s and tries again, so a hold that ends within
+      # RETREAT_HOLD_TIMEOUT still ends in a retreat. A longer hold returns
+      # false. When the character must stand but can't (overburdened,
+      # unconscious, no room), no reply says when that ends, so it pauses 1 s
+      # and returns false. Either way a caller that calls it again at once
+      # sends at most about one RETREAT a second.
       #
       # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
       # @return [Boolean, nil] nil when no other NPC is in the room, true once
@@ -807,16 +814,20 @@ module Lich
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
+        deadline = Time.now + RETREAT_HOLD_TIMEOUT
         loop do
           case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, IMMOBILE_PATTERN, *RETREAT_MESSAGES)
           when *RETREAT_ESCAPE_MESSAGES
             return true
           when IMMOBILE_PATTERN
-            pause 1
-            return false
+            state = :immobile
           else
-            return false unless DRC.fix_standing
+            state = DRC.stand_result
           end
+          next if state == :standing
+
+          pause 1
+          return false unless state == :immobile && Time.now < deadline
         end
       end
 
