@@ -284,6 +284,9 @@ module Lich
       # (delete_if { ... }) therefore run once on this session's copy and again
       # on the stored container, and once more each time another session's
       # write makes the save start over, so they must not have side effects.
+      # Both runs hold the lock of the script's settings in that scope (see
+      # Settings.with_proxy_lock), so a slow block delays the script's other
+      # threads writing settings in that scope until it returns.
       MUTATING_METHODS = [
         :<<, :[]=, :append, :clear, :collect!, :compact!, :compare_by_identity,
         :concat, :default=, :default_proc=, :delete, :delete_at, :delete_if,
@@ -299,11 +302,7 @@ module Lich
         # Under the entry's lock from the change to this session's copy until
         # the proxy shows the stored container (see Settings.with_proxy_lock).
         @settings_module.with_proxy_lock(self) do
-          key = positions_in_copy(:[]=, [key], nil).first
-          @target[key] = actual_value
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
-          replayed = @settings_module.save_proxy_changes(self, :[]=, [key, actual_value])
-          take_stored_container(replayed[1]) if replayed
+          change_and_replay(:[]=, [key, actual_value], nil)
         end
         # rubocop:disable Lint/Void
         # This is Ruby expected behavior to return the value.
@@ -347,8 +346,9 @@ module Lich
             # Any other method (key?, each_pair, ...) may or may not change the
             # container. What it changed, if anything, is saved.
             before = dump_of_target
+            known = containers_in(@target)
             result = @target.send(method, *unwrapped_args, &block)
-            save_changes_since(method, before) if before.nil? || dump_of_target != before
+            save_changes_since(method, before, known) if before.nil? || dump_of_target != before
             return handle_method_result(result, method, unwrapped_args)
           end
         else
@@ -361,24 +361,75 @@ module Lich
       # stored container (what pop or delete took from what was saved), and
       # this proxy now shows that container.
       #
-      # A negative Array index or range bound in +args+ is first made
-      # positive against this session's copy (see #positions_in_copy).
-      #
       # All of it runs under the entry's lock (see Settings.with_proxy_lock).
       private def call_mutating_method(method, args, block)
         @settings_module.with_proxy_lock(self) do
-          args = positions_in_copy(method, args, block)
-          result = @target.send(method, *args, &block)
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
-          replayed = @settings_module.save_proxy_changes(self, method, args, block)
+          result, replayed = change_and_replay(method, args, block)
           if replayed
             stored_result, stored_container = replayed
-            stored_result = take_stored_container(stored_container, stored_result)
             stored_result.equal?(stored_container) ? self : handle_mutating_result(stored_result, method, args)
           else
             handle_mutating_result(result, method, args)
           end
         end
+      end
+
+      # Applies +method+ (a MUTATING_METHODS call, or []=) to this session's
+      # copy, replays it on the stored row (Settings.save_proxy_changes) and,
+      # when it was replayed, shows the stored container through this proxy
+      # (#take_stored_container). Called under the entry's lock.
+      #
+      # For an Array method whose arguments include a position
+      # (POSITION_METHODS), a negative index or range bound is first made
+      # positive against this session's copy (see #positions_in_copy), and
+      # the call is replayed on the stored Array's first elements, as many as
+      # this session's copy had, keeping the ones another session appended
+      # after them (see Settings.replay_at_positions).
+      #
+      # Returns [the call's result on this session's copy, the [result,
+      # container] pair from the replay or nil]; the replay's result is,
+      # when it is one of the stored containers, the container of this
+      # session's copy that now shows it.
+      private def change_and_replay(method, args, block)
+        known = containers_in(@target)
+        if @target.is_a?(Array) && POSITION_METHODS.include?(method)
+          args = positions_in_copy(method, args, block)
+          before = @target.dup
+          result = @target.send(method, *args, &block)
+          replay_args = [before.size, first_changed_position(before, @target), method, args]
+          replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_AT_POSITIONS, replay_args, block, label: method)
+        else
+          result = @target.send(method, *args, &block)
+          replayed = @settings_module.save_proxy_changes(self, method, args, block)
+        end
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
+        return [result, nil] unless replayed
+
+        stored_result, stored_container = replayed
+        [result, [take_stored_container(stored_container, stored_result, known), stored_container]]
+      end
+
+      # The first position at which +after+ (an Array) no longer holds the
+      # same object as +before+, a shallow copy of it taken before a call;
+      # nil when it holds the same objects.
+      private def first_changed_position(before, after)
+        (0...[before.size, after.size].max).find { |i| i >= before.size || i >= after.size || !before[i].equal?(after[i]) }
+      end
+
+      # The containers in +container+ (itself included, and those inside its
+      # elements), as an identity Hash. Taken before a call changes this
+      # session's copy, so that #show_stored fills in place only containers
+      # the copy held before it, and never one the call put there (a Hash
+      # given to push, a []= value, what a block returned), which the caller
+      # may still hold and use.
+      private def containers_in(container, found = {}.compare_by_identity)
+        return found if found.key?(container)
+
+        found[container] = true
+        (container.is_a?(Hash) ? container.each_value : container.each).each do |value|
+          containers_in(value, found) if @settings_module.container?(value)
+        end
+        found
       end
 
       # Array methods whose arguments include a position (an index, a start or
@@ -399,8 +450,11 @@ module Lich
       # element another session appended meanwhile. When such a call runs to
       # the end from that position (fill without a length, an endless range,
       # a slice! length past the end), it stops at this session's end too.
-      # (pop, shift, push and unshift still act on the stored Array's ends,
-      # and a position counted from the start is left as it is.)
+      # A position counted from the start is left as it is: the replay runs
+      # on as many of the stored Array's first elements as this session's
+      # copy had (Settings.replay_at_positions), so it does not reach past
+      # this session's end either. (pop, shift, push and unshift still act
+      # on the stored Array's ends.)
       #
       # On this session's copy the call does exactly what it would with the
       # original arguments. A position before the start that makes the call
@@ -423,7 +477,7 @@ module Lich
 
         copy = args.dup
         copy[index, replaced.size] = replaced
-        if [:[]=, :slice!].include?(method) && position.is_a?(Integer) && copy[index] >= 0 && copy[index + 1].is_a?(Integer)
+        if method == :slice! && position.is_a?(Integer) && copy[index] >= 0 && copy[index + 1].is_a?(Integer)
           copy[index + 1] = [copy[index + 1], size - copy[index]].min # a length past the end
         end
         copy
@@ -509,28 +563,34 @@ module Lich
       #
       # Returns +stored_result+, or, when it is one of the stored containers
       # whose contents a container of the copy now shows, that container.
-      private def take_stored_container(stored_container, stored_result = nil)
+      #
+      # +known+ (from #containers_in) holds the containers the copy held
+      # before the write; only those are filled in place.
+      private def take_stored_container(stored_container, stored_result = nil, known = containers_in(@target))
         return stored_result unless stored_container.instance_of?(@target.class)
         return stored_result if stored_container.equal?(@target)
 
         shown_by = {}.compare_by_identity
-        show_stored(@target, stored_container, shown_by, {}.compare_by_identity)
+        show_stored(@target, stored_container, shown_by, {}.compare_by_identity, known)
         shown_by.fetch(stored_result, stored_result)
       end
 
       # Makes +mine+ (a container of this session's copy) hold what +stored+
       # holds. Where +stored+ has a container at a key (or index) where
-      # +mine+ has one of the same class, +mine+ keeps its own and that one
-      # is made to hold the stored one's contents, and so on down. An Array
-      # is matched by position, as a proxy's path addresses it. Each
-      # container of the copy is used once (+used+). +shown_by+ maps each
-      # stored container to the container of the copy that now shows it.
-      private def show_stored(mine, stored, shown_by, used)
+      # +mine+ has one of the same class that the copy held before the write
+      # (+known+), +mine+ keeps its own and that one is made to hold the
+      # stored one's contents, and so on down. An Array is matched by
+      # position, as a proxy's path addresses it. A container the write put
+      # in the copy (push(entry), opts['k'] = h) is never changed: the stored
+      # copy of it takes its place. Each container of the copy is used once
+      # (+used+). +shown_by+ maps each stored container to the container of
+      # the copy that now shows it.
+      private def show_stored(mine, stored, shown_by, used, known)
         used[mine] = true
         kept = (mine.is_a?(Hash) ? stored.keys : stored.each_index.to_a).filter_map do |at|
           own = mine.is_a?(Hash) ? (mine.key?(at) ? mine[at] : nil) : mine[at]
           theirs = stored[at]
-          next unless @settings_module.container?(theirs) && own.instance_of?(theirs.class) && !own.equal?(theirs) && !used.key?(own)
+          next unless @settings_module.container?(theirs) && own.instance_of?(theirs.class) && !own.equal?(theirs) && known.key?(own) && !used.key?(own)
 
           used[own] = true
           [at, own, theirs]
@@ -545,7 +605,7 @@ module Lich
         end
         shown_by[stored] = mine
         kept.each { |at, own, _theirs| mine[at] = own }
-        kept.each { |_at, own, theirs| show_stored(own, theirs, shown_by, used) }
+        kept.each { |_at, own, theirs| show_stored(own, theirs, shown_by, used, known) }
       end
 
       # Saves what +method+ (one in neither method list) changed in the
@@ -561,7 +621,7 @@ module Lich
       # session's copy may not show them. Otherwise (an Array that grew or
       # shrank, or a target that can't be dumped) this session's copy of the
       # container is stored.
-      private def save_changes_since(method, before)
+      private def save_changes_since(method, before, known)
         changes = changed_entries(load_dump(before))
         unless changes
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed the target; saving this session's copy" })
@@ -574,7 +634,7 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   #{method} changed #{changes.size} entries; replaying them" })
         @settings_module.with_proxy_lock(self) do
           replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_ENTRY_CHANGES, [changes], label: method)
-          take_stored_container(replayed[1]) if replayed
+          take_stored_container(replayed[1], nil, known) if replayed
         end
       end
 

@@ -348,6 +348,14 @@ module Lich
           return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash")
         end
 
+        # An element of an Array is addressed by its position. When the stored
+        # Array no longer reaches that position, the element this session saw
+        # there has moved or gone, so storing this session's copy there would
+        # pad the Array with nil or store an element twice.
+        if (array_path = position_gone(root, path))
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})")
+        end
+
         parent = path.empty? ? nil : container_at(root, path[0...-1])
         unless path.empty? || parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer) && path.last >= 0)
           return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container")
@@ -363,13 +371,20 @@ module Lich
           # script's own rescue clause is the exception that clause handles.
           finished = false
           begin
-            result = method == REPLAY_ENTRY_CHANGES ? replay_entry_changes(existing, *args) : existing.public_send(method, *args, &block)
+            result = case method
+                     when REPLAY_ENTRY_CHANGES then replay_entry_changes(existing, *args)
+                     when REPLAY_AT_POSITIONS then replay_at_positions(existing, *args, &block)
+                     else existing.public_send(method, *args, &block)
+                     end
             finished = true
             yield [result, existing]
             return root
+          rescue PositionGoneError
+            finished = true
+            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)")
           rescue StandardError => e
             finished = true
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
+            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{label || method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
           rescue Exception => e # rubocop:disable Lint/RescueException -- reported, then raised again
             finished = true
             refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings")
@@ -405,6 +420,75 @@ module Lich
       # [:[]=, [key_or_index, value]]); they are all applied, in order, in one
       # update of the row (see #replay_entry_changes).
       REPLAY_ENTRY_CHANGES = :replay_entry_changes
+
+      # The operation save_proxy_changes replays for an Array method whose
+      # arguments include a position (SettingsProxy::POSITION_METHODS). Its
+      # arguments are [size, first_changed, method, args]: the size of this
+      # session's copy before the call, the first position the call changed
+      # in that copy (nil when it changed none), and the call itself, its
+      # positions counted from the start of that copy (see
+      # #replay_at_positions).
+      REPLAY_AT_POSITIONS = :replay_at_positions
+
+      # Raised by replay_at_positions when the call changed a position of
+      # this session's copy that the stored Array no longer has; nothing is
+      # stored, and the user is told (see #apply_to_stored_row).
+      class PositionGoneError < StandardError; end
+      private_constant :PositionGoneError
+
+      # Replays +method+ (with +args+ and +block+) on +container+, a stored
+      # Array, the way it ran on this session's copy of +size+ elements.
+      #
+      # When the stored Array has at least +size+ elements, the call runs on
+      # its first +size+ elements only, and the elements past them (those
+      # another session appended) follow what it leaves. So a position at or
+      # past this session's end (list.delete_at(5), list.slice!(2..),
+      # list.fill('z', 1, 9), list[size] = v) reaches none of them, and the
+      # call returns what it returned on this session's copy, as the
+      # positions counted from the end already do.
+      #
+      # When the stored Array is shorter (another session removed elements),
+      # the call runs on it as it is, unless the first position it changed in
+      # this session's copy (+first_changed+) is past the stored Array's end:
+      # the element this session saw there is gone, so PositionGoneError is
+      # raised, rather than padding the Array with nil or changing nothing.
+      #
+      # @return the call's result
+      def self.replay_at_positions(container, size, first_changed, method, args, &block)
+        if container.size >= size
+          appended = container.slice!(size..)
+          begin
+            container.public_send(method, *args, &block)
+          ensure
+            container.concat(appended)
+          end
+        elsif first_changed && first_changed >= container.size
+          raise PositionGoneError
+        else
+          container.public_send(method, *args, &block)
+        end
+      end
+      private_class_method :replay_at_positions
+
+      # The part of +path+ that leads to the stored Array that no longer has
+      # the position +path+ goes through next (an Array that another session
+      # removed counts as an empty one); nil when every position along +path+
+      # is still there.
+      def self.position_gone(root, path)
+        node = root
+        path.each_with_index do |segment, i|
+          if node.is_a?(Array) || (node.nil? && segment.is_a?(Integer))
+            return nil unless segment.is_a?(Integer) && segment >= 0 # refused by apply_to_stored_row
+
+            return path[0...i] if segment >= (node.nil? ? 0 : node.size)
+          elsif !node.nil? && !node.is_a?(Hash)
+            return nil
+          end
+          node = node.nil? ? nil : node[segment]
+        end
+        nil
+      end
+      private_class_method :position_gone
 
       # Applies +changes+, a list of [operation, args] entry changes, to
       # +container+, in order.
