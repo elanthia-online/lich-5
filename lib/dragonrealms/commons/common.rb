@@ -21,7 +21,8 @@ module Lich
       WAIT_RESPONSE_PATTERN = /(?:\.\.\. ?wait|\AWait) (?<seconds>[0-9]+) seconds?\.(?:<[^>]+>)*\s*\z/.freeze
 
       # Most collect attempts per DRC.collect call while the room is too
-      # cluttered; matches the default tries of DRC.forage?.
+      # cluttered. Chosen to equal DRC.forage?'s default tries (5), which is
+      # its own literal and does not follow this constant.
       COLLECT_CLUTTER_ATTEMPTS = 5
 
       # Collect command response messages
