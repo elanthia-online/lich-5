@@ -135,24 +135,18 @@ module Lich
   @@last_warn_deprecated = 0
   @@deprecated_log       = []
 
-  @@db_mutex             ||= Mutex.new
+  @@db_mutex ||= Mutex.new
+  @display_settings_mutex ||= Mutex.new
+
+  # Display caches are reset on reload, like the former individual fields.
+  @display_settings_cache = {}
 
   # settings
-  @@display_lichid       = nil # boolean
-  @@display_uid          = nil # boolean
-  @@display_exits        = nil # boolean
-  @@display_stringprocs  = nil # boolean
-  @@display_room_links   = nil # boolean
-  @@display_room_mono    = nil # boolean
-  @@display_expgains     = nil # boolean (DragonRealms only)
-  @@display_roomid_location = nil # string (DragonRealms only): "title" | "line" | "both"
-  @@hide_uid_flag        = nil # boolean
   @@keep_fe_string       = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
   @@track_persistent_launcher_mode = nil # boolean
-  @@follow_description_flag = nil # boolean (DragonRealms only)
   @@debug_messaging = nil # boolean
   @@max_debug_logs  = nil # integer
 
@@ -796,52 +790,96 @@ module Lich
     end
   end
 
-  def Lich.display_lichid
-    if @@display_lichid.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
-      @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+  # Display DB operations retain Lich.db's C busy_timeout, which holds the
+  # GVL and can stall all Ruby threads (5000 ms per attempt by default).
+  # Two attempts plus one 100 ms pause bound each operation's default lock
+  # waiting to about 10.1 seconds plus execution overhead. Failed writes raise;
+  # hot-path reads use an uncached default unless a command requests strict reads.
+  DISPLAY_SETTINGS_MAX_ATTEMPTS = 2
+  DISPLAY_SETTINGS_RETRY_DELAY = 0.1
+
+  # Retries one display-setting read or write after transient contention.
+  # @yield performs one DB operation
+  # @return [Object] the operation's result
+  # @raise [SQLite3::BusyException] when the final attempt remains busy
+  def self.with_display_settings_retry
+    attempts = 0
+    begin
+      attempts += 1
+      yield
+    rescue SQLite3::BusyException
+      raise if attempts >= DISPLAY_SETTINGS_MAX_ATTEMPTS
+
+      sleep DISPLAY_SETTINGS_RETRY_DELAY
+      retry
     end
-    return @@display_lichid
+  end
+
+  # Loads and normalizes an unresolved display value under the same lock as
+  # writes, so a concurrent cold read cannot overwrite a successful update.
+  # @param name [Symbol] the internal display setting name
+  # @yieldparam value [String, nil] the stored value, or nil for no row
+  # @return [Boolean, String, nil] cached value, or an uncached default while busy
+  def self.read_display_setting(name)
+    @display_settings_mutex.synchronize do
+      cached = @display_settings_cache[name]
+      return cached unless cached.nil?
+
+      stored = begin
+        with_display_settings_retry do
+          Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='#{name}';")
+        end
+      rescue SQLite3::BusyException
+        raise if Thread.current[:lich_strict_display_reads]
+
+        # A rendering/hook read must not remove the hook or abort the parser.
+        # Leave the cache unresolved so a later read can load the saved choice.
+        return yield(nil)
+      end
+      @display_settings_cache[name] = yield(stored)
+    end
+  end
+
+  # Persists first, then publishes the cache while still holding the display
+  # lock. Competing writes therefore leave the cache at the last saved value.
+  # Defer thread interrupts through publication so a committed value cannot be
+  # left behind an old cache. Synchronous DB failures still raise immediately.
+  # @param name [Symbol] the internal display setting name
+  # @param value [Boolean, String] the normalized value to save
+  # @return [Boolean, String] the saved value; raises on a failed write
+  def self.write_display_setting(name, value)
+    @display_settings_mutex.synchronize do
+      Thread.handle_interrupt(Exception => :never) do
+        with_display_settings_retry do
+          Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('#{name}',?);",
+                          [value.to_s.encode('UTF-8')])
+        end
+        @display_settings_cache[name] = value
+      end
+    end
+  end
+  private_class_method :with_display_settings_retry, :read_display_setting, :write_display_setting
+
+  def Lich.display_lichid
+    read_display_setting(:display_lichid) do |val|
+      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
+    end
   end
 
   def Lich.display_lichid=(val)
-    @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", [@@display_lichid.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_lichid, val.to_s.match?(/on|true|yes/))
   end
 
   def Lich.hide_uid_flag
-    if @@hide_uid_flag.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='hide_uid_flag';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = false if val.nil? and XMLData.game != ""; # default false
-      @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:hide_uid_flag) do |val|
+      val = false if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@hide_uid_flag
   end
 
   def Lich.hide_uid_flag=(val)
-    @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('hide_uid_flag',?);", [@@hide_uid_flag.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:hide_uid_flag, val.to_s.match?(/on|true|yes/))
   end
 
   # Whether the client gets the character's room view without its
@@ -850,29 +888,16 @@ module Lich
   # Lich::Common::RoomDescriptionFilter. Off by default.
   # @return [Boolean, nil] nil until a game is identified and no value is stored
   def Lich.follow_description_flag
-    if @@follow_description_flag.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='follow_description_flag';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = false if val.nil? and XMLData.game != ""; # default false
-      @@follow_description_flag = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
+    read_display_setting(:follow_description_flag) do |val|
+      val = false if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@follow_description_flag
   end
 
   # Sets and persists the room description filter toggle.
   # @param val [Boolean, String] truthy values are any of on/true/yes
   def Lich.follow_description_flag=(val)
-    @@follow_description_flag = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('follow_description_flag',?);", [@@follow_description_flag.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:follow_description_flag, val.to_s.match?(/on|true|yes/))
   end
 
   # Whether Lich's proxy forwards a front end's own /FE: handshake instead of
@@ -930,27 +955,14 @@ module Lich
   end
 
   def Lich.display_uid
-    if @@display_uid.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
-      @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:display_uid) do |val|
+      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@display_uid
   end
 
   def Lich.display_uid=(val)
-    @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", [@@display_uid.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_uid, val.to_s.match?(/on|true|yes/))
   end
 
   # The valid values for Lich.display_roomid_location.
@@ -963,19 +975,10 @@ module Lich
   # read fresh from the lich_settings table on first access and then memoized.
   # @return [String, nil] one of ROOMID_LOCATIONS, or nil before a game has been identified
   def Lich.display_roomid_location
-    if @@display_roomid_location.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_roomid_location';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      # Default to the historical below-room line once a game is known; leave unresolved
-      # (nil) until then, matching the other display_* getters.
+    read_display_setting(:display_roomid_location) do |val|
       val = "line" if val.nil? && XMLData.game != ""
-      @@display_roomid_location = (ROOMID_LOCATIONS.include?(val) ? val : "line") unless val.nil?
+      val.nil? ? nil : (ROOMID_LOCATIONS.include?(val) ? val : "line")
     end
-    return @@display_roomid_location
   end
 
   # Sets the DragonRealms room-id display placement and persists it. An unrecognized value is
@@ -987,61 +990,29 @@ module Lich
     normalized = val.to_s.downcase
     return unless ROOMID_LOCATIONS.include?(normalized)
 
-    @@display_roomid_location = normalized
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_roomid_location',?);", [normalized.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_roomid_location, normalized)
   end
 
   def Lich.display_exits
-    if @@display_exits.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_exits';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = false if val.nil? and XMLData.game != ""; # default false
-      @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:display_exits) do |val|
+      val = false if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@display_exits
   end
 
   def Lich.display_exits=(val)
-    @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_exits',?);", [@@display_exits.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_exits, val.to_s.match?(/on|true|yes/))
   end
 
   def Lich.display_stringprocs
-    if @@display_stringprocs.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_stringprocs';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = false if val.nil? and XMLData.game != ""; # default false
-      @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:display_stringprocs) do |val|
+      val = false if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@display_stringprocs
   end
 
   def Lich.display_stringprocs=(val)
-    @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_stringprocs, val.to_s.match?(/on|true|yes/))
   end
 
   # Whether room exits are rendered as clickable command links (a <d> tag) or as
@@ -1054,17 +1025,10 @@ module Lich
   #   the game is identified (XMLData.game still blank), matching the pre-existing
   #   display_* getters. Callers treat nil as falsy.
   def Lich.display_room_links
-    if @@display_room_links.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_links';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = (XMLData.game =~ /^DR/ ? false : true) if val.nil? and XMLData.game != ""; # default: DR off, others on
-      @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:display_room_links) do |val|
+      val = (XMLData.game =~ /^DR/ ? false : true) if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@display_room_links
   end
 
   # Sets and persists the room-exit link toggle.
@@ -1072,13 +1036,7 @@ module Lich
   # @return [Boolean, String] the value passed in - Ruby assignment methods
   #   always return their argument, not the method body's result
   def Lich.display_room_links=(val)
-    @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_links',?);", [@@display_room_links.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_room_links, val.to_s.match?(/on|true|yes/))
   end
 
   # Whether the Lich-injected room lines (Room Number, Room Exits, StringProcs)
@@ -1092,17 +1050,10 @@ module Lich
   #   nil until the game is identified (XMLData.game still blank), matching the
   #   pre-existing display_* getters. Callers treat nil as falsy.
   def Lich.display_room_mono
-    if @@display_room_mono.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_mono';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      val = (XMLData.game =~ /^DR/ ? true : false) if val.nil? and XMLData.game != ""; # default: DR on, others off
-      @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    read_display_setting(:display_room_mono) do |val|
+      val = (XMLData.game =~ /^DR/ ? true : false) if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    return @@display_room_mono
   end
 
   # Sets and persists the room-line mono-font toggle.
@@ -1110,41 +1061,18 @@ module Lich
   # @return [Boolean, String] the value passed in - Ruby assignment methods
   #   always return their argument, not the method body's result
   def Lich.display_room_mono=(val)
-    @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_mono',?);", [@@display_room_mono.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_room_mono, val.to_s.match?(/on|true|yes/))
   end
 
   def Lich.display_expgains
-    if @@display_expgains.nil?
-      begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_expgains';")
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      # Default to true for non-Genie frontends (Genie has built-in exp tracking)
-      # Once explicitly set, the persisted value takes precedence
-      if val.nil? && XMLData.game != ""
-        val = ($frontend == 'genie') ? 'false' : 'true'
-      end
-      @@display_expgains = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
+    read_display_setting(:display_expgains) do |val|
+      val = ($frontend == 'genie' ? 'false' : 'true') if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
     end
-    @@display_expgains
   end
 
   def Lich.display_expgains=(val)
-    @@display_expgains = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_expgains',?);", [@@display_expgains.to_s.encode('UTF-8')])
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+    write_display_setting(:display_expgains, val.to_s.match?(/on|true|yes/))
   end
 
   def Lich.track_autosort_state

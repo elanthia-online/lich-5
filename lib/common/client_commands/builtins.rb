@@ -17,6 +17,18 @@ require File.join(LIB_DIR, 'common', 'client_commands.rb')
 module Lich
   module Common
     module ClientCommands
+      # Commands must report a failed read rather than toggle an uncached
+      # fallback. Public getters otherwise protect game rendering and hooks.
+      # @yield reads a display setting using its existing public accessor
+      # @return [Object] the loaded value
+      def self.strict_display_read
+        previous = Thread.current[:lich_strict_display_reads]
+        Thread.current[:lich_strict_display_reads] = true
+        yield
+      ensure
+        Thread.current[:lich_strict_display_reads] = previous
+      end
+
       define do
         # ---- script control ---------------------------------------------
 
@@ -270,27 +282,39 @@ module Lich
 
         # ---- display ----------------------------------------------------
 
+        # Persist before announcing changes or starting/stopping the monitor.
+        # Strict reads raise on cold-cache contention; failed writes also raise,
+        # so assignment expressions need no return checks.
         command(/^display flaguid(?: (true|false))?/i, game: :dr) do |m|
-          new_value = ClientCommands.toggle_value(Lich.hide_uid_flag, m[1])
-          respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
+          current = ClientCommands.strict_display_read { Lich.hide_uid_flag }
+          new_value = ClientCommands.toggle_value(current, m[1])
           Lich.hide_uid_flag = new_value
+          respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
           respond 'Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. ' \
                   "To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         command(/^display descflag(?: (true|false|on|off))?$/i, game: :dr) do |m|
-          new_value = ClientCommands.toggle_value(Lich.follow_description_flag, m[1])
-          respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
+          current = ClientCommands.strict_display_read { Lich.follow_description_flag }
+          new_value = ClientCommands.toggle_value(current, m[1])
           Lich.follow_description_flag = new_value
+          respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         # The uniform six, in the positions the chain had them. ;display roomid
         # (DR) is registered between uid and exits to keep its original place.
         DISPLAY_TOGGLES.each_with_index do |(word, accessor, description), index|
           command(/^display #{word}(?: (true|false))?/i) do |m|
-            new_value = ClientCommands.toggle_value(Lich.public_send(accessor), m[1])
-            respond "Changing Lich to display #{description} to #{new_value}"
+            current = ClientCommands.strict_display_read { Lich.public_send(accessor) }
+            new_value = ClientCommands.toggle_value(current, m[1])
             Lich.public_send("#{accessor}=", new_value)
+            respond "Changing Lich to display #{description} to #{new_value}"
+          rescue SQLite3::Exception => e
+            respond "--- Lich: could not update display settings: #{e.message}"
           end
 
           next unless index == 1 # after uid, before exits
@@ -298,13 +322,16 @@ module Lich
           command(/^display roomid(?:\s+(title|line|both))?/i, game: :dr) do |m|
             requested = m[1]&.downcase
             if requested.nil?
-              respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
+              current = ClientCommands.strict_display_read { Lich.display_roomid_location }
+              respond "DragonRealms room id / RealID display placement is currently: #{current}"
               respond 'Usage: ;display roomid <title|line|both>  (title = in the room name line, ' \
                       'line = a Room Number line below the room, both = both places)'
             else
               Lich.display_roomid_location = requested
               respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
             end
+          rescue SQLite3::Exception => e
+            respond "--- Lich: could not update display settings: #{e.message}"
           end
         end
 
@@ -313,7 +340,8 @@ module Lich
             respond 'Error: exp-monitor.lic script is currently running'
             respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
           else
-            new_value = ClientCommands.toggle_value(Lich.display_expgains, m[:toggle])
+            current = ClientCommands.strict_display_read { Lich.display_expgains }
+            new_value = ClientCommands.toggle_value(current, m[:toggle])
             Lich.display_expgains = new_value
             if new_value
               respond 'Enabling real-time experience gain reporting'
@@ -323,6 +351,8 @@ module Lich
               DRExpMonitor.stop
             end
           end
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         command(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i, game: :dr) do |m|
@@ -336,9 +366,10 @@ module Lich
         end
 
         command(/^display exp-status$/i, game: :dr) do
+          expgains = ClientCommands.strict_display_read { Lich.display_expgains }
           respond
           respond 'DragonRealms Experience Monitor Status:'
-          respond "  expgains:   #{Lich.display_expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
+          respond "  expgains:   #{expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
           respond "  inlineexp:  #{DRExpMonitor.inline_display? ? 'ON' : 'OFF'}  (cumulative gains in EXP window)"
           respond "  reporter:   #{DRExpMonitor.active? ? 'RUNNING' : 'STOPPED'}"
           respond
@@ -346,6 +377,8 @@ module Lich
           respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
           respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
           respond
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not read display settings: #{e.message}"
         end
 
         # ---- debug logs -------------------------------------------------

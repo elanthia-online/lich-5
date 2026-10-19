@@ -882,6 +882,119 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
+  describe 'persisted display command failures' do
+    # Load the real accessors only in the isolated probe, retaining its fake I/O.
+    # @return [String] setup for a real in-memory display settings database
+    def real_display_settings_setup
+      <<~'RUBY'
+        require 'sqlite3'
+        load './lib/lich.rb'
+        db = SQLite3::Database.new(':memory:')
+        db.execute('CREATE TABLE lich_settings (name TEXT PRIMARY KEY, value TEXT)')
+        Lich.define_singleton_method(:db) { db }
+        Lich.define_singleton_method(:sleep) { |_| nil }
+        Lich.define_singleton_method(:log) { |_| nil }
+        Object.send(:define_method, :running?) { |_| false }
+        Object.const_set(:DRExpMonitor, Module.new) unless Object.const_defined?(:DRExpMonitor)
+        DRExpMonitor.define_singleton_method(:start) { puts 'MON START' }
+        DRExpMonitor.define_singleton_method(:stop) { puts 'MON STOP' }
+        display_settings = {
+          'lichid' => :display_lichid, 'uid' => :display_uid,
+          'exits' => :display_exits, 'stringprocs' => :display_stringprocs,
+          'roomlinks' => :display_room_links, 'roommono' => :display_room_mono,
+          'flaguid' => :hide_uid_flag, 'descflag' => :follow_description_flag,
+          'expgains' => :display_expgains, 'roomid' => :display_roomid_location
+        }
+      RUBY
+    end
+
+    it 'reports failed writes without a success announcement, cache change or monitor side effect' do
+      out = probe(<<~RUBY, game: 'DR')
+        #{real_display_settings_setup}
+        display_settings.each_value do |name|
+          Lich.public_send("\#{name}=", name == :display_roomid_location ? 'line' : false)
+        end
+        attempts = 0
+        db.define_singleton_method(:execute) do |*|
+          attempts += 1
+          raise 'unbounded command write' if attempts > 2
+          raise SQLite3::BusyException, 'database is locked'
+        end
+        display_settings.each do |word, name|
+          attempts = 0
+          requested = word == 'roomid' ? 'both' : 'true'
+          do_client(";display \#{word} \#{requested}")
+          puts "ATTEMPTS \#{attempts}"
+          puts "CACHE \#{name}=\#{Lich.public_send(name)}"
+        end
+        # A failed disable must not stop the monitor either.
+        attempts = 0
+        do_client(';display expgains off')
+        puts "SAVED \#{db.get_first_value("SELECT count(*) FROM lich_settings WHERE value NOT IN ('false', 'line')")}"
+        Script.define_singleton_method(:running) { [] }
+        do_client(';list')
+      RUBY
+      expect(out.scan('R:--- Lich: could not update display settings: database is locked').length).to eq(11)
+      expect(out.scan('ATTEMPTS 2').length).to eq(10)
+      expect(out.scan(/^CACHE .*=(?:false|line)$/).length).to eq(10)
+      expect(out).to include('SAVED 0', 'R:--- Lich: no active scripts')
+      expect(out).not_to match(/R:Changing|R:Enabling|R:Disabling|MON START|MON STOP/)
+    end
+
+    it 'bounds failed lazy reads for toggles and status without false success or side effects' do
+      out = probe(<<~RUBY, game: 'DR')
+        #{real_display_settings_setup}
+        attempts = 0
+        db.define_singleton_method(:get_first_value) do |*|
+          attempts += 1
+          raise 'unbounded command read' if attempts > 2
+          raise SQLite3::BusyException, 'database is locked'
+        end
+        display_settings.each do |word, name|
+          attempts = 0
+          do_client(";display \#{word}")
+          puts "ATTEMPTS \#{attempts}"
+          puts "UNRESOLVED \#{Lich.instance_variable_get(:@display_settings_cache)[name].nil?}"
+        end
+        attempts = 0
+        do_client(';display exp-status')
+        attempts = 0
+        puts "PUBLIC \#{Lich.display_uid}"
+        puts "STRICT_RESTORED \#{Thread.current[:lich_strict_display_reads].nil?}"
+      RUBY
+      expect(out.scan('could not update display settings: database is locked').length).to eq(10)
+      expect(out.scan('could not read display settings: database is locked').length).to eq(1)
+      expect(out.scan('ATTEMPTS 2').length).to eq(10)
+      expect(out.scan('UNRESOLVED true').length).to eq(10)
+      expect(out).to include('PUBLIC false', 'STRICT_RESTORED true')
+      expect(out).not_to match(/R:Changing|R:Enabling|R:Disabling|MON START|MON STOP|Monitor Status:/)
+    end
+
+    it 'announces successful writes and starts or stops the monitor only after persistence' do
+      out = probe(<<~RUBY, game: 'DR')
+        #{real_display_settings_setup}
+        db.define_singleton_method(:execute) do |query, params|
+          super(query, params)
+          puts "SAVED \#{params.first}"
+        end
+        display_settings.each do |word, _name|
+          puts "COMMAND \#{word}"
+          requested = word == 'roomid' ? 'both' : 'true'
+          do_client(";display \#{word} \#{requested}")
+        end
+        puts 'COMMAND disable'
+        do_client(';display expgains off')
+      RUBY
+      segments = out.split(/^COMMAND /).drop(1)
+      expect(segments.length).to eq(11)
+      segments.each do |segment|
+        expect(segment).to match(/SAVED .*\nR:(?:Changing|Enabling|Disabling)/)
+      end
+      expect(out).to include("SAVED true\nR:Enabling real-time experience gain reporting\nMON START")
+      expect(out).to include("SAVED false\nR:Disabling real-time experience gain reporting\nMON STOP")
+    end
+  end
+
   describe 'help' do
     it 'lists the built-in commands' do
       out = probe("do_client(';help')")

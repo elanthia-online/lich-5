@@ -16,7 +16,13 @@ module Lich
       # Lich.display_uid (a global, not parser state).
       def self.main_subtitle(subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
         if Lich.display_uid == false && subtitle[3..-1] =~ / - \d+$/
-          Lich.display_uid = true
+          begin
+            Lich.display_uid = true
+          rescue SQLite3::Exception => e
+            # This optional persisted preference must not reset the XML parser.
+            # Retain the old setting; the next numbered subtitle can retry.
+            Lich.log "warning: could not persist automatic display_uid: #{e.message}"
+          end
         end
         { room_title: '[' + subtitle[3..-1].gsub(/ - \d+$/, '') + ']' }
       end
