@@ -509,21 +509,61 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(messages.grep(/No match was found/)).to be_empty
       end
 
+      # The last RETREAT goes out up to 1 s after the deadline, then retreat
+      # pauses 1 s before it gives up, so a caller that calls it again at once
+      # is paced.
       it 'returns false when the hold outlasts the deadline, without waiting for a RETREAT timeout' do
         game_with_clock('retreat' => immobile)
         expect(drc.retreat).to be false
-        expect(sent).to eq(['retreat'] * hold_timeout)
-        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout).times
-        expect(clock[:offset]).to eq(hold_timeout)
+        expect(sent).to eq(['retreat'] * (hold_timeout + 1))
+        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout + 1).times
+        expect(clock[:offset]).to eq(hold_timeout + 1)
         expect(messages.grep(/No match was found/)).to be_empty
       end
 
       it 'counts the time RETREAT replies take toward the deadline' do
-        replies = 0
-        game_with_clock('retreat' => -> { replies += 1; clock[:offset] += 0.5; immobile })
+        game_with_clock('retreat' => -> { clock[:offset] += 0.5; immobile })
         expect(drc.retreat).to be false
-        # 1.5 s per try: 1 s pause plus 0.5 s for the reply.
-        expect(sent.size).to eq((hold_timeout / 1.5).ceil)
+        # The deadline starts at the first reply (0.5 s). Each try then takes
+        # 1.5 s (0.5 s reply, 1 s pause), so RETREATs go out at 0, 1.5 ... 15,
+        # the last one after the reply at 14 s, inside the deadline.
+        expect(sent.size).to eq((hold_timeout / 1.5).floor + 1)
+      end
+
+      # The hold budget starts at the first immobile reply, so entry roundtime
+      # (bput waits it out before the first RETREAT) doesn't use it up.
+      it 'retreats when an entry roundtime and a hold together outlast the deadline' do
+        game_with_clock('retreat' => -> { clock[:offset] < 18 ? immobile : 'You retreat from combat.' })
+        roundtime = [10]
+        allow(drc).to receive(:waitrt?) { clock[:offset] += roundtime.shift.to_i }
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 9)
+      end
+
+      it 'retreats when a slow first step and a hold together outlast the deadline' do
+        game_with_clock('retreat' => lambda {
+          next(clock[:offset] += 10; 'You retreat back to pole range.') if sent.size == 1
+
+          clock[:offset] < 24 ? immobile : 'You retreat from combat.'
+        })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 16)
+      end
+
+      it 'retreats when the hold ends in the last second before the deadline' do
+        game_with_clock('retreat' => -> { clock[:offset] < hold_timeout - 0.5 ? immobile : 'You retreat from combat.' })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * (hold_timeout + 1))
+      end
+
+      it 'keeps every try 1 s apart, the last one less than 1 s after the deadline' do
+        sent_at = []
+        game_with_clock('retreat' => -> { sent_at << clock[:offset]; clock[:offset] += 0.3; immobile })
+        expect(drc.retreat).to be false
+        expect(drc).to have_received(:pause).with(1).exactly(sent_at.size).times
+        # Deadline: the first reply (0.3 s) plus the hold timeout. Tries go
+        # out every 1.3 s; the last reply before the deadline comes at 14.6 s.
+        expect(sent_at.last).to be_within(0.01).of(15.6)
       end
 
       it 'does not send STAND when held while standing' do
@@ -545,10 +585,10 @@ RSpec.describe 'Callers that list the immobile reply' do
       end
 
       it 'starts a new deadline on each call' do
-        game_with_clock('retreat' => held_after(hold_timeout + 1, 'You retreat from combat.'))
+        game_with_clock('retreat' => held_after(hold_timeout + 2, 'You retreat from combat.'))
         expect(drc.retreat).to be false
         expect(drc.retreat).to be true
-        expect(sent.size).to eq(hold_timeout + 2)
+        expect(sent.size).to eq(hold_timeout + 3)
       end
 
       it 'DRCT.retreat passes the false through' do
@@ -591,8 +631,8 @@ RSpec.describe 'Callers that list the immobile reply' do
       it 'returns false when the hold outlasts the deadline, one RETREAT and STAND a second' do
         game_with_clock('retreat' => must_stand, 'stand' => immobile)
         expect(drc.retreat).to be false
-        expect(sent).to eq(%w[retreat stand] * hold_timeout)
-        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout).times
+        expect(sent).to eq(%w[retreat stand] * (hold_timeout + 1))
+        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout + 1).times
       end
 
       # Overburdened, unconscious and the like: standing can't succeed, and no

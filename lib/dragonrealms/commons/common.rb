@@ -61,9 +61,10 @@ module Lich
         /You are already/
       ].freeze
 
-      # Seconds retreat keeps trying, about once a second, while held or
-      # rooted. bput's default timeout, so a hold costs no longer than one
-      # RETREAT that drew no recognised reply.
+      # Seconds from the first immobile reply that retreat keeps trying,
+      # about once a second, while held or rooted. bput's default timeout, so
+      # a hold costs about as long as one RETREAT that drew no recognised
+      # reply.
       RETREAT_HOLD_TIMEOUT = 15
 
       # Assess teach parsing patterns
@@ -801,12 +802,15 @@ module Lich
       # Retreats until out of combat, standing first when the game asks.
       #
       # While held or rooted (the immobile reply, to RETREAT or to STAND) it
-      # pauses 1 s and tries again, so a hold that ends within
-      # RETREAT_HOLD_TIMEOUT still ends in a retreat. A longer hold returns
-      # false. When the character must stand but can't (overburdened,
-      # unconscious, no room), no reply says when that ends, so it pauses 1 s
-      # and returns false. Either way a caller that calls it again at once
-      # sends at most about one RETREAT a second.
+      # pauses 1 s and tries again for RETREAT_HOLD_TIMEOUT seconds from the
+      # first immobile reply, so entry roundtime and earlier steps don't use
+      # up that time. The last try goes out up to 1 s after that deadline, so
+      # a hold that ends within RETREAT_HOLD_TIMEOUT still ends in a retreat.
+      # A longer hold returns false. When the character must stand but can't
+      # (overburdened, unconscious, no room), no reply says when that ends,
+      # so it returns false. It pauses 1 s before it gives up either way, so
+      # a caller that calls it again at once sends at most about one RETREAT
+      # a second.
       #
       # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
       # @return [Boolean, nil] nil when no other NPC is in the room, true once
@@ -814,7 +818,7 @@ module Lich
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
-        deadline = Time.now + RETREAT_HOLD_TIMEOUT
+        deadline = nil
         loop do
           case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, IMMOBILE_PATTERN, *RETREAT_MESSAGES)
           when *RETREAT_ESCAPE_MESSAGES
@@ -826,8 +830,12 @@ module Lich
           end
           next if state == :standing
 
+          # The deadline is checked before the pause, so the last RETREAT goes
+          # out up to 1 s after it and every try stays 1 s apart.
+          deadline ||= Time.now + RETREAT_HOLD_TIMEOUT if state == :immobile
+          try_again = state == :immobile && Time.now < deadline
           pause 1
-          return false unless state == :immobile && Time.now < deadline
+          return false unless try_again
         end
       end
 
