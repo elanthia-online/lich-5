@@ -45,6 +45,13 @@ module Lich
   # and COMMIT); a third leaves room for holders that start waiting after the
   # queued thread does. A queued thread then gets a connection once those
   # holders finish, and its own full busy timeout after that.
+  #
+  # A caller that defers interrupts around a database call
+  # (Thread.handle_interrupt(Object => :never)) and is killed while queued
+  # holds the kill back for up to this long plus one busy timeout: the pool
+  # wait does not end on an interrupt, and the call that follows starts with
+  # the kill pending, so it waits out its lock wait (see
+  # SQLiteBusyWait.wait_uninterrupted). That is 20 s with the defaults.
   def Lich.sqlite_pool_timeout_s
     SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS * sqlite_busy_timeout_ms.to_i / 1000.0
   end

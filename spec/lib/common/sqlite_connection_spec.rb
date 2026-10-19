@@ -829,6 +829,69 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       expect(busy.map(&:last)).to all(be >= 0.2)
       expect(db[:rows].select_order_map(:n)).to eq([0])
     end
+
+    # A caller that defers interrupts around a write (Thread.handle_interrupt)
+    # and is killed while it is queued on the pool holds the kill back for the
+    # pool wait plus, once it has a connection, one lock wait: the kill is
+    # pending when that call starts, so the call waits out its busy timeout.
+    describe 'a kill sent to a writer queued with interrupts deferred' do
+      # Takes all four pooled connections until `gate` gets four values.
+      def take_every_connection(db, gate)
+        holders = Array.new(4) { Thread.new { db.synchronize { gate.pop } } }
+        holders.each { |t| wait_until_sleeping(t) }
+        holders
+      end
+
+      # Starts a write inside Thread.handle_interrupt(Object => :never), kills
+      # it once it is queued on the pool, and returns [thread, start time].
+      def kill_masked_writer(db)
+        started = monotonic
+        victim = Thread.new do
+          Thread.handle_interrupt(Object => :never) { db[:rows].insert(n: 1) }
+          :survived
+        end
+        wait_until_sleeping(victim)
+        victim.kill
+        [victim, started]
+      end
+
+      it 'lands when the pool wait ends with Sequel::PoolTimeout' do
+        allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+        db = open_db
+        gate = Queue.new
+        holders = take_every_connection(db, gate)
+        victim, started = kill_masked_writer(db)
+        result = victim.value
+        dead_after = monotonic - started
+        4.times { gate << true }
+        holders.each(&:join)
+
+        expect(result).to be_nil
+        expect(dead_after).to be >= 0.6
+        expect(dead_after).to be < 0.6 + 0.4
+        expect(db[:rows].count).to eq(0)
+      end
+
+      it 'lands after a full lock wait when a connection frees up while another process holds the lock' do
+        allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+        db = open_db
+        holder = hold_write_lock
+        gate = Queue.new
+        holders = take_every_connection(db, gate)
+        victim, started = kill_masked_writer(db)
+        sleep 0.3
+        4.times { gate << true }
+        holders.each(&:join)
+        result = victim.value
+        dead_after = monotonic - started
+        holder.execute('COMMIT')
+
+        expect(result).to be_nil
+        expect(dead_after).to be >= 0.3 + 0.2
+        expect(dead_after).to be < 0.6 + 0.2 + 0.4
+        expect(db[:rows].select_order_map(:n)).to eq([0])
+      end
+    end
   end
 
   it 'does not track a statement that is closed at birth (comment-only SQL)' do
