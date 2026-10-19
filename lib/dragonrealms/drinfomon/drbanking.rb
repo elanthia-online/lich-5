@@ -96,6 +96,10 @@ module Lich
       # (see in_transaction)
       DEFERRED_LOG_KEY = :lich_drbanking_deferred_log
 
+      # Added to a failed balance write's error: nothing is cached, so the
+      # change is gone and the recorded balance stays off until a BALANCE.
+      SYNC_HINT = 'check BALANCE to sync'
+
       class << self
         # Returns the bank accounts of every character in this game, read
         # fresh from the database on every call (nothing is cached).
@@ -116,7 +120,7 @@ module Lich
         # @param town [String] The town/bank name
         # @param copper [Integer] The balance in copper
         def update_balance(town, copper)
-          stored = modify_my_accounts("save the #{town} balance") do |accounts|
+          stored = modify_my_accounts("save the #{town} balance", hint: SYNC_HINT) do |accounts|
             accounts[town] = copper.to_i
             accounts
           end
@@ -430,9 +434,10 @@ module Lich
         # when there is none or it can't be loaded); the block returns the
         # Hash to store, or nil to store nothing.
         # @param action [String] what is being done, for error messages
+        # @param hint [String, nil] added to the error message on failure
         # @return [Hash, nil] the stored Hash; nil if nothing was stored
-        def modify_my_accounts(action)
-          in_my_row_transaction(action) do |db, scope|
+        def modify_my_accounts(action, hint: nil)
+          in_my_row_transaction(action, hint: hint) do |db, scope|
             updated = yield read_row(db, STORE_SCRIPT, scope)
             db.save_settings!(STORE_SCRIPT, updated, scope) unless updated.nil?
             updated
@@ -442,10 +447,11 @@ module Lich
         # Runs the block in one transaction with this character's row scope,
         # after moving any legacy data. Any error is reported and gives nil.
         # @param action [String] what is being done, for error messages
+        # @param hint [String, nil] added to the error message on failure
         # @yieldparam db [Lich::Common::DatabaseAdapter]
         # @yieldparam scope [String] this character's row scope
         # @return [Object, nil] what the block returned; nil on error
-        def in_my_row_transaction(action)
+        def in_my_row_transaction(action, hint: nil)
           scope = my_scope
           unless scope
             Lich::Messaging.msg('info', "DRBanking: Can't #{action} before the character is known.")
@@ -458,7 +464,7 @@ module Lich
             yield db, scope
           end
         rescue StandardError => e
-          report_storage_error(action, e)
+          report_storage_error(action, e, hint: hint)
           nil
         end
 
@@ -572,8 +578,9 @@ module Lich
           end
         end
 
-        def report_storage_error(action, error)
-          Lich::Messaging.msg('bold', "DRBanking: could not #{action}: #{error.class}: #{error.message}")
+        def report_storage_error(action, error, hint: nil)
+          suffix = hint ? " - #{hint}." : ''
+          Lich::Messaging.msg('bold', "DRBanking: could not #{action}: #{error.class}: #{error.message}#{suffix}")
           Lich.log("error: DRBanking could not #{action}: #{error.class}: #{error.message}\n\t#{(error.backtrace || []).first(5).join("\n\t")}")
         end
 
@@ -581,7 +588,7 @@ module Lich
         # Without a recorded balance there is nothing to apply it to.
         def change_balance(town, delta, description)
           unknown = false
-          stored = modify_my_accounts("save the #{town} balance") do |accounts|
+          stored = modify_my_accounts("save the #{town} balance", hint: SYNC_HINT) do |accounts|
             if accounts[town].nil?
               unknown = true
               nil
@@ -592,7 +599,7 @@ module Lich
           end
 
           if unknown
-            Lich::Messaging.msg('info', "DRBanking: #{description}. No prior balance recorded - check BALANCE to sync.")
+            Lich::Messaging.msg('info', "DRBanking: #{description}. No prior balance recorded - #{SYNC_HINT}.")
           elsif stored
             Lich::Messaging.msg('info', "DRBanking: Updated #{town} balance to #{format_currency(stored[town])}")
           end

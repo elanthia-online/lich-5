@@ -925,6 +925,101 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
+  # Nothing is cached, so a balance change the database refuses is gone: the
+  # recorded ledger is now off until the next BALANCE, and the error says so.
+  describe 'a balance write that fails' do
+    let(:sync_hint) { 'check BALANCE to sync' }
+    let(:deposit_line) { 'The clerk slides a small metal box across the counter into which you drop 5 gold Kronars' }
+    let(:withdraw_line) { 'The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger' }
+
+    before do
+      XMLData.name = 'CharA'
+      XMLData.room_title = '[[Provincial Bank, Teller]]' # Crossings bank
+      seed_row('CharA', { 'Crossings' => 10_000 })
+    end
+
+    it 'tells the user to check BALANCE when a deposit is refused' do
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.parse(deposit_line)
+
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure', sync_hint)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 10_000)
+    end
+
+    it 'tells the user to check BALANCE when a withdrawal is refused' do
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.parse(withdraw_line)
+
+      expect(message_strings.last).to include('could not save the Crossings balance', 'simulated write failure', sync_hint)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 10_000)
+    end
+
+    it 'tells the user to check BALANCE when a BALANCE figure is refused' do
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.update_balance('Crossings', 12_345)
+
+      expect(message_strings.last).to include('could not save the Crossings balance', sync_hint)
+      expect(message_strings.grep(/Updated Crossings/)).to be_empty
+    end
+
+    it 'tells the user to check BALANCE when withdrawing everything is refused' do
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.parse('The clerk counts out all your Kronars and hands them over')
+
+      expect(message_strings.grep(/could not save the Crossings balance/).last).to include(sync_hint)
+      expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 10_000)
+    end
+
+    it 'tells the user to check BALANCE when reading the balance hits a database error' do
+      allow(adapter).to receive(:get_settings).and_call_original
+      allow(adapter).to receive(:get_settings).with('core.banking', 'DR:CharA')
+                                              .and_raise(Sequel::DatabaseError, 'disk I/O error')
+      described_module.parse(deposit_line)
+
+      expect(message_strings.last).to include('could not save the Crossings balance', 'disk I/O error', sync_hint)
+    end
+
+    context 'when another process holds the write lock past the busy timeout' do
+      let(:adapter) do
+        allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+        Lich::Common::DatabaseAdapter.new(data_dir, :script_auto_settings)
+      end
+
+      it 'reports the lock with the hint, keeps the row, and records the next deposit on the old figure' do
+        adapter # connect before the lock is taken
+        locker = SQLite3::Database.new(SettingsSpecDB.path(data_dir))
+        begin
+          locker.execute('BEGIN EXCLUSIVE')
+          described_module.parse(deposit_line)
+        ensure
+          locker.execute('ROLLBACK')
+          locker.close
+        end
+
+        expect(message_strings.last).to include('could not save the Crossings balance', 'BusyException', sync_hint)
+        expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 10_000)
+
+        described_module.parse(deposit_line)
+        expect(rows[['core.banking', 'DR:CharA']]).to eq('Crossings' => 15_000)
+      end
+    end
+
+    it 'leaves the hint off a failure that is not a balance write' do
+      SettingsSpecDB.fail_writes_to(data_dir, 'DR:CharA')
+      described_module.reset_character!
+
+      expect(message_strings.last).to include('could not clear your bank data', 'simulated write failure')
+      expect(message_strings.last).not_to include(sync_hint)
+    end
+
+    it 'leaves the hint off a write that succeeds' do
+      described_module.parse(deposit_line)
+
+      expect(message_strings.last).to include('Updated Crossings balance')
+      expect(message_strings.last).not_to include(sync_hint)
+    end
+  end
+
   describe '.clear_balance' do
     it 'sets balance to zero' do
       described_module.update_balance('Crossings', 10_000)
