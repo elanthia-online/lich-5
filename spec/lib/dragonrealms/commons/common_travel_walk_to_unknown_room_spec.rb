@@ -612,6 +612,20 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       expect(world.sent).to eq(%w[north west north])
       expect(plain_messages.grep(/did not reach/)).to eq(['DRCT: Move from room 101 did not reach room 102, attempting again (retry 1/3).'])
     end
+
+    it 'takes a move that lands in the target by another route as arrival, not as a miss' do
+      [false, true].each do |restart_on_fail|
+        Lich::Messaging.clear_messages!
+        world = install(WalkToUnknownRoomSpec::World.new(corridor(2), position: 101))
+        # The first hop toward 103 is 102, but the move lands in 103 itself.
+        world.overrides[[101, 'north']] = 103
+
+        expect(DRCT.walk_to(103, restart_on_fail)).to be(true), "restart_on_fail=#{restart_on_fail}"
+        expect(world.sent).to eq(['north'])
+        expect(plain_messages.grep(/did not reach/)).to be_empty
+        expect(bold_messages).to be_empty
+      end
+    end
   end
 
   describe 'a room that resolves on one read and not the next' do
