@@ -208,11 +208,36 @@ describe DRCC do
     context 'when the rub reply says the character cannot figure out how' do
       before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_CONFUSED) }
 
-      it 'stows each held item once and stops' do
+      it 'stows the brush and the tool once each and skips the oil for that tool' do
         DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
 
-        expect(stowed).to eq(['wire brush', 'hammer'])
-        expect(sent).to eq(['rub my hammer with my wire brush'])
+        expect(stowed.first(2)).to eq(['wire brush', 'hammer'])
+        expect(sent).not_to include('pour my oil on my hammer')
+      end
+
+      it 'moves on and repairs the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+
+      it 'names the tool it could not repair' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(Lich::Messaging.messages.map { |m| m[:message] })
+          .to eq(['DRCC: Cannot repair hammer, moving to the next tool.'])
+      end
+    end
+
+    context 'when the pour reply says the character cannot figure out how after a successful rub' do
+      before { stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_CONFUSED) }
+
+      it 'stows the brush, the oil and the tool once each and repairs the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
       end
     end
 
@@ -263,7 +288,7 @@ describe DRCC do
 
     context 'when the repair is a Proper Forging Tool Care success before a stop reply' do
       before do
-        stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_CONFUSED)
+        stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_ENGAGED)
         # Stubbed rather than set: depending on load order Flags is the spec mock or the production class.
         allow(Flags).to receive(:[]).and_call_original
         allow(Flags).to receive(:[]).with('proper-repair').and_return(true)
@@ -278,22 +303,58 @@ describe DRCC do
       end
     end
 
+    # Runs the real stow_crafting_item. Tie attempts are counted whether they
+    # go through DRCI.tie_item? (DRCI is the spec_helper mock or the real
+    # module, depending on load order) or straight through DRC.bput, so the
+    # examples hold however the belt tie is implemented. The first tie
+    # succeeds; any later tie finds nothing in hand and fails, and safe-room
+    # raises, so a second tie that falls back to it fails the example at once.
     context 'with the real stow_crafting_item and a belt tool' do
       let(:belt) { { 'name' => 'forging belt', 'items' => ['hammer'] } }
+      let(:tie_command) { 'tie my hammer to my forging belt' }
+      let(:tie_replies) { ['You tie your hammer to your forging belt.'] }
+
+      def next_tie_reply
+        sent << tie_command
+        tie_replies.shift || 'Tie what?'
+      end
+
+      def stub_belt_replies(rub_reply)
+        allow(DRCI).to receive(:tie_item?).with('hammer', 'forging belt') { next_tie_reply.start_with?('You tie') }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          next next_tie_reply if command == tie_command
+
+          sent << command
+          case command
+          when 'rub my hammer with my wire brush' then rub_reply
+          when /^put my / then 'You put'
+          else DRCC::REPAIR_SUCCESS
+          end
+        end
+      end
 
       before do
         allow(DRCC).to receive(:stow_crafting_item).and_call_original
-        allow(DRCI).to receive(:tie_item?).and_return(true)
-        allow(DRC).to receive(:wait_for_script_to_complete)
-        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED)
+        allow(DRC).to receive(:wait_for_script_to_complete).and_raise('safe-room run')
+        allow(DRCT).to receive(:walk_to)
       end
 
-      it 'ties the tool to the belt once and never sends it to the safe room' do
+      it 'ties the tool once and never sends it to the safe room when engaged' do
+        stub_belt_replies(DRCC::REPAIR_ENGAGED)
+
         DRCC.repair_own_tools(info, %w[hammer], bag, bag_items, belt)
 
-        expect(DRCI).to have_received(:tie_item?).with('hammer', 'forging belt').once
-        expect(DRC).not_to have_received(:wait_for_script_to_complete)
-        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack'])
+        expect(sent.count(tie_command)).to eq(1)
+        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack', tie_command])
+      end
+
+      it 'ties the tool once and never sends it to the safe room when it cannot figure out how' do
+        stub_belt_replies(DRCC::REPAIR_CONFUSED)
+
+        DRCC.repair_own_tools(info, %w[hammer], bag, bag_items, belt)
+
+        expect(sent.count(tie_command)).to eq(1)
+        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack', tie_command])
       end
     end
   end

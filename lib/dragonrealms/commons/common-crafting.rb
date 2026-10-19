@@ -441,7 +441,7 @@ module Lich
           DRCC.get_crafting_item(tool_name, bag, bag_items, belt, true) # attempts to fetch the next tool, with the option (true) to continue if fetch fails
           next unless DRC.right_hand # if we don't get the next tool for whatever reason, we move on to the next tool.
 
-          stop_repairs = false # set when a reply means no further tool can be repaired right now
+          stop_repairs = false # set when engaged: no further tool can be repaired right now
           repair_tool.each do |x| # iterates once for each: wire brush, oil
             DRCC.get_crafting_item(x, bag, bag_items, belt)
             command = x == 'wire brush' ? "rub my #{tool_name} with my wire brush" : "pour my oil on my #{tool_name}" # changes the command based on the tool, instead of a second case statement, since it's just one of each
@@ -464,10 +464,9 @@ module Lich
               DRCC.stow_crafting_item(x, bag, belt) # the tool itself is stowed once, below
               stop_repairs = true
               break
-            when REPAIR_CONFUSED
-              Lich::Messaging.msg('bold', 'DRCC: Something has gone wrong with repair, exiting repair loop.')
+            when REPAIR_CONFUSED # this tool can't be repaired this way; the others may still be
+              Lich::Messaging.msg('bold', "DRCC: Cannot repair #{tool_name}, moving to the next tool.")
               DRCC.stow_crafting_item(x, bag, belt) # the tool itself is stowed once, below
-              stop_repairs = true
               break
             end
           end
