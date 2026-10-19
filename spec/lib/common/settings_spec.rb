@@ -2336,7 +2336,7 @@ RSpec.describe Lich::Common::Settings do
         copies.call.each { |row| row.merge({})['k'] = 1 }
 
         expect(stored).to eq("rows" => [{ "x" => 0 }, { "x" => 0 }, { "x" => 0 }])
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "later writes through what this each loop yields are not saved either")).exactly(3).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "the same goes for any other such write in this each loop, which is only logged")).exactly(3).times
         expect(Lich::Messaging).to have_received(:msg).exactly(3).times
         expect(logged.grep(/not saved/).size).to eq(9)
       end
@@ -2433,20 +2433,15 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).exactly(4).times
       end
 
-      it "writes through a new container built from an element yielded by each as through one built from that element read by index, never at the top of the row" do
-        results = {
-          "each" => ->(write) { game_read('rows').each { |row| write.call(row) } },
-          "[0]"  => ->(write) { write.call(game_read('rows')[0]) }
-        }.transform_values do |read|
-          their_write("rows" => [{ "x" => 0 }], "top" => 1)
-          read.call(->(row) { row.merge({})['k'] = 1 })
-          after_write = stored
-          read.call(->(row) { row.merge({}).delete('x') })
-          [after_write, stored]
-        end
+      it "stores nothing, and says so once per loop, for a write through a new container built from an element yielded by each, neither at the element nor at the top of the row" do
+        their_write("rows" => [{ "x" => 0 }, { "x" => 1 }], "top" => 1)
 
-        expect(results["each"]).to eq(results["[0]"])
-        expect(results["each"].map { |row| row["top"] }).to eq([1, 1])
+        game_read('rows').each { |row| row.merge({})['k'] = 1 }
+        game_read('rows').each { |row| row.merge({}).delete('x') }
+        game_read('rows').each { |row| row.select { true }.delete('x') }
+
+        expect(stored).to eq("rows" => [{ "x" => 0 }, { "x" => 1 }], "top" => 1)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded")).exactly(3).times
       end
 
       it "writes through an element of a new container built from a view of a root proxy into that element" do

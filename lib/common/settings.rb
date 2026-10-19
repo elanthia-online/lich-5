@@ -270,8 +270,9 @@ module Lich
       # a path (a view of a root proxy, the default fetch returned, or a
       # container built from one), nor for the
       # proxy of a view's element that can't be found in the settings
-      # (SettingsProxy#unlocated?). Nothing is stored either, and the user is
-      # told, when +block+ leaves early (break, throw or return), is
+      # (SettingsProxy#unlocated?), nor for a new container built from an
+      # element SettingsProxy#each yielded (SettingsProxy#copy?). Nothing is
+      # stored either, and the user is told, when +block+ leaves early (break, throw or return), is
       # interrupted or its thread is killed while it runs on the stored
       # container.
       #
@@ -330,6 +331,10 @@ module Lich
         if script_name.nil? || script_name.empty?
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
           return nil
+        end
+
+        if proxy.respond_to?(:copy?) && proxy.copy?
+          return refuse_proxy_save(script_name, proxy, "this is a new container built from an element an each loop yielded (merge, select, first(2), ...), not part of the settings")
         end
 
         if proxy.respond_to?(:detached?) && proxy.detached?
@@ -558,21 +563,26 @@ module Lich
 
       # Tells the user that a write through a proxy could not be saved.
       #
-      # For writes through the elements one call to SettingsProxy#each
-      # yielded (SettingsProxy#refusals), the user is told about the first
-      # one, and that the others are not saved either; each of them is still
-      # logged.
+      # For writes through what one call to SettingsProxy#each yielded
+      # (SettingsProxy#refusals), the user is told about the first one
+      # refused for each reason, and that any other refused for it in the
+      # loop is only logged; each of them is still logged. A loop can also
+      # yield elements whose writes are stored (an element of a view that is
+      # found in the settings), so the message speaks of the refused ones
+      # only.
       #
       # @return nil
       def self.refuse_proxy_save(script_name, proxy, reason)
         refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
+        tell = true
         if refusals
-          refusals[:count] += 1
-          reason = "#{reason}; later writes through what this each loop yields are not saved either" if refusals[:count] == 1
+          refusals[reason] = refusals.fetch(reason, 0) + 1
+          tell = refusals[reason] == 1
+          reason = "#{reason}; the same goes for any other such write in this each loop, which is only logged" if tell
         end
         message = "--- Error: settings for #{script_name} (#{proxy.scope}) not saved: #{reason} ---"
         _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{message}" })
-        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && (refusals.nil? || refusals[:count] == 1)
+        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && tell
         nil
       end
       private_class_method :refuse_proxy_save

@@ -19,11 +19,17 @@ module Lich
       # of a view that can't be found in the settings: a write through it is
       # refused with a message instead of being saved somewhere else.
       #
-      # +refusals+, shared by the unlocated elements one call to #each
+      # +refusals+, shared by the container elements one call to #each
       # yields (and the containers taken from them), counts the writes
       # through them that were refused, so that the user is told once per
-      # loop (see #refusals).
-      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil)
+      # loop for each reason (see #refusals).
+      #
+      # +copy+ marks a new container built from an element #each yielded
+      # (row.merge(..), row.select { ... }, row.first(2)): like a plain
+      # Hash's, it is not part of the settings, so a write to it is refused
+      # with a message; its elements are found where the settings hold them
+      # (+source+ is that element's container).
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -33,17 +39,24 @@ module Lich
         @source = source
         @unlocated = unlocated
         @refusals = refusals
+        @copy = copy
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
       attr_reader :target, :path, :scope, :script_name
 
-      # For an unlocated element yielded by #each, or a container taken from
+      # For a container element yielded by #each, or a container taken from
       # one: a Hash shared by everything that one call to #each yielded,
-      # whose :count is the number of writes through them that were refused
-      # (Settings.refuse_proxy_save tells the user about the first one only).
-      # nil for any other proxy.
+      # counting, for each reason, the writes through them that were refused
+      # (Settings.refuse_proxy_save tells the user about the first one for
+      # each reason only). nil for any other proxy.
       attr_reader :refusals
+
+      # True for a proxy #each yielded, or a container taken from one (see
+      # #refusals).
+      private def yielded?
+        !@refusals.nil?
+      end
 
       # Minimal change: expose detached? status
       def detached?
@@ -54,6 +67,12 @@ module Lich
       # settings (see #initialize).
       def unlocated?
         !!@unlocated
+      end
+
+      # True for a new container built from an element #each yielded (see
+      # #initialize); Settings.save_proxy_changes refuses a write to it.
+      def copy?
+        !!@copy
       end
 
       def nil?
@@ -203,7 +222,8 @@ module Lich
       def dup
         Marshal.load(Marshal.dump(@target))
       rescue TypeError
-        @settings_module.unwrap_proxies(@target)
+        # unwrap_proxies is private to Settings.
+        @settings_module.__send__(:unwrap_proxies, @target)
       end
 
       # As #dup; the copy is frozen when +freeze+ is true, or when it is nil
@@ -298,7 +318,7 @@ module Lich
 
       # Yields one object per element of the target (see #each); returns self.
       private def each_element
-        refusals = { count: 0 }
+        refusals = {}
         case @target
         when Hash
           @target.each_pair { |key, value| yield [key, element_for(key, value, refusals)] }
@@ -326,7 +346,7 @@ module Lich
         return value unless @settings_module.container?(value)
         return view_element_proxy([key], value, refusals) if built_from_source?
 
-        SettingsProxy.new(@settings_module, @scope, @path + [key], value, script_name: @script_name)
+        SettingsProxy.new(@settings_module, @scope, @path + [key], value, script_name: @script_name, refusals: refusals)
       end
 
       # True for a proxy whose elements are looked up in the container it
@@ -803,7 +823,10 @@ module Lich
       # element's path, so that a write through it saves to that element.
       # Any other container (a new one, such as what merge or first(2)
       # return) keeps this proxy's path, and the views listed in
-      # NON_DESTRUCTIVE_CONTAINER_VIEWS are tagged as detached.
+      # NON_DESTRUCTIVE_CONTAINER_VIEWS are tagged as detached, except that
+      # a new container built from an element #each yielded (row.merge(..),
+      # row.select { ... }) is a copy (see #copy?): a write to it is not
+      # stored, as for a plain Hash, and the user is told.
       #
       # The elements of such a container are looked up in the container it
       # was built from (see #built_from_source? and #view_element_proxy).
@@ -815,6 +838,8 @@ module Lich
             SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
           elsif @settings_module.container?(result) && (pathless_element? || fetch_default?(method, args))
             pathless_derived_proxy(result)
+          elsif @settings_module.container?(result) && yielded?
+            SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: true)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
               # For Array#find / Array#detect, identify the element index in the
@@ -939,14 +964,14 @@ module Lich
 
         base = @source && source_segment(segments.first)
         if base
-          SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name)
+          SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name, refusals: refusals)
         elsif (key = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
           if segments.size == 1
             # The pair itself, as the Hash's each yields it: [key, the proxy
             # for the value there], which |key, value| takes apart.
-            [value.first, SettingsProxy.new(@settings_module, @scope, @path + [key], value.last, script_name: @script_name)]
+            [value.first, SettingsProxy.new(@settings_module, @scope, @path + [key], value.last, script_name: @script_name, refusals: refusals)]
           else
-            SettingsProxy.new(@settings_module, @scope, @path + [key] + segments.drop(2), value, script_name: @script_name)
+            SettingsProxy.new(@settings_module, @scope, @path + [key] + segments.drop(2), value, script_name: @script_name, refusals: refusals)
           end
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
@@ -960,11 +985,15 @@ module Lich
       # reject, slice, compact) keeps the keys, so its key also addresses
       # the element after the container has taken the stored row's elements,
       # as long as that key still holds the same kind of container; a fresh
-      # read of that key would address the same entry.
+      # read of that key would address the same entry. That holds only for
+      # a detached view: another Hash built from the container (merge with
+      # the script's own Hash, transform_values) may hold, at a key, a value
+      # that is not the container's, so its elements are found by identity
+      # only, and a write through one that isn't found is refused.
       private def source_segment(view_segment)
         element = @target[view_segment]
         same = segment_in(@source, view_segment)
-        return same if same && (@source[same.first].equal?(element) || same_key_in_hash_source?(same.first, element))
+        return same if same && (@source[same.first].equal?(element) || (detached? && same_key_in_hash_source?(same.first, element)))
 
         child_segment(@source, element)
       end

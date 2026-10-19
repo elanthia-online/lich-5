@@ -249,7 +249,7 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
 
       expect(stored).to eq(before_write)
       expect(error_messages.size).to eq(1)
-      expect(error_messages.first).to include("not saved", "not found in the settings", "later writes through what this each loop yields are not saved either")
+      expect(error_messages.first).to include("not saved", "not found in the settings", "the same goes for any other such write in this each loop, which is only logged")
     end
   end
 
@@ -310,6 +310,69 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(plain(list)).to eq([{ id: 0 }, { id: 1 }, { id: 2 }])
       expect(plain(reversed)).to eq([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }])
       expect(stored[:list]).to eq([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }])
+    end
+
+    it "stores nothing, says so once per loop, and leaves the copy a plain Ruby copy, for a new container built from an element each yields" do
+      settings[:rows] = [{ x: 1 }, { x: 2 }]
+      settings[:by] = { "a" => { x: 1 } }
+      before_write = stored
+      copies = []
+
+      settings[:rows].each do |row|
+        copy = row.merge(extra: 1)
+        copy.delete(:x)
+        copy[:k] = 1
+        copies << plain(copy)
+      end
+      settings[:by].each { |_key, value| value.merge(y: 1).delete(:x) }
+      settings[:rows].each_with_index { |row, _i| row.select { true }.clear }
+
+      expect(stored).to eq(before_write)
+      expect(copies).to eq([{ extra: 1, k: 1 }, { extra: 1, k: 1 }])
+      expect(error_messages.size).to eq(3)
+      expect(error_messages).to all(include("not saved", "a new container built from an element an each loop yielded"))
+    end
+
+    it "still stores a write through an element of such a container where the settings hold that element" do
+      settings[:groups] = { "g" => { "a" => { n: 1 }, "b" => { n: 2 } } }
+
+      settings[:groups].each { |_name, members| members.sort_by { |key, _value| key }.each { |_key, member| member[:seen] = true } }
+      settings[:groups].each { |_name, members| members.merge("x" => {})["a"][:also] = 1 }
+
+      expect(stored[:groups]).to eq("g" => { "a" => { n: 1, seen: true, also: 1 }, "b" => { n: 2, seen: true } })
+      expect(error_messages).to be_empty
+    end
+
+    it "stores nothing for an element of a Hash built from other values (merge with the script's Hash, transform_values), and leaves the script's Hash as plain Ruby does" do
+      settings[:m] = { "a" => { n: 1 } }
+      mine = { "a" => { n: 9 } }
+
+      settings[:m].merge(mine).each { |_key, value| value[:w] = 1 }
+      settings[:m].merge(mine)["a"][:z] = 1
+      settings[:m].transform_values { |value| value.merge(t: 1) }.each { |_key, value| value[:w] = 1 }
+
+      expect(stored[:m]).to eq("a" => { n: 1 })
+      expect(mine).to eq("a" => { n: 9, w: 1, z: 1 })
+      expect(error_messages.size).to eq(3)
+      expect(error_messages).to all(include("not saved", "not found in the settings"))
+
+      settings[:m].merge({}).each { |_key, value| value[:kept] = 1 }
+      settings[:m].except("nope")["a"][:also] = 1
+      expect(stored[:m]).to eq("a" => { n: 1, kept: 1, also: 1 })
+    end
+
+    it "says, in a loop where only some elements are found in the settings, that only the others are not saved" do
+      settings[:vs] = [{ id: 0 }, { id: 1 }]
+      list = settings[:vs]
+      reversed = list.reverse
+      list[1] = { id: "new" }
+
+      reversed.each { |element| element[:m] = 1 }
+
+      expect(stored[:vs]).to eq([{ id: 0, m: 1 }, { id: "new" }])
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not found in the settings", "the same goes for any other such write in this each loop, which is only logged")
+      expect(error_messages.first).not_to include("later writes through what this each loop yields are not saved either")
     end
 
     it "still applies a destructive call to the container at its path (first(2).push appends to the list)" do
@@ -387,6 +450,26 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       settings[:rows].each { |row| row.clone.delete(:n) }
 
       expect(stored).to eq(by: { "a" => { n: 0 } }, rows: [{ n: 0 }])
+      expect(error_messages).to be_empty
+    end
+
+    it "copies a value Marshal can't dump container by container, so changing the copy stores nothing" do
+      settings[:list] = [1, [2]]
+      list = settings[:list]
+      list << proc { 1 } # refused: it stays in this session's copy only
+      error_messages.clear
+
+      copy = list.dup
+      frozen = list.clone(freeze: true)
+      copy << 3
+      copy[1] << 4
+
+      expect(copy).to be_instance_of(Array)
+      expect(copy.size).to eq(4)
+      expect(copy[2]).to be_a(Proc)
+      expect(frozen).to be_frozen
+      expect(plain(list)[0, 2]).to eq([1, [2]])
+      expect(stored[:list]).to eq([1, [2]])
       expect(error_messages).to be_empty
     end
 
