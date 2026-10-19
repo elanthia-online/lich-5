@@ -33,6 +33,10 @@ end unless defined?(StringProc)
 
 # Load the map_base module
 require 'common/map/map_base'
+# apply_wayto_overrides writes go2's custom targets through the real settings store
+require_relative '../../../support/lich_sqlite'
+require 'common/settings'
+require 'common/settings/gamesettings'
 
 RSpec.describe Lich::Common::MinHeap do
   let(:heap) { described_class.new }
@@ -1010,7 +1014,6 @@ RSpec.describe Lich::Common::MapBase do
       test_class.test_list[10] = room10
       test_class.test_list[20] = room20
 
-      stub_const('GameSettings', {})
       allow(test_class).to receive(:get_settings).and_return(settings)
     end
 
@@ -1123,40 +1126,121 @@ RSpec.describe Lich::Common::MapBase do
       expect { test_class.apply_wayto_overrides }.not_to raise_error
     end
 
-    it 'merges personal_map_targets into GameSettings custom targets' do
-      settings.base_wayto_overrides = nil
-      settings.personal_wayto_overrides = nil
-      settings.personal_map_targets = { 'my_spot' => 10 }
-
-      test_class.apply_wayto_overrides
-      expect(GameSettings['custom targets']).to eq({ 'my_spot' => 10 })
-    end
-
-    it 'merges personal_map_targets with existing custom targets' do
-      GameSettings['custom targets'] = { 'bank' => 20 }
-      settings.base_wayto_overrides = nil
-      settings.personal_wayto_overrides = nil
-      settings.personal_map_targets = { 'my_spot' => 10 }
-
-      test_class.apply_wayto_overrides
-      expect(GameSettings['custom targets']).to eq({ 'bank' => 20, 'my_spot' => 10 })
-    end
-
-    it 'skips personal_map_targets when not a hash' do
-      settings.base_wayto_overrides = nil
-      settings.personal_wayto_overrides = nil
-      settings.personal_map_targets = 'not a hash'
-
-      expect { test_class.apply_wayto_overrides }.not_to raise_error
-      expect(GameSettings['custom targets']).to be_nil
-    end
-
     it 'skips personal_map_targets when nil' do
       settings.base_wayto_overrides = nil
       settings.personal_wayto_overrides = nil
       settings.personal_map_targets = nil
 
       expect { test_class.apply_wayto_overrides }.not_to raise_error
+    end
+
+    # personal_map_targets go into go2's custom targets. These run the real
+    # Settings and GameSettings over a real SQLite settings store, because the
+    # defect was which settings row the write landed in: GameSettings keys rows
+    # by the running script's name, and the caller is autostart, not go2.
+    context 'with personal_map_targets, through the real settings store' do
+      let(:store_dir) { Dir.mktmpdir('apply-wayto-overrides-settings') }
+      # The table as lib/lich.rb creates it at startup, before Settings loads.
+      # DatabaseAdapter's own fallback table has no key, so its upsert would fail.
+      let(:store) do
+        db = Lich.open_sequel_sqlite(File.join(store_dir, 'lich.db3'))
+        db.run('CREATE TABLE IF NOT EXISTS script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));')
+        db.disconnect
+        Lich::Common::DatabaseAdapter.new(store_dir, :script_auto_settings)
+      end
+      let(:settings_module) { Lich::Common::Settings }
+
+      # What go2 sees when it reads GameSettings['custom targets'] itself.
+      def go2_custom_targets
+        Script.current = OpenStruct.new(name: 'go2')
+        Lich::Common::GameSettings['custom targets']&.to_h
+      end
+
+      def run_as(script_name)
+        Script.current = script_name && OpenStruct.new(name: script_name)
+        test_class.apply_wayto_overrides
+      end
+
+      before do
+        @saved_settings_state = %i[@db_adapter @path_navigator @settings_cache].to_h do |ivar|
+          [ivar, settings_module.instance_variable_get(ivar)]
+        end
+        settings_module.instance_variable_set(:@db_adapter, store)
+        settings_module.instance_variable_set(:@path_navigator, Lich::Common::PathNavigator.new(store))
+        settings_module.instance_variable_set(:@settings_cache, {})
+
+        XMLData.game = 'DR'
+        settings.base_wayto_overrides = nil
+        settings.personal_wayto_overrides = nil
+      end
+
+      after do
+        @saved_settings_state.each { |ivar, value| settings_module.instance_variable_set(ivar, value) }
+        store.instance_variable_get(:@db)&.disconnect
+        FileUtils.remove_entry(store_dir) if Dir.exist?(store_dir)
+      end
+
+      it "stores them in go2's row when autostart applies them" do
+        settings.personal_map_targets = { 'my_spot' => 10 }
+
+        run_as('autostart')
+
+        expect(go2_custom_targets).to eq({ 'my_spot' => 10 })
+      end
+
+      it "leaves autostart's own row without custom targets" do
+        settings.personal_map_targets = { 'my_spot' => 10 }
+
+        run_as('autostart')
+
+        expect(store.get_settings('autostart', 'DR')).not_to have_key('custom targets')
+      end
+
+      it 'writes them to the database under the current game, not only to the cache' do
+        settings.personal_map_targets = { 'my_spot' => 10 }
+
+        run_as('autostart')
+
+        expect(store.get_settings('go2', 'DR')['custom targets']).to eq({ 'my_spot' => 10 })
+        expect(store.get_settings('go2', 'GSIV')).to be_empty
+      end
+
+      it "keeps go2's own targets and lets a personal target replace one of the same name" do
+        Script.current = OpenStruct.new(name: 'go2')
+        Lich::Common::GameSettings['custom targets'] = { 'bank' => 20, 'my_spot' => 99 }
+        settings.personal_map_targets = { 'my_spot' => 10 }
+
+        run_as('autostart')
+
+        expect(go2_custom_targets).to eq({ 'bank' => 20, 'my_spot' => 10 })
+      end
+
+      it 'gives the same result when applied again, as on the next login' do
+        settings.personal_map_targets = { 'my_spot' => 10, 'Crossing' => [1, 2] }
+
+        2.times { run_as('autostart') }
+
+        expect(go2_custom_targets).to eq({ 'my_spot' => 10, 'Crossing' => [1, 2] })
+      end
+
+      it 'stores them in the same row when go2 itself applies them' do
+        settings.personal_map_targets = { 'my_spot' => 10 }
+
+        run_as('go2')
+
+        expect(go2_custom_targets).to eq({ 'my_spot' => 10 })
+      end
+
+      it "leaves go2's targets alone when personal_map_targets is not a hash" do
+        Script.current = OpenStruct.new(name: 'go2')
+        Lich::Common::GameSettings['custom targets'] = { 'bank' => 20 }
+        settings.personal_map_targets = 'not a hash'
+
+        run_as('autostart')
+
+        expect(go2_custom_targets).to eq({ 'bank' => 20 })
+        expect(store.get_settings('autostart', 'DR')).to be_empty
+      end
     end
   end
 end
