@@ -131,11 +131,11 @@ module Lich
                                         frontend: frontend,
                                         game_code: game_code)
                 rescue StandardError => e
-                  Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+                  Lich.log("warning: SessionLifecycle heartbeat tick failed (continuing): #{e.class}: #{e.message}") if Lich.respond_to?(:log)
                 end
               end
             rescue StandardError => e
-              Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+              Lich.log("warning: SessionLifecycle heartbeat thread stopped: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
             end
           rescue StandardError
             @running = false

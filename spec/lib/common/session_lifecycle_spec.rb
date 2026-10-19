@@ -249,6 +249,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
     let(:heartbeat_blocks) { [] }
 
     before(:each) do
+      allow(Lich).to receive(:log)
       allow(Thread).to receive(:new) do |&block|
         heartbeat_blocks << block
         heartbeat_thread
@@ -280,10 +281,25 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(events).to eq([[:sleep, 0], [:sleep, 2], :failed_write, [:sleep, 2], :successful_write, [:sleep, 2]])
       expect(Lich::Common::SessionsSettings).to have_received(:heartbeat_admitted).twice
       expect(Lich::Common::SessionsSettings).to have_received(:register_session_admitted).once
+      expect(Lich).to have_received(:log).with('warning: SessionLifecycle heartbeat tick failed (continuing): IOError: summary store temporarily unavailable').once
+      expect(Lich).not_to have_received(:log).with(a_string_matching(/heartbeat thread stopped/))
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(false)
       expect(described_class.stop).to be(true)
       expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid).once
       expect(heartbeat_thread).not_to have_received(:kill)
+    end
+
+    it 'logs a stopped heartbeat thread when its wait raises outside the tick rescue' do
+      allow(described_class).to receive(:sleep).with(0)
+      allow(described_class).to receive(:sleep).with(2).and_raise(IOError, 'heartbeat wait interrupted')
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(true)
+      heartbeat_blocks.last.call
+
+      expect(Lich).to have_received(:log).with('warning: SessionLifecycle heartbeat thread stopped: IOError: heartbeat wait interrupted').once
+      expect(Lich).not_to have_received(:log).with(a_string_matching(/heartbeat tick failed \(continuing\)/))
+      expect(Lich::Common::SessionsSettings).not_to have_received(:heartbeat_admitted)
+      expect(described_class.stop).to be(true)
     end
 
     it 'stops before retrying a failed write and allows a fresh start' do
