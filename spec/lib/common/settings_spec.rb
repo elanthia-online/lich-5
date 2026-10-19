@@ -726,6 +726,383 @@ RSpec.describe Lich::Common::Settings do
       expect(game_read('lost')).to be_nil
       expect(@mock_db).to have_received(:get_settings).at_least(:once)
     end
+
+    # Two threads of this process. Each test holds the first thread between
+    # its database call and its cache update for up to PAUSE seconds, or until
+    # the second thread is done, and checks that the cache ends on the newest
+    # row whichever way the threads are ordered.
+    describe "two threads of one process" do
+      pause = 0.5
+
+      def in_thread(&block)
+        Thread.new do
+          Thread.current.report_on_exception = false
+          block.call
+        end
+      end
+
+      it "leaves the cache on the newer row when a later write finishes first" do
+        first_stored = Queue.new
+        second_done = Queue.new
+        first = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          stored = original.call(*args, &block)
+          if Thread.current.equal?(first)
+            first_stored << true
+            second_done.pop(timeout: pause)
+          end
+          stored
+        end
+
+        first = in_thread { game_write('a', 1) }
+        second = in_thread do
+          first_stored.pop(timeout: 2)
+          game_write('b', 2)
+          second_done << true
+        end
+        [first, second].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('a' => 1, 'b' => 2)
+        expect(game_read('a')).to eq(1)
+        expect(game_read('b')).to eq(2)
+      end
+
+      it "does not let a read that missed the cache replace a row a write cached after it" do
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { game_read('a') }
+        writer = in_thread do
+          loaded.pop(timeout: 2)
+          game_write('a', 1)
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('a' => 1)
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "does not let a root proxy's cache fill replace a row a write cached after it" do
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { settings.root_proxy_for("GSIV") }
+        writer = in_thread do
+          loaded.pop(timeout: 2)
+          game_write('a', 1)
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "leaves the cache on the newer row when a top-level write finishes during a nested write" do
+        settings[:list] = []
+        nested_saved = Queue.new
+        top_done = Queue.new
+        nested = nil
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          saved = original.call(*args)
+          if Thread.current.equal?(nested)
+            nested_saved << true
+            top_done.pop(timeout: pause)
+          end
+          saved
+        end
+
+        nested = in_thread { settings[:list] << 'x' }
+        top = in_thread do
+          nested_saved.pop(timeout: 2)
+          settings[:k] = 1
+          top_done << true
+        end
+        [nested, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'], k: 1)
+        expect(settings[:k]).to eq(1)
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      it "does not let a nested write's row save erase a key a top-level write stored after its refresh" do
+        settings[:list] = []
+        list = settings[:list]
+        refreshed = Queue.new
+        top_done = Queue.new
+        nested = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(nested)
+            refreshed << true
+            top_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        nested = in_thread { list << 'x' }
+        top = in_thread do
+          refreshed.pop(timeout: 2)
+          settings[:k] = 1
+          top_done << true
+        end
+        [nested, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'], k: 1)
+        expect(settings[:k]).to eq(1)
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      # Settings[k] = v with a navigation path left over (for example by a
+      # destructive call on a detached view, see _reattach_live!) saves the
+      # whole row it navigated. Its read and its save must be one step.
+      it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
+        settings[:k0] = 0
+        navigated = Queue.new
+        top_done = Queue.new
+        path_writer = nil
+        allow(settings).to receive(:navigate_to_path).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          if Thread.current.equal?(path_writer)
+            navigated << true
+            top_done.pop(timeout: pause)
+          end
+          result
+        end
+
+        path_writer = in_thread do
+          settings.instance_variable_get(:@path_navigator).set_path([:nested])
+          settings[:k] = 1
+        end
+        top = in_thread do
+          navigated.pop(timeout: 2)
+          settings.set_script_settings(":", :t, 2)
+          top_done << true
+        end
+        [path_writer, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(k0: 0, nested: { k: 1 }, t: 2)
+        expect(settings.to_hash).to eq(k0: 0, nested: { k: 1 }, t: 2)
+        expect(settings.instance_variable_get(:@path_navigator).path).to be_empty
+      end
+
+      # save_to_database is public; a direct call stores the row it is given
+      # and caches it, and a top-level write must not land in between.
+      it "leaves the cache on the newer row when a top-level write finishes during a direct whole-row save" do
+        saved = Queue.new
+        top_done = Queue.new
+        saver = nil
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          if Thread.current.equal?(saver)
+            saved << true
+            top_done.pop(timeout: pause)
+          end
+          result
+        end
+
+        saver = in_thread { settings.save_to_database({ 'whole' => 1 }, ":") }
+        top = in_thread do
+          saved.pop(timeout: 2)
+          settings.set_script_settings(":", 't', 2)
+          top_done << true
+        end
+        [saver, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq('whole' => 1, 't' => 2)
+        expect(settings.to_hash).to eq('whole' => 1, 't' => 2)
+      end
+
+      it "does not let a read that missed the cache replace a row a nested write cached after it" do
+        settings[:list] = []
+        list = settings[:list]
+        settings.instance_variable_set(:@settings_cache, {})
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { settings.current_script_settings(":") }
+        writer = in_thread do
+          loaded.pop(timeout: 2)
+          list << 'x'
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'])
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      it "does not let a root proxy's cache fill replace a row a nested write cached after it" do
+        settings[:list] = []
+        list = settings[:list]
+        settings.instance_variable_set(:@settings_cache, {})
+        loaded = Queue.new
+        write_done = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            write_done.pop(timeout: pause)
+          end
+          row
+        end
+
+        reader = in_thread { settings.root_proxy_for(":", script_name: "test_script") }
+        writer = in_thread do
+          loaded.pop(timeout: 2)
+          list << 'x'
+          write_done << true
+        end
+        [reader, writer].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(list: ['x'])
+        expect(settings[:list].to_a).to eq(['x'])
+      end
+
+      it "does not make another script's first read wait for a write in progress" do
+        write_started = Queue.new
+        release = Queue.new
+        writer = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          if Thread.current.equal?(writer)
+            write_started << true
+            release.pop(timeout: 2)
+          end
+          original.call(*args, &block)
+        end
+
+        writer = in_thread { game_write('a', 1) }
+        write_started.pop(timeout: 2)
+        reader = in_thread { settings.get_scoped_setting("GSIV", 'b', script_name: 'other_script') }
+        finished = reader.join(1)
+        release << true
+        writer.join(5)
+
+        expect(finished).to eq(reader)
+        expect(game_read('a')).to eq(1)
+      end
+
+      it "makes a second write to the same row wait for the one in progress" do
+        write_started = Queue.new
+        release = Queue.new
+        first = nil
+        allow(@mock_db).to receive(:update_settings).and_wrap_original do |original, *args, &block|
+          if Thread.current.equal?(first)
+            write_started << true
+            release.pop(timeout: 2)
+          end
+          original.call(*args, &block)
+        end
+
+        first = in_thread { game_write('a', 1) }
+        write_started.pop(timeout: 2)
+        second = in_thread { game_write('b', 2) }
+        waited = second.join(0.3).nil?
+        release << true
+        [first, second].each { |t| t.join(5) }
+
+        expect(waited).to be(true)
+        expect(game_read('a')).to eq(1)
+        expect(game_read('b')).to eq(2)
+      end
+
+      it "releases the lock when the database call raises, so the next write still runs" do
+        allow(@mock_db).to receive(:update_settings).and_raise(TypeError, 'incompatible marshal file format')
+        expect { game_write('a', 1) }.to raise_error(TypeError)
+        allow(@mock_db).to receive(:update_settings).and_call_original
+
+        writer = in_thread { game_write('b', 2) }
+
+        expect(writer.join(2)).to eq(writer)
+        expect(@mock_db.get_settings("test_script", "GSIV")).to eq('b' => 2)
+      end
+
+      it "makes Settings.load return and cache a row committed before it was called, over an older fill in progress" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+        loaded = Queue.new
+        release = Queue.new
+        reader = nil
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          row = original.call(*args)
+          if Thread.current.equal?(reader)
+            loaded << true
+            release.pop(timeout: 2)
+          end
+          row
+        end
+
+        reader = in_thread { settings.to_hash }
+        loaded.pop(timeout: 2)
+        # Another session commits a newer row while the reader holds the older one.
+        @mock_db.save_settings("test_script", { 'v' => 1 }, ":")
+        refreshed = nil
+        refresher = in_thread { refreshed = settings.load }
+        Thread.pass until refresher.status == 'sleep' || !refresher.alive?
+        release << true
+        [reader, refresher].each { |t| t.join(5) }
+
+        expect(refreshed).to eq('v' => 1)
+        expect(settings.to_hash).to eq('v' => 1)
+      end
+
+      it "returns a copy from Settings.load, so changing it leaves the cache alone" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+
+        settings.load['v'] = 9
+
+        expect(settings.to_hash).to eq('v' => 0)
+      end
+
+      it "keeps the cached row when Settings.load fails to read the database, and releases the lock" do
+        @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
+        expect(settings.to_hash).to eq('v' => 0) # fills the cache
+        failures = 1
+        allow(@mock_db).to receive(:get_settings).and_wrap_original do |original, *args|
+          if failures.positive?
+            failures -= 1
+            raise 'database is locked'
+          end
+          original.call(*args)
+        end
+
+        expect { settings.load }.to raise_error(RuntimeError, 'database is locked')
+        failures = 1 # a read that went to the database would raise again
+
+        expect(settings.to_hash).to eq('v' => 0)
+        failures = 0
+        writer = in_thread { settings['w'] = 1 }
+        expect(writer.join(2)).to eq(writer)
+        expect(@mock_db.get_settings("test_script", ":")).to eq('v' => 0, 'w' => 1)
+      end
+    end
   end
 
   # Another Lich session is another process. These examples play it by writing
@@ -984,14 +1361,14 @@ RSpec.describe Lich::Common::Settings do
         expect(game_read('k')).to eq(2)
       end
 
-      it "does not cache the row when a Settings.load dropped the cached one meanwhile" do
+      it "does not cache the row when a Settings.load replaced the cached one meanwhile" do
         their_write({ k: 1 }, ":")
         expect(settings[:k]).to eq(1)
         their_write({ k: 2 }, ":")
         @reader, release = start_paused_reader { settings[:k] }
 
         their_write({ k: 3 }, ":")
-        settings.load # drops the cached row and reads k=3
+        settings.load # replaces the cached row with k=3
         release << true
 
         expect(@reader.value).to eq(2)
