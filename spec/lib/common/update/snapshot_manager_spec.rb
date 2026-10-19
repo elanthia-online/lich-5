@@ -943,6 +943,26 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
       end
 
+      # Renaming alone would leave such a snapshot refused for scripts/.
+      {
+        'stops before an installed core script' => ->(dir) { File.delete(File.join(dir, 'scripts', 'map.lic')) },
+        'has an empty core script'              => ->(dir) { File.write(File.join(dir, 'scripts', 'map.lic'), '') }
+      }.each do |layout, cut|
+        it "gives no rename hint and blames an interruption when its scripts/ #{layout}" do
+          dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+          cut.call(dir)
+          before = live_state
+          messages = capture_responses
+
+          manager.revert
+
+          expect(live_state).to eq(before)
+          expect(messages).to include("    #{dir}", '  - lib/version.rb is missing')
+          expect(messages.grep(/rename|copy them/)).to be_empty
+          expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+        end
+      end
+
       it 'still blames an interruption for the other directories when both kinds are listed' do
         legacy = make_legacy_snapshot('2026-10-16-00-00-00', '5.21.0')
         broken = make_snapshot('2026-10-17-00-00-00', '5.22.0', omit: %i[scripts])
@@ -952,7 +972,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
         expect(messages).to include('The 2 newest snapshots are incomplete, so nothing was changed:')
         expect(messages).to include("    #{legacy}", "    #{broken}")
-        expect(messages).to include('The ones without a rename hint were most likely left by snapshots that were interrupted.')
+        expect(messages).to include('The ones without a hint were most likely left by snapshots that were interrupted.')
       end
 
       it 'gives no rename hint when LIB_DIR is named lib' do
@@ -1109,7 +1129,14 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     context 'when an older Lich was interrupted while copying the core scripts' do
       let!(:complete) { make_snapshot('2026-10-01-00-00-00', '5.20.0') }
 
-      def refuses(bad, problem)
+      let(:hint) do
+        '  - if the scripts named above were not installed when it was taken, it is complete; ' \
+          "to use it, copy them from #{SCRIPT_DIR} into its scripts/ (a revert would leave them as they are anyway)"
+      end
+
+      # With +interrupted+ the refusal blames an interruption; without it
+      # the snapshot may be complete, so it gives the copy hint instead.
+      def refuses(bad, problem, interrupted:)
         before = live_state
         messages = capture_responses
 
@@ -1120,33 +1147,85 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(messages).to include('The newest snapshot is incomplete, so nothing was changed:')
         expect(messages).to include("    #{bad}")
         expect(messages).to include("  - #{problem}")
-        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+        if interrupted
+          expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+          expect(messages).not_to include(hint)
+        else
+          expect(messages.grep(/interrupted/)).to be_empty
+          expect(messages).to include(hint)
+        end
         expect(messages).to include('The next complete snapshot is Lich5 version 5.20.0:')
         expect(messages.join("\n")).not_to include('has been reverted')
+        messages
       end
 
       it 'refuses one whose scripts/ is empty although core scripts are installed' do
         bad = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[scripts])
         FileUtils.mkdir_p(File.join(bad, 'scripts'))
 
-        refuses(bad, 'scripts/ has none of the installed core scripts (go2.lic map.lic), so copying them stopped early')
+        refuses(bad, 'scripts/ has none of the installed core scripts (go2.lic map.lic): ' \
+                     'either copying them stopped early, or they were not installed when it was taken',
+                interrupted: false)
       end
 
-      it 'refuses one that stops before an installed core script, naming the one that may be cut short' do
+      # Nothing on disk tells a copy that stopped before map.lic and
+      # version.lic from a snapshot taken before they were installed.
+      it 'refuses one that stops before an installed core script, naming both causes and the copy hint' do
         write(File.join(SCRIPT_DIR, 'version.lic'), "# version 5.22.0\n")
         write(File.join(complete, 'scripts', 'version.lic'), "# version 5.20.0\n")
         bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
         File.delete(File.join(bad, 'scripts', 'map.lic'))
 
         refuses(bad, 'scripts/ ends at go2.lic and has none of the installed core scripts after it ' \
-                     '(map.lic version.lic), so copying them stopped early and go2.lic may be cut short')
+                     '(map.lic version.lic): either copying them stopped early and go2.lic may be cut short, ' \
+                     'or they were not installed when it was taken',
+                interrupted: false)
+      end
+
+      it 'restores that snapshot once the user copies the named scripts in, as the hint says' do
+        write(File.join(SCRIPT_DIR, 'version.lic'), "# version 5.22.0\n")
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.delete(File.join(bad, 'scripts', 'map.lic'))
+        manager.revert
+        %w[map.lic version.lic].each { |file| FileUtils.cp(File.join(SCRIPT_DIR, file), File.join(bad, 'scripts', file)) }
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.21.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("# map 5.22.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'version.lic'))).to eq("# version 5.22.0\n")
       end
 
       it 'refuses one with an empty core script' do
         bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
         File.write(File.join(bad, 'scripts', 'map.lic'), '')
 
-        refuses(bad, 'scripts/map.lic is empty')
+        refuses(bad, 'scripts/map.lic is empty', interrupted: true)
+      end
+
+      it 'blames an interruption and gives no copy hint when the last core script it has is empty' do
+        write(File.join(SCRIPT_DIR, 'version.lic'), "# version 5.22.0\n")
+        write(File.join(complete, 'scripts', 'version.lic'), "# version 5.20.0\n")
+        bad = make_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.write(File.join(bad, 'scripts', 'map.lic'), '')
+
+        messages = refuses(bad, 'scripts/map.lic is empty', interrupted: true)
+
+        expect(messages.grep(/\A  - scripts\/ ends at map\.lic .*\(version\.lic\)/).size).to eq(1)
+      end
+
+      it 'counts only the snapshots without a hint as interrupted when both kinds are listed' do
+        tail = make_snapshot('2026-10-16-00-00-00', '5.21.0', omit: %i[scripts])
+        FileUtils.mkdir_p(File.join(tail, 'scripts'))
+        broken = make_snapshot('2026-10-17-00-00-00', '5.22.0', omit: %i[lich])
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('The 2 newest snapshots are incomplete, so nothing was changed:')
+        expect(messages).to include("    #{tail}", "    #{broken}", hint)
+        expect(messages).to include('The ones without a hint were most likely left by snapshots that were interrupted.')
       end
 
       it 'restores the complete snapshot once the user removes the cut-off one' do
@@ -1208,6 +1287,8 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         problems = messages.grep(/^  - /)
         expect(problems).to include('  - lib/version.rb is missing')
         expect(problems.grep(/copying them stopped early/).size).to eq(1)
+        expect(problems).not_to include(hint)
+        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
       end
     end
 
