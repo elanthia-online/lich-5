@@ -1108,15 +1108,24 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password123', 'stormfront')
     end
 
-    it 'saves YAML with 0600 permissions in add_account' do
+    it 'delegates account persistence to AccountManager' do
+      auth_data = [
+        { char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }
+      ]
+      characters = [auth_data.first.merge(frontend: 'stormfront')]
+      manager = Lich::Common::GUI::AccountManager
+
       allow(Lich::Common::Authentication).to receive(:authenticate)
-        .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+        .and_return(auth_data)
+      allow(manager).to receive(:convert_auth_data_to_characters)
+        .with(auth_data, 'stormfront').and_return(characters)
+
+      expect(manager).to receive(:add_or_update_account)
+        .with(DATA_DIR, 'DOUG', 'password', characters)
         .and_return(true)
 
-      Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'stormfront')
-
-      # AccountManager should handle permissions, but verify
+      expect(described_class.add_account('doug', 'password', 'stormfront'))
+        .to eq(0)
     end
   end
 
