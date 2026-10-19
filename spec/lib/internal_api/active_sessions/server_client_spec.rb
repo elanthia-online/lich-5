@@ -64,7 +64,7 @@ RSpec.describe 'ActiveSessions server/client' do
     expect(client_thread).to receive(:join).with(0.25)
     expect(client_thread).to receive(:kill)
 
-    server.send(:track_client_thread, client_thread)
+    server.send(:track_client_thread, client_thread, server.instance_variable_get(:@run_id))
     server.stop
   end
 

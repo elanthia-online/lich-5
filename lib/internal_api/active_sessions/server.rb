@@ -265,12 +265,10 @@ module Lich
 
         # Records a running handler atomically with the shutdown snapshot.
         #
-        # @param thread [Thread, nil]
+        # @param thread [Thread]
         # @param run_id [Object] run that accepted the handler's socket
         # @return [Boolean] whether the handler may process its request
-        def track_client_thread(thread, run_id = @run_id)
-          return false unless thread
-
+        def track_client_thread(thread, run_id)
           @mutex.synchronize do
             return false if @stopping || !run_id.equal?(@run_id)
 
