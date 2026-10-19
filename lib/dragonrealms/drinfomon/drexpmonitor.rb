@@ -101,11 +101,14 @@ module Lich
       end
 
       # Body of the reporter thread. Loops while +generation+ is current and
-      # gives up ownership on the way out, whatever ends it.
+      # reporting is on, and gives up ownership on the way out, whatever ends
+      # it. Checking @@running too keeps active? truthful if the flag is
+      # cleared without a generation bump, as the ensure of a reporter started
+      # by an older copy of this file does after an in-session update.
       # @param generation [Integer] the generation start assigned this thread
       # @return [void]
       def self.run_reporter(generation)
-        while @@generation == generation
+        while @@generation == generation && @@running
           begin
             report_skill_gains
           rescue StandardError => e

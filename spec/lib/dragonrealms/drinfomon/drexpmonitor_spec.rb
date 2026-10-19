@@ -495,6 +495,28 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
       expect(reported?('already active')).to be(false)
     end
 
+    # A reporter started by an older copy of this file, before an in-session
+    # update and `;hmr`, ends with an unconditional `@@running = false`. That
+    # clears the flag without bumping the generation, and active? must still
+    # agree with what is actually running.
+    it 'stops reporting when reporting is marked off without a generation bump' do
+      old = start_and_capture_thread
+
+      described_class.class_variable_set(:@@running, false)
+
+      expect(old.join(interval * 20)).not_to be_nil
+      expect(described_class.active?).to be(false)
+      drskill_class.gained_skills << { skill: 'Evasion', change: 1 }
+      sleep interval * 4
+      expect(reported?('Evasion(+1)')).to be(false)
+
+      # And `;display expgains on` brings back exactly one reporter
+      described_class.start
+      expect(described_class.active?).to be(true)
+      expect(wait_for { reported?('DRExpMonitor: Evasion(+1)') }).to be(true)
+      expect(reporter_threads.size).to eq(1)
+    end
+
     context 'with the reporter in a long pause' do
       # Long enough that a reporter left to run is still asleep when the join
       # below gives up, so only a kill ends it in time.
