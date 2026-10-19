@@ -391,8 +391,10 @@ module Lich
       #   bput matched nothing: normally because no prep message arrived before
       #   bput gave up (it still reads any lines already waiting when its
       #   timeout passes, and restarts its timer on the replies it retries,
-      #   such as a wait or a stun), or at once on the first line read that no
-      #   built-in message matches when the first custom pattern that matches
+      #   such as a wait or a stun), or at once on the first line bput does
+      #   not handle itself (a line it retries on, such as a wait, a stun or a
+      #   type-ahead reply, or the "can't move" line it skips) that no
+      #   built-in message matches, when the first custom pattern that matches
       #   that line matches it empty at its leftmost match (bput returns the
       #   leftmost match of the first pattern that matches): +'You chant|'+ on
       #   any line not starting with "You chant", +'|You chant'+ on every line,
@@ -541,8 +543,10 @@ module Lich
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
       # @return [Boolean] true if the spell cast without a failure flag being set,
       #   including when no cast message arrived before DRC.bput gave up, and
-      #   when bput returned +''+ at once on the first line read that no
-      #   built-in message matches because the first custom pattern that
+      #   when bput returned +''+ at once on the first line it does not
+      #   handle itself (a line it retries on, such as a wait, a stun or a
+      #   type-ahead reply, or the "can't move" line it skips) that no
+      #   built-in message matches, because the first custom pattern that
       #   matches that line matches it empty at its leftmost match (as
       #   +'You gesture|'+ does on any line not starting with "You gesture",
       #   and +'|You gesture'+ on every line); false if the +spell-fail+
@@ -562,9 +566,13 @@ module Lich
       #   deliberate. Mapping a timeout to false would make retry loops such as
       #   +until cast_spell?(...)+ prepare and cast again after a cast that went
       #   off but was not recognised (a stall, or a message that is not listed;
-      #   the reason custom_cast_message exists). {#cast_spell}, {#cast_spell?}
-      #   and {#crafting_cast_spell} pass this result through ({#cast_spell}
-      #   returns nil for a ritual spell).
+      #   the reason custom_cast_message exists). A missed late failure line is
+      #   not always harmless: if it arrives while a later cast? is running,
+      #   that call takes it as its own failure, returns false and releases
+      #   mana (and any symbiosis) even if its own cast went off.
+      #   {#cast_spell}, {#cast_spell?} and {#crafting_cast_spell} pass this
+      #   result through ({#cast_spell} returns nil, and so {#cast_spell?}
+      #   returns false, for a ritual spell or after a successful segue).
       def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
