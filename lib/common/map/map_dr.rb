@@ -314,12 +314,14 @@ module Lich
       end
 
       # Every room whose title and exits match the live room exactly (title
-      # alone under fog) and one of whose stored descriptions contains, word for
-      # word, at least one sentence of the live description (see
-      # {description_sentences}). This tolerates a description that has drifted
-      # from the map: a typo fixed in one sentence, a sentence rewritten, a
-      # day/night variant the map lacks. A live description with no usable
-      # sentence, an empty one included, matches nothing.
+      # alone under fog) and one of whose stored descriptions contains, as a run
+      # of text, at least one sentence of the live description (see
+      # {description_sentences}). The run need not start or end at a word edge
+      # of the stored text ("over the road" is found in "over the roadway").
+      # This tolerates a description that has drifted from the map: a typo
+      # fixed in one sentence, a sentence rewritten, a day/night variant the
+      # map lacks. A live description with no usable sentence, an empty one
+      # included, matches nothing.
       #
       # @param rooms [Array<Lich::Common::Map>] rooms already matching the live
       #   title and exits (see {rooms_matching_live_title_and_exits})
