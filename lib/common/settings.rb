@@ -567,15 +567,20 @@ module Lich
         if @path_navigator.path.empty?
           set_script_settings(scope_to_use, name, value)
         else
-          target, root_settings = navigate_to_path(true, scope_to_use)
-          if target && (target.is_a?(Hash) || target.is_a?(Array))
-            actual_value = value.is_a?(SettingsProxy) ? unwrap_proxies(value) : value
-            target[name] = actual_value
-            save_to_database(root_settings, scope_to_use)
-            reset_path_and_return(value)
-          else
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: Cannot assign to non-container or nil target at path #{@path_navigator.path.inspect}" })
-            reset_path_and_return(nil)
+          # This saves the whole row it navigated, so the read and the save run
+          # under one hold of the entry's lock (see with_cache_lock). Otherwise
+          # a write another thread stores in between is erased by the save.
+          with_cache_lock("#{Script.current.name || ""}::#{scope_to_use}") do
+            target, root_settings = navigate_to_path(true, scope_to_use)
+            if target && (target.is_a?(Hash) || target.is_a?(Array))
+              actual_value = value.is_a?(SettingsProxy) ? unwrap_proxies(value) : value
+              target[name] = actual_value
+              save_to_database(root_settings, scope_to_use)
+              reset_path_and_return(value)
+            else
+              _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: Cannot assign to non-container or nil target at path #{@path_navigator.path.inspect}" })
+              reset_path_and_return(nil)
+            end
           end
         end
       end

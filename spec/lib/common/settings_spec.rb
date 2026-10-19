@@ -851,6 +851,66 @@ RSpec.describe Lich::Common::Settings do
         expect(settings[:list].to_a).to eq(['x'])
       end
 
+      # Settings[k] = v with a navigation path left over (for example by a
+      # destructive call on a detached view, see _reattach_live!) saves the
+      # whole row it navigated. Its read and its save must be one step.
+      it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
+        settings[:k0] = 0
+        navigated = Queue.new
+        top_done = Queue.new
+        path_writer = nil
+        allow(settings).to receive(:navigate_to_path).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          if Thread.current.equal?(path_writer)
+            navigated << true
+            top_done.pop(timeout: pause)
+          end
+          result
+        end
+
+        path_writer = in_thread do
+          settings.instance_variable_get(:@path_navigator).set_path([:nested])
+          settings[:k] = 1
+        end
+        top = in_thread do
+          navigated.pop(timeout: 2)
+          settings.set_script_settings(":", :t, 2)
+          top_done << true
+        end
+        [path_writer, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq(k0: 0, nested: { k: 1 }, t: 2)
+        expect(settings.to_hash).to eq(k0: 0, nested: { k: 1 }, t: 2)
+        expect(settings.instance_variable_get(:@path_navigator).path).to be_empty
+      end
+
+      # save_to_database is public; a direct call stores the row it is given
+      # and caches it, and a top-level write must not land in between.
+      it "leaves the cache on the newer row when a top-level write finishes during a direct whole-row save" do
+        saved = Queue.new
+        top_done = Queue.new
+        saver = nil
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          if Thread.current.equal?(saver)
+            saved << true
+            top_done.pop(timeout: pause)
+          end
+          result
+        end
+
+        saver = in_thread { settings.save_to_database({ 'whole' => 1 }, ":") }
+        top = in_thread do
+          saved.pop(timeout: 2)
+          settings.set_script_settings(":", 't', 2)
+          top_done << true
+        end
+        [saver, top].each { |t| t.join(5) }
+
+        expect(@mock_db.get_settings("test_script", ":")).to eq('whole' => 1, 't' => 2)
+        expect(settings.to_hash).to eq('whole' => 1, 't' => 2)
+      end
+
       it "does not let a read that missed the cache replace a row a nested write cached after it" do
         settings[:list] = []
         list = settings[:list]
