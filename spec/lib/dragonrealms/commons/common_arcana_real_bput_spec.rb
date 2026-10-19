@@ -6,12 +6,17 @@ require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 
 # DRCA.prepare? and DRCA.cast? run through the real DRC.bput here, against a
 # small model of the game stream: each send queues that send's replies and
-# get? reads them back in order. common_arcana_spec.rb stubs DRC.bput, so this
-# file pins what only the real bput decides: a custom message pattern that can
-# match an empty string (a trailing '|') makes bput return '' on the first line
-# read that no built-in message matches. bput tries the built-in messages
-# before the custom ones, and handles its own retry replies (a wait, a stun...)
-# before matching anything.
+# get? reads them back in order. A queued line has arrived, so it also sets any
+# Flag whose registered pattern it matches, as DRParser.check_events does in
+# the game thread whether or not the script ever reads the line.
+# common_arcana_spec.rb stubs DRC.bput, so this file pins what only the real
+# bput decides: bput returns the leftmost match of the first message pattern
+# that matches a line, so a custom message pattern that can match an empty
+# string makes bput return '' on any line where the first custom pattern that
+# matches it matches empty ('You chant|' on a line not starting with
+# 'You chant', '|You chant' on every line). bput tries the built-in messages
+# before the custom ones, and handles its own retry replies (a wait, a
+# stun...) before matching anything.
 RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
   let(:drc) { Lich::DragonRealms::DRC }
   let(:drca) { Lich::DragonRealms::DRCA }
@@ -39,9 +44,21 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
   def game(replies)
     allow(drc).to receive(:put) do |message|
       sent << message
-      buffer.concat(Array(replies[message]))
+      arrive(*Array(replies[message]))
     end
     allow(drc).to receive(:get?) { buffer.shift }
+  end
+
+  # A line arriving from the game: queue it for get? and set the Flags it
+  # matches, at arrival rather than when the script reads it.
+  def arrive(*lines)
+    lines.each do |line|
+      Flags.matchers.each do |name, patterns|
+        match = patterns.lazy.map { |pattern| line.match(pattern) }.find(&:itself)
+        Flags[name] = match if match
+      end
+      buffer << line
+    end
   end
 
   describe '.prepare?' do
@@ -74,11 +91,29 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       expect(buffer).to eq(['You begin to chant.'])
     end
 
+    it "returns '' even on a line that starts with the custom text when the pattern's empty branch comes first" do
+      game('prepare fireball 10' => ['You chant softly.', 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, '|You chant')).to eq('')
+      expect(buffer).to eq(['You begin to chant.'])
+    end
+
+    it "returns '' when an empty-matching per-spell message comes before a custom_spell_prep the line starts with" do
+      game('prepare fireball 10' => ['You murmur the words.', 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'xyz|', custom_spell_prep: 'You murmur')).to eq('')
+      expect(buffer).to eq(['You begin to chant.'])
+    end
+
+    it "returns the whole line, not '', for a custom pattern whose leftmost match on it is not empty" do
+      game('prepare fireball 10' => ['A goblin arrives.', 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, '.*')).to eq('A goblin arrives.')
+      expect(buffer).to eq(['You begin to chant.'])
+    end
+
     it "resends on a wait reply rather than returning '' for it" do
       replies = [['...wait 1 seconds.'], ['You begin to chant.']]
       allow(drc).to receive(:put) do |message|
         sent << message
-        buffer.concat(replies.shift || [])
+        arrive(*(replies.shift || []))
       end
       allow(drc).to receive(:get?) { buffer.shift }
       expect(drca.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You chant|')).to eq('You begin to')
@@ -92,25 +127,25 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
         'cast'         => ['A goblin arrives.', 'Something is interfering with the spell', 'You gesture.'],
         'release mana' => ["You aren't harnessing any mana"]
       )
-      allow(drc).to receive(:get?) do
-        line = buffer.shift
-        Flags['spell-fail'] = [line] if line == 'Something is interfering with the spell'
-        line
-      end
       expect(drca.cast?('cast', false, [], [], 'You gesture')).to be false
       expect(sent).to eq(['cast', 'release mana'])
     end
 
-    it "returns true on the first unrelated line when the custom cast message can match '', missing a later failure line" do
-      game('cast' => ['A goblin arrives.', 'Something is interfering with the spell', 'You gesture.'])
-      allow(drc).to receive(:get?) do
-        line = buffer.shift
-        Flags['spell-fail'] = [line] if line == 'Something is interfering with the spell'
-        line
-      end
+    it "still returns false with a custom cast message that can match '' when the failure line has arrived behind the unrelated line" do
+      game(
+        'cast'         => ['A goblin arrives.', 'Something is interfering with the spell', 'You gesture.'],
+        'release mana' => ["You aren't harnessing any mana"]
+      )
+      expect(drca.cast?('cast', false, [], [], 'You gesture|')).to be false
+      expect(sent).to eq(['cast', 'release mana'])
+    end
+
+    it "returns true on the first unrelated line when the custom cast message can match '', missing a failure line that arrives after the flag read" do
+      game('cast' => ['A goblin arrives.'])
       expect(drca.cast?('cast', false, [], [], 'You gesture|')).to be true
-      expect(buffer).to eq(['Something is interfering with the spell', 'You gesture.'])
       expect(sent).to eq(['cast'])
+      arrive('Something is interfering with the spell')
+      expect(Flags['spell-fail']).to be_truthy
     end
   end
 end
