@@ -92,10 +92,47 @@ RSpec.describe GlobalDefsSpecSource do
       end
     end
 
-    it 'raises when the def has no column-0 end' do
-      with_source("def open_ended\n", "  1\n", "  end\n") do |path|
+    it 'takes the def as the parser sees it, whatever its shape' do
+      with_source("def bare() :bare end\n",
+                  "def first; :first; end; def same_line; :same_line; end\n",
+                  "def commented # looks like a one-liner; end\n", "  :commented\n", "end\n",
+                  "def indented_end\n", "  :indented_end\n", "  end\n",
+                  "def after\n", "  :after\n", "end\n") do |path|
+        %w[bare first commented indented_end].each do |name|
+          target = Class.new
+          described_class.define(target, name, path: path)
+
+          expect(target.instance_methods(false)).to eq([name.to_sym])
+          expect(target.new.public_send(name)).to eq(name.to_sym)
+        end
+      end
+    end
+
+    it 'reports the line a def starts on, not the first line of a shared one' do
+      with_source("x = 1; def shared_line\n", "  :shared_line\n", "end\n") do |path|
+        code, line = described_class.method_source('shared_line', path: path)
+
+        expect(line).to eq(1)
+        expect(code).to start_with('def shared_line')
+      end
+    end
+
+    it 'raises when the file does not parse, rather than guessing where the def ends' do
+      with_source("def open_ended\n", "  1\n", "def after\n", "  2\n", "end\n") do |path|
         expect { described_class.define(Class.new, 'open_ended', path: path) }
-          .to raise_error(RuntimeError, /def open_ended terminator missing/)
+          .to raise_error(RuntimeError, /global_defs\.rb does not parse: line \d+: /)
+      end
+    end
+
+    it 'loads every top-level def of lib/global_defs.rb as exactly one method' do
+      names = File.readlines(described_class::PATH).filter_map { |l| l[/\Adef ([^\s(;=]+)/, 1] }
+      expect(names.size).to be > 200
+
+      names.each do |name|
+        target = Class.new
+        described_class.define(target, name)
+
+        expect(target.private_instance_methods(false) + target.instance_methods(false)).to eq([name.to_sym]), name
       end
     end
 
@@ -162,10 +199,33 @@ RSpec.describe GlobalDefsSpecSource do
       end
     end
 
-    it 'raises when the block has no column-0 end' do
-      with_source("# probe marker\n", "module GlobalDefsSpecSourceProbe\n", "  end\n") do |path|
+    it 'evaluates a one-line block alone' do
+      with_source("# probe marker\n", "module GlobalDefsSpecSourceProbe; VALUE = 2; end\n",
+                  "raise 'read past the block'\n", "def later\n", "end\n") do |path|
+        described_class.eval_toplevel_block('probe marker', path: path)
+
+        expect(GlobalDefsSpecSourceProbe::VALUE).to eq(2)
+      end
+    end
+
+    it 'raises when nothing follows the marker' do
+      with_source("module GlobalDefsSpecSourceProbe\n", "end\n", "# probe marker\n") do |path|
         expect { described_class.eval_toplevel_block('probe marker', path: path) }
-          .to raise_error(RuntimeError, /block "probe marker" terminator missing/)
+          .to raise_error(RuntimeError, /no top-level statement follows block marker "probe marker"/)
+      end
+    end
+
+    it 'raises when the marker sits inside a statement rather than before one' do
+      with_source("module GlobalDefsSpecSourceProbe\n", "  # probe marker\n", "  VALUE = 3\n", "end\n") do |path|
+        expect { described_class.eval_toplevel_block('probe marker', path: path) }
+          .to raise_error(RuntimeError, /block marker "probe marker" is inside the statement on lines 1-4/)
+      end
+    end
+
+    it 'raises when the file does not parse' do
+      with_source("# probe marker\n", "module GlobalDefsSpecSourceProbe\n", "  VALUE = 4\n") do |path|
+        expect { described_class.eval_toplevel_block('probe marker', path: path) }
+          .to raise_error(RuntimeError, /global_defs\.rb does not parse: line \d+: /)
       end
     end
   end
