@@ -388,9 +388,10 @@ module Lich
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
       # @return [String, false] the matched prep message; or +''+ (truthy) when
-      #   bput matched nothing, normally because no prep message arrived within
-      #   its timeout (a custom message pattern that can match an empty string,
-      #   such as +'You chant|'+, also yields +''+ at once); or false on one of
+      #   bput matched nothing: normally because no prep message arrived before
+      #   bput gave up (it keeps reading past its timeout while lines keep
+      #   arriving), or at once when a custom message pattern can match an
+      #   empty string, such as +'You chant|'+; or false on one of
       #   the failure replies prepare? itself checks for (its +when+ arms other
       #   than the retried "slips away" one, which returns the retry's result),
       #   a nil +abbrev+, or exhausted retries. Any other matched reply is
@@ -532,8 +533,12 @@ module Lich
       # @param custom_cast_message [String, nil] a per-spell cast message to also accept (see {#with_custom_messages})
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
       # @return [Boolean] true if the spell cast without a failure flag being set,
-      #   including when no cast message arrived within the DRC.bput timeout;
-      #   false if the +spell-fail+ flag was set or a retry limit ran out.
+      #   including when no cast message arrived before DRC.bput gave up, and
+      #   when a custom cast message that can match an empty string, such as
+      #   +'You gesture|'+, made bput return +''+ at once on the first line that
+      #   arrived; false if the +spell-fail+ flag was set or a retry limit ran
+      #   out. In both +''+ cases the result rests on +spell-fail+ at the moment
+      #   it is read (see the note).
       #
       # @note A timeout counts as success. When nothing in cast_messages arrives
       #   before bput gives up (a server stall, or a successful cast whose
