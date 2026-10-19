@@ -20,7 +20,6 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
       close: nil
     )
   end
-  let(:finished_thread) { instance_double(Thread, alive?: false, join: nil) }
 
   # Builds a Server with a finite, injected sequence of accept results.
   #
@@ -36,9 +35,9 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
       entry.is_a?(Class) ? raise(entry, "simulated #{entry}") : entry
     end
 
+    # Keep accept-error examples synchronous; lifecycle examples inject real threads.
     default_client_factory = ->(socket, &block) do
       block&.call(socket)
-      finished_thread
     end
 
     described_class.new(
@@ -122,7 +121,6 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
             raise 'thread pool exhausted' if socket.equal?(leaked_socket)
 
             block&.call(socket)
-            finished_thread
           end
         )
         start_and_finish(server)
@@ -186,7 +184,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
 
         server.instance_variable_set(:@server, listener)
         server.instance_variable_set(:@stopping, true)
-        server.send(:accept_loop)
+        server.send(:accept_loop, server.instance_variable_get(:@run_id))
 
         expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop stopped/)
         expect(Lich).not_to have_received(:log).with(/closed unexpectedly/)
@@ -358,8 +356,9 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
       socket = instance_double(IO)
       server = build_server(accept_results: [IOError])
       allow(server).to receive(:handle_client).and_raise(IOError, 'request failed')
+      run_id = server.instance_variable_get(:@run_id)
       handler = Thread.new do
-        server.send(:handle_tracked_client, socket)
+        server.send(:handle_tracked_client, socket, run_id)
       rescue IOError => error
         error.message
       end

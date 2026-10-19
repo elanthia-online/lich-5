@@ -122,7 +122,7 @@ module Lich
         #
         # @param run_id [Object] identity of the run spawning this accept loop
         # @return [void]
-        def accept_loop(run_id = @run_id)
+        def accept_loop(run_id)
           loop do
             server = @server
             unless server
@@ -163,7 +163,7 @@ module Lich
         # @param socket [IO]
         # @param run_id [Object] identity captured before spawning the handler
         # @return [void]
-        def handle_tracked_client(socket, run_id = @run_id)
+        def handle_tracked_client(socket, run_id)
           if track_client_thread(Thread.current, run_id)
             handle_client(socket)
           else
@@ -270,6 +270,7 @@ module Lich
         # @return [Boolean] whether the handler may process its request
         def track_client_thread(thread, run_id)
           @mutex.synchronize do
+            # Reject earlier-run handlers even after a later start clears @stopping.
             return false if @stopping || !run_id.equal?(@run_id)
 
             @client_threads << thread
