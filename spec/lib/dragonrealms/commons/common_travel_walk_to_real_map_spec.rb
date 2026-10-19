@@ -6,15 +6,14 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
 
 DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 
-# walk_to from an unresolved room, against the DR map's own resolver
-# (Lich::Common::Map.current with a script running) instead of a fake one.
+# walk_to from an unresolved room and after go2, against the DR map's own
+# resolver (Lich::Common::Map.current with a script running) instead of a
+# fake one.
 #
-# The map resolves a room by its first title/description/exits match, unless
-# that room's stored UIDs exclude the live UID. walk_to's own match
-# (match_unknown_room) only accepts a room when it is the single
-# title/description/exits match and is not excluded by UID, so any room it
-# accepts is one Room.current has already resolved. From a room Room.current
-# cannot resolve, walk_to therefore fails at once without moving.
+# The map resolves a room by its title, description and exits, and a stored
+# UID that excludes the live one vetoes the room. walk_to treats the
+# character as being in a room only when Room.current resolves it, so from a
+# room the map cannot resolve it fails at once without moving.
 RSpec.describe DRCT, '.walk_to with the map resolver' do
   let(:real_map) { Lich::Common::Map }
 
@@ -104,6 +103,10 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     Lich::Messaging.messages.select { |m| m[:type] == 'bold' }.map { |m| m[:message] }
   end
 
+  def unresolved_message(target)
+    "DRCT: Unable to resolve the current room, cannot walk to room #{target}."
+  end
+
   describe 'starting in a room the map does not resolve' do
     it 'fails without moving when the start room is unique by text but its stored UID is stale' do
       corridor
@@ -113,7 +116,16 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
 
       expect(DRCT.walk_to(3)).to be(false)
       expect(sent).to be_empty
-      expect(bold_messages).to include('DRCT: Failed to find a matching room from unknown location.')
+      expect(bold_messages).to eq([unresolved_message(3)])
+    end
+
+    it 'fails without moving when the target is a direct neighbour' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+
+      expect(DRCT.walk_to(2)).to be(false)
+      expect(sent).to be_empty
     end
 
     it 'fails without moving when the live exits differ from the map' do
@@ -125,6 +137,59 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
 
       expect(DRCT.walk_to(3)).to be(false)
       expect(sent).to be_empty
+    end
+
+    it 'does not take a title and description match with the target as arrival' do
+      corridor
+      live[:uids][3] = 3777
+      place(3)
+      expect(Room.current).to be_nil
+
+      expect(DRCT.walk_to(3)).to be(false)
+      expect(sent).to be_empty
+      expect(bold_messages).to eq([unresolved_message(3)])
+    end
+
+    it 'does not take an unmapped look-alike of the target, with different exits, as arrival' do
+      corridor
+      live[:uids][3] = 0
+      live[:exits][3] = 'Obvious exits: west, up.'
+      place(3)
+      expect(Room.current).to be_nil
+
+      expect(DRCT.walk_to(3)).to be(false)
+      expect(sent).to be_empty
+    end
+
+    it 'sends nothing when the target is not in the map' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+
+      expect(DRCT.walk_to(42)).to be(false)
+      expect(sent).to be_empty
+    end
+
+    it 'does not call a StringProc exit toward the target' do
+      corridor
+      exit_proc = StringProc.new('nil')
+      allow(exit_proc).to receive(:call)
+      real_map[1].wayto['2'] = exit_proc
+      live[:uids][1] = 1777
+      place(1)
+
+      expect(DRCT.walk_to(2)).to be(false)
+      expect(exit_proc).not_to have_received(:call)
+      expect(sent).to be_empty
+    end
+
+    it 'does not start go2' do
+      corridor
+      live[:uids][1] = 1777
+      place(1)
+
+      DRCT.walk_to(3)
+      expect(DRCT).not_to have_received(:start_script)
     end
   end
 
@@ -147,22 +212,20 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
 
         expect(DRCT.walk_to(2)).to be(false)
         expect(sent).to be_empty
-        expect(bold_messages).to include('DRCT: Failed to find a matching room from unknown location.')
+        expect(bold_messages).to eq([unresolved_message(2)])
       end
 
-      it "matches no room when the only title, description and exits match stores the fogged exits (#{fog})" do
-        build_room(1, {}, title: '[Fog Path]', description: 'A misty trail.', paths: fog)
+      it "fails without moving from a room unique by text whose stored UID is stale (#{fog})" do
+        build_room(1, { '2' => 'north' }, uid: [7001], title: '[Fog Path]', description: 'A misty trail.')
+        build_room(2, { '1' => 'south' }, uid: [7002])
+        live[:uids][1] = 1001
+        live[:exits][1] = fog
         place(1)
+        expect(Room.current).to be_nil
 
-        expect(DRCT.send(:match_unknown_room)).to be_nil
+        expect(DRCT.walk_to(2)).to be(false)
+        expect(sent).to be_empty
       end
-    end
-
-    it 'still matches a room whose stored exits merely mention fog' do
-      build_room(1, {}, title: '[Fog Path]', description: 'A misty trail.', paths: 'Obvious paths: fog.')
-      place(1)
-
-      expect(DRCT.send(:match_unknown_room)&.id).to eq(1)
     end
   end
 
@@ -177,55 +240,44 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
       expect(DRCT.walk_to(3, false)).to be(true)
     end
 
+    it 'returns true when the map resolves the target' do
+      corridor
+      place(1)
+
+      expect(DRCT.walk_to(3)).to be(true)
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns false when the target's stored UID is stale (restart_on_fail false)" do
+      corridor
+      live[:uids][3] = 3777
+      place(1)
+
+      expect(DRCT.walk_to(3, false)).to be(false)
+      expect(DRCT).to have_received(:start_script).once
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns false when the target's stored UID is stale, retrying once into the unresolved-room failure (restart_on_fail true)" do
+      corridor
+      live[:uids][3] = 3777
+      place(1)
+
+      expect(DRCT.walk_to(3, true)).to be(false)
+      expect(DRCT).to have_received(:start_script).once
+      expect(bold_messages).to eq(['DRCT: Failed to navigate to room 3, attempting again (1/3).', unresolved_message(3)])
+    end
+
     [true, false].each do |restart|
-      it "returns false when the target's stored UID is stale (restart_on_fail #{restart})" do
+      it "returns false when go2 ends in an unmapped look-alike of the target (restart_on_fail #{restart})" do
         corridor
-        live[:uids][3] = 3777
+        live[:uids][3] = 0
+        live[:exits][3] = 'Obvious exits: west, up.'
         place(1)
 
         expect(DRCT.walk_to(3, restart)).to be(false)
+        expect(sent).to be_empty
       end
     end
-  end
-
-  # The property the walk_to docs rest on: with a script running, a room
-  # match_unknown_room accepts is always one Room.current resolves. Small random
-  # worlds with look-alike text, rooms stored with fogged exits, missing,
-  # correct and stale stored UIDs, a live UID or none, and a random cached
-  # previous room.
-  it 'never accepts a room by its own match that Room.current leaves unresolved' do
-    titles = ['[A]', '[B]']
-    descriptions = ['Desc one.', 'Desc two.']
-    exits = ['Obvious paths: north.', 'Obvious paths: south.', fog_lines.first]
-    rng = Random.new(20_261_018)
-    matched = 0
-
-    2_000.times do
-      real_map.class_variable_set(:@@list, [])
-      real_map.class_variable_set(:@@uids, {})
-      live[:uids].clear
-      rooms = rng.rand(1..5)
-      rooms.times do |id|
-        live[:uids][id] = rng.rand(4).zero? ? 0 : 1000 + id
-        uid = case rng.rand(3)
-              when 0 then []
-              when 1 then [live[:uids][id].zero? ? 5000 + id : live[:uids][id]]
-              else [9000 + rng.rand(3)]
-              end
-        build_room(id, {}, uid: uid, title: titles.sample(random: rng),
-                           description: descriptions.sample(random: rng), paths: exits.sample(random: rng))
-      end
-      real_map.class_variable_set(:@@current_room_id, rng.rand(3).zero? ? nil : rng.rand(rooms))
-      real_map.class_variable_set(:@@current_room_count, -1)
-      place(rng.rand(rooms))
-
-      match = DRCT.send(:match_unknown_room)
-      next if match.nil?
-
-      matched += 1
-      expect(Room.current).not_to be_nil, "room #{match.id} matched but Room.current is nil"
-    end
-    # The sweep must actually exercise accepted matches.
-    expect(matched).to be > 100
   end
 end

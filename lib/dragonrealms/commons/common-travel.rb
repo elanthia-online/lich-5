@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative '../../common/map/map_base'
-
 module Lich
   module DragonRealms
     module DRCT
@@ -176,20 +174,18 @@ module Lich
 
       # Navigate to +target_room+ using the go2 script.
       #
-      # From a room Room.current cannot resolve, the walk goes to
-      # {walk_from_unknown_room} instead of go2. In practice that fails at once
-      # without moving: with a script running, any room {match_unknown_room}
-      # accepts is one the map's own resolver (Map.current) already resolves.
-      # The hand walker only moves when the live room changes between the
-      # Room.current read and the match.
+      # The character is in a room only when Room.current resolves it: the
+      # map's resolver goes by a live UID that maps to one room, or else by the
+      # live title, description and exits, and a stored UID that excludes the
+      # live one vetoes the room. From a room Room.current cannot resolve, the
+      # walk fails at once without moving, since neither the start room nor
+      # arrival can be told apart from a look-alike room.
       #
       # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
       # @param restart_on_fail [Boolean] retry navigation on failure
       # @param retry_depth [Integer] internal counter -- callers should not set this
-      # @param move_budget [Integer, nil] internal -- callers should not set
-      #   this; the moves {walk_from_unknown_room} has left when it hands back
       # @return [Boolean] true if the character is now in the target room
-      def walk_to(target_room, restart_on_fail = true, retry_depth: 0, move_budget: nil)
+      def walk_to(target_room, restart_on_fail = true, retry_depth: 0)
         target_room = tag_to_id(target_room) if target_room.is_a?(String) && target_room.count("a-zA-Z") > 0
 
         return false if target_room.nil?
@@ -201,7 +197,10 @@ module Lich
 
         DRC.fix_standing
 
-        return walk_from_unknown_room(room_num, restart_on_fail, retry_depth, move_budget) if Room.current&.id.nil?
+        if Room.current&.id.nil?
+          Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, cannot walk to room #{room_num}.")
+          return false
+        end
 
         script_handle = start_script('go2', [room_num.to_s], force: true)
 
@@ -249,7 +248,7 @@ module Lich
           Flags.delete('travel-engaged')
         end
 
-        arrived = arrived_at?(room_num)
+        arrived = Room.current&.id == room_num
         if !arrived && restart_on_fail
           if retry_depth >= MAX_WALK_TO_RETRIES
             Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num} after #{MAX_WALK_TO_RETRIES} retries, giving up.")
@@ -260,190 +259,6 @@ module Lich
         end
         arrived
       end
-
-      # Whether the character stands in +room_num+: by Room.current when the
-      # map resolves the room, otherwise by a unique title, description and
-      # exits match (see {match_unknown_room}). That fallback only differs from
-      # Room.current when the live room changed between the two reads.
-      #
-      # @param room_num [Integer] room id
-      # @return [Boolean]
-      def arrived_at?(room_num)
-        current_id = Room.current&.id
-        return current_id == room_num unless current_id.nil?
-
-        match_unknown_room&.id == room_num
-      end
-
-      # Find the map room the character is standing in when Room.current could
-      # not resolve it. A room is only identified when its title, description
-      # AND exits all match the live room, and exactly one map room does. A
-      # title and description match alone is not enough. When fog hides the
-      # live exits (MapBase::FOGGY_EXITS_PATTERN, the line the map's resolvers
-      # treat as fog) nothing matches, even a room whose stored exits are that
-      # same fog line: rooms first mapped in fog store it, so it cannot tell
-      # look-alike rooms apart.
-      #
-      # A stored UID vetoes the match through the map's own resolver rule
-      # (Map.resolve_matched_room, as Map.current applies it with a script
-      # running): when the game shows a live UID and the room carries UIDs that
-      # do not include it, that room is not accepted. A vetoed
-      # room still counts as a candidate, so a vetoed look-alike next to a room
-      # with no stored UID makes the match ambiguous and nothing is returned.
-      # The two cases look identical from here: the character may stand in the
-      # room without a UID (the vetoed one is a different room), or in the
-      # vetoed room itself, whose stored UID list is stale or incomplete. Taking
-      # the room without a UID would report arrival in the second case with
-      # nothing sent, so the match fails instead.
-      #
-      # With a script running, Map.current takes the first title, description
-      # and exits match unless its UIDs veto it (in fog, the first title and
-      # description match), so a room this method accepts is normally one
-      # Room.current resolves as well. It returns a room
-      # Room.current did not resolve only when the live room changed between
-      # the two reads.
-      #
-      # @return [Lich::Common::Map, nil] the single matching room; nil when no
-      #   room or more than one room matches, when the single match is vetoed
-      #   by its UID, when fog hides the live exits, or when the live room text
-      #   is missing
-      def match_unknown_room
-        title = XMLData.room_title.to_s
-        description = XMLData.room_description.to_s.strip
-        exits = XMLData.room_exits_string.to_s.strip
-        return nil if title.empty? || description.empty? || exits.empty?
-        return nil if exits.match?(Lich::Common::MapBase::FOGGY_EXITS_PATTERN)
-
-        rooms = Map.list.select do |room|
-          room &&
-            room.title.include?(title) &&
-            room.description.include?(description) &&
-            room.paths.include?(exits)
-        end
-        return nil unless rooms.length == 1
-        # The resolver's own UID rule, so the two cannot drift apart.
-        return nil if Map.resolve_matched_room(rooms.first, honor_peer_tags: false).nil?
-
-        rooms.first
-      end
-
-      # Walk toward +room_num+ from a room Room.current cannot resolve, one map
-      # edge at a time, always the first hop of the map path (as go2 would
-      # take it). As soon as Room.current resolves again the
-      # walk hands back to walk_to (and go2). A hand-back before any move
-      # (the room resolved between walk_to's read and this one) spends one of
-      # the MAX_WALK_TO_RETRIES, so the two cannot call each other forever.
-      #
-      # Arrival is checked after every move. A move that lands in the expected
-      # next room is progress and does not spend a retry; a move that does not
-      # (blocked, or the character ended up somewhere unexpected) spends one of
-      # the MAX_WALK_TO_RETRIES, and is not retried at all when
-      # +restart_on_fail+ is false. A move the game reports as a wrong exit
-      # (move returned false) ends the walk. Moves are capped at the first
-      # path's length plus MAX_WALK_TO_RETRIES so a map that loops cannot walk
-      # forever. A hand-back passes the moves left on to walk_to, so when the
-      # room reads as unresolved again and the walk comes straight back here,
-      # the cap carries on instead of starting over. go2 does not use it, so a
-      # go2 failure that walk_to retries from an unresolved room starts a
-      # fresh cap; that retry is bounded by MAX_WALK_TO_RETRIES.
-      #
-      # The "manually attempting to navigate" line is logged only once the
-      # start room is identified. Under the map's own resolver the walk
-      # normally ends on the first iteration with only "Failed to find a
-      # matching room" (see {match_unknown_room}).
-      #
-      # @param room_num [Integer] target room id
-      # @param restart_on_fail [Boolean] retry a move that made no progress
-      # @param retry_depth [Integer] retries already spent by walk_to
-      # @param move_budget [Integer, nil] moves left from an earlier call that
-      #   handed back; nil to size the cap from the first path
-      # @return [Boolean] true if the character is now in the target room
-      def walk_from_unknown_room(room_num, restart_on_fail, retry_depth, move_budget)
-        retries = retry_depth
-        # Moves made by this call. The free hand-back below depends on it, so
-        # it starts at zero even when a cap is carried over.
-        moves = 0
-        max_moves = move_budget
-
-        loop do
-          current_id = Room.current&.id
-          return true if current_id == room_num
-          # The map knows where we are again; go2 is the better walker.
-          unless current_id.nil?
-            # walk_to sent us here because Room.current was nil, and nothing
-            # has moved since. A hand-back with no move spends a retry, so a
-            # room that resolves on one read and not the next cannot bounce
-            # between walk_to and this walker forever. The budget may already
-            # be spent by go2 failures in walk_to, so the give-up message
-            # does not claim the room alternated more than once.
-            if moves.zero?
-              if retries >= MAX_WALK_TO_RETRIES
-                Lich::Messaging.msg('bold', "DRCT: Room #{current_id} resolved again without a move; no retries left (#{MAX_WALK_TO_RETRIES}), giving up.")
-                return false
-              end
-              retries += 1
-              # Logged so walk_to's "attempting again (n/N)" count does not
-              # appear to skip the retry spent here.
-              Lich::Messaging.msg('plain', "DRCT: Room #{current_id} resolved again without a move, handing back (retry #{retries}/#{MAX_WALK_TO_RETRIES}).")
-            end
-            return walk_to(room_num, restart_on_fail, retry_depth: retries, move_budget: max_moves && (max_moves - moves))
-          end
-
-          room = match_unknown_room
-          if room.nil?
-            Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
-            return false
-          end
-          Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}") if moves.zero?
-          return true if room.id == room_num
-
-          # Map[] indexes an Array, so Map[-1] is the last room, not nil.
-          target = room_num.negative? ? nil : Map[room_num]
-          # Map.findpath(room, nil) searches for room 0, so a target the map
-          # does not know would walk toward whatever room 0 is.
-          path = target.nil? ? nil : Map.findpath(room, target)
-          # Follow the map path like go2 does. A direct edge the pathfinder
-          # skips (no usable timeto) is one go2 would not take either.
-          next_id = path&.first
-          way = next_id.nil? ? nil : room.wayto[next_id.to_s]
-          if way.nil?
-            Lich::Messaging.msg('bold', "DRCT: No map path from room #{room.id} to room #{room_num}, giving up.")
-            return false
-          end
-
-          max_moves ||= path.length + MAX_WALK_TO_RETRIES
-          if moves >= max_moves
-            Lich::Messaging.msg('bold', "DRCT: Ran out of moves walking from an unknown room to room #{room_num}, giving up.")
-            return false
-          end
-          moves += 1
-
-          if way.is_a?(StringProc)
-            way.call
-          elsif move(way) == false
-            Lich::Messaging.msg('bold', "DRCT: The exit '#{way}' from room #{room.id} did not work, giving up.")
-            return false
-          end
-
-          landed_id = Room.current&.id || match_unknown_room&.id
-          next if landed_id == next_id || landed_id == room_num
-
-          unless restart_on_fail
-            Lich::Messaging.msg('bold', "DRCT: Failed to navigate from unknown room to room #{room_num}, giving up.")
-            return false
-          end
-          if retries >= MAX_WALK_TO_RETRIES
-            Lich::Messaging.msg('bold', "DRCT: Failed to navigate from unknown room after #{MAX_WALK_TO_RETRIES} retries, giving up.")
-            return false
-          end
-          retries += 1
-          Lich::Messaging.msg('plain', "DRCT: Move from room #{room.id} did not reach room #{next_id}, attempting again (retry #{retries}/#{MAX_WALK_TO_RETRIES}).")
-        end
-      end
-
-      # Internal helpers of walk_to; module_function would otherwise make
-      # them public DRCT methods.
-      private_class_method :arrived_at?, :match_unknown_room, :walk_from_unknown_room
 
       def tag_to_id(target)
         start_room = Room.current.id
