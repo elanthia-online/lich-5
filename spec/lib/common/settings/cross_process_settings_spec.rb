@@ -50,6 +50,11 @@ RSpec.describe 'Settings writes across Lich processes' do
       result
     end
 
+    # Whether an answer is waiting to be read.
+    def answered?
+      !IO.select([@io], nil, nil, 0).nil?
+    end
+
     def call(line)
       send_command(line)
       answer
@@ -239,6 +244,9 @@ RSpec.describe 'Settings writes across Lich processes' do
   describe 'write lock' do
     def with_write_lock
       db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      # The worker's busy wait briefly takes a shared lock on each retry; give
+      # this connection's COMMIT a busy timeout so it does not fail on one.
+      db.busy_timeout = 5000
       db.execute('BEGIN IMMEDIATE')
       yield db
     ensure
@@ -250,19 +258,33 @@ RSpec.describe 'Settings writes across Lich processes' do
                  [script, scope, SQLite3::Blob.new(Marshal.dump(hash))])
     end
 
-    it 'keeps a change another process committed while this write waited for the lock' do
-      alpha = start('DR', 'Alpha', 'go2')
-      alpha.call('get G anything')
+    [
+      ['a row that does not exist yet (insert)', 'get G anything', {}],
+      ['a stored row (conditional update)', 'set G before "1"', { 'before' => '1' }],
+    ].each do |label, setup, committed_base|
+      it "keeps a change another process committed while this write waited for the lock, on #{label}" do
+        store_log = File.join(data_dir, 'store.log')
+        alpha = start('DR', 'Alpha', 'go2', 'LICH_SPEC_STORE_LOG' => store_log)
+        alpha.call(setup)
+        File.delete(store_log) if File.exist?(store_log)
 
-      with_write_lock do |db|
-        alpha.send_command('set G alpha_key "1"') # blocks on the lock
-        sleep 0.3
-        put_row(db, 'go2', 'DR', { 'committed_while_waiting' => 'yes' })
-        db.execute('COMMIT')
+        with_write_lock do |db|
+          alpha.send_command('set G alpha_key "1"')
+          # Commit only once the write has read the row and is trying to store
+          # it, which it cannot do while this lock is held.
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 3
+          sleep 0.01 until File.exist?(store_log) || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+          expect(File.exist?(store_log)).to be(true), 'the write never reached its store'
+          expect(alpha.answered?).to be(false)
+          put_row(db, 'go2', 'DR', committed_base.merge('committed_while_waiting' => 'yes'))
+          db.execute('COMMIT')
+        end
+
+        expect(alpha.answer).to eq('ok')
+        expect(stored_row('go2', 'DR')).to eq(committed_base.merge('committed_while_waiting' => 'yes', 'alpha_key' => '1'))
+        # The first store found the row changed, so it read the row again.
+        expect(File.readlines(store_log).size).to eq(2)
       end
-
-      expect(alpha.answer).to eq('ok')
-      expect(stored_row('go2', 'DR')).to eq('committed_while_waiting' => 'yes', 'alpha_key' => '1')
     end
 
     it 'reports a write that cannot get the lock and does not pretend it was saved' do
