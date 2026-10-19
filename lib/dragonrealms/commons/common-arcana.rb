@@ -138,6 +138,10 @@ module Lich
 
       PERC_MANA_START_PATTERN = /streams of .* mana/
       PERC_MANA_END_PATTERN = /Roundtime/
+      # One line of a Moon Mage's PERC MANA reply, one per Lunar spellbook, e.g.
+      # "You reach out with your senses and see glaring (19/21) streams of cold,
+      # white Lunar mana available for the Illusion book."
+      PERC_MANA_BOOK_PATTERN = %r{\A\s*You reach out with your .+? and (?:see|hear) (?<adj>\w+) (?:\((?<level>\d+)/\d+\) )?streams of .* mana available for the (?<book>.+?) book}
       SYMBIOSIS_PATTERN = /combine the weaves of the (?<type>\w+) symbiosis/
       DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
       DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
@@ -774,6 +778,19 @@ module Lich
         manalevels.index(adj).to_i + 1
       end
 
+      # Perceives the local mana level.
+      #
+      # A Moon Mage sends PERC MANA and gets one line per Lunar spellbook; the
+      # result is a Hash of book name (downcased, spaces as underscores, e.g.
+      # 'fabrication', 'illusion', 'noematics') to its level on the 21-step mana
+      # scale (1 = faint, 21 = blinding). Only the books named in the reply are
+      # keys. A cut-off reply prints a bold message and returns the books that
+      # arrived. Returns nil when no book line was captured.
+      #
+      # Other magic users send PERC and get a single Integer level.
+      #
+      # @return [Hash{String => Integer}, Integer, nil] nil for Barbarians,
+      #   Thieves, Traders and Commoners, and when a Moon Mage reply names no book
       def perc_mana
         return nil if DRStats.barbarian? || DRStats.thief? || DRStats.trader? || DRStats.commoner?
 
@@ -791,17 +808,14 @@ module Lich
           end
           Lich::Messaging.msg("bold", "DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.") unless complete
 
-          mana_msgs = lines.map(&:strip).select { |line| line.include?('streams') }[0..3]
-          return nil if mana_msgs.length < 4
+          books = lines.each_with_object({}) do |line, levels|
+            match = PERC_MANA_BOOK_PATTERN.match(line)
+            next unless match
 
-          mana_msgs.collect! { |mana_msg| mana_msg.split(' streams')[0] }
-
-          {
-            'enlightened_geometry'   => parse_mana_message(mana_msgs[0]),
-            'moonlight_manipulation' => parse_mana_message(mana_msgs[1]),
-            'perception'             => parse_mana_message(mana_msgs[2]),
-            'psychic_projection'     => parse_mana_message(mana_msgs[3])
-          }
+            key = match[:book].downcase.tr(' ', '_')
+            levels[key] = match[:level] ? match[:level].to_i : parse_mana_message(match[:adj])
+          end
+          books.empty? ? nil : books
         else
           mana_msg = DRC.bput('perc', '^You reach out with your .* and (see|hear) \w+')
           parse_mana_message(mana_msg)

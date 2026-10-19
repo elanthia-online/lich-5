@@ -2,6 +2,10 @@
 
 require_relative '../../../spec_helper'
 
+# drvariables publishes the $MANA_MAP global that parse_mana_message reads; it
+# is a pure constants file, so requiring it here is safe.
+require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drvariables.rb')
+
 # Ensure XMLData has prepared_spell accessor for tests
 unless XMLData.respond_to?(:prepared_spell=)
   XMLData.singleton_class.attr_accessor(:prepared_spell)
@@ -1064,35 +1068,80 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(DRCA.perc_mana).to be_nil
     end
 
-    it 'returns mana levels for moon mages via issue_command' do
-      DRStats.guild = 'Moon Mage'
-      mock_lines = [
-        'The developing streams of Enlightened Geometry mana flowing through',
-        'The developing streams of Moonlight Manipulation mana flowing through',
-        'The developing streams of Perception mana flowing through',
-        'The developing streams of Psychic Projection mana flowing through',
-        'Roundtime: 3 sec.'
+    # Real PERC MANA reply lines for a Moon Mage: one line per Lunar spellbook,
+    # then Roundtime. The (N/M) figure is the level on the 21-step mana scale.
+    let(:lunar_book_lines) do
+      [
+        'You reach out with your senses and see blinding (21/21) streams of cold, white Lunar mana available for the Fabrication book.',
+        'You reach out with your senses and see glaring (19/21) streams of cold, white Lunar mana available for the Illusion book.',
+        'You reach out with your senses and see blazing (20/21) streams of cold, white Lunar mana available for the Noematics book.'
       ]
-      allow(Lich::Util).to receive(:issue_command).and_return(mock_lines)
-      allow(DRCA).to receive(:parse_mana_message).and_return(3)
-      result = DRCA.perc_mana
-      expect(result).to be_a(Hash)
-      expect(result.keys).to contain_exactly('enlightened_geometry', 'moonlight_manipulation', 'perception', 'psychic_projection')
+    end
+
+    context 'when a moon mage gets the three-book PERC MANA reply' do
+      before { DRStats.guild = 'Moon Mage' }
+
+      it 'returns the level of each Lunar book, keyed by book name' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines + ['Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'does not depend on the order of the book lines' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines.reverse + ['Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'tolerates leading and trailing whitespace on the captured lines' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines.map { |l| "  #{l}  " } + ['Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'reads the level from the adjective when the (N/M) figure is absent' do
+        lines = lunar_book_lines.map { |l| l.sub(%r{ \(\d+/\d+\)}, '') }
+        allow(Lich::Util).to receive(:issue_command).and_return(lines + ['Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'reads the lowest level' do
+        line = 'You reach out with your senses and see faint (1/21) streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('illusion' => 1)
+      end
+
+      it 'turns a multi-word book name into a snake_case key' do
+        line = 'You reach out with your senses and see faint (1/21) streams of cold, white Lunar mana available for the Psychic Projection book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('psychic_projection' => 1)
+      end
+
+      it 'ignores captured lines that are not book lines' do
+        noise = 'A void-black umbral moth glides in, shadows seeming to warp as it passes.'
+        allow(Lich::Util).to receive(:issue_command).and_return([lunar_book_lines[0], noise, *lunar_book_lines[1..], 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'ignores a player quoting a book line' do
+        speech = 'Bob says, "You reach out with your senses and see faint (1/21) streams of cold, white Lunar mana available for the Illusion book."'
+        allow(Lich::Util).to receive(:issue_command).and_return([*lunar_book_lines, speech, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
+      end
+
+      it 'returns nil when no captured line names a book' do
+        line = 'You reach out with your senses and see blazing (20/21) streams of golden Holy mana radiating through the area.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to be_nil
+      end
+
+      it 'does not call parse_mana_message when the (N/M) figure is present' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines + ['Roundtime: 3 sec.'])
+        expect(DRCA).not_to receive(:parse_mana_message)
+        DRCA.perc_mana
+      end
     end
 
     context 'when the moon mage reply ends on Roundtime or is cut off' do
-      let(:stream_lines) do
-        [
-          'The developing streams of Enlightened Geometry mana flowing through',
-          'The developing streams of Moonlight Manipulation mana flowing through',
-          'The developing streams of Perception mana flowing through',
-          'The developing streams of Psychic Projection mana flowing through'
-        ]
-      end
-
       before do
         DRStats.guild = 'Moon Mage'
-        allow(DRCA).to receive(:parse_mana_message).and_return(3)
       end
 
       it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
@@ -1105,21 +1154,21 @@ RSpec.describe Lich::DragonRealms::DRCA do
       end
 
       it 'prints no message on a complete reply' do
-        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines + ['Roundtime: 3 sec.'])
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines + ['Roundtime: 3 sec.'])
         expect(Lich::Messaging).not_to receive(:msg)
         DRCA.perc_mana
       end
 
-      it 'prints a cut-off message and still parses when all four streams arrived' do
-        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines)
+      it 'prints a cut-off message and still parses when every book line arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines)
         expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
-        expect(DRCA.perc_mana).to be_a(Hash)
+        expect(DRCA.perc_mana).to eq('fabrication' => 21, 'illusion' => 19, 'noematics' => 20)
       end
 
-      it 'prints a cut-off message and returns nil when fewer than four streams arrived' do
-        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines.first(2))
+      it 'prints a cut-off message and returns only the books that arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(lunar_book_lines.first(1))
         expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
-        expect(DRCA.perc_mana).to be_nil
+        expect(DRCA.perc_mana).to eq('fabrication' => 21)
       end
     end
 
