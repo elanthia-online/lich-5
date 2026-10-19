@@ -43,10 +43,13 @@ If the path already begins with the `from:` room (compared as numbers, so
 `"012"` matches room 12), that room is not added a second time, so a full path
 is also safe to pass with `from:`. Otherwise the `from:` room must have an exit
 to the first room of the path, or `estimate_time` raises `ArgumentError`. This
-catches a start room read again after the character moved. An exit with no
-`timeto` still counts 0.2 seconds. A stale start room that happens to be the
-first room of the path can't be told apart from a full path, so it is taken as
-one; reading `Room.current` once avoids both cases.
+catches a start room with no exit to the path start, for example one read after
+the character left the path. An exit with no `timeto` still counts 0.2 seconds.
+The check can't catch every stale start room. A room further along a two-way
+path has an exit back to the path start, so it is accepted and the estimate
+comes out wrong. A stale start room that happens to be the first room of the
+path can't be told apart from a full path, so it is taken as one. Read
+`Room.current` once, before the character moves, to avoid these cases.
 
 Leave `from:` out and `estimate_time` behaves as it always has.
 

@@ -259,6 +259,9 @@ module Lich
         # When +array+ already begins with the +from:+ room it is not counted
         # twice, so a full path is safe to pass with +from:+ as well. Otherwise
         # the +from:+ room must have an exit (a +wayto+) to +array.first+.
+        # That catches a start room off the path, but not one further along a
+        # two-way path, which has an exit back; another reason to read
+        # Room.current once.
         #
         # The argument is never modified.
         #
@@ -339,15 +342,21 @@ module Lich
           # Compared as numbers, so a zero-padded '012' still names room 12.
           # A stale origin that happens to equal the path start cannot be told
           # apart from a full path, so it is taken as one.
-          return array.dup if first.match?(/\A[0-9]+\z/) && first.to_i == origin
+          numeric_first = first.match?(/\A[0-9]+\z/)
+          return array.dup if numeric_first && first.to_i == origin
 
-          # A start room with no exit to the path start (a stale Room.current
-          # read after a move) would count the first leg as the 0.2 default.
+          # A start room with no exit to the path start (for example one read
+          # after leaving the path) would count the first leg as the 0.2
+          # default. A room further along a two-way path has an exit back to
+          # the path start, so it passes; the array alone cannot reveal that.
           # Check wayto, not timeto: an exit with no timeto is a real leg that
           # counts 0.2. The key is the id as written, the same key the walk
           # looks the leg up by.
           unless rooms[origin].wayto.key?(first)
-            raise ArgumentError, "Map.estimate_time was given a from: room (#{origin}) with no exit to the path start (#{first})"
+            # Name only the class of a non-id start: a room's to_s is its
+            # whole multi-line description.
+            shown = numeric_first ? first : array.first.class
+            raise ArgumentError, "Map.estimate_time was given a from: room (#{origin}) with no exit to the path start (#{shown})"
           end
 
           [origin] + array

@@ -505,6 +505,25 @@ RSpec.shared_examples 'a game Map class' do |game|
         .to raise_error(ArgumentError, /no exit to the path start \(3\)/)
     end
 
+    it 'names only the class of a non-id path start in the no-exit message' do
+      # A room's to_s is its whole multi-line description, so a room object as
+      # the path start must not be pasted into the message.
+      expect { map_class.estimate_time([map_class[2], 3], from: 4) }
+        .to raise_error(ArgumentError, "Map.estimate_time was given a from: room (4) with no exit to the path start (#{map_class})")
+      expect { map_class.estimate_time(["3\nmore", 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (String)')
+    end
+
+    it 'accepts a from: room further along a two-way path, which the array cannot reveal' do
+      # The exit check catches a start room with no exit to the path start. A
+      # room read again after a step along a two-way path has an exit back to
+      # the path start, so it is accepted; read Room.current once instead.
+      map_class[3].wayto['2'] = 'south'
+      map_class[3].timeto['2'] = 7
+
+      expect(map_class.estimate_time([2, 3, 4], from: 3)).to be_within(0.001).of(8.2)
+    end
+
     it 'checks the exit, not the timeto, so an exit with no timeto still counts 0.2' do
       map_class[4].wayto['1'] = 'climb down'
 
