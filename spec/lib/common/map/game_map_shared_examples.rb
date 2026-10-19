@@ -1245,11 +1245,21 @@ RSpec.shared_examples 'a game Map class' do |game|
         expect(stray_files).to be_empty
       end
 
-      it 'warns that the map was not saved' do
+      it 'raises an error saying the map was not saved' do
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError, /\Acould not back up .*; map not saved: /)
+
+        expect(map_class).not_to have_received(:respond).with(/saved\z/)
+      end
+
+      # Whatever runs the save (the ;e runner, a script's error handler)
+      # reports the raised error; reporting it here as well showed it twice.
+      it 'leaves reporting the error to the caller' do
+        allow(Lich).to receive(:log)
+
         expect { map_class.save_json(target) }.to raise_error(SystemCallError)
 
-        expect(map_class).to have_received(:respond).with(/could not back up .*map not saved/)
-        expect(map_class).not_to have_received(:respond).with(/saved\z/)
+        expect(map_class).not_to have_received(:respond).with(/error/i)
+        expect(Lich).not_to have_received(:log)
       end
     end
 
@@ -1276,12 +1286,12 @@ RSpec.shared_examples 'a game Map class' do |game|
       it 'raises the original error even when the temp file cannot be removed' do
         allow(File).to receive(:delete).and_raise(Errno::EACCES)
 
-        expect { map_class.save_json(target) }.to raise_error(Errno::ENOSPC)
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::ENOSPC, /\Acould not back up .*; map not saved: No space left/)
 
         expect(File.binread(backup)).to eq('older backup')
         expect(File.binread(target)).to eq(existing_bytes)
         expect(stray_files).to contain_exactly(match(/\Asaved\.json\.bak\.\d+\.\d+\.tmp\z/))
-        expect(map_class).to have_received(:respond).with(/could not back up .*map not saved: No space left/)
       end
     end
 
@@ -1292,13 +1302,27 @@ RSpec.shared_examples 'a game Map class' do |game|
         allow(File).to receive(:rename).with(anything, target).and_raise(Errno::EACCES)
       end
 
-      it 'raises, warns, and leaves the existing file and no temp file behind' do
-        expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+      it 'raises, saying so, and leaves the existing file and no temp file behind' do
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::EACCES, /\Acould not write .*; existing file left unchanged: Permission denied/)
 
         expect(File.binread(target)).to eq(existing_bytes)
         expect(File.binread(backup)).to eq(existing_bytes)
         expect(stray_files).to be_empty
-        expect(map_class).to have_received(:respond).with(/could not write .*existing file left unchanged/)
+      end
+
+      it 'raises a copy of the original error, keeping its errno, backtrace and cause' do
+        error = nil
+        begin
+          map_class.save_json(target)
+        rescue Errno::EACCES => e
+          error = e
+        end
+
+        expect(error.errno).to eq(Errno::EACCES::Errno)
+        expect(error.backtrace).not_to be_empty
+        expect(error.cause).to be_a(Errno::EACCES)
+        expect(error.cause.message).to eq(Errno::EACCES.new.message)
       end
     end
 
@@ -1318,10 +1342,8 @@ RSpec.shared_examples 'a game Map class' do |game|
     it 'says no file was created when writing a new file fails' do
       missing = File.join(map_dir, 'nope', 'new.json')
 
-      expect { map_class.save_json(missing) }.to raise_error(Errno::ENOENT)
-
-      expect(map_class).to have_received(:respond).with(/could not write #{Regexp.escape(missing)}; no file created: /)
-      expect(map_class).not_to have_received(:respond).with(/existing file left unchanged/)
+      expect { map_class.save_json(missing) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(missing)}; no file created: /)
     end
 
     it 'creates the file a dangling symlink points to, keeping the link', unless: Gem.win_platform? do
@@ -1380,12 +1402,12 @@ RSpec.shared_examples 'a game Map class' do |game|
     it 'raises on a dangling symlink into a missing directory, keeping the link', unless: Gem.win_platform? do
       File.symlink('nope/new.json', target)
 
-      expect { map_class.save_json(target) }.to raise_error(Errno::ENOENT)
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(target)}; no file created: /)
 
       expect(File.symlink?(target)).to be true
       expect(File.readlink(target)).to eq('nope/new.json')
       expect(Dir.children(map_dir).sort).to eq(%w[saved.json])
-      expect(map_class).to have_received(:respond).with(/could not write #{Regexp.escape(target)}; no file created: /)
     end
 
     # Root can write any file, so the refusal (like the in-place write before
@@ -1396,13 +1418,20 @@ RSpec.shared_examples 'a game Map class' do |game|
       File.binwrite(backup, 'older backup')
       File.chmod(0o444, target)
 
-      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+      error = nil
+      begin
+        map_class.save_json(target)
+      rescue Errno::EACCES => e
+        error = e
+      end
 
+      expect(error.message).to match(/\Acould not write .*; existing file left unchanged: Permission denied/)
+      # Raised, not just built, so whoever reports it has a backtrace to log.
+      expect(error.backtrace).not_to be_empty
       expect(File.binread(target)).to eq(existing_bytes)
       expect(File.stat(target).mode & 0o777).to eq(0o444)
       expect(File.binread(backup)).to eq('older backup')
       expect(stray_files).to be_empty
-      expect(map_class).to have_received(:respond).with(/could not write .*existing file left unchanged: Permission denied/)
       expect(map_class).not_to have_received(:respond).with(/Backing it up/)
     end
 
@@ -1424,13 +1453,13 @@ RSpec.shared_examples 'a game Map class' do |game|
       File.binwrite(backup, 'protected backup')
       File.chmod(0o444, backup)
 
-      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::EACCES, /\Acould not back up .*; map not saved: Permission denied/)
 
       expect(File.binread(target)).to eq(existing_bytes)
       expect(File.binread(backup)).to eq('protected backup')
       expect(File.stat(backup).mode & 0o777).to eq(0o444)
       expect(stray_files).to be_empty
-      expect(map_class).to have_received(:respond).with(/could not back up .*map not saved: Permission denied/)
     end
 
     it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do

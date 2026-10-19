@@ -653,7 +653,10 @@ module Lich
         #   The existing file is always left unchanged. A failed serialization or
         #   backup also leaves any earlier backup unchanged; a failed write comes
         #   after the backup step, so "<filename>.bak" then holds a copy of the
-        #   existing file.
+        #   existing file. A refused, backup or write failure keeps its class
+        #   (e.g. Errno::EACCES), and its message starts with what failed and
+        #   what was left on disk, e.g. "could not back up <filename>; map not
+        #   saved: ...".
         def save_json(filename = nil)
           filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
           data = to_json
@@ -661,9 +664,7 @@ module Lich
           # The rename below would replace a read-only file that the in-place
           # write refused to open, so keep that refusal explicitly.
           if existed && !File.writable?(filename)
-            error = Errno::EACCES.new(filename)
-            report_map_save_failure("could not write #{filename}; existing file left unchanged", error)
-            raise error
+            raise map_save_error(Errno::EACCES.new(filename), "could not write #{filename}; existing file left unchanged")
           end
           if existed
             respond 'File exists!  Backing it up before proceeding...'
@@ -674,16 +675,14 @@ module Lich
 
               publish_map_file(backup, mode_of: filename) { |io| IO.copy_stream(filename, io) }
             rescue StandardError => e
-              report_map_save_failure("could not back up #{filename}; map not saved", e)
-              raise
+              raise map_save_error(e, "could not back up #{filename}; map not saved")
             end
           end
           begin
             publish_map_file(filename, mode_of: filename) { |io| io.write(data) }
           rescue StandardError => e
             left = existed ? 'existing file left unchanged' : 'no file created'
-            report_map_save_failure("could not write #{filename}; #{left}", e)
-            raise
+            raise map_save_error(e, "could not write #{filename}; #{left}")
           end
           respond "#{filename} saved"
           # Reload if the map index appears corrupted: the last entry's id should
@@ -739,15 +738,20 @@ module Lich
           nil
         end
 
-        # @param message [String] what failed and what was left on disk
+        # The error to raise for a failed save: a copy of +error+, keeping its
+        # class, errno and backtrace, whose message also says what failed and
+        # what was left on disk. save_json reports nothing itself; whatever
+        # runs it (the ;e runner or a script's error handler) reports the
+        # raised error once, with its backtrace, and a caller that rescues it
+        # still gets the whole story from the message.
         # @param error [StandardError]
-        # @return [void]
-        def report_map_save_failure(message, error)
-          respond "--- Lich: error: #{message}: #{error.message}"
-          Lich.log "error: #{message}: #{error.message}\n\t#{Array(error.backtrace).join("\n\t")}"
+        # @param context [String] what failed and what was left on disk
+        # @return [StandardError]
+        def map_save_error(error, context)
+          error.exception("#{context}: #{error.message}")
         end
 
-        private :publish_map_file, :remove_map_temp_file, :report_map_save_failure
+        private :publish_map_file, :remove_map_temp_file, :map_save_error
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets
