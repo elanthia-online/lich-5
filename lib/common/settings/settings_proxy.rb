@@ -194,6 +194,26 @@ module Lich
         end
       end
 
+      # A copy of the container is not part of the settings, so dup and clone
+      # return a plain copy of the target (proxies unwrapped, containers
+      # inside it copied too) instead of a proxy that shares the target and
+      # the path, through which a change to the copy (list.dup.pop) would
+      # change and store the settings. A value that can't be copied whole is
+      # copied container by container.
+      def dup
+        Marshal.load(Marshal.dump(@target))
+      rescue TypeError
+        @settings_module.unwrap_proxies(@target)
+      end
+
+      # As #dup; the copy is frozen when +freeze+ is true, or when it is nil
+      # and the target is frozen, as Object#clone does.
+      def clone(freeze: nil)
+        copy = dup
+        copy.freeze if freeze || (freeze.nil? && @target.frozen?)
+        copy
+      end
+
       # Updated inspect method to show the target's inspect string
       def inspect
         @target.inspect
@@ -242,21 +262,24 @@ module Lich
       # Array per entry, value proxied, which a |key, value| block takes
       # apart, exactly as Hash#each's own blocks do.
       #
-      # For a detached view (what select or sort returned), an element is
-      # proxied with the path it has in the container the view was taken
-      # from (see #view_element_proxy). One the settings don't hold (an
-      # element of what map returned) is yielded detached and unlocated, so
-      # a write through it is refused, and the user is told once per loop
-      # (see #refusals).
+      # For a detached view (what select or sort returned), or another
+      # container built from one (what reverse, last(2) or list - x
+      # returned), an element is proxied with the path it has in the
+      # container it was taken from (see #view_element_proxy); a [key,
+      # value] pair of a Hash (what sort_by returned for a Hash) is yielded
+      # as the Hash yields it, with its value proxied at that key. One the
+      # settings don't hold (an element of what map returned) is yielded
+      # detached and unlocated, so a write through it is refused, and the
+      # user is told once per loop (see #refusals).
       def each(&block)
-        return enum_for(:each) unless block
+        return enum_for(:each) { size_of_target } unless block
 
         each_element(&block)
       end
 
       # As Enumerable#each_with_index, with the elements #each yields.
       def each_with_index
-        return enum_for(:each_with_index) unless block_given?
+        return enum_for(:each_with_index) { size_of_target } unless block_given?
 
         index = 0
         each_element do |element|
@@ -267,7 +290,7 @@ module Lich
 
       # As Enumerable#each_with_object, with the elements #each yields.
       def each_with_object(memo)
-        return enum_for(:each_with_object, memo) unless block_given?
+        return enum_for(:each_with_object, memo) { size_of_target } unless block_given?
 
         each_element { |element| yield element, memo }
         memo
@@ -287,14 +310,32 @@ module Lich
         self
       end
 
+      # The size of the Enumerators #each, #each_with_index and
+      # #each_with_object return without a block, as for the target's own.
+      private def size_of_target
+        @target.size if @target.respond_to?(:size)
+      end
+
       # +value+, the target's element at +key+ (a Hash key or an Array
       # index), or for a container the proxy that writes to it where the
-      # settings hold it (see #each).
+      # settings hold it (see #each). An element of a container built from
+      # another one (a view, or what reverse, last(2) or merge returned) is
+      # looked up in the container it was built from (see
+      # #view_element_proxy), since its key or index there is not +key+.
       private def element_for(key, value, refusals)
         return value unless @settings_module.container?(value)
-        return view_element_proxy([key], value, refusals) if detached?
+        return view_element_proxy([key], value, refusals) if built_from_source?
 
         SettingsProxy.new(@settings_module, @scope, @path + [key], value, script_name: @script_name)
+      end
+
+      # True for a proxy whose elements are looked up in the container it
+      # was built from (+source+), not by their own key or index: a detached
+      # view (what select or sort returned), or a new container another
+      # non-destructive method built (reverse, rotate, last(2), list - x,
+      # merge, ...), whose positions are not positions in the settings.
+      private def built_from_source?
+        detached? || !@source.nil?
       end
 
       NON_DESTRUCTIVE_METHODS = [
@@ -302,7 +343,7 @@ module Lich
         :all?, :any?, :assoc, :at, :bsearch, :bsearch_index, :chunk, :chunk_while,
         :collect, :collect_concat, :compact, :compare_by_identity?, :count, :cycle,
         :default, :default_proc, :detect, :dig, :drop, :drop_while,
-        :each_cons, :each_entry, :each_slice, :each_with_index, :each_with_object, :empty?,
+        :each_cons, :each_entry, :each_slice, :empty?, # each_with_index and each_with_object are defined above
         :entries, :except, :fetch, :fetch_values, :filter, :find, :find_all, :find_index,
         :first, :flat_map, :flatten, :frozen?, :grep, :grep_v, :group_by, :has_value?,
         :include?, :inject, :invert, :join, :key, :keys, :last, :lazy, :length,
@@ -324,12 +365,12 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
         if @settings_module.container?(value)
-          # In a detached view (what select or sort returned), a position is
-          # not the element's position in
-          # the settings, so the element is looked up in the container the
-          # view was taken from. A negative Array index is made positive, as
-          # for at and dig.
-          (detached? && view_element_proxy([key], value)) ||
+          # In a detached view (what select or sort returned), or a container
+          # built from another one (#built_from_source?), a position is not
+          # the element's position in the settings, so the element is looked
+          # up in the container it was taken from. A negative Array index is
+          # made positive, as for at and dig.
+          (built_from_source? && view_element_proxy([key], value)) ||
             SettingsProxy.new(@settings_module, @scope, @path + (segment_in(@target, key) || [key]), value, script_name: @script_name)
         else
           value
@@ -388,7 +429,8 @@ module Lich
             # The view is bound to the container at its path, as the stored
             # row holds it (Settings._reattach_live!), and the call is made on
             # that container and stored there. When there is none of the
-            # view's kind, nothing is changed or stored, and the user is told.
+            # view's kind, nothing is changed or stored, the user is told,
+            # and the call returns nil.
             #
             # A detached proxy without a path (a view's element not found in
             # the settings, a view of a root proxy, the default fetch
@@ -399,7 +441,7 @@ module Lich
             if detached? && !@path.empty?
               unless @settings_module._reattach_live!(self, method)
                 @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
-                return self
+                return nil
               end
             end
 
@@ -409,7 +451,7 @@ module Lich
             # Any other method (key?, each_pair, ...) may or may not change the
             # container. What it changed, if anything, is saved.
             before = dump_of_target
-            known = containers_in(@target)
+            known = own_containers
             result = @target.send(method, *unwrapped_args, &block)
             save_changes_since(method, before, known) if before.nil? || dump_of_target != before
             return handle_method_result(result, method, unwrapped_args)
@@ -454,7 +496,7 @@ module Lich
       # when it is one of the stored containers, the container of this
       # session's copy that now shows it.
       private def change_and_replay(method, args, block)
-        known = containers_in(@target)
+        known = own_containers
         if @target.is_a?(Array) && POSITION_METHODS.include?(method)
           args = positions_in_copy(method, args, block)
           before = @target.dup
@@ -477,6 +519,19 @@ module Lich
       # nil when it holds the same objects.
       private def first_changed_position(before, after)
         (0...[before.size, after.size].max).find { |i| i >= before.size || i >= after.size || !before[i].equal?(after[i]) }
+      end
+
+      # The containers of this proxy's copy that #show_stored may fill in
+      # place after a replayed write (see #containers_in). For a container
+      # built from another one (what reverse, last(2) or merge returned, see
+      # #built_from_source?), only the container itself: its elements are
+      # the elements of the container it was built from, at other positions
+      # or keys, and filling them in place would make a proxy kept for that
+      # container show the stored elements of other positions.
+      private def own_containers
+        return {}.compare_by_identity.merge!(@target => true) if !detached? && !@source.nil?
+
+        containers_in(@target)
       end
 
       # The containers in +container+ (itself included, and those inside its
@@ -629,12 +684,15 @@ module Lich
       #
       # +known+ (from #containers_in) holds the containers the copy held
       # before the write; only those are filled in place.
-      private def take_stored_container(stored_container, stored_result = nil, known = containers_in(@target))
+      private def take_stored_container(stored_container, stored_result = nil, known = own_containers)
         return stored_result unless stored_container.instance_of?(@target.class)
         return stored_result if stored_container.equal?(@target)
 
         shown_by = {}.compare_by_identity
         show_stored(@target, stored_container, shown_by, {}.compare_by_identity, known)
+        # It now shows the container at its path, so its positions are that
+        # container's (what reverse returned shows the container itself).
+        @source = nil if shown_by.key?(stored_container)
         shown_by.fetch(stored_result, stored_result)
       end
 
@@ -747,11 +805,11 @@ module Lich
       # return) keeps this proxy's path, and the views listed in
       # NON_DESTRUCTIVE_CONTAINER_VIEWS are tagged as detached.
       #
-      # A detached view's elements are looked up in the container the view
-      # was taken from (see #view_element_proxy).
+      # The elements of such a container are looked up in the container it
+      # was built from (see #built_from_source? and #view_element_proxy).
       def handle_non_destructive_result(method, result, args = [])
         @settings_module.reset_path_and_return(
-          if @settings_module.container?(result) && detached? && (element = view_element_proxy(keys_for(method, args), result))
+          if @settings_module.container?(result) && built_from_source? && (element = view_element_proxy(keys_for(method, args), result))
             element
           elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
             SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
@@ -774,10 +832,13 @@ module Lich
                 SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
               end
             else
-              # Existing behavior for all other non-destructive container methods
+              # Existing behavior for all other non-destructive container
+              # methods. Every such container keeps the container it was
+              # built from as its source, so that its elements are found
+              # where the settings hold them (see #built_from_source?).
               is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
               SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
-                                                                               source: is_view ? view_source : nil)
+                                                                               source: view_source)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -829,10 +890,11 @@ module Lich
       # for dig, fetch and at, the element their keys lead to; otherwise the
       # first element that is +result+ itself (not just equal to it). An
       # Array index is made non-negative. nil when +result+ is not one, and
-      # for a detached view, whose positions are not positions in the
+      # for a detached view or another container built from one
+      # (#built_from_source?), whose positions are not positions in the
       # settings (see #view_element_proxy).
       private def element_path_for(method, args, result)
-        return nil if detached?
+        return nil if built_from_source?
 
         segments = segments_to(keys_for(method, args), result, @target)
         segments && @path + segments
@@ -864,6 +926,13 @@ module Lich
       # is detached and unlocated, so a write through it is refused instead
       # of being saved by position somewhere else. nil when +value+ is not an
       # element of the view (a new container, such as what merge returns).
+      #
+      # A [key, value] pair of a view of a Hash (what sort, sort_by, min_by(2)
+      # or first(2) returned) whose value is a container the Hash holds at that
+      # key is the plain pair [key, proxy for the value at that key], as the
+      # Hash's own #each yields it, so that a |key, value| block writes to
+      # the value where the settings hold it; a container further down the
+      # value has its path under that key.
       private def view_element_proxy(keys, value, refusals = @refusals)
         segments = segments_to(keys, value, @target)
         return nil unless segments
@@ -871,6 +940,14 @@ module Lich
         base = @source && source_segment(segments.first)
         if base
           SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name)
+        elsif (key = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
+          if segments.size == 1
+            # The pair itself, as the Hash's each yields it: [key, the proxy
+            # for the value there], which |key, value| takes apart.
+            [value.first, SettingsProxy.new(@settings_module, @scope, @path + [key], value.last, script_name: @script_name)]
+          else
+            SettingsProxy.new(@settings_module, @scope, @path + [key] + segments.drop(2), value, script_name: @script_name)
+          end
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
           SettingsProxy.new(@settings_module, @scope, [], value, detached: true, script_name: @script_name, unlocated: true, refusals: refusals)
@@ -892,15 +969,35 @@ module Lich
         child_segment(@source, element)
       end
 
+      # For a view whose source is a Hash: the key of the view's element at
+      # +view_segment+ when that element is a [key, value] pair (what
+      # Hash#sort or Hash#first(2) build) whose value is the very container
+      # the source holds at that key. nil otherwise (a value another write
+      # has since replaced, or an Array value of the Hash that only looks
+      # like a pair), so a write through it is refused.
+      private def pair_key_in_hash_source(view_segment)
+        return nil unless @source.is_a?(Hash) && @target.is_a?(Array)
+
+        pair = @target[view_segment]
+        return nil unless pair.instance_of?(Array) && pair.size == 2 && @settings_module.container?(pair.last)
+
+        key, value = pair
+        key if @source.key?(key) && @source[key].equal?(value)
+      end
+
       # True when this view and its source are Hashes and +key+ holds, in
       # the source, a container of the same class as +element+.
       private def same_key_in_hash_source?(key, element)
         @target.is_a?(Hash) && @source.is_a?(Hash) && @source[key].instance_of?(element.class)
       end
 
-      # The container a view taken from this proxy shares its elements with.
+      # The container a view (or another container) taken from this proxy
+      # shares its elements with: this proxy's source when it has one (see
+      # #built_from_source?), otherwise its target. Settings._reattach_live!
+      # also calls it, with __send__, for this session's copy of a view's
+      # container.
       private def view_source
-        detached? ? @source : @target
+        detached? ? @source : (@source || @target)
       end
 
       # The segments along +keys+ when they lead from +node+ to +result+

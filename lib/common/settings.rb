@@ -75,15 +75,23 @@ module Lich
       # own script (InstanceSettings has its own) as stored now, so that the
       # destructive +method+ about to be called through it changes that
       # container and is stored there (list.sort.push(4) appends 4 to list).
-      # A missing container on the way is created, as before.
+      #
+      # When the stored row holds nothing there (another session removed the
+      # container, or a container on the way), the view is bound to this
+      # session's copy of the container it was taken from, when that is of
+      # the view's kind, and the call is stored from that copy, as through a
+      # proxy for the container itself (Settings[:list].push(4) after another
+      # session removed list stores this session's list with 4 appended).
       #
       # The path is passed to the navigator, not set on it: the navigator is
       # shared by every script's Settings[] calls, and a path left on it
       # would send the next top-level write somewhere else.
       #
-      # Returns false, binding nothing, and tells the user, when there is no
-      # container there of the view's kind (a Hash where values returned an
-      # Array) or the path leads through something else.
+      # Returns false, binding nothing, and tells the user, when the stored
+      # row holds a container of another kind there (a Hash where values
+      # returned an Array) or something that is not a container, or holds
+      # nothing there and the copy the view was taken from is of another
+      # kind.
       def self._reattach_live!(proxy, method = nil)
         script_name = proxy_script_name(proxy)
         scope       = proxy.scope
@@ -91,23 +99,23 @@ module Lich
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "reattach_live!: scope=#{scope.inspect} path=#{path.inspect}" })
 
-        begin
-          live, _root = @path_navigator.navigate_to_path(script_name, true, scope, path)
-        rescue ArgumentError => e
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: #{e.message}" })
-          live = nil
+        live, _root = @path_navigator.navigate_to_path(script_name, false, scope, path)
+        if live.nil?
+          own_copy = proxy.__send__(:view_source)
+          live = own_copy if own_copy.instance_of?(proxy.target.class)
         end
 
         unless live.instance_of?(proxy.target.class)
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: failed to resolve live target for path=#{path.inspect} scope=#{scope.inspect}" })
-          what = live.nil? ? "nothing it can be applied to" : "#{live.class} there, and the view is #{proxy.target.class}"
+          what = live.nil? ? "nothing there" : "#{live.class} there, and the view is #{proxy.target.class}"
           refuse_proxy_save(script_name, proxy, "#{method || "the call"} on a view (sort, select, values, ...) of #{path.inspect} was not applied: the settings hold #{what}")
           return false
         end
 
         # Swap the proxy onto the live object via SettingsProxy API (encapsulated)
         # Centralizes invariants/logging within SettingsProxy itself. The
-        # rebinding is private to SettingsProxy; this is its one caller.
+        # rebinding (and view_source) is private to SettingsProxy; this is
+        # its one caller.
         proxy.__send__(:rebind_to_live!, live)
         true
       end

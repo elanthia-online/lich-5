@@ -253,6 +253,165 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
     end
   end
 
+  describe "a container built from another one (reverse, rotate, last(2), list - x, values_at)" do
+    before { settings[:list] = [{ id: 0 }, { id: 1 }, { id: 2 }] }
+
+    {
+      "reverse"         => ->(list) { list.reverse },
+      "rotate"          => ->(list) { list.rotate },
+      "last(2)"         => ->(list) { list.last(2) },
+      "list - x"        => ->(list) { list - [{ id: 0 }] },
+      "values_at"       => ->(list) { list.values_at(2, 0) },
+      "shuffle"         => ->(list) { list.shuffle },
+      "reverse.drop(1)" => ->(list) { list.reverse.drop(1) }
+    }.each do |name, build|
+      it "stores a write to each element each yields for #{name} at that element, not at its position in #{name}" do
+        build.call(settings[:list]).each { |element| element[:mark] = element[:id] }
+
+        marked = stored[:list].select { |element| element.key?(:mark) }
+        expect(marked).to all(satisfy { |element| element[:mark] == element[:id] })
+        expect(marked).not_to be_empty
+        expect(reloaded(:list)).to eq(stored[:list])
+        expect(error_messages).to be_empty
+      end
+    end
+
+    it "stores a write through what [], first, find and dig return for reverse at that element" do
+      settings[:list].reverse[0][:a] = 1
+      settings[:list].reverse.first[:b] = 1
+      settings[:list].reverse.find { |element| element[:id] == 1 }[:c] = 1
+      settings[:list].last(2).dig(0)[:d] = 1
+
+      expect(stored[:list]).to eq([{ id: 0 }, { id: 1, c: 1, d: 1 }, { id: 2, a: 1, b: 1 }])
+    end
+
+    it "stores nothing, and says so, for an element the settings don't hold (one list + [x] added)" do
+      (settings[:list] + [{ id: 9 }]).each { |element| element[:mark] = true if element[:id] == 9 }
+
+      expect(stored[:list]).to eq([{ id: 0 }, { id: 1 }, { id: 2 }])
+      expect(error_messages).to contain_exactly(a_string_including("not saved", "not found in the settings"))
+    end
+
+    it "keeps finding an element after another session inserted one before it" do
+      reversed = settings[:list].reverse
+      settings[:list].unshift({ id: -1 })
+
+      reversed.each { |element| element[:mark] = element[:id] }
+
+      expect(stored[:list]).to eq([{ id: -1 }, { id: 0, mark: 0 }, { id: 1, mark: 1 }, { id: 2, mark: 2 }])
+    end
+
+    it "leaves the elements of a proxy kept for the list where they are after a push through reverse" do
+      list = settings[:list]
+      reversed = list.reverse
+
+      reversed.push({ id: 3 })
+
+      expect(plain(list)).to eq([{ id: 0 }, { id: 1 }, { id: 2 }])
+      expect(plain(reversed)).to eq([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }])
+      expect(stored[:list]).to eq([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }])
+    end
+
+    it "still applies a destructive call to the container at its path (first(2).push appends to the list)" do
+      firsts = settings[:list].first(2)
+      firsts.push({ id: 3 })
+
+      expect(stored[:list]).to eq([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }])
+      expect(firsts.to_a).to eq(stored[:list])
+      firsts.each { |element| element[:mark] = element[:id] }
+      expect(stored[:list].map { |element| element[:mark] }).to eq([0, 1, 2, 3])
+    end
+  end
+
+  describe "a view of a Hash made of [key, value] pairs (sort, sort_by, first(3), min_by(2))" do
+    before { settings[:by] = { "b" => { n: 2 }, "a" => { n: 1 }, "c" => 3 } }
+
+    {
+      "sort_by"   => ->(by) { by.sort_by { |key, _value| key } },
+      "sort"      => ->(by) { by.select { |_key, value| value.is_a?(Hash) }.sort },
+      "first(3)"  => ->(by) { by.first(3) },
+      "min_by(2)" => ->(by) { by.min_by(2) { |key, _value| key } }
+    }.each do |name, build|
+      it "stores a write to the value a |key, value| block gets for #{name}, at that key" do
+        build.call(settings[:by]).each { |_key, value| value[:seen] = true if value.is_a?(Hash) }
+
+        expect(stored[:by]).to eq("b" => { n: 2, seen: true }, "a" => { n: 1, seen: true }, "c" => 3)
+        expect(reloaded(:by)).to eq(stored[:by])
+        expect(error_messages).to be_empty
+      end
+    end
+
+    it "stores a write through pair.last, through key, value = view.first, and through view.dig(i, 1)" do
+      view = settings[:by].sort_by { |key, _value| key }
+      view.each { |pair| pair.last[:last] = true if pair.last.is_a?(Hash) }
+      _key, value = view.first
+      value[:first] = true
+      view.dig(1, 1)[:dug] = true
+
+      expect(stored[:by]).to eq("b" => { n: 2, last: true, dug: true }, "a" => { n: 1, last: true, first: true }, "c" => 3)
+    end
+
+    it "yields the pairs a plain Hash's sort_by yields" do
+      plain = { "b" => { n: 2 }, "a" => { n: 1 }, "c" => 3 }
+
+      yielded = []
+      settings[:by].sort_by { |key, _value| key }.each { |pair| yielded << plain(pair) }
+
+      expect(yielded).to eq(plain.sort_by { |key, _value| key })
+    end
+  end
+
+  describe "a copy (dup, clone)" do
+    it "is a plain copy, so changing it changes and stores nothing" do
+      settings[:aim] = %w[head neck eyes]
+      settings[:rows] = [{ n: 0 }]
+
+      locations = settings[:aim].dup
+      popped = locations.pop
+      rows = settings[:rows].clone
+      rows[0][:n] = 5
+      rows << { n: 1 }
+
+      expect(popped).to eq("eyes")
+      expect([locations, rows]).to all(satisfy { |copy| !copy.is_a?(Lich::Common::SettingsProxy) && copy.instance_of?(Array) })
+      expect(stored).to eq(aim: %w[head neck eyes], rows: [{ n: 0 }])
+      expect(plain(settings[:aim])).to eq(%w[head neck eyes])
+      expect(plain(settings[:rows])).to eq([{ n: 0 }])
+    end
+
+    it "stores nothing for a copy of a value a |key, value| block or each gets" do
+      settings[:by] = { "a" => { n: 0 } }
+      settings[:rows] = [{ n: 0 }]
+
+      settings[:by].each { |_key, value| value.dup[:tmp] = 1 }
+      settings[:rows].each { |row| row.clone.delete(:n) }
+
+      expect(stored).to eq(by: { "a" => { n: 0 } }, rows: [{ n: 0 }])
+      expect(error_messages).to be_empty
+    end
+
+    it "freezes a clone as Object#clone does" do
+      settings[:list] = [1]
+
+      expect(settings[:list].clone).not_to be_frozen
+      expect(settings[:list].clone(freeze: true)).to be_frozen
+      expect(settings[:list].dup).to eq([1])
+    end
+  end
+
+  describe "the Enumerators each, each_with_index and each_with_object return" do
+    it "have the container's size, as a plain container's do" do
+      settings[:rows] = [{ n: 0 }, { n: 1 }]
+      settings[:by] = { "a" => 1 }
+
+      expect(settings[:rows].each.size).to eq(2)
+      expect(settings[:rows].each_with_index.size).to eq(2)
+      expect(settings[:rows].each_with_object([]).size).to eq(2)
+      expect(settings[:by].each.size).to eq(1)
+      expect(settings[:rows].each.with_index.map { |row, i| [row[:n], i] }).to eq([[0, 0], [1, 1]])
+    end
+  end
+
   describe "a destructive call on a sort or select view" do
     before { settings[:items] = [3, 1, 2] }
 
@@ -289,11 +448,39 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
     it "stores nothing, and says so, when the container at the view's path is not of the view's kind" do
       settings[:opts] = { "a" => 1 }
 
-      expect { settings[:opts].values.push(2) }.not_to raise_error
+      expect(settings[:opts].values.push(2)).to be_nil
       settings[:after] = 1
 
       expect(stored).to eq(items: [3, 1, 2], opts: { "a" => 1 }, after: 1)
       expect(error_messages).to include(a_string_including("not saved", "push on a view", "[:opts]", "hold Hash there, and the view is Array"))
+    end
+
+    it "stores this session's copy of the container with the call applied when another session removed it, as a call on the container itself does" do
+      results = {
+        "view"   => ->(items) { items.sort.push(4) },
+        "direct" => ->(items) { items.push(4) }
+      }.transform_values do |call|
+        settings[:items] = [3, 1, 2]
+        items = settings[:items]
+        their_write({ other: 1 })
+        call.call(items)
+        stored
+      end
+
+      expect(results["view"]).to eq(other: 1, items: [3, 1, 2, 4])
+      expect(results["view"]).to eq(results["direct"])
+      expect(error_messages).to be_empty
+    end
+
+    it "stores nothing, says the settings hold nothing there, and returns nil when another session removed the container of a view of another kind" do
+      settings[:opts] = { "a" => 1, "b" => 2 }
+      values = settings[:opts].values
+      their_write({ other: 1 })
+
+      expect(values.pop).to be_nil
+
+      expect(stored).to eq(other: 1)
+      expect(error_messages).to contain_exactly(a_string_including("not saved", "pop on a view", "[:opts]", "the settings hold nothing there"))
     end
 
     it "stores the call in the row of the proxy's own script (InstanceSettings)" do
