@@ -19,10 +19,11 @@
 #   InstanceSettings.game['key'] = { ... }
 #   all_data = InstanceSettings.game['key']
 #
-#   NOTE: each Lich process caches the game-scoped row when it first reads it
-#   and never sees other sessions' later writes; every write saves this
-#   process's whole copy. Don't keep data here that several sessions update.
-#   DRBanking keeps one row per character instead.
+#   NOTE: every session of the game, each its own Lich process, shares this
+#   row. Before keeping data here that several sessions update, check how
+#   Settings caches rows and what a write through this proxy saves (see
+#   lib/common/settings.rb). DRBanking keeps one row per character instead,
+#   read and written in one database transaction.
 #
 #   # Direct proxy access for complex operations
 #   proxy = InstanceSettings.character_proxy
