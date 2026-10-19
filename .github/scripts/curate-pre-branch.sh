@@ -454,7 +454,7 @@ generate_report() {
     {
       echo ""
       echo "---"
-      echo "# ⚠️ MANUAL REVIEW REQUIRED"
+      echo "# [WARNING] MANUAL REVIEW REQUIRED"
       echo ""
       echo "Union merge was used to auto-resolve conflicts."
       echo "**Review all changes before deploying.**"
@@ -467,7 +467,7 @@ generate_report() {
 
   # Summary
   {
-    echo "### ✅ Curation Complete"
+    echo "### [PASS] Curation Complete"
     echo ""
     echo "- **Destination:** \`$DEST_SAFE\`"
     echo "- **Base:** \`$BASE_SAFE\`"

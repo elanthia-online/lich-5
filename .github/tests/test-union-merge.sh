@@ -93,10 +93,10 @@ cp "$FIXTURES_DIR/conflict-simple.txt" "$test_file"
 if parse_and_resolve_conflicts "$test_file" &&\
    grep -q "new_feature_from_pr6.rb" "$test_file" &&\
    grep -q "other_feature_from_pr12.rb" "$test_file"; then
-  echo "✓ Simple conflict resolution"
+  echo "[PASS] Simple conflict resolution"
   ((++PASSED))
 else
-  echo "✗ Simple conflict resolution"
+  echo "[FAIL] Simple conflict resolution"
   ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
@@ -106,10 +106,10 @@ test_file="$(mktemp)"
 cp "$FIXTURES_DIR/conflict-duplicate.txt" "$test_file"
 if parse_and_resolve_conflicts "$test_file" &&\
    [[ $(grep -c "same_feature.rb" "$test_file") -eq 1 ]]; then
-  echo "✓ Duplicate line detection"
+  echo "[PASS] Duplicate line detection"
   ((++PASSED))
 else
-  echo "✗ Duplicate line detection"
+  echo "[FAIL] Duplicate line detection"
   ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
@@ -122,10 +122,10 @@ if parse_and_resolve_conflicts "$test_file" &&\
    grep -q "feature_b.rb" "$test_file" &&\
    grep -q "feature_c.rb" "$test_file" &&\
    grep -q "feature_d.rb" "$test_file"; then
-  echo "✓ Multiple conflict regions"
+  echo "[PASS] Multiple conflict regions"
   ((++PASSED))
 else
-  echo "✗ Multiple conflict regions"
+  echo "[FAIL] Multiple conflict regions"
   ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
@@ -134,10 +134,10 @@ rm -f "$test_file" "${test_file}.union-merge"
 test_file="$(mktemp)"
 cp "$FIXTURES_DIR/conflict-incomplete.txt" "$test_file"
 if ! parse_and_resolve_conflicts "$test_file" 2>/dev/null; then
-  echo "✓ Incomplete marker detection"
+  echo "[PASS] Incomplete marker detection"
   ((++PASSED))
 else
-  echo "✗ Incomplete marker detection"
+  echo "[FAIL] Incomplete marker detection"
   ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
