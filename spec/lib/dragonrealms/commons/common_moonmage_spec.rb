@@ -1253,6 +1253,50 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(world[:polls]).to be >= 2
       end
 
+      context 'with the autostart hint' do
+        let(:autostart_hint) { ";e autostart('moonwatch')" }
+
+        def all_messages
+          Lich::Messaging.messages.map { |m| m[:message] }
+        end
+
+        it 'does not suggest autostart when the moonwatch it started stops before publishing' do
+          allow(described_class).to receive(:start_script).with('moonwatch') do
+            world[:running] = true
+            world[:on_poll] = ->(n) { world[:running] = false if n >= 2 }
+            Object.new
+          end
+          expect(check).to be false
+          expect(all_messages.grep(/autostart/)).to be_empty
+        end
+
+        it 'does not suggest autostart when the moonwatch it started never publishes' do
+          allow(described_class).to receive(:start_script).with('moonwatch') do
+            world[:running] = true
+            UserVars.moons = skeleton.dup
+            Object.new
+          end
+          expect(check).to be false
+          expect(all_messages.grep(/autostart/)).to be_empty
+        end
+
+        it 'suggests autostart only once the moon data is ready' do
+          ready_when_hinted = nil
+          allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, *args|
+            ready_when_hinted = described_class.moon_data_ready? if args[1].to_s.include?(autostart_hint)
+            original.call(*args)
+          end
+          allow(described_class).to receive(:start_script).with('moonwatch') do
+            world[:running] = true
+            UserVars.moons = skeleton.dup
+            world[:on_poll] = ->(n) { UserVars.moons = ready_moons if n >= 2 }
+            Object.new
+          end
+          expect(check).to be true
+          expect(ready_when_hinted).to be true
+        end
+      end
+
       it 'releases the start lock when start_script raises' do
         allow(described_class).to receive(:start_script).with('moonwatch').and_raise(RuntimeError, 'boom')
         expect { check }.to raise_error(RuntimeError, 'boom')
@@ -1292,6 +1336,20 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(starts).to eq(1)
         expect(world[:polls]).to eq(0)
         expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it "tells unavailable data apart from nothing up only through check_moonwatch's return" do
+        world[:running] = true
+        UserVars.moons = ready_moons.merge('visible' => [])
+        UserVars.sun = { 'running' => true, 'day' => false, 'night' => true, 'visible' => false, 'timer' => 45 }
+        nothing_up = [check, described_class.bright_celestial_object?, described_class.any_celestial_object?]
+
+        world[:running] = false
+        allow(described_class).to receive(:start_script).with('moonwatch') { crashing_start.call }
+        unavailable = [check, described_class.bright_celestial_object?, described_class.any_celestial_object?]
+
+        expect(nothing_up).to eq([true, false, false])
+        expect(unavailable).to eq([false, false, false])
       end
 
       it 'starts a crashing moonwatch once per bright_celestial_object? call, not once per moon looked at' do

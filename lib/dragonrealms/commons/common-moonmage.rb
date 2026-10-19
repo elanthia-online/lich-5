@@ -74,8 +74,9 @@ module Lich
       # freshly started moonwatch has already published.
       MOONWATCH_START_LOCK = Mutex.new
 
-      # Set when check_moonwatch gave up waiting for a running moonwatch's data
-      # (see await_running_moonwatch).
+      # Set when a wait for moonwatch's data timed out while moonwatch kept
+      # running: by await_running_moonwatch, or by check_moonwatch's own start
+      # (via note_moonwatch_start_failure). See note_moonwatch_stall.
       @moonwatch_data_stalled = false
 
       # Monotonic time before which check_moonwatch does not start moonwatch
@@ -477,7 +478,10 @@ module Lich
 
       # returns true if at least one bright moon (yavash, xibar) or the sun are
       #  above the horizon and won't set for at least another ~4 minutes.
-      #  False when moonwatch's data is unavailable (see check_moonwatch).
+      #  False when moonwatch's data is unavailable (see check_moonwatch), the
+      #  same answer as "nothing up". A caller that must not act on unknown
+      #  data (for example a spell gated on nothing being up) should check
+      #  that check_moonwatch returns true first.
       def bright_celestial_object?
         return false unless check_moonwatch
 
@@ -486,7 +490,10 @@ module Lich
 
       # returns true if at least one moon (katamba, yavash, xibar) or the sun are
       #  above the horizon and won't set for at least another ~4 minutes.
-      #  False when moonwatch's data is unavailable (see check_moonwatch).
+      #  False when moonwatch's data is unavailable (see check_moonwatch), the
+      #  same answer as "nothing up". A caller that must not act on unknown
+      #  data (for example a spell gated on nothing being up) should check
+      #  that check_moonwatch returns true first.
       def any_celestial_object?
         return false unless check_moonwatch
 
@@ -532,6 +539,12 @@ module Lich
       # those checks read, written after 'day'), the data is not ready. Sun
       # data without a 'running' key (older moonwatch versions) is not
       # checked.
+      #
+      # moonwatch's 'running' => false marker is saved only when Lich shuts
+      # down in an orderly way. After a crash the saved data can still say
+      # 'running' => true, and while a newly started moonwatch has not yet
+      # written its skeleton (normally a few milliseconds) that saved data
+      # counts as ready.
       #
       # @return [Boolean]
       def moon_data_ready?
@@ -620,16 +633,17 @@ module Lich
           @moonwatch_data_stalled = false
           UserVars.moons = {}
           UserVars.sun = {}
-          seen_running = false
-          if start_script('moonwatch')
-            seen_running = true
-            Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.")
-          elsif !Script.running?('moonwatch') && !moonwatch_findable?
+          started = start_script('moonwatch') ? true : false
+          if !started && !Script.running?('moonwatch') && !moonwatch_findable?
             Lich::Messaging.msg("bold", "DRCMM: moonwatch could not be found. Moon data is unavailable.")
             note_moonwatch_start_failure
             return false
           end
-          return moonwatch_data_ready! if await_moonwatch_data(seen_running, timeout)
+          if await_moonwatch_data(started, timeout)
+            # Only suggest autostart once this start has actually worked.
+            Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.") if started
+            return moonwatch_data_ready!
+          end
 
           note_moonwatch_start_failure
           false
