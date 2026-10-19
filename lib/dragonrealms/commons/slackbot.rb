@@ -160,7 +160,7 @@ module Lich
         end
 
         dm_channel = get_dm_channel(username)
-        dm_channel = get_dm_channel(username) if dm_channel.nil? && reload_users_cache
+        dm_channel = get_dm_channel(username) if dm_channel.nil? && reload_users_cache(username)
         unless dm_channel
           Lich::Messaging.msg('bold', "SlackBot: Cannot send message - user '#{username}' not found in Slack workspace.")
           return nil
@@ -370,14 +370,23 @@ module Lich
       end
 
       # Called by #direct_message when an initialized bot does not know the
-      # user: reloads the shared cache in case another character refreshed it.
+      # user: looks the user up in the shared cache in case another character
+      # refreshed it, and adds that one entry to the current list. The list is
+      # never replaced here, so a mistyped name or a cache written under
+      # another token cannot drop users the bot already knows.
       # Never raises; a cache read error (e.g. a locked database) is logged and
       # the current list is kept, so the message still ends in "user not found"
       # rather than an exception in the calling script.
       #
-      # @return [Boolean] true if the cache was loaded
-      def reload_users_cache
-        load_users_from_cache('Reloaded cached users list')
+      # @param username [String] the user the current list does not know
+      # @return [Boolean] true if the cache listed the user
+      def reload_users_cache(username)
+        member = cached_members&.find { |u| u.is_a?(Hash) && u['name'] == username }
+        return false unless member
+
+        @users_list = { 'members' => @users_list['members'] + [member] }
+        Lich.log "SlackBot: Added #{username} from the cached users list"
+        true
       rescue StandardError => e
         Lich.log "SlackBot: Failed to reload cached users list: #{e.class}: #{e.message}"
         false

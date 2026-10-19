@@ -643,6 +643,27 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(messages.last).to match(/user 'bob' not found/)
     end
 
+    it 'keeps a user it knows when the shared cache lists other users only' do
+      bot = described_class.new
+      fresh_cache([{ 'name' => 'zed', 'id' => 'Z9' }])
+
+      expect(bot.direct_message('alcie', 'typo')).to be_nil
+      expect(messages.last).to match(/user 'alcie' not found/)
+
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(posted.map { |p| p['channel'] }).to eq(['U1'])
+    end
+
+    it 'adds the user from a cache that lists other users only, keeping the users it knew' do
+      bot = described_class.new
+      fresh_cache([{ 'name' => 'bob', 'id' => 'U2' }])
+
+      expect(bot.direct_message('bob', 'help')).to include('ok' => true)
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(bot.direct_message('bob', 'again')).to include('ok' => true)
+      expect(posted.map { |p| p['channel'] }).to eq(%w[U2 U1 U2])
+    end
+
     it 'keeps its list when the shared cache holds an empty list' do
       bot = described_class.new
       Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache',
