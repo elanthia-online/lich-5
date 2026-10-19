@@ -276,9 +276,10 @@ module Lich
       # title and description match alone is not enough, and fogged-over exits
       # match nothing.
       #
-      # A stored UID vetoes the match the same way the map's own resolver does
-      # (Map.resolve_matched_room): when the game shows a live UID and the room
-      # carries UIDs that do not include it, that room is not accepted. A vetoed
+      # A stored UID vetoes the match through the map's own resolver rule
+      # (Map.resolve_matched_room, as Map.current applies it with a script
+      # running): when the game shows a live UID and the room carries UIDs that
+      # do not include it, that room is not accepted. A vetoed
       # room still counts as a candidate, so a vetoed look-alike next to a room
       # with no stored UID makes the match ambiguous and nothing is returned.
       # The two cases look identical from here: the character may stand in the
@@ -309,22 +310,10 @@ module Lich
             room.paths.include?(exits)
         end
         return nil unless rooms.length == 1
-        return nil if uid_excludes?(rooms.first, XMLData.room_id.to_i)
+        # The resolver's own UID rule, so the two cannot drift apart.
+        return nil if Map.resolve_matched_room(rooms.first, honor_peer_tags: false).nil?
 
         rooms.first
-      end
-
-      # Whether +room+'s stored UIDs rule out the live UID: the game shows one
-      # (non-zero) and the room has UIDs that do not include it.
-      #
-      # @param room [Lich::Common::Map] a map room
-      # @param live_uid [Integer] XMLData.room_id (0 when the game shows none)
-      # @return [Boolean]
-      def uid_excludes?(room, live_uid)
-        return false if live_uid.zero?
-
-        uids = Array(room.uid)
-        uids.any? && !uids.include?(live_uid)
       end
 
       # Walk toward +room_num+ from a room Room.current cannot resolve, one map
@@ -343,15 +332,16 @@ module Lich
       # path's length plus MAX_WALK_TO_RETRIES so a map that loops cannot walk
       # forever.
       #
-      # Under the map's own resolver this normally ends on the first iteration
-      # with "Failed to find a matching room" (see {match_unknown_room}).
+      # The "manually attempting to navigate" line is logged only once the
+      # start room is identified. Under the map's own resolver the walk
+      # normally ends on the first iteration with only "Failed to find a
+      # matching room" (see {match_unknown_room}).
       #
       # @param room_num [Integer] target room id
       # @param restart_on_fail [Boolean] retry a move that made no progress
       # @param retry_depth [Integer] retries already spent by walk_to
       # @return [Boolean] true if the character is now in the target room
       def walk_from_unknown_room(room_num, restart_on_fail, retry_depth)
-        Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}")
         retries = retry_depth
         moves = 0
         max_moves = nil
@@ -385,6 +375,7 @@ module Lich
             Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
             return false
           end
+          Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}") if moves.zero?
           return true if room.id == room_num
 
           # Map[] indexes an Array, so Map[-1] is the last room, not nil.
@@ -433,7 +424,7 @@ module Lich
 
       # Internal helpers of walk_to; module_function would otherwise make
       # them public DRCT methods.
-      private_class_method :arrived_at?, :match_unknown_room, :uid_excludes?, :walk_from_unknown_room
+      private_class_method :arrived_at?, :match_unknown_room, :walk_from_unknown_room
 
       def tag_to_id(target)
         start_room = Room.current.id

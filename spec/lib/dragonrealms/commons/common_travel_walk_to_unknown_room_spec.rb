@@ -127,6 +127,9 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
     allow(Map).to receive(:list).and_return(list)
     allow(Map).to receive(:[]) { |id| world.room(id.to_i) }
     allow(Map).to receive(:findpath) { |source, destination| world.findpath(source, destination) }
+    # The DR map's own UID rule, which walk_to's match reuses.
+    real_map = MapLoader.use(:dr)
+    allow(Map).to receive(:resolve_matched_room) { |room, **opts| real_map.resolve_matched_room(room, **opts) }
     allow(Room).to receive(:current) { world.current_room }
     allow(XMLData).to receive(:room_title) { world.live_title }
     allow(XMLData).to receive(:room_description) { world.live_description }
@@ -416,6 +419,41 @@ RSpec.describe DRCT, '.walk_to from an unknown room' do
       install(world)
 
       expect(DRCT.walk_to(102)).to be(true)
+    end
+
+    # The UID rule is the map resolver's own, not a copy of it: whatever the
+    # resolver decides about a room is what walk_to decides.
+    it "takes the map resolver's verdict on a room, not a copy of its UID rule" do
+      world = install(WalkToUnknownRoomSpec::World.new(corridor(1), position: 101))
+      # Neither room carries a UID and the game shows none, so a copied UID
+      # rule would accept room 101; this resolver declines it.
+      real_map = Lich::Common::Map
+      allow(Map).to receive(:resolve_matched_room) do |room, **opts|
+        room.id == 101 ? nil : real_map.resolve_matched_room(room, **opts)
+      end
+
+      expect(DRCT.walk_to(102)).to be(false)
+      expect(world.sent).to be_empty
+      expect(Map).to have_received(:resolve_matched_room).with(world.room(101), honor_peer_tags: false).at_least(:once)
+    end
+  end
+
+  describe 'the unknown-room log line' do
+    it 'does not claim to navigate when the start room cannot be identified' do
+      world = WalkToUnknownRoomSpec::World.new(corridor(1), position: 101)
+      world.blank = :exits
+      install(world)
+
+      expect(DRCT.walk_to(102)).to be(false)
+      expect(plain_messages.grep(/manually attempting/)).to be_empty
+      expect(bold_messages).to eq(['DRCT: Failed to find a matching room from unknown location.'])
+    end
+
+    it 'logs the attempt once when the start room is identified, however many moves follow' do
+      install(WalkToUnknownRoomSpec::World.new(corridor(3), position: 101))
+
+      expect(DRCT.walk_to(104)).to be(true)
+      expect(plain_messages.grep(/manually attempting/)).to eq(['DRCT: In an unknown room, manually attempting to navigate to 104'])
     end
   end
 

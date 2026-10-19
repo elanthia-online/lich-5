@@ -77,6 +77,7 @@ RSpec.describe DRCT, '.walk_to with the map resolver' do
     allow(Map).to receive(:list) { real_map.list }
     allow(Map).to receive(:[]) { |id| real_map[id] }
     allow(Map).to receive(:findpath) { |source, destination| real_map.findpath(source, destination) }
+    allow(Map).to receive(:resolve_matched_room) { |room, **opts| real_map.resolve_matched_room(room, **opts) }
 
     allow(DRCT).to receive(:move) do |dir|
       sent << dir
