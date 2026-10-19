@@ -227,8 +227,14 @@ module Lich
           end
 
           respond 'Beta test installation accepted.  Thank you for considering!'
-          # Held from setting the beta target until the install clears it.
-          RELEASE_LOCK.synchronize { install_beta }
+          # Held from setting the beta target until the install clears it. The
+          # ensure also clears a target set before the install began, such as
+          # when reading the release record raises.
+          RELEASE_LOCK.synchronize do
+            install_beta
+          ensure
+            clear_release_target
+          end
         end
 
         # Downloads and installs latest stable release.

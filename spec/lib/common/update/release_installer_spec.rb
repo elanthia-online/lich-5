@@ -210,13 +210,13 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
 
     # Resolves the beta channel to beta_release and serves the releases list
     # the beta install reads, plus archives chosen per download URL.
-    def offer_beta(archive_for)
+    def offer_beta(archive_for, beta: beta_release)
       allow(resolver).to receive(:resolve_channel_ref).with(:beta).and_return('v5.20.0-beta.1')
       allow(resolver).to receive(:last_error).and_return(nil)
       releases_url = "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases"
       allow(URI).to receive(:parse).and_wrap_original do |original, url|
         if url.to_s == releases_url
-          double('releases', open: StringIO.new(JSON.generate([beta_release, latest.first])))
+          double('releases', open: StringIO.new(JSON.generate([beta, latest.first])))
         elsif url.to_s.start_with?('https://example.test/')
           downloaded << url
           double('download', open: StringIO.new(archive_for.call(url)))
@@ -236,6 +236,19 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         installer.download_release_update
 
         expect(downloaded).to eq([beta_url, 'https://example.test/lich-5.19.0.tar.gz'])
+        expect(messages).to include('Downloading Lich5 version 5.19.0')
+      end
+
+      it 'installs the stable release on the next update after a beta install that raised before its download' do
+        archive = ruby_floor_archive('9.0')
+        no_url = beta_release.merge('assets' => [{ 'name' => Lich::Util::Update::ASSET_TARBALL_NAME }])
+        offer_beta(->(_url) { archive }, beta: no_url)
+        installer.prep_betatest
+        expect { installer.confirm_betatest }.to raise_error(KeyError)
+
+        installer.download_release_update
+
+        expect(downloaded).to eq(['https://example.test/lich-5.19.0.tar.gz'])
         expect(messages).to include('Downloading Lich5 version 5.19.0')
       end
 
@@ -597,14 +610,15 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         releases_url = "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases"
         allow(URI).to receive(:parse).and_call_original
         allow(URI).to receive(:parse).with(releases_url).and_return(double(open: StringIO.new(JSON.generate(releases))))
-        expect(installer).to receive(:download_release_update)
+        target = nil
+        expect(installer).to receive(:download_release_update) do
+          target = %i[@update_to @zipfile @new_features].map { |ivar| installer.instance_variable_get(ivar) }
+        end
 
         installer.prep_betatest
         installer.confirm_betatest
 
-        expect(installer.instance_variable_get(:@update_to)).to eq('5.20.0-beta.1')
-        expect(installer.instance_variable_get(:@zipfile)).to eq('https://example.test/beta.tar.gz')
-        expect(installer.instance_variable_get(:@new_features)).to eq("Beta notes\n")
+        expect(target).to eq(['5.20.0-beta.1', 'https://example.test/beta.tar.gz', "Beta notes\n"])
       end
     end
   end
