@@ -347,16 +347,16 @@ module Lich
           line = script.gets(remaining)
           # Script#gets returns false when the script stopped reading
           # downstream during the wait, so no reply can arrive any more.
+          # send_to_script pushes its arguments as given, so a pushed false
+          # cannot be told apart from this case and also ends the wait.
           if line == false
             Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
             return false
           end
+
           # nil means this read timed out (or a pushed nil); the loop re-checks
-          # the deadline.
-          # Other non-String objects can reach the buffer through
-          # send_to_script, which pushes its arguments as given. A pushed
-          # false cannot be told apart from the no-downstream read above and
-          # ends the wait.
+          # the deadline. Other non-String objects pushed through
+          # send_to_script are skipped the same way.
           next unless line.is_a?(String)
 
           if (match = line.match(token_pattern))
