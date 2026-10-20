@@ -360,7 +360,7 @@ module Lich
         # committed does not leave the cache without it, and a newer row
         # another thread re-read after the store is kept (see
         # store_after_database).
-        cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+        cache_stored_row = cache_stored_row_for(cache_key)
         stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
           replayed = nil
           apply_to_stored_row(fresh_root, proxy, method, stored_args, block, script_name, label) { |result| replayed = result }
@@ -779,6 +779,17 @@ module Lich
       end
       private_class_method :store_after_database
 
+      # The on_stored callback for DatabaseAdapter#update_settings shared by
+      # every key-level write (top-level, through a proxy, under a navigation
+      # path): it caches the row as stored, at the version read right after
+      # the store (see store_after_database).
+      #
+      # @return [Proc] taking the stored row
+      def self.cache_stored_row_for(cache_key)
+        ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+      end
+      private_class_method :cache_stored_row_for
+
       # Saves a whole row and caches it (see store_after_database).
       #
       # @return [Boolean, nil] whether the cache took the saved row (false
@@ -917,7 +928,7 @@ module Lich
       # part of the store (on_stored), so a script killed right after the row
       # was committed does not leave the cache without it.
       def self.store_top_level_key(script_name, cache_key, scope, name, value)
-        cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+        cache_stored_row = cache_stored_row_for(cache_key)
         stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
           if fresh_root.is_a?(Hash)
             fresh_root[name] = value
@@ -995,10 +1006,9 @@ module Lich
       # example), not positions read from the stored row, so a new Array
       # padded with nil up to such a key would be wrong. An Array already
       # stored is written into by position. A non-negative Integer +name+
-      # past the end of an Array pads it with
-      # nil, as Array#[]= does. The cache then takes the row as stored. If
-      # nothing is stored, the cache is left as it was: the key is never put
-      # in this session's copy.
+      # past the end of an Array pads it with nil, as Array#[]= does. The
+      # cache then takes the row as stored. If nothing is stored, the cache
+      # is left as it was: the key is never put in this session's copy.
       #
       # Nothing is stored, and the user is told, when +path+ does not lead to
       # a container (a value that is not one is on the way, or an Array is
@@ -1027,7 +1037,7 @@ module Lich
         cache_key = "#{script_name}::#{scope}"
         with_cache_lock(cache_key) do
           refusal = nil
-          cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+          cache_stored_row = cache_stored_row_for(cache_key)
           @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
             # fresh_root is read anew for each attempt, so containers created
             # in it on the way to a refusal are never stored.
