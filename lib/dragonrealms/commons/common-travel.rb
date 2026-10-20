@@ -323,10 +323,13 @@ module Lich
           Lich::Messaging.msg('plain', "DRCT: Search attempt #{search_attempt} of #{max_search_attempts} to find a suitable room.")
           found_empty = false
           search_rooms.each do |room_id|
-            walk_to(room_id)
-            pause 0.1 until room_id == Room.current.id
-
+            # walk_to returns true when it believes it reached the target and
+            # false when it could not confirm arrival (see walk_to); such a room
+            # is skipped for this pass rather than waiting for Room.current to
+            # change.
+            reached = walk_to(room_id)
             rooms_searched += 1
+            next unless reached
 
             if prioritize_buddies && (rooms_searched <= search_rooms.size)
               suitable_room = ((DRRoom.pcs & UserVars.friends).any? && (DRRoom.pcs & UserVars.hunting_nemesis).none?)

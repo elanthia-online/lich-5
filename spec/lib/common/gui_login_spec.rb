@@ -1,13 +1,16 @@
 # frozen_string_literal: true
 
 require_relative '../../login_spec_helper'
+require 'tmpdir'
 
 RSpec.describe Lich::Common, "#gui_login" do
   # Since gui_login is a complex method with UI interactions,
   # we'll focus on testing its integration with other components
 
   let(:test_instance) { Class.new { include Lich::Common }.new }
-  let(:data_dir) { "/tmp/test_data" }
+  # A fresh directory per example: a fixed path is shared with other spec
+  # files (and other runs), and this file's cleanup would delete theirs.
+  let(:data_dir) { Dir.mktmpdir("lich-gui-login-spec-") }
   let(:entry_data) { [] }
   let(:launch_data) { ["KEY=value", "SERVER=game.example.com"] }
 
@@ -52,9 +55,6 @@ RSpec.describe Lich::Common, "#gui_login" do
   let(:manual_login_ui) { { custom_launch_entry: custom_launch_entry, custom_launch_dir: custom_launch_dir } }
 
   before do
-    # Setup test directory
-    FileUtils.mkdir_p(data_dir)
-
     # Remove constants if they exist to ensure clean test environment
     if Lich.const_defined?(:Common) && Lich::Common.const_defined?(:GUI)
       if Lich::Common::GUI.const_defined?(:AccountManagerUI)
@@ -213,7 +213,6 @@ RSpec.describe Lich::Common, "#gui_login" do
   end
 
   after do
-    # Clean up test directory
     FileUtils.rm_rf(data_dir)
   end
 
