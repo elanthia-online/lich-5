@@ -1074,13 +1074,21 @@ module Lich
 
       # The container at +path+ in +root+, a stored row, that +name+ is
       # written into, creating missing containers on the way as Hashes (see
-      # container_at); or the reason it can't be.
+      # container_at); or the reason it can't be. A segment of +path+ past
+      # the end of a stored Array is refused, as a write through a proxy is
+      # (see #position_gone), rather than padding the Array with nil; +name+
+      # past the end of the Array at +path+ pads it, as Array#[]= does.
       #
       # @return [Array(Hash|Array, nil), Array(nil, String)]
       def self.container_for_path_write(root, path, name)
         return [nil, "settings are stored as #{root.class}, not a Hash"] unless root.is_a?(Hash)
 
-        container = container_at(root, [*path, name], Array.new(path.size + 1, Hash))
+        classes = Array.new(path.size + 1, Hash)
+        if (array_path = position_gone(root, path, classes))
+          return [nil, "#{array_path.inspect} holds an Array that ends before position #{path[array_path.size].inspect}"]
+        end
+
+        container = container_at(root, [*path, name], classes)
         if !container?(container)
           [nil, "#{path.inspect} does not lead to a container"]
         elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)

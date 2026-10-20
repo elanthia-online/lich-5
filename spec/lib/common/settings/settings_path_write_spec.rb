@@ -268,6 +268,40 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(@errors).to be_empty
   end
 
+  it "refuses a path segment past the end of a stored Array, as a write through a proxy does, without padding it" do
+    settings[:list] = [{ a: 1 }]
+
+    result = :unset
+    expect { result = write_under([:list, 3], :k, 1) }.not_to raise_error
+
+    expect(result).to be_nil
+    expect(stored).to eq(list: [{ a: 1 }])
+    expect(settings.to_hash).to eq(list: [{ a: 1 }])
+    expect(@errors).to include(a_string_including("not saved", ":k under [:list, 3]", "[:list] holds an Array that ends before position 3"))
+    expect(navigator_path).to be_empty
+  end
+
+  it "refuses a path segment past the end of an Array another session shrank after this session set the path" do
+    settings[:outer] = { list: [{ a: 1 }, { b: 2 }] }
+    settings.set_path([:outer, :list, 1])
+    their_write(outer: { list: [{ a: 1 }] })
+
+    expect(settings.public_send(:[]=, :k, 1)).to be_nil
+
+    expect(stored).to eq(outer: { list: [{ a: 1 }] })
+    expect(@errors).to include(a_string_including("not saved", "[:outer, :list] holds an Array that ends before position 1"))
+  end
+
+  it "still writes through the last position of a stored Array, and replaces a nil element there" do
+    settings[:list] = [{ a: 1 }, nil]
+
+    write_under([:list, 0], :k, 1)
+    write_under([:list, 1], :k, 2)
+
+    expect(stored).to eq(list: [{ a: 1, k: 1 }, { k: 2 }])
+    expect(@errors).to be_empty
+  end
+
   it "clears the path before the database write, so another script's top-level write meanwhile stays top-level" do
     their_write(x: {}, top: 0)
     writer = nil
