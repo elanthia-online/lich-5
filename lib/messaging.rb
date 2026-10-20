@@ -18,8 +18,9 @@ module Lich
       return msg_format("monster", msg, encode: encode)
     end
 
-    # Sends msg to a stream window, or to the main window (with a marker for
-    # familiar, thoughts and voln) where the frontend can't show that window.
+    # Sends msg to a stream window, or to the main window where the frontend
+    # can't show that window. There, familiar is wrapped in the GSL control
+    # pair (\034GSe / \034GSf), and thoughts and voln in game-style text.
     #
     # @return [nil]
     def self.stream_window(msg, window = "familiar", encode: true)

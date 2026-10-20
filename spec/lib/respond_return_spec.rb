@@ -184,7 +184,7 @@ RSpec.describe 'respond, _respond and Lich::Messaging return values' do
     end
 
     it '.msg returns nil for every preset type' do
-      %w[error warn info green link cmd plain].each do |type|
+      %w[error warn info green link cmd plain bold].each do |type|
         expect(messaging.msg(type, 'x')).to be_nil
       end
     end
