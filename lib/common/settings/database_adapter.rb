@@ -208,6 +208,102 @@ module Lich
         nil
       end
 
+      # Runs the block inside one SQLite write transaction (BEGIN IMMEDIATE).
+      # The write lock is taken before the first read, so a read-modify-write
+      # inside the block cannot interleave with another process's write.
+      # A nested call joins the outer transaction. If the block raises, nothing
+      # it wrote is kept. (Sequel's SQLite adapter re-raises an ArgumentError
+      # from the block as Sequel::DatabaseError.)
+      #
+      # @raise [Sequel::DatabaseError] if the database stays locked past the
+      #   busy timeout.
+      def transaction(&block)
+        @db.transaction(mode: :immediate, &block)
+      end
+
+      # Lists the scopes of every row for script_name whose scope starts with
+      # scope_prefix, without loading the stored values (so a row that can't
+      # be loaded is still listed).
+      #
+      # @param script_name [String]
+      # @param scope_prefix [String] matched literally (not as a LIKE pattern)
+      # @return [Array<String>]
+      def scopes_by_prefix(script_name, scope_prefix)
+        prefix = scope_prefix.to_s
+        @table.where(script: script_name).select_map(:scope).map(&:to_s).select { |scope| scope.start_with?(prefix) }
+      end
+
+      # Reads every row for script_name whose scope starts with scope_prefix,
+      # straight from the database (no cache).
+      #
+      # A row whose stored value can't be loaded is skipped and logged, so one
+      # bad row doesn't hide the others.
+      #
+      # @param script_name [String]
+      # @param scope_prefix [String] matched literally (not as a LIKE pattern)
+      # @return [Hash{String => Object}] scope => stored settings
+      def get_settings_by_scope_prefix(script_name, scope_prefix)
+        prefix = scope_prefix.to_s
+        @table.where(script: script_name).select(:scope, :hash).each_with_object({}) do |row, result|
+          scope = row[:scope].to_s
+          next unless scope.start_with?(prefix)
+
+          begin
+            result[scope] = Marshal.load(row[:hash])
+          rescue StandardError => e
+            Lich.log("--- Error: skipping unreadable settings row script=#{script_name} scope=#{scope}: #{e.class}: #{e.message} ---")
+          end
+        end
+      end
+
+      # Writes one settings row without reading it first.
+      #
+      # Unlike #save_settings, which reports errors and returns false, this
+      # raises, so a caller inside #transaction gets the whole transaction
+      # rolled back and can tell that nothing was written.
+      #
+      # @param script_name [String]
+      # @param settings [Hash]
+      # @param scope [String]
+      # @return [Hash] settings
+      # @raise [TypeError] if settings is not a Hash or can't be serialized
+      # @raise [Sequel::DatabaseError] if the database is locked or the write fails
+      def save_settings!(script_name, settings, scope)
+        raise TypeError, "settings must be a Hash, got #{settings.class}" unless settings.is_a?(Hash)
+
+        upsert_settings(script_name, scope, Sequel::SQL::Blob.new(Marshal.dump(settings)))
+        settings
+      end
+
+      # Atomically reads, changes and writes one settings row.
+      #
+      # Yields a fresh copy of the stored hash ({} when there is no row) inside
+      # #transaction. If the block returns a Hash, that Hash is written to the
+      # row; if it returns nil, the row is left as it was.
+      #
+      # Raises on every failure, like #save_settings!, so the caller can tell
+      # that nothing was written.
+      #
+      # @return [Hash, nil] what the block returned
+      # @raise [Sequel::DatabaseError] if the database is locked or the write
+      #   fails, or if loading the stored row raises ArgumentError (truncated
+      #   Marshal data, for example; Sequel re-raises an ArgumentError from
+      #   the block as Sequel::DatabaseError, with the ArgumentError as cause)
+      # @raise [StandardError] whatever else Marshal.load raises on a stored
+      #   row that can't be loaded (usually TypeError), without yielding
+      # @raise [TypeError] if the block returns something other than a Hash or nil
+      def update_settings!(script_name, scope)
+        transaction do
+          updated = yield(get_settings(script_name, scope))
+          unless updated.nil? || updated.is_a?(Hash)
+            raise TypeError, "update_settings! block must return a Hash or nil, got #{updated.class}"
+          end
+
+          save_settings!(script_name, updated, scope) if updated
+          updated
+        end
+      end
+
       private
 
       # Opens the version connection unless another thread already has. Its

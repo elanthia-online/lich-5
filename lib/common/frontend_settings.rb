@@ -4,6 +4,7 @@ require 'fileutils'
 require 'tempfile'
 require 'yaml'
 require_relative 'frontend'
+require_relative 'sharing_violation_retry'
 
 module Lich
   module Common
@@ -20,6 +21,9 @@ module Lich
       MAX_SCALAR_BYTES = 4096
       MAX_ARGUMENTS = 256
       MUTEX = Mutex.new
+      # Bounded backoff for publishing or removing the settings file while
+      # Windows reports a sharing violation. Shared with ActiveSessions.
+      SHARING_VIOLATION_RETRY_DELAYS = SharingViolationRetry::DELAYS
 
       # Raised when saving would overwrite a settings document created by a
       # newer, unsupported schema version.
@@ -34,6 +38,8 @@ module Lich
       )
 
       @current = EMPTY_CONFIGURATION
+
+      extend SharingViolationRetry
 
       class << self
         # Loads, validates, and applies frontends.yml from a Lich data directory.
@@ -155,6 +161,12 @@ module Lich
         end
 
         # Atomically writes a normalized settings document with owner-only access.
+        # The temporary file is staged beside the destination so the rename
+        # never crosses volumes, and it is closed before the rename because
+        # Windows refuses to rename a file that still has an open handle.
+        # If publishing fails, the temporary file is removed with the same
+        # bounded retry; a removal that still fails is logged and never
+        # replaces the publication error.
         #
         # @param path [String] destination settings path
         # @param configuration [Hash] normalized frontend configuration
@@ -164,15 +176,45 @@ module Lich
         def write_file(path, configuration)
           directory = File.dirname(path)
           FileUtils.mkdir_p(directory)
-          Tempfile.create(['frontends', '.yml.tmp'], directory) do |file|
+          file = Tempfile.create(['frontends', '.yml.tmp'], directory)
+          begin
             file.chmod(0o600)
             file.write(configuration.to_yaml)
             file.flush
             file.fsync
-            File.rename(file.path, path)
+            file.close
+            retry_sharing_violation { File.rename(file.path, path) }
+          ensure
+            remove_temp_file(file)
           end
         rescue SystemCallError => error
           raise IOError, "could not save #{FILE_NAME}: #{error.message}"
+        end
+
+        # Best-effort removal of an unpublished temporary file. Every error is
+        # logged and swallowed so it cannot replace the error that caused the
+        # save to fail.
+        #
+        # A close that fails is ignored and the removal continues: after a
+        # failed write or flush, close retries the pending buffer and raises
+        # the same error again, but Ruby has already released the descriptor.
+        #
+        # @param file [File] temporary file created by write_file
+        # @return [void]
+        # @api private
+        def remove_temp_file(file)
+          begin
+            file.close unless file.closed?
+          rescue IOError, SystemCallError
+            nil
+          end
+          return unless File.exist?(file.path)
+
+          retry_sharing_violation { File.unlink(file.path) }
+        rescue Errno::ENOENT
+          nil
+        rescue StandardError => error
+          log_warning("could not remove temporary #{FILE_NAME} file #{file.path}: #{error.message}")
         end
 
         # Converts an arbitrary settings document into the supported immutable schema.

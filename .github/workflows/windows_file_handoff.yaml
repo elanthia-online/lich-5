@@ -1,4 +1,4 @@
-name: Windows ActiveSessions Handoff
+name: Windows File Handoff
 
 on:
   push:
@@ -10,7 +10,11 @@ on:
       - "spec/lib/internal_api/active_sessions*_spec.rb"
       - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
-      - ".github/workflows/windows_active_sessions.yaml"
+      - "lib/common/frontend_settings.rb"
+      - "lib/common/sharing_violation_retry.rb"
+      - "spec/lib/common/frontend_settings_spec.rb"
+      - "spec/lib/common/sharing_violation_retry_spec.rb"
+      - ".github/workflows/windows_file_handoff.yaml"
   pull_request:
     paths:
       - "lib/internal_api/active_sessions.rb"
@@ -18,7 +22,11 @@ on:
       - "spec/lib/internal_api/active_sessions*_spec.rb"
       - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
-      - ".github/workflows/windows_active_sessions.yaml"
+      - "lib/common/frontend_settings.rb"
+      - "lib/common/sharing_violation_retry.rb"
+      - "spec/lib/common/frontend_settings_spec.rb"
+      - "spec/lib/common/sharing_violation_retry_spec.rb"
+      - ".github/workflows/windows_file_handoff.yaml"
   workflow_dispatch:
 
 permissions:
@@ -38,3 +46,6 @@ jobs:
           bundler-cache: true
       - name: Run ActiveSessions ownership and handoff specs
         run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb spec/lib/internal_api/active_sessions/server_client_spec.rb
+      - name: Run frontend settings specs
+        if: ${{ !cancelled() }}
+        run: bundle exec rspec spec/lib/common/frontend_settings_spec.rb spec/lib/common/sharing_violation_retry_spec.rb
