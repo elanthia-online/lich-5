@@ -277,7 +277,7 @@ module Lich
                 # The cache was updated before queueing; drop those entries so the
                 # next get reads the DB and the next set of the same value is retried.
                 keys.each { |key| Infomon.cache.delete(key) }
-                Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{e.class}: #{e.message}"
+                Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
               end
             end
           rescue StandardError
