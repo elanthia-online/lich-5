@@ -66,6 +66,11 @@ module Lich
         /You are already/
       ].freeze
 
+      # Seconds bput waits for a matching reply when the caller passes no
+      # 'timeout'. retreat also uses it as its hold budget, so a hold costs
+      # about as long as one RETREAT that drew no recognised reply.
+      BPUT_DEFAULT_TIMEOUT = 15
+
       # Assess teach parsing patterns
       ASSESS_TEACH_TEACHER_PATTERN = /(?<teacher>.*) is teaching a class on (?<skill>.*) which is still open to new students/.freeze
       ASSESS_TEACH_SKILL_FILTER_PATTERN = /.* \(compared to what you already know\) (?<filtered_skill>.*)/.freeze
@@ -166,14 +171,14 @@ module Lich
 
       # Like `fput` but better because will wait for RT
       # before performing command and do smart retries.
-      # Will wait for matching text up to 15 seconds then timeout.
+      # Will wait for matching text up to BPUT_DEFAULT_TIMEOUT seconds then timeout.
       # Also recovers from some limited failures wherein we want to
       # simply fix the issue and retry the bput, like when we're prone
       # and need to be standing. Complex handling should be done within
       # the calling script.
       def bput(message, *matches)
         options = (matches.shift if matches.first.is_a?(Hash)) || {}
-        options['timeout'] ||= 15
+        options['timeout'] ||= BPUT_DEFAULT_TIMEOUT
         options['ignore_rt'] ||= false
 
         timeout = options['timeout']
@@ -885,16 +890,45 @@ module Lich
         $ENC_MAP[encumbrance]
       end
 
+      # Retreats until out of combat, standing first when the game asks.
+      #
+      # While held or rooted (the immobile reply, to RETREAT or to STAND) it
+      # pauses 1 s and tries again for BPUT_DEFAULT_TIMEOUT seconds from the
+      # first immobile reply, so entry roundtime and earlier steps don't use
+      # up that time. That one budget covers every hold in the call, so holds
+      # that alternate with steps back can't go on unbounded. The last try
+      # goes out up to 1 s after the deadline, so holds that end within
+      # BPUT_DEFAULT_TIMEOUT of the first immobile reply still end in a
+      # retreat; longer ones return false. When the character must stand but can't
+      # (overburdened, unconscious, no room), no reply says when that ends,
+      # so it returns false. It pauses 1 s before it gives up either way, so
+      # a caller that calls it again at once sends at most about one RETREAT
+      # a second.
+      #
+      # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
+      # @return [Boolean, nil] nil when no other NPC is in the room, true once
+      #   out of combat, false when retreating can't succeed now
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
+        deadline = nil
         loop do
-          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, *RETREAT_MESSAGES)
+          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, IMMOBILE_PATTERN, *RETREAT_MESSAGES)
           when *RETREAT_ESCAPE_MESSAGES
             return true
+          when IMMOBILE_PATTERN
+            state = :immobile
           else
-            DRC.fix_standing
+            state = DRC.stand_result
           end
+          next if state == :standing
+
+          # The deadline is checked before the pause, so the last RETREAT goes
+          # out up to 1 s after it and every try stays 1 s apart.
+          deadline ||= Time.now + BPUT_DEFAULT_TIMEOUT if state == :immobile
+          try_again = state == :immobile && Time.now < deadline
+          pause 1
+          return false unless try_again
         end
       end
 
