@@ -176,7 +176,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
   # so every Slack call it makes is capped by STARTUP_REQUEST_BUDGET. A bot
   # that gives up retries on the next message.
   describe 'startup time budget' do
-    # The documented startup cap per Slack API step (SlackBot::STARTUP_REQUEST_BUDGET).
+    # Upper bound for the timing examples below, hard-coded on purpose (not
+    # read from SlackBot::STARTUP_REQUEST_BUDGET) so they fail if the cap grows.
     let(:startup_budget) { 10 }
     # Most the startup jitter before users.list can sleep.
     let(:max_jitter) { 5 }
@@ -346,10 +347,6 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
 
       expect(bot.initialized?).to be true
       expect(calls['users.list']).to eq(0)
-    end
-
-    it 'defines STARTUP_REQUEST_BUDGET as a short cap' do
-      expect(described_class::STARTUP_REQUEST_BUDGET).to eq(startup_budget)
     end
   end
 

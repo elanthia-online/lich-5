@@ -132,14 +132,16 @@ module Lich
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
       #   (token check, users.list), or nil for the full retry policy. The LNet
       #   token discovery keeps its own timeouts.
+      # @param jitter [Boolean] wait a random moment before calling users.list
+      #   (on for a manual reconnect; the in-send reconnect turns it off)
       # @return [Boolean] true if the token is valid and a non-empty users list
       #   (fresh, cached, or the one loaded earlier) is available
-      def reconnect!(budget: nil)
+      def reconnect!(budget: nil, jitter: true)
         @error_message = nil
         @initialized = false
         @token_verified = false
 
-        connect(budget: budget)
+        connect(budget: budget, jitter: jitter)
       end
 
       # Checks whether the LNet connection is alive and responsive.
@@ -223,7 +225,7 @@ module Lich
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
       # @param jitter [Boolean] wait a random moment before calling users.list
       # @return [Boolean] the new initialized? state
-      def connect(budget: nil, jitter: budget.nil?)
+      def connect(budget:, jitter:)
         return false unless verify_token(budget)
 
         @token_verified = true
@@ -319,7 +321,7 @@ module Lich
       def restore_connection_once
         return load_users_list(SEND_REQUEST_BUDGET) if @token_verified
 
-        reconnect!(budget: SEND_REQUEST_BUDGET)
+        reconnect!(budget: SEND_REQUEST_BUDGET, jitter: false)
       rescue StandardError => e
         Lich.log "SlackBot: Reconnect failed: #{e.class}: #{e.message}"
         @initialized = false
