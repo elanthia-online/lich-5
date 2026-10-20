@@ -1082,7 +1082,19 @@ RSpec.describe Lich::DragonRealms::DRC do
     it 'issues collect without practice when false' do
       allow(described_class).to receive(:bput).and_return('You begin to forage around')
       described_class.collect('rock', false)
-      expect(described_class).to have_received(:bput).with('collect rock ', described_class::COLLECT_MESSAGES)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'sends no trailing whitespace when practice is nil' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', nil)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'waits out roundtime once on an uncluttered collect' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', false)
+      expect(described_class).to have_received(:waitrt?).once
     end
 
     it 'calls kick_pile? when room is cluttered' do
@@ -1091,6 +1103,95 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:kick_pile?).and_return(true)
       described_class.collect('rock')
       expect(described_class).to have_received(:kick_pile?)
+    end
+
+    context 'when the room is cluttered' do
+      # Real kick_pile? runs; only bput, the room's objects, fix_standing and waitrt? are stubbed.
+      # Each bput call pops the next scripted reply and records the command sent.
+      let(:sent) { [] }
+
+      def script_replies(*replies)
+        allow(described_class).to receive(:fix_standing)
+        allow(described_class).to receive(:bput) do |command, *_patterns|
+          sent << command
+          replies.shift || raise("unexpected extra bput: #{command.inspect}")
+        end
+      end
+
+      context 'with a kickable pile in the room' do
+        before { allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks']) }
+
+        it 'retries without practice when practice is false' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock', false)
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'retries with practice by default' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock')
+          expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'retries with practice when practice is explicitly true' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock', true)
+          expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'keeps practice off across repeated cluttered retries' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'take a step back and run up to',
+                         'You begin to forage around,')
+          described_class.collect('rock', false)
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'does not retry when the kick misses the pile' do
+          script_replies('The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent).to eq(['collect rock practice', 'kick pile'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'waits out roundtime once when a later kick misses the pile' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'with no pile in the room' do
+        before { allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder']) }
+
+        it 'gives up without kicking or retrying' do
+          script_replies('The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent).to eq(['collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'when the pile is gone on a later attempt' do
+        before do
+          room_states = [['a pile of rocks'], []]
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+        end
+
+        it 'waits out the kick roundtime once when it gives up after the first kick succeeded' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
     end
   end
 
