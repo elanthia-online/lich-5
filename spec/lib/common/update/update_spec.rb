@@ -32,10 +32,11 @@ RSpec.describe 'Lich::Util::Update.request while a revert is running' do
   let(:root) { Dir.mktmpdir('update-request-spec') }
   let(:manager) { Lich::Util::Update::SnapshotManager.new }
   let(:release_installer) do
-    # A newer release already resolved, so --update goes straight to its
-    # snapshot without asking GitHub.
+    # A newer release already resolved, with its download URL, so --update
+    # goes straight to its snapshot without asking GitHub.
     Lich::Util::Update::ReleaseInstaller.new(nil, nil, manager).tap do |installer|
       installer.instance_variable_set(:@update_to, '99.0.0')
+      installer.instance_variable_set(:@zipfile, 'https://example.invalid/lich5.tar.gz')
       allow(installer).to receive(:respond)
     end
   end
@@ -129,7 +130,6 @@ RSpec.describe 'Lich::Util::Update.request while a revert is running' do
     end
 
     it 'is refused while --update downloads, and the lock is free afterwards' do
-      release_installer.instance_variable_set(:@zipfile, 'https://example.invalid/lich5.tar.gz')
       allow(OpenURI).to receive(:open_uri) do
         revert_from_other_session
         raise SocketError, 'offline'
@@ -145,7 +145,6 @@ RSpec.describe 'Lich::Util::Update.request while a revert is running' do
     end
 
     it 'is refused while --update installs' do
-      release_installer.instance_variable_set(:@zipfile, 'https://example.invalid/lich5.tar.gz')
       allow(OpenURI).to receive(:open_uri).and_return(StringIO.new(lich_tarball))
       allow(release_installer).to receive(:perform_update) do
         revert_from_other_session
