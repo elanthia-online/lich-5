@@ -868,5 +868,16 @@ RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
       expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> glares at you.])).to eq(:noop)
       expect(wraith.status).to be_nil
     end
+
+    it "does not mark a different NPC dead" do
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="999" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
+      expect(wraith.status).to be_nil
+    end
+
+    it "does not overwrite a gone NPC" do
+      wraith.status = "gone"
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
+      expect(wraith.status).to eq("gone")
+    end
   end
 end
