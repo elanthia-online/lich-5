@@ -6,12 +6,16 @@ require 'common/gui/master_password_manager'
 require 'common/gui/password_cipher'
 require 'common/authentication/entry_store'
 require 'fileutils'
+require 'tmpdir'
 
 RSpec.describe Lich::Common::GUI::MasterPasswordChange do
   let(:test_password) { 'TestPassword123!' }
   let(:new_password) { 'NewSecurePassword456!' }
   let(:weak_password) { 'weak' }
-  let(:data_dir) { File.join('/tmp', "lich_test_#{Time.now.to_i}") }
+  # A fresh directory per example. A name built from the clock second is shared
+  # by every run that starts in the same second, and one run's cleanup deletes
+  # the other's files.
+  let(:data_dir) { Dir.mktmpdir('lich-master-password-change-spec-') }
   let(:yaml_file) { File.join(data_dir, 'entry.yaml') }
 
   # Import necessary classes
@@ -20,12 +24,11 @@ RSpec.describe Lich::Common::GUI::MasterPasswordChange do
   let(:entry_store) { Lich::Common::Authentication::EntryStore }
 
   before do
-    FileUtils.mkdir_p(data_dir)
     allow(Lich).to receive(:log)
   end
 
   after do
-    FileUtils.rm_rf(data_dir) if File.exist?(data_dir)
+    FileUtils.rm_rf(data_dir)
   end
 
   describe '.show_change_master_password_dialog' do

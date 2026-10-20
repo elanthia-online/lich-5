@@ -400,5 +400,21 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       allow(script_class).to receive(:respond)
       expect(script_class.version('ghost')).to be_nil
     end
+
+    # DRCMM.check_moonwatch relies on this to tell a missing script from a
+    # duplicate start: Script.exists? does not search custom/<subdir>/, but
+    # Script.version resolves names the way Script.start does.
+    it 'finds a custom/<subdir>/ script that Script.exists? does not see' do
+      add_script('subwatch', header('version: 1.2.0'), subdir: 'mypack')
+
+      expect(script_class.exists?('subwatch')).to be false
+      expect(script_class.version('subwatch')).to eq(Gem::Version.new('1.2.0'))
+    end
+
+    it 'raises ArgumentError for a malformed version header' do
+      add_script('badver', header('version: 1.0 beta'))
+
+      expect { script_class.version('badver') }.to raise_error(ArgumentError)
+    end
   end
 end
