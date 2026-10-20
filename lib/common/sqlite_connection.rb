@@ -43,8 +43,9 @@ module Lich
   # waited for the lock itself. A connection holder usually keeps its
   # connection waiting for locks for at most two busy timeouts in one
   # transaction (BEGIN IMMEDIATE or its first write, and COMMIT); a third
-  # leaves room for holders that start waiting after the queued thread does. A queued thread then usually gets a connection once
-  # those holders finish, and its own full busy timeout after that. Sequel's
+  # leaves room for holders that start waiting after the queued thread does.
+  # A queued thread then usually gets a connection once those holders finish,
+  # and its own full busy timeout after that. Sequel's
   # pool is not strictly first come, first served: a thread that releases a
   # connection and asks again at once can take it back before a queued thread
   # wakes. A queued thread can still time out behind callers that keep coming
