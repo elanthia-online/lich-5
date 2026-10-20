@@ -43,8 +43,9 @@ module Lich
         # whole session, and the login autostart runs --announce on a script
         # thread while lich5-update runs on the client thread, so without it
         # one command could clear the target another is installing. Reentrant,
-        # because the beta install calls #download_release_update and both
-        # call #prep_update. Class-level for the same reload reason as BETA_LOCK.
+        # because the beta install calls #download_release_update under the
+        # lock, and #announce and #download_release_update call #prep_update.
+        # Class-level for the same reload reason as BETA_LOCK.
         RELEASE_LOCK = Monitor.new unless const_defined?(:RELEASE_LOCK, false)
 
         # @param client [GitHubClient] GitHub API client instance
