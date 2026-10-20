@@ -302,14 +302,6 @@ RSpec.describe '#fput' do
     end
   end
 
-  # The fput above is a copy; this pins production fput, dothis and
-  # dothistimeout to the shared pattern so the copy cannot drift from them.
-  it 'production fput, dothis and dothistimeout all use the shared wait pattern' do
-    source = File.read(File.expand_path('../../lib/global_defs.rb', __dir__))
-    expect(source.scan('Lich::Common::WAIT_RESPONSE_PATTERN.match(').size).to eq(3)
-    expect(source).not_to match(/[.W]ait \(\?<wait_time>|[.W]ait \(\[0-9\]\+\)/)
-  end
-
   context 'when character is stunned or dead' do
     it 'returns false when dead' do
       stub_game_responses("can't do that while dead")

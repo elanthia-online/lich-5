@@ -171,6 +171,61 @@ RSpec.describe 'Native command and roundtime execution guard checkpoints' do
     end
   end
 
+  # Production fput, dothis and dothistimeout against the shared wait pattern:
+  # a refusal in any spelling, or appended to the line before it, waits and
+  # resends; player speech containing "Wait N" is not a refusal.
+  context 'with wait refusals and player speech' do
+    let(:success) { 'Your spell is ready.' }
+    let(:replies) { [] }
+    let(:sleeps) { [] }
+
+    before do
+      allow(owner).to receive(:execution_sleep) { |duration| sleeps << duration }
+      allow(harness).to receive(:put) do |command|
+        writes << command
+        Array(replies.shift || success).each { |line| buffer << line }
+      end
+    end
+
+    speech = ['Soandso says, "Wait 5 minutes before we go."', 'You whisper to Bob, "Wait 10 and then follow."']
+    waits = ['You slip....wait 1 seconds.', '... wait 2 seconds.']
+
+    it 'fput returns player speech as the reply without waiting or resending' do
+      speech.each do |line|
+        writes.clear
+        replies.replace([line])
+        expect(harness.fput('prepare 101')).to eq(line)
+        expect(writes).to eq(['prepare 101'])
+      end
+      expect(sleeps).to be_empty
+    end
+
+    it 'fput waits out an appended and a spaced wait, then resends' do
+      replies.replace(waits)
+      expect(harness.fput('prepare 101')).to eq(success)
+      expect(writes).to eq(['prepare 101'] * 3)
+      expect(sleeps).to eq([1, 2])
+    end
+
+    { dothis: [], dothistimeout: [5] }.each do |method, timeout|
+      call = ->(h) { h.public_send(method, 'prepare 101', *timeout, /ready/) }
+
+      it "#{method} reads past player speech without waiting or resending" do
+        replies.replace([speech + [success]])
+        expect(call.call(harness)).to eq(success)
+        expect(writes).to eq(['prepare 101'])
+        expect(sleeps).to be_empty
+      end
+
+      it "#{method} waits out an appended and a spaced wait, then retries" do
+        replies.replace(waits)
+        expect(call.call(harness)).to eq(success)
+        expect(writes).to eq(['prepare 101'] * 3)
+        expect(sleeps).to eq([0.3, 1.5])
+      end
+    end
+  end
+
   %i[wait_until wait_while].each do |method|
     it "restores thread priority when #{method} unwinds on cancellation" do
       original_priority = Thread.current.priority

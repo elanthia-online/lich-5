@@ -40,10 +40,11 @@ module MoveFakePrimitives
   def put(cmd) = game.put(cmd)
 
   # The bounded fput of #1587, reduced to what move relies on: a refusal
-  # ("...wait N", "You struggle, but fail to stand.") triggers a resend -
-  # 'stand' in frame for the struggle - up to max_resends, then the failure
-  # symbol; any other line is returned as the reply. An unbounded call is
-  # the bug #1622 exists to fix, so it raises.
+  # (a WAIT_RESPONSE_PATTERN wait, as production fput matches it, or "You
+  # struggle, but fail to stand.") triggers a resend - 'stand' in frame for
+  # the struggle - up to max_resends, then the failure symbol; any other line
+  # is returned as the reply. An unbounded call is the bug #1622 exists to
+  # fix, so it raises.
   def fput(cmd, *_waitingfor, **opts)
     raise "move called fput(#{cmd.inspect}) without max_resends" unless opts[:max_resends]
 
@@ -53,7 +54,7 @@ module MoveFakePrimitives
       game.sent << message.dup
       reply = game.get?
       return :no_response if reply.nil?
-      return reply unless reply =~ /^\.{3}wait \d|^You.+struggle.+stand/
+      return reply unless Lich::Common::WAIT_RESPONSE_PATTERN.match?(reply) || reply =~ /^You.+struggle.+stand/
 
       resends += 1
       return :too_many_resends if resends > opts[:max_resends]
