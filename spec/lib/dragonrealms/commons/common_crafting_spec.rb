@@ -2,7 +2,9 @@
 
 require_relative '../../../spec_helper'
 
-# Load production code
+# Load production code. common-items is loaded so DRCC reaches the real DRCI
+# (and its pattern constants) whether this file runs alone or in the suite.
+require 'dragonrealms/commons/common-items'
 require 'dragonrealms/commons/common-crafting'
 
 DRCC = Lich::DragonRealms::DRCC unless defined?(DRCC)
@@ -1305,6 +1307,173 @@ describe DRCC do
               end
             end
           end
+        end
+      end
+    end
+  end
+
+  describe '.stow_crafting_item' do
+    let(:belt) { { 'name' => "forger's belt", 'items' => ['tongs'] } }
+    let(:tie) { "tie my tongs to my forger's belt" }
+    let(:bag_put) { 'put my tongs in my backpack' }
+    let(:wounds) { 'Your wounds hinder your ability to do that.' }
+    let(:attach) { "You attach the tongs to your forger's belt." }
+    let(:sent) { [] }
+    let(:tie_replies) { [] }
+    let(:bag_put_reply) { 'You put your tongs in your backpack.' }
+    # The safe-room stub moves the character, so only a room id read before
+    # the trip walks back to the crafting room (8775).
+    let(:room_id) { [8775] }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i and
+      # the matched text (not the whole line) is returned; '' on a timeout.
+      # A non-empty reply that no pattern matches raises: the real bput would
+      # wait out its 15 s timeout and print a debug block instead.
+      allow(DRC).to receive(:bput) do |command, *patterns|
+        sent << command
+        # main retried without limit; stop the example instead of the stack.
+        raise 'tie sent a third time' if sent.count { |c| c.start_with?('tie ') } > 2
+
+        line = command.start_with?('tie ') ? tie_replies.shift.to_s : bag_put_reply
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
+
+        match ? match.to_a.first : ''
+      end
+      allow(DRC).to receive(:wait_for_script_to_complete) do |script, args|
+        sent << "#{script} #{args.join(' ')}"
+        room_id[0] = 1
+      end
+      allow(DRCT).to receive(:walk_to) { |room| sent << "walk #{room}" }
+      allow(Room).to receive(:current) { OpenStruct.new(id: room_id.first) }
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    it 'keeps the belt tie helper out of the public DRCC API' do
+      expect(DRCC).not_to respond_to(:tie_to_crafting_belt?)
+      expect { DRCC.tie_to_crafting_belt?('tongs', belt) }.to raise_error(NoMethodError, /private method/)
+    end
+
+    it 'returns nil without sending anything when there is no tool name' do
+      expect(DRCC.stow_crafting_item(nil, 'backpack', belt)).to be_nil
+      expect(sent).to be_empty
+    end
+
+    it 'ties a belt tool and returns true' do
+      tie_replies << attach
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie])
+      expect(Lich::Messaging).not_to have_received(:msg)
+    end
+
+    it 'counts a tool that is already tied off as tied' do
+      tie_replies << 'The tongs has already been tied off.'
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie])
+    end
+
+    it 'puts a tool that is not on the belt list in the bag without a tie' do
+      expect(DRCC.stow_crafting_item('hammer', 'backpack', belt)).to be(true)
+      expect(sent).to eq(['put my hammer in my backpack'])
+    end
+
+    it 'puts the tool in the bag when there is no belt' do
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+      expect(sent).to eq([bag_put])
+    end
+
+    [
+      "There's no more free ties on the belt.",
+      'Tie what?',
+      'You must be holding the tongs to do that.',
+      'You are a little too busy to do that.',
+      'The tongs doesn\'t seem to fit.',
+      'You should close the fan first.',
+      "Tie it off when it's empty?",
+      ''
+    ].each do |reply|
+      it "puts the tool in the bag without a safe-room trip after #{reply.empty? ? 'no reply' : reply.inspect}" do
+        tie_replies << reply
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+        expect(sent).to eq([tie, bag_put])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', "DRCC: Failed to tie tongs to forger's belt. Stowing it off the belt instead.").once
+      end
+    end
+
+    it 'goes to safe-room once for wounds, then ties again' do
+      tie_replies.push(wounds, attach)
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', "DRCC: Wounds hinder tying tongs to forger's belt. Visiting safe-room, then trying once more.").once
+      expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Failed to tie/)
+    end
+
+    it 'puts the tool in the bag when wounds still hinder the tie after safe-room' do
+      tie_replies.push(wounds, wounds)
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Wounds hinder tying tongs/).once
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Failed to tie tongs/).once
+    end
+
+    it 'puts the tool in the bag when the tie after safe-room fails another way' do
+      tie_replies.push(wounds, 'Tie what?')
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
+    end
+
+    context 'when the bag has no room' do
+      let(:bag_put_reply) { "There's no room in the backpack." }
+
+      it 'stows the tool after a failed tie and returns true' do
+        tie_replies << 'Tie what?'
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+        expect(sent).to eq([tie, bag_put, 'stow my tongs'])
+      end
+    end
+
+    context 'when the bag refuses the tool' do
+      let(:bag_put_reply) { "You can't put that there." }
+
+      it 'returns false, as for any bag tool, after putting it in the other bag' do
+        tie_replies << "There's no more free ties on the belt."
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(false)
+        expect(sent).to eq([tie, bag_put, 'put my tongs in my other backpack'])
+      end
+    end
+
+    # Every tie reply DRCI knows (and a timeout), alone and after wounds: the
+    # trip and the retry happen only for wounds, at most once, and anything
+    # that isn't a tie ends in the bag. A second reply is only read after
+    # wounds, so pairs that start with anything else add no behaviour.
+    # DRCI's /^You don't seem to be able to move/ is left out: the real bput
+    # skips that line, so the outcome is the timeout ('') case covered here.
+    describe 'for every tie reply, alone and after wounds' do
+      success = ["You attach the tongs to your forger's belt.", 'You tie the tongs to the belt.',
+                 'The tongs has already been tied off.']
+      refusals = ["There's no more free ties on the belt.", 'Tie what?', 'You are a little too busy to do that.',
+                  'You must be holding the tongs to do that.', 'You should close the fan first.',
+                  'The tongs doesn\'t seem to fit.', "Tie it off when it's empty?", '']
+      wound = 'Your wounds hinder your ability to do that.'
+      replies = success + refusals + [wound]
+
+      sequences = (success + refusals).map { |reply| [reply] } + replies.map { |reply| [wound, reply] }
+      sequences.each do |sequence|
+        it "is bounded after #{sequence.map(&:inspect).join(' then ')}" do
+          tie_replies.push(*sequence)
+          result = DRCC.stow_crafting_item('tongs', 'backpack', belt)
+
+          retried = sequence.first == wound
+          tied = success.include?(sequence.last)
+          expected = [tie]
+          expected += ['safe-room force', 'walk 8775', tie] if retried
+          expected << bag_put unless tied
+          expect(sent).to eq(expected)
+          expect(result).to be(true)
         end
       end
     end

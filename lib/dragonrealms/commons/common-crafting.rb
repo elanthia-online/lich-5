@@ -55,8 +55,7 @@ module Lich
       UNTIE_NOT_FOUND = /^Untie what/
       UNTIE_WOUNDED = /^Your wounds hinder your ability to do that/
 
-      TIE_BELT_SUCCESS = 'you attach'
-      TIE_BELT_WOUNDED = 'Your wounds hinder'
+      TIE_BELT_WOUNDED = UNTIE_WOUNDED
 
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
@@ -527,24 +526,44 @@ module Lich
 
         waitrt?
         if belt && belt['items'].find { |item| /\b#{name}/i =~ item || /\b#{item}/i =~ name }
-          unless DRCI.tie_item?(name, belt['name'])
-            Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}.")
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return stow_crafting_item(name, bag, belt)
-          end
-        else
-          case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
-          when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
-            fput("stow my #{name}")
-          when PUT_BAG_CANT_THERE
-            fput("put my #{name} in my other #{bag}")
-            return false
-          end
+          return true if tie_to_crafting_belt?(name, belt)
+
+          # Not tied: wounds outlasted the safe-room trip, or the reply was a
+          # refusal that retrying won't clear. Put the tool in the bag instead;
+          # get_crafting_item's `get my <name>` finds it there.
+          Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
+        end
+
+        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
+        when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
+          fput("stow my #{name}")
+        when PUT_BAG_CANT_THERE
+          fput("put my #{name} in my other #{bag}")
+          return false
         end
         true
       end
+
+      # Ties a crafting tool to the belt. When wounds hinder the tie, visits
+      # safe-room once and tries once more; any other reply is final.
+      #
+      # @param name [String] tool noun, as passed to stow_crafting_item
+      # @param belt [Hash] crafting belt settings ('name' is tied to)
+      # @return [Boolean] true if the tool is tied (or was already tied off)
+      def tie_to_crafting_belt?(name, belt)
+        command = "tie my #{name} to my #{belt['name']}"
+        patterns = [DRCI::TIE_ITEM_SUCCESS_PATTERNS, DRCI::TIE_ITEM_EMPTY_PATTERN, DRCI::TIE_ITEM_FAILURE_PATTERNS]
+        result = DRC.bput(command, *patterns)
+        if result.match?(TIE_BELT_WOUNDED)
+          Lich::Messaging.msg('bold', "DRCC: Wounds hinder tying #{name} to #{belt['name']}. Visiting safe-room, then trying once more.")
+          craft_room = Room.current.id
+          DRC.wait_for_script_to_complete('safe-room', ['force'])
+          DRCT.walk_to(craft_room)
+          result = DRC.bput(command, *patterns)
+        end
+        DRCI::TIE_ITEM_SUCCESS_PATTERNS.any? { |pattern| result.match?(pattern) }
+      end
+      private_class_method :tie_to_crafting_belt?
 
       def crafting_cost(recipe, hometown, parts, quantity, material)
         # To use this method, you'll need to pass:
