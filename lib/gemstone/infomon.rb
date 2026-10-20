@@ -274,6 +274,7 @@ module Lich
 
             # Normal SQL statement processing
             sql, keys = item
+            write_error = nil
             Infomon.mutex.synchronize do
               begin
                 Infomon.db.run(sql)
@@ -284,9 +285,13 @@ module Lich
                 # Keep the cached value (Infomon's view of the game) and mark the keys so
                 # the next set/upsert_batch of the same value is retried instead of a :noop.
                 keys.each { |key| @unpersisted[key] = true }
-                respond "--- Lich: error: Infomon write failed for #{keys.join(', ')}: #{e.message}"
-                Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
+                write_error = e
               end
+            end
+            # Reported after releasing the DB mutex so a slow client write can't hold it.
+            if write_error
+              respond "--- Lich: error: Infomon write failed for #{keys.join(', ')}: #{write_error.message}"
+              Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{write_error.class}: #{write_error.message}\n\t#{write_error.backtrace.join("\n\t")}"
             end
           rescue StandardError
             respond "--- Lich: error: Infomon ThreadQueue: #{$!}"
