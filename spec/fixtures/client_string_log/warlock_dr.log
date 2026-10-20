@@ -1,0 +1,22 @@
+2026-10-17 09:43:26: info: Lich 5.22.0
+2026-10-17 09:43:26: info: Ruby 4.0.7
+2026-10-17 09:43:26: info: x64-mingw-ucrt
+2026-10-17 09:43:31: === Frontend.init_from_parent called ===
+2026-10-17 09:43:31: Parent process PID: 17012
+2026-10-17 09:43:31: Parent process name: warlock.exe
+2026-10-17 09:43:31: === resolve_windows_pid starting with PID: 17012 ===
+2026-10-17 09:43:31:   Process name: warlock.exe
+2026-10-17 09:43:31:   Found visible window for PID 17012
+2026-10-17 09:43:31:   Stopping at PID 17012 (warlock.exe) - has visible window
+2026-10-17 09:43:31: resolve_pid(17012) returned: 17012
+2026-10-17 09:43:31: Frontend PID set to: 17012
+2026-10-17 09:43:32: info: pretending to be dr.simutronics.net
+2026-10-17 09:43:32: info: listening on port 11024
+2026-10-17 09:43:32: info: waiting for the client to connect...
+2026-10-17 09:43:32: info: connection with the game client is open
+2026-10-17 09:43:32: info: connecting to the real game host...
+2026-10-17 09:43:32: info: connected via direct TCP transport (dr.simutronics.net:11024)
+2026-10-17 09:43:32: info: connection with the game host is open
+2026-10-17 09:43:32: info: client string from front end: /FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML
+2026-10-17 09:43:32: info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (Lich's, in place of the front end's)
+2026-10-17 09:43:34: info: logged in as DR:Testchar

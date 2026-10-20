@@ -1,0 +1,22 @@
+2026-10-17 09:46:06: info: Lich 5.22.0
+2026-10-17 09:46:06: info: Ruby 4.0.7
+2026-10-17 09:46:06: info: x64-mingw-ucrt
+2026-10-17 09:46:10: === Frontend.init_from_parent called ===
+2026-10-17 09:46:10: Parent process PID: 3200
+2026-10-17 09:46:10: Parent process name: Frostbite.exe
+2026-10-17 09:46:10: === resolve_windows_pid starting with PID: 3200 ===
+2026-10-17 09:46:10:   Process name: Frostbite.exe
+2026-10-17 09:46:10:   Found visible window for PID 3200
+2026-10-17 09:46:10:   Stopping at PID 3200 (Frostbite.exe) - has visible window
+2026-10-17 09:46:10: resolve_pid(3200) returned: 3200
+2026-10-17 09:46:10: Frontend PID set to: 3200
+2026-10-17 09:46:11: info: pretending to be dr.simutronics.net
+2026-10-17 09:46:11: info: listening on port 11024
+2026-10-17 09:46:11: info: waiting for the client to connect...
+2026-10-17 09:46:11: info: connection with the game client is open
+2026-10-17 09:46:11: info: connecting to the real game host...
+2026-10-17 09:46:11: info: connected via direct TCP transport (dr.simutronics.net:11024)
+2026-10-17 09:46:11: info: connection with the game host is open
+2026-10-17 09:46:11: info: client string from front end: <c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML
+2026-10-17 09:46:11: info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML
+2026-10-17 09:46:13: info: logged in as DR:Testchar

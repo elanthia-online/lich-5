@@ -157,18 +157,13 @@ module Lich
 
           unless requested_file_ext == "bad extension"
             file_path = File.join(location, requested_file)
-            tmp_file_path = file_path + ".tmp"
-            old_file_path = file_path + ".old"
-
-            File.rename(file_path, old_file_path) if File.exist?(file_path)
 
             begin
-              File.open(tmp_file_path, "wb") do |file|
-                file.write URI.parse(File.join(remote_repo, requested_file)).open.read
-              end
-
-              File.rename(tmp_file_path, file_path)
-              File.delete(old_file_path) if File.exist?(old_file_path)
+              # Download fully before touching the file, then replace it
+              # atomically: the live file stays in place for the whole
+              # network read and is untouched if anything fails.
+              content = URI.parse(File.join(remote_repo, requested_file)).open.read
+              FileWriter.safe_write(file_path, content)
 
               respond
               respond "#{requested_file} has been updated."
@@ -176,24 +171,7 @@ module Lich
               respond
               respond "Error updating #{requested_file}: #{e.class} - #{e.message}"
               respond "Backtrace: #{e.backtrace.first(3).join(' | ')}" if $debug
-
-              if File.exist?(tmp_file_path)
-                begin
-                  File.delete(tmp_file_path)
-                  respond "Cleaned up incomplete temporary file."
-                rescue => cleanup_error
-                  respond "Warning: Could not delete temporary file: #{cleanup_error.message}"
-                end
-              end
-
-              if File.exist?(old_file_path)
-                begin
-                  File.rename(old_file_path, file_path)
-                  respond "Restored original file."
-                rescue => restore_error
-                  respond "Warning: Could not restore original file: #{restore_error.message}"
-                end
-              end
+              respond "The existing #{requested_file} was left unchanged." if File.exist?(file_path)
 
               respond
               respond "The filename #{requested_file} is not available via lich5-update."

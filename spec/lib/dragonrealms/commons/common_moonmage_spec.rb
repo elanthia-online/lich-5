@@ -2272,6 +2272,105 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         described_class.set_planet_data(data)
         expect(Lich::Messaging.messages.last[:message]).to include('RTG')
       end
+
+      context 'when Messaging.msg returns the truthy Array production returns' do
+        # The real Lich::Messaging.msg returns the detachable-client snapshot
+        # (an Array, truthy even when empty); the spec_helper mock returns nil.
+        before do
+          allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, *args, **opts|
+            original.call(*args, **opts)
+            []
+          end
+        end
+
+        it 'returns nil so callers do not cast' do
+          data = { 'stats' => ['wisdom'], 'abbrev' => 'RTG' }
+          expect(described_class.set_planet_data(data)).to be_nil
+        end
+
+        it 'makes update_astral_data return nil' do
+          data = { 'stats' => ['wisdom'], 'abbrev' => 'RTG' }
+          expect(described_class.update_astral_data(data)).to be_nil
+        end
+      end
+    end
+
+    context 'when the telescope cannot be fetched' do
+      before do
+        allow(described_class).to receive(:get_data).with('constellations').and_return(
+          OpenStruct.new(constellations: [
+                           { 'name' => 'Yavash', 'stats' => ['wisdom'] }
+                         ])
+        )
+        allow(described_class).to receive(:find_visible_planets).and_return(nil)
+        allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, *args, **opts|
+          original.call(*args, **opts)
+          []
+        end
+      end
+
+      it 'returns nil and reports that the spell cannot be cast' do
+        data = { 'stats' => ['wisdom'], 'abbrev' => 'RTG' }
+        expect(described_class.set_planet_data(data)).to be_nil
+        expect(Lich::Messaging.messages.last[:message]).to include('Could not set planet data')
+      end
+    end
+
+    context 'with the real find_visible_planets and the truthy Array production msg returns' do
+      # find_visible_planets is not stubbed here, so these cover the real
+      # telescope-failure and missing-settings paths end to end.
+      let(:settings) { double('settings', telescope_name: 'telescope', telescope_storage: { 'container' => 'backpack' }) }
+      let(:data) { { 'stats' => ['wisdom'], 'abbrev' => 'IOTS' } }
+
+      before do
+        allow(described_class).to receive(:get_data).with('constellations').and_return(
+          OpenStruct.new(constellations: [
+                           { 'name' => 'Yavash', 'stats' => ['wisdom'] },
+                           { 'name' => 'Katamba' }
+                         ])
+        )
+        allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, *args, **opts|
+          original.call(*args, **opts)
+          []
+        end
+      end
+
+      it 'returns nil when the telescope cannot be fetched' do
+        allow(described_class).to receive(:get_telescope?).with('telescope', { 'container' => 'backpack' }).and_return(false)
+        expect(described_class.set_planet_data(data, settings)).to be_nil
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(
+          a_string_including('Could not get telescope'),
+          a_string_including('Could not set planet data. Cannot cast IOTS')
+        )
+      end
+
+      it 'returns nil when every planet with a stat turns up fruitless' do
+        allow(described_class).to receive(:get_telescope?).and_return(true)
+        allow(described_class).to receive(:store_telescope?).and_return(true)
+        allow(described_class).to receive(:center_telescope) { Flags['planet-not-visible'] = true }
+        expect(described_class.set_planet_data(data, settings)).to be_nil
+      end
+
+      it 'only centers on planets that carry stats' do
+        allow(described_class).to receive(:get_telescope?).and_return(true)
+        allow(described_class).to receive(:store_telescope?).and_return(true)
+        expect(described_class).to receive(:center_telescope).with('Yavash').once
+        expect(described_class).not_to receive(:center_telescope).with('Katamba')
+        expect(described_class.set_planet_data(data, settings)['cast']).to eq('cast Yavash')
+      end
+
+      it 'returns nil without touching the telescope when no settings are given' do
+        expect(described_class).not_to receive(:get_telescope?)
+        expect(DRC).not_to receive(:bput)
+        expect(described_class.set_planet_data(data)).to be_nil
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(a_string_including('No settings given'))
+      end
+
+      it 'does not set cast on the caller hash when it fails' do
+        allow(described_class).to receive(:get_telescope?).and_return(false)
+        described_class.set_planet_data(data, settings)
+        expect(data).not_to have_key('cast')
+      end
     end
 
     context 'when visible planets do not have the required stat' do
@@ -2315,6 +2414,36 @@ RSpec.describe Lich::DragonRealms::DRCMM do
     it 'returns data unchanged when neither moon nor stats' do
       data = { 'name' => 'Some Spell' }
       expect(described_class.update_astral_data(data)).to eq(data)
+    end
+
+    context 'when the astral body cannot be used and msg returns the truthy Array production returns' do
+      before do
+        allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, *args, **opts|
+          original.call(*args, **opts)
+          []
+        end
+      end
+
+      it 'returns nil for a stats spell when the telescope cannot be fetched' do
+        settings = double('settings', telescope_name: 'telescope', telescope_storage: {})
+        allow(described_class).to receive(:get_data).with('constellations').and_return(
+          OpenStruct.new(constellations: [{ 'name' => 'Yavash', 'stats' => ['wisdom'] }])
+        )
+        allow(described_class).to receive(:get_telescope?).with('telescope', {}).and_return(false)
+        expect(described_class.update_astral_data({ 'stats' => ['wisdom'], 'abbrev' => 'IOTS' }, settings)).to be_nil
+      end
+
+      it 'returns nil for a stats spell called without settings' do
+        allow(described_class).to receive(:get_data).with('constellations').and_return(
+          OpenStruct.new(constellations: [{ 'name' => 'Yavash', 'stats' => ['wisdom'] }])
+        )
+        expect(described_class.update_astral_data({ 'stats' => ['wisdom'], 'abbrev' => 'IOTS' })).to be_nil
+      end
+
+      it 'returns nil for a moon spell when no moon is up' do
+        allow(described_class).to receive(:visible_moons).and_return([])
+        expect(described_class.update_astral_data({ 'moon' => true, 'name' => 'Moongate' })).to be_nil
+      end
     end
 
     it 'prefers moon over stats when both keys present' do
@@ -2522,6 +2651,21 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'cleans up flags even when an error occurs' do
         allow(described_class).to receive(:center_telescope).and_raise(StandardError, 'test error')
         expect { described_class.find_visible_planets(%w[Yavash], settings) }.to raise_error(StandardError)
+      end
+    end
+
+    context 'when settings is nil' do
+      it 'returns nil without fetching the telescope or sending a command' do
+        expect(described_class).not_to receive(:get_telescope?)
+        expect(described_class).not_to receive(:center_telescope)
+        expect(DRC).not_to receive(:bput)
+        expect(described_class.find_visible_planets(%w[Yavash Xibar], nil)).to be_nil
+      end
+
+      it 'defaults settings to nil and says why it cannot look' do
+        expect(described_class.find_visible_planets(%w[Yavash])).to be_nil
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM: No settings given')
       end
     end
 
