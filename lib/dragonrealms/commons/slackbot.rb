@@ -674,6 +674,10 @@ module Lich
           retry
         rescue SystemCallError, IOError, OpenSSL::OpenSSLError => e
           # EOFError (an IOError), ECONNRESET and EINVAL are retried above.
+          # IOError is kept broad on purpose: it also catches local faults
+          # such as "closed stream", which are not network failures. Callers
+          # like direct_message must never stop the calling script, and the
+          # class name in the message keeps such a fault diagnosable.
           raise NetworkError, "Network error: #{e.message} (#{e.class})"
         end
       end
