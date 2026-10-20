@@ -1068,7 +1068,8 @@ module Lich
         base = @source && source_segment(segments.first)
         if base
           proxy_at(@path + base + segments.drop(1), value, @source, refusals: refusals)
-        elsif (key = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
+        elsif (key_segment = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
+          key = key_segment.first
           if segments.size == 1
             # The pair itself, as the Hash's each yields it: [key, the proxy
             # for the value there], which |key, value| takes apart.
@@ -1101,12 +1102,13 @@ module Lich
         child_segment(@source, element)
       end
 
-      # For a view whose source is a Hash: the key of the view's element at
-      # +view_segment+ when that element is a [key, value] pair (what
-      # Hash#sort or Hash#first(2) build) whose value is the very container
-      # the source holds at that key. nil otherwise (a value another write
-      # has since replaced, or an Array value of the Hash that only looks
-      # like a pair), so a write through it is refused.
+      # For a view whose source is a Hash: [key], the key of the view's
+      # element at +view_segment+ (nil and false included), when that
+      # element is a [key, value] pair (what Hash#sort or Hash#first(2)
+      # build) whose value is the very container the source holds at that
+      # key. nil otherwise (a value another write has since replaced, or an
+      # Array value of the Hash that only looks like a pair), so a write
+      # through it is refused.
       private def pair_key_in_hash_source(view_segment)
         return nil unless @source.is_a?(Hash) && @target.is_a?(Array)
 
@@ -1114,7 +1116,7 @@ module Lich
         return nil unless pair.instance_of?(Array) && pair.size == 2 && @settings_module.container?(pair.last)
 
         key, value = pair
-        key if @source.key?(key) && @source[key].equal?(value)
+        [key] if @source.key?(key) && @source[key].equal?(value)
       end
 
       # True when this view and its source are Hashes and +key+ holds, in

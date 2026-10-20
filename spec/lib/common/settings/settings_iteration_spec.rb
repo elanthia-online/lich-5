@@ -414,6 +414,16 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(stored[:by]).to eq("b" => { n: 2, last: true, dug: true }, "a" => { n: 1, last: true, first: true }, "c" => 3)
     end
 
+    it "stores a write to the value a |key, value| block gets at a nil or false key, as at any other key" do
+      settings[:pairs] = { nil => { n: 0 }, false => { n: 0 }, ord: { n: 0 } }
+
+      settings[:pairs].sort_by { |key, _value| key.to_s }.each { |_key, value| value[:n] = 1 }
+      settings[:pairs].sort_by { |key, _value| key.to_s }.dig(0, 1)[:dug] = true
+
+      expect(stored[:pairs]).to eq(nil => { n: 1, dug: true }, false => { n: 1 }, ord: { n: 1 })
+      expect(error_messages).to be_empty
+    end
+
     it "yields the pairs a plain Hash's sort_by yields" do
       plain = { "b" => { n: 2 }, "a" => { n: 1 }, "c" => 3 }
 
