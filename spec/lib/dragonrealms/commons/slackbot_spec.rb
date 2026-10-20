@@ -93,6 +93,10 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     it 'defines MAX_THROTTLE_RETRIES' do
       expect(described_class::MAX_THROTTLE_RETRIES).to eq(10)
     end
+
+    it 'defines SEND_REQUEST_BUDGET as a short cap' do
+      expect(described_class::SEND_REQUEST_BUDGET).to eq(5)
+    end
   end
 
   # ---- Error Classes ----
@@ -388,7 +392,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         )
 
         result = bot.send(:fetch_users_from_api)
-        expect(result['members'].first['name']).to eq('other_char_cached')
+        expect(result.first['name']).to eq('other_char_cached')
       end
     end
 
@@ -412,12 +416,12 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         end
 
         result = bot.send(:fetch_users_from_api)
-        expect(result['members'].first['name']).to eq('retry_user')
+        expect(result.first['name']).to eq('retry_user')
       end
     end
 
     context 'when throttle retries exhausted with no cache' do
-      it 'returns empty members list after MAX_THROTTLE_RETRIES' do
+      it 'returns nil after MAX_THROTTLE_RETRIES' do
         Lich::Common::DB_Store.reset!
 
         throttle_resp = double('resp_429')
@@ -426,27 +430,27 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(mock_http).to receive(:request).and_return(throttle_resp)
 
         result = bot.send(:fetch_users_from_api)
-        expect(result['members']).to eq([])
+        expect(result).to be_nil
       end
     end
 
     context 'when API error occurs' do
-      it 'returns empty members list' do
+      it 'returns nil' do
         allow(mock_http).to receive(:request) do
           raise described_class::ApiError, 'invalid_auth'
         end
 
         result = bot.send(:fetch_users_from_api)
-        expect(result['members']).to eq([])
+        expect(result).to be_nil
       end
     end
 
     context 'when network error occurs' do
-      it 'returns empty members list after retries exhaust' do
+      it 'returns nil after retries exhaust' do
         allow(mock_http).to receive(:request).and_raise(Timeout::Error)
 
         result = bot.send(:fetch_users_from_api)
-        expect(result['members']).to eq([])
+        expect(result).to be_nil
       end
     end
   end
