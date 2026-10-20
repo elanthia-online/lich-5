@@ -528,6 +528,10 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
+        # As in cast_spell: drop a spell left prepared by an earlier caller, so
+        # the focus invoke and the cast below act on this ritual's prep.
+        DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
+
         prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
         return unless prep_confirmed?(prepared, data['abbrev'], command: command, runestone_name: data['runestone_name'])
 

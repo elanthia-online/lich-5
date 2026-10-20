@@ -964,7 +964,32 @@ RSpec.describe Lich::DragonRealms::DRCA do
       let(:settings) { OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil) }
       let(:data) { { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] } }
 
-      before { allow(DRCA).to receive(:pause) }
+      before do
+        allow(DRCA).to receive(:pause)
+        allow(DRCA).to receive(:checkprep).and_return('None')
+      end
+
+      it 'releases a spell left prepared before it preps, then preps and casts' do
+        allow(DRCA).to receive(:checkprep).and_return('Fire Ball')
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+        allow(DRCA).to receive(:find_focus)
+        allow(DRCA).to receive(:invoke)
+        allow(DRCA).to receive(:stow_focus)
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent).to eq(['release spell', 'prepare fb 10', 'cast'])
+      end
+
+      it 'sends no release before the prep when no spell is left prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+        allow(DRCA).to receive(:find_focus)
+        allow(DRCA).to receive(:invoke)
+        allow(DRCA).to receive(:stow_focus)
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent.first).to eq('prepare fb 10')
+        expect(sent).not_to include('release spell')
+      end
 
       it 'stops after the prep and releases it, without touching the focus or casting, when no spell shows as prepared' do
         allow(XMLData).to receive(:prepared_spell).and_return('None')

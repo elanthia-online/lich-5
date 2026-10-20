@@ -201,6 +201,7 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       allow(Time).to receive(:now) { base + @clock }
       allow(drc).to receive(:pause) { |seconds = 1| @clock += seconds.to_f }
       allow(XMLData).to receive(:prepared_spell) { @indicator }
+      allow(drca).to receive(:checkprep).and_return('None')
       allow(drc).to receive(:release_invisibility)
       allow(drca).to receive(:find_focus)
       allow(drca).to receive(:invoke)
