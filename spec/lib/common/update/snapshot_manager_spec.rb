@@ -1240,6 +1240,17 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
           expect(messages).to include(hint, 'No complete snapshot was found. Seek assistance.')
           expect(messages).not_to include(hinted_end)
         end
+
+        it 'points at the hint when the hinted snapshot is newer than the interrupted one' do
+          make_snapshot('2026-10-16-00-00-00', '5.20.0', omit: %i[lich])
+          cut_off_snapshot('2026-10-17-00-00-00')
+          messages = capture_responses
+
+          manager.revert
+
+          expect(messages).to include(hint, hinted_end)
+          expect(messages).not_to include('No complete snapshot was found. Seek assistance.')
+        end
       end
 
       it 'refuses one whose scripts/ is empty although core scripts are installed' do

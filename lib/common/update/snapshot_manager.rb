@@ -634,7 +634,8 @@ module Lich
           end
           # A snapshot with a hint is not blamed on an interruption: it may
           # only need renaming, or be complete (see #doubtful_problems).
-          interrupted = incomplete.count { |path, _| legacy_lib_dir_name(path).nil? && !only_doubtful_problems?(path) }
+          interrupted_flags = incomplete.map { |path, _| legacy_lib_dir_name(path).nil? && !only_doubtful_problems?(path) }
+          interrupted = interrupted_flags.count(true)
           if interrupted == incomplete.size && interrupted == 1
             respond 'It was most likely left by a snapshot that was interrupted.'
           elsif interrupted == incomplete.size
@@ -653,8 +654,9 @@ module Lich
               respond "To revert to it, move or delete all #{incomplete.size} incomplete directories above,"
             end
             respond 'then run the revert again.'
-          elsif interrupted.zero?
-            # Every one has a hint, and following it may make it usable.
+          elsif !interrupted_flags.first
+            # The newest one has a hint, and following it may make it
+            # usable; the revert only ever restores the newest snapshot.
             respond 'No complete snapshot was found. If a hint above applies, follow it; otherwise seek assistance.'
           else
             respond 'No complete snapshot was found. Seek assistance.'
