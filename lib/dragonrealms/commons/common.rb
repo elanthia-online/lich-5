@@ -303,7 +303,11 @@ module Lich
 
         case bput(command, COLLECT_MESSAGES)
         when 'The room is too cluttered'
-          return unless kick_pile?
+          # Giving up still waits out any roundtime, e.g. from an earlier kick.
+          unless kick_pile?
+            waitrt?
+            return
+          end
 
           # The retry waits out its own roundtime.
           return collect(item, practice)

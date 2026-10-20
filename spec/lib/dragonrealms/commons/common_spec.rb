@@ -982,32 +982,30 @@ RSpec.describe Lich::DragonRealms::DRC do
           expect(described_class).to have_received(:waitrt?).once
         end
 
-        # Pins give-up behaviour main already has; the default mode keeps the command text unchanged.
         it 'does not retry when the kick misses the pile' do
           script_replies('The room is too cluttered', 'I could not find')
           expect(described_class.collect('rock')).to be_nil
           expect(sent).to eq(['collect rock practice', 'kick pile'])
-          expect(described_class).not_to have_received(:waitrt?)
+          expect(described_class).to have_received(:waitrt?).once
         end
 
-        it 'gives up without waiting when a later kick misses the pile' do
+        it 'waits out roundtime once when a later kick misses the pile' do
           script_replies('The room is too cluttered', 'take a step back and run up to',
                          'The room is too cluttered', 'I could not find')
           expect(described_class.collect('rock', false)).to be_nil
           expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile'])
-          expect(described_class).not_to have_received(:waitrt?)
+          expect(described_class).to have_received(:waitrt?).once
         end
       end
 
       context 'with no pile in the room' do
         before { allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder']) }
 
-        # Pins give-up behaviour main already has; the default mode keeps the command text unchanged.
         it 'gives up without kicking or retrying' do
           script_replies('The room is too cluttered')
           expect(described_class.collect('rock')).to be_nil
           expect(sent).to eq(['collect rock practice'])
-          expect(described_class).not_to have_received(:waitrt?)
+          expect(described_class).to have_received(:waitrt?).once
         end
       end
 
@@ -1017,12 +1015,12 @@ RSpec.describe Lich::DragonRealms::DRC do
           allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
         end
 
-        it 'gives up without waiting after the first kick succeeded' do
+        it 'waits out the kick roundtime once when it gives up after the first kick succeeded' do
           script_replies('The room is too cluttered', 'take a step back and run up to',
                          'The room is too cluttered')
           expect(described_class.collect('rock', false)).to be_nil
           expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
-          expect(described_class).not_to have_received(:waitrt?)
+          expect(described_class).to have_received(:waitrt?).once
         end
       end
     end
