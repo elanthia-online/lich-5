@@ -124,6 +124,100 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(reloaded(:rows)).to eq(stored[:rows])
     end
 
+    it "stores nothing, and says so, for a write through an element the loop removed, instead of writing to the element now at its position" do
+      settings[:rows] = [{ k: 1 }, { k: 2 }, { k: 3 }]
+      rows = settings[:rows]
+
+      rows.each do |row|
+        rows.delete(row) if row[:k] == 1
+        row[:seen] = true
+        row[:sub] ||= {} if row[:k] == 3
+      end
+
+      plain_rows = [{ k: 1 }, { k: 2 }, { k: 3 }]
+      plain_rows.each do |row|
+        plain_rows.delete(row) if row[:k] == 1
+        row[:seen] = true
+        row[:sub] ||= {} if row[:k] == 3
+      end
+      expect(stored[:rows]).to eq(plain_rows)
+      expect(stored[:rows]).to eq([{ k: 2 }, { k: 3, seen: true, sub: {} }])
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:rows, 0] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores nothing for a write to a container inside an element the loop removed from a Hash, instead of putting the entry back" do
+      settings[:by] = { "a" => { sub: { n: 1 } }, "b" => { sub: { n: 2 } } }
+      by = settings[:by]
+
+      by.each { |key, value| by.delete(key) if key == "a"; value[:sub][:seen] = true }
+
+      expect(stored[:by]).to eq("b" => { sub: { n: 2, seen: true } })
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:by, \"a\"] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores nothing for a write through an element a nested each yields from an element the outer loop removed" do
+      settings[:rows] = [{ k: 1, list: [{ i: 0 }] }, { k: 2, list: [{ i: 0 }] }]
+      rows = settings[:rows]
+
+      rows.each { |row| rows.delete(row) if row[:k] == 1; row[:list].each { |item| item[:x] = row[:k] } }
+
+      expect(stored[:rows]).to eq([{ k: 2, list: [{ i: 0 }] }])
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:rows, 0] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores nothing for a write through a nested each inside an entry the loop removed from a Hash, instead of putting the entry back" do
+      settings[:by] = { "a" => { m: { "x" => {} } }, "b" => { m: { "y" => {} } } }
+      by = settings[:by]
+
+      by.each { |key, value| by.delete(key) if key == "a"; value[:m].each { |_k, v| v[:seen] = true } }
+
+      expect(stored[:by]).to eq("b" => { m: { "y" => { seen: true } } })
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:by, \"a\"] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores nothing for a write through an element found through a copy of a container inside an element the loop removed" do
+      settings[:rows] = [{ k: 1, l: [{ i: 0 }] }, { k: 2, l: [{ i: 0 }] }]
+      rows = settings[:rows]
+
+      rows.each { |row| rows.delete(row) if row[:k] == 1; row[:l].select { true }.first[:x] = row[:k] }
+
+      expect(stored[:rows]).to eq([{ k: 2, l: [{ i: 0 }] }])
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:rows, 0] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores the writes a nested each makes after another session commits mid-loop, over what that session wrote" do
+      settings[:rows] = [{ k: 1, list: [{ c: 0 }] }, { k: 2, list: [{ c: 0 }] }]
+      first = true
+
+      settings[:rows].each do |row|
+        row[:list].each do |item|
+          item[:c] += 1
+          next unless first
+
+          first = false
+          their_write({ rows: [{ k: 1, list: [{ c: 0 }], theirs: 1 }, { k: 2, list: [{ c: 0, theirs: 2 }] }] })
+          item[:c2] = 1
+        end
+      end
+
+      expect(stored[:rows]).to eq([{ k: 1, list: [{ c: 0, c2: 1 }], theirs: 1 }, { k: 2, list: [{ c: 1, theirs: 2 }] }])
+      expect(error_messages).to be_empty
+    end
+
+    it "still stores a write through a nested each when no element was removed" do
+      settings[:rows] = [{ k: 1, list: [{ i: 0 }] }, { k: 2, list: [{ i: 0 }] }]
+
+      settings[:rows].each { |row| row[:list].each { |item| item[:x] = row[:k] }; row[:l2] = row[:list].select { true }.first.merge(y: 1).size }
+
+      expect(stored[:rows]).to eq([{ k: 1, list: [{ i: 0, x: 1 }], l2: 3 }, { k: 2, list: [{ i: 0, x: 2 }], l2: 3 }])
+      expect(error_messages).to be_empty
+    end
+
     it "keeps what another session changed in an element the loop writes to, and the elements it appended" do
       rows = settings[:rows]
       their_write({ rows: [{ name: "a", count: 0, theirs: 1 }, { name: "b", count: 0 }, { name: "c", count: 0 }] })
@@ -330,7 +424,33 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(stored).to eq(before_write)
       expect(copies).to eq([{ extra: 1, k: 1 }, { extra: 1, k: 1 }])
       expect(error_messages.size).to eq(3)
-      expect(error_messages).to all(include("not saved", "a new container built from an element an each loop yielded"))
+      expect(error_messages).to all(include("not saved", "a new container built from an element an each loop yielded", "a plain copy",
+                                            "to store a change, write to the element itself"))
+      expect(error_messages.map { |message| message[/this is what #(\S+) returned/, 1] }).to eq(["merge", "merge", "select"])
+    end
+
+    it "names the method that made the copy for a plain local copy of an element, and still tells it once per loop" do
+      settings[:rows] = [{ k: 0 }, { k: 1 }]
+      before_write = stored
+
+      settings[:rows].each { |row| row = row.merge(d: 0); row[:k] = 9 }
+      settings[:rows].each { |row| row.reject { false }.first(1).push([:z, 1]) }
+
+      expect(stored).to eq(before_write)
+      expect(error_messages.size).to eq(2)
+      expect(error_messages[0]).to include("--- Error: settings for test_script", "this is what #merge returned, a new container built from an element an each loop yielded")
+      expect(error_messages[1]).to include("this is what #first returned, a new container built from an element an each loop yielded")
+    end
+
+    it "names an operator method that made the copy so that the message reads as a method name" do
+      settings[:rows] = [{ l: [1] }]
+      before_write = stored
+
+      settings[:rows].each { |row| (row[:l] + [2]) << 3 }
+      settings[:rows].each { |row| (row[:l] - [2]).push(4) }
+
+      expect(stored).to eq(before_write)
+      expect(error_messages.map { |message| message[/this is what (\S+) returned/, 1] }).to eq(["#+", "#-"])
     end
 
     it "still stores a write through an element of such a container where the settings hold that element" do
@@ -359,6 +479,20 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       settings[:m].merge({}).each { |_key, value| value[:kept] = 1 }
       settings[:m].except("nope")["a"][:also] = 1
       expect(stored[:m]).to eq("a" => { n: 1, kept: 1, also: 1 })
+    end
+
+    it "stores nothing for an element of a select or reject of such a Hash, and leaves the script's Hash as plain Ruby does" do
+      settings[:m] = { "a" => { n: 1 }, "b" => { n: 2 } }
+      mine = { "a" => { n: 9 } }
+
+      settings[:m].merge(mine).select { true }.each { |_key, value| value[:w] = 1 }
+      settings[:m].merge(mine).reject { false }.select { true }["a"][:x] = 1
+      settings[:m].transform_values { |value| value.merge(t: 1) }.select { true }["b"][:y] = 1
+
+      expect(stored[:m]).to eq("a" => { n: 1 }, "b" => { n: 2, w: 1 })
+      expect(mine).to eq("a" => { n: 9, w: 1, x: 1 })
+      expect(error_messages.size).to eq(3)
+      expect(error_messages).to all(include("not saved", "not found in the settings"))
     end
 
     it "says, in a loop where only some elements are found in the settings, that only the others are not saved" do
@@ -412,6 +546,16 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       view.dig(1, 1)[:dug] = true
 
       expect(stored[:by]).to eq("b" => { n: 2, last: true, dug: true }, "a" => { n: 1, last: true, first: true }, "c" => 3)
+    end
+
+    it "stores a write to the value a |key, value| block gets at a nil or false key, as at any other key" do
+      settings[:pairs] = { nil => { n: 0 }, false => { n: 0 }, ord: { n: 0 } }
+
+      settings[:pairs].sort_by { |key, _value| key.to_s }.each { |_key, value| value[:n] = 1 }
+      settings[:pairs].sort_by { |key, _value| key.to_s }.dig(0, 1)[:dug] = true
+
+      expect(stored[:pairs]).to eq(nil => { n: 1, dug: true }, false => { n: 1 }, ord: { n: 1 })
+      expect(error_messages).to be_empty
     end
 
     it "yields the pairs a plain Hash's sort_by yields" do

@@ -333,8 +333,14 @@ module Lich
           return nil
         end
 
+        if proxy.respond_to?(:moved?) && proxy.moved?
+          return refuse_proxy_save(script_name, proxy, "#{proxy.anchor_path.inspect} no longer holds the element this each loop yielded there (it was removed, replaced or moved in this session), so the write would land on another element", kind: :element_moved)
+        end
+
         if proxy.respond_to?(:copy?) && proxy.copy?
-          return refuse_proxy_save(script_name, proxy, "this is a new container built from an element an each loop yielded (merge, select, first(2), ...), not part of the settings")
+          copied_by = proxy.respond_to?(:copied_by) && proxy.copied_by
+          what = copied_by ? "what ##{copied_by} returned" : "a copy (what merge, select, first(2), ... returned)"
+          return refuse_proxy_save(script_name, proxy, "this is #{what}, a new container built from an element an each loop yielded: a plain copy, not part of the settings (to store a change, write to the element itself)")
         end
 
         if proxy.respond_to?(:detached?) && proxy.detached?
@@ -342,7 +348,8 @@ module Lich
             return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
           end
           if path.empty?
-            return refuse_proxy_save(script_name, proxy, "this is not part of the settings (a view of the whole settings, the default fetch returned, or a container built from one)")
+            cause = proxy.respond_to?(:pathless_cause) && proxy.pathless_cause
+            return refuse_proxy_save(script_name, proxy, cause ? "this is #{cause}, not part of the settings" : "this is not part of the settings (a view of the whole settings, the default fetch returned, or a container built from one)")
           end
           label ||= method
           method = nil
@@ -386,11 +393,12 @@ module Lich
         # Array no longer reaches that position, the element this session saw
         # there has moved or gone, so storing this session's copy there would
         # pad the Array with nil or store an element twice.
-        if (array_path = position_gone(root, path))
+        classes = proxy.respond_to?(:path_classes) ? proxy.path_classes : nil
+        if (array_path = position_gone(root, path, classes))
           return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})", kind: :position_gone)
         end
 
-        parent = path.empty? ? nil : container_at(root, path[0...-1])
+        parent = path.empty? ? nil : container_at(root, path, classes)
         unless path.empty? || parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer) && path.last >= 0)
           return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container", kind: :no_container)
         end
@@ -507,11 +515,13 @@ module Lich
       # The part of +path+ that leads to the stored Array that no longer has
       # the position +path+ goes through next (an Array that another session
       # removed counts as an empty one); nil when every position along +path+
-      # is still there.
-      def self.position_gone(root, path)
+      # is still there. Whether a removed container was an Array is told by
+      # +classes+ (SettingsProxy#path_classes), else by the segment (see
+      # #container_class_at).
+      def self.position_gone(root, path, classes = nil)
         node = root
         path.each_with_index do |segment, i|
-          if node.is_a?(Array) || (node.nil? && segment.is_a?(Integer))
+          if node.is_a?(Array) || (node.nil? && container_class_at(path, classes, i) == Array)
             return nil unless segment.is_a?(Integer) && segment >= 0 # refused by apply_to_stored_row
 
             return path[0...i] if segment >= (node.nil? ? 0 : node.size)
@@ -544,26 +554,34 @@ module Lich
       end
       private_class_method :stored_copy
 
-      # The container at +segments+ under +root+, creating missing (or nil)
-      # Hash and Array entries on the way, as nested saves always have. An
-      # Integer segment that comes next makes an Array, anything else a Hash;
-      # the last one is a Hash. With +arrays+ false, every container created
-      # is a Hash.
+      # The container under +root+ that holds the last segment of +path+
+      # (the container at all the segments before it), creating missing (or
+      # nil) Hash and Array entries on the way, as nested saves always have,
+      # of the class #container_class_at gives.
       #
-      # @return [Object, nil] what is at the last segment, which is not a
-      #   container when a value that is not one is stored there (callers
-      #   check); nil when a segment can't be followed: a value that is not
-      #   a container on the way, or an Array index that is not a
-      #   non-negative Integer
-      def self.container_at(root, segments, arrays: true)
-        segments.each_with_index.reduce(root) do |node, (seg, idx)|
+      # @return [Object, nil] what is at the segments before the last one,
+      #   which is not a container when a value that is not one is stored
+      #   there (callers check); nil when a segment can't be followed: a
+      #   value that is not a container on the way, or an Array index that
+      #   is not a non-negative Integer
+      def self.container_at(root, path, classes = nil)
+        path[0...-1].each_with_index.reduce(root) do |node, (seg, idx)|
           return nil unless node.is_a?(Hash) || (node.is_a?(Array) && seg.is_a?(Integer) && seg >= 0)
 
-          node[seg] = arrays && segments[idx + 1].is_a?(Integer) ? [] : {} if node[seg].nil?
+          node[seg] = container_class_at(path, classes, idx + 1).new if node[seg].nil?
           node[seg]
         end
       end
       private_class_method :container_at
+
+      # The class (Hash or Array) of the container that +path+[+i+] indexes:
+      # the one this session's copy held there (+classes+, from
+      # SettingsProxy#path_classes) when known, otherwise an Array for an
+      # Integer segment and a Hash for anything else.
+      def self.container_class_at(path, classes, i)
+        classes&.at(i) || (path[i].is_a?(Integer) ? Array : Hash)
+      end
+      private_class_method :container_class_at
 
       # Tells the user that a write through a proxy could not be saved.
       #
@@ -1062,7 +1080,7 @@ module Lich
       def self.container_for_path_write(root, path, name)
         return [nil, "settings are stored as #{root.class}, not a Hash"] unless root.is_a?(Hash)
 
-        container = container_at(root, path, arrays: false)
+        container = container_at(root, [*path, name], Array.new(path.size + 1, Hash))
         if !container?(container)
           [nil, "#{path.inspect} does not lead to a container"]
         elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)

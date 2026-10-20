@@ -490,6 +490,32 @@ RSpec.describe 'Settings writes across Lich processes' do
       expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'z' => 2 })
     end
 
+    it 'recreates a removed Hash with Integer keys around a kept child\'s copy' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('iset G rooms 1 {"a":1}')
+      alpha.call('ikeep room G rooms 1')
+
+      beta.call('set G rooms null')
+      alpha.call('kset room b 2')
+
+      expect(stored_row('go2', 'DR')).to eq('rooms' => { 1 => { 'a' => 1, 'b' => 2 } })
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
+    it 'stores nothing, and says so, when assigning the value already there at a position another session removed' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G arr [1,2,3]')
+      alpha.call('keep arr G arr')
+
+      beta.call('set G arr [1]')
+      alpha.call('kcall arr []= [2,3]')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => [1])
+      expect(alpha.call('msgs')).to include(['error', a_string_including('not saved', 'no longer there')])
+    end
+
     it 'keeps a container another session created when writing through a kept GameSettings.to_hash' do
       alpha = start('DR', 'Alpha', 'go2')
       beta = start('DR', 'Beta', 'go2')

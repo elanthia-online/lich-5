@@ -2156,6 +2156,39 @@ RSpec.describe Lich::Common::Settings do
           expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", 'changed a position of ["l"] that is no longer there')).exactly(5).times
         end
 
+        it "stores nothing, and says so, when the call puts the value already there at a position the stored Array no longer has" do
+          {
+            [[1, 2, 3], ->(l) { l[2] = 3 }]                => [1],
+            [[1, 2, 3], ->(l) { l[1..] = [2, 3] }]         => [1],
+            [[1, 2, 3], ->(l) { l.fill(3, 2) }]            => [1],
+            [[1, 2, 3], ->(l) { l.fill(2) { |i| i + 1 } }] => [1],
+            [[true, true], ->(l) { l[1] = true }]          => [true],
+            [[:a, :a], ->(l) { l[-1] = :a }]               => [:a]
+          }.each_with_index do |((mine, call), expected), i|
+            l = kept_list(mine, mine.first(1)) # another session removed the last elements
+
+            call.call(l)
+
+            expect(stored["l"]).to eq(expected), "case #{i}: #{stored["l"].inspect}"
+          end
+          expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", 'changed a position of ["l"] that is no longer there')).exactly(6).times
+        end
+
+        it "replays a call on equal values from the position it targets, not from where the copy's values first differ" do
+          l = kept_list([3, 3, 3], [3, 3]) # another session popped
+          expect(l.delete_at(1)).to eq(3)
+          expect(stored["l"]).to eq([3])
+
+          l = kept_list([3, 3, 3, 3], [3, 3, 3])
+          l.insert(1, 3)
+          expect(stored["l"]).to eq([3, 3, 3, 3])
+
+          l = kept_list([1, 2, 3], [1, 2])
+          l[0] = 1
+          expect(stored["l"]).to eq([1, 2])
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
         it "still replays, by position, a call whose change starts where the shorter stored Array still has elements" do
           l = kept_list(["a", "b", "c"], ["a", "b"]) # another session popped c
 
@@ -2220,6 +2253,38 @@ RSpec.describe Lich::Common::Settings do
         opts['y'] = 1
 
         expect(stored).to eq("opts" => { "x" => 0, "y" => 1 }, "other" => 1)
+      end
+
+      it "recreates a removed Hash with Integer keys around a kept child's copy, as for String keys" do
+        reads = {
+          "[]"          => ->(rooms, key) { rooms[key] },
+          "dig"         => ->(rooms, key) { rooms.dig(key) },
+          "fetch"       => ->(rooms, key) { rooms.fetch(key) },
+          "select view" => ->(rooms, key) { rooms.select { true }[key] }
+        }
+        reads.each do |how, read|
+          [1, "1"].each do |key|
+            their_write("rooms" => { key => { "a" => 1 } })
+            room = read.call(game_read('rooms'), key)
+            their_write("other" => 1) # another session removed rooms
+
+            room['b'] = 2
+
+            expect(stored).to eq("rooms" => { key => { "a" => 1, "b" => 2 } }, "other" => 1), "#{how} #{key.inspect}: #{stored.inspect}"
+          end
+        end
+        expect(Lich::Messaging).not_to have_received(:msg)
+      end
+
+      it "recreates removed Hashes with Integer keys two levels down" do
+        their_write("rooms" => { 1 => { 2 => { "a" => 1 } } })
+        room = game_read('rooms')[1][2]
+        their_write("rooms" => { 1 => nil })
+
+        room['b'] = 2
+
+        expect(stored).to eq("rooms" => { 1 => { 2 => { "a" => 1, "b" => 2 } } })
+        expect(Lich::Messaging).not_to have_received(:msg)
       end
 
       it "stores a copy that shares no String with the caller when it stores the proxy's copy" do
@@ -2299,7 +2364,13 @@ RSpec.describe Lich::Common::Settings do
         row['k'] = 1
         expect(stored).to eq("other" => 1)
 
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "is no longer there")).twice
+        their_write("rows" => [{ 1 => { "a" => 1 } }])
+        sub = game_read('rows')[0][1]
+        their_write("other" => 1) # an Integer key under an Array another session removed
+        sub['b'] = 2
+        expect(stored).to eq("other" => 1)
+
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "is no longer there")).exactly(3).times
       end
 
       it "still stores through an element whose position the stored Array still has, as before" do
@@ -2462,7 +2533,7 @@ RSpec.describe Lich::Common::Settings do
         root.reject { false }.clear
 
         expect(stored).to eq("a" => 1, "b" => 2)
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).twice
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a view (select, sort, ...) of the whole settings, not part")).twice
       end
 
       it "stores nothing, and says so, for a write through the default fetch returned for a missing key" do
@@ -2475,7 +2546,8 @@ RSpec.describe Lich::Common::Settings do
         game_read('opts').fetch('m', {}).merge({})['k'] = 1
 
         expect(stored).to eq("opts" => { "a" => 1 }, "l" => [1])
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "not part of the settings")).exactly(5).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is the default fetch returned, not part of the settings")).exactly(4).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container built from the default fetch returned, not part")).once
       end
 
       it "stores nothing and says so for an element of a view once its container no longer holds it" do
@@ -2499,9 +2571,11 @@ RSpec.describe Lich::Common::Settings do
 
         game_read('rows').each { |row| row['sub']['k'] = 1 }
         game_read('rows').each { |row| row.dig('sub')['j'] = 1 }
+        game_read('rows').each { |row| row['sub'].merge({})['m'] = 1 }
 
         expect(stored).to eq("rows" => [{ "sub" => { "x" => 1, "k" => 1, "j" => 1 } }], "sub" => "top")
-        expect(Lich::Messaging).not_to have_received(:msg)
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded")).once
       end
 
       it "stores nothing and says so for an element of a Hash view whose key now holds another kind of value" do

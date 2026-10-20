@@ -30,8 +30,27 @@ module Lich
       # (row.merge(..), row.select { ... }, row.first(2)): like a plain
       # Hash's, it is not part of the settings, so a write to it is refused
       # with a message; its elements are found where the settings hold them
-      # (+source+ is that element's container).
-      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false)
+      # (+source+ is that element's container). It is the method that built
+      # it (see #copied_by), or true.
+      #
+      # +path_classes+ (see #path_classes) defaults, for a path of at most
+      # one segment, to the root's class (a Hash), and otherwise to nil.
+      #
+      # +pathless_cause+ (see #pathless_cause) says, for a detached proxy
+      # without a path, what it is.
+      #
+      # +foreign_values+ marks a view taken from a container that may hold,
+      # at a key, a value that is not its source's (see
+      # #may_hold_foreign_values?): its elements are found in the source by
+      # identity only (see #source_segment).
+      #
+      # +anchor+ (see #moved?) is, for a container element #each yielded
+      # and every container taken from it, a list with one entry for each
+      # loop, outermost first, that yielded it or a container it is in:
+      # [the container of this session's copy that held the element, its
+      # key or index there, the element, the element's path].
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false,
+                     path_classes: nil, pathless_cause: nil, foreign_values: false, anchor: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -42,6 +61,10 @@ module Lich
         @unlocated = unlocated
         @refusals = refusals
         @copy = copy
+        @path_classes = path_classes&.size == @path.size ? path_classes.dup : (Array.new(@path.size, Hash) if @path.size <= 1)
+        @pathless_cause = pathless_cause
+        @foreign_values = foreign_values
+        @anchor = anchor&.dup&.freeze
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -56,12 +79,50 @@ module Lich
       # proxy.
       attr_reader :refusals
 
+      # True when a container element #each yielded (this proxy's, the one
+      # this proxy's container was taken from, or one an outer loop yielded
+      # that holds either) is no longer at the key or index it was yielded
+      # at in this session's copy: the loop removed it
+      # (list.each { |e| list.delete(e) ... }), put another value there, or
+      # moved it. Its path still leads to that key or index, where the
+      # settings now hold another element (or none), so
+      # Settings.save_proxy_changes refuses a write through it.
+      def moved?
+        !moved_anchor.nil?
+      end
+
+      # The path of the outermost element #each yielded that #moved? found
+      # moved; nil when none has.
+      def anchor_path
+        moved_anchor&.last
+      end
+
+      # The outermost entry of +anchor+ (see #initialize) whose element is no
+      # longer where it was yielded; nil when there is none.
+      private def moved_anchor
+        @anchor&.find do |holder, segment, element, _path|
+          !(segment_in(holder, segment) && holder[segment].equal?(element))
+        end
+      end
+
       # True for a proxy #each yielded, or a container taken from one at any
       # depth (see #refusals). A new container built from such a proxy is a
       # copy (see #copy?).
       private def yielded?
         !@refusals.nil?
       end
+
+      # For each segment of #path, the class (Hash or Array) of the container
+      # it indexed in this session's copy when this proxy was made; nil when
+      # not known. When another session removed a container on the path,
+      # Settings.save_proxy_changes goes by it, rather than by the segment's
+      # class, to tell a Hash with Integer keys from an Array.
+      attr_reader :path_classes
+
+      # For a detached proxy without a path: what it is ("a view of the whole
+      # settings", "the default fetch returned", ...), which the message for
+      # a refused write names; nil when not known.
+      attr_reader :pathless_cause
 
       # Minimal change: expose detached? status
       def detached?
@@ -78,6 +139,12 @@ module Lich
       # #initialize); Settings.save_proxy_changes refuses a write to it.
       def copy?
         !!@copy
+      end
+
+      # For a #copy?, the method that built it (merge, select, first, ...);
+      # nil when not known.
+      def copied_by
+        @copy if @copy.is_a?(Symbol)
       end
 
       def nil?
@@ -356,7 +423,7 @@ module Lich
         return value unless @settings_module.container?(value)
         return view_element_proxy([key], value, refusals) if built_from_source?
 
-        SettingsProxy.new(@settings_module, @scope, @path + [key], value, script_name: @script_name, refusals: refusals)
+        proxy_at(@path + [key], value, refusals: refusals, anchor: [*@anchor, [@target, key, value, @path + [key]]])
       end
 
       # True for a proxy whose elements are looked up in the container it
@@ -401,7 +468,7 @@ module Lich
           # up in the container it was taken from. A negative Array index is
           # made positive, as for at and dig.
           (built_from_source? && view_element_proxy([key], value)) ||
-            SettingsProxy.new(@settings_module, @scope, @path + (segment_in(@target, key) || [key]), value, script_name: @script_name, refusals: @refusals)
+            proxy_at(@path + (segment_in(@target, key) || [key]), value)
         else
           value
         end
@@ -529,9 +596,9 @@ module Lich
         known = own_containers
         if @target.is_a?(Array) && POSITION_METHODS.include?(method)
           args = positions_in_copy(method, args, block)
-          before = @target.dup
+          size = @target.size
           result = @target.send(method, *args, &block)
-          replay_args = [before.size, first_changed_position(before, @target), method, args]
+          replay_args = [size, first_changed_position(method, args, block, size), method, args]
           replayed = @settings_module.save_proxy_changes(self, Settings::REPLAY_AT_POSITIONS, replay_args, block, label: method)
         else
           result = @target.send(method, *args, &block)
@@ -544,11 +611,29 @@ module Lich
         [result, [take_stored_container(stored_container, stored_result, known), stored_container]]
       end
 
-      # The first position at which +after+ (an Array) no longer holds the
-      # same object as +before+, a shallow copy of it taken before a call;
-      # nil when it holds the same objects.
-      private def first_changed_position(before, after)
-        (0...[before.size, after.size].max).find { |i| i >= before.size || i >= after.size || !before[i].equal?(after[i]) }
+      # The first position that +method+ (a POSITION_METHODS call, with
+      # +args+ from #positions_in_copy, and +block+) changes in an Array of
+      # +size+ elements; nil when it changes none. The positions are those the call
+      # targets, whatever the values: list[2] = 3 changes position 2 even
+      # when list[2] already holds 3. The call runs on an Array holding its
+      # own positions (0, 1, 2, ...), with each value it puts in replaced by
+      # a new object, and the first position no longer holding itself is
+      # the answer.
+      private def first_changed_position(method, args, block, size)
+        positions = Array.new(size) { |i| i }
+        case method
+        when :[]=
+          # A start and length, or a range, replace the elements there with
+          # those of an Array value; an index replaces one element.
+          value = args.last
+          splice = args.size == 3 || args.first.is_a?(Range)
+          positions[*args[0...-1]] = splice && value.is_a?(Array) ? Array.new(value.size) { Object.new } : Object.new
+        when :insert then positions.insert(args.first, *Array.new(args.size - 1) { Object.new })
+        when :fill
+          block ? positions.fill(*args) { Object.new } : positions.fill(Object.new, *args.drop(1))
+        else positions.public_send(method, *args)
+        end
+        (0...[size, positions.size].max).find { |i| !positions[i].equal?(i) }
       end
 
       # The containers of this proxy's copy that #show_stored may fill in
@@ -690,7 +775,7 @@ module Lich
         return result unless @settings_module.container?(result)
 
         element_path = element_path_for(method, args, result)
-        element_path ? SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals) : result
+        element_path ? proxy_at(element_path, result) : result
       end
 
       # After a write was replayed on the stored row, shows that container
@@ -845,11 +930,12 @@ module Lich
           if @settings_module.container?(result) && built_from_source? && (element = view_element_proxy(keys_for(method, args), result))
             element
           elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
-            SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals)
+            proxy_at(element_path, result)
           elsif @settings_module.container?(result) && (pathless_element? || fetch_default?(method, args))
-            pathless_derived_proxy(result)
+            pathless_derived_proxy(result, fetch_default?(method, args) ? "the default fetch returned" : nil)
           elsif @settings_module.container?(result) && yielded?
-            SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: true)
+            SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: method,
+                                                                             path_classes: @path_classes, anchor: @anchor)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
               # For Array#find / Array#detect, identify the element index in the
@@ -859,12 +945,13 @@ module Lich
               if !idx.nil?
                 element_path = @path.dup
                 element_path << idx
-                SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+                proxy_at(element_path, result)
               else
                 # Fallback: if we somehow can't locate the element, preserve
                 # the old behavior (path == @path, no index).
                 is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
+                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
+                                                                                 path_classes: @path_classes, pathless_cause: view_cause(is_view))
               end
             else
               # Existing behavior for all other non-destructive container
@@ -873,7 +960,9 @@ module Lich
               # where the settings hold them (see #built_from_source?).
               is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
               SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
-                                                                               source: view_source)
+                                                                               source: view_source,
+                                                                               path_classes: @path_classes, pathless_cause: view_cause(is_view),
+                                                                               foreign_values: may_hold_foreign_values?, anchor: @anchor)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -886,11 +975,11 @@ module Lich
         if result.equal?(@target)
           self # Return self if the method modified the target in-place and returned it
         elsif @settings_module.container?(result) && (element_path = element_path_for(method, args, result))
-          SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name, refusals: @refusals)
+          proxy_at(element_path, result)
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
-          SettingsProxy.new(@settings_module, @scope, @path, result, script_name: @script_name)
+          SettingsProxy.new(@settings_module, @scope, @path, result, script_name: @script_name, path_classes: @path_classes)
         else
           result
         end
@@ -917,8 +1006,55 @@ module Lich
       # (#fetch_default?). It is detached and has no path either, so a write
       # through it is refused with a message instead of landing at the top of
       # the row.
-      private def pathless_derived_proxy(result)
-        SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?, refusals: @refusals)
+      #
+      # Its #pathless_cause is +cause+, or else "a container built from"
+      # this proxy's own.
+      private def pathless_derived_proxy(result, cause = nil)
+        cause ||= @pathless_cause && "a container built from #{@pathless_cause}"
+        SettingsProxy.new(@settings_module, @scope, [], result, detached: true, script_name: @script_name, unlocated: unlocated?, refusals: @refusals,
+                                                                pathless_cause: cause)
+      end
+
+      # The #pathless_cause of a container inside this pathless proxy: the
+      # same cause one level down, without repeating "a container inside"
+      # for every level.
+      private def inside_cause
+        prefix = "a container inside "
+        @pathless_cause.start_with?(prefix) ? @pathless_cause : "#{prefix}#{@pathless_cause}"
+      end
+
+      # The #pathless_cause of a view (+is_view+) taken from this proxy when
+      # it has no path: a view of the whole settings, or of this proxy's own
+      # cause; nil for anything else.
+      private def view_cause(is_view)
+        return nil unless is_view && @path.empty?
+
+        @pathless_cause ? "a view (select, sort, ...) of #{@pathless_cause}" : "a view (select, sort, ...) of the whole settings"
+      end
+
+      # The proxy for +value+, the container at +path+, which goes through
+      # this proxy's path and then, from +container+ (this proxy's target,
+      # or a view's source), along the segments after it. Its #path_classes
+      # are this proxy's followed by the classes of the containers those
+      # segments index; nil when this proxy's are not known. It shares
+      # +refusals+ (see #refusals) and +anchor+ (see #moved?), this proxy's
+      # by default.
+      private def proxy_at(path, value, container = @target, refusals: @refusals, anchor: @anchor)
+        classes = @path_classes && path_classes_along(container, path.drop(@path.size))
+        SettingsProxy.new(@settings_module, @scope, path, value, script_name: @script_name, refusals: refusals,
+                                                                 path_classes: classes && (@path_classes + classes), anchor: anchor)
+      end
+
+      # The class (Hash or Array) of each container +segments+ index, from
+      # +node+ on; nil when one of them is neither.
+      private def path_classes_along(node, segments)
+        segments.map do |segment|
+          return nil unless node.is_a?(Hash) || node.is_a?(Array)
+
+          node_class = node.is_a?(Array) ? Array : Hash
+          node = node[segment]
+          node_class
+        end
       end
 
       # The path of +result+ when it is an element of this proxy's container:
@@ -959,8 +1095,12 @@ module Lich
       # container has since taken a stored row that has no container of
       # the element's kind at its key or index, see #take_stored_container), the proxy
       # is detached and unlocated, so a write through it is refused instead
-      # of being saved by position somewhere else. nil when +value+ is not an
-      # element of the view (a new container, such as what merge returns).
+      # of being saved by position somewhere else. Under a proxy that was
+      # never part of the settings (#pathless_cause, such as the default
+      # fetch returned) there is nothing to look in, so the proxy is
+      # detached and pathless with a cause that names it. nil when +value+
+      # is not an element of the view (a new container, such as what merge
+      # returns).
       #
       # A [key, value] pair of a view of a Hash (what sort, sort_by, min_by(2)
       # or first(2) returned) whose value is a container the Hash holds at that
@@ -971,17 +1111,19 @@ module Lich
       private def view_element_proxy(keys, value, refusals = @refusals)
         segments = segments_to(keys, value, @target)
         return nil unless segments
+        return pathless_derived_proxy(value, inside_cause) if @source.nil? && @pathless_cause
 
         base = @source && source_segment(segments.first)
         if base
-          SettingsProxy.new(@settings_module, @scope, @path + base + segments.drop(1), value, script_name: @script_name, refusals: refusals)
-        elsif (key = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
+          proxy_at(@path + base + segments.drop(1), value, @source, refusals: refusals)
+        elsif (key_segment = pair_key_in_hash_source(segments.first)) && (segments.size == 1 || segments[1] == 1)
+          key = key_segment.first
           if segments.size == 1
             # The pair itself, as the Hash's each yields it: [key, the proxy
             # for the value there], which |key, value| takes apart.
-            [value.first, SettingsProxy.new(@settings_module, @scope, @path + [key], value.last, script_name: @script_name, refusals: refusals)]
+            [value.first, proxy_at(@path + [key], value.last, @source, refusals: refusals)]
           else
-            SettingsProxy.new(@settings_module, @scope, @path + [key] + segments.drop(2), value, script_name: @script_name, refusals: refusals)
+            proxy_at(@path + [key] + segments.drop(2), value, @source, refusals: refusals)
           end
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "view element at #{segments.inspect} not found in the settings; writes through it are refused" })
@@ -996,24 +1138,34 @@ module Lich
       # the element after the container has taken the stored row's elements,
       # as long as that key still holds the same kind of container; a fresh
       # read of that key would address the same entry. That holds only for
-      # a detached view: another Hash built from the container (merge with
-      # the script's own Hash, transform_values) may hold, at a key, a value
-      # that is not the container's, so its elements are found by identity
-      # only, and a write through one that isn't found is refused.
+      # a detached view of the container itself: another Hash built from
+      # the container (merge with the script's own Hash, transform_values),
+      # and a view of such a Hash (merge(mine).select { ... }), may hold, at
+      # a key, a value that is not the container's, so its elements are
+      # found by identity only, and a write through one that isn't found is
+      # refused.
       private def source_segment(view_segment)
         element = @target[view_segment]
         same = segment_in(@source, view_segment)
-        return same if same && (@source[same.first].equal?(element) || (detached? && same_key_in_hash_source?(same.first, element)))
+        return same if same && (@source[same.first].equal?(element) || (detached? && !@foreign_values && same_key_in_hash_source?(same.first, element)))
 
         child_segment(@source, element)
       end
 
-      # For a view whose source is a Hash: the key of the view's element at
-      # +view_segment+ when that element is a [key, value] pair (what
-      # Hash#sort or Hash#first(2) build) whose value is the very container
-      # the source holds at that key. nil otherwise (a value another write
-      # has since replaced, or an Array value of the Hash that only looks
-      # like a pair), so a write through it is refused.
+      # True when this proxy's container may hold, at a key, a value that is
+      # not its source's: it was built from another container (merge,
+      # transform_values, ...), or it is a view of one.
+      private def may_hold_foreign_values?
+        @foreign_values || (!detached? && !@source.nil?)
+      end
+
+      # For a view whose source is a Hash: [key], the key of the view's
+      # element at +view_segment+ (nil and false included), when that
+      # element is a [key, value] pair (what Hash#sort or Hash#first(2)
+      # build) whose value is the very container the source holds at that
+      # key. nil otherwise (a value another write has since replaced, or an
+      # Array value of the Hash that only looks like a pair), so a write
+      # through it is refused.
       private def pair_key_in_hash_source(view_segment)
         return nil unless @source.is_a?(Hash) && @target.is_a?(Array)
 
@@ -1021,7 +1173,7 @@ module Lich
         return nil unless pair.instance_of?(Array) && pair.size == 2 && @settings_module.container?(pair.last)
 
         key, value = pair
-        key if @source.key?(key) && @source[key].equal?(value)
+        [key] if @source.key?(key) && @source[key].equal?(value)
       end
 
       # True when this view and its source are Hashes and +key+ holds, in
