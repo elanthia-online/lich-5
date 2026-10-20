@@ -491,7 +491,7 @@ RSpec.describe Lich::Common::MapBase do
 
         expect(room.dijkstra).to be_nil
         expect(room).to have_received(:echo).with('Map.dijkstra: error: boom')
-        expect(room).to have_received(:respond).with(kind_of(Array))
+        expect(room).to have_received(:respond).with(array_including(a_string_matching(/map_base\.rb/)))
       end
     end
 
