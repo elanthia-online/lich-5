@@ -759,10 +759,15 @@ module Lich
           uids[uid] || []
         end
 
-        # Convert map to JSON
+        # Convert the map to a JSON array of its rooms, in id order.
+        #
+        # Serializes a compacted copy and leaves the list alone. The list is
+        # indexed by room id and a real mapdb has far more unused ids than rooms,
+        # so removing its nil gaps in place would move every room after the
+        # first gap to the wrong index for every script looking rooms up.
+        # @return [String]
         def to_json(*args)
-          list.delete_if(&:nil?)
-          list.sort_by(&:id).to_json(args)
+          list.compact.sort_by(&:id).to_json(args)
         end
 
         # Save the map as a JSON file.
@@ -814,11 +819,6 @@ module Lich
             raise map_save_error(e, "could not write #{filename}; #{left}")
           end
           respond "#{filename} saved"
-          # Reload if the map index appears corrupted: the last entry's id should
-          # index back to itself. Nothing to check when the map holds no rooms,
-          # where self[-1] is nil and only the NilClass patch made this pass.
-          last = list.compact.last
-          reload if !last.nil? && self[last.id]&.id != last.id
         end
 
         alias_method :save, :save_json

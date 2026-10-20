@@ -14,39 +14,7 @@ require_relative '../spec_helper'
 # lib/global_defs.rb and class_evals each one into its example group, so
 # the examples run the shipped code, the definitions stay scoped to that
 # group, and calls inside them resolve stubs via normal method lookup.
-module GlobalDefsSpecSource
-  PATH = File.expand_path('../../lib/global_defs.rb', __dir__)
-
-  # Defines each named top-level method of lib/global_defs.rb on target.
-  # Raises when a definition or its column-0 `end` is missing, so a
-  # reformat of the production file fails loudly instead of testing nothing.
-  def self.define(target, *names)
-    lines = File.readlines(PATH)
-    names.each do |name|
-      first = def_index(lines, name)
-      offset = lines[(first + 1)..].index { |line| line.match?(/^end\s*$/) }
-      raise "global_defs.rb: def #{name} terminator missing" unless offset
-
-      target.class_eval(lines[first..(first + offset + 1)].join, PATH, first + 1)
-    end
-  end
-
-  # The 1-based line of a method's def in lib/global_defs.rb.
-  def self.line_of(name)
-    def_index(File.readlines(PATH), name) + 1
-  end
-
-  # Ruby keeps the last of two top-level defs, so a second one would leave
-  # these examples testing the definition that does not ship.
-  def self.def_index(lines, name)
-    found = lines.each_index.select { |i| lines[i].match?(/^def #{Regexp.escape(name)}(?:\(|\s|$)/) }
-    raise "global_defs.rb: def #{name} missing" if found.empty?
-    raise "global_defs.rb: def #{name} defined #{found.size} times" if found.size > 1
-
-    found.first
-  end
-  private_class_method :def_index
-end
+require_relative '../support/global_defs_spec_source'
 
 # Production sleeps through Script.execution_sleep (it checks the script's
 # execution guard); with no guard installed it is a plain sleep. Route it to
@@ -65,22 +33,6 @@ RSpec.describe '#fput' do
     %w[fput multifput].each do |name|
       expect(method(name).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of(name)])
     end
-  end
-
-  it 'fails loudly when a method cannot be found in lib/global_defs.rb' do
-    expect { GlobalDefsSpecSource.define(Class.new, 'no_such_global') }
-      .to raise_error(RuntimeError, /def no_such_global missing/)
-  end
-
-  it 'fails loudly on a duplicate, prefix-only or unterminated def' do
-    allow(File).to receive(:readlines).and_call_original
-    allow(File).to receive(:readlines).with(GlobalDefsSpecSource::PATH)
-                                      .and_return(["def twice\n", "end\n", "def twice\n", "end\n",
-                                                   "def fputs_like(x)\n", "end\n", "def open_ended\n", "  1\n"])
-
-    expect { GlobalDefsSpecSource.define(Class.new, 'twice') }.to raise_error(RuntimeError, /def twice defined 2 times/)
-    expect { GlobalDefsSpecSource.define(Class.new, 'fputs') }.to raise_error(RuntimeError, /def fputs missing/)
-    expect { GlobalDefsSpecSource.define(Class.new, 'open_ended') }.to raise_error(RuntimeError, /terminator missing/)
   end
 
   let(:downstream_buffer) { [] }
