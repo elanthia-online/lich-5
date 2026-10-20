@@ -171,14 +171,17 @@ module Lich
 
       # Wears items from the target set that are not currently in the combat inventory.
       #
-      # Target items already in a hand are put away first via {#stow_weapon},
-      # which sends the WEAR itself for worn items; a held item whose put-away
+      # Target items already in a hand are put away first via {#stow_gear_item},
+      # which sends the WEAR itself for worn items. The set item itself is put
+      # away, not a fresh lookup by its short name, so the put-away and the
+      # check after the wears (see {#put_away_forms}) follow the same item
+      # and use that item's own storage settings. A held item whose put-away
       # fails is reported rather than retried. The hands are checked again just
       # before each put-away; a held item that has left the hand by then joins
       # the unheld items, which are then fetched and worn in gear-set order.
       # When two set descriptions resolve to the same gear item, a held item
       # that failed is not tried again. After the wears, a held failure counts
-      # as in hand if a hand matches the item or any form {#stow_weapon} turned
+      # as in hand if a hand matches the item or any form {#stow_gear_item} turned
       # it into (see {#put_away_forms}). One that has left the hand is looked
       # for in one INV COMBAT if its put-away was a WEAR: if it is worn it is
       # not a failure. Any other held failure that has left the hand, worn or
@@ -206,7 +209,7 @@ module Lich
         to_wear = held.map(&:!)
 
         # Put held items away first so the hands are free for the wears below.
-        # stow_weapon already sent the WEAR for a worn item, so a failure here
+        # stow_gear_item already sent the WEAR for a worn item, so a failure here
         # is final: the item is reported for the user to check rather than
         # sent the same command again, so a second entry for an item that
         # already failed is skipped. An item that is no longer in hand by its
@@ -219,7 +222,7 @@ module Lich
 
           if !DRCI.in_hands?(item)
             to_wear[index] = true
-          elsif !stow_weapon(item.short_name)
+          elsif !stow_gear_item(item)
             held_failures << item
           end
         end
@@ -255,15 +258,16 @@ module Lich
         [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
       end
 
-      # Lists the forms {#stow_weapon} goes through to put a held item away:
-      # the item itself, then, for a non-worn transform item, each form it is
-      # transformed into, following +transforms_to+ at most +transform_depth+
-      # times as {#stow_weapon} does. The last form is the one whose put-away
-      # (a WEAR when it is worn) {#stow_weapon} sent. A transformed form that
+      # Lists the forms {#stow_gear_item} goes through to put a held item away:
+      # the item itself (the same object {#wear_missing_items} put away), then,
+      # for a non-worn transform item, each form it is transformed into,
+      # following +transforms_to+ at most +transform_depth+ times as
+      # {#stow_gear_item} does. The last form is the one whose put-away (a WEAR
+      # when it is worn) {#stow_gear_item} sent. A transformed form that
       # is not in the gear list ends the list as its description String.
       #
       # @param item [DRC::Item] held gear item
-      # @param transform_depth [Integer] transforms {#stow_weapon} follows
+      # @param transform_depth [Integer] transforms {#stow_gear_item} follows
       # @return [Array<DRC::Item, String>] forms in the order they are handled
       # @api private
       def put_away_forms(item, transform_depth: 3)
@@ -955,6 +959,20 @@ module Lich
         weapon = item_by_desc(description)
         return unless weapon
 
+        stow_gear_item(weapon, transform_depth: transform_depth)
+      end
+
+      # Puts a gear item away by its own configuration (WEAR for a worn item,
+      # the transform for a transform item, otherwise {#stow_by_type}).
+      # {#stow_weapon} resolves a description to the item first; callers that
+      # already hold the gear item pass it here so the item put away is the
+      # one they hold, not whichever gear item first matches its short name.
+      #
+      # @param weapon [DRC::Item] gear item to put away
+      # @param transform_depth [Integer] remaining transform recursion depth
+      # @return [Boolean, nil] as {#stow_weapon}
+      # @api private
+      def stow_gear_item(weapon, transform_depth: 3)
         # Is this a weapon that needs to be unloaded before it is put away?
         # This is an optimization attempt so that the script
         # isn't trying to unload every weapon that gets put away.

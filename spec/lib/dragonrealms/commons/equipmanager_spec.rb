@@ -1464,6 +1464,28 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
 
+    context 'when an earlier gear item also matches the held set item by its short name' do
+      # A lookup by 'bronze.sword' would find the plain sword first; the held
+      # set item itself must be put away, by its own storage settings, and
+      # checked afterwards as that same item.
+      let(:plain_sword) { gear_class.new(short_name: 'sword', short_regex: /\bsword/i, worn: false, container: 'backpack') }
+      let(:right_hand) { 'bronze sword' }
+
+      before { allow(em).to receive(:items).and_return([plain_sword, sword]) }
+
+      it 'puts away the set item it was given, not the first gear item matching its short name' do
+        replies['put my bronze.sword in my scabbard'] = 'You put your bronze sword in your scabbard.'
+        expect(em.wear_missing_items([sword], [])).to eq([[], []])
+        expect(sent).to eq(['put my bronze.sword in my scabbard'])
+      end
+
+      it 'reports that same item as left in hand when its put-away fails' do
+        replies['put my bronze.sword in my scabbard'] = "There isn't any more room in your scabbard."
+        expect(em.wear_missing_items([sword], [])).to eq([[sword], [sword]])
+        expect(sent).to eq(['put my bronze.sword in my scabbard'])
+      end
+    end
+
     context 'when a held transform item turns into something that is not in the gear list' do
       # stow_weapon runs the transform, then returns nil because the
       # transformed description matches no gear item: nothing was put away.
