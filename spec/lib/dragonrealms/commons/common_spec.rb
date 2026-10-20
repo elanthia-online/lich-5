@@ -113,6 +113,7 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('extracts noun from multi-word item') { expect(described_class.get_noun(' a steel sword')).to eq('sword') }
     it('extracts hyphenated noun') { expect(described_class.get_noun(' a long-sword')).to eq('long-sword') }
     it('extracts noun with apostrophe') { expect(described_class.get_noun(" a thief's pick")).to eq("pick") }
+    it('returns nil when the name does not end in a word') { expect(described_class.get_noun('a 5')).to be_nil }
   end
 
   describe '.remove_flavor_text' do
@@ -579,17 +580,186 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
   end
 
+  describe '.capture_reply' do
+    it 'asks issue_command for the end line, quietly, with the given stream and timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_reply('commune sense', /benevolent/, /Roundtime/, usexml: false, timeout: 7)
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'commune sense', /benevolent/, /Roundtime/,
+        usexml: false, quiet: true, include_end: true, timeout: 7
+      )
+    end
+
+    it 'defaults the timeout to 5 seconds' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)
+      expect(Lich::Util).to have_received(:issue_command).with(anything, anything, anything, hash_including(timeout: 5))
+    end
+
+    it 'requires usexml to be given' do
+      expect { described_class.capture_reply('assess teach', /teaching/, /Roundtime/) }.to raise_error(ArgumentError, /usexml/)
+    end
+
+    it 'drops the end line and reports complete when the reply ends on it' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', 'Roundtime: 3 sec.'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class'], true])
+    end
+
+    it 'keeps every line and reports incomplete when the end line never arrived' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', 'Bar is teaching a class'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class', 'Bar is teaching a class'], false])
+    end
+
+    it 'returns [[], false] on a timeout before the start line ([])' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)).to eq([[], false])
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)).to eq([[], false])
+    end
+
+    it 'does not count a lone start line that matches the end pattern as complete' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Roundtime teaching'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Roundtime teaching'], false])
+    end
+
+    it 'judges completeness against the end pattern it was given, not the prompt' do
+      prompt = '<prompt time="1700000000">&gt;</prompt>'
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', prompt])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class', prompt], false])
+    end
+  end
+
+  describe '.capture_to_prompt' do
+    let(:prompt) { '<prompt time="1700000000">&gt;</prompt>' }
+
+    it 'asks issue_command for the prompt line, quietly, over XML, with the given timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('wealth', /^Wealth:/, timeout: 12)
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'wealth', /^Wealth:/, /<prompt/,
+        usexml: true, quiet: true, include_end: true, timeout: 12
+      )
+    end
+
+    it 'defaults the timeout to 5 seconds' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('health', /^Your body feels/)
+      expect(Lich::Util).to have_received(:issue_command).with(anything, anything, anything, hash_including(timeout: 5))
+    end
+
+    it 'drops the prompt line and reports complete when the reply ends on the prompt' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.', prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], true])
+    end
+
+    it 'returns [[], false] on a timeout before the start line ([])' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'keeps every line and reports incomplete when the prompt never arrived' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.'])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], false])
+    end
+
+    it 'does not count a lone prompt line as a complete reply' do
+      allow(Lich::Util).to receive(:issue_command).and_return([prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[prompt], false])
+    end
+
+    it 'does not mutate the array issue_command returned' do
+      raw = ['Wealth:', prompt].freeze
+      allow(Lich::Util).to receive(:issue_command).and_return(raw)
+      expect { described_class.capture_to_prompt('wealth', /^Wealth:/) }.not_to raise_error
+      expect(raw).to eq(['Wealth:', prompt])
+    end
+  end
+
   describe '.assess_teach' do
-    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return(nil); expect(described_class.assess_teach).to eq({}) }
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
+    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return([]); expect(described_class.assess_teach).to eq({}) }
+
+    it 'prints a timeout message when issue_command returns []' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRC: Failed to capture ASSESS TEACH output (timeout).')
+      described_class.assess_teach
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRC: Failed to capture ASSESS TEACH output/)
+      expect(described_class.assess_teach).to eq({})
+    end
+
+    it 'prints no timeout message when no one is teaching' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching'])
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.assess_teach
+    end
     it('returns empty hash when no one is teaching') { allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching']); expect(described_class.assess_teach).to eq({}) }
     it('returns empty hash when "You are teaching"') { allow(Lich::Util).to receive(:issue_command).and_return(['You are teaching a class']); expect(described_class.assess_teach).to eq({}) }
 
     it 'returns parsed hash when teachers found' do
       allow(Lich::Util).to receive(:issue_command).and_return([
                                                                 'Foo is teaching a class on Sorcery which is still open to new students',
-                                                                'Bar is teaching a class on Scholarship which is still open to new students'
+                                                                'Bar is teaching a class on Scholarship which is still open to new students',
+                                                                'Roundtime: 2 sec.'
                                                               ])
       expect(described_class.assess_teach).to eq({ 'Foo' => 'Sorcery', 'Bar' => 'Scholarship' })
+    end
+
+    it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.assess_teach
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'assess teach', anything, /Roundtime/,
+        usexml: false, quiet: true, include_end: true, timeout: 5
+      )
+    end
+
+    it 'prints no message on a complete reply' do
+      allow(Lich::Util).to receive(:issue_command).and_return([
+                                                                'Foo is teaching a class on Sorcery which is still open to new students',
+                                                                'Roundtime: 2 sec.'
+                                                              ])
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.assess_teach
+    end
+
+    context 'when the reply is cut off before its Roundtime line' do
+      before do
+        allow(Lich::Util).to receive(:issue_command).and_return([
+                                                                  'Foo is teaching a class on Sorcery which is still open to new students'
+                                                                ])
+      end
+
+      it 'prints a cut-off message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRC: ASSESS TEACH output was cut off (timeout); the result is incomplete.')
+        described_class.assess_teach
+      end
+
+      it 'returns the classes that did arrive' do
+        allow(Lich::Messaging).to receive(:msg)
+        expect(described_class.assess_teach).to eq({ 'Foo' => 'Sorcery' })
+      end
+    end
+
+    it 'prints no cut-off message for a "no one is teaching" reply without a Roundtime line' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching.'])
+      expect(Lich::Messaging).not_to receive(:msg)
+      expect(described_class.assess_teach).to eq({})
     end
   end
 
@@ -913,7 +1083,19 @@ RSpec.describe Lich::DragonRealms::DRC do
     it 'issues collect without practice when false' do
       allow(described_class).to receive(:bput).and_return('You begin to forage around')
       described_class.collect('rock', false)
-      expect(described_class).to have_received(:bput).with('collect rock ', described_class::COLLECT_MESSAGES)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'sends no trailing whitespace when practice is nil' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', nil)
+      expect(described_class).to have_received(:bput).with('collect rock', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'waits out roundtime once on an uncluttered collect' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', false)
+      expect(described_class).to have_received(:waitrt?).once
     end
 
     it 'calls kick_pile? when room is cluttered' do
@@ -922,6 +1104,203 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:kick_pile?).and_return(true)
       described_class.collect('rock')
       expect(described_class).to have_received(:kick_pile?)
+    end
+
+    context 'when the room is cluttered' do
+      # Real kick_pile? runs; only bput, the room's objects, fix_standing and waitrt? are stubbed.
+      # Each bput call pops the next scripted reply and records the command sent.
+      let(:sent) { [] }
+
+      def script_replies(*replies)
+        allow(described_class).to receive(:fix_standing)
+        allow(described_class).to receive(:bput) do |command, *_patterns|
+          sent << command
+          replies.shift || raise("unexpected extra bput: #{command.inspect}")
+        end
+      end
+
+      context 'with a kickable pile in the room' do
+        before { allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks']) }
+
+        it 'retries without practice when practice is false' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock', false)
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'retries with practice by default' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock')
+          expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'retries with practice when practice is explicitly true' do
+          script_replies('The room is too cluttered', 'take a step back and run up to', 'You begin to forage around,')
+          described_class.collect('rock', true)
+          expect(sent).to eq(['collect rock practice', 'kick pile', 'collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'keeps practice off across repeated cluttered retries' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'take a step back and run up to',
+                         'You begin to forage around,')
+          described_class.collect('rock', false)
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'does not retry when the kick misses the pile' do
+          script_replies('The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent).to eq(['collect rock practice', 'kick pile'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'waits out roundtime once when a later kick misses the pile' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock', 'kick pile'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'with no pile in the room' do
+        before { allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder']) }
+
+        it 'gives up without kicking or retrying' do
+          script_replies('The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent).to eq(['collect rock practice'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'when the room stays cluttered after every successful kick' do
+        # Every collect is refused, a pile is always in the room and every kick lands.
+        # The cap is the only thing that can stop it; the guard turns a runaway loop
+        # into a plain failure instead of a SystemStackError.
+        before do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          allow(described_class).to receive(:fix_standing)
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        def endless_clutter(success_on_attempt: nil)
+          attempts = 0
+          allow(described_class).to receive(:bput) do |command, *_patterns|
+            sent << command
+            raise "runaway collect: #{sent.length} commands sent" if sent.length > 50
+
+            if command.start_with?('kick')
+              'take a step back and run up to'
+            else
+              attempts += 1
+              attempts == success_on_attempt ? 'You begin to forage around,' : 'The room is too cluttered'
+            end
+          end
+        end
+
+        it 'gives up after the fifth refused collect without a fifth kick' do
+          endless_clutter
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(sent.last).to eq('collect rock practice')
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'keeps the caller mode on every capped attempt' do
+          endless_clutter
+          described_class.collect('rock', false)
+          expect(sent.uniq).to eq(['collect rock', 'kick pile'])
+          expect(sent.length).to eq(9)
+        end
+
+        it 'says why it gave up' do
+          endless_clutter
+          described_class.collect('rock')
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+        end
+
+        it 'still collects when the last allowed attempt goes through' do
+          endless_clutter(success_on_attempt: 5)
+          allow(described_class).to receive(:waitrt?).and_return(true)
+          expect(described_class.collect('rock')).to be(true)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(described_class).to have_received(:waitrt?).once
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'gives every call its own budget' do
+          endless_clutter
+          described_class.collect('rock')
+          sent.clear
+          described_class.collect('rock')
+          expect(sent.count('collect rock practice')).to eq(5)
+        end
+      end
+
+      context 'when the last pile is kicked just before the cap' do
+        # Four piles, each destroyed by its kick, and every collect refused. The fifth
+        # refusal hits the cap before kick_pile? would find the room empty, so the
+        # give-up is the loud one.
+        before do
+          room_states = Array.new(4) { ['a pile of rocks'] }
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        it 'gives up at the cap with the message and without looking for a fifth pile' do
+          script_replies(*(['The room is too cluttered', 'take a step back and run up to'] * 4), 'The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(DRRoom).to have_received(:room_objs).exactly(4).times
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'when it gives up before the cap' do
+        # Only the cap prints a message; a missing pile or a missed kick stays silent.
+        before { allow(Lich::Messaging).to receive(:msg) }
+
+        it 'prints nothing when there is no pile to kick' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder'])
+          script_replies('The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'prints nothing when the kick misses' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+      end
+
+      context 'when the pile is gone on a later attempt' do
+        before do
+          room_states = [['a pile of rocks'], []]
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+        end
+
+        it 'waits out the kick roundtime once when it gives up after the first kick succeeded' do
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered')
+          expect(described_class.collect('rock', false)).to be_nil
+          expect(sent).to eq(['collect rock', 'kick pile', 'collect rock'])
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
     end
   end
 

@@ -19,8 +19,33 @@ module Lich
   module Common
     # Mock database adapter that simulates database operations using in-memory storage
     class MockDatabaseAdapter
+      # One clock for every instance, so that data_version only ever grows,
+      # even across the fresh adapter each example creates: the real
+      # adapter's values grow across reopened connections too, and Settings
+      # keeps versions recorded with rows that may still be cached from an
+      # earlier example.
+      @version_clock = 0
+      @version_clock_mutex = Mutex.new
+
+      def self.next_version
+        @version_clock_mutex.synchronize { @version_clock += 1 }
+      end
+
       def initialize
         @storage = {}
+        @version = self.class.next_version
+        @data_version_unknown = false
+      end
+
+      # Set to true to play a database whose data_version can't be read right
+      # now (DatabaseAdapter#data_version returns nil while another process
+      # holds the lock).
+      attr_accessor :data_version_unknown
+
+      # Like DatabaseAdapter#data_version: changes on every save, as the real
+      # one changes on every commit by any connection, this process's included.
+      def data_version
+        @data_version_unknown ? nil : @version
       end
 
       # Get settings for a specific script and scope
@@ -41,12 +66,29 @@ module Lich
         key = "#{script_name}:#{scope}"
         # Store a deep copy to prevent unintended modifications
         @storage[key] = deep_copy(settings)
+        @version = self.class.next_version
+        true
+      end
+
+      # Read-modify-write of one row, mirroring DatabaseAdapter#update_settings:
+      # the block gets the stored row and returns the row to store, or nil to
+      # store nothing. Returns the block's own row object (not a copy), as the
+      # real adapter does, so a caller that forgets to copy a value is caught.
+      # on_stored is called with the stored row, as the real adapter does.
+      def update_settings(script_name, scope = ":", on_stored: nil)
+        updated = yield get_settings(script_name, scope)
+        return nil unless updated.is_a?(Hash)
+
+        save_settings(script_name, updated, scope)
+        on_stored&.call(updated)
+        updated
       end
 
       # Clear all stored settings
       # This is useful for resetting the state between tests
       def clear
         @storage = {}
+        @version = self.class.next_version
       end
 
       # Get a copy of the entire storage hash
