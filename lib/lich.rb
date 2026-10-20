@@ -176,6 +176,13 @@ module Lich
     nil
   end
 
+  # WARNING: do not call Lich.db.transaction { } (or run BEGIN/COMMIT by hand
+  # on Lich.db) without handling a failed or interrupted COMMIT. If the thread
+  # is killed while COMMIT waits for the lock, the transaction stays open on
+  # this shared connection and holds the write lock until Lich exits. Nothing
+  # calls Lich.db.transaction today. Databases opened with
+  # Lich.open_sequel_sqlite roll back a failed or interrupted COMMIT; see
+  # SQLiteBusyWait::Transactions.
   def Lich.db
     @@lich_db ||= open_sqlite_db("#{DATA_DIR}/lich.db3")
   end
