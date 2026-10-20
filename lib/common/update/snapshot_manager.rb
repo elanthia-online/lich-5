@@ -357,14 +357,15 @@ module Lich
         # Lists what a snapshot directory lacks for #revert to restore it.
         # Problems that may also mean the snapshot is complete (see
         # #doubtful_problems) get a hint for using it then, unless it has
-        # another problem as well.
+        # another problem as well that is not fixed by renaming its legacy
+        # --lib-dir directory (see #legacy_lib_dir_name).
         #
         # @param dir [String] snapshot directory
         # @return [Array<String>] human-readable problems; empty if complete
         def snapshot_problems(dir)
           problems = interruption_problems(dir)
           doubts, hints = doubtful_problems(dir)
-          problems + doubts + (problems.empty? ? hints : [])
+          problems + doubts + (problems.empty? || legacy_lib_dir_name(dir) ? hints : [])
         end
 
         # Every problem #snapshot_problems lists except those
@@ -541,12 +542,14 @@ module Lich
         # Older Lich versions copied LIB_DIR into a snapshot under its own
         # name, so with --lib-dir pointing at a directory not named "lib" the
         # files landed in <snapshot>/<name>/ and lib/ stayed empty. Only a
-        # snapshot that renaming would make complete counts: lib/ must be
-        # absent or empty, and lich.rbw and scripts/ must be present (older
-        # versions copied them before and after LIB_DIR, so a missing one
-        # means that snapshot was interrupted, possibly mid-copy), and so
-        # must every core script it would restore (see #legacy_cut_off;
-        # older versions copied those last).
+        # snapshot that renaming would leave with no problem blamed on an
+        # interruption counts: lib/ must be absent or empty, lich.rbw and
+        # scripts/ must be present (older versions copied them before and
+        # after LIB_DIR, so a missing one means that snapshot was
+        # interrupted, possibly mid-copy), and the last core script it has
+        # must not be empty (see #interruption_problems; older versions
+        # copied those last). Problems that may also mean it is complete
+        # (see #doubtful_problems) remain, with their own hints.
         #
         # @param dir [String] snapshot directory
         # @return [String, nil] that directory name if +dir+ has this layout
@@ -555,7 +558,7 @@ module Lich
           return nil if name == 'lib'
           return nil unless File.file?(File.join(dir, name, 'version.rb'))
           return nil unless File.file?(File.join(dir, lich_file_name)) && File.directory?(File.join(dir, 'scripts'))
-          return nil unless legacy_empty_scripts(dir).empty? && legacy_cut_off(dir).nil?
+          return nil if legacy_empty_scripts(dir).include?(legacy_last_script(dir))
 
           lib = File.join(dir, 'lib')
           if File.symlink?(lib) || File.exist?(lib)

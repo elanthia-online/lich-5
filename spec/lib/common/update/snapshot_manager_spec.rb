@@ -943,15 +943,44 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
       end
 
-      # Renaming alone would leave such a snapshot refused for scripts/.
+      # Renaming alone would leave such a snapshot refused for scripts/,
+      # with the last core script it has possibly cut short.
+      it 'gives no rename hint and blames an interruption when its last core script is empty' do
+        dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+        File.write(File.join(dir, 'scripts', 'map.lic'), '')
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(messages).to include("    #{dir}", '  - lib/version.rb is missing', '  - scripts/map.lic is empty')
+        expect(messages.grep(/rename|copy them|delete them/)).to be_empty
+        expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+      end
+
+      # Renaming would leave only problems that may also mean the snapshot
+      # is complete, so it gets the rename hint and theirs, and is not
+      # blamed on an interruption.
       {
-        'stops before an installed core script'    => ->(dir) { File.delete(File.join(dir, 'scripts', 'map.lic')) },
-        'has an empty core script'                 => ->(dir) { File.write(File.join(dir, 'scripts', 'map.lic'), '') },
-        'has an empty core script before its last' => ->(dir) { File.write(File.join(dir, 'scripts', 'go2.lic'), '') }
-      }.each do |layout, cut|
-        it "gives no rename hint and blames an interruption when its scripts/ #{layout}" do
+        'stops before an installed core script'    => {
+          cut: ->(dir) { File.delete(File.join(dir, 'scripts', 'map.lic')) },
+          problem: /\A  - scripts\/ ends at go2\.lic and has none of the installed core scripts after it \(map\.lic\)/,
+          hint: /copy them from/,
+          follow: ->(dir) { FileUtils.cp(File.join(SCRIPT_DIR, 'map.lic'), File.join(dir, 'scripts', 'map.lic')) },
+          map: '# map 5.22.0'
+        },
+        'has an empty core script before its last' => {
+          cut: ->(dir) { File.write(File.join(dir, 'scripts', 'go2.lic'), '') },
+          problem: /\A  - scripts\/go2\.lic is empty: either it was empty when the snapshot was taken/,
+          hint: /delete them from its scripts/,
+          follow: ->(dir) { File.delete(File.join(dir, 'scripts', 'go2.lic')) },
+          map: '# map 5.21.0'
+        }
+      }.each do |layout, c|
+        it "gives the rename hint and the doubt hint, without blaming an interruption, when its scripts/ #{layout}" do
           dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
-          cut.call(dir)
+          c[:cut].call(dir)
           before = live_state
           messages = capture_responses
 
@@ -959,8 +988,24 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
           expect(live_state).to eq(before)
           expect(messages).to include("    #{dir}", '  - lib/version.rb is missing')
-          expect(messages.grep(/rename|copy them|delete them/)).to be_empty
-          expect(messages).to include('It was most likely left by a snapshot that was interrupted.')
+          expect(messages).to include("  - an older Lich saved this --lib-dir snapshot's files in #{legacy_name}/; " \
+                                      "to use it, delete the empty lib/ in it, then rename #{legacy_name}/ to lib/")
+          expect(messages.grep(c[:problem]).size).to eq(1)
+          expect(messages.grep(c[:hint]).size).to eq(1)
+          expect(messages.grep(/most likely left by/)).to be_empty
+        end
+
+        it "restores it once both hints are followed when its scripts/ #{layout}" do
+          dir = make_legacy_snapshot('2026-10-17-00-00-00', '5.21.0')
+          c[:cut].call(dir)
+          Dir.rmdir(File.join(dir, 'lib'))
+          File.rename(File.join(dir, legacy_name), File.join(dir, 'lib'))
+          c[:follow].call(dir)
+
+          manager.revert
+
+          expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+          expect(File.read(File.join(SCRIPT_DIR, 'map.lic'))).to eq("#{c[:map]}\n")
         end
       end
 
