@@ -692,7 +692,7 @@ module XMLData
   @dr_active_spells_stellar_percentage = 0
 
   class << self
-    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm, :show_room_id
+    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm, :nav_count, :show_room_id
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
     attr_accessor :current_target_ids
 
@@ -728,6 +728,7 @@ module XMLData
       @injuries = {}
       @room_id = 0
       @previous_nav_rm = nil
+      @nav_count = 0
       @show_room_id = false
       @room_title = ''
       @room_description = ''
