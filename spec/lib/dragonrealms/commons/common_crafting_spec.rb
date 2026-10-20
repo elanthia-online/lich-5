@@ -2,7 +2,9 @@
 
 require_relative '../../../spec_helper'
 
-# Load production code
+# Load production code. common-items is loaded so DRCC reaches the real DRCI
+# (and its pattern constants) whether this file runs alone or in the suite.
+require 'dragonrealms/commons/common-items'
 require 'dragonrealms/commons/common-crafting'
 
 DRCC = Lich::DragonRealms::DRCC unless defined?(DRCC)
@@ -152,6 +154,264 @@ describe DRCC do
         expect(DRCI).not_to receive(:put_away_item?).with('outfitting logbook')
 
         DRCC.logbook_item(logbook, noun, container)
+      end
+    end
+  end
+
+  describe '.repair_own_tools' do
+    let(:info) { { 'finisher-room' => 8776, 'finisher-number' => 6 } }
+    let(:bag) { 'backpack' }
+    let(:bag_items) { [] }
+    let(:belt) { nil }
+    let(:sent) { [] }
+    let(:stowed) { [] }
+
+    # Replies keyed by the repair command; any command not listed succeeds.
+    # An Array value gives successive replies to the same command.
+    # DRC.bput returns the matched text, so the stubs return the pattern constants.
+    def stub_repair_replies(replies = {})
+      allow(DRC).to receive(:bput) do |command, *_patterns|
+        sent << command
+        reply = replies.fetch(command, DRCC::REPAIR_SUCCESS)
+        reply.is_a?(Array) ? (reply.shift || DRCC::REPAIR_SUCCESS) : reply
+      end
+    end
+
+    before(:each) do
+      allow(DRCC).to receive(:check_consumables)
+      allow(DRCC).to receive(:get_crafting_item)
+      allow(DRCC).to receive(:stow_crafting_item) { |name, *_rest| stowed << name }
+      allow(DRC).to receive(:right_hand).and_return('hammer')
+    end
+
+    context 'when the rub reply says the character is engaged' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED) }
+
+      it 'stows the tool once and the wire brush once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed.count('hammer')).to eq(1)
+        expect(stowed.count('wire brush')).to eq(1)
+      end
+
+      it 'does not fetch or work on the remaining tools' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRCC).not_to have_received(:get_crafting_item).with('tongs', any_args)
+        expect(sent).to eq(['rub my hammer with my wire brush'])
+        expect(stowed).to eq(['wire brush', 'hammer'])
+      end
+
+      it 'tells the user why repairs stopped' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to eq(['DRCC: Cannot repair in combat.'])
+      end
+    end
+
+    context 'when the rub reply says the character cannot figure out how' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_CONFUSED) }
+
+      it 'stows the brush and the tool once each and skips the oil for that tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed.first(2)).to eq(['wire brush', 'hammer'])
+        expect(sent).not_to include('pour my oil on my hammer')
+      end
+
+      it 'moves on and repairs the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+
+      it 'names the tool it could not repair' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(Lich::Messaging.messages.map { |m| m[:message] })
+          .to eq(['DRCC: Cannot repair hammer, skipping it.'])
+      end
+    end
+
+    context 'when the pour reply says the character cannot figure out how after a successful rub' do
+      before { stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_CONFUSED) }
+
+      it 'stows the brush, the oil and the tool once each and repairs the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+    end
+
+    context 'when the pour reply says the character is engaged after a successful rub' do
+      before { stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_ENGAGED) }
+
+      it 'stows the brush, the oil and the tool once each and skips the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer'])
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer'])
+      end
+    end
+
+    context 'when the pour reply is Pour what and the retry says the character is engaged' do
+      before { stub_repair_replies('pour my oil on my hammer' => [DRCC::REPAIR_POUR_WHAT, DRCC::REPAIR_ENGAGED]) }
+
+      it 'stows the oil and the tool once each and skips the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer', 'pour my oil on my hammer'])
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer'])
+      end
+
+      it 'waits for the engaged reply on the retry and tells the user why repairs stopped' do
+        result = DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRC).to have_received(:bput)
+          .with('pour my oil on my hammer', DRCC::REPAIR_SUCCESS, DRCC::REPAIR_ENGAGED)
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to eq(['DRCC: Cannot repair in combat.'])
+        expect(result).to eq(:engaged)
+      end
+    end
+
+    context 'when the pour reply is Pour what and the retry succeeds' do
+      before { stub_repair_replies('pour my oil on my hammer' => [DRCC::REPAIR_POUR_WHAT, DRCC::REPAIR_SUCCESS]) }
+
+      it 'fetches more oil and goes on to the next tool' do
+        result = DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRCC).to have_received(:check_consumables).with('oil', 8776, 6, bag, bag_items, belt)
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
+        expect(result).to be_nil
+      end
+    end
+
+    describe 'return value' do
+      it 'is :engaged when an engaged reply stops the repairs' do
+        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED)
+
+        expect(DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)).to eq(:engaged)
+      end
+
+      it 'is nil when every tool is worked through' do
+        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_CONFUSED)
+
+        expect(DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)).to be_nil
+      end
+
+      it 'is nil when no tool is eligible' do
+        stub_repair_replies
+
+        expect(DRCC.repair_own_tools(info, [], bag, bag_items, belt)).to be_nil
+        expect(sent).to be_empty
+      end
+    end
+
+    context 'when the last tool hits a stop reply' do
+      before { stub_repair_replies('rub my tongs with my wire brush' => DRCC::REPAIR_ENGAGED) }
+
+      it 'keeps the earlier repairs and stows the last tool once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'tongs'])
+      end
+    end
+
+    context 'when every reply succeeds' do
+      before { stub_repair_replies }
+
+      it 'rubs and oils every tool and stows each once' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+    end
+
+    context 'when a tool is not damaged enough' do
+      before { stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_NOT_NEEDED) }
+
+      it 'skips the oil for that tool and still repairs the next one' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush',
+                            'rub my tongs with my wire brush', 'pour my oil on my tongs'])
+        expect(stowed).to eq(['wire brush', 'hammer', 'wire brush', 'oil', 'tongs'])
+      end
+    end
+
+    context 'when the repair is a Proper Forging Tool Care success before a stop reply' do
+      before do
+        stub_repair_replies('pour my oil on my hammer' => DRCC::REPAIR_ENGAGED)
+        # Stubbed rather than set: depending on load order Flags is the spec mock or the production class.
+        allow(Flags).to receive(:[]).and_call_original
+        allow(Flags).to receive(:[]).with('proper-repair').and_return(true)
+        allow(Flags).to receive(:reset)
+      end
+
+      it 'still records the immunity and clears the flag' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(UserVars.immune_list.keys).to eq(['hammer'])
+        expect(Flags).to have_received(:reset).with('proper-repair').once
+      end
+    end
+
+    # Runs the real stow_crafting_item. Tie attempts are counted whether they
+    # go through DRCI.tie_item? (DRCI is the spec_helper mock or the real
+    # module, depending on load order) or straight through DRC.bput, so the
+    # examples hold however the belt tie is implemented. The first tie
+    # succeeds; any later tie finds nothing in hand and fails, and safe-room
+    # raises, so a second tie that falls back to it fails the example at once.
+    context 'with the real stow_crafting_item and a belt tool' do
+      let(:belt) { { 'name' => 'forging belt', 'items' => ['hammer'] } }
+      let(:tie_command) { 'tie my hammer to my forging belt' }
+      let(:tie_replies) { ['You tie your hammer to your forging belt.'] }
+
+      def next_tie_reply
+        sent << tie_command
+        tie_replies.shift || 'Tie what?'
+      end
+
+      def stub_belt_replies(rub_reply)
+        allow(DRCI).to receive(:tie_item?).with('hammer', 'forging belt') { next_tie_reply.start_with?('You tie') }
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          next next_tie_reply if command == tie_command
+
+          sent << command
+          case command
+          when 'rub my hammer with my wire brush' then rub_reply
+          when /^put my / then 'You put'
+          else DRCC::REPAIR_SUCCESS
+          end
+        end
+      end
+
+      before do
+        allow(DRCC).to receive(:stow_crafting_item).and_call_original
+        allow(DRC).to receive(:wait_for_script_to_complete).and_raise('safe-room run')
+        allow(DRCT).to receive(:walk_to)
+      end
+
+      it 'ties the tool once and never sends it to the safe room when engaged' do
+        stub_belt_replies(DRCC::REPAIR_ENGAGED)
+
+        DRCC.repair_own_tools(info, %w[hammer], bag, bag_items, belt)
+
+        expect(sent.count(tie_command)).to eq(1)
+        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack', tie_command])
+      end
+
+      it 'ties the tool once and never sends it to the safe room when it cannot figure out how' do
+        stub_belt_replies(DRCC::REPAIR_CONFUSED)
+
+        DRCC.repair_own_tools(info, %w[hammer], bag, bag_items, belt)
+
+        expect(sent.count(tie_command)).to eq(1)
+        expect(sent).to eq(['rub my hammer with my wire brush', 'put my wire brush in my backpack', tie_command])
       end
     end
   end
@@ -605,6 +865,318 @@ describe DRCC do
     end
   end
 
+  describe '.empty_crucible?' do
+    # Reference the modules the way production resolves them, so the stubs hit
+    # the same objects whether or not the real commons are loaded.
+    let(:common) { Lich::DragonRealms::DRC }
+    let(:items) { Lich::DragonRealms::DRCI }
+    let(:sent) { [] }
+    let(:look_replies) { [] }
+    # Nouns whose GET from the crucible fails (get_item_unsafe returns false).
+    let(:stuck) { [] }
+    let(:empty) { 'There is nothing in there.' }
+    let(:molten) { 'In the large crucible you see some molten bronze.' }
+    let(:nugget) { 'In the large crucible you see a bronze nugget.' }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i and
+      # the matched text (not the whole line) is returned. The last reply repeats.
+      allow(common).to receive(:bput) do |command, *patterns|
+        sent << command
+        next 'You tap a large crucible' if command == 'tap crucible'
+
+        line = look_replies.length > 1 ? look_replies.shift : look_replies.first
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        match ? match.to_a.first : ''
+      end
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(items).to receive(:get_item_unsafe) do |item, container|
+        sent << "get #{item} from #{container}"
+        !stuck.include?(item)
+      end
+      allow(items).to receive(:dispose_trash) { |item| sent << "dispose #{item}" }
+      allow(items).to receive(:in_hands?) { |item| held.include?(item) }
+    end
+
+    # Nouns the player is already holding (DRCI.in_hands? returns true).
+    let(:held) { [] }
+
+    it 'returns true for an empty crucible' do
+      look_replies << empty
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false when there is no crucible' do
+      look_replies << 'I could not find what you were referring to.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false without retrying when the look times out' do
+      look_replies << 'Something unrelated scrolls by.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'tilts molten metal out instead of trying to pick it up' do
+      look_replies.push(molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'tilts the metal first, then clears the clutter left behind' do
+      look_replies.push('In the large crucible you see some molten bronze and a bronze nugget.', nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'gets and disposes of solid clutter' do
+      look_replies.push(nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'returns true when the crucible empties on the last allowed pass' do
+      look_replies.push(molten, molten, molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages).to be_empty
+    end
+
+    it 'gives up after 3 passes when the molten metal stays' do
+      look_replies << molten
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(sent.grep(/^get /)).to be_empty
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'gives up after 3 passes when the clutter cannot be removed' do
+      look_replies << nugget
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('get nugget from crucible')).to eq(3)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'counts a tilt and the clears after it against the same 3-pass budget' do
+      look_replies.push(molten, nugget)
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc'])
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'does not dispose of clutter it failed to pick up from the crucible' do
+      look_replies.push(nugget, empty)
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'look in cruc'])
+      expect(items).not_to have_received(:dispose_trash)
+    end
+
+    it 'disposes only of the clutter items it picked up' do
+      look_replies.push('In the large crucible you see a bronze nugget and a granite rock.', empty)
+      stuck << 'rock'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get rock from crucible', 'look in cruc'])
+    end
+
+    it 'tilts molten metal listed after solid clutter instead of picking it up' do
+      look_replies.push('In the large crucible you see a bronze nugget and some molten bronze.', nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'tilts molten metal listed without an article' do
+      look_replies.push('In the large crucible you see molten bronze.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'skips an entry with no noun to pick up and gives up after one look' do
+      # The real DRC.get_noun returns nil for a name that does not end in a
+      # word (see common_spec.rb); the spec_helper stub never does.
+      allow(common).to receive(:get_noun).with('a 5').and_return(nil)
+      look_replies << 'In the large crucible you see a 5.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:in_hands?)
+      expect(items).not_to have_received(:get_item_unsafe)
+    end
+
+    it 'tilts molten metal anywhere in a comma-separated list' do
+      look_replies.push('In the large crucible you see a bronze nugget, some molten iron and a granite rock.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    [
+      'a bronze nugget, molten iron and a granite rock',
+      'a bronze nugget and molten iron',
+      'a bronze nugget, a granite rock, and molten iron'
+    ].each do |list|
+      it "tilts bare molten metal that is not first in the list: #{list}" do
+        look_replies.push("In the large crucible you see #{list}.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'does not split a solid item at a molten-hued word after and' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
+    it 'clears the entry glued to a molten-hued item on the next pass' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.',
+                        'In the large crucible you see a bronze nugget.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'picks up a solid item whose description only contains the word molten' do
+      look_replies.push('In the large crucible you see a nugget of once-molten bronze.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get bronze from crucible', 'dispose bronze', 'look in cruc'])
+    end
+
+    %w[wand band stand].each do |noun|
+      it "tilts molten metal listed after a #{noun}" do
+        look_replies.push("In the large crucible you see a gold #{noun} and some molten bronze.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'tilts molten metal at the end of a list with a serial comma' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and some molten iron.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'picks up every item of a serial-comma list by its own noun' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get rock from crucible', 'dispose rock',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'does not cut a noun ending in "and" when splitting the list' do
+      look_replies.push('In the large crucible you see a gold wand and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get wand from crucible', 'dispose wand',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'picks up a solid item whose adjective starts with molten' do
+      look_replies.push('In the large crucible you see a nugget and a molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
+    it 'leaves clutter alone when the player already holds an item with that noun' do
+      look_replies << 'In the large crucible you see a steel bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:get_item_unsafe)
+      expect(items).not_to have_received(:dispose_trash)
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('Not clearing the bar')
+    end
+
+    it 'clears the other clutter, then gives up on the held noun without more passes' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'prints the held-noun message once, not again on the next pass' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints the held-noun message once when two entries share the held noun' do
+      look_replies << 'In the large crucible you see a steel bar and an iron bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'prints the held-noun message on a later pass when it first shows up there' do
+      look_replies.push(molten, 'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints one held-noun message per distinct noun' do
+      look_replies << 'In the large crucible you see a steel bar and a bronze nugget.'
+      held.push('bar', 'nugget')
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.map { |m| m[:message] }.grep(/Not clearing the/)
+      expect(held_messages).to eq(['DRCC: Not clearing the bar from the crucible while you are holding something that matches it.',
+                                   'DRCC: Not clearing the nugget from the crucible while you are holding something that matches it.'])
+    end
+
+    it 'still tilts molten metal while holding an item with the same noun' do
+      look_replies.push(molten, empty)
+      held << 'bronze'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'lets find_empty_crucible move on from a crucible that will not empty' do
+      look_replies << molten
+      travel = Lich::DragonRealms::DRCT
+      allow(DRCC).to receive(:get_data).with('crafting').and_return(
+        'blacksmithing' => { 'Crossing' => { 'crucibles' => [1, 2], 'idle-room' => 3 } }
+      )
+      allow(Lich::DragonRealms::DRRoom).to receive(:pcs).and_return([])
+      allow(Lich::DragonRealms::DRRoom).to receive(:group_members).and_return([])
+      allow(DRCC).to receive(:clean_anvil?)
+      predicate_results = []
+      allow(travel).to receive(:find_sorted_empty_room) do |_rooms, _idle, predicate|
+        predicate_results << predicate.call
+      end
+      DRCC.find_empty_crucible('Crossing')
+
+      expect(predicate_results).to eq([false])
+      expect(sent.first).to eq('tap crucible')
+      expect(sent.count('look in cruc')).to eq(8)
+    end
+  end
+
   describe '.get_crafting_item' do
     # Reference the modules the way production resolves them, so the stubs hit
     # the same objects whether or not other specs load the real commons.
@@ -993,6 +1565,173 @@ describe DRCC do
               end
             end
           end
+        end
+      end
+    end
+  end
+
+  describe '.stow_crafting_item' do
+    let(:belt) { { 'name' => "forger's belt", 'items' => ['tongs'] } }
+    let(:tie) { "tie my tongs to my forger's belt" }
+    let(:bag_put) { 'put my tongs in my backpack' }
+    let(:wounds) { 'Your wounds hinder your ability to do that.' }
+    let(:attach) { "You attach the tongs to your forger's belt." }
+    let(:sent) { [] }
+    let(:tie_replies) { [] }
+    let(:bag_put_reply) { 'You put your tongs in your backpack.' }
+    # The safe-room stub moves the character, so only a room id read before
+    # the trip walks back to the crafting room (8775).
+    let(:room_id) { [8775] }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i and
+      # the matched text (not the whole line) is returned; '' on a timeout.
+      # A non-empty reply that no pattern matches raises: the real bput would
+      # wait out its 15 s timeout and print a debug block instead.
+      allow(DRC).to receive(:bput) do |command, *patterns|
+        sent << command
+        # main retried without limit; stop the example instead of the stack.
+        raise 'tie sent a third time' if sent.count { |c| c.start_with?('tie ') } > 2
+
+        line = command.start_with?('tie ') ? tie_replies.shift.to_s : bag_put_reply
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
+
+        match ? match.to_a.first : ''
+      end
+      allow(DRC).to receive(:wait_for_script_to_complete) do |script, args|
+        sent << "#{script} #{args.join(' ')}"
+        room_id[0] = 1
+      end
+      allow(DRCT).to receive(:walk_to) { |room| sent << "walk #{room}" }
+      allow(Room).to receive(:current) { OpenStruct.new(id: room_id.first) }
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    it 'keeps the belt tie helper out of the public DRCC API' do
+      expect(DRCC).not_to respond_to(:tie_to_crafting_belt?)
+      expect { DRCC.tie_to_crafting_belt?('tongs', belt) }.to raise_error(NoMethodError, /private method/)
+    end
+
+    it 'returns nil without sending anything when there is no tool name' do
+      expect(DRCC.stow_crafting_item(nil, 'backpack', belt)).to be_nil
+      expect(sent).to be_empty
+    end
+
+    it 'ties a belt tool and returns true' do
+      tie_replies << attach
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie])
+      expect(Lich::Messaging).not_to have_received(:msg)
+    end
+
+    it 'counts a tool that is already tied off as tied' do
+      tie_replies << 'The tongs has already been tied off.'
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie])
+    end
+
+    it 'puts a tool that is not on the belt list in the bag without a tie' do
+      expect(DRCC.stow_crafting_item('hammer', 'backpack', belt)).to be(true)
+      expect(sent).to eq(['put my hammer in my backpack'])
+    end
+
+    it 'puts the tool in the bag when there is no belt' do
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+      expect(sent).to eq([bag_put])
+    end
+
+    [
+      "There's no more free ties on the belt.",
+      'Tie what?',
+      'You must be holding the tongs to do that.',
+      'You are a little too busy to do that.',
+      'The tongs doesn\'t seem to fit.',
+      'You should close the fan first.',
+      "Tie it off when it's empty?",
+      ''
+    ].each do |reply|
+      it "puts the tool in the bag without a safe-room trip after #{reply.empty? ? 'no reply' : reply.inspect}" do
+        tie_replies << reply
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+        expect(sent).to eq([tie, bag_put])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', "DRCC: Failed to tie tongs to forger's belt. Stowing it off the belt instead.").once
+      end
+    end
+
+    it 'goes to safe-room once for wounds, then ties again' do
+      tie_replies.push(wounds, attach)
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', "DRCC: Wounds hinder tying tongs to forger's belt. Visiting safe-room, then trying once more.").once
+      expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Failed to tie/)
+    end
+
+    it 'puts the tool in the bag when wounds still hinder the tie after safe-room' do
+      tie_replies.push(wounds, wounds)
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Wounds hinder tying tongs/).once
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Failed to tie tongs/).once
+    end
+
+    it 'puts the tool in the bag when the tie after safe-room fails another way' do
+      tie_replies.push(wounds, 'Tie what?')
+      expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+      expect(sent).to eq([tie, 'safe-room force', 'walk 8775', tie, bag_put])
+    end
+
+    context 'when the bag has no room' do
+      let(:bag_put_reply) { "There's no room in the backpack." }
+
+      it 'stows the tool after a failed tie and returns true' do
+        tie_replies << 'Tie what?'
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(true)
+        expect(sent).to eq([tie, bag_put, 'stow my tongs'])
+      end
+    end
+
+    context 'when the bag refuses the tool' do
+      let(:bag_put_reply) { "You can't put that there." }
+
+      it 'returns false, as for any bag tool, after putting it in the other bag' do
+        tie_replies << "There's no more free ties on the belt."
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(false)
+        expect(sent).to eq([tie, bag_put, 'put my tongs in my other backpack'])
+      end
+    end
+
+    # Every tie reply DRCI knows (and a timeout), alone and after wounds: the
+    # trip and the retry happen only for wounds, at most once, and anything
+    # that isn't a tie ends in the bag. A second reply is only read after
+    # wounds, so pairs that start with anything else add no behaviour.
+    # DRCI's /^You don't seem to be able to move/ is left out: the real bput
+    # skips that line, so the outcome is the timeout ('') case covered here.
+    describe 'for every tie reply, alone and after wounds' do
+      success = ["You attach the tongs to your forger's belt.", 'You tie the tongs to the belt.',
+                 'The tongs has already been tied off.']
+      refusals = ["There's no more free ties on the belt.", 'Tie what?', 'You are a little too busy to do that.',
+                  'You must be holding the tongs to do that.', 'You should close the fan first.',
+                  'The tongs doesn\'t seem to fit.', "Tie it off when it's empty?", '']
+      wound = 'Your wounds hinder your ability to do that.'
+      replies = success + refusals + [wound]
+
+      sequences = (success + refusals).map { |reply| [reply] } + replies.map { |reply| [wound, reply] }
+      sequences.each do |sequence|
+        it "is bounded after #{sequence.map(&:inspect).join(' then ')}" do
+          tie_replies.push(*sequence)
+          result = DRCC.stow_crafting_item('tongs', 'backpack', belt)
+
+          retried = sequence.first == wound
+          tied = success.include?(sequence.last)
+          expected = [tie]
+          expected += ['safe-room force', 'walk 8775', tie] if retried
+          expected << bag_put unless tied
+          expect(sent).to eq(expected)
+          expect(result).to be(true)
         end
       end
     end
