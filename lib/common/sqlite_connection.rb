@@ -117,16 +117,6 @@ module Lich
   # cleanup makes once the kill returns. With the C busy timeout none of this
   # could happen, because nothing else ran until the wait ended.
   #
-  # Two interrupts that both arrive before the waiting thread runs again
-  # (about a millisecond, plus any wait for the GVL) still queue up, as they
-  # do for a thread blocked anywhere in Ruby (sleep, Queue#pop, IO): Ruby
-  # delivers the first as the call returns and the second only at the
-  # thread's next blocking call or interrupt-mask boundary, which can be
-  # outside the scope the second was meant for (a Timeout::ExitException
-  # after its block). Ruby can't drop a queued interrupt without delivering
-  # it, and dropping one would lose a Timeout or a Thread#raise, so this is
-  # left as Ruby does it.
-  #
   # Two exceptions keep waiting until the lock frees or the busy timeout
   # expires, and deliver the interrupt afterwards:
   #
@@ -279,49 +269,30 @@ module Lich
     end
 
     # Prepended to SQLite3::Backup. Only backups with a marked connection at
-    # either end change behaviour.
-    #
-    # sqlite3_backup_step takes both connections' mutexes and can wait for a
-    # lock on either database through that connection's busy handler. With
-    # the Ruby handler that wait sleeps inside SQLite like a statement's, so:
+    # either end change behaviour. sqlite3_backup_step takes both
+    # connections' mutexes and can wait for a lock through the Ruby busy
+    # handler, so:
     #
     # - #step defers interrupts as Statement#step does: an interrupt ends the
-    #   wait, #step returns SQLITE_BUSY and the interrupt is delivered in its
-    #   place, and the connections' mutexes are released first;
-    # - a shared connection can be the source. #initialize
-    #   (sqlite3_backup_init), #step and #finish (sqlite3_backup_finish), which
-    #   all take its mutex, run under its Monitor, so another thread that uses
-    #   it meanwhile waits for the Monitor instead of blocking on the mutex
-    #   with the GVL held. SQLite allows the source to be used between steps.
-    #   #finish defers interrupts while it waits for that Monitor, so a
-    #   Thread#kill or #raise that lands in an `ensure backup.finish` can't
-    #   skip sqlite3_backup_finish and leave the destination locked; it is
-    #   delivered once #finish returns. A kill there can therefore take as
-    #   long as the Monitor's holder, up to its busy timeout if it is waiting
-    #   for a lock.
-    # - a shared connection can't be the destination: #initialize raises
-    #   ArgumentError. SQLite requires that nothing else use the destination
-    #   from sqlite3_backup_init to sqlite3_backup_finish, and a Monitor only
-    #   serializes single calls; a write from another thread between two
-    #   steps corrupted the destination and crashed the process. The
-    #   destination must be a pooled connection or a plain one, and nothing
-    #   may use it until #finish returns: not another thread, not another
-    #   backup, and not the backing-up thread itself. A pooled destination
-    #   stays checked out for the whole backup, so a Sequel call on the same
-    #   pool inside that #synchronize block reuses it; a write made that way
-    #   between two steps also corrupted the destination and crashed the
-    #   process in #step. Call #finish in an ensure.
+    #   wait, the mutexes are released, and it is delivered in place of
+    #   SQLITE_BUSY.
+    # - A shared connection may be the source. #initialize, #step and #finish
+    #   run under its Monitor, so other threads wait on the Monitor rather
+    #   than on the mutex with the GVL held. #finish defers interrupts while
+    #   it waits for the Monitor, so a kill in `ensure backup.finish` can't
+    #   skip sqlite3_backup_finish and leave the destination locked; the kill
+    #   can take as long as the Monitor's holder (up to its busy timeout).
+    # - A shared connection may not be the destination (#initialize raises
+    #   ArgumentError): SQLite requires nothing else use the destination
+    #   until #finish, and a Monitor only serializes single calls.
     #
-    # #remaining and #pagecount only read the backup's own counters.
-    #
-    # Neither a pooled nor a plain end of a backup is tracked or serialized.
-    # Until #finish returns, no other thread, and no other backup, may use
-    # it: #step waits holding its mutex, so another thread that calls into it
-    # blocks on that mutex with the GVL held, the lock holder never gets to
-    # commit, and the process freezes. For the same reason a statement
-    # dropped unclosed on it can freeze the process if GC finalizes it during
-    # the wait. Close statements on a connection before backing up to or from
-    # it.
+    # Pooled and plain ends are neither tracked nor serialized. Until #finish
+    # returns nothing else may use them (no other thread, no other backup,
+    # and no Sequel call on the same pool from the backing-up thread), or a
+    # caller blocks on the mutex with the GVL held and the process freezes
+    # or the destination is corrupted. Close statements on both ends first,
+    # so GC can't finalize one mid-wait, and call #finish in an ensure.
+    # #remaining and #pagecount only read counters.
     module Backup
       def initialize(dstdb, dstname, srcdb, srcname)
         if dstdb.is_a?(SerializedDatabase)
