@@ -871,9 +871,9 @@ RSpec.describe Lich::Common::Settings do
         expect(settings[:list].to_a).to eq(['x'])
       end
 
-      # Settings[k] = v with a navigation path left over (for example by a
-      # destructive call on a detached view, see _reattach_live!) saves the
-      # whole row it navigated. Its read and its save must be one step.
+      # Settings[k] = v with a navigation path left over (Settings.set_path
+      # reaches the shared navigator through method_missing) saves the whole
+      # row it navigated. Its read and its save must be one step.
       it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
         settings[:k0] = 0
         navigated = Queue.new
@@ -2380,35 +2380,131 @@ RSpec.describe Lich::Common::Settings do
     end
 
     describe "not storing" do
-      it "stores nothing for an element yielded by each (a detached view without a path)" do
-        their_write("rows" => [{ "x" => 0 }])
-        allow(@mock_db).to receive(:update_settings).and_call_original
+      it "stores a write through an element yielded by each at that element's position" do
+        their_write("rows" => [{ "x" => 0 }, { "x" => 9 }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "x" => 0, "theirs" => 1 }, { "x" => 9 }], "top" => 1)
 
-        game_read('rows').each { |row| row['y'] = 1 }
-        game_read('rows').each { |row| row.delete('x') }
-        game_read('rows').each { |row| row.each_pair { |k, _v| row.target[k] = 5 } }
+        rows.each { |row| row['y'] = 1 if row['x'].zero? }
+        game_read('rows').each { |row| row.delete('x') if row['y'] }
+        game_read('rows').each { |row| row.each_pair { |k, _v| row.target[k] = 5 if k == 'theirs' } }
 
-        expect(@mock_db).not_to have_received(:update_settings)
-        expect(stored).to eq("rows" => [{ "x" => 0 }])
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is an element yielded by each, not part of the settings")).exactly(3).times
+        expect(stored).to eq("rows" => [{ "theirs" => 5, "y" => 1 }, { "x" => 9 }], "top" => 1)
+        expect(Lich::Messaging).not_to have_received(:msg)
       end
 
-      it "tells the user once per each loop about writes through the elements it yields, and logs every one" do
+      it "tells the user once per each loop about writes through the elements it yields that are not in the settings, and logs every one" do
         their_write("rows" => [{ "x" => 0 }, { "x" => 0 }, { "x" => 0 }])
         logged = []
         allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
           logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
           original.call(level, prefix, message)
         end
+        copies = -> { game_read('rows').map { |row| row.merge("copy" => true) } }
 
-        game_read('rows').each { |row| row['x'] = 1 }
-        game_read('rows').each { |row| row['sub'] = {} }
-        game_read('rows').each { |row| row.merge({})['k'] = 1 }
+        copies.call.each { |row| row['x'] = 1 }
+        copies.call.each { |row| row['sub'] = {} }
+        copies.call.each { |row| row.merge({})['k'] = 1 }
 
         expect(stored).to eq("rows" => [{ "x" => 0 }, { "x" => 0 }, { "x" => 0 }])
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "any other writes through this loop's elements are not saved either")).exactly(3).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "the same goes for any other such write in this each loop, which is only logged")).exactly(3).times
         expect(Lich::Messaging).to have_received(:msg).exactly(3).times
         expect(logged.grep(/not saved/).size).to eq(9)
+      end
+
+      it "tells the user once per each loop when the refusals name each element's own position, and logs every one" do
+        logged = []
+        allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
+          logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
+          original.call(level, prefix, message)
+        end
+        their_write("rows" => [{ "n" => 1 }, { "n" => 2 }, { "n" => 3 }, { "n" => 4 }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "n" => 1 }]) # another session removed three
+
+        yielded = 0
+        rows.each do |row|
+          yielded += 1
+          row['k'] = 1
+        end
+
+        expect(yielded).to eq(4)
+        expect(stored).to eq("rows" => [{ "n" => 1, "k" => 1 }])
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including('["rows", 1] is no longer there', "the same goes for any other such write in this each loop, which is only logged"))
+        expect(logged.grep(/is no longer there/).size).to eq(3)
+      end
+
+      it "tells the user once per each loop when the refusals come through a container inside each element, and logs every one" do
+        logged = []
+        allow(settings).to receive(:_log).and_wrap_original do |original, level, prefix, message|
+          logged << message.call if level == Lich::Common::Settings::LOG_LEVEL_ERROR
+          original.call(level, prefix, message)
+        end
+        # A list of four rows read, then shortened to one by another session.
+        shortened = lambda do
+          their_write("rows" => Array.new(4) { |i| { "n" => i, "tags" => [], "sub" => {} } })
+          rows = game_read('rows')
+          their_write("rows" => [{ "n" => 0, "tags" => [], "sub" => {} }])
+          rows
+        end
+
+        shortened.call.each { |row| row['tags'] << 1 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [1], "sub" => {} }])
+        shortened.call.each { |row| row['sub']['k'] = 1 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [], "sub" => { "k" => 1 } }])
+        shortened.call.each { |row| row.dig('sub')['k'] = 2 }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [], "sub" => { "k" => 2 } }])
+        shortened.call.each { |row| row.fetch('tags').push(3) }
+        expect(stored).to eq("rows" => [{ "n" => 0, "tags" => [3], "sub" => {} }])
+
+        expect(Lich::Messaging).to have_received(:msg).exactly(4).times
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including('["rows", 1, ', "is no longer there", "the same goes for any other such write in this each loop, which is only logged")).exactly(4).times
+        expect(logged.grep(/is no longer there/).size).to eq(12)
+      end
+
+      it "tells the user once per each loop when refusals that an element's position is gone come both before and during the replay" do
+        their_write("rows" => [{ "tags" => %w[a b c] }, { "tags" => %w[a b c] }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "tags" => ["a"] }]) # another session shortened both lists
+
+        rows.each { |row| row['tags'][2] = 'z' }
+
+        expect(stored).to eq("rows" => [{ "tags" => ["a"] }])
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "the same goes for any other such write in this each loop, which is only logged"))
+      end
+
+      it "stores nothing, and says so once per loop, for a new container built from a container inside an element each yields" do
+        their_write("rows" => [{ "sub" => { "a" => 1 }, "tags" => [1] }, { "sub" => { "a" => 2 }, "tags" => [2] }])
+
+        game_read('rows').each { |row| row['sub'].merge({}).clear }
+        game_read('rows').each { |row| row['tags'].first(1).push(9) }
+        game_read('rows').each { |row| row['tags'].sort.push(9) }
+
+        expect(stored).to eq("rows" => [{ "sub" => { "a" => 1 }, "tags" => [1] }, { "sub" => { "a" => 2 }, "tags" => [2] }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded", "the same goes for any other such write in this each loop, which is only logged")).exactly(3).times
+        expect(Lich::Messaging).to have_received(:msg).exactly(3).times
+      end
+
+      it "tells the user about each refused write through an element, or a container inside one, kept after its each loop ended" do
+        their_write("rows" => [{ "n" => 0, "sub" => {} }, { "n" => 1, "sub" => {} }])
+        rows = game_read('rows')
+        their_write("rows" => [{ "n" => 0, "sub" => {} }]) # another session removed one
+        kept = []
+        rows.each do |row|
+          row['k'] = 1
+          kept << row
+        end
+        expect(Lich::Messaging).to have_received(:msg).once
+
+        kept[1]['j'] = 2
+        kept[1]['sub']['j'] = 2
+
+        expect(stored).to eq("rows" => [{ "n" => 0, "sub" => {}, "k" => 1 }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_matching(/\["rows", 1\] is no longer there(?!.*each loop)/)).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_matching(/\["rows", 1, "sub"\] is no longer there(?!.*each loop)/)).once
+        expect(Lich::Messaging).to have_received(:msg).exactly(3).times
       end
 
       it "reads an element yielded by each with a method in neither list, without storing anything" do
@@ -2464,26 +2560,16 @@ RSpec.describe Lich::Common::Settings do
         expect(element).to be_unlocated
       end
 
-      it "stores nothing and says so for a container under an element yielded by each, instead of writing it at the top of the row" do
+      it "stores a write to a container under an element yielded by each at that container, not at the top of the row" do
         their_write("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
 
         game_read('rows').each { |row| row['sub']['k'] = 1 }
         game_read('rows').each { |row| row.dig('sub')['j'] = 1 }
         game_read('rows').each { |row| row['sub'].merge({})['m'] = 1 }
 
-        expect(stored).to eq("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container inside an element yielded by each, not part of the settings")).twice
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container built from a container inside an element yielded by each, not part")).once
-        expect(Lich::Messaging).not_to have_received(:msg).with("error", a_string_including("not found in the settings"))
-      end
-
-      it "names an element yielded by each as the cause for a container any depth under it" do
-        their_write("rows" => [{ "a" => { "b" => { "c" => 1 } } }])
-
-        game_read('rows').each { |row| row['a']['b']['k'] = 1 }
-
-        expect(stored).to eq("rows" => [{ "a" => { "b" => { "c" => 1 } } }])
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container inside an element yielded by each, not part of the settings")).once
+        expect(stored).to eq("rows" => [{ "sub" => { "x" => 1, "k" => 1, "j" => 1 } }], "sub" => "top")
+        expect(Lich::Messaging).to have_received(:msg).once
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded")).once
       end
 
       it "stores nothing and says so for an element of a Hash view whose key now holds another kind of value" do
@@ -2516,14 +2602,15 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).exactly(4).times
       end
 
-      it "stores nothing for a new container built from an element yielded by each, instead of writing at the top of the row" do
-        their_write("rows" => [{ "x" => 0 }], "top" => 1)
+      it "stores nothing, and says so once per loop, for a write through a new container built from an element yielded by each, neither at the element nor at the top of the row" do
+        their_write("rows" => [{ "x" => 0 }, { "x" => 1 }], "top" => 1)
 
         game_read('rows').each { |row| row.merge({})['k'] = 1 }
-        game_read('rows').each { |row| row.merge({}).clear }
+        game_read('rows').each { |row| row.merge({}).delete('x') }
+        game_read('rows').each { |row| row.select { true }.delete('x') }
 
-        expect(stored).to eq("rows" => [{ "x" => 0 }], "top" => 1)
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container built from an element yielded by each, not part")).twice
+        expect(stored).to eq("rows" => [{ "x" => 0 }, { "x" => 1 }], "top" => 1)
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "a new container built from an element an each loop yielded")).exactly(3).times
       end
 
       it "writes through an element of a new container built from a view of a root proxy into that element" do

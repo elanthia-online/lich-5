@@ -69,25 +69,54 @@ module Lich
 
       # Internal non-destructive correction method (issue from Lich 5.12.6)
       # non-destructive methods (.sort) cannot own a proxy that requires update (.push)
-      def self._reattach_live!(proxy)
-        script_name = Script.current.name
+      #
+      # Binds +proxy+, a detached view with a path (what sort or select
+      # returned), to the container at its path in the row of the proxy's
+      # own script (InstanceSettings has its own) as stored now, so that the
+      # destructive +method+ about to be called through it changes that
+      # container and is stored there (list.sort.push(4) appends 4 to list).
+      #
+      # When the stored row holds nothing there (another session removed the
+      # container, or a container on the way), the view is bound to this
+      # session's copy of the container it was taken from, when that is of
+      # the view's kind, and the call is stored from that copy, as through a
+      # proxy for the container itself (Settings[:list].push(4) after another
+      # session removed list stores this session's list with 4 appended).
+      #
+      # The path is passed to the navigator, not set on it: the navigator is
+      # shared by every script's Settings[] calls, and a path left on it
+      # would send the next top-level write somewhere else.
+      #
+      # Returns false, binding nothing, and tells the user, when the stored
+      # row holds a container of another kind there (a Hash where values
+      # returned an Array) or something that is not a container, or holds
+      # nothing there and the copy the view was taken from is of another
+      # kind.
+      def self._reattach_live!(proxy, method = nil)
+        script_name = proxy_script_name(proxy)
         scope       = proxy.scope
         path        = proxy.path
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "reattach_live!: scope=#{scope.inspect} path=#{path.inspect}" })
 
-        @path_navigator.reset_path
-        @path_navigator.set_path(path)
-        live, _root = @path_navigator.navigate_to_path(script_name, true, scope)
-
+        live, _root = @path_navigator.navigate_to_path(script_name, false, scope, path)
         if live.nil?
+          own_copy = proxy.__send__(:view_source)
+          live = own_copy if own_copy.instance_of?(proxy.target.class)
+        end
+
+        unless live.instance_of?(proxy.target.class)
           _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: failed to resolve live target for path=#{path.inspect} scope=#{scope.inspect}" })
+          what = live.nil? ? "nothing there" : "#{live.class} there, and the view is #{proxy.target.class}"
+          refuse_proxy_save(script_name, proxy, "#{method || "the call"} on a view (sort, select, values, ...) of #{path.inspect} was not applied: the settings hold #{what}", kind: :view_not_applied)
           return false
         end
 
         # Swap the proxy onto the live object via SettingsProxy API (encapsulated)
-        # Centralizes invariants/logging within SettingsProxy itself.
-        proxy.rebind_to_live!(live)
+        # Centralizes invariants/logging within SettingsProxy itself. The
+        # rebinding (and view_source) is private to SettingsProxy; this is
+        # its one caller.
+        proxy.__send__(:rebind_to_live!, live)
         true
       end
 
@@ -246,11 +275,12 @@ module Lich
       # container of the proxy's class at its path (another session removed or
       # replaced it), or when the operation raises on the stored container.
       # Nothing is stored, and the user is told, for a detached proxy without
-      # a path (an element yielded by each, a view of a root proxy, the
-      # default fetch returned, or a container built from one), nor for the
+      # a path (a view of a root proxy, the default fetch returned, or a
+      # container built from one), nor for the
       # proxy of a view's element that can't be found in the settings
-      # (SettingsProxy#unlocated?). Nothing is stored either, and the user is
-      # told, when +block+ leaves early (break, throw or return), is
+      # (SettingsProxy#unlocated?), nor for a new container built from an
+      # element SettingsProxy#each yielded (SettingsProxy#copy?). Nothing is
+      # stored either, and the user is told, when +block+ leaves early (break, throw or return), is
       # interrupted or its thread is killed while it runs on the stored
       # container.
       #
@@ -311,13 +341,23 @@ module Lich
           return nil
         end
 
+        if proxy.respond_to?(:moved?) && proxy.moved?
+          return refuse_proxy_save(script_name, proxy, "#{proxy.anchor_path.inspect} no longer holds the element this each loop yielded there (it was removed, replaced or moved in this session), so the write would land on another element", kind: :element_moved)
+        end
+
+        if proxy.respond_to?(:copy?) && proxy.copy?
+          copied_by = proxy.respond_to?(:copied_by) && proxy.copied_by
+          what = copied_by ? "what ##{copied_by} returned" : "a copy (what merge, select, first(2), ... returned)"
+          return refuse_proxy_save(script_name, proxy, "this is #{what}, a new container built from an element an each loop yielded: a plain copy, not part of the settings (to store a change, write to the element itself)")
+        end
+
         if proxy.respond_to?(:detached?) && proxy.detached?
           if proxy.respond_to?(:unlocated?) && proxy.unlocated?
             return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
           end
           if path.empty?
             cause = proxy.respond_to?(:pathless_cause) && proxy.pathless_cause
-            return refuse_proxy_save(script_name, proxy, cause ? "this is #{cause}, not part of the settings" : "this is not part of the settings (an element yielded by each, a view of the whole settings, the default fetch returned, or a container built from one)")
+            return refuse_proxy_save(script_name, proxy, cause ? "this is #{cause}, not part of the settings" : "this is not part of the settings (a view of the whole settings, the default fetch returned, or a container built from one)")
           end
           label ||= method
           method = nil
@@ -327,7 +367,7 @@ module Lich
           stored_args = stored_copy(args)
         rescue TypeError => e
           what = method == REPLAY_ENTRY_CHANGES ? "a value changed by #{label || "a method"}" : "an argument of #{label || method}"
-          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})")
+          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})", kind: :argument_not_storable)
         end
         replayed = nil
         # The adapter updates the cache as part of the store (on_stored), as
@@ -354,7 +394,7 @@ module Lich
       def self.apply_to_stored_row(root, proxy, method, args, block, script_name, label = nil)
         path = proxy.path
         unless root.is_a?(Hash)
-          return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash")
+          return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash", kind: :row_not_hash)
         end
 
         # An element of an Array is addressed by its position. When the stored
@@ -363,12 +403,12 @@ module Lich
         # pad the Array with nil or store an element twice.
         classes = proxy.respond_to?(:path_classes) ? proxy.path_classes : nil
         if (array_path = position_gone(root, path, classes))
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})", kind: :position_gone)
         end
 
         parent = path.empty? ? nil : container_at(root, path, classes)
         unless path.empty? || parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer) && path.last >= 0)
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container", kind: :no_container)
         end
 
         existing = path.empty? ? root : parent[path.last]
@@ -391,18 +431,18 @@ module Lich
             return root
           rescue PositionGoneError
             finished = true
-            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)")
+            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)", kind: :position_gone)
           rescue StandardError => e
             finished = true
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{label || method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
           rescue Exception => e # rubocop:disable Lint/RescueException -- reported, then raised again
             finished = true
-            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings")
+            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings", kind: :interrupted)
             raise
           ensure
             unless finished
               how = Thread.current.status == "aborting" ? "was stopped (its thread was killed)" : "left early (break, throw or return)"
-              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings")
+              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings", kind: :left_early)
             end
           end
         end
@@ -410,12 +450,12 @@ module Lich
         begin
           copy = stored_copy(proxy.target)
         rescue TypeError => e
-          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})")
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})", kind: :copy_not_storable)
         end
         if path.empty?
           return copy if copy.is_a?(Hash)
 
-          return refuse_proxy_save(script_name, proxy, "a #{copy.class} can't be the whole row")
+          return refuse_proxy_save(script_name, proxy, "a #{copy.class} can't be the whole row", kind: :copy_not_hash)
         end
 
         parent[path.last] = copy
@@ -551,21 +591,30 @@ module Lich
 
       # Tells the user that a write through a proxy could not be saved.
       #
-      # For writes through the elements one call to SettingsProxy#each
-      # yielded (SettingsProxy#refusals), the user is told about the first
-      # one, and that the others are not saved either; each of them is still
-      # logged.
+      # For writes through what one call to SettingsProxy#each yielded, or a
+      # container taken from it (SettingsProxy#refusals), made while the
+      # loop runs, the user is told about the first one refused for each
+      # +kind+ of reason, and that any other refused for it in the loop is
+      # only logged; each of them is still logged. After the loop, each
+      # refused write is told (the loop's refusals are frozen then). A reason
+      # that names a path or a method passes a +kind+, so that the writes
+      # through each element of one loop (each with its own path) count as
+      # one kind. A loop can also yield elements whose writes are stored (an
+      # element of a view that is found in the settings), so the message
+      # speaks of the refused ones only.
       #
       # @return nil
-      def self.refuse_proxy_save(script_name, proxy, reason)
+      def self.refuse_proxy_save(script_name, proxy, reason, kind: reason)
         refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
-        if refusals
-          refusals[:count] += 1
-          reason = "#{reason}; any other writes through this loop's elements are not saved either" if refusals[:count] == 1
+        tell = true
+        if refusals && !refusals.frozen?
+          refusals[kind] = refusals.fetch(kind, 0) + 1
+          tell = refusals[kind] == 1
+          reason = "#{reason}; the same goes for any other such write in this each loop, which is only logged" if tell
         end
         message = "--- Error: settings for #{script_name} (#{proxy.scope}) not saved: #{reason} ---"
         _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{message}" })
-        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && (refusals.nil? || refusals[:count] == 1)
+        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && tell
         nil
       end
       private_class_method :refuse_proxy_save
