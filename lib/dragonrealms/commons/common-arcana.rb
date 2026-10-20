@@ -391,15 +391,16 @@ module Lich
       #   bput matched nothing: normally because no prep message arrived before
       #   bput gave up (it still reads any lines already waiting when its
       #   timeout passes, and restarts its timer on the replies it retries,
-      #   such as a wait or a stun), or at once on the first line bput does
-      #   not handle itself (a line it retries on, such as a wait, a stun or a
-      #   type-ahead reply, or the "can't move" line it skips) that no
-      #   built-in message matches, when the first custom pattern that matches
-      #   that line matches it empty at its leftmost match (bput returns the
-      #   leftmost match of the first pattern that matches): +'You chant|'+ on
-      #   any line not starting with "You chant", +'|You chant'+ on every line,
-      #   and an empty-matching per-spell pattern hides a later custom_spell_prep
-      #   one; or false on one of
+      #   such as a wait or a stun). bput also returns +''+ at once for a line
+      #   that no built-in message matches when the first custom pattern that
+      #   matches the line makes an empty match there (bput returns the leftmost
+      #   match of the first pattern that matches), such as
+      #   +'(?=A goblin)'+ on a line starting "A goblin"; an empty match in a
+      #   per-spell pattern also hides a later custom_spell_prep one. That
+      #   applies only to a custom pattern {#custom_message_pattern} lets
+      #   through, and never to a line bput handles itself: it retries on a
+      #   wait, a stun or a type-ahead reply and skips the "can't move" line.
+      #   Or false on one of
       #   the failure replies prepare? itself checks for (its +when+ arms other
       #   than the retried "slips away" one, which returns the retry's result),
       #   a nil +abbrev+, or exhausted retries. Any other matched reply is
@@ -543,23 +544,23 @@ module Lich
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
       # @return [Boolean] true if the spell cast without a failure flag being set,
       #   including when no cast message arrived before DRC.bput gave up, and
-      #   when bput returned +''+ at once on the first line it does not
-      #   handle itself (a line it retries on, such as a wait, a stun or a
-      #   type-ahead reply, or the "can't move" line it skips) that no
-      #   built-in message matches, because the first custom pattern that
-      #   matches that line matches it empty at its leftmost match (as
-      #   +'You gesture|'+ does on any line not starting with "You gesture",
-      #   and +'|You gesture'+ on every line); false if the +spell-fail+
-      #   flag was set or a retry limit ran
-      #   out. In both +''+ cases the result rests on +spell-fail+ at the moment
-      #   it is read (see the note).
+      #   when bput returned +''+ at once for a line that no built-in message
+      #   matches because the first custom pattern that matches the line makes
+      #   an empty match there (as +'(?=A goblin)'+ does on a line starting
+      #   "A goblin"; only a custom pattern {#custom_message_pattern} lets
+      #   through can do this, and never on a line bput handles itself: it
+      #   retries on a wait, a stun or a type-ahead reply and skips the
+      #   "can't move" line); false if the +spell-fail+ flag was set or a retry
+      #   limit ran out. In both +''+ cases the result rests on +spell-fail+ at
+      #   the moment it is read (see the note).
       #
-      # @note A timeout counts as success. When nothing in cast_messages arrives
-      #   before bput gives up (a server stall, or a successful cast whose
-      #   message is not listed), bput returns +''+, which no +when+ arm
-      #   handles: the barrage and cyclic/full-prep retry flags still apply,
-      #   and the result rests on the +spell-fail+ flag. That flag is read only
-      #   after the cast bput, the roundtime wait and the +after+ actions, so
+      # @note A timeout counts as success. When nothing cast? accepts (the
+      #   cast_messages plus the custom cast message) arrives before bput gives
+      #   up (a server stall, or a successful cast whose message is not
+      #   listed), bput returns +''+, which no +when+ arm handles: the
+      #   barrage and cyclic/full-prep retry flags still apply, and the result
+      #   rests on the +spell-fail+ flag. That flag is read only after the cast
+      #   bput, the roundtime wait and the +after+ actions, so
       #   the result is true unless a failure line arrived before then (in
       #   which case mana, and any symbiosis, is released and the result is
       #   false); a failure line that arrives later is missed. This is
