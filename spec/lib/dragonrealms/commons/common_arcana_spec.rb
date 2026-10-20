@@ -285,6 +285,76 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect('You cup your left hand').to match(pattern)
       expect('You wave your right hand').to match(pattern)
     end
+
+    # A pattern that can match without consuming any text is satisfied by every
+    # line bput reads, exactly like the blank pattern above: bput would return
+    # the first unrelated line (or '') as if it were the expected message.
+    it 'drops patterns that match the empty string (they match every line)' do
+      ['.*', 'a*', 'You|', '|You', 'You||Me', '()', '(?:)', '^', '$', '\A', '\z', '\Z', '\B',
+       '(You)?', '\s*', ' .* ', '[a-z]*', 'x{0,3}', '(?i)x*', '^$', '\A\z'].each do |matches_empty|
+        expect(DRCA.custom_message_pattern(matches_empty)).to be_nil, "expected #{matches_empty.inspect} to be dropped"
+      end
+    end
+
+    it 'drops patterns that only assert a position without consuming text' do
+      ['\b', '(?=.)', '(?!zzz)', '(?<=.)', '(?<!zzz)', 'You|\b', '\b|You', 'zzz|(?=.)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    # A lookaround for a common letter or punctuation mark still matches
+    # almost every line with an empty match, so the probe must contain them.
+    it 'drops lookarounds for common letters, digits and punctuation' do
+      ['(?=e)', 'zzz|(?=e)', '(?=th)', '(?=,)', '(?<=,)', "(?=')", '(?=-)', '(?=\\d)', 'You|(?=Y)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    # Game lines usually end in a period and often hold a double space, so a
+    # lookaround for either context still makes an empty match on most lines.
+    it 'drops lookarounds for a line-final period or a double space' do
+      ['(?<=\\.)$', '(?=\\.$)', '(?=  )', 'zzz|(?<=\\.)$'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    it 'drops a lookahead or lookbehind for any printable ASCII character' do
+      (33..126).map(&:chr).each do |char|
+        ["(?=#{Regexp.escape(char)})", "(?<=#{Regexp.escape(char)})"].each do |zero_width|
+          expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+          # Case-sensitive too, as a player can write (?-i) in the message.
+          expect(DRCA.zero_width_pattern?(Regexp.new(zero_width))).to be(true), "expected case-sensitive #{zero_width.inspect} to be flagged"
+        end
+      end
+    end
+
+    # A non-ASCII probe would raise Encoding::CompatibilityError (not a
+    # RegexpError) against a binary pattern carrying high bytes.
+    it 'keeps a binary pattern with high bytes without raising' do
+      expect(DRCA::ZERO_WIDTH_PROBE).to be_ascii_only
+      message = "caf#{0xE9.chr} hums".b
+      pattern = DRCA.custom_message_pattern(message)
+      expect(pattern).to be_a(Regexp)
+      expect(message).to match(pattern)
+    end
+
+    it 'keeps anchored, bounded and optional-suffix patterns that always consume text' do
+      {
+        '^You murmur'                => 'You murmur softly',
+        'hums$'                      => 'Your focus hums',
+        '\bfocus\b'                  => 'Your focus hums',
+        'Your focus( hums)?'         => 'Your focus glows',
+        'You (cup|wave)?'            => 'You raise a hand',
+        'x+'                         => 'a box',
+        '(?=Your)Your focus'         => 'Your focus hums',
+        'Flames wreathe your hands.' => 'Flames wreathe your hands.'
+      }.each do |message, line|
+        pattern = DRCA.custom_message_pattern(message)
+        expect(pattern).to be_a(Regexp), "expected #{message.inspect} to be kept"
+        expect(line).to match(pattern)
+        expect(pattern.match(line)[0]).not_to be_empty
+      end
+    end
   end
 
   # ----------------------------------------------
@@ -302,6 +372,12 @@ RSpec.describe Lich::DragonRealms::DRCA do
 
     it 'returns the base list unchanged when no custom message is valid' do
       expect(DRCA.with_custom_messages(['only base'], nil, '', '   ', 5)).to eq(['only base'])
+    end
+
+    it 'drops a match-everything custom but keeps the valid ones around it' do
+      result = DRCA.with_custom_messages(['base'], 'first', '.*', '\b', 'You|', 'second')
+      expect(result.first).to eq('base')
+      expect(result.drop(1).map(&:source)).to eq(%w[first second])
     end
 
     it 'does not mutate the base list it was given' do
@@ -340,6 +416,11 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'drops a blank custom_invoke_message so it cannot compile to // (match anything)' do
       allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: '   '))
       expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    it 'drops a custom_invoke_message (per-character or per-spell) that matches every line' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: '^'))
+      expect(DRCA.invoke_messages('\b')).to eq(get_data('spells').invoke_messages)
     end
 
     it 'drops a malformed-regex custom_invoke_message instead of raising in bput' do
@@ -418,6 +499,13 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(captured).to eq(get_data('spells').prep_messages)
     end
 
+    it 'drops a custom_prep_message that matches the empty string instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, '.*', custom_spell_prep: 'You murmur|')
+      expect(captured).to eq(get_data('spells').prep_messages)
+    end
+
     it 'drops a malformed-regex custom_prep_message instead of crashing' do
       captured = nil
       allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
@@ -475,6 +563,13 @@ RSpec.describe Lich::DragonRealms::DRCA do
       captured = nil
       allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
       DRCA.cast?('cast', false, [], [], '   ')
+      expect(captured).to eq(get_data('spells').cast_messages)
+    end
+
+    it 'drops a custom_cast_message that matches the empty string instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      DRCA.cast?('cast', false, [], [], '(A rare shimmer)?')
       expect(captured).to eq(get_data('spells').cast_messages)
     end
 
