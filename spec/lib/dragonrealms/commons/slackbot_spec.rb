@@ -121,6 +121,20 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       err = described_class::ThrottlingError.new('throttled')
       expect(err.retry_after).to be_nil
     end
+
+    # A token check treats ApiError as "Slack rejected the token" (which starts
+    # LNet discovery) unless the error is in SLACK_UNAVAILABLE_ERRORS. A new
+    # ApiError subclass must be placed on one side deliberately.
+    it 'puts every ApiError subclass in SLACK_UNAVAILABLE_ERRORS' do
+      expect(described_class::ApiError.subclasses)
+        .to match_array(described_class::SLACK_UNAVAILABLE_ERRORS - [described_class::NetworkError])
+    end
+
+    it 'lists NetworkError but not the plain ApiError as Slack unavailable' do
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to include(described_class::NetworkError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).not_to include(described_class::ApiError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to be_frozen
+    end
   end
 
   # ---- #initialize ----
@@ -267,6 +281,18 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         end
         expect(Lich).to receive(:log).with(/Failed to send Slack message/)
         expect { bot.direct_message('testuser', 'hello') }.not_to raise_error
+      end
+    end
+
+    context 'when the in-game message call returns a value' do
+      it 'still returns nil on failure' do
+        bot = build_initialized_bot
+        allow(mock_http).to receive(:request) do
+          raise described_class::ApiError, 'test error'
+        end
+        # Lich's _respond returns the list of attached clients, not nil.
+        allow(Lich::Messaging).to receive(:msg).and_return([])
+        expect(bot.direct_message('testuser', 'hello')).to be_nil
       end
     end
   end
@@ -538,7 +564,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'JSON parse error' do
-      it 'raises ApiError' do
+      it 'raises MalformedResponseError, still an ApiError' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -547,7 +573,8 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
-        }.to raise_error(described_class::ApiError, /Failed to parse/)
+        }.to raise_error(described_class::MalformedResponseError, /Failed to parse/)
+        expect(described_class::MalformedResponseError.superclass).to eq(described_class::ApiError)
       end
     end
 
