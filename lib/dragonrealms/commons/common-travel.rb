@@ -152,13 +152,22 @@ module Lich
 
         where = if room.nil?
                   'the shop (no room given)'
-                elsif room.is_a?(String) && room.count('a-zA-Z') > 0
+                elsif map_tag?(room)
                   "a room tagged #{room}"
                 else
                   "room #{room}"
                 end
         Lich::Messaging.msg('bold', "DRCT: Could not reach #{where}, so not #{action}.")
         false
+      end
+
+      # Internal: true when walk_to reads +room+ as a map tag (a String with
+      # a letter in it) rather than a room id. Shared by walk_to and
+      # walk_to_merchant so the failure message names the room the same way
+      # walk_to looked it up.
+      # @api private
+      def map_tag?(room)
+        room.is_a?(String) && room.count('a-zA-Z') > 0
       end
 
       def dispose(item, trash_room = nil, worn_trashcan = nil, worn_trashcan_verb = nil)
@@ -209,7 +218,7 @@ module Lich
       # @param retry_depth [Integer] internal counter -- callers should not set this
       # @return [Boolean] true if the character is now in the target room
       def walk_to(target_room, restart_on_fail = true, retry_depth: 0)
-        target_room = tag_to_id(target_room) if target_room.is_a?(String) && target_room.count("a-zA-Z") > 0
+        target_room = tag_to_id(target_room) if map_tag?(target_room)
 
         return false if target_room.nil?
 

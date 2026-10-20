@@ -350,6 +350,44 @@ RSpec.describe DRCT do
       end
     end
 
+    # walk_to and the failure message share one tag-vs-id test, so a room
+    # walk_to treats as an id is never reported as a tag, and vice versa.
+    describe 'tag-vs-id test shared with walk_to' do
+      {
+        'bank' => true, 'a1' => true, 'Shop 7' => true,
+        '100' => false, '' => false, 100 => false, nil => false, :bank => false
+      }.each do |room, expected|
+        it "map_tag?(#{room.inspect}) is #{expected}" do
+          expect(DRCT.map_tag?(room)).to equal(expected)
+        end
+      end
+
+      it 'reports a digit-only string as a room id, as walk_to reads it' do
+        allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+        allow(DRCT).to receive(:tag_to_id)
+        allow(DRC).to receive(:fix_standing)
+        allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+        allow(Script).to receive(:running).and_return([])
+        allow(Script).to receive(:running?).and_return(false)
+        allow(XMLData).to receive(:room_description).and_return('A room')
+        allow(XMLData).to receive(:room_title).and_return('[Room]')
+
+        expect(DRCT.sell_item('999', 'sword')).to eq(false)
+        expect(DRCT).not_to have_received(:tag_to_id)
+        expect(failure_messages.map { |m| m[:message] }).to eq(['DRCT: Could not reach room 999, so not selling sword.'])
+      end
+
+      it 'walk_to and the message both follow map_tag?' do
+        allow(DRCT).to receive(:map_tag?).and_call_original
+        allow(DRCT).to receive(:map_tag?).with('100').and_return(true)
+        allow(DRCT).to receive(:tag_to_id).with('100').and_return(nil)
+
+        expect(DRCT.sell_item('100', 'sword')).to eq(false)
+        expect(DRCT).to have_received(:tag_to_id).with('100')
+        expect(failure_messages.map { |m| m[:message] }).to eq(['DRCT: Could not reach a room tagged 100, so not selling sword.'])
+      end
+    end
+
     it 'sell_item still checks the hands before walking' do
       allow(DRCI).to receive(:in_hands?).with('sword').and_return(false)
       allow(DRCT).to receive(:walk_to)
