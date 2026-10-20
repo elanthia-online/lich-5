@@ -267,30 +267,80 @@ module Lich
         end
       end
 
+      # Finds the recipe whose name matches item_name (a case-insensitive
+      # regex). A single match, or a single exact-name match, is returned
+      # directly. Otherwise the matches are listed as a numbered menu and the
+      # user picks one with ;send #. Lines that are not a bare number are
+      # ignored (they may be game output); a number outside the menu
+      # re-prompts. The chosen recipe is returned by its menu position, so a
+      # pick never resolves to a different recipe with a similar or
+      # duplicate name.
+      #
+      # @param recipes [Array<Hash>] recipe entries with at least 'name'
+      # @param item_name [String] full or partial recipe name
+      # @return [Hash, nil] the chosen recipe, or nil when nothing matches
       def recipe_lookup(recipes, item_name)
-        match_names = recipes.map { |x| x['name'] }.select { |x| x =~ /#{item_name}/i }
-        case match_names.length
+        matches = recipes.select { |x| x['name'] =~ /#{item_name}/i }
+        case matches.length
         when 0
           Lich::Messaging.msg('bold', "DRCC: No recipe in base-recipes.yaml matches #{item_name}")
           nil
         when 1
-          recipes.find { |x| x['name'] =~ /#{item_name}/i }
+          matches.first
         else
-          exact_matches = recipes.map { |x| x['name'] }.select { |x| x == item_name }
+          exact_matches = matches.select { |x| x['name'] == item_name }
+          return exact_matches.first if exact_matches.length == 1
 
-          if exact_matches.length == 1
-            return recipes.find { |x| x['name'] == item_name }
+          # The full-name hint only helps when the full name was not typed and
+          # at least one listed name is unique; a name shared by several
+          # recipes shows this menu however it is typed.
+          if exact_matches.empty? && matches.map { |x| x['name'] }.tally.value?(1)
+            Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
           end
-
-          Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
           Lich::Messaging.msg('plain', "DRCC: Please select desired recipe #{$clean_lich_char}send #")
-          match_names.each_with_index { |x, i| respond "    #{i + 1}: #{x}" }
-          line = get until line.strip =~ /^(\d+)$/
-          match = line.strip.match(/^(?<num>\d+)$/)
-          item_name = match_names[match[:num].to_i - 1]
-          recipes.find { |x| x['name'] =~ /#{item_name}/i }
+          recipe_menu_labels(matches).each_with_index { |label, i| respond "    #{i + 1}: #{label}" }
+          matches[recipe_menu_choice(matches.length) - 1]
         end
       end
+
+      # Menu labels for recipe_lookup. A name that appears more than once is
+      # suffixed with its type and chapter so the entries can be told apart,
+      # and with its volume too when the type and chapter are also shared.
+      # Entries that are still identical after that (a duplicate in the data)
+      # are numbered "entry k of n" so every menu line is distinct.
+      def recipe_menu_labels(matches)
+        name_counts = matches.map { |x| x['name'] }.tally
+        place_counts = matches.map { |x| x.values_at('name', 'type', 'chapter') }.tally
+        labels = matches.map do |x|
+          next x['name'] if name_counts[x['name']] == 1
+
+          details = [x['type'], "chapter #{x['chapter']}"]
+          details << "volume #{x['volume']}" if x['volume'] && place_counts[x.values_at('name', 'type', 'chapter')] > 1
+          "#{x['name']} (#{details.join(', ')})"
+        end
+        label_counts = labels.tally
+        seen = Hash.new(0)
+        labels.map do |label|
+          next label if label_counts[label] == 1
+
+          "#{label.delete_suffix(')')}, entry #{seen[label] += 1} of #{label_counts[label]})"
+        end
+      end
+
+      # Reads lines until one is a bare number from 1 to count and returns it.
+      def recipe_menu_choice(count)
+        loop do
+          line = get.to_s.strip
+          next unless line =~ /\A\d+\z/
+
+          choice = line.to_i
+          return choice if choice.between?(1, count)
+
+          Lich::Messaging.msg('bold', "DRCC: #{choice} is not on the list. Enter a number from 1 to #{count} with #{$clean_lich_char}send #")
+        end
+      end
+
+      private_class_method :recipe_menu_labels, :recipe_menu_choice
 
       def find_recipe(chapter, match_string, book = 'book')
         case DRC.bput("turn my #{book} to chapter #{chapter}", BOOK_CHAPTER_TURN_SUCCESS, BOOK_CHAPTER_DISTRACTED, BOOK_CHAPTER_ALREADY)
@@ -321,46 +371,117 @@ module Lich
         DRC.bput("study my #{book}", BOOK_STUDY_SUCCESS)
       end
 
+      # Puts a crafting tool or material in hand. A tool listed on the
+      # crafting belt is untied from it; anything else is fetched with
+      # `get my <name>`, from +bag+ when +bag_items+ lists it.
+      #
+      # When wounds hinder an untie, visits safe-room once and sends that
+      # untie once more. The belt untie and the plain untie each get their
+      # own visit, so a call that falls from the belt to a GET that says to
+      # untie the item can visit safe-room twice, never more. Four failures
+      # are final, and no retry follows them:
+      # - the item can't be found and isn't already in hand;
+      # - the game says it "can't quite lift it";
+      # - the GET says to untie the item, the untie finds nothing, and the
+      #   item isn't in hand;
+      # - wounds still hinder the untie after the safe-room trip, and the
+      #   item isn't in hand.
+      # Each one beeps and prints a bold line. The method then returns false
+      # when +skip_exit+ is set; otherwise it stops the script. A reply that
+      # matches nothing (a bput timeout) is not final. A timed-out GET, or a
+      # timed-out untie after "You should untie", returns whether the item is
+      # in hand, as a late reply may still deliver it; a timed-out belt untie
+      # falls back to the GET.
+      #
+      # @param name [String] item to put in hand
+      # @param bag [String] container that holds +bag_items+
+      # @param bag_items [Array<String>, nil] items kept in +bag+
+      # @param belt [Hash, nil] crafting belt settings ('name', 'items')
+      # @param skip_exit [Boolean] return false on a final failure instead of
+      #   stopping the script
+      # @return [Boolean] true when the item is in hand (the untie or get
+      #   succeeded, or it was already held); false after a final failure
+      #   with +skip_exit+, or when a timed-out reply leaves it out of hand
       def get_crafting_item(name, bag, bag_items, belt, skip_exit = false)
         waitrt?
         if belt && belt['items'].find { |item| /\b#{name}/i =~ item || /\b#{item}/i =~ name }
-          case DRC.bput("untie my #{name} from my #{belt['name']}", BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY, BELT_UNTIE_NOT_FOUND, BELT_UNTIE_WOUNDED)
+          case untie_crafting_item(name, "untie my #{name} from my #{belt['name']}", BELT_UNTIE_WOUNDED, BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY, BELT_UNTIE_NOT_FOUND)
           when BELT_UNTIE_SUCCESS, BELT_UNTIE_ALREADY
-            return
+            return true
           when BELT_UNTIE_WOUNDED
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return get_crafting_item(name, bag, bag_items, belt)
+            return true if DRCI.in_hands?(name)
+
+            return crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
           end
         end
         command = "get my #{name}"
         command += " from my #{bag}" if bag_items && bag_items.include?(name)
         case DRC.bput(command, GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE, GET_CRAFTING_PICKUP, GET_CRAFTING_HEAVY, GET_CRAFTING_TIED)
+        when GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_PICKUP
+          true
         when GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE
           pause 2
-          return if DRCI.in_hands?(name)
+          return true if DRCI.in_hands?(name)
 
-          DRC.beep
-          Lich::Messaging.msg('bold', "DRCC: You seem to be missing: #{name}")
-          return nil if skip_exit
-
-          Lich::Messaging.msg('bold', 'DRCC: Cannot continue crafting without required item. Stopping script.')
-          exit
+          crafting_item_failed("DRCC: You seem to be missing: #{name}", skip_exit)
         when GET_CRAFTING_HEAVY
-          get_crafting_item(name, bag, bag_items, belt)
+          # Final: GETting it again won't make it liftable.
+          crafting_item_failed("DRCC: You can't quite lift: #{name}", skip_exit)
         when GET_CRAFTING_TIED
-          case DRC.bput("untie my #{name}", UNTIE_SUCCESS, UNTIE_NOT_FOUND, UNTIE_WOUNDED)
+          case untie_crafting_item(name, "untie my #{name}", UNTIE_WOUNDED, UNTIE_SUCCESS, UNTIE_NOT_FOUND)
           when UNTIE_SUCCESS
-            return
+            true
           when UNTIE_WOUNDED
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return get_crafting_item(name, bag, bag_items, belt)
+            return true if DRCI.in_hands?(name)
+
+            crafting_item_failed("DRCC: Your wounds still hinder untying: #{name}", skip_exit)
+          when UNTIE_NOT_FOUND
+            return true if DRCI.in_hands?(name)
+
+            crafting_item_failed("DRCC: Told to untie it, but found nothing to untie: #{name}", skip_exit)
+          else
+            DRCI.in_hands?(name)
           end
+        else
+          DRCI.in_hands?(name)
         end
       end
+
+      # Sends an untie for get_crafting_item. When wounds hinder it, visits
+      # safe-room once, walks back and sends the untie once more.
+      #
+      # @param name [String] item being untied
+      # @param command [String] the untie command
+      # @param wounded [Regexp] the reply meaning wounds hinder the untie
+      # @param patterns [Array<Regexp>] the other replies to wait for
+      # @return [String] the matched reply ('' on a timeout)
+      def untie_crafting_item(name, command, wounded, *patterns)
+        result = DRC.bput(command, *patterns, wounded)
+        return result unless result.match?(wounded)
+
+        Lich::Messaging.msg('bold', "DRCC: Wounds hinder untying #{name}. Visiting safe-room, then trying once more.")
+        craft_room = Room.current.id
+        DRC.wait_for_script_to_complete('safe-room', ['force'])
+        DRCT.walk_to(craft_room)
+        DRC.bput(command, *patterns, wounded)
+      end
+
+      # Reports a final get_crafting_item failure: beeps and prints +message+.
+      #
+      # @param message [String] bold line naming the failure
+      # @param skip_exit [Boolean] return instead of stopping the script
+      # @return [false] when +skip_exit+; otherwise stops the script
+      def crafting_item_failed(message, skip_exit)
+        DRC.beep
+        Lich::Messaging.msg('bold', message)
+        return false if skip_exit
+
+        Lich::Messaging.msg('bold', 'DRCC: Cannot continue crafting without required item. Stopping script.')
+        exit
+      end
+
+      # Internal to get_crafting_item; kept off the public DRCC API.
+      private_class_method :untie_crafting_item, :crafting_item_failed
 
       def stow_crafting_item(name, bag, belt)
         return unless name
