@@ -207,4 +207,77 @@ RSpec.describe Lich::Util::Update::FileUpdater do
       expect(printed).to eq(['No viable beta found. Aborting beta update.'])
     end
   end
+
+  describe '#update_file legacy download' do
+    let(:printed) { [] }
+    let(:live_path) { File.join(tmpdir, 'foo.lic') }
+    let(:remote) { instance_double(URI::HTTPS) }
+
+    before do
+      allow(updater).to receive(:respond) { |msg = ''| printed << msg }
+      allow(URI).to receive(:parse)
+        .with('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/foo.lic')
+        .and_return(remote)
+      File.binwrite(live_path, "# foo v1\n")
+    end
+
+    it 'keeps the live file in place for the whole download' do
+      seen_during_download = nil
+      allow(remote).to receive(:open) do
+        seen_during_download = File.exist?(live_path) ? File.binread(live_path) : :missing
+        StringIO.new("# foo v2\n")
+      end
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(seen_during_download).to eq("# foo v1\n")
+      expect(File.binread(live_path)).to eq("# foo v2\n")
+      expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+      expect(printed).to include('foo.lic has been updated.')
+    end
+
+    it 'leaves the existing file untouched when the download fails' do
+      allow(remote).to receive(:open).and_raise(SocketError.new('getaddrinfo failed'))
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(File.binread(live_path)).to eq("# foo v1\n")
+      expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+      expect(printed).to include('Error updating foo.lic: SocketError - getaddrinfo failed')
+      expect(printed).to include('The existing foo.lic was left unchanged.')
+      expect(printed).not_to include('foo.lic has been updated.')
+    end
+
+    it 'leaves the existing file untouched when the write fails' do
+      allow(remote).to receive(:open).and_return(StringIO.new("# foo v2\n"))
+      allow(File).to receive(:rename).and_raise(Errno::EACCES.new('Permission denied'))
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(File.binread(live_path)).to eq("# foo v1\n")
+      expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+      expect(printed).to include('The existing foo.lic was left unchanged.')
+    end
+
+    it 'does not claim a file was left unchanged when there was none' do
+      File.delete(live_path)
+      allow(remote).to receive(:open).and_raise(SocketError.new('getaddrinfo failed'))
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(Dir.children(tmpdir)).to be_empty
+      expect(printed.grep(/left unchanged/)).to be_empty
+    end
+
+    it 'removes a .old file left by an interrupted older update' do
+      File.delete(live_path)
+      File.binwrite("#{live_path}.old", "# foo v1\n")
+      allow(remote).to receive(:open).and_return(StringIO.new("# foo v2\n"))
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(File.binread(live_path)).to eq("# foo v2\n")
+      expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+    end
+  end
 end
