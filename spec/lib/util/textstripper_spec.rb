@@ -25,6 +25,26 @@ RSpec.describe Lich::Util::TextStripper do
       expect { described_class.strip('<b>x</b>', 42) }
         .to raise_error(ArgumentError, /Mode must be a Symbol or String/)
     end
+
+    it 'raises ArgumentError for an invalid mode even when the text is empty' do
+      expect { described_class.strip('', :bogus) }.to raise_error(ArgumentError, /Invalid mode: bogus/)
+    end
+  end
+
+  describe 'Mode.valid?' do
+    it 'returns false for a non-Symbol/String mode instead of raising' do
+      expect(described_class::Mode.valid?(42)).to be(false)
+    end
+  end
+
+  describe '.strip when Kramdown raises' do
+    it 'logs it as a parse failure and returns the input' do
+      allow(described_class).to receive(:strip_with_kramdown).and_raise(Kramdown::Error, 'bad markup')
+      allow(described_class).to receive(:log_error)
+
+      expect(described_class.strip('<b>x</b>', :html)).to eq('<b>x</b>')
+      expect(described_class).to have_received(:log_error).with('Failed to parse html', kind_of(Kramdown::Error))
+    end
   end
 
   describe '.strip when Kramdown failed to load' do

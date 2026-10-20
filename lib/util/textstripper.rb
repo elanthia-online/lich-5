@@ -91,7 +91,7 @@ module Lich
         #   Mode.valid?(:markdown) # => true
         #   Mode.valid?(:invalid)  # => false
         def self.valid?(mode)
-          ALL.include?(mode.to_sym)
+          (mode.is_a?(Symbol) || mode.is_a?(String)) && ALL.include?(mode.to_sym)
         end
 
         # Get a human-readable list of valid modes
@@ -181,11 +181,11 @@ module Lich
       # @note If Kramdown or Ox parsing fails, a warning is issued and the original
       #   text is returned unchanged
       def self.strip(text, mode)
-        return "" if text.nil? || text.empty?
-
-        # Validate mode outside the begin/rescue below, which wraps only the
-        # parsing, so ArgumentError propagates to the caller as documented
+        # Validate mode first and outside the begin/rescue below, which wraps only
+        # the parsing, so ArgumentError propagates to the caller as documented
         validated_mode = validate_mode(mode)
+
+        return "" if text.nil? || text.empty?
 
         # Check if kramdown is required and available
         if requires_kramdown?(validated_mode) && !KRAMDOWN_LOADED
@@ -208,7 +208,11 @@ module Lich
         rescue StandardError => e
           # Kramdown errors land here too: naming Kramdown::Error in a rescue
           # raises NameError when kramdown failed to load
-          log_error("Unexpected error during #{validated_mode} parsing", e)
+          if defined?(Kramdown::Error) && e.is_a?(Kramdown::Error)
+            log_error("Failed to parse #{validated_mode}", e)
+          else
+            log_error("Unexpected error during #{validated_mode} parsing", e)
+          end
           text
         end
       end
