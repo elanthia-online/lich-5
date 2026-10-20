@@ -37,8 +37,13 @@ module Lich
       #
       # +pathless_cause+ (see #pathless_cause) says, for a detached proxy
       # without a path, what it is.
+      #
+      # +foreign_values+ marks a view taken from a container that may hold,
+      # at a key, a value that is not its source's (see
+      # #may_hold_foreign_values?): its elements are found in the source by
+      # identity only (see #source_segment).
       def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false,
-                     path_classes: nil, pathless_cause: nil)
+                     path_classes: nil, pathless_cause: nil, foreign_values: false)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -51,6 +56,7 @@ module Lich
         @copy = copy
         @path_classes = path_classes&.size == @path.size ? path_classes.dup : (Array.new(@path.size, Hash) if @path.size <= 1)
         @pathless_cause = pathless_cause
+        @foreign_values = foreign_values
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -915,7 +921,8 @@ module Lich
               is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
               SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
                                                                                source: view_source,
-                                                                               path_classes: @path_classes, pathless_cause: view_cause(is_view))
+                                                                               path_classes: @path_classes, pathless_cause: view_cause(is_view),
+                                                                               foreign_values: may_hold_foreign_values?)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -1090,16 +1097,25 @@ module Lich
       # the element after the container has taken the stored row's elements,
       # as long as that key still holds the same kind of container; a fresh
       # read of that key would address the same entry. That holds only for
-      # a detached view: another Hash built from the container (merge with
-      # the script's own Hash, transform_values) may hold, at a key, a value
-      # that is not the container's, so its elements are found by identity
-      # only, and a write through one that isn't found is refused.
+      # a detached view of the container itself: another Hash built from
+      # the container (merge with the script's own Hash, transform_values),
+      # and a view of such a Hash (merge(mine).select { ... }), may hold, at
+      # a key, a value that is not the container's, so its elements are
+      # found by identity only, and a write through one that isn't found is
+      # refused.
       private def source_segment(view_segment)
         element = @target[view_segment]
         same = segment_in(@source, view_segment)
-        return same if same && (@source[same.first].equal?(element) || (detached? && same_key_in_hash_source?(same.first, element)))
+        return same if same && (@source[same.first].equal?(element) || (detached? && !@foreign_values && same_key_in_hash_source?(same.first, element)))
 
         child_segment(@source, element)
+      end
+
+      # True when this proxy's container may hold, at a key, a value that is
+      # not its source's: it was built from another container (merge,
+      # transform_values, ...), or it is a view of one.
+      private def may_hold_foreign_values?
+        @foreign_values || (!detached? && !@source.nil?)
       end
 
       # For a view whose source is a Hash: [key], the key of the view's

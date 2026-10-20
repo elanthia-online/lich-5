@@ -361,6 +361,20 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(stored[:m]).to eq("a" => { n: 1, kept: 1, also: 1 })
     end
 
+    it "stores nothing for an element of a select or reject of such a Hash, and leaves the script's Hash as plain Ruby does" do
+      settings[:m] = { "a" => { n: 1 }, "b" => { n: 2 } }
+      mine = { "a" => { n: 9 } }
+
+      settings[:m].merge(mine).select { true }.each { |_key, value| value[:w] = 1 }
+      settings[:m].merge(mine).reject { false }.select { true }["a"][:x] = 1
+      settings[:m].transform_values { |value| value.merge(t: 1) }.select { true }["b"][:y] = 1
+
+      expect(stored[:m]).to eq("a" => { n: 1 }, "b" => { n: 2, w: 1 })
+      expect(mine).to eq("a" => { n: 9, w: 1, x: 1 })
+      expect(error_messages.size).to eq(3)
+      expect(error_messages).to all(include("not saved", "not found in the settings"))
+    end
+
     it "says, in a loop where only some elements are found in the settings, that only the others are not saved" do
       settings[:vs] = [{ id: 0 }, { id: 1 }]
       list = settings[:vs]
