@@ -2114,6 +2114,37 @@ RSpec.describe Lich::DragonRealms::DRCMM do
             holder.join(5)
           end
         end
+
+        it 'does not latch a fresh start that took the lock just after its wait timed out' do
+          release = Queue.new
+          other = hold_start_lock(release)
+          holder = nil
+          # Between the deadline check and the latch, the start waited on
+          # releases the lock and another caller takes it for a new start.
+          allow(Lich::Messaging).to receive(:msg).and_wrap_original do |original, type, text, **opts|
+            if holder.nil? && text.include?('Timed out waiting for another start')
+              release << :go
+              other.join(5)
+              holder = start_stuck_holder
+            end
+            original.call(type, text, **opts)
+          end
+
+          begin
+            expect(check).to be false
+            expect(described_class::MOONWATCH_START_LOCK).to be_locked
+            expect(described_class.instance_variable_get(:@moonwatch_start_stuck)).to be false
+            expect(all_messages.grep(/#{stuck_message}/)).to be_empty
+
+            # So the next caller waits on the new start instead of returning at once.
+            started = monotonic
+            expect(check).to be false
+            expect(monotonic - started).to be >= 0.3
+          ensure
+            unpause << true
+            holder&.join(5)
+          end
+        end
       end
     end
   end

@@ -81,6 +81,10 @@ module Lich
       # freshly started moonwatch has already published.
       MOONWATCH_START_LOCK = Mutex.new
 
+      # Makes the stuck-start latch's set and clear atomic with taking and
+      # releasing MOONWATCH_START_LOCK (see note_moonwatch_start_stuck).
+      MOONWATCH_STATE_LOCK = Mutex.new
+
       # Set when a wait for moonwatch's data timed out while moonwatch kept
       # running: by await_running_moonwatch, or by check_moonwatch's own start
       # (via note_moonwatch_start_failure). See note_moonwatch_stall.
@@ -96,6 +100,10 @@ module Lich
       # callers queued on the lock do not wait for it again. Cleared when a
       # caller gets the lock and again when it releases the lock.
       @moonwatch_start_stuck = false
+
+      # Counts check_moonwatch's acquisitions of MOONWATCH_START_LOCK, so a
+      # caller that timed out on one start never latches a later one as stuck.
+      @moonwatch_start_generation = 0
 
       # Expected game responses when centering a telescope on a target.
       CENTER_TELESCOPE_MESSAGES = [
@@ -636,6 +644,7 @@ module Lich
         end
 
         lock_deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout + MOONWATCH_LOCK_WAIT_MARGIN
+        start_generation = @moonwatch_start_generation
         until MOONWATCH_START_LOCK.try_lock
           # The other start may publish while the lock is still held (its
           # holder can be paused or slow to return), so keep checking. When
@@ -652,7 +661,7 @@ module Lich
           end
           if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= lock_deadline
             Lich::Messaging.msg("bold", "DRCMM: Timed out waiting for another start of moonwatch to finish. Moon data is unavailable.")
-            note_moonwatch_start_stuck if full_moonwatch_wait?(timeout)
+            note_moonwatch_start_stuck(start_generation) if full_moonwatch_wait?(timeout)
             return false
           end
           pause MOONWATCH_POLL_INTERVAL
@@ -660,7 +669,7 @@ module Lich
 
         begin
           # A stuck start, if any, has released the lock.
-          @moonwatch_start_stuck = false
+          moonwatch_start_lock_taken
           # Another caller started moonwatch (or another wait on it ran) while
           # this one waited for the lock: wait for its data, honouring the latch.
           return await_running_moonwatch(timeout) if Script.running?('moonwatch')
@@ -700,10 +709,7 @@ module Lich
           note_moonwatch_start_failure(timeout)
           false
         ensure
-          if MOONWATCH_START_LOCK.owned?
-            @moonwatch_start_stuck = false
-            MOONWATCH_START_LOCK.unlock
-          end
+          release_moonwatch_start_lock if MOONWATCH_START_LOCK.owned?
         end
       end
 
@@ -748,9 +754,40 @@ module Lich
       # Called when a wait for another caller's start of moonwatch timed out:
       # until that start releases the lock, callers queued on it return false
       # at once while moonwatch is not running (see check_moonwatch).
-      def note_moonwatch_start_stuck
-        @moonwatch_start_stuck = true
+      #
+      # Latches only while the start that was waited on still holds the lock.
+      # If it released the lock after the deadline check (and another caller
+      # may already have taken it for a fresh start), nothing is latched.
+      #
+      # @param start_generation [Integer] @moonwatch_start_generation when the
+      #   wait began
+      def note_moonwatch_start_stuck(start_generation)
+        latched = MOONWATCH_STATE_LOCK.synchronize do
+          next false unless start_generation == @moonwatch_start_generation && MOONWATCH_START_LOCK.locked?
+
+          @moonwatch_start_stuck = true
+        end
+        return unless latched
+
         Lich::Messaging.msg("plain", "DRCMM: Not waiting for that start of moonwatch again until it finishes. Moon checks report no moon until then, unless moonwatch is running.")
+      end
+
+      # Called by check_moonwatch right after it takes MOONWATCH_START_LOCK:
+      # starts a new generation and clears the stuck-start latch.
+      def moonwatch_start_lock_taken
+        MOONWATCH_STATE_LOCK.synchronize do
+          @moonwatch_start_generation += 1
+          @moonwatch_start_stuck = false
+        end
+      end
+
+      # Clears the stuck-start latch and releases MOONWATCH_START_LOCK as one
+      # step, so a waiter cannot latch this start after the clear.
+      def release_moonwatch_start_lock
+        MOONWATCH_STATE_LOCK.synchronize do
+          @moonwatch_start_stuck = false
+          MOONWATCH_START_LOCK.unlock
+        end
       end
 
       # Called when moonwatch is running with real moon data: clears the stall
