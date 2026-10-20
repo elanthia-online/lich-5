@@ -863,6 +863,31 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       infomon.db.run("DROP TRIGGER IF EXISTS reject_write_failure_test")
     end
 
+    it "shows one short in-game line per failure streak" do
+      infomon = Lich::Gemstone::Infomon
+      allow(Lich).to receive(:log)
+      allow(infomon).to receive(:respond)
+      table = infomon.db.literal(infomon.table_name)
+      infomon.db.run("CREATE TRIGGER reject_all_writes_test BEFORE INSERT ON #{table} BEGIN SELECT RAISE(FAIL, 'injected'); END")
+      begin
+        infomon.upsert_batch((1..52).map { |i| ["streak.key#{i}", i] })
+        20.times { |i| infomon.set("streak.single", i) }
+        infomon.flush
+      ensure
+        infomon.db.run("DROP TRIGGER IF EXISTS reject_all_writes_test")
+      end
+      expect(infomon).to have_received(:respond).once
+      expect(infomon).to have_received(:respond).with(a_string_matching(/failed for 52 key\(s\) \(streak\.key1, streak\.key2, streak\.key3, \.\.\.\): .*injected/).and(satisfy { |m| m.length < 200 }))
+      expect(Lich).to have_received(:log).with(/Infomon write failed for/).exactly(21).times
+
+      # once a successful write clears every unpersisted key, a new failure is shown again
+      infomon.upsert_batch((1..52).map { |i| ["streak.key#{i}", i] })
+      infomon.set("streak.single", 19)
+      infomon.flush
+      with_rejected_write("streak.other") { infomon.set("streak.other", 1) }
+      expect(infomon).to have_received(:respond).twice
+    end
+
     it "allows a failed write to be retried" do
       infomon = Lich::Gemstone::Infomon
       k = "write_failure.test"
@@ -873,7 +898,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       allow(infomon).to receive(:respond)
       with_rejected_write(k) { infomon.set(k, 2) }
       expect(Lich).to have_received(:log).with(/Infomon write failed for #{k}: Sequel::\w+.*injected/)
-      expect(infomon).to have_received(:respond).with(/Infomon write failed for #{k}: .*injected/)
+      expect(infomon).to have_received(:respond).with(/Infomon write failed for 1 key\(s\) \(#{k}\): .*injected/)
       # the cache keeps the last value set; only the DB is behind
       expect(infomon.get(k)).to eq(2)
       expect(infomon.table[key: k][:value]).to eq(1)

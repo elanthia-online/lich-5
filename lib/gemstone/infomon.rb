@@ -275,6 +275,7 @@ module Lich
             # Normal SQL statement processing
             sql, keys = item
             write_error = nil
+            new_streak = false
             Infomon.mutex.synchronize do
               begin
                 Infomon.db.run(sql)
@@ -284,13 +285,20 @@ module Lich
               rescue StandardError => e
                 # Keep the cached value (Infomon's view of the game) and mark the keys so
                 # the next set/upsert_batch of the same value is retried instead of a :noop.
+                new_streak = @unpersisted.empty?
                 keys.each { |key| @unpersisted[key] = true }
                 write_error = e
               end
             end
             # Reported after releasing the DB mutex so a slow client write can't hold it.
+            # The game window gets one short line per failure streak (until a successful
+            # write leaves nothing unpersisted); the log gets every failure in full.
             if write_error
-              respond "--- Lich: error: Infomon write failed for #{keys.join(', ')}: #{write_error.message}"
+              if new_streak
+                shown = keys.first(3).join(', ')
+                shown += ', ...' if keys.size > 3
+                respond "--- Lich: error: Infomon write failed for #{keys.size} key(s) (#{shown}): #{write_error.message}"
+              end
               Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{write_error.class}: #{write_error.message}\n\t#{write_error.backtrace.join("\n\t")}"
             end
           rescue StandardError
