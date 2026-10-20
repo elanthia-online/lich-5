@@ -482,13 +482,13 @@ module Lich
       # sends with its prep reply (on the same line or just before it),
       # listed or not: it counts if a spell shows as being prepared within
       # PREP_CONFIRM_WAIT_SECONDS, which also covers a prep reply that lands
-      # just after an empty-matching custom prep message made bput return
-      # early. Otherwise a bold message says so, +release spell+ is sent and
-      # the result is false. The game handles commands in order, so during a
-      # server stall that release lands behind the prep still waiting there
-      # and cancels it, rather than leaving it prepared for the next caller
-      # (whose own release is skipped while the indicator still shows no
-      # spell) to charge and cast as its own.
+      # just after bput returned early (see {#prepare?}). Otherwise a bold
+      # message says so, +release spell+ is sent and the result is false.
+      # The game handles commands in order, so during a server stall that
+      # release lands behind the prep still waiting there and cancels it,
+      # rather than leaving it prepared for the next caller (whose own
+      # release is skipped while the indicator still shows no spell) to
+      # charge and cast as its own.
       #
       # The indicator rule covers preps made with a prep command. An invoke
       # (a runestone, or a tattoo whose prep command is +invoke+) is not

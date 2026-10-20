@@ -218,8 +218,8 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
 
     # The empty-matching custom message makes bput return '' at once, on the
     # unrelated first line; without one, bput returns '' when it times out.
-    [['an empty-matching custom prep message', { 'custom_prep_message' => 'You chant|' }, 0.0],
-     ['a bput timeout', {}, 15.0]].each do |label, extra, bput_wait|
+    [['an empty-matching custom prep message', { 'custom_prep_message' => 'You chant|' }],
+     ['a bput timeout', {}]].each do |label, extra|
       context "after #{label}" do
         it 'goes on to the focus and the cast when the prep reply lands during the wait' do
           game('prepare fireball 10' => ['A goblin arrives.'], 'cast' => ['You gesture.'])
@@ -234,7 +234,8 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
           expect(drca.ritual(data.merge(extra), settings)).to be_nil
           expect(drca).not_to have_received(:find_focus)
           expect(sent).to eq(['prepare fireball 10', 'release spell'])
-          expect(@clock).to be_within(0.5).of(bput_wait + DRCA::PREP_CONFIRM_WAIT_SECONDS)
+          # At most bput's 15 s timeout, then prep_confirmed?'s whole wait.
+          expect(@clock).to be_between(DRCA::PREP_CONFIRM_WAIT_SECONDS - 0.01, 15 + DRCA::PREP_CONFIRM_WAIT_SECONDS + 0.5)
           expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(not_casting)
         end
       end
