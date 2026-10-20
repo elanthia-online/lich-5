@@ -15,6 +15,9 @@ require_relative '../../../lib/common/frontend_locator'
 RSpec.describe Lich::Common::FrontendSettings do
   let(:data_dir) { Dir.mktmpdir('lich-frontend-settings') }
   let(:settings_file) { File.join(data_dir, 'frontends.yml') }
+  # The executable-discovery examples stage POSIX shell scripts and resolve
+  # them as :linux, which native Windows can't execute.
+  posix_executables_only = Gem.win_platform? && 'stages POSIX shell scripts as executables'
 
   it 'preserves literal whitespace and empty positional arguments through disk reload' do
     arguments = ['--title', '', '  keep me  ', '--next']
@@ -435,7 +438,7 @@ RSpec.describe Lich::Common::FrontendSettings do
     reader&.join
   end
 
-  it 'prefers a configured executable before automatic discovery' do
+  it 'prefers a configured executable before automatic discovery', skip: posix_executables_only do
     executable = File.join(data_dir, 'custom-wrayth')
     File.write(executable, '#!/bin/sh')
     File.chmod(0o755, executable)
@@ -456,7 +459,7 @@ RSpec.describe Lich::Common::FrontendSettings do
     expect(resolution.source).to eq(:configured)
   end
 
-  it 'falls back to discovery when a configured executable has gone missing' do
+  it 'falls back to discovery when a configured executable has gone missing', skip: posix_executables_only do
     executable_directory = File.join(data_dir, 'bin')
     FileUtils.mkdir_p(executable_directory)
     discovered_executable = File.join(executable_directory, 'Wrayth.exe')
