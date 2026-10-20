@@ -408,6 +408,13 @@ RSpec.describe DRCT do
       bold_msgs = Lich::Messaging.messages.select { |m| m[:type] == 'bold' }
       expect(bold_msgs.any? { |m| m[:message].include?('DRCT:') && m[:message].include?('Failed to navigate') }).to eq(true)
     end
+
+    it 'keeps its unresolved-room helpers private' do
+      %i[walk_to_current_room walk_to_current_room_id walk_to_unresolved_failure walk_to_unresolved_message].each do |helper|
+        expect(DRCT.respond_to?(helper)).to eq(false), "DRCT.#{helper} is public"
+        expect(DRCT.respond_to?(helper, true)).to eq(true), "DRCT.#{helper} is missing"
+      end
+    end
   end
 
   # --- tag_to_id -----------------------------------------------------
