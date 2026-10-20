@@ -1245,7 +1245,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       src
     end
 
-    it 'defers interrupts in #step when lich.db3 is either end, and not between plain connections' do
+    it 'defers interrupts in #step when lich.db3 is either end, in #finish when a shared connection is the source, and not between plain connections' do
       open_db
       shared = Lich.open_sqlite_db(path)
       @raw << shared
@@ -1262,7 +1262,7 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
       _, plain_only = masks_set_during { SQLite3::Backup.new(other, 'main', plain, 'main').tap { |b| b.step(-1) }.finish }
 
       expect(SQLite3::Backup.ancestors).to include(Lich::SQLiteBusyWait::Backup)
-      expect(from_lich).to eq([{ Object => :never }])
+      expect(from_lich).to eq([{ Object => :never }] * 2)
       expect(to_lich).to eq([{ Object => :never }])
       expect(plain_only).to be_empty
     end
@@ -1304,6 +1304,56 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
 
       expect(waits.values).to all(be >= 0.2)
       expect(free.values).to all(be < 0.2)
+    end
+
+    # A kill that lands while #finish waits for the source's Monitor must not
+    # skip sqlite3_backup_finish: that would leave the destination's write
+    # transaction open and the copy locked.
+    it 'still finishes the backup when the thread is killed while #finish waits for the Monitor' do
+      open_db
+      shared = Lich.open_sqlite_db(path)
+      @raw << shared
+      shared.execute('CREATE TABLE blobs (b BLOB)')
+      50.times { shared.execute('INSERT INTO blobs (b) VALUES (randomblob(4000))') }
+      monitor = shared.instance_variable_get(:@lich_monitor)
+      stepped = Queue.new
+      grabbed = Queue.new
+      release = Queue.new
+      holder = Thread.new { stepped.pop; monitor.synchronize { grabbed << true; release.pop } }
+      step_result = nil
+      in_ensure = false
+      finished = false
+      worker = Thread.new do
+        dst = SQLite3::Database.new(copy_path)
+        backup = SQLite3::Backup.new(dst, 'main', shared, 'main')
+        begin
+          step_result = backup.step(5)
+          stepped << true
+          grabbed.pop
+        ensure
+          in_ensure = true
+          backup.finish
+          finished = true
+          dst.close
+        end
+      end
+      deadline = monotonic + 5
+      sleep 0.01 until (in_ensure && worker.status == 'sleep') || monotonic > deadline
+      expect(in_ensure).to be(true)
+      worker.kill
+      waited_for_monitor = worker.join(0.2).nil?
+      release << true
+      holder.join(5)
+      worker.join(5)
+
+      expect(step_result).to eq(SQLite3::Constants::ErrorCode::OK)
+      expect(waited_for_monitor).to be(true)
+      expect(worker.alive?).to be(false)
+      expect(finished).to be(false)
+      writer = SQLite3::Database.new(copy_path)
+      @raw << writer
+      writer.busy_timeout = 100
+      expect { writer.execute('CREATE TABLE after_kill (n INTEGER)') }.not_to raise_error
     end
 
     # SQLite requires that no other thread use a backup's destination

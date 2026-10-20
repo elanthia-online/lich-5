@@ -293,6 +293,12 @@ module Lich
     #   all take its mutex, run under its Monitor, so another thread that uses
     #   it meanwhile waits for the Monitor instead of blocking on the mutex
     #   with the GVL held. SQLite allows the source to be used between steps.
+    #   #finish defers interrupts while it waits for that Monitor, so a
+    #   Thread#kill or #raise that lands in an `ensure backup.finish` can't
+    #   skip sqlite3_backup_finish and leave the destination locked; it is
+    #   delivered once #finish returns. A kill there can therefore take as
+    #   long as the Monitor's holder, up to its busy timeout if it is waiting
+    #   for a lock.
     # - a shared connection can't be the destination: #initialize raises
     #   ArgumentError. SQLite requires that nothing else use the destination
     #   from sqlite3_backup_init to sqlite3_backup_finish, and a Monitor only
@@ -338,7 +344,9 @@ module Lich
       end
 
       def finish
-        synchronize_source { super }
+        return super unless @lich_monitor
+
+        Thread.handle_interrupt(Object => :never) { @lich_monitor.synchronize { super } }
       end
 
       private
