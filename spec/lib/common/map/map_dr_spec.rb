@@ -1301,6 +1301,24 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         expect(map_class.match_fuzzy).to eq(10)
       end
 
+      it 'splits the live description at an exclamation mark as well as a period' do
+        drifted(10, 'Reeds sway very gently!  Mud covers everything here.')
+        live(description: 'Reeds sway very gently!  A heron watches from the shallows.')
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      it 'splits the live description at a question mark as well as a period' do
+        drifted(10, 'Is that a heron nearby?  Mud covers everything here.')
+        live(description: 'Is that a heron nearby?  Rain falls.')
+        expect(map_class.match_current(nil)).to eq(10)
+      end
+
+      it 'still ignores a fragment under four words cut at an exclamation mark' do
+        drifted(10, 'Reeds sway gently!  Mud covers everything here.')
+        live(description: 'Reeds sway gently!  A heron watches from the shallows.')
+        expect(map_class.match_current(nil)).to be_nil
+      end
+
       it 'matches a live sentence that ends partway through a stored word' do
         drifted(10, 'The gate stands tall over the roadway.  Inns line it.')
         live(description: 'The gate stands tall over the road.  Rain falls.')
@@ -1803,6 +1821,13 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
       end
     end
 
+    describe '.pick_text_candidate with no candidates' do
+      it 'is unresolved without looking up an anchor room' do
+        expect(map_class).not_to receive(:anchor_room)
+        expect(map_class.pick_text_candidate([])).to be_nil
+      end
+    end
+
     describe '.current_or_new in an ambiguous room' do
       before(:each) { Script.current = :test_script }
 
@@ -1826,7 +1851,7 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         twin(11)
         live(room_count: 1)
         expect(map_class.current_or_new&.id).to eq(12)
-        expect(messages).to include(a_string_matching(/2 mapped rooms match this room/))
+        expect(messages).to include(a_string_matching(/2 mapped rooms match this room's text but none could be confirmed/))
       end
 
       it 'says so when the mapped rooms only share a sentence with it' do
@@ -1836,7 +1861,18 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         twin(11)
         live(room_count: 1, description: "#{desc}  A heron watches from the shallows.")
         expect(map_class.current_or_new&.id).to eq(12)
-        expect(messages).to include(a_string_matching(/2 mapped rooms match this room/))
+        expect(messages).to include(a_string_matching(/2 mapped rooms match this room's text but none could be confirmed/))
+      end
+
+      it 'says so when the live UID vetoes every mapped room matching its text' do
+        messages = []
+        allow(map_class).to receive(:echo) { |msg| messages << msg }
+        twin(10, uid: [500])
+        twin(11, uid: [501])
+        live(room_id: 999, room_count: 1)
+        expect(map_class.current_or_new&.id).to eq(12)
+        expect(messages).to include(a_string_matching(/2 mapped rooms match this room's text but none could be confirmed/))
+        expect(messages.grep(/told apart/)).to be_empty
       end
 
       it 'does not warn when the room it maps matches no mapped room' do

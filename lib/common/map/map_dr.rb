@@ -301,14 +301,14 @@ module Lich
       TOLERANT_SENTENCE_MIN_WORDS = 4
 
       # The sentences of a live description that {tolerant_text_candidates}
-      # looks for: split at each run of periods, stripped, keeping only those of
-      # at least {TOLERANT_SENTENCE_MIN_WORDS} words. An empty description has
-      # none.
+      # looks for: split at each run of sentence-ending marks (+.+, +!+, +?+),
+      # stripped, keeping only those of at least {TOLERANT_SENTENCE_MIN_WORDS}
+      # words. An empty description has none.
       #
       # @param description [String, nil]
       # @return [Array<String>]
       def self.description_sentences(description)
-        description.to_s.split(/\.+/).map(&:strip).select do |sentence|
+        description.to_s.split(/[.!?]+/).map(&:strip).select do |sentence|
           sentence.split.size >= TOLERANT_SENTENCE_MIN_WORDS
         end
       end
@@ -443,7 +443,8 @@ module Lich
       # room. Otherwise the room resolves only when exactly one candidate is
       # reachable from the anchor room (see {adjacent_candidate}) and
       # that candidate survived the veto; in every other case it is unresolved
-      # rather than the first of them.
+      # rather than the first of them. No candidates is unresolved without
+      # looking up an anchor room.
       #
       # When the veto dropped any candidate, reachability is judged over all the
       # candidates, vetoed ones included, and even a lone survivor must be the
@@ -455,6 +456,8 @@ module Lich
       # @param candidates [Array<Lich::Common::Map>] rooms matching the live text
       # @return [Lich::Common::Map, nil]
       def self.pick_text_candidate(candidates)
+        return nil if candidates.empty?
+
         survivors = candidates.reject { |r| uid_vetoes?(r) }
         return survivors.first if survivors.size == 1 && survivors.size == candidates.size
 
@@ -555,12 +558,13 @@ module Lich
           return nil
         end
 
-        # Several rooms fit the live text and none could be told apart from the
-        # room before it. The room may be one of them or a new one; mapping it
-        # as new keeps identical rooms with no UID mappable, so say so.
+        # Several rooms fit the live text but none was confirmed as this room:
+        # the live UID vetoed them, or none could be told apart from the room
+        # before it. The room may be one of them or a new one; mapping it as
+        # new keeps identical rooms with no UID mappable, so say so.
         twins = live_text_candidates.size
         if twins > 1
-          echo "Map: #{twins} mapped rooms match this room and none can be told apart from the room before it; mapping it as a new room"
+          echo "Map: #{twins} mapped rooms match this room's text but none could be confirmed as this room; mapping it as a new room"
         end
 
         id = get_free_id
