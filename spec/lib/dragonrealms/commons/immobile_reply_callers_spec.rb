@@ -480,7 +480,7 @@ RSpec.describe 'Callers that list the immobile reply' do
   describe 'DRC.retreat' do
     let(:standing) { [true] }
     let(:must_stand) { 'You must stand first.' }
-    let(:hold_timeout) { Lich::DragonRealms::DRC::RETREAT_HOLD_TIMEOUT }
+    let(:hold_timeout) { Lich::DragonRealms::DRC::BPUT_DEFAULT_TIMEOUT }
     # Seconds added to Time.now. Each pause moves the clock on, so a hold that
     # outlasts retreat's deadline runs without real waiting.
     let(:clock) { { offset: 0 } }
