@@ -160,6 +160,50 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
+  describe '.lich_version_at_least?' do
+    it 'is true when LICH_VERSION equals the requested version' do
+      stub_const('LICH_VERSION', '5.12.0')
+      expect(described_class.lich_version_at_least?(5, 12, 0)).to be true
+    end
+
+    it 'is true when the major, minor or patch component is higher' do
+      stub_const('LICH_VERSION', '5.12.1')
+      expect(described_class.lich_version_at_least?(5, 12, 0)).to be true
+      expect(described_class.lich_version_at_least?(5, 11, 9)).to be true
+      expect(described_class.lich_version_at_least?(4, 99, 99)).to be true
+    end
+
+    it 'is false when any component is lower' do
+      stub_const('LICH_VERSION', '5.12.1')
+      expect(described_class.lich_version_at_least?(5, 12, 2)).to be false
+      expect(described_class.lich_version_at_least?(5, 13)).to be false
+      expect(described_class.lich_version_at_least?(6)).to be false
+    end
+
+    it 'compares numerically, not lexically' do
+      stub_const('LICH_VERSION', '5.10.0')
+      expect(described_class.lich_version_at_least?(5, 9, 0)).to be true
+      expect(described_class.lich_version_at_least?(5, 10, 0)).to be true
+    end
+
+    it 'defaults minor and patch to zero' do
+      stub_const('LICH_VERSION', '5.0.0')
+      expect(described_class.lich_version_at_least?(5)).to be true
+      expect(described_class.lich_version_at_least?(5, 0)).to be true
+    end
+
+    it 'ranks a prerelease below its release and above the previous release' do
+      stub_const('LICH_VERSION', '5.13.0-beta.4')
+      expect(described_class.lich_version_at_least?(5, 13, 0)).to be false
+      expect(described_class.lich_version_at_least?(5, 12, 12)).to be true
+    end
+
+    it 'is false when LICH_VERSION is not defined' do
+      hide_const('LICH_VERSION')
+      expect(described_class.lich_version_at_least?(0)).to be false
+    end
+  end
+
   describe 'FRONTEND_PATTERN' do
     it 'matches --stormfront' do
       match = '--stormfront'.match(described_class::FRONTEND_PATTERN)
@@ -716,15 +760,49 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
   end
 
   describe '.format_launch_flag' do
-    it 'returns nil for empty game code' do
+    it 'returns nil for a blank game code' do
       expect(described_class.format_launch_flag('')).to be_nil
       expect(described_class.format_launch_flag(nil)).to be_nil
+      expect(described_class.format_launch_flag('   ')).to be_nil
+      expect(described_class.format_launch_flag(:'')).to be_nil
     end
 
-    it 'returns formatted flag for valid game code' do
-      # Assuming lich_version_at_least?(5, 12, 0) returns true in test environment
-      result = described_class.format_launch_flag('GS3')
-      expect(result).to match(/--G?S?3?/i)
+    it 'returns exactly --GAMECODE for every accepted game code' do
+      described_class::VALID_GAME_CODES.each do |code|
+        expect(described_class.format_launch_flag(code)).to eq("--#{code}")
+      end
+    end
+
+    it 'upcases lowercase and symbol game codes' do
+      expect(described_class.format_launch_flag('drx')).to eq('--DRX')
+      expect(described_class.format_launch_flag('gst')).to eq('--GST')
+      expect(described_class.format_launch_flag(:drt)).to eq('--DRT')
+    end
+
+    it 'passes a non-blank code that is not an accepted game code through upcased' do
+      expect(described_class::VALID_GAME_CODES).not_to include('GSX')
+      expect(described_class.format_launch_flag('gsx')).to eq('--GSX')
+    end
+
+    it 'emits a flag that resolve_login_args resolves back to the same instance' do
+      described_class::VALID_GAME_CODES.each do |code|
+        argv = ['--login', 'Tsetem', described_class.format_launch_flag(code.downcase)]
+        expect(described_class.resolve_login_args(argv).first).to eq(code)
+      end
+    end
+
+    it 'does not depend on the Lich version' do
+      stub_const('LICH_VERSION', '5.11.0')
+
+      expect(described_class.format_launch_flag('GS3')).to eq('--GS3')
+      expect(described_class.format_launch_flag('drt')).to eq('--DRT')
+    end
+
+    it 'still formats the flag when LICH_VERSION is not defined' do
+      hide_const('LICH_VERSION')
+
+      expect(described_class.format_launch_flag('DR')).to eq('--DR')
+      expect(described_class.format_launch_flag('gst')).to eq('--GST')
     end
   end
 end
