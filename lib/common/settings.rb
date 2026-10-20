@@ -594,14 +594,23 @@ module Lich
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_to_database: Data AFTER unwrap_proxies (object_id: #{unwrapped_settings.object_id}): #{unwrapped_settings.inspect}" })
 
         with_cache_lock(cache_key) do
-          @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+          # Thread#kill and Thread#raise (Script#kill) wait until the cache
+          # holds what was just written, so a script killed right after the
+          # row was committed does not leave this process's cache behind the
+          # database. As in DatabaseAdapter#update_settings, only the store is
+          # held back.
+          stored = Thread.handle_interrupt(Object => :never) do
+            @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+
+            cached_row = unwrapped_settings
+            cached_row.replace(data_to_save) if keep_entries && (data_to_save.is_a?(Hash) || data_to_save.is_a?(Array))
+
+            store_after_database(cache_key, cached_row, @db_adapter.data_version)
+          end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
 
-          cached_row = unwrapped_settings
-          cached_row.replace(data_to_save) if keep_entries && (data_to_save.is_a?(Hash) || data_to_save.is_a?(Array))
-
-          if store_after_database(cache_key, cached_row, @db_adapter.data_version)
-            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{cached_row.object_id})." })
+          if stored
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
             true
           else
             _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Kept the newer row another thread re-read for #{cache_key} after the save." })

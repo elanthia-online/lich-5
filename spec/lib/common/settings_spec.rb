@@ -1064,6 +1064,28 @@ RSpec.describe Lich::Common::Settings do
         expect(game_read('a')).to eq(1)
       end
 
+      it "leaves the cache holding a whole-row save when the writing thread is killed right after the store" do
+        expect(game_read('a')).to be_nil # this process caches the empty row
+        # Script#kill is Thread#kill from another thread; here it arrives just
+        # after the row was committed, before the cache is updated.
+        committed = Queue.new
+        allow(@mock_db).to receive(:save_settings).and_wrap_original do |original, *args|
+          result = original.call(*args)
+          committed << true
+          sleep 0.3
+          result
+        end
+
+        writer = in_thread { settings.save_to_database({ 'a' => 1 }, "GSIV", script_name: "test_script") }
+        committed.pop(timeout: 2)
+        writer.kill
+        expect(writer.join(2)).to eq(writer)
+        allow(@mock_db).to receive(:get_settings).and_raise(RuntimeError, 'a read went to the database')
+
+        expect(@mock_db.dump["test_script:GSIV"]).to eq('a' => 1)
+        expect(game_read('a')).to eq(1)
+      end
+
       it "makes Settings.load return and cache a row committed before it was called, over an older fill in progress" do
         @mock_db.save_settings("test_script", { 'v' => 0 }, ":")
         loaded = Queue.new
