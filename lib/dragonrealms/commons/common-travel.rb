@@ -292,6 +292,9 @@ module Lich
         Lich::Messaging.msg('bold', "DRCT: Unable to resolve the current room, #{consequence}.")
       end
 
+      private_class_method :walk_to_current_room, :walk_to_current_room_id,
+                           :walk_to_unresolved_failure, :walk_to_unresolved_message
+
       # The id of the nearest room tagged +target+, measured from the room
       # Room.current resolves, or nil (with a message) when there is none or
       # the current room is still unresolved after walk_to_current_room's wait.
