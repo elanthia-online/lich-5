@@ -20,7 +20,7 @@ end
 # Override get_data for this spec with DRCA-specific data (barb_abilities)
 def get_data(_type)
   @mock_data ||= OpenStruct.new(
-    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
+    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations', 'You seem to have forgotten this spell'],
     cast_messages: ['You gesture', 'Your target pattern dissipates'],
     invoke_messages: ['Your cambrinth absorbs', 'you find it too clumsy', 'Invoke what?'],
     charge_messages: ['Your cambrinth absorbs all of the energy', 'You are in no condition to do that', 'You\'ll have to hold it', 'you find it too clumsy'],
@@ -44,6 +44,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
     Flags.reset!
+    # cast? stores the backfire flag in module state; start each example clean
+    DRCA.instance_variable_set(:@backfired_status, false)
     allow(DRCMM).to receive(:update_astral_data) { |data, _settings| data }
     allow(DRC).to receive(:bput).and_return('default')
   end
@@ -623,6 +625,202 @@ RSpec.describe Lich::DragonRealms::DRCA do
   end
 
   # ----------------------------------------------
+  # No-match timeout: DRC.bput returns '' when none of its patterns arrive
+  # within its timeout (pinned in common_spec). These examples pin what
+  # prepare? and cast? do with that value, as their docs describe.
+  # ----------------------------------------------
+  describe 'when DRC.bput times out with no match' do
+    let(:sent) { [] }
+
+    # Every bput times out unless the example overrides a command's reply.
+    def silent_game(sent, replies = {})
+      allow(DRC).to receive(:bput) do |cmd, *_patterns|
+        sent << cmd
+        reply = replies.fetch(cmd, '')
+        reply.respond_to?(:call) ? reply.call : reply
+      end
+    end
+
+    describe '.prepare?' do
+      it "returns '' (truthy), not false" do
+        silent_game(sent)
+        result = DRCA.prepare?('fireball', 10)
+        expect(result).to eq('')
+        expect(result).to be_truthy
+        expect(sent).to eq(['prepare fireball 10'])
+      end
+
+      it 'keeps a prepared symbiosis instead of releasing it' do
+        silent_game(sent, 'prepare symbiosis' => 'You recall the exact details of the')
+        expect(DRCA.prepare?('fireball', 10, true)).to eq('')
+        expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+      end
+
+      it 'still sends target for a tattoo TM prep' do
+        silent_game(sent)
+        expect(DRCA.prepare?('fireball', 10, false, 'prepare', true)).to eq('')
+        expect(sent).to eq(['prepare fireball 10', 'target'])
+      end
+
+      it 'does not dispose of a runestone whose invoke timed out' do
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        expect(DRCI).not_to receive(:dispose_trash)
+        silent_game(sent)
+        expect(DRCA.prepare?('fireball', 10, false, 'prepare', false, 'rune')).to eq('')
+        expect(sent).to eq(['prepare my rune'])
+      end
+
+      it "returns '' when the retry after a slipped offensive prep times out" do
+        silent_game(sent)
+        replies = ['Your desire to prepare this offensive spell suddenly slips away', '']
+        allow(DRC).to receive(:bput).with('prepare fireball 10', anything) do |cmd, *_|
+          sent << cmd
+          replies.shift
+        end
+        expect(DRCA.prepare?('fireball', 10)).to eq('')
+        expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
+      end
+
+      # Like '', a matched reply that has no failure arm passes through as is,
+      # including a prep_messages entry that reads like a failure.
+      ['You begin to draw your focus on', 'You seem to have forgotten this spell'].each do |prep_reply|
+        it "returns the matched prep reply #{prep_reply.inspect} unchanged, keeping symbiosis" do
+          replies = { 'prepare symbiosis' => 'You recall the exact details of the', 'prepare fireball 10' => prep_reply }
+          silent_game(sent, replies)
+          expect(DRCA.prepare?('fireball', 10, true)).to eq(prep_reply)
+          expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+        end
+      end
+    end
+
+    describe '.cast?' do
+      it 'returns true and releases nothing when no failure flag was set' do
+        silent_game(sent)
+        expect(DRCA.cast?).to be true
+        expect(sent).to eq(['cast'])
+        expect(DRCA.backfired?).to be false
+      end
+
+      it 'keeps a symbiosis when no failure flag was set' do
+        silent_game(sent)
+        expect(DRCA.cast?('cast', true)).to be true
+        expect(sent).to eq(['cast'])
+      end
+
+      it 'returns false and releases mana when a spell-fail line was seen while bput waited' do
+        silent_game(sent, 'cast' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        expect(DRCA.cast?).to be false
+        expect(sent).to eq(['cast', 'release mana'])
+      end
+
+      it 'returns false and releases mana and symbiosis when a spell-fail line was seen with a symbiosis' do
+        silent_game(sent, 'cast' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        expect(DRCA.cast?('cast', true)).to be false
+        expect(sent).to eq(['cast', 'release mana', 'release symbiosis'])
+      end
+
+      # spell-fail is read after the roundtime wait and the after actions, so
+      # a failure line that only arrives then still counts.
+      it 'returns false and releases mana when a spell-fail line arrives during the roundtime wait' do
+        silent_game(sent)
+        allow(DRCA).to receive(:waitrt?) { Flags['spell-fail'] = ['Your target pattern dissipates because'] }
+        expect(DRCA.cast?).to be false
+        expect(sent).to eq(['cast', 'release mana'])
+      end
+
+      it 'returns false and releases mana when a spell-fail line arrives during an after action' do
+        silent_game(sent, 'invoke circle' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        after = [{ 'message' => 'invoke circle', 'matches' => ['You invoke'] }]
+        expect(DRCA.cast?('cast', false, [], after)).to be false
+        expect(sent).to eq(['cast', 'invoke circle', 'release mana'])
+      end
+
+      it 'records a backfire seen while bput waited' do
+        silent_game(sent, 'cast' => lambda {
+          Flags['spell-fail'] = ['Your spell backfires']
+          Flags['spell-backfired'] = ['Your spell backfires']
+          ''
+        })
+        expect(DRCA.cast?).to be false
+        expect(DRCA.backfired?).to be_truthy
+      end
+
+      it 'still retries when a cyclic-too-recent line was seen while bput waited' do
+        replies = [-> { Flags['cyclic-too-recent'] = ['The mental strain of initiating a cyclic spell'] }, -> {}]
+        silent_game(sent, 'cast' => -> { replies.shift.call; '' })
+        expect(DRCA.cast?).to be true
+        expect(sent).to eq(%w[cast cast])
+      end
+
+      it 'returns true when a barrage times out without a barrage failure' do
+        silent_game(sent)
+        expect(DRCA.cast?('barrage goblin')).to be true
+        expect(sent).to eq(['barrage goblin'])
+      end
+    end
+
+    describe '.cast_spell?' do
+      let(:settings) do
+        OpenStruct.new(
+          cambrinth_items: [{ 'name' => nil }],
+          cambrinth: 'armband',
+          cambrinth_cap: 50,
+          stored_cambrinth: false,
+          use_harness_when_arcana_locked: false,
+          dedicated_camb_use: nil,
+          cambrinth_invoke_exact_amount: nil
+        )
+      end
+
+      # An `until DRCA.cast_spell?(...)` retry loop stops after one attempt
+      # when both the prep and the cast go unanswered.
+      it 'reports success, preparing and casting once, when both prep and cast time out' do
+        allow(DRCA).to receive(:find_charge_invoke_stow)
+        silent_game(sent)
+        expect(DRCA.cast_spell?({ 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'before' => [], 'after' => [] }, settings)).to be true
+        expect(sent.count('prep fb 10')).to eq(1)
+        expect(sent.count('cast')).to eq(1)
+      end
+    end
+
+    describe '.ritual' do
+      it 'carries on to the focus invoke and the cast after a timed-out prep' do
+        settings = OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil)
+        data = { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] }
+        expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
+        expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
+        expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent).to eq(['prepare fb 10', 'cast'])
+      end
+    end
+
+    describe '.crafting_prepare_spell' do
+      it "returns prepare?'s '' unchanged" do
+        allow(DRCMM).to receive(:set_moon_data).and_return(true)
+        allow(DRCA).to receive(:checkprep).and_return('None')
+        settings = OpenStruct.new(custom_spell_prep: nil)
+        silent_game(sent)
+        expect(DRCA.crafting_prepare_spell({ 'abbrev' => 'fb', 'mana' => 10 }, settings)).to eq('')
+        expect(sent).to eq(['release mana', 'prep fb 10'])
+      end
+    end
+
+    describe '.crafting_cast_spell' do
+      it "returns cast?'s true for a cast that timed out with no failure flag" do
+        allow(DRCA).to receive(:normalize_cambrinth_items)
+        allow(DRCA).to receive(:check_to_harness).and_return(false)
+        expect(DRCA).to receive(:charge_cambrinth_items)
+        silent_game(sent)
+        data = { 'cast' => 'cast', 'cambrinth' => [5], 'before' => [], 'after' => [] }
+        expect(DRCA.crafting_cast_spell(data, OpenStruct.new(use_harness_when_arcana_locked: false))).to be true
+        expect(sent).to eq(['cast'])
+      end
+    end
+  end
+
+  # ----------------------------------------------
   # backfired?
   # ----------------------------------------------
   describe '.backfired?' do
@@ -941,6 +1139,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
 
     it 'returns nil for nil settings' do
       expect(DRCA.cast_spell({}, nil)).to be_nil
+    end
+
+    # cast? is not reached on these paths, so cast_spell? reports false even
+    # though the spell went off.
+    it 'returns nil without casting after a successful segue, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'prep' => 'segue' }
+      allow(DRCA).to receive(:segue?).with('ae', 10).and_return(true)
+      expect(DRCA).not_to receive(:cast?)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+    end
+
+    it 'returns nil after running a ritual spell, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'ritual' => true }
+      allow(DRCA).to receive(:ritual)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+      expect(DRCA).to have_received(:ritual).twice
     end
   end
 

@@ -391,7 +391,39 @@ module Lich
       # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
-      # @return [String, false] the matched prep message, or false on failure
+      # @return [String, false] the matched prep message; or +''+ (truthy) when
+      #   bput matched nothing: normally because no prep message arrived before
+      #   bput gave up (it still reads any lines already waiting when its
+      #   timeout passes, and restarts its timer on the replies it retries,
+      #   such as a wait or a stun). bput also returns +''+ at once for a line
+      #   that no built-in message matches when the first custom pattern that
+      #   matches the line makes an empty match there (bput returns the leftmost
+      #   match of the first pattern that matches), such as
+      #   +'(?=A goblin)'+ on a line starting "A goblin"; an empty match in a
+      #   per-spell pattern also hides a later custom_spell_prep one. That
+      #   applies only to a custom pattern {#custom_message_pattern} lets
+      #   through, and never to a line bput handles itself: it retries on a
+      #   wait, a stun or a type-ahead reply and skips the "can't move" line.
+      #   Or false on one of
+      #   the failure replies prepare? itself checks for (its +when+ arms other
+      #   than the retried "slips away" one, which returns the retry's result),
+      #   a nil +abbrev+, or exhausted retries. Any other matched reply is
+      #   returned as is, even one that reads like a failure.
+      #
+      # @note A timeout is not a failure. When nothing prepare? accepts (the
+      #   prep_messages plus the custom prep messages, or {#invoke_messages}
+      #   for a runestone) arrives before bput gives up, bput returns +''+
+      #   and prepare? returns it unchanged, after still sending the
+      #   tattoo/runestone +target+. {#cast_spell} and {#ritual} test the
+      #   result for truthiness and carry on as if the spell were prepared;
+      #   {#crafting_prepare_spell} returns it as is. A timeout is ambiguous:
+      #   the prep may have succeeded with a message that is not in the list
+      #   (the reason custom_prep_message exists) or with a reply delayed by a
+      #   server stall, and returning false there would abort a real prep. It
+      #   can also mean nothing was prepared at all. Callers that would
+      #   otherwise charge cambrinth, harness mana or cast on the strength of
+      #   this result can compare it against +''+ first, which catches every
+      #   empty match, not only a timeout.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
@@ -514,7 +546,38 @@ module Lich
       # @param after [Array<Hash>] actions to bput after casting
       # @param custom_cast_message [String, nil] a per-spell cast message to also accept (see {#with_custom_messages})
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
-      # @return [Boolean] true if the spell cast without a failure flag being set
+      # @return [Boolean] true if the spell cast without a failure flag being set,
+      #   including when no cast message arrived before DRC.bput gave up, and
+      #   when bput returned +''+ at once for a line that no built-in message
+      #   matches because the first custom pattern that matches the line makes
+      #   an empty match there (as +'(?=A goblin)'+ does on a line starting
+      #   "A goblin"; only a custom pattern {#custom_message_pattern} lets
+      #   through can do this, and never on a line bput handles itself: it
+      #   retries on a wait, a stun or a type-ahead reply and skips the
+      #   "can't move" line); false if the +spell-fail+ flag was set or a retry
+      #   limit ran out. In both +''+ cases the result rests on +spell-fail+ at
+      #   the moment it is read (see the note).
+      #
+      # @note A timeout counts as success. When nothing cast? accepts (the
+      #   cast_messages plus the custom cast message) arrives before bput gives
+      #   up (a server stall, or a successful cast whose message is not
+      #   listed), bput returns +''+, which no +when+ arm handles: the
+      #   barrage and cyclic/full-prep retry flags still apply, and the result
+      #   rests on the +spell-fail+ flag. That flag is read only after the cast
+      #   bput, the roundtime wait and the +after+ actions, so
+      #   the result is true unless a failure line arrived before then (in
+      #   which case mana, and any symbiosis, is released and the result is
+      #   false); a failure line that arrives later is missed. This is
+      #   deliberate. Mapping a timeout to false would make retry loops such as
+      #   +until cast_spell?(...)+ prepare and cast again after a cast that went
+      #   off but was not recognised (a stall, or a message that is not listed;
+      #   the reason custom_cast_message exists). A missed late failure line is
+      #   not always harmless: if it arrives while a later cast? is running,
+      #   that call takes it as its own failure, returns false and releases
+      #   mana (and any symbiosis) even if its own cast went off.
+      #   {#cast_spell}, {#cast_spell?} and {#crafting_cast_spell} pass this
+      #   result through ({#cast_spell} returns nil, and so {#cast_spell?}
+      #   returns false, for a ritual spell or after a successful segue).
       def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
