@@ -1080,7 +1080,10 @@ RSpec.describe Lich::Common::Settings do
         committed.pop(timeout: 2)
         writer.kill
         expect(writer.join(2)).to eq(writer)
-        allow(@mock_db).to receive(:get_settings).and_raise(RuntimeError, 'a read went to the database')
+        # The save changed data_version, so the next read re-reads the row; a
+        # locked database makes that re-read fall back to the cached row,
+        # which is there only if the kill did not skip the cache update.
+        allow(@mock_db).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
 
         expect(@mock_db.dump["test_script:GSIV"]).to eq('a' => 1)
         expect(game_read('a')).to eq(1)
