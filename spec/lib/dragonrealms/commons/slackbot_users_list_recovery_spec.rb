@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -52,16 +53,22 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     when :throttle then -> { http_response(429, '', 'Retry-After' => '1') }
     when :throttle_long then -> { http_response(429, '', 'Retry-After' => '30') }
     when :throttle_zero then -> { http_response(429, '', 'Retry-After' => '0') }
-    when :econnrefused then -> { raise Errno::ECONNREFUSED }
+    # An error post does not turn into a SlackBot::Error (a bug, say).
+    when :unexpected then -> { raise TypeError, 'unexpected transport failure' }
     end
   end
 
+  # DB_Store script name of the users cache kept for a token.
+  def users_cache_script(token = 'valid-token')
+    "#{described_class::USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
+  end
+
   def fresh_cache(list = members)
-    Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'members' => list, 'fetched_at' => Time.now.to_i })
+    Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'members' => list, 'fetched_at' => Time.now.to_i })
   end
 
   def cache
-    Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+    Lich::Common::DB_Store.get_data('DR', users_cache_script)
   end
 
   # Moves the monotonic clock forward without running any SlackBot code.
@@ -291,13 +298,13 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       bot = described_class.new
       wait_out_cooldown
       plan['users.list'].clear
-      plan['users.list'] << -> { raise Errno::ECONNREFUSED }
+      plan['users.list'] << failure(:unexpected)
 
       result = nil
       expect { result = bot.direct_message('alice', 'help') }.not_to raise_error
       expect(result).to be_nil
       expect(bot.initialized?).to be false
-      expect(bot.error_message).to include('Connection refused')
+      expect(bot.error_message).to include('unexpected transport failure')
     end
 
     it 'starts the cooldown after an unexpected transport error from users.list' do
@@ -305,7 +312,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       bot = described_class.new
       wait_out_cooldown
       plan['users.list'].clear
-      plan['users.list'] << failure(:econnrefused)
+      plan['users.list'] << failure(:unexpected)
       bot.direct_message('alice', 'help')
       expect(calls['users.list']).to eq(2)
 
@@ -457,17 +464,17 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(result).to be_nil
       expect(elapsed).to be < send_budget
       expect(delta['auth.test']).to eq(2)
-      expect(bot.error_message).to include('Unable to locate a Slack token')
+      expect(bot.error_message).to start_with('Slack unavailable: ')
     end
 
     it 'delivers on the next message after an unexpected error in the token check' do
       bot = unverified_bot
-      plan['auth.test'] << failure(:econnrefused)
+      plan['auth.test'] << failure(:unexpected)
       plan['auth.test'] << ok({})
       plan['users.list'] << users_ok
 
       expect(bot.direct_message('alice', 'help')).to be_nil
-      expect(bot.error_message).to include('Connection refused')
+      expect(bot.error_message).to include('unexpected transport failure')
 
       expect(bot.direct_message('alice', 'help')).to include('ok' => true)
       expect(calls['users.list']).to eq(1)
@@ -667,7 +674,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
 
     it 'keeps its list when the shared cache holds an empty list' do
       bot = described_class.new
-      Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache',
+      Lich::Common::DB_Store.store_data('DR', users_cache_script,
                                         { 'members' => [], 'fetched_at' => Time.now.to_i })
 
       bot.direct_message('bob', 'help')
@@ -716,7 +723,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
     end
 
     it 'ignores a fresh cache entry whose members are missing and fetches from the API' do
-      Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'fetched_at' => Time.now.to_i })
+      Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'fetched_at' => Time.now.to_i })
       plan['users.list'] << users_ok
 
       bot = described_class.new
@@ -743,7 +750,7 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       fill_after.times { plan['users.list'] << failure(:throttle) }
       plan['users.list'].last.then do |throttled|
         plan['users.list'][-1] = lambda do
-          Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache',
+          Lich::Common::DB_Store.store_data('DR', users_cache_script,
                                             { 'members' => members, 'fetched_at' => written_at })
           throttled.call
         end
