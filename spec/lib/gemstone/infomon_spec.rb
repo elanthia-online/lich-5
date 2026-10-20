@@ -14,6 +14,7 @@ require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
 require "attributes/skills"
+require "attributes/enhancive"
 require "gemstone/currency"
 require "gemstone/infomon/status"
 require "gemstone/experience"
@@ -818,6 +819,77 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
         }
       }
       scripts.map(&:value)
+    end
+  end
+
+  context "error mid-section" do
+    let(:parser) { Lich::Gemstone::Infomon::Parser }
+    let(:state) { Lich::Gemstone::Infomon::Parser::State }
+
+    around(:each) do |example|
+      state.set(state::Ready)
+      example.run
+    ensure
+      state.set(state::Ready)
+      Lich::Gemstone::Infomon.mutex_unlock
+    end
+
+    it "does not take the DB lock when an enhancive header arrives in a stuck state" do
+      parser.parse("Skill goals updated!") # state is now Goals, with no "goals ended" line to come
+      parser.parse("Stats:") # State.set(EnhanciveStats) raises from Goals
+      parser.parse("      Strength (STR): 12/40")
+      parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "keeps collecting a skills section after a non-terminator line raises" do
+      parser.parse(" Testing (at level 12), your current skill bonuses and ranks (including all modifiers) are:")
+      parser.parse("  Two Weapon Combat..................|  12            2")
+      parser.parse("Skill goals updated!")
+      parser.parse("Skill goals updated!") # raises: state is already Goals
+      parser.parse("  Armor Use..........................|  40            8")
+      parser.parse("Training Points: 100 Phy 50 Mnt")
+      Lich::Gemstone::Infomon.flush
+
+      expect(Lich::Gemstone::Infomon.get("skill.two_weapon_combat")).to eq(2)
+      expect(Lich::Gemstone::Infomon.get("skill.armor_use")).to eq(8)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "keeps values parsed before a non-terminator raise in an enhancive section" do
+      parser.parse("Stats:")
+      parser.parse("      Strength (STR): 12/40")
+      parser.parse("Skill goals updated!") # raises: State.set(Goals) from an enhancive state
+      parser.parse("Skills:")
+      parser.parse("                Edged Weapons Ranks:  7/50")
+      parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+      Lich::Gemstone::Infomon.flush
+
+      expect(Lich::Gemstone::Enhancive.strength.value).to eq(12)
+      expect(Lich::Gemstone::Enhancive.edged_weapons.ranks).to eq(7)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "releases the DB lock when a section terminator raises" do
+      Lich::Gemstone::Infomon::Parser.parse(" Testing (at level 12), your current skill bonuses and ranks (including all modifiers) are:")
+      expect(Lich::Gemstone::Infomon.mutex).to be_owned
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("  Two Weapon Combat..................|  12            2")
+      Lich::Gemstone::Infomon::Parser.parse("Training Points: 100 Phy 50 Mnt")
+
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+      reader = Thread.new { Lich::Gemstone::Infomon.get("uncached.key") }
+      expect(reader.join(2)).not_to be_nil, "Infomon.get blocked on a mutex left held by the parser"
+    end
+
+    it "resets enhancive state so the next enhancive header starts fresh" do
+      Lich::Gemstone::Infomon::Parser.parse("Stats:")
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+
+      expect(Lich::Gemstone::Infomon::Parser::State.get).to eq(Lich::Gemstone::Infomon::Parser::State::Ready)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
     end
   end
 
