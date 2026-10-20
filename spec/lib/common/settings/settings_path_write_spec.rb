@@ -304,6 +304,23 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(navigator_path).to be_empty
   end
 
+  it "refuses an Array indexed by a negative position on the way, tells the user, and clears the path" do
+    their_write(list: [{ a: 1 }], empty: [])
+
+    results = []
+    expect do
+      results << write_under([:list, -1], :k, 1) # would land in the last element
+      results << write_under([:empty, -1], :k, 1) # would raise IndexError
+    end.not_to raise_error
+
+    expect(results).to eq([nil, nil])
+    expect(stored).to eq(list: [{ a: 1 }], empty: [])
+    expect(settings.to_hash).to eq(list: [{ a: 1 }], empty: [])
+    expect(@errors).to include(a_string_including("not saved", "[:list, -1] does not lead to a container"),
+                               a_string_including("not saved", "[:empty, -1] does not lead to a container"))
+    expect(navigator_path).to be_empty
+  end
+
   it "refuses an Array indexed by a non-Integer on the way, creating nothing" do
     settings[:list] = [{ a: 1 }]
 
@@ -374,6 +391,26 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     rows = SQLite3::Database.new(db_file).then { |db| db.get_first_value('SELECT COUNT(*) FROM script_auto_settings').tap { db.close } }
     expect(rows).to eq(0)
     expect(navigator_path).to be_empty
+  end
+
+  it "leaves the cache holding the stored row when the writing thread is killed right after the store" do
+    settings[:n] = { a: 1 }
+    expect(settings.to_hash).to eq(n: { a: 1 }) # this session caches the row
+    # Script#kill is Thread#kill; here it lands as soon as the adapter returns.
+    allow(@adapter).to receive(:update_settings).and_wrap_original do |original, *args, **opts, &block|
+      original.call(*args, **opts, &block)
+      Thread.current.kill
+    end
+
+    writer = Thread.new { write_under([:n], :k, 1) }
+    expect(writer.join(5)).to eq(writer)
+    # Had the kill skipped the cache update, the cached row would be older
+    # than the database, so the next read would re-read it; a locked database
+    # makes that re-read fall back to the cached row without the key.
+    allow(@adapter).to receive(:get_settings).and_raise(Sequel::DatabaseError, 'database is locked')
+
+    expect(stored).to eq(n: { a: 1, k: 1 })
+    expect(settings.to_hash).to eq(n: { a: 1, k: 1 })
   end
 
   it "clears the path when the write raises" do
