@@ -13,11 +13,10 @@
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
   Lich will not start and cannot run the revert again. The snapshot itself
   is untouched: copying its lib/, the core scripts in its scripts/ and its
-  lich.rbw back by hand, or running the
-  revert from another session of this installation that is still running,
-  restores it. On Windows each rename of the swap that Windows refuses
-  keeps this window open for up to about 3 seconds while it is retried;
-  Lich says so while it waits.
+  lich.rbw back by hand, or running the revert from another session of this
+  installation that is still running, restores it. On Windows each rename
+  of the swap that Windows refuses keeps this window open for up to about 3
+  seconds while it is retried; Lich says so while it waits.
 =end
 
 require 'tmpdir'

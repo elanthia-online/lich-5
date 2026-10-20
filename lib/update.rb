@@ -105,6 +105,8 @@ module Lich
           release_installer.announce
         when /^--branch=(.+)$/
           branch_installer.download_branch_update($1)
+        when /^--(?:beta|test)\s+(?:--)?confirm\s*$/
+          release_installer.confirm_betatest
         when /^--(?:beta|test)(?: --(?:(script|library|data))=(.+))?\b/
           release_installer.prep_betatest($1&.dup, $2&.dup)
         when /^(?:--help|-h)\b/
@@ -202,6 +204,11 @@ module Lich
     #{$clean_lich_char}lich5-update --track=owner/repo:script.lic       Track a script from custom repo
     #{$clean_lich_char}lich5-update --sync=owner/repo                   Sync a custom repo
     Custom scripts install to #{$clean_lich_char}scripts/custom/<owner-repo>/ (name collisions rejected)
+
+  [Beta testing]
+    #{$clean_lich_char}lich5-update --beta                              Show the beta notice; confirm within #{ReleaseInstaller::BETA_CONFIRM_WINDOW} seconds
+    #{$clean_lich_char}lich5-update --beta --confirm                    Install the latest Lich beta after reading the notice
+    #{$clean_lich_char}lich5-update --beta --library=<name>             Update one library file from the beta channel
 
   [Individual file updates]
     #{$clean_lich_char}lich5-update --script=<name>                     Update script (auto-detects repo)

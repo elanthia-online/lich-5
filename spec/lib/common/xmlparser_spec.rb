@@ -813,6 +813,13 @@ RSpec.describe Lich::Common::XMLParser do
       expect(parser.previous_nav_rm).to eq(230007)
     end
 
+    it 'counts every arrival in nav_count, with or without a UID' do
+      expect(parser.nav_count).to eq(0)
+      feed(parser, "<nav rm='230007'/>")
+      feed(parser, "<nav/>")
+      expect(parser.nav_count).to eq(2)
+    end
+
     it 'sets room_id to 0 for a no-uid room (a bare <nav/> with no rm attribute)' do
       feed(parser, "<nav rm='230008'/>")
       feed(parser, "<nav/>")

@@ -144,11 +144,12 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
     end
   end
 
-  # The version lines below are illustrative: these branches discard whatever
-  # the front end sends, and the log echoes it.
+  # These branches discard whatever the front end sends, and the log echoes it.
+  # The version lines are as captured live (see the replays below); Avalon
+  # introduces itself as Wizard.
   {
-    'Wizard'    => ['wizard', "/FE:WIZARD /VERSION:1.0.1.22 /P:WIN_UNKNOWN\r\n", "GOOD\r\n"],
-    'Avalon'    => ['avalon', "/FE:AVALON /VERSION:4.3 /P:MAC\r\n", "GOOD\r\n\r\n"],
+    'Wizard'    => ['wizard', "/FE:WIZARD /VERSION:2.04 /P:WIN32\r\n", "GOOD\r\n"],
+    'Avalon'    => ['avalon', "/FE:WIZARD /VERSION:2.02 /P:WIN32\r\n", "GOOD\r\n\r\n"],
     'Frostbite' => ['frostbite', "<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n", '']
   }.each do |name, (frontend, version_line, rest)|
     context "with #{name}" do
@@ -158,7 +159,7 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
         expect(Game.sent[1]).to eq(lich_string)
         expect(logged).to eq([
                                "info: client string from front end: #{version_line.chomp}",
-                               "info: client string sent to game: #{lich_string}"
+                               "info: client string sent to game: #{lich_string} (Lich's, in place of the front end's)"
                              ])
       end
 
@@ -237,6 +238,64 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
       expect(Game.sent.last).to eq(key_line)
       expect(logged.size).to eq(2)
       expect(logged.join("\n")).not_to include(key)
+    end
+  end
+
+  # Live session logs (spec/fixtures/client_string_log, character names
+  # anonymised). Each capture's front-end line is replayed through its real
+  # login path, as BINARY as a socket reads it; the log must echo it as the
+  # live session did, and Lich must send what it sent then. The captures
+  # predate the note on the Wizard, Avalon and Frostbite paths, so the note is checked
+  # on its own: every captured front end got Lich's string.
+  context 'replaying live session logs' do
+    fixture_dir = File.expand_path('../../fixtures/client_string_log', __dir__)
+    captured_lich_string = '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML' # CLIENT_STRING when captured
+    sent_line = /\Ainfo: client string sent to game: (?<string>.*?)(?: \((?<note>[^()]*)\))?\z/
+
+    # fixture => [$frontend, login path, what the front end sends after its version line]
+    # Warlock and Wrayth run as stormfront; no front end but Saga has its own
+    # replacement string, so the id does not change what is sent.
+    {
+      'wizard_gs.log'    => ['wizard', :run_gsl_frostbite, "GOOD\r\n"],
+      'avalon_gs.log'    => ['avalon', :run_gsl_frostbite, "GOOD\r\n\r\n"],
+      'frostbite_dr.log' => ['frostbite', :run_gsl_frostbite, ''],
+      'genie_dr.log'     => ['genie', :run_forward, ''],
+      'warlock_dr.log'   => ['stormfront', :run_forward, ''],
+      'wrayth_gs.log'    => ['stormfront', :run_forward, '']
+    }.each do |fixture, (frontend, login_path, rest)|
+      context "with #{fixture}" do
+        captured = File.readlines(File.join(fixture_dir, fixture), chomp: true)
+                       .map { |line| line.sub(/\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d: /, '') }
+                       .grep(/\Ainfo: client string /)
+        raise "#{fixture}: expected a from-front-end and a sent-to-game line, got #{captured.inspect}" unless captured.size == 2
+
+        from_frontend = captured.first
+        sent = sent_line.match(captured.last)
+
+        before do
+          client(frontend, "#{key_line}#{from_frontend.delete_prefix('info: client string from front end: ')}\r\n#{rest}".b)
+          harness.send(login_path)
+        end
+
+        it 'logs the front end string in full, as the live session did' do
+          expect(logged.first).to eq(from_frontend)
+        end
+
+        it 'sends the game the client string the live session sent, and logs it' do
+          expected = sent[:string].sub(captured_lich_string, lich_string)
+          expect(Game.sent[1].chomp).to eq(expected)
+          expect(sent_line.match(logged.last)[:string]).to eq(expected)
+        end
+
+        it "notes that Lich's string replaced the front end's" do
+          expect(sent_line.match(logged.last)[:note]).to eq("Lich's, in place of the front end's")
+        end
+
+        it 'sends the key to the game but never logs it' do
+          expect(Game.sent.first).to include(key)
+          expect(logged.join("\n")).not_to include(key)
+        end
+      end
     end
   end
 end
