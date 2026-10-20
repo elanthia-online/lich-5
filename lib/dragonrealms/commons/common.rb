@@ -358,13 +358,18 @@ module Lich
       end
 
       def collect(item, practice = true)
-        practicing = "practice" if practice
+        command = practice ? "collect #{item} practice" : "collect #{item}"
 
-        case bput("collect #{item} #{practicing}", COLLECT_MESSAGES)
+        case bput(command, COLLECT_MESSAGES)
         when 'The room is too cluttered'
-          return unless kick_pile?
+          # Giving up still waits out any roundtime, e.g. from an earlier kick.
+          unless kick_pile?
+            waitrt?
+            return
+          end
 
-          collect(item)
+          # The retry waits out its own roundtime.
+          return collect(item, practice)
         end
         waitrt?
       end

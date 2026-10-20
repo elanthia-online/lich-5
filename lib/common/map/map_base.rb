@@ -765,23 +765,54 @@ module Lich
           list.sort_by(&:id).to_json(args)
         end
 
-        # Save map as JSON file
+        # Save the map as a JSON file.
+        #
+        # Nothing on disk is touched until the map has serialized, and every file
+        # is published by renaming a fully written temp file over it, so a
+        # failure part way through leaves the existing file as it was. Replacing
+        # an existing file first copies it byte for byte to "<filename>.bak". If
+        # that backup cannot be made the save is abandoned with an error rather
+        # than overwriting the only copy; callers such as a mapdb upload ignore
+        # the return value, so failing quietly would let them act on a stale map.
+        #
+        # @param filename [String, nil] destination; nil writes a new
+        #   map-<epoch>.json in the game's data directory
+        # @return [void]
+        # @raise [StandardError] when serializing, backing up or writing fails.
+        #   The existing file is always left unchanged. A failed serialization or
+        #   backup also leaves any earlier backup unchanged; a failed write comes
+        #   after the backup step, so "<filename>.bak" then holds a copy of the
+        #   existing file. A refused, backup or write failure keeps its class
+        #   (e.g. Errno::EACCES), and its message starts with what failed and
+        #   what was left on disk, e.g. "could not back up <filename>; map not
+        #   saved: ...".
         def save_json(filename = nil)
           filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
-          if File.exist?(filename)
+          data = to_json
+          existed = File.exist?(filename)
+          # The rename below would replace a read-only file that the in-place
+          # write refused to open, so keep that refusal explicitly.
+          if existed && !File.writable?(filename)
+            raise map_save_error(Errno::EACCES.new(filename), "could not write #{filename}; existing file left unchanged")
+          end
+          if existed
             respond 'File exists!  Backing it up before proceeding...'
             begin
-              File.open(filename, 'rb') do |infile|
-                File.open("#{filename}.bak", 'wb:UTF-8') do |outfile|
-                  outfile.write(infile.read)
-                end
-              end
+              backup = "#{filename}.bak"
+              # Same refusal for a read-only backup, which the rename would replace.
+              raise Errno::EACCES, backup if File.exist?(backup) && !File.writable?(backup)
+
+              publish_map_file(backup, mode_of: filename) { |io| IO.copy_stream(filename, io) }
             rescue StandardError => e
-              respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}"
-              Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
+              raise map_save_error(e, "could not back up #{filename}; map not saved")
             end
           end
-          File.open(filename, 'wb:UTF-8') { |file| file.write(to_json) }
+          begin
+            publish_map_file(filename, mode_of: filename) { |io| io.write(data) }
+          rescue StandardError => e
+            left = existed ? 'existing file left unchanged' : 'no file created'
+            raise map_save_error(e, "could not write #{filename}; #{left}")
+          end
           respond "#{filename} saved"
           # Reload if the map index appears corrupted: the last entry's id should
           # index back to itself. Nothing to check when the map holds no rooms,
@@ -791,6 +822,65 @@ module Lich
         end
 
         alias_method :save, :save_json
+
+        # Write a file through a temp file in the same directory, renamed over
+        # the destination only once the block has finished and the bytes are
+        # flushed to disk. The temp name is unique to this process and thread,
+        # and ends in .tmp so a leftover never matches the map-<epoch>.json
+        # pattern that loading and uploading look for. The suffix makes the temp
+        # name about 15 bytes longer than the destination's, so a name within
+        # that of the system's limit (255 bytes on most) raises ENAMETOOLONG
+        # with the destination unchanged. Writes are binary, so bytes are never
+        # transcoded. A destination that is a symlink keeps the link and has the
+        # file it points to replaced (or created, when the link dangles), as the
+        # in-place write this replaces did. File.realdirpath follows a dangling
+        # link the way the system does (a relative target from the link's
+        # directory, ".." from a directory's real location) and raises ELOOP on
+        # a cycle. Unlike the system it has no hop limit, so an acyclic chain
+        # longer than the system allows still resolves to its last name.
+        # @param path [String] destination
+        # @param mode_of [String] existing file whose permissions the result
+        #   takes (the map file for both the map and its backup)
+        # @yieldparam io [File] the open temp file
+        # @return [void]
+        def publish_map_file(path, mode_of:)
+          path = File.realdirpath(path) if File.symlink?(path)
+          tmp = "#{path}.#{Process.pid}.#{Thread.current.object_id}.tmp"
+          File.open(tmp, 'wb') do |io|
+            yield io
+            io.flush
+            io.fsync
+          end
+          File.chmod(File.stat(mode_of).mode & 0o7777, tmp) if File.exist?(mode_of)
+          File.rename(tmp, path)
+        ensure
+          remove_map_temp_file(tmp) if tmp
+        end
+
+        # Best-effort cleanup of a temp file left by a failed publish. It runs
+        # while that failure is propagating, so it must never replace it.
+        # @param tmp [String]
+        # @return [void]
+        def remove_map_temp_file(tmp)
+          File.delete(tmp) if File.exist?(tmp)
+        rescue SystemCallError
+          nil
+        end
+
+        # The error to raise for a failed save: a copy of +error+, keeping its
+        # class, errno and backtrace, whose message also says what failed and
+        # what was left on disk. save_json reports nothing itself; whatever
+        # runs it (the ;e runner or a script's error handler) reports the
+        # raised error once, with its backtrace, and a caller that rescues it
+        # still gets the whole story from the message.
+        # @param error [StandardError]
+        # @param context [String] what failed and what was left on disk
+        # @return [StandardError]
+        def map_save_error(error, context)
+          error.exception("#{context}: #{error.message}")
+        end
+
+        private :publish_map_file, :remove_map_temp_file, :map_save_error
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets

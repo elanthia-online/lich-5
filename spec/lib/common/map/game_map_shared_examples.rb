@@ -1415,4 +1415,383 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(map_class).to have_received(:respond).with(/no map database found/)
     end
   end
+
+  # save_json used to truncate the destination before serializing, copy the
+  # backup with a binary read and a UTF-8 write (which raises on any non-ASCII
+  # byte, after truncating the old .bak), and carry on overwriting when that
+  # backup failed. These run on real files in a temp directory.
+  describe 'saving' do
+    let(:target) { File.join(map_dir, 'saved.json') }
+    let(:backup) { "#{target}.bak" }
+    # rubocop:disable Custom/AsciiOnlySource -- Intentional non-ASCII fixture; the old backup broke on any byte above 0x7F.
+    let(:non_ascii_title) { '[Café Row]' }
+    # rubocop:enable Custom/AsciiOnlySource
+    # A previous save holding non-ASCII text; JSON.generate emits it raw.
+    let(:existing_bytes) { JSON.generate([{ 'id' => 1, 'title' => [non_ascii_title] }]).b }
+
+    before do
+      FileUtils.mkdir_p(map_dir)
+      allow(map_class).to receive(:respond)
+      shared_room(1, title: '[Market Row]', description: 'Stalls line the muddy street.')
+      shared_room(2, title: '[Quiet Lane]', description: 'Marble counters gleam here.')
+    end
+
+    def saved_ids(path)
+      JSON.parse(File.read(path)).map { |room| room['id'] }
+    end
+
+    def stray_files
+      Dir.children(map_dir) - [File.basename(target), File.basename(backup)]
+    end
+
+    it 'writes the serialized map to a new file' do
+      map_class.save_json(target)
+
+      expect(saved_ids(target)).to eq([1, 2])
+      expect(File.exist?(backup)).to be false
+      expect(stray_files).to be_empty
+    end
+
+    it 'backs up an existing non-ASCII file byte for byte before replacing it' do
+      File.binwrite(target, existing_bytes)
+
+      map_class.save_json(target)
+
+      expect(File.binread(backup)).to eq(existing_bytes)
+      expect(saved_ids(target)).to eq([1, 2])
+      expect(stray_files).to be_empty
+    end
+
+    it 'replaces an older backup with the file it is about to overwrite' do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'older backup')
+
+      map_class.save_json(target)
+
+      expect(File.binread(backup)).to eq(existing_bytes)
+    end
+
+    it 'round-trips non-ASCII room text through save and load' do
+      map_class[1].title = [non_ascii_title]
+      map_class.save_json(target)
+      map_class.class_variable_get(:@@list).clear
+      map_class.class_variable_set(:@@loaded, false)
+
+      expect(map_class.load(target)).to be true
+      expect(map_class[1].title).to eq([non_ascii_title])
+    end
+
+    it 'saves to a new map-<epoch>.json that the loader picks up when given no name' do
+      map_class.save_json
+
+      files = map_class.send(:json_map_files)
+      expect(files.size).to eq(1)
+      expect(File.basename(files.first)).to match(/\Amap-\d+\.json\z/)
+      expect(saved_ids(files.first)).to eq([1, 2])
+    end
+
+    context 'when the map cannot be serialized' do
+      before do
+        # JSON refuses NaN, so Room#to_json raises part way through the list.
+        map_class[2].timeto['1'] = Float::NAN
+      end
+
+      it 'raises and leaves an existing file and its backup untouched' do
+        File.binwrite(target, existing_bytes)
+        File.binwrite(backup, 'older backup')
+
+        expect { map_class.save_json(target) }.to raise_error(JSON::GeneratorError)
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.binread(backup)).to eq('older backup')
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises without creating an empty map that would shadow older ones' do
+        expect { map_class.save_json }.to raise_error(JSON::GeneratorError)
+
+        expect(map_class.send(:json_map_files)).to be_empty
+        expect(Dir.children(map_dir)).to be_empty
+      end
+    end
+
+    context 'when the backup cannot be made' do
+      before do
+        File.binwrite(target, existing_bytes)
+        # A directory where the backup belongs: neither writing nor renaming
+        # a file onto it can succeed.
+        FileUtils.mkdir_p(File.join(backup, 'occupied'))
+      end
+
+      it 'raises and leaves the existing file untouched' do
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError)
+
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.directory?(backup)).to be true
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises an error saying the map was not saved' do
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError, /\Acould not back up .*; map not saved: /)
+
+        expect(map_class).not_to have_received(:respond).with(/saved\z/)
+      end
+
+      # Whatever runs the save (the ;e runner, a script's error handler)
+      # reports the raised error; reporting it here as well showed it twice.
+      it 'leaves reporting the error to the caller' do
+        allow(Lich).to receive(:log)
+
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError)
+
+        expect(map_class).not_to have_received(:respond).with(/error/i)
+        expect(Lich).not_to have_received(:log)
+      end
+    end
+
+    context 'when the copy into the backup fails part way' do
+      before do
+        File.binwrite(target, existing_bytes)
+        File.binwrite(backup, 'older backup')
+        allow(IO).to receive(:copy_stream).and_wrap_original do |original, source, destination|
+          destination.write('partial')
+          raise Errno::ENOSPC if source == target
+
+          original.call(source, destination)
+        end
+      end
+
+      it 'keeps the older backup and the existing file intact' do
+        expect { map_class.save_json(target) }.to raise_error(Errno::ENOSPC)
+
+        expect(File.binread(backup)).to eq('older backup')
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises the original error even when the temp file cannot be removed' do
+        allow(File).to receive(:delete).and_raise(Errno::EACCES)
+
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::ENOSPC, /\Acould not back up .*; map not saved: No space left/)
+
+        expect(File.binread(backup)).to eq('older backup')
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(stray_files).to contain_exactly(match(/\Asaved\.json\.bak\.\d+\.\d+\.tmp\z/))
+      end
+    end
+
+    context 'when publishing the new file fails' do
+      before do
+        File.binwrite(target, existing_bytes)
+        allow(File).to receive(:rename).and_call_original
+        allow(File).to receive(:rename).with(anything, target).and_raise(Errno::EACCES)
+      end
+
+      it 'raises, saying so, and leaves the existing file and no temp file behind' do
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::EACCES, /\Acould not write .*; existing file left unchanged: Permission denied/)
+
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.binread(backup)).to eq(existing_bytes)
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises a copy of the original error, keeping its errno, backtrace and cause' do
+        error = nil
+        begin
+          map_class.save_json(target)
+        rescue Errno::EACCES => e
+          error = e
+        end
+
+        expect(error.errno).to eq(Errno::EACCES::Errno)
+        expect(error.backtrace).not_to be_empty
+        expect(error.cause).to be_a(Errno::EACCES)
+        expect(error.cause.message).to eq(Errno::EACCES.new.message)
+      end
+    end
+
+    it 'writes through a symlinked map file, keeping the link', unless: Gem.win_platform? do
+      real = File.join(map_dir, 'real.json')
+      File.binwrite(real, existing_bytes)
+      File.symlink(real, target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(real)).to eq([1, 2])
+      expect(File.binread(backup)).to eq(existing_bytes)
+      expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json saved.json.bak])
+    end
+
+    it 'says no file was created when writing a new file fails' do
+      missing = File.join(map_dir, 'nope', 'new.json')
+
+      expect { map_class.save_json(missing) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(missing)}; no file created: /)
+    end
+
+    it 'creates the file a dangling symlink points to, keeping the link', unless: Gem.win_platform? do
+      File.symlink('gone.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'gone.json'))).to eq([1, 2])
+      expect(Dir.children(map_dir).sort).to eq(%w[gone.json saved.json])
+    end
+
+    it 'follows a chain of dangling symlinks relative to each link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'sub'))
+      File.symlink('sub/hop.json', target)
+      File.symlink('../final.json', File.join(map_dir, 'sub', 'hop.json'))
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'final.json'))).to eq([1, 2])
+    end
+
+    it 'resolves .. after a symlinked directory physically when following a dangling link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'deep', 'dir'))
+      File.symlink('deep/dir', File.join(map_dir, 'sub'))
+      File.symlink('sub/../climbed.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'deep', 'climbed.json'))).to eq([1, 2])
+      expect(File.exist?(File.join(map_dir, 'climbed.json'))).to be false
+    end
+
+    it 'follows a dangling link with an absolute target', unless: Gem.win_platform? do
+      absolute = File.join(File.realpath(map_dir), 'abs.json')
+      File.symlink(absolute, target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(absolute)).to eq([1, 2])
+    end
+
+    it 'raises on a symlink cycle without leaving a temp file', unless: Gem.win_platform? do
+      other = File.join(map_dir, 'other.json')
+      File.symlink(other, target)
+      File.symlink(target, other)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::ELOOP)
+
+      expect(Dir.children(map_dir).sort).to eq(%w[other.json saved.json])
+    end
+
+    it 'raises on a dangling symlink into a missing directory, keeping the link', unless: Gem.win_platform? do
+      File.symlink('nope/new.json', target)
+
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(target)}; no file created: /)
+
+      expect(File.symlink?(target)).to be true
+      expect(File.readlink(target)).to eq('nope/new.json')
+      expect(Dir.children(map_dir).sort).to eq(%w[saved.json])
+    end
+
+    # Root can write any file, so the refusal (like the in-place write before
+    # it) does not apply there; Process.uid is also 0 on Windows.
+    it 'refuses to replace a read-only file, leaving it and its backup untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'older backup')
+      File.chmod(0o444, target)
+
+      error = nil
+      begin
+        map_class.save_json(target)
+      rescue Errno::EACCES => e
+        error = e
+      end
+
+      expect(error.message).to match(/\Acould not write .*; existing file left unchanged: Permission denied/)
+      # Raised, not just built, so whoever reports it has a backtrace to log.
+      expect(error.backtrace).not_to be_empty
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.stat(target).mode & 0o777).to eq(0o444)
+      expect(File.binread(backup)).to eq('older backup')
+      expect(stray_files).to be_empty
+      expect(map_class).not_to have_received(:respond).with(/Backing it up/)
+    end
+
+    it 'refuses to replace a read-only file reached through a symlink', unless: Gem.win_platform? || Process.uid.zero? do
+      real = File.join(map_dir, 'real.json')
+      File.binwrite(real, existing_bytes)
+      File.chmod(0o444, real)
+      File.symlink(real, target)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(real)).to eq(existing_bytes)
+      expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json])
+    end
+
+    it 'refuses to replace a read-only backup, leaving it and the file untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'protected backup')
+      File.chmod(0o444, backup)
+
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::EACCES, /\Acould not back up .*; map not saved: Permission denied/)
+
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.binread(backup)).to eq('protected backup')
+      expect(File.stat(backup).mode & 0o777).to eq(0o444)
+      expect(stray_files).to be_empty
+    end
+
+    it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do
+      File.binwrite(target, existing_bytes)
+      File.chmod(0o640, target)
+
+      map_class.save_json(target)
+
+      expect(File.stat(target).mode & 0o777).to eq(0o640)
+      expect(File.stat(backup).mode & 0o777).to eq(0o640)
+    end
+
+    # The mode and the bytes must both be in place before the rename makes a
+    # temp file visible under the real name. Only events on each temp file
+    # are recorded, so other File.chmod or File.rename calls do not matter.
+    it 'flushes each temp file to disk and sets its mode before renaming it into place' do
+      File.binwrite(target, existing_bytes)
+      events = []
+      allow(File).to receive(:open).and_wrap_original do |original, path, *args, **kwargs, &block|
+        next original.call(path, *args, **kwargs, &block) unless block && path.to_s.end_with?('.tmp')
+
+        original.call(path, *args, **kwargs) do |io|
+          allow(io).to receive(:fsync).and_wrap_original do |fsync|
+            events << [:fsync, path]
+            fsync.call
+          end
+          block.call(io)
+        end
+      end
+      allow(File).to receive(:chmod).and_wrap_original do |original, mode, *paths|
+        paths.each { |path| events << [:chmod, path] }
+        original.call(mode, *paths)
+      end
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        events << [:rename, from, to]
+        original.call(from, to)
+      end
+
+      map_class.save_json(target)
+
+      [backup, target].each do |destination|
+        rename = events.index { |event| event[0] == :rename && event[2] == destination }
+        expect(rename).not_to be_nil
+        tmp = events[rename][1]
+        expect(events.map(&:first).values_at(*events.each_index.select { |i| events[i][1] == tmp }))
+          .to eq(%i[fsync chmod rename])
+      end
+    end
+  end
 end
