@@ -43,6 +43,20 @@ module Lich
         @storage[key] = deep_copy(settings)
       end
 
+      # Read-modify-write of one row, mirroring DatabaseAdapter#update_settings:
+      # the block gets the stored row and returns the row to store, or nil to
+      # store nothing. Returns the block's own row object (not a copy), as the
+      # real adapter does, so a caller that forgets to copy a value is caught.
+      # on_stored is called with the stored row, as the real adapter does.
+      def update_settings(script_name, scope = ":", on_stored: nil)
+        updated = yield get_settings(script_name, scope)
+        return nil unless updated.is_a?(Hash)
+
+        save_settings(script_name, updated, scope)
+        on_stored&.call(updated)
+        updated
+      end
+
       # Clear all stored settings
       # This is useful for resetting the state between tests
       def clear
