@@ -704,6 +704,7 @@ module Lich
 
         # The script whose GameSettings row holds the custom targets go2 reads.
         CUSTOM_TARGETS_SCRIPT = 'go2'
+        private_constant :CUSTOM_TARGETS_SCRIPT
 
         # Merge targets into go2's custom targets, keeping go2's own and letting a
         # target of the same name replace go2's. GameSettings['custom targets']
