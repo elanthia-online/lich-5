@@ -304,6 +304,63 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(navigator_path).to be_empty
   end
 
+  # store_if_unchanged already makes a losing writer retry, so the cache lock
+  # isn't what keeps a key in the stored row here. It orders the cache
+  # updates: without it, another thread's store and cache update could land
+  # between this write's store and its on_stored, which would then put the
+  # older row over the newer one, and reads would be served it whenever the
+  # version can't be read.
+  it "keeps another thread's newer row in the cache when its write starts between this write's store and its cache update" do
+    their_write(x: {}, top: 0)
+    settings.to_hash # cache the row
+    writer = nil
+    paused = Queue.new
+    go = Queue.new
+    allow(@adapter).to receive(:update_settings).and_wrap_original do |original, *args, on_stored: nil, **opts, &block|
+      if Thread.current.equal?(writer)
+        inner = on_stored
+        on_stored = lambda do |row|
+          paused << true
+          go.pop
+          inner.call(row)
+        end
+      end
+      original.call(*args, on_stored: on_stored, **opts, &block)
+    end
+
+    writer = Thread.new { write_under([:x], :k, 1) }
+    other = nil
+    begin
+      expect(paused.pop(timeout: 5)).to be(true) # stored, cache not yet updated
+      other = Thread.new { settings[:t] = 2 }
+      # The other write either waits on the cache lock the path write holds,
+      # or, with no lock, stores and caches its newer row before the path
+      # write's cache update.
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until !other.alive? || (other.status == 'sleep' && other.backtrace.to_a.any? { |frame| frame.include?('with_cache_lock') })
+        raise 'the other write neither finished nor waited on the cache lock' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+        sleep 0.005
+      end
+    ensure
+      go << true
+      [writer, other].compact.each { |t| t.join(10) }
+    end
+
+    expect(stored).to eq(x: { k: 1 }, top: 0, t: 2)
+    # While another session holds the lock, the version can't be read and
+    # reads answer from the cache, which must hold the newer row.
+    locker = SQLite3::Database.new(db_file)
+    begin
+      locker.execute('BEGIN EXCLUSIVE')
+      expect(@adapter.data_version).to be_nil
+      expect(settings.to_hash).to eq(x: { k: 1 }, top: 0, t: 2)
+    ensure
+      locker.rollback if locker.transaction_active?
+      locker.close
+    end
+  end
+
   it "refuses an Array indexed by a negative position on the way, tells the user, and clears the path" do
     their_write(list: [{ a: 1 }], empty: [])
 

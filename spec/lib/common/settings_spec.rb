@@ -874,7 +874,10 @@ RSpec.describe Lich::Common::Settings do
       # Settings[k] = v with a navigation path left over (Settings.set_path
       # reaches the shared navigator through method_missing) changes the row
       # it read. A top-level write another thread makes after that read must
-      # not be erased.
+      # not be erased. The mock's update_settings has no compare-and-swap, so
+      # here only the cache lock keeps the key; with the real adapter,
+      # store_if_unchanged does, and settings_path_write_spec.rb pins what the
+      # lock does there (the order of the cache updates).
       it "does not let a leftover-path Settings write erase a top-level key stored after its read" do
         settings[:k0] = 0
         navigated = Queue.new
