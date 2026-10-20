@@ -84,7 +84,8 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
 
     it 'WAIT_RESPONSE_PATTERN matches the singular, appended and tagged forms the game sends' do
-      ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>'].each do |line|
+      # 'sec.' is newly accepted here (dothis/move already allowed it before the pattern was shared)
+      ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>', '...wait 5 sec.'].each do |line|
         expect(line).to match(described_class::WAIT_RESPONSE_PATTERN)
       end
     end
