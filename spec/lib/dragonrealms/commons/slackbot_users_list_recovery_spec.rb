@@ -445,9 +445,10 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       allow(LNet).to receive(:server).and_return(double('server', closed?: false))
       allow(Script).to receive(:running).and_return([lnet])
       allow(Script).to receive(:hidden).and_return([])
-      allow_any_instance_of(described_class).to receive(:pause)
-      allow_any_instance_of(described_class).to receive(:get)
+      caller_script = double('calling script', name: 'caller', want_downstream: true, want_downstream_xml: false)
+      allow(caller_script).to receive(:gets)
         .and_return('[Private]-X:Quilsilgas: "slack_token: found-token"')
+      allow(Script).to receive(:current).and_return(caller_script)
       plan['auth.test'] << failure(:ok_false)   # the stored token
       plan['auth.test'] << failure(:econnreset) # the token found over LNet
 

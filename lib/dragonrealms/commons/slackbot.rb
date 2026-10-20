@@ -257,11 +257,6 @@ module Lich
         members.is_a?(Array) && !members.empty?
       end
 
-      # @return [Float] monotonic clock reading in seconds
-      def monotonic_now
-        Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      end
-
       # @param budget [Numeric, nil] seconds from now
       # @return [Float, nil] monotonic deadline, or nil when there is no budget
       def deadline_for(budget)
