@@ -132,5 +132,25 @@ RSpec.describe Lich::Common::Vars do
       autosave.call
       expect(described_class).to have_received(:respond).twice
     end
+
+    it 'shows a repeat of the same error again after an explicit Vars.save succeeds' do
+      allow(described_class).to receive(:respond)
+      full = true
+      allow(db).to receive(:execute).and_wrap_original do |orig, *args|
+        raise SQLite3::FullException, 'database or disk is full' if full
+
+        orig.call(*args)
+      end
+
+      described_class['key'] = 'a'
+      autosave.call
+      full = false
+      described_class.save
+      described_class['key'] = 'b'
+      full = true
+      autosave.call
+
+      expect(described_class).to have_received(:respond).twice
+    end
   end
 end

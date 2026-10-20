@@ -90,6 +90,9 @@ module Lich
                 )
                 # Only mark clean once the write lands, so a failed save is retried next time
                 @@md5 = current_md5
+                # Any successful write (autosave or an explicit Vars.save) re-arms the
+                # autosave's one-time error message
+                @@autosave_error = nil
               rescue SQLite3::BusyException
                 sleep 0.1
                 retry
@@ -109,8 +112,9 @@ module Lich
           @@autosave_error = nil
         rescue StandardError => e
           Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
-          respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}" unless e.message == @@autosave_error
-          @@autosave_error = e.message
+          error_key = "#{e.class}: #{e.message}"
+          respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}" unless error_key == @@autosave_error
+          @@autosave_error = error_key
         end
       }
 
