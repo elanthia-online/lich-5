@@ -4,13 +4,13 @@ require_relative '../../spec_helper'
 require 'gemstone/readylist'
 
 RSpec.describe Lich::Gemstone::ReadyList do
-  # Empty hands carry a nil id.
   let(:item) { Struct.new(:id) }
 
   before do
     described_class.reset(all: true)
     described_class.checked = true
     described_class.weapon = item.new('123456')
+    # Empty hands carry a nil id.
     allow(Lich::Common::GameObj).to receive_messages(inv: [], containers: {}, left_hand: item.new(nil))
   end
 
