@@ -391,19 +391,34 @@ module Lich
         DRC.retreat(ignored_npcs)
       end
 
+      # find_empty_room gives up after this many searches in a row in which
+      # walk_to reached none of the search rooms. Searches that reach a room
+      # but find it occupied are not counted: those wait for max_search_attempts.
+      MAX_UNREACHABLE_SEARCHES = 3
+
       def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, prioritize_buddies = false)
+        # With an idle room and no max_search_attempts, an empty list would
+        # idle forever without searching anything.
+        if search_rooms.nil? || search_rooms.empty?
+          Lich::Messaging.msg('bold', 'DRCT: No rooms to search, stopping the search.')
+          return false
+        end
+
         search_attempt = 0
+        unreachable_searches = 0
         check_mana = min_mana > 0
         loop do
           search_attempt += 1
           Lich::Messaging.msg('plain', "DRCT: Search attempt #{search_attempt} of #{max_search_attempts} to find a suitable room.")
           found_empty = false
+          reached_any = false
           search_rooms.each_with_index do |room_id, index|
             # walk_to returns true when it believes it reached the target and
             # false when it could not confirm arrival (see walk_to); such a room
             # is skipped for this pass rather than waiting for Room.current to
             # change.
             reached = walk_to(room_id)
+            reached_any ||= reached
 
             last_buddy_room = false
             nemesis_with_buddy = false
@@ -456,6 +471,16 @@ module Lich
           end
 
           check_mana = min_mana > 0
+
+          # Waiting at the idle room cannot help if no search room can be
+          # reached, so a run of such searches ends the search even when
+          # max_search_attempts is unbounded.
+          unreachable_searches = reached_any ? 0 : unreachable_searches + 1
+          if unreachable_searches >= MAX_UNREACHABLE_SEARCHES
+            rooms = search_rooms.size == 1 ? 'the search room' : "any of the #{search_rooms.size} search rooms"
+            Lich::Messaging.msg('bold', "DRCT: Could not reach #{rooms} in #{unreachable_searches} searches, stopping the search.")
+            return false
+          end
 
           if idle_room && search_attempt < max_search_attempts
             idle_room = idle_room.sample if idle_room.is_a?(Array)

@@ -1444,6 +1444,144 @@ RSpec.describe DRCT do
     end
   end
 
+  describe '.find_empty_room bounds' do
+    # Searches with an idle room and the default max_search_attempts
+    # (Infinity), as every find_sorted_empty_room caller makes them. Nobody is
+    # in any room unless a test says so; walk_to gives up on the rooms in
+    # `unreachable` and moves everywhere else.
+    let(:current) { OpenStruct.new(id: 50) }
+    let(:walks) { [] }
+    let(:unreachable) { [] }
+    let(:messages) { Lich::Messaging.messages.map { |m| m[:message] } }
+
+    before do
+      allow(Room).to receive(:current) { current }
+      allow(DRRoom).to receive(:pcs).and_return([])
+      allow(DRRoom).to receive(:group_members).and_return([])
+      allow(DRCT).to receive(:walk_to) do |room|
+        walks << room
+        next false if unreachable.include?(room)
+
+        current.id = room
+        true
+      end
+    end
+
+    it 'returns false at once when there are no rooms to search' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room([], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+      expect(messages).to include('DRCT: No rooms to search, stopping the search.')
+    end
+
+    it 'returns false at once when the room list is nil' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room(nil, 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+    end
+
+    it 'returns false at once with no rooms even when prioritizing buddies' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room([], 300, nil, 0, false, Float::INFINITY, true) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+    end
+
+    it 'stops after three searches that reach no room' do
+      unreachable.replace([100, 200])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 200, 300, 100, 200, 300, 100, 200])
+      expect(messages).to include('DRCT: Could not reach any of the 2 search rooms in 3 searches, stopping the search.')
+      expect(messages).not_to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops after three searches that reach no room when the idle room is unreachable too' do
+      unreachable.replace([100, 300])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
+    end
+
+    it 'keeps waiting while a room can be reached but is occupied' do
+      searches = 0
+      allow(DRRoom).to receive(:pcs) { searches > 5 ? [] : ['Stranger'] }
+      allow(Lich::Messaging).to receive(:msg).and_call_original
+      allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) { searches += 1 }
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(true)
+      expect(walks.count(100)).to eq(6)
+      expect(walks.count(300)).to eq(5)
+    end
+
+    [[100], [200]].each do |gone|
+      it "keeps waiting while only some rooms can be reached (#{gone.first} unreachable)" do
+        unreachable.replace(gone)
+        searches = 0
+        allow(DRRoom).to receive(:pcs) { searches > 4 ? [] : ['Stranger'] }
+        allow(Lich::Messaging).to receive(:msg).and_call_original
+        allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) { searches += 1 }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300) }
+        expect(result).to eq(true)
+        expect(searches).to eq(5)
+      end
+    end
+
+    it 'counts only consecutive searches that reach no room' do
+      # Searches 1-2 reach nothing, 3 reaches an occupied 100, 4-5 reach
+      # nothing, 6 finds 100 empty: two unreachable runs of two never add up
+      # to the bound.
+      reachable_on = [3, 6]
+      searches = 0
+      allow(Lich::Messaging).to receive(:msg).and_call_original
+      allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) do
+        searches += 1
+        unreachable.replace(reachable_on.include?(searches) ? [] : [100])
+      end
+      allow(DRRoom).to receive(:pcs) { searches == 3 ? ['Stranger'] : [] }
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(true)
+      expect(searches).to eq(6)
+    end
+
+    it 'stops at max_search_attempts first when it is smaller than the bound' do
+      unreachable.replace([100])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 2) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100])
+      expect(messages).to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops with the unreachable message when max_search_attempts equals the bound' do
+      unreachable.replace([100])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 3) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
+      expect(messages).not_to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops after the buddy pass and three empty-room searches reach no room' do
+      unreachable.replace([100, 200])
+      allow(UserVars).to receive(:friends).and_return(['Buddy'])
+      allow(UserVars).to receive(:hunting_nemesis).and_return([])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, Float::INFINITY, true) }
+      expect(result).to eq(false)
+      # buddy pass, then three empty-room searches with two idle walks
+      expect(walks).to eq([100, 200, 100, 200, 300, 100, 200, 300, 100, 200])
+    end
+
+    it 'still takes a low-mana room on the relaxed retry, without idling' do
+      # 100 is reachable and empty but low on mana; the relaxed retry takes it.
+      allow(DRStats).to receive(:moon_mage?).and_return(false)
+      allow(DRStats).to receive(:trader?).and_return(false)
+      allow(DRCA).to receive(:perc_mana).and_return(10)
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 30) }
+      expect(result).to eq(true)
+      expect(walks).to eq([100, 100])
+    end
+  end
+
   # --- find_sorted_empty_room ----------------------------------------
 
   describe '.find_sorted_empty_room' do
@@ -1457,6 +1595,50 @@ RSpec.describe DRCT do
       end
 
       DRCT.find_sorted_empty_room([100, 200], nil)
+    end
+
+    context 'through the real search' do
+      # sort_destinations keeps only rooms dijkstra can reach from here, then
+      # find_empty_room searches them with the crafting callers' idle room and
+      # no max_search_attempts.
+      let(:current) { OpenStruct.new(id: 1) }
+      let(:walks) { [] }
+      let(:unreachable) { [] }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(DRRoom).to receive(:pcs).and_return([])
+        allow(DRRoom).to receive(:group_members).and_return([])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          next false if unreachable.include?(room)
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'returns false at once when no search room has a path from here' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0 }])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room([100, 200], 300) }
+        expect(result).to eq(false)
+        expect(walks).to eq([])
+      end
+
+      it 'returns false when walk_to gives up on every sorted room' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0, 100 => 5, 200 => 2 }])
+        unreachable.replace([100, 200])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room(%w[100 200], 300) }
+        expect(result).to eq(false)
+        expect(walks).to eq([200, 100, 300, 200, 100, 300, 200, 100])
+      end
+
+      it 'still takes the nearest empty room' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0, 100 => 5, 200 => 2 }])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room([100, 200], 300) }
+        expect(result).to eq(true)
+        expect(walks).to eq([200])
+      end
     end
   end
 end
