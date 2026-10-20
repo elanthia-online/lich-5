@@ -851,27 +851,88 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       end
     end
 
+    # Rejects inserts of `key` (optionally only when the value is `value`) while the block runs.
+    def with_rejected_write(key, value = nil)
+      infomon = Lich::Gemstone::Infomon
+      cond = "NEW.key = #{infomon.db.literal(key)}"
+      cond += " AND NEW.value = #{infomon.db.literal(value)}" unless value.nil?
+      infomon.db.run("CREATE TRIGGER reject_write_failure_test BEFORE INSERT ON #{infomon.db.literal(infomon.table_name)} WHEN #{cond} BEGIN SELECT RAISE(FAIL, 'injected'); END")
+      yield
+      infomon.flush
+    ensure
+      infomon.db.run("DROP TRIGGER IF EXISTS reject_write_failure_test")
+    end
+
     it "allows a failed write to be retried" do
       infomon = Lich::Gemstone::Infomon
       k = "write_failure.test"
       infomon.set(k, 1)
       infomon.flush
       infomon.get(k) # ensure the cache is loaded so the next get is served from it
-      trigger = "CREATE TRIGGER reject_write_failure_test BEFORE INSERT ON %s WHEN NEW.key = %s BEGIN SELECT RAISE(FAIL, 'injected'); END"
-      infomon.db.run(trigger % [infomon.db.literal(infomon.table_name), infomon.db.literal(k)])
       allow(Lich).to receive(:log)
-      begin
-        infomon.set(k, 2)
-        infomon.flush
-      ensure
-        infomon.db.run("DROP TRIGGER reject_write_failure_test")
-      end
+      allow(infomon).to receive(:respond)
+      with_rejected_write(k) { infomon.set(k, 2) }
       expect(Lich).to have_received(:log).with(/Infomon write failed for #{k}: Sequel::\w+.*injected/)
-      # failed write must not leave the unpersisted value cached
-      expect(infomon.get(k)).to eq(1)
+      expect(infomon).to have_received(:respond).with(/Infomon write failed for #{k}: .*injected/)
+      # the cache keeps the last value set; only the DB is behind
+      expect(infomon.get(k)).to eq(2)
+      expect(infomon.table[key: k][:value]).to eq(1)
       expect(infomon.set(k, 2)).not_to eq(:noop)
       infomon.flush
       expect(infomon.table[key: k][:value]).to eq(2)
+      expect(infomon.set(k, 2)).to eq(:noop)
+    end
+
+    it "persists nil set after a failed write" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.nil"
+      infomon.set(k, 1)
+      infomon.flush
+      allow(Lich).to receive(:log)
+      with_rejected_write(k, 2) { infomon.set(k, 2) }
+      expect(infomon.set(k, nil)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to be_nil
+      expect(infomon.get(k)).to be_nil
+    end
+
+    it "persists nil for a key the DB has but the cache does not" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.uncached"
+      infomon.set(k, 1)
+      infomon.flush
+      infomon.cache.delete(k)
+      expect(infomon.set(k, nil)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to be_nil
+    end
+
+    it "keeps relative updates across a failed write" do
+      infomon = Lich::Gemstone::Infomon
+      gain = "You violently shatter the bond on the soul of the troll.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence."
+      Lich::Gemstone::Infomon::Parser.parse("Accumulated Shadow Essence: 1")
+      infomon.flush
+      allow(Lich).to receive(:log)
+      with_rejected_write("resources.shadow_essence", 2) do
+        # flush between lines so the first write has failed before the second is parsed
+        2.times { Lich::Gemstone::Infomon::Parser.parse(gain); infomon.flush }
+      end
+      expect(Lich).to have_received(:log).with(/Infomon write failed for resources.shadow_essence/)
+      expect(Lich::Resources.shadow_essence).to eq(3)
+      expect(infomon.table[key: "resources.shadow_essence"][:value]).to eq(3)
+    end
+
+    it "re-queues a failed upsert_batch on retry" do
+      infomon = Lich::Gemstone::Infomon
+      batch = { "write_failure.batch_a" => 5, "write_failure.batch_b" => 6 }
+      allow(Lich).to receive(:log)
+      with_rejected_write("write_failure.batch_a") { infomon.upsert_batch(batch) }
+      expect(infomon.table[key: "write_failure.batch_a"]).to be_nil
+      expect(infomon.upsert_batch(batch)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: "write_failure.batch_a"][:value]).to eq(5)
+      expect(infomon.table[key: "write_failure.batch_b"][:value]).to eq(6)
+      expect(infomon.upsert_batch(batch)).to eq(:noop)
     end
   end
 end

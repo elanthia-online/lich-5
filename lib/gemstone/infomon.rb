@@ -32,6 +32,9 @@ module Lich
       @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
       @sql_queue ||= Queue.new
       @sql_mutex ||= Mutex.new
+      # keys whose last attempted write failed; cleared by a later successful write.
+      # Plain Hash like Cache: mutated by the worker thread and reset!; single ops are GVL-atomic.
+      @unpersisted ||= {}
 
       def self.cache
         @cache
@@ -90,6 +93,7 @@ module Lich
         self.mutex_lock
         Infomon.db.drop_table?(self.table_name)
         self.cache.clear
+        @unpersisted.clear
         @cache_loaded = false
         Infomon.setup!
       end
@@ -210,9 +214,9 @@ module Lich
       def self.set(key, value)
         key = self._key(key)
         value = self._validate!(key, value)
-        return :noop if self.cache.get(key) == value
+        return :noop if !@unpersisted.key?(key) && self.cache.include?(key) && self.cache.get(key) == value
         self.cache.put(key, value)
-        # queue items are [sql, keys] so a failed write can invalidate its cache entries
+        # queue items are [sql, keys] so a failed write can mark its keys unpersisted
         self.queue << ["INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
       on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), current_timestamp], [key]]
       end
@@ -244,7 +248,7 @@ module Lich
       end
 
       def self.upsert_batch(*blob)
-        updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
+        updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a.reject { |k, _| @unpersisted.key?(k) })
         return :noop if updated.empty?
         now = current_timestamp
         pairs = updated.map { |key, value|
@@ -273,10 +277,14 @@ module Lich
             Infomon.mutex.synchronize do
               begin
                 Infomon.db.run(sql)
+                # Safe to clear: the queue is FIFO, so any later write for these keys
+                # runs after this and re-marks them if it fails.
+                keys.each { |key| @unpersisted.delete(key) }
               rescue StandardError => e
-                # The cache was updated before queueing; drop those entries so the
-                # next get reads the DB and the next set of the same value is retried.
-                keys.each { |key| Infomon.cache.delete(key) }
+                # Keep the cached value (Infomon's view of the game) and mark the keys so
+                # the next set/upsert_batch of the same value is retried instead of a :noop.
+                keys.each { |key| @unpersisted[key] = true }
+                respond "--- Lich: error: Infomon write failed for #{keys.join(', ')}: #{e.message}"
                 Lich.log "error: Infomon write failed for #{keys.join(', ')}: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
               end
             end
