@@ -653,6 +653,9 @@ module Lich
               respond "To revert to it, move or delete all #{incomplete.size} incomplete directories above,"
             end
             respond 'then run the revert again.'
+          elsif interrupted.zero?
+            # Every one has a hint, and following it may make it usable.
+            respond 'No complete snapshot was found. If a hint above applies, follow it; otherwise seek assistance.'
           else
             respond 'No complete snapshot was found. Seek assistance.'
           end

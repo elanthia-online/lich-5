@@ -1211,6 +1211,37 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         messages
       end
 
+      context 'when no complete snapshot is left' do
+        let(:hinted_end) { 'No complete snapshot was found. If a hint above applies, follow it; otherwise seek assistance.' }
+
+        before { FileUtils.rm_rf(complete) }
+
+        def cut_off_snapshot(stamp)
+          make_snapshot(stamp, '5.21.0').tap { |dir| File.delete(File.join(dir, 'scripts', 'map.lic')) }
+        end
+
+        it 'points at the hint instead of only saying to seek assistance' do
+          cut_off_snapshot('2026-10-17-00-00-00')
+          messages = capture_responses
+
+          manager.revert
+
+          expect(messages).to include(hint, hinted_end)
+          expect(messages).not_to include('No complete snapshot was found. Seek assistance.')
+        end
+
+        it 'only says to seek assistance when a newer snapshot was interrupted' do
+          cut_off_snapshot('2026-10-16-00-00-00')
+          make_snapshot('2026-10-17-00-00-00', '5.22.0', omit: %i[lich])
+          messages = capture_responses
+
+          manager.revert
+
+          expect(messages).to include(hint, 'No complete snapshot was found. Seek assistance.')
+          expect(messages).not_to include(hinted_end)
+        end
+      end
+
       it 'refuses one whose scripts/ is empty although core scripts are installed' do
         bad = make_snapshot('2026-10-17-00-00-00', '5.21.0', omit: %i[scripts])
         FileUtils.mkdir_p(File.join(bad, 'scripts'))
