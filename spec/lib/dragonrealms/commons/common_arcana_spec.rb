@@ -15,7 +15,7 @@ end
 # Override get_data for this spec with DRCA-specific data (barb_abilities)
 def get_data(_type)
   @mock_data ||= OpenStruct.new(
-    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
+    prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations', 'You seem to have forgotten this spell'],
     cast_messages: ['You gesture', 'Your target pattern dissipates'],
     invoke_messages: ['Your cambrinth absorbs', 'you find it too clumsy', 'Invoke what?'],
     charge_messages: ['Your cambrinth absorbs all of the energy', 'You are in no condition to do that', 'You\'ll have to hold it', 'you find it too clumsy'],
@@ -28,7 +28,8 @@ def get_data(_type)
   )
 end
 
-# Load the module under test
+# Load the module under test (common.rb provides DRC.capture_reply)
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
@@ -38,6 +39,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
     Flags.reset!
+    # cast? stores the backfire flag in module state; start each example clean
+    DRCA.instance_variable_set(:@backfired_status, false)
     allow(DRCMM).to receive(:update_astral_data) { |data, _settings| data }
     allow(DRC).to receive(:bput).and_return('default')
   end
@@ -282,6 +285,76 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect('You cup your left hand').to match(pattern)
       expect('You wave your right hand').to match(pattern)
     end
+
+    # A pattern that can match without consuming any text is satisfied by every
+    # line bput reads, exactly like the blank pattern above: bput would return
+    # the first unrelated line (or '') as if it were the expected message.
+    it 'drops patterns that match the empty string (they match every line)' do
+      ['.*', 'a*', 'You|', '|You', 'You||Me', '()', '(?:)', '^', '$', '\A', '\z', '\Z', '\B',
+       '(You)?', '\s*', ' .* ', '[a-z]*', 'x{0,3}', '(?i)x*', '^$', '\A\z'].each do |matches_empty|
+        expect(DRCA.custom_message_pattern(matches_empty)).to be_nil, "expected #{matches_empty.inspect} to be dropped"
+      end
+    end
+
+    it 'drops patterns that only assert a position without consuming text' do
+      ['\b', '(?=.)', '(?!zzz)', '(?<=.)', '(?<!zzz)', 'You|\b', '\b|You', 'zzz|(?=.)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    # A lookaround for a common letter or punctuation mark still matches
+    # almost every line with an empty match, so the probe must contain them.
+    it 'drops lookarounds for common letters, digits and punctuation' do
+      ['(?=e)', 'zzz|(?=e)', '(?=th)', '(?=,)', '(?<=,)', "(?=')", '(?=-)', '(?=\\d)', 'You|(?=Y)'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    # Game lines usually end in a period and often hold a double space, so a
+    # lookaround for either context still makes an empty match on most lines.
+    it 'drops lookarounds for a line-final period or a double space' do
+      ['(?<=\\.)$', '(?=\\.$)', '(?=  )', 'zzz|(?<=\\.)$'].each do |zero_width|
+        expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+      end
+    end
+
+    it 'drops a lookahead or lookbehind for any printable ASCII character' do
+      (33..126).map(&:chr).each do |char|
+        ["(?=#{Regexp.escape(char)})", "(?<=#{Regexp.escape(char)})"].each do |zero_width|
+          expect(DRCA.custom_message_pattern(zero_width)).to be_nil, "expected #{zero_width.inspect} to be dropped"
+          # Case-sensitive too, as a player can write (?-i) in the message.
+          expect(DRCA.zero_width_pattern?(Regexp.new(zero_width))).to be(true), "expected case-sensitive #{zero_width.inspect} to be flagged"
+        end
+      end
+    end
+
+    # A non-ASCII probe would raise Encoding::CompatibilityError (not a
+    # RegexpError) against a binary pattern carrying high bytes.
+    it 'keeps a binary pattern with high bytes without raising' do
+      expect(DRCA::ZERO_WIDTH_PROBE).to be_ascii_only
+      message = "caf#{0xE9.chr} hums".b
+      pattern = DRCA.custom_message_pattern(message)
+      expect(pattern).to be_a(Regexp)
+      expect(message).to match(pattern)
+    end
+
+    it 'keeps anchored, bounded and optional-suffix patterns that always consume text' do
+      {
+        '^You murmur'                => 'You murmur softly',
+        'hums$'                      => 'Your focus hums',
+        '\bfocus\b'                  => 'Your focus hums',
+        'Your focus( hums)?'         => 'Your focus glows',
+        'You (cup|wave)?'            => 'You raise a hand',
+        'x+'                         => 'a box',
+        '(?=Your)Your focus'         => 'Your focus hums',
+        'Flames wreathe your hands.' => 'Flames wreathe your hands.'
+      }.each do |message, line|
+        pattern = DRCA.custom_message_pattern(message)
+        expect(pattern).to be_a(Regexp), "expected #{message.inspect} to be kept"
+        expect(line).to match(pattern)
+        expect(pattern.match(line)[0]).not_to be_empty
+      end
+    end
   end
 
   # ----------------------------------------------
@@ -299,6 +372,12 @@ RSpec.describe Lich::DragonRealms::DRCA do
 
     it 'returns the base list unchanged when no custom message is valid' do
       expect(DRCA.with_custom_messages(['only base'], nil, '', '   ', 5)).to eq(['only base'])
+    end
+
+    it 'drops a match-everything custom but keeps the valid ones around it' do
+      result = DRCA.with_custom_messages(['base'], 'first', '.*', '\b', 'You|', 'second')
+      expect(result.first).to eq('base')
+      expect(result.drop(1).map(&:source)).to eq(%w[first second])
     end
 
     it 'does not mutate the base list it was given' do
@@ -337,6 +416,11 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'drops a blank custom_invoke_message so it cannot compile to // (match anything)' do
       allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: '   '))
       expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    it 'drops a custom_invoke_message (per-character or per-spell) that matches every line' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: '^'))
+      expect(DRCA.invoke_messages('\b')).to eq(get_data('spells').invoke_messages)
     end
 
     it 'drops a malformed-regex custom_invoke_message instead of raising in bput' do
@@ -415,6 +499,13 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(captured).to eq(get_data('spells').prep_messages)
     end
 
+    it 'drops a custom_prep_message that matches the empty string instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, '.*', custom_spell_prep: 'You murmur|')
+      expect(captured).to eq(get_data('spells').prep_messages)
+    end
+
     it 'drops a malformed-regex custom_prep_message instead of crashing' do
       captured = nil
       allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
@@ -472,6 +563,13 @@ RSpec.describe Lich::DragonRealms::DRCA do
       captured = nil
       allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
       DRCA.cast?('cast', false, [], [], '   ')
+      expect(captured).to eq(get_data('spells').cast_messages)
+    end
+
+    it 'drops a custom_cast_message that matches the empty string instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      DRCA.cast?('cast', false, [], [], '(A rare shimmer)?')
       expect(captured).to eq(get_data('spells').cast_messages)
     end
 
@@ -558,6 +656,103 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
+  describe '.prep_confirmed?' do
+    let(:polls) { (DRCA::PREP_CONFIRM_WAIT_SECONDS / DRCA::PREP_CONFIRM_POLL_SECONDS).round }
+    let(:not_casting) { "DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting" }
+
+    before { allow(DRCA).to receive(:pause) }
+
+    it 'returns false for a failed prep without reading the indicator, waiting or releasing' do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?(false, 'fb')).to be false
+      expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
+      expect(bold_messages).to be_empty
+    end
+
+    it 'returns true for a matched prep message without reading the indicator or waiting' do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?('You begin to', 'fb')).to be true
+      expect(DRCA).not_to have_received(:pause)
+    end
+
+    it "returns true for '' at once when a spell already shows as prepared" do
+      allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns true for '' when the spell shows as prepared partway through the wait" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None', 'None', 'None', 'Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).to have_received(:pause).with(DRCA::PREP_CONFIRM_POLL_SECONDS).exactly(3).times
+    end
+
+    it "returns true for '' when the spell shows as prepared only on the check after the last pause" do
+      allow(XMLData).to receive(:prepared_spell).and_return(*Array.new(polls, 'None'), 'Fire Ball')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be true
+      expect(DRCA).to have_received(:pause).exactly(polls).times
+      expect(bold_messages).to be_empty
+    end
+
+    it "returns false for '' after a bounded wait, saying why, when no spell shows as prepared" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+      expect(DRCA).to have_received(:pause).with(DRCA::PREP_CONFIRM_POLL_SECONDS).exactly(polls).times
+      expect(bold_messages).to eq([not_casting])
+    end
+
+    # A prep still queued behind a server stall is cancelled in order by the
+    # release, instead of being left for the next caller to cast as its own.
+    it "sends release spell, after the wait, when it rejects ''" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None')
+      expect(DRCA).to receive(:pause).exactly(polls).times.ordered
+      expect(DRC).to receive(:bput).with('release spell', 'You let your concentration lapse', "You aren't preparing a spell").once.ordered
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+    end
+
+    it "treats an empty indicator like 'None'" do
+      allow(XMLData).to receive(:prepared_spell).and_return('')
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+    end
+
+    # No record shows whether the game sets the indicator for an invoke, so
+    # '' after one carries on as it did before.
+    it "returns true for '' after a runestone invoke without reading the indicator or waiting" do
+      expect(XMLData).not_to receive(:prepared_spell)
+      expect(DRCA.prep_confirmed?('', 'fb', command: 'invoke', runestone_name: 'rune')).to be true
+      expect(DRCA.prep_confirmed?('', 'fb', runestone_name: 'rune')).to be true
+      expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
+      expect(bold_messages).to be_empty
+    end
+
+    ['invoke', 'Invoke', ' invoke ', 'invoke my'].each do |command|
+      it "returns true for '' after the invoke command #{command.inspect} without reading the indicator or waiting" do
+        expect(XMLData).not_to receive(:prepared_spell)
+        expect(DRCA.prep_confirmed?('', 'my tattoo', command: command)).to be true
+        expect(DRCA).not_to have_received(:pause)
+        expect(bold_messages).to be_empty
+      end
+    end
+
+    it 'still returns false for a failed invoke' do
+      expect(DRCA.prep_confirmed?(false, 'my tattoo', command: 'invoke', runestone_name: 'rune')).to be false
+    end
+
+    ['prep', 'invoker', 'reinvoke', nil].each do |command|
+      it "applies the indicator rule to '' after the command #{command.inspect}" do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA.prep_confirmed?('', 'fb', command: command)).to be false
+        expect(DRCA).to have_received(:pause).exactly(polls).times
+        expect(DRC).to have_received(:bput).with('release spell', anything, anything).once
+        expect(bold_messages).to eq([not_casting])
+      end
+    end
+  end
+
   # ----------------------------------------------
   # cast?
   # ----------------------------------------------
@@ -613,6 +808,340 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRC).to receive(:bput).with('release mana', anything, anything)
       allow(DRC).to receive(:bput).with('release symbiosis', anything, anything)
       DRCA.cast?('cast', true)
+    end
+  end
+
+  # ----------------------------------------------
+  # No-match timeout: DRC.bput returns '' when none of its patterns arrive
+  # within its timeout (pinned in common_spec). These examples pin what
+  # prepare? and cast? do with that value, as their docs describe.
+  # ----------------------------------------------
+  describe 'when DRC.bput times out with no match' do
+    let(:sent) { [] }
+
+    # Every bput times out unless the example overrides a command's reply.
+    def silent_game(sent, replies = {})
+      allow(DRC).to receive(:bput) do |cmd, *_patterns|
+        sent << cmd
+        reply = replies.fetch(cmd, '')
+        reply.respond_to?(:call) ? reply.call : reply
+      end
+    end
+
+    describe '.prepare?' do
+      it "returns '' (truthy), not false" do
+        silent_game(sent)
+        result = DRCA.prepare?('fireball', 10)
+        expect(result).to eq('')
+        expect(result).to be_truthy
+        expect(sent).to eq(['prepare fireball 10'])
+      end
+
+      it 'keeps a prepared symbiosis instead of releasing it' do
+        silent_game(sent, 'prepare symbiosis' => 'You recall the exact details of the')
+        expect(DRCA.prepare?('fireball', 10, true)).to eq('')
+        expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+      end
+
+      it 'still sends target for a tattoo TM prep' do
+        silent_game(sent)
+        expect(DRCA.prepare?('fireball', 10, false, 'prepare', true)).to eq('')
+        expect(sent).to eq(['prepare fireball 10', 'target'])
+      end
+
+      it 'does not dispose of a runestone whose invoke timed out' do
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        expect(DRCI).not_to receive(:dispose_trash)
+        silent_game(sent)
+        expect(DRCA.prepare?('fireball', 10, false, 'prepare', false, 'rune')).to eq('')
+        expect(sent).to eq(['prepare my rune'])
+      end
+
+      it "returns '' when the retry after a slipped offensive prep times out" do
+        silent_game(sent)
+        replies = ['Your desire to prepare this offensive spell suddenly slips away', '']
+        allow(DRC).to receive(:bput).with('prepare fireball 10', anything) do |cmd, *_|
+          sent << cmd
+          replies.shift
+        end
+        expect(DRCA.prepare?('fireball', 10)).to eq('')
+        expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
+      end
+
+      # Like '', a matched reply that has no failure arm passes through as is,
+      # including a prep_messages entry that reads like a failure.
+      ['You begin to draw your focus on', 'You seem to have forgotten this spell'].each do |prep_reply|
+        it "returns the matched prep reply #{prep_reply.inspect} unchanged, keeping symbiosis" do
+          replies = { 'prepare symbiosis' => 'You recall the exact details of the', 'prepare fireball 10' => prep_reply }
+          silent_game(sent, replies)
+          expect(DRCA.prepare?('fireball', 10, true)).to eq(prep_reply)
+          expect(sent).to eq(['prepare symbiosis', 'prepare fireball 10'])
+        end
+      end
+    end
+
+    describe '.cast?' do
+      it 'returns true and releases nothing when no failure flag was set' do
+        silent_game(sent)
+        expect(DRCA.cast?).to be true
+        expect(sent).to eq(['cast'])
+        expect(DRCA.backfired?).to be false
+      end
+
+      it 'keeps a symbiosis when no failure flag was set' do
+        silent_game(sent)
+        expect(DRCA.cast?('cast', true)).to be true
+        expect(sent).to eq(['cast'])
+      end
+
+      it 'returns false and releases mana when a spell-fail line was seen while bput waited' do
+        silent_game(sent, 'cast' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        expect(DRCA.cast?).to be false
+        expect(sent).to eq(['cast', 'release mana'])
+      end
+
+      it 'returns false and releases mana and symbiosis when a spell-fail line was seen with a symbiosis' do
+        silent_game(sent, 'cast' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        expect(DRCA.cast?('cast', true)).to be false
+        expect(sent).to eq(['cast', 'release mana', 'release symbiosis'])
+      end
+
+      # spell-fail is read after the roundtime wait and the after actions, so
+      # a failure line that only arrives then still counts.
+      it 'returns false and releases mana when a spell-fail line arrives during the roundtime wait' do
+        silent_game(sent)
+        allow(DRCA).to receive(:waitrt?) { Flags['spell-fail'] = ['Your target pattern dissipates because'] }
+        expect(DRCA.cast?).to be false
+        expect(sent).to eq(['cast', 'release mana'])
+      end
+
+      it 'returns false and releases mana when a spell-fail line arrives during an after action' do
+        silent_game(sent, 'invoke circle' => -> { Flags['spell-fail'] = ['Something is interfering with the spell']; '' })
+        after = [{ 'message' => 'invoke circle', 'matches' => ['You invoke'] }]
+        expect(DRCA.cast?('cast', false, [], after)).to be false
+        expect(sent).to eq(['cast', 'invoke circle', 'release mana'])
+      end
+
+      it 'records a backfire seen while bput waited' do
+        silent_game(sent, 'cast' => lambda {
+          Flags['spell-fail'] = ['Your spell backfires']
+          Flags['spell-backfired'] = ['Your spell backfires']
+          ''
+        })
+        expect(DRCA.cast?).to be false
+        expect(DRCA.backfired?).to be_truthy
+      end
+
+      it 'still retries when a cyclic-too-recent line was seen while bput waited' do
+        replies = [-> { Flags['cyclic-too-recent'] = ['The mental strain of initiating a cyclic spell'] }, -> {}]
+        silent_game(sent, 'cast' => -> { replies.shift.call; '' })
+        expect(DRCA.cast?).to be true
+        expect(sent).to eq(%w[cast cast])
+      end
+
+      it 'returns true when a barrage times out without a barrage failure' do
+        silent_game(sent)
+        expect(DRCA.cast?('barrage goblin')).to be true
+        expect(sent).to eq(['barrage goblin'])
+      end
+    end
+
+    describe '.cast_spell?' do
+      let(:settings) do
+        OpenStruct.new(
+          cambrinth_items: [{ 'name' => nil }],
+          cambrinth: 'armband',
+          cambrinth_cap: 50,
+          stored_cambrinth: false,
+          use_harness_when_arcana_locked: false,
+          dedicated_camb_use: nil,
+          cambrinth_invoke_exact_amount: nil
+        )
+      end
+
+      # A prep that drew no recognised reply goes on only if the game shows a
+      # spell being prepared (see prep_confirmed?).
+      def cast_data(extra = {})
+        { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'before' => [], 'after' => [] }.merge(extra)
+      end
+
+      before do
+        allow(DRCA).to receive(:pause)
+        allow(DRCA).to receive(:find_charge_invoke_stow)
+      end
+
+      it 'stops after the prep and releases it, charging and casting nothing, when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data, settings)).to be false
+        expect(DRCA).not_to have_received(:find_charge_invoke_stow)
+        expect(sent).to eq(['release mana', 'prep fb 10', 'release spell'])
+        expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
+      end
+
+      it 'harnesses nothing when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:check_to_harness).and_return(true)
+        expect(DRCA).not_to receive(:harness_mana)
+        silent_game(sent)
+        expect(DRCA.cast_spell(cast_data, settings)).to be_nil
+      end
+
+      it 'calls no post-prep, pre-cast or post-cast lifecycle hook when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        stages = []
+        silent_game(sent)
+        DRCA.cast_spell(cast_data, settings, false, ->(stage, _data, _settings) { stages << stage })
+        expect(stages).to eq(['pre-prep'])
+      end
+
+      # An `until DRCA.cast_spell?(...)` retry loop still stops after one
+      # attempt when the prep went through with an unlisted reply and the
+      # cast then went unanswered.
+      it 'charges and casts once, reporting success, when a spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None', 'Fire Ball')
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data, settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent.count('prep fb 10')).to eq(1)
+        expect(sent.count('cast')).to eq(1)
+        expect(bold_messages).to be_empty
+      end
+
+      # An invoke is not checked against the indicator (see prep_confirmed?).
+      it 'puts the runestone away, then charges and casts as before, when its invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        allow(DRCA).to receive(:prepare_to_cast_runestone?).and_return(true)
+        allow(DRCI).to receive(:in_hands?).with('rune').and_return(true)
+        expect(DRCI).to receive(:put_away_item?).with('rune', 'pack')
+        settings.runestone_storage = 'pack'
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data('runestone_name' => 'rune', 'prep' => 'invoke'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'invoke my rune', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+
+      it 'charges and casts as before when a tattoo invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data('abbrev' => 'my tattoo', 'prep' => 'invoke'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'invoke my tattoo 10', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+
+      # The runestone alone exempts the prep: with no 'prep' key the command
+      # is the default 'prep', which would otherwise get the indicator check.
+      it 'charges and casts as before when a runestone prep with the default command drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+        allow(DRCA).to receive(:prepare_to_cast_runestone?).and_return(true)
+        allow(DRCI).to receive(:in_hands?).with('rune').and_return(false)
+        silent_game(sent)
+        expect(DRCA.cast_spell?(cast_data('runestone_name' => 'rune'), settings)).to be true
+        expect(DRCA).to have_received(:find_charge_invoke_stow).once
+        expect(sent).to eq(['release mana', 'prep my rune', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+
+      # cast?'s spell-fail branch used to send release symbiosis after the
+      # cast drew "You don't have a spell prepared!"; cast? is no longer run.
+      it 'sends release spell but no release symbiosis when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        silent_game(sent, 'prepare symbiosis' => 'You recall the exact details of the')
+        expect(DRCA.cast_spell?(cast_data('symbiosis' => true), settings)).to be false
+        expect(sent).to eq(['release mana', 'prepare symbiosis', 'prep fb 10', 'release spell'])
+      end
+    end
+
+    describe '.ritual' do
+      let(:settings) { OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil) }
+      let(:data) { { 'abbrev' => 'fb', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast', 'before' => [], 'after' => [] } }
+
+      before do
+        allow(DRCA).to receive(:pause)
+        allow(DRCA).to receive(:checkprep).and_return('None')
+      end
+
+      it 'releases a spell left prepared before it preps, then preps and casts' do
+        allow(DRCA).to receive(:checkprep).and_return('Fire Ball')
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+        allow(DRCA).to receive(:find_focus)
+        allow(DRCA).to receive(:invoke)
+        allow(DRCA).to receive(:stow_focus)
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent).to eq(['release spell', 'prepare fb 10', 'cast'])
+      end
+
+      it 'sends no release before the prep when no spell is left prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+        allow(DRCA).to receive(:find_focus)
+        allow(DRCA).to receive(:invoke)
+        allow(DRCA).to receive(:stow_focus)
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent.first).to eq('prepare fb 10')
+        expect(sent).not_to include('release spell')
+      end
+
+      it 'stops after the prep and releases it, without touching the focus or casting, when no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA).not_to receive(:find_focus)
+        expect(DRCA).not_to receive(:invoke)
+        expect(DRCA).not_to receive(:stow_focus)
+        silent_game(sent)
+        expect(DRCA.ritual(data, settings)).to be_nil
+        expect(sent).to eq(['prepare fb 10', 'release spell'])
+        expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
+      end
+
+      it 'carries on to the focus invoke and the cast when a spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
+        expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
+        expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
+        expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
+        silent_game(sent)
+        DRCA.ritual(data, settings)
+        expect(sent).to eq(['prepare fb 10', 'cast'])
+      end
+
+      # An invoke is not checked against the indicator (see prep_confirmed?).
+      it 'carries on to the focus invoke and the cast when an invoke drew no reply and no spell shows as prepared' do
+        allow(XMLData).to receive(:prepared_spell).and_return('None')
+        expect(DRCA).to receive(:find_focus).with('totem', nil, nil, nil).ordered
+        expect(DRCA).to receive(:invoke).with('totem', nil, nil).ordered
+        expect(DRCA).to receive(:stow_focus).with('totem', nil, nil, nil).ordered
+        silent_game(sent)
+        DRCA.ritual(data.merge('prep' => 'invoke'), settings)
+        expect(sent).to eq(['invoke fb 10', 'cast'])
+        expect(bold_messages).to be_empty
+      end
+    end
+
+    describe '.crafting_prepare_spell' do
+      it "returns prepare?'s '' unchanged" do
+        allow(DRCMM).to receive(:set_moon_data).and_return(true)
+        allow(DRCA).to receive(:checkprep).and_return('None')
+        settings = OpenStruct.new(custom_spell_prep: nil)
+        silent_game(sent)
+        expect(DRCA.crafting_prepare_spell({ 'abbrev' => 'fb', 'mana' => 10 }, settings)).to eq('')
+        expect(sent).to eq(['release mana', 'prep fb 10'])
+      end
+    end
+
+    describe '.crafting_cast_spell' do
+      it "returns cast?'s true for a cast that timed out with no failure flag" do
+        allow(DRCA).to receive(:normalize_cambrinth_items)
+        allow(DRCA).to receive(:check_to_harness).and_return(false)
+        expect(DRCA).to receive(:charge_cambrinth_items)
+        silent_game(sent)
+        data = { 'cast' => 'cast', 'cambrinth' => [5], 'before' => [], 'after' => [] }
+        expect(DRCA.crafting_cast_spell(data, OpenStruct.new(use_harness_when_arcana_locked: false))).to be true
+        expect(sent).to eq(['cast'])
+      end
     end
   end
 
@@ -936,6 +1465,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'returns nil for nil settings' do
       expect(DRCA.cast_spell({}, nil)).to be_nil
     end
+
+    # cast? is not reached on these paths, so cast_spell? reports false even
+    # though the spell went off.
+    it 'returns nil without casting after a successful segue, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'prep' => 'segue' }
+      allow(DRCA).to receive(:segue?).with('ae', 10).and_return(true)
+      expect(DRCA).not_to receive(:cast?)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+    end
+
+    it 'returns nil after running a ritual spell, so cast_spell? returns false' do
+      data = { 'abbrev' => 'ae', 'mana' => 10, 'ritual' => true }
+      allow(DRCA).to receive(:ritual)
+      expect(DRCA.cast_spell(data, OpenStruct.new)).to be_nil
+      expect(DRCA.cast_spell?(data, OpenStruct.new)).to be false
+      expect(DRCA).to have_received(:ritual).twice
+    end
   end
 
   # ----------------------------------------------
@@ -1069,7 +1616,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
         'The developing streams of Enlightened Geometry mana flowing through',
         'The developing streams of Moonlight Manipulation mana flowing through',
         'The developing streams of Perception mana flowing through',
-        'The developing streams of Psychic Projection mana flowing through'
+        'The developing streams of Psychic Projection mana flowing through',
+        'Roundtime: 3 sec.'
       ]
       allow(Lich::Util).to receive(:issue_command).and_return(mock_lines)
       allow(DRCA).to receive(:parse_mana_message).and_return(3)
@@ -1078,9 +1626,67 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(result.keys).to contain_exactly('enlightened_geometry', 'moonlight_manipulation', 'perception', 'psychic_projection')
     end
 
+    context 'when the moon mage reply ends on Roundtime or is cut off' do
+      let(:stream_lines) do
+        [
+          'The developing streams of Enlightened Geometry mana flowing through',
+          'The developing streams of Moonlight Manipulation mana flowing through',
+          'The developing streams of Perception mana flowing through',
+          'The developing streams of Psychic Projection mana flowing through'
+        ]
+      end
+
+      before do
+        DRStats.guild = 'Moon Mage'
+        allow(DRCA).to receive(:parse_mana_message).and_return(3)
+      end
+
+      it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
+        allow(Lich::Util).to receive(:issue_command).and_return([])
+        DRCA.perc_mana
+        expect(Lich::Util).to have_received(:issue_command).with(
+          'perc mana', described_class::PERC_MANA_START_PATTERN, described_class::PERC_MANA_END_PATTERN,
+          usexml: false, quiet: true, include_end: true, timeout: 5
+        )
+      end
+
+      it 'prints no message on a complete reply' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines + ['Roundtime: 3 sec.'])
+        expect(Lich::Messaging).not_to receive(:msg)
+        DRCA.perc_mana
+      end
+
+      it 'prints a cut-off message and still parses when all four streams arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines)
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
+        expect(DRCA.perc_mana).to be_a(Hash)
+      end
+
+      it 'prints a cut-off message and returns nil when fewer than four streams arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines.first(2))
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
+        expect(DRCA.perc_mana).to be_nil
+      end
+    end
+
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
     it 'returns nil when issue_command times out for moon mage' do
       DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'prints a timeout message when issue_command returns [] for moon mage' do
+      DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: Failed to capture PERC MANA output (timeout).')
+      DRCA.perc_mana
+    end
+
+    it 'treats nil from issue_command the same as a timeout for moon mage' do
+      DRStats.guild = 'Moon Mage'
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCA: Failed to capture PERC MANA output/)
       expect(DRCA.perc_mana).to be_nil
     end
 

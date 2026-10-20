@@ -58,8 +58,11 @@ RSpec.describe 'wine.rb' do
   end
 
   describe 'ARGV parsing with controlled load' do
-    let(:temp_wine_bin) { '/tmp/wine_spec_bin' }
-    let(:temp_wine_prefix) { '/tmp/wine_spec_prefix' }
+    # A fresh directory per example, so two runs at once never share (or
+    # delete) each other's wine binary, prefix or system.reg.
+    let(:temp_root) { Dir.mktmpdir('lich-wine-spec-') }
+    let(:temp_wine_bin) { File.join(temp_root, 'wine_spec_bin') }
+    let(:temp_wine_prefix) { File.join(temp_root, 'wine_spec_prefix') }
 
     before(:each) do
       $wine_bin = nil
@@ -70,8 +73,7 @@ RSpec.describe 'wine.rb' do
     end
 
     after(:each) do
-      FileUtils.rm_f(temp_wine_bin)
-      FileUtils.rm_rf(temp_wine_prefix)
+      FileUtils.rm_rf(temp_root)
       $wine_bin = nil
       $wine_prefix = nil
       Object.send(:remove_const, :Wine) if defined?(Wine)
@@ -154,8 +156,11 @@ RSpec.describe 'wine.rb' do
   end
 
   describe 'Wine module functionality' do
-    let(:temp_wine_bin) { '/tmp/wine_spec_bin' }
-    let(:temp_wine_prefix) { '/tmp/wine_spec_prefix' }
+    # A fresh directory per example, so two runs at once never share (or
+    # delete) each other's wine binary, prefix or system.reg.
+    let(:temp_root) { Dir.mktmpdir('lich-wine-spec-') }
+    let(:temp_wine_bin) { File.join(temp_root, 'wine_spec_bin') }
+    let(:temp_wine_prefix) { File.join(temp_root, 'wine_spec_prefix') }
 
     before(:each) do
       $wine_bin = nil
@@ -168,8 +173,7 @@ RSpec.describe 'wine.rb' do
     end
 
     after(:each) do
-      FileUtils.rm_f(temp_wine_bin)
-      FileUtils.rm_rf(temp_wine_prefix)
+      FileUtils.rm_rf(temp_root)
       $wine_bin = nil
       $wine_prefix = nil
       Object.send(:remove_const, :Wine) if defined?(Wine)
@@ -232,7 +236,7 @@ RSpec.describe 'wine.rb' do
 
     describe 'Wine.registry_puts' do
       before do
-        stub_const('TEMP_DIR', '/tmp')
+        stub_const('TEMP_DIR', temp_root)
       end
 
       it 'returns false when prefix does not exist' do
