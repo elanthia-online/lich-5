@@ -279,12 +279,12 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     describe '#read_users_cache' do
       it 'returns nil when cache is empty' do
         Lich::Common::DB_Store.reset!
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache has no fetched_at' do
         Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'members' => [] })
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache is expired' do
@@ -292,7 +292,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => [{ 'name' => 'old', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 7200 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns data when cache is fresh' do
@@ -301,7 +301,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => members, 'fetched_at' => Time.now.to_i - 60 }
         )
-        cached = bot.send(:read_users_cache)
+        cached = bot.send(:read_users_cache, token: 'valid-token')
         expect(cached['members']).to eq(members)
       end
 
@@ -311,14 +311,14 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => [{ 'name' => 'dr_user', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
     describe '#write_users_cache' do
       it 'stores members with timestamp' do
         members = [{ 'name' => 'new', 'id' => 'U3' }]
-        bot.send(:write_users_cache, members)
+        bot.send(:write_users_cache, members, token: 'valid-token')
 
         cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
         expect(cached['members']).to eq(members)
@@ -577,7 +577,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3599 }
         )
-        expect(bot.send(:read_users_cache)).not_to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).not_to be_nil
       end
 
       it 'rejects cache at TTL + 1 second' do
@@ -585,7 +585,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3601 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
@@ -597,13 +597,13 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           'DR', users_cache_script,
           { 'members' => [], 'fetched_at' => nil }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when data is nil' do
         Lich::Common::DB_Store.reset!
         allow(Lich::Common::DB_Store).to receive(:get_data).and_return(nil)
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 

@@ -237,33 +237,31 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users cache keyed by token' do
 
     [nil, ''].each do |missing|
       it "reads no cache for #{missing.inspect}" do
-        bot.send(:write_users_cache, members, token_one)
+        bot.send(:write_users_cache, members, token: token_one)
         # A fresh row at the key an unguarded lookup of "" would use, so the
         # read returns nil only because the guard skips it.
         Lich::Common::DB_Store.store_data(
           'DR', cache_key(''), { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
 
-        expect(bot.send(:read_users_cache, missing)).to be_nil
-        expect(bot.send(:cached_members, missing)).to be_nil
+        expect(bot.send(:read_users_cache, token: missing)).to be_nil
+        expect(bot.send(:cached_members, token: missing)).to be_nil
       end
 
       it "writes no cache for #{missing.inspect}" do
         bot
         before_write = Lich::Common::DB_Store.instance_variable_get(:@store).dup
 
-        bot.send(:write_users_cache, members, missing)
+        bot.send(:write_users_cache, members, token: missing)
 
         expect(Lich::Common::DB_Store.instance_variable_get(:@store)).to eq(before_write)
       end
     end
 
-    it 'defaults to the current UserVars.slack_token' do
-      bot.send(:write_users_cache, members)
-      expect(cached_list(token_one)).to eq(members)
-
-      UserVars.slack_token = nil
-      expect(bot.send(:read_users_cache)).to be_nil
+    it 'requires the token keyword on every cache helper' do
+      expect { bot.send(:read_users_cache) }.to raise_error(ArgumentError, /token/)
+      expect { bot.send(:cached_members) }.to raise_error(ArgumentError, /token/)
+      expect { bot.send(:write_users_cache, members) }.to raise_error(ArgumentError, /token/)
     end
   end
 end

@@ -366,7 +366,7 @@ module Lich
       # @param label [String] log message prefix
       # @return [Boolean] true if the cache was loaded
       def load_users_from_cache(label)
-        members = cached_members
+        members = cached_members(token: UserVars.slack_token)
         return false unless members
 
         @users_list = { 'members' => members }
@@ -387,7 +387,7 @@ module Lich
       # @param username [String] the user the current list does not know
       # @return [Boolean] true if the cache listed the user
       def reload_users_cache(username)
-        member = cached_members&.find { |u| u.is_a?(Hash) && u['name'] == username }
+        member = cached_members(token: UserVars.slack_token)&.find { |u| u.is_a?(Hash) && u['name'] == username }
         return false unless member
 
         @users_list = { 'members' => @users_list['members'] + [member] }
@@ -416,8 +416,8 @@ module Lich
 
       # @param token [String, nil] the token whose cache to read
       # @return [Array<Hash>, nil] members from a fresh, non-empty shared cache
-      def cached_members(token = UserVars.slack_token)
-        cached = read_users_cache(token)
+      def cached_members(token:)
+        cached = read_users_cache(token: token)
         members = cached && cached['members']
         members.is_a?(Array) && !members.empty? ? members : nil
       end
@@ -441,10 +441,10 @@ module Lich
           end
 
           @users_list_retry_at = nil
-          write_users_cache(members, token)
+          write_users_cache(members, token: token)
           members
         rescue ThrottlingError => e
-          members = cached_members(token)
+          members = cached_members(token: token)
           if members
             Lich.log "SlackBot: Throttled, but another character using this token cached the users list"
             return members
@@ -501,7 +501,7 @@ module Lich
       # @param token [String, nil] the token whose cache to read
       # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil
       #   if missing/expired or there is no token
-      def read_users_cache(token = UserVars.slack_token)
+      def read_users_cache(token:)
         key = users_cache_key(token)
         return nil unless key
 
@@ -519,7 +519,7 @@ module Lich
       # @param token [String, nil] the token that fetched the list; nothing is
       #   written without one
       # @return [void]
-      def write_users_cache(members, token = UserVars.slack_token)
+      def write_users_cache(members, token:)
         key = users_cache_key(token)
         return unless key
 
