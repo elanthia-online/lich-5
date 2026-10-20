@@ -18,7 +18,7 @@ module Lich
                   :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-                  :dialogs, :room_id, :previous_nav_rm, :show_room_id, :concentration, :max_concentration,
+                  :dialogs, :room_id, :previous_nav_rm, :nav_count, :show_room_id, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
                   :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
                   :room_climate, :room_terrain, :room_weather, :room_bonfire,
@@ -243,6 +243,9 @@ module Lich
         # rather than a NoMethodError on room_id.zero? (DR) or room_id > N (GS) in the map layer.
         @room_id = 0
         @previous_nav_rm = nil
+        # How many <nav> tags (arrivals) have been seen. The map uses it to tell
+        # whether a room it resolved earlier is the room just left.
+        @nav_count = 0
         # True once <nav> has supplied a real (non-zero) UID for the current
         # arrival and the streamWindow subtitle has not yet consumed it. Keeps a
         # ShowRoomID-on subtitle from overwriting an authoritative nav UID in the
@@ -686,6 +689,7 @@ module Lich
             # gives early room knowledge before the room text streams, and keeps
             # @previous_nav_rm accurate for Map.previous_uid.
             @previous_nav_rm = @room_id
+            @nav_count += 1
             @room_id = attributes['rm'].to_i
             # A real nav UID this arrival is authoritative; flag it so the
             # streamWindow subtitle below treats its own UID marker as a fallback

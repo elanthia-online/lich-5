@@ -629,7 +629,13 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
     let(:em) { described_class.new(settings) }
 
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
     it 'returns empty array when issue_command times out' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(em.send(:get_combat_items)).to eq([])
+    end
+
+    it 'returns empty array when issue_command returns nil' do
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
       expect(em.send(:get_combat_items)).to eq([])
     end
