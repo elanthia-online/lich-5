@@ -143,9 +143,10 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
     allow(Script).to receive(:running?).with('lnet').and_return(true)
     allow(Script).to receive(:running).and_return([double('lnet script', name: 'lnet', unique_buffer: lnet_chats)])
     allow(Script).to receive(:hidden).and_return([])
-    allow_any_instance_of(described_class).to receive(:pause)
-    allow_any_instance_of(described_class).to receive(:get)
+    caller_script = double('calling script', name: 'caller', want_downstream: true, want_downstream_xml: false)
+    allow(caller_script).to receive(:gets)
       .and_return(%([Private]-X:Quilsilgas: "slack_token: #{token}"))
+    allow(Script).to receive(:current).and_return(caller_script)
   end
 
   def initialized_bot

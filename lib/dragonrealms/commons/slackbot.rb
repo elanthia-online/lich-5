@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -10,10 +11,14 @@ module Lich
   module DragonRealms
     # Slack API client for sending direct messages via DragonRealms LNet.
     #
-    # Caches the Slack users list in a shared SQLite store (DB_Store) so all
-    # characters on the same game instance share a single cached copy with
-    # a 1-hour TTL. Randomized startup jitter prevents thundering herd on
-    # simultaneous character logins.
+    # Caches the Slack users list in a shared SQLite store (DB_Store) with a
+    # 1-hour TTL. The cache is kept per token, so characters on the same game
+    # instance that use the same token share one cached copy, and a character
+    # never reads another workspace's users. Entries are never deleted:
+    # DB_Store has no delete and the TTL is checked on read, so lich.db keeps
+    # one row per token ever used.
+    # Randomized startup jitter prevents thundering herd on simultaneous
+    # character logins.
     class SlackBot
       # Base error for all SlackBot failures.
       class Error < StandardError; end
@@ -335,11 +340,6 @@ module Lich
         members.is_a?(Array) && !members.empty?
       end
 
-      # @return [Float] monotonic clock reading in seconds
-      def monotonic_now
-        Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      end
-
       # @param budget [Numeric, nil] seconds from now
       # @return [Float, nil] monotonic deadline, or nil when there is no budget
       def deadline_for(budget)
@@ -443,7 +443,7 @@ module Lich
       # @param label [String] log message prefix
       # @return [Boolean] true if the cache was loaded
       def load_users_from_cache(label)
-        members = cached_members
+        members = cached_members(token: UserVars.slack_token)
         return false unless members
 
         @users_list = { 'members' => members }
@@ -452,10 +452,11 @@ module Lich
       end
 
       # Called by #direct_message when an initialized bot does not know the
-      # user: looks the user up in the shared cache in case another character
-      # refreshed it, and adds that one entry to the current list. The list is
-      # never replaced here, so a mistyped name or a cache written under
-      # another token cannot drop users the bot already knows.
+      # user: looks the user up in the shared cache for the current token in
+      # case another character refreshed it, and adds that one entry to the
+      # current list. The list is never replaced here, so a mistyped name or a
+      # cache refreshed after users left cannot drop users the bot already
+      # knows.
       # Never raises; a cache read error (e.g. a locked database) is logged and
       # the current list is kept, so the message still ends in "user not found"
       # rather than an exception in the calling script.
@@ -463,7 +464,7 @@ module Lich
       # @param username [String] the user the current list does not know
       # @return [Boolean] true if the cache listed the user
       def reload_users_cache(username)
-        member = cached_members&.find { |u| u.is_a?(Hash) && u['name'] == username }
+        member = cached_members(token: UserVars.slack_token)&.find { |u| u.is_a?(Hash) && u['name'] == username }
         return false unless member
 
         @users_list = { 'members' => @users_list['members'] + [member] }
@@ -490,23 +491,26 @@ module Lich
         nil
       end
 
+      # @param token [String, nil] the token whose cache to read
       # @return [Array<Hash>, nil] members from a fresh, non-empty shared cache
-      def cached_members
-        cached = read_users_cache
+      def cached_members(token:)
+        cached = read_users_cache(token: token)
         members = cached && cached['members']
         members.is_a?(Array) && !members.empty? ? members : nil
       end
 
       # Fetches the users list from the Slack API with throttle retry, and
-      # writes a successful result to the shared cache.
+      # writes a successful result to the shared cache. The token is read
+      # once, so the list is cached under the token that fetched it.
       #
       # @param deadline [Float, nil] monotonic deadline; retries that would
       #   overrun it are skipped
       # @return [Array<Hash>, nil] members, or nil on failure
       def fetch_users_from_api(deadline = nil)
+        token = UserVars.slack_token
         retries = 0
         begin
-          members = post('users.list', { 'token' => UserVars.slack_token }, deadline: deadline)['members']
+          members = post('users.list', { 'token' => token }, deadline: deadline)['members']
           unless members.is_a?(Array) && !members.empty?
             Lich.log 'SlackBot: users.list returned no members'
             Lich::Messaging.msg('bold', 'SlackBot: Failed to fetch Slack user list: Slack returned no members')
@@ -514,12 +518,12 @@ module Lich
           end
 
           @users_list_retry_at = nil
-          write_users_cache(members)
+          write_users_cache(members, token: token)
           members
         rescue ThrottlingError => e
-          members = cached_members
+          members = cached_members(token: token)
           if members
-            Lich.log "SlackBot: Throttled, but another character cached the users list"
+            Lich.log "SlackBot: Throttled, but another character using this token cached the users list"
             return members
           end
 
@@ -557,11 +561,28 @@ module Lich
         end
       end
 
+      # DB_Store script name of the users cache for a token. Each token has
+      # its own entry, so a list fetched with one workspace's token is never
+      # used with another's. The key holds a SHA-256 digest, not the token.
+      #
+      # @param token [String, nil] Slack API token
+      # @return [String, nil] the cache key, or nil when there is no token
+      def users_cache_key(token)
+        return nil unless token.is_a?(String) && !token.empty?
+
+        "#{USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
+      end
+
       # Reads cached users list from DB_Store.
       #
-      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil if missing/expired
-      def read_users_cache
-        data = Lich::Common::DB_Store.get_data(XMLData.game, USERS_CACHE_SCRIPT)
+      # @param token [String, nil] the token whose cache to read
+      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil
+      #   if missing/expired or there is no token
+      def read_users_cache(token:)
+        key = users_cache_key(token)
+        return nil unless key
+
+        data = Lich::Common::DB_Store.get_data(XMLData.game, key)
         return nil if data.nil? || data.empty?
         return nil unless data['fetched_at']
         return nil if (Time.now.to_i - data['fetched_at']) > USERS_CACHE_TTL
@@ -572,14 +593,19 @@ module Lich
       # Writes users list to DB_Store cache with a timestamp.
       #
       # @param members [Array<Hash>] Slack user objects to cache
+      # @param token [String, nil] the token that fetched the list; nothing is
+      #   written without one
       # @return [void]
-      def write_users_cache(members)
+      def write_users_cache(members, token:)
+        key = users_cache_key(token)
+        return unless key
+
         Lich::Common::DB_Store.store_data(
           XMLData.game,
-          USERS_CACHE_SCRIPT,
+          key,
           { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
-        Lich.log "SlackBot: Cached #{members.length} Slack users for all characters"
+        Lich.log "SlackBot: Cached #{members.length} Slack users for characters using this token"
       end
 
       # Searches LICHBOTS for a valid Slack token via LNet chat.
@@ -603,25 +629,64 @@ module Lich
 
       # Requests a Slack token from a LichBot via LNet private message.
       #
+      # The reply arrives on the calling script's downstream, so each read is
+      # bounded by the time left before TOKEN_REQUEST_TIMEOUT. A quiet stream
+      # therefore ends the wait on time instead of blocking until the next
+      # game line.
+      #
       # @param lichbot [String] name of the LichBot to request from
       # @return [String, false] token string, or false on failure/timeout
       def request_token(lichbot)
         return false unless lnet_available?
 
-        send_time = Time.now
+        script = Script.current
+        unless script
+          Lich.log 'SlackBot: No calling script to read a token reply from'
+          return false
+        end
+        # LNet delivers the reply through Script.new_downstream and
+        # Script.new_downstream_xml only, so a script that reads neither
+        # stream (one reading only script output, say) can never see it.
+        # Check before sending, so the request is not sent and the wait
+        # does not run for nothing.
+        unless script.want_downstream || script.want_downstream_xml
+          Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
+          return false
+        end
+
+        deadline = monotonic_now + TOKEN_REQUEST_TIMEOUT
         @lnet.unique_buffer.push("chat to #{lichbot} RequestSlackToken")
         token_pattern = /\[Private\]-.*:#{Regexp.escape(lichbot)}: "slack_token: (?<token>.*)"/
 
         loop do
-          line = get
-          pause 0.05
-          return false if Time.now - send_time > TOKEN_REQUEST_TIMEOUT
+          remaining = deadline - monotonic_now
+          return false if remaining <= 0
 
-          if (match = line&.match(token_pattern))
+          line = script.gets(remaining)
+          # Script#gets returns false when the script stopped reading
+          # downstream during the wait, so no reply can arrive any more.
+          # send_to_script pushes its arguments as given, so a pushed false
+          # cannot be told apart from this case and also ends the wait.
+          if line == false
+            Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
+            return false
+          end
+
+          # nil means this read timed out (or a pushed nil); the loop re-checks
+          # the deadline. Other non-String objects pushed through
+          # send_to_script are skipped the same way.
+          next unless line.is_a?(String)
+
+          if (match = line.match(token_pattern))
             return match[:token] == 'Not Found' ? false : match[:token]
           end
-          return false if line&.match?(NO_USER_PATTERN)
+          return false if line.match?(NO_USER_PATTERN)
         end
+      end
+
+      # @return [Float] seconds from a clock that wall-clock changes do not move
+      def monotonic_now
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       # Posts to the Slack API with retry and exponential backoff on network errors.
@@ -697,6 +762,10 @@ module Lich
           retry
         rescue SystemCallError, IOError, OpenSSL::OpenSSLError => e
           # EOFError (an IOError), ECONNRESET and EINVAL are retried above.
+          # IOError is kept broad on purpose: it also catches local faults
+          # such as "closed stream", which are not network failures. Callers
+          # like direct_message must never stop the calling script, and the
+          # class name in the message keeps such a fault diagnosable.
           raise NetworkError, "Network error: #{e.message} (#{e.class})"
         end
       end
@@ -767,6 +836,16 @@ module Lich
           # net/http's own cleanup for start with a block. Unlike finish, it
           # also closes a socket from a start interrupted after connecting
           # but before the session was marked started.
+          #
+          # do_finish is private. The public route to it is start with a
+          # block, but that puts connecting and the request under one
+          # Timeout, so the connect deadline could no longer raise
+          # Net::OpenTimeout separately from the request deadline. If a
+          # net/http upgrade renames do_finish, every request here fails
+          # with NoMethodError, and the "closes the socket when start is
+          # interrupted after connecting" example in
+          # spec/lib/dragonrealms/commons/slackbot_request_deadline_spec.rb
+          # fails with it.
           http.send(:do_finish)
         end
       end

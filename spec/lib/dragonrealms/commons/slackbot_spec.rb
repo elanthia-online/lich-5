@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -62,6 +63,11 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
   after(:each) do
     UserVars.slack_token = nil
+  end
+
+  # DB_Store script name of the users cache kept for a token.
+  def users_cache_script(token = 'valid-token')
+    "#{described_class::USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
   end
 
   # Helper: build a bot with valid token and users list, skipping cache
@@ -185,7 +191,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         UserVars.slack_token = 'valid-token'
         allow(mock_http).to receive(:request).and_return(auth_success_response)
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'cached_user', 'id' => 'U99999' }], 'fetched_at' => Time.now.to_i }
         )
       end
@@ -307,48 +313,48 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     describe '#read_users_cache' do
       it 'returns nil when cache is empty' do
         Lich::Common::DB_Store.reset!
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache has no fetched_at' do
-        Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'members' => [] })
-        expect(bot.send(:read_users_cache)).to be_nil
+        Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'members' => [] })
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache is expired' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'old', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 7200 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns data when cache is fresh' do
         members = [{ 'name' => 'fresh', 'id' => 'U2' }]
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => members, 'fetched_at' => Time.now.to_i - 60 }
         )
-        cached = bot.send(:read_users_cache)
+        cached = bot.send(:read_users_cache, token: 'valid-token')
         expect(cached['members']).to eq(members)
       end
 
       it 'uses XMLData.game for scope isolation' do
         allow(XMLData).to receive(:game).and_return('GS')
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'dr_user', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
     describe '#write_users_cache' do
       it 'stores members with timestamp' do
         members = [{ 'name' => 'new', 'id' => 'U3' }]
-        bot.send(:write_users_cache, members)
+        bot.send(:write_users_cache, members, token: 'valid-token')
 
-        cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+        cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
         expect(cached['members']).to eq(members)
         expect(cached['fetched_at']).to be_within(2).of(Time.now.to_i)
       end
@@ -361,7 +367,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     it 'uses cache when available and skips API' do
       members = [{ 'name' => 'cached', 'id' => 'U100' }]
       Lich::Common::DB_Store.store_data(
-        'DR', '_slackbot_users_cache',
+        'DR', users_cache_script,
         { 'members' => members, 'fetched_at' => Time.now.to_i }
       )
 
@@ -382,7 +388,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       described_class.new
 
-      cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+      cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
       expect(cached['members']).to include({ 'name' => 'testuser', 'id' => 'U12345' })
     end
 
@@ -401,7 +407,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       described_class.new
 
-      cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+      cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
       expect(cached).to be_empty
     end
   end
@@ -421,7 +427,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         members = [{ 'name' => 'other_char_cached', 'id' => 'U777' }]
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
 
@@ -603,18 +609,18 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       it 'accepts cache at exactly TTL - 1 second' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3599 }
         )
-        expect(bot.send(:read_users_cache)).not_to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).not_to be_nil
       end
 
       it 'rejects cache at TTL + 1 second' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3601 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
@@ -623,16 +629,16 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       it 'returns nil when fetched_at is nil' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [], 'fetched_at' => nil }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when data is nil' do
         Lich::Common::DB_Store.reset!
         allow(Lich::Common::DB_Store).to receive(:get_data).and_return(nil)
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
@@ -796,32 +802,261 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
   # ---- #request_token ----
 
+  # These examples read through the real Script#gets and LimitedArray#wait_shift,
+  # so a reply, a quiet stream and a late line behave as they do in a script.
   describe '#request_token (via send)' do
+    let(:token_line) { '[Private]-MAHTRA:Quilsilgas: "slack_token: xoxb-real-token"' }
+    let(:downstream) { Lich::Common::LimitedArray.new }
+    let(:want_downstream) { true }
+    let(:calling_script) do
+      Lich::Common::Script.allocate.tap do |instance|
+        instance.instance_variable_set(:@name, 'caller')
+        instance.instance_variable_set(:@downstream_buffer, downstream)
+        instance.instance_variable_set(:@want_downstream, want_downstream)
+        instance.instance_variable_set(:@want_downstream_xml, false)
+        instance.instance_variable_set(:@want_script_output, false)
+      end
+    end
     let(:bot) do
       instance = build_initialized_bot
       instance.instance_variable_set(:@lnet, lnet_script)
       instance
     end
 
-    context 'when token is received' do
-      it 'returns the token string' do
-        line = '[Private]-MAHTRA:Quilsilgas: "slack_token: xoxb-real-token"'
-        allow(bot).to receive(:get).and_return(line)
-        allow(bot).to receive(:pause)
+    before(:context) do
+      require_relative '../../../../lib/common/limitedarray'
+      require_relative '../../../../lib/common/script'
+    end
 
-        result = bot.send(:request_token, 'Quilsilgas')
-        expect(result).to eq('xoxb-real-token')
+    after(:context) do
+      %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+        Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
+      end
+      $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
+    end
+
+    before do
+      allow(Script).to receive(:current).and_return(calling_script)
+    end
+
+    def monotonic
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    # Runs request_token on its own thread so a hang fails the example
+    # instead of the run.
+    def request_in_thread
+      Thread.new { bot.send(:request_token, 'Quilsilgas') }.tap { |t| t.report_on_exception = false }
+    end
+
+    context 'when the token reply is already buffered' do
+      it 'returns the token string and sends the request over LNet' do
+        downstream.push(token_line)
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+        expect(lnet_buffer).to eq(['chat to Quilsilgas RequestSlackToken'])
       end
     end
 
-    context 'when Not Found response' do
-      it 'returns false' do
-        line = '[Private]-MAHTRA:Quilsilgas: "slack_token: Not Found"'
-        allow(bot).to receive(:get).and_return(line)
-        allow(bot).to receive(:pause)
+    context 'when the reply arrives after unrelated game lines' do
+      it 'skips the unrelated lines and returns the token' do
+        downstream.push('The wind picks up.')
+        downstream.push('[Private]-MAHTRA:Someoneelse: "slack_token: xoxb-spoofed"')
+        downstream.push(token_line)
 
-        result = bot.send(:request_token, 'Quilsilgas')
-        expect(result).to be false
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+      end
+    end
+
+    context 'when non-String objects reach the downstream buffer' do
+      # send_to_script pushes its arguments into a script's downstream
+      # buffer as given, so Script#gets can return objects other than
+      # String, nil or false.
+      it 'skips them and returns the token' do
+        downstream.push(42)
+        downstream.push({ note: 'not a line' })
+        downstream.push(token_line)
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+      end
+    end
+
+    context 'when the reply arrives while the read is waiting' do
+      it 'wakes on the line and returns the token' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+        waiter = request_in_thread
+        sleep 0.1
+        expect(waiter).to be_alive
+
+        downstream.push(token_line)
+
+        expect(waiter.join(2)&.value).to eq('xoxb-real-token')
+      end
+    end
+
+    # The reply is already buffered, so the method must answer from it in
+    # well under the timeout. A timing bound keeps a timeout-driven false
+    # from passing for the reply-driven one.
+    def expect_prompt_false
+      stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+      started = monotonic
+      waiter = request_in_thread
+
+      finished = waiter.join(3)
+      elapsed = monotonic - started
+      waiter.kill unless finished
+
+      expect(finished).not_to be_nil, 'request_token did not answer from the buffered reply'
+      expect(waiter.value).to be false
+      expect(elapsed).to be < 1
+    end
+
+    context 'when Not Found response' do
+      it 'returns false at once' do
+        downstream.push('[Private]-MAHTRA:Quilsilgas: "slack_token: Not Found"')
+
+        expect_prompt_false
+      end
+    end
+
+    context 'when LNet reports no such user' do
+      it 'returns false at once' do
+        downstream.push('[server]: "no user Quilsilgas"')
+
+        expect_prompt_false
+      end
+    end
+
+    context 'when the stream is idle' do
+      it 'returns false once the timeout passes, without waiting for a game line' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 0.3)
+        started = monotonic
+        waiter = request_in_thread
+
+        finished = waiter.join(3)
+        waiter.kill unless finished
+
+        expect(finished).not_to be_nil, 'request_token still blocked on an idle stream after 3 s'
+        expect(waiter.value).to be false
+        expect(monotonic - started).to be_between(0.3, 1.5)
+      end
+    end
+
+    context 'when only unrelated lines arrive past the timeout' do
+      it 'returns false at the timeout instead of at the late line' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 0.3)
+        started = monotonic
+        waiter = request_in_thread
+        feeder = Thread.new do
+          sleep 1.5
+          downstream.push('The wind picks up.')
+        end
+
+        finished = waiter.join(3)
+        elapsed = monotonic - started
+        waiter.kill unless finished
+        feeder.join
+
+        expect(finished).not_to be_nil
+        expect(waiter.value).to be false
+        expect(elapsed).to be < 1.2
+      end
+    end
+
+    context 'when the token line arrives after the timeout' do
+      it 'returns false before the line arrives and leaves it unread' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 0.2)
+        started = monotonic
+        waiter = request_in_thread
+        feeder = Thread.new do
+          sleep 1.0
+          downstream.push(token_line)
+        end
+
+        finished = waiter.join(3)
+        elapsed = monotonic - started
+        waiter.kill unless finished
+        feeder.join
+
+        expect(finished).not_to be_nil, 'request_token still blocked after 3 s'
+        expect(waiter.value).to be false
+        expect(elapsed).to be < 0.9
+        expect(downstream.try_shift).to eq(token_line)
+      end
+    end
+
+    # LNet delivers the reply through Script.new_downstream and
+    # Script.new_downstream_xml only.
+    context 'when the calling script reads no downstream' do
+      let(:want_downstream) { false }
+
+      before do
+        allow(calling_script).to receive(:echo)
+        allow(calling_script).to receive(:execution_sleep)
+      end
+
+      it 'returns false at once without sending the request or reading' do
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+        started = monotonic
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect(monotonic - started).to be < 1
+        expect(lnet_buffer).to be_empty
+        expect(calling_script).not_to have_received(:echo)
+        expect(calling_script).not_to have_received(:execution_sleep)
+        expect(Lich).to have_received(:log).with(/caller reads no downstream/)
+      end
+
+      it 'returns false at once when the script reads only script output' do
+        calling_script.instance_variable_set(:@want_script_output, true)
+        stub_const("#{described_class}::TOKEN_REQUEST_TIMEOUT", 5)
+        started = monotonic
+        waiter = request_in_thread
+
+        finished = waiter.join(3)
+        elapsed = monotonic - started
+        waiter.kill unless finished
+
+        expect(finished).not_to be_nil, 'request_token waited for a reply that cannot arrive'
+        expect(waiter.value).to be false
+        expect(elapsed).to be < 1
+        expect(lnet_buffer).to be_empty
+        expect(Lich).to have_received(:log).with(/caller reads no downstream/)
+      end
+
+      it 'sends the request and reads the reply when the script reads only XML downstream' do
+        calling_script.instance_variable_set(:@want_downstream_xml, true)
+        downstream.push(token_line)
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to eq('xoxb-real-token')
+        expect(lnet_buffer).to eq(['chat to Quilsilgas RequestSlackToken'])
+      end
+    end
+
+    context 'when a false is pushed into the downstream buffer during the wait' do
+      # Script#gets also returns false when downstream reading stops, so a
+      # false read ends the wait.
+      it 'returns false at once and logs it' do
+        downstream.push(false)
+        downstream.push(token_line)
+        started = monotonic
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect(monotonic - started).to be < 1
+        expect(lnet_buffer).to eq(['chat to Quilsilgas RequestSlackToken'])
+        expect(Lich).to have_received(:log).with(/caller reads no downstream/)
+      end
+    end
+
+    context 'when no script is bound to the calling thread' do
+      it 'returns false at once without sending the request' do
+        allow(Script).to receive(:current).and_return(nil)
+        started = monotonic
+
+        expect(bot.send(:request_token, 'Quilsilgas')).to be false
+        expect(monotonic - started).to be < 1
+        expect(lnet_buffer).to be_empty
+        expect(Lich).to have_received(:log).with(/No calling script/)
       end
     end
 

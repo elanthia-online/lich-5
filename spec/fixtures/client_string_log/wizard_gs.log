@@ -1,0 +1,20 @@
+2026-10-17 09:46:55: info: Lich 5.22.0
+2026-10-17 09:46:55: info: Ruby 4.0.7
+2026-10-17 09:46:55: info: x64-mingw-ucrt
+2026-10-17 09:46:59: info: no force-mode info given
+2026-10-17 09:47:08: info: authenticated via eaccess
+2026-10-17 09:47:08: info: Working against a Windows Platform for FE Executable
+2026-10-17 09:47:08: info: Working against a Windows Platform for FE Location
+2026-10-17 09:47:08: info: Current Windows working directory is C:/PROGRA~2/SIMU/WIZARD
+2026-10-17 09:47:08: info: gamehost: storm.gs4.game.play.net
+2026-10-17 09:47:08: info: gameport: 10024
+2026-10-17 09:47:08: info: game: WIZ
+2026-10-17 09:47:08: info: launcher_cmd: ["Wizard.exe", "/GGS/H127.0.0.1", "/P61587", "/K[scrubbed key]"]
+2026-10-17 09:47:08: info: waiting for client to connect...
+2026-10-17 09:47:08: info: connected
+2026-10-17 09:47:08: info: connecting to game server (storm.gs4.game.play.net:10024)
+2026-10-17 09:47:08: info: connected via direct TCP transport (storm.gs4.game.play.net:10024)
+2026-10-17 09:47:08: info: connected
+2026-10-17 09:47:08: info: client string from front end: /FE:WIZARD /VERSION:2.04 /P:WIN32
+2026-10-17 09:47:08: info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML
+2026-10-17 09:47:12: info: logged in as GSIV:Testchar
