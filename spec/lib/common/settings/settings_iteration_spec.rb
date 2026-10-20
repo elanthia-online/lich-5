@@ -124,6 +124,39 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(reloaded(:rows)).to eq(stored[:rows])
     end
 
+    it "stores nothing, and says so, for a write through an element the loop removed, instead of writing to the element now at its position" do
+      settings[:rows] = [{ k: 1 }, { k: 2 }, { k: 3 }]
+      rows = settings[:rows]
+
+      rows.each do |row|
+        rows.delete(row) if row[:k] == 1
+        row[:seen] = true
+        row[:sub] ||= {} if row[:k] == 3
+      end
+
+      plain_rows = [{ k: 1 }, { k: 2 }, { k: 3 }]
+      plain_rows.each do |row|
+        plain_rows.delete(row) if row[:k] == 1
+        row[:seen] = true
+        row[:sub] ||= {} if row[:k] == 3
+      end
+      expect(stored[:rows]).to eq(plain_rows)
+      expect(stored[:rows]).to eq([{ k: 2 }, { k: 3, seen: true, sub: {} }])
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:rows, 0] no longer holds the element this each loop yielded there")
+    end
+
+    it "stores nothing for a write to a container inside an element the loop removed from a Hash, instead of putting the entry back" do
+      settings[:by] = { "a" => { sub: { n: 1 } }, "b" => { sub: { n: 2 } } }
+      by = settings[:by]
+
+      by.each { |key, value| by.delete(key) if key == "a"; value[:sub][:seen] = true }
+
+      expect(stored[:by]).to eq("b" => { sub: { n: 2, seen: true } })
+      expect(error_messages.size).to eq(1)
+      expect(error_messages.first).to include("not saved", "[:by, \"a\"] no longer holds the element this each loop yielded there")
+    end
+
     it "keeps what another session changed in an element the loop writes to, and the elements it appended" do
       rows = settings[:rows]
       their_write({ rows: [{ name: "a", count: 0, theirs: 1 }, { name: "b", count: 0 }, { name: "c", count: 0 }] })

@@ -333,6 +333,10 @@ module Lich
           return nil
         end
 
+        if proxy.respond_to?(:moved?) && proxy.moved?
+          return refuse_proxy_save(script_name, proxy, "#{proxy.anchor_path.inspect} no longer holds the element this each loop yielded there (it was removed, replaced or moved in this session), so the write would land on another element", kind: :element_moved)
+        end
+
         if proxy.respond_to?(:copy?) && proxy.copy?
           return refuse_proxy_save(script_name, proxy, "this is a new container built from an element an each loop yielded (merge, select, first(2), ...), not part of the settings")
         end

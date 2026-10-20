@@ -42,8 +42,13 @@ module Lich
       # at a key, a value that is not its source's (see
       # #may_hold_foreign_values?): its elements are found in the source by
       # identity only (see #source_segment).
+      #
+      # +anchor+ (see #moved?) is, for a container element #each yielded
+      # and every container taken from it, [the container of this session's
+      # copy that held the element, its key or index there, the element,
+      # the element's path].
       def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false,
-                     path_classes: nil, pathless_cause: nil, foreign_values: false)
+                     path_classes: nil, pathless_cause: nil, foreign_values: false, anchor: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
@@ -57,6 +62,7 @@ module Lich
         @path_classes = path_classes&.size == @path.size ? path_classes.dup : (Array.new(@path.size, Hash) if @path.size <= 1)
         @pathless_cause = pathless_cause
         @foreign_values = foreign_values
+        @anchor = anchor
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -70,6 +76,27 @@ module Lich
       # ends; after that every refused write is told. nil for any other
       # proxy.
       attr_reader :refusals
+
+      # True when the container element #each yielded (this proxy's, or the
+      # one this proxy's container was taken from) is no longer at the key
+      # or index it was yielded at in this session's copy: the loop removed
+      # it (list.each { |e| list.delete(e) ... }), put another value there,
+      # or moved it. Its path still leads to that key or index, where the
+      # settings now hold another element (or none), so
+      # Settings.save_proxy_changes refuses a write through it.
+      def moved?
+        return false unless @anchor
+
+        holder, segment, element, = @anchor
+        found = segment_in(holder, segment)
+        !(found && holder[segment].equal?(element))
+      end
+
+      # The path of the element #each yielded that #moved? checks; nil for a
+      # proxy that has none.
+      def anchor_path
+        @anchor&.last
+      end
 
       # True for a proxy #each yielded, or a container taken from one at any
       # depth (see #refusals). A new container built from such a proxy is a
@@ -383,7 +410,7 @@ module Lich
         return value unless @settings_module.container?(value)
         return view_element_proxy([key], value, refusals) if built_from_source?
 
-        proxy_at(@path + [key], value, refusals: refusals)
+        proxy_at(@path + [key], value, refusals: refusals, anchor: [@target, key, value, @path + [key]])
       end
 
       # True for a proxy whose elements are looked up in the container it
@@ -922,7 +949,7 @@ module Lich
               SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name,
                                                                                source: view_source,
                                                                                path_classes: @path_classes, pathless_cause: view_cause(is_view),
-                                                                               foreign_values: may_hold_foreign_values?)
+                                                                               foreign_values: may_hold_foreign_values?, anchor: @anchor)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -997,11 +1024,12 @@ module Lich
       # or a view's source), along the segments after it. Its #path_classes
       # are this proxy's followed by the classes of the containers those
       # segments index; nil when this proxy's are not known. It shares
-      # +refusals+ (see #refusals), this proxy's by default.
-      private def proxy_at(path, value, container = @target, refusals: @refusals)
+      # +refusals+ (see #refusals) and +anchor+ (see #moved?), this proxy's
+      # by default.
+      private def proxy_at(path, value, container = @target, refusals: @refusals, anchor: @anchor)
         classes = @path_classes && path_classes_along(container, path.drop(@path.size))
         SettingsProxy.new(@settings_module, @scope, path, value, script_name: @script_name, refusals: refusals,
-                                                                 path_classes: classes && (@path_classes + classes))
+                                                                 path_classes: classes && (@path_classes + classes), anchor: anchor)
       end
 
       # The class (Hash or Array) of each container +segments+ index, from
