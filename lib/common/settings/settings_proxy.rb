@@ -45,9 +45,10 @@ module Lich
       # identity only (see #source_segment).
       #
       # +anchor+ (see #moved?) is, for a container element #each yielded
-      # and every container taken from it, [the container of this session's
-      # copy that held the element, its key or index there, the element,
-      # the element's path].
+      # and every container taken from it, a list with one entry for each
+      # loop, outermost first, that yielded it or a container it is in:
+      # [the container of this session's copy that held the element, its
+      # key or index there, the element, the element's path].
       def initialize(settings_module, scope, path, target, detached: false, script_name: nil, source: nil, unlocated: false, refusals: nil, copy: false,
                      path_classes: nil, pathless_cause: nil, foreign_values: false, anchor: nil)
         @settings_module = settings_module # This should be the Settings module itself
@@ -63,7 +64,7 @@ module Lich
         @path_classes = path_classes&.size == @path.size ? path_classes.dup : (Array.new(@path.size, Hash) if @path.size <= 1)
         @pathless_cause = pathless_cause
         @foreign_values = foreign_values
-        @anchor = anchor
+        @anchor = anchor&.dup&.freeze
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
@@ -78,25 +79,30 @@ module Lich
       # proxy.
       attr_reader :refusals
 
-      # True when the container element #each yielded (this proxy's, or the
-      # one this proxy's container was taken from) is no longer at the key
-      # or index it was yielded at in this session's copy: the loop removed
-      # it (list.each { |e| list.delete(e) ... }), put another value there,
-      # or moved it. Its path still leads to that key or index, where the
+      # True when a container element #each yielded (this proxy's, the one
+      # this proxy's container was taken from, or one an outer loop yielded
+      # that holds either) is no longer at the key or index it was yielded
+      # at in this session's copy: the loop removed it
+      # (list.each { |e| list.delete(e) ... }), put another value there, or
+      # moved it. Its path still leads to that key or index, where the
       # settings now hold another element (or none), so
       # Settings.save_proxy_changes refuses a write through it.
       def moved?
-        return false unless @anchor
-
-        holder, segment, element, = @anchor
-        found = segment_in(holder, segment)
-        !(found && holder[segment].equal?(element))
+        !moved_anchor.nil?
       end
 
-      # The path of the element #each yielded that #moved? checks; nil for a
-      # proxy that has none.
+      # The path of the outermost element #each yielded that #moved? found
+      # moved; nil when none has.
       def anchor_path
-        @anchor&.last
+        moved_anchor&.last
+      end
+
+      # The outermost entry of +anchor+ (see #initialize) whose element is no
+      # longer where it was yielded; nil when there is none.
+      private def moved_anchor
+        @anchor&.find do |holder, segment, element, _path|
+          !(segment_in(holder, segment) && holder[segment].equal?(element))
+        end
       end
 
       # True for a proxy #each yielded, or a container taken from one at any
@@ -417,7 +423,7 @@ module Lich
         return value unless @settings_module.container?(value)
         return view_element_proxy([key], value, refusals) if built_from_source?
 
-        proxy_at(@path + [key], value, refusals: refusals, anchor: [@target, key, value, @path + [key]])
+        proxy_at(@path + [key], value, refusals: refusals, anchor: [*@anchor, [@target, key, value, @path + [key]]])
       end
 
       # True for a proxy whose elements are looked up in the container it
@@ -929,7 +935,7 @@ module Lich
             pathless_derived_proxy(result, fetch_default?(method, args) ? "the default fetch returned" : nil)
           elsif @settings_module.container?(result) && yielded?
             SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: method,
-                                                                             path_classes: @path_classes)
+                                                                             path_classes: @path_classes, anchor: @anchor)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)
               # For Array#find / Array#detect, identify the element index in the
