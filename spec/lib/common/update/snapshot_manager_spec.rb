@@ -346,7 +346,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
           reverting.revert
         end
 
-        expect(messages).to include('Another revert or a snapshot is running on this installation. Nothing was changed.')
+        expect(messages).to include('Another revert, a snapshot or an update is running on this installation. Nothing was changed.')
         expect(live_state).to eq(before)
         expect(revert_temp_dirs).to be_empty
         expect(published.sort).to eq([older, dir].sort)
@@ -1470,7 +1470,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
     context 'when another revert on the same installation is running' do
       let(:lock_path) { revert_lock_path }
-      let(:refusal) { 'Another revert or a snapshot is running on this installation. Nothing was changed.' }
+      let(:refusal) { 'Another revert, a snapshot or an update is running on this installation. Nothing was changed.' }
 
       before { make_snapshot('2026-10-01-00-00-00', '5.21.0') }
 

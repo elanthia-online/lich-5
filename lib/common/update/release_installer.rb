@@ -238,47 +238,50 @@ module Lich
             respond 'Getting ready to update.  First we will create a'
             respond 'snapshot in case there are problems with the update.'
 
-            snapshot_dir = @snapshot_manager.snapshot
+            # The snapshot holds the revert lock until the block returns, so a
+            # revert in another session cannot swap lib/ during the download or
+            # the install.
+            @snapshot_manager.snapshot do |snapshot_dir|
+              respond
+              respond "Downloading Lich5 version #{@update_to}"
+              respond
+              filename = "lich5-#{@update_to}"
+              File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
+                file.write URI.parse(@zipfile).open.read
+              end
 
-            respond
-            respond "Downloading Lich5 version #{@update_to}"
-            respond
-            filename = "lich5-#{@update_to}"
-            File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-              file.write URI.parse(@zipfile).open.read
+              FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
+              Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"),
+                                                  File.join(TEMP_DIR, filename))
+              new_target = Dir.children(File.join(TEMP_DIR, filename))
+              FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
+              FileUtils.remove_dir(File.join(TEMP_DIR, filename))
+              FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
+
+              source_dir = File.join(TEMP_DIR, filename)
+
+              unless check_ruby_compatibility(source_dir, @update_to)
+                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
+                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+                next
+              end
+
+              unless perform_update(source_dir, @update_to, snapshot_dir)
+                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
+                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+                next
+              end
+
+              FileUtils.remove_dir(source_dir)
+              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+
+              Lich::Util::Update.clear_branch_tracking
+
+              respond
+              respond "Lich5 has been updated to Lich5 version #{@update_to}"
+              respond "You should exit the game, then log back in.  This will start the game"
+              respond "with your updated Lich.  Enjoy!"
             end
-
-            FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
-            Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"),
-                                                File.join(TEMP_DIR, filename))
-            new_target = Dir.children(File.join(TEMP_DIR, filename))
-            FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
-            FileUtils.remove_dir(File.join(TEMP_DIR, filename))
-            FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-
-            source_dir = File.join(TEMP_DIR, filename)
-
-            unless check_ruby_compatibility(source_dir, @update_to)
-              FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-              return
-            end
-
-            unless perform_update(source_dir, @update_to, snapshot_dir)
-              FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-              return
-            end
-
-            FileUtils.remove_dir(source_dir)
-            FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-
-            Lich::Util::Update.clear_branch_tracking
-
-            respond
-            respond "Lich5 has been updated to Lich5 version #{@update_to}"
-            respond "You should exit the game, then log back in.  This will start the game"
-            respond "with your updated Lich.  Enjoy!"
           end
         end
 

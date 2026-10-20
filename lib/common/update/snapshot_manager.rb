@@ -114,7 +114,14 @@ module Lich
         # revert's swap could publish a mix of two versions that looks
         # complete. Other snapshots do not block it.
         #
-        # @return [String] path to the published snapshot directory
+        # Given a block, yields the published snapshot's path to it and keeps
+        # holding the lock until the block returns, so an update that
+        # downloads and installs in the block cannot have a revert swap lib/
+        # under it.
+        #
+        # @yieldparam snapshot_dir [String] path to the published snapshot
+        # @return [String, Object] path to the published snapshot directory,
+        #   or the block's value when given a block
         # @raise [SystemCallError] if any copy fails; no snapshot is published
         # @raise [RevertRunningError] if a revert is running; nothing is copied
         def snapshot
@@ -127,6 +134,7 @@ module Lich
 
           FileUtils.mkdir_p(BACKUP_DIR)
           snapshot_subdir = nil
+          result = nil
           locked = with_revert_lock(File::LOCK_SH) do
             # Interrupts are deferred except while copying and publishing, so
             # a kill can never land between creating the staging directory
@@ -153,20 +161,20 @@ module Lich
                 FileUtils.rm_rf(staging_dir) unless snapshot_subdir
               end
             end
+
+            respond
+            respond 'Current Lich ecosystem files (only) backed up to:'
+            respond "    #{snapshot_subdir}"
+
+            result = block_given? ? yield(snapshot_subdir) : snapshot_subdir
             true
           end
-          unless locked
-            respond
-            respond 'A revert is running on this installation, so no snapshot was saved and nothing was changed.'
-            respond 'Run the update again once the revert has finished.'
-            raise RevertRunningError, 'a revert is running on this installation'
-          end
+          return result if locked
 
           respond
-          respond 'Current Lich ecosystem files (only) backed up to:'
-          respond "    #{snapshot_subdir}"
-
-          snapshot_subdir
+          respond 'A revert is running on this installation, so no snapshot was saved and nothing was changed.'
+          respond 'Run the update again once the revert has finished.'
+          raise RevertRunningError, 'a revert is running on this installation'
         end
 
         # Restores most recent snapshot from BACKUP_DIR.
@@ -180,8 +188,8 @@ module Lich
         # may be several versions back.
         #
         # Holds the revert lock exclusively for the whole run. If another
-        # revert, or a snapshot, on the same installation holds it, says so
-        # and changes nothing.
+        # revert, a snapshot, or an update past its snapshot (see #snapshot)
+        # on the same installation holds it, says so and changes nothing.
         #
         # @return [void]
         def revert
@@ -195,7 +203,7 @@ module Lich
           return if ran
 
           respond
-          respond 'Another revert or a snapshot is running on this installation. Nothing was changed.'
+          respond 'Another revert, a snapshot or an update is running on this installation. Nothing was changed.'
         end
 
         private
