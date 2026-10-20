@@ -605,6 +605,318 @@ describe DRCC do
     end
   end
 
+  describe '.empty_crucible?' do
+    # Reference the modules the way production resolves them, so the stubs hit
+    # the same objects whether or not the real commons are loaded.
+    let(:common) { Lich::DragonRealms::DRC }
+    let(:items) { Lich::DragonRealms::DRCI }
+    let(:sent) { [] }
+    let(:look_replies) { [] }
+    # Nouns whose GET from the crucible fails (get_item_unsafe returns false).
+    let(:stuck) { [] }
+    let(:empty) { 'There is nothing in there.' }
+    let(:molten) { 'In the large crucible you see some molten bronze.' }
+    let(:nugget) { 'In the large crucible you see a bronze nugget.' }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i and
+      # the matched text (not the whole line) is returned. The last reply repeats.
+      allow(common).to receive(:bput) do |command, *patterns|
+        sent << command
+        next 'You tap a large crucible' if command == 'tap crucible'
+
+        line = look_replies.length > 1 ? look_replies.shift : look_replies.first
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        match ? match.to_a.first : ''
+      end
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(items).to receive(:get_item_unsafe) do |item, container|
+        sent << "get #{item} from #{container}"
+        !stuck.include?(item)
+      end
+      allow(items).to receive(:dispose_trash) { |item| sent << "dispose #{item}" }
+      allow(items).to receive(:in_hands?) { |item| held.include?(item) }
+    end
+
+    # Nouns the player is already holding (DRCI.in_hands? returns true).
+    let(:held) { [] }
+
+    it 'returns true for an empty crucible' do
+      look_replies << empty
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false when there is no crucible' do
+      look_replies << 'I could not find what you were referring to.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false without retrying when the look times out' do
+      look_replies << 'Something unrelated scrolls by.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'tilts molten metal out instead of trying to pick it up' do
+      look_replies.push(molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'tilts the metal first, then clears the clutter left behind' do
+      look_replies.push('In the large crucible you see some molten bronze and a bronze nugget.', nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'gets and disposes of solid clutter' do
+      look_replies.push(nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'returns true when the crucible empties on the last allowed pass' do
+      look_replies.push(molten, molten, molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages).to be_empty
+    end
+
+    it 'gives up after 3 passes when the molten metal stays' do
+      look_replies << molten
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(sent.grep(/^get /)).to be_empty
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'gives up after 3 passes when the clutter cannot be removed' do
+      look_replies << nugget
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('get nugget from crucible')).to eq(3)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'counts a tilt and the clears after it against the same 3-pass budget' do
+      look_replies.push(molten, nugget)
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc', 'get nugget from crucible',
+                          'look in cruc'])
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 attempts to tilt or clear it')
+    end
+
+    it 'does not dispose of clutter it failed to pick up from the crucible' do
+      look_replies.push(nugget, empty)
+      stuck << 'nugget'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'look in cruc'])
+      expect(items).not_to have_received(:dispose_trash)
+    end
+
+    it 'disposes only of the clutter items it picked up' do
+      look_replies.push('In the large crucible you see a bronze nugget and a granite rock.', empty)
+      stuck << 'rock'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get rock from crucible', 'look in cruc'])
+    end
+
+    it 'tilts molten metal listed after solid clutter instead of picking it up' do
+      look_replies.push('In the large crucible you see a bronze nugget and some molten bronze.', nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'tilts molten metal listed without an article' do
+      look_replies.push('In the large crucible you see molten bronze.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'skips an entry with no noun to pick up and gives up after one look' do
+      # The real DRC.get_noun returns nil for a name that does not end in a
+      # word (see common_spec.rb); the spec_helper stub never does.
+      allow(common).to receive(:get_noun).with('a 5').and_return(nil)
+      look_replies << 'In the large crucible you see a 5.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:in_hands?)
+      expect(items).not_to have_received(:get_item_unsafe)
+    end
+
+    it 'tilts molten metal anywhere in a comma-separated list' do
+      look_replies.push('In the large crucible you see a bronze nugget, some molten iron and a granite rock.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    [
+      'a bronze nugget, molten iron and a granite rock',
+      'a bronze nugget and molten iron',
+      'a bronze nugget, a granite rock, and molten iron'
+    ].each do |list|
+      it "tilts bare molten metal that is not first in the list: #{list}" do
+        look_replies.push("In the large crucible you see #{list}.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'does not split a solid item at a molten-hued word after and' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
+    it 'clears the entry glued to a molten-hued item on the next pass' do
+      look_replies.push('In the large crucible you see a bronze nugget and molten-hued ingot.',
+                        'In the large crucible you see a bronze nugget.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get ingot from crucible', 'dispose ingot',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'picks up a solid item whose description only contains the word molten' do
+      look_replies.push('In the large crucible you see a nugget of once-molten bronze.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get bronze from crucible', 'dispose bronze', 'look in cruc'])
+    end
+
+    %w[wand band stand].each do |noun|
+      it "tilts molten metal listed after a #{noun}" do
+        look_replies.push("In the large crucible you see a gold #{noun} and some molten bronze.", empty)
+        expect(DRCC.empty_crucible?).to be(true)
+        expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      end
+    end
+
+    it 'tilts molten metal at the end of a list with a serial comma' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and some molten iron.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'picks up every item of a serial-comma list by its own noun' do
+      look_replies.push('In the large crucible you see a bronze nugget, a granite rock, and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get rock from crucible', 'dispose rock',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'does not cut a noun ending in "and" when splitting the list' do
+      look_replies.push('In the large crucible you see a gold wand and a steel bar.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get wand from crucible', 'dispose wand',
+                          'get bar from crucible', 'dispose bar', 'look in cruc'])
+    end
+
+    it 'picks up a solid item whose adjective starts with molten' do
+      look_replies.push('In the large crucible you see a nugget and a molten-hued ingot.', empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'get ingot from crucible', 'dispose ingot', 'look in cruc'])
+    end
+
+    it 'leaves clutter alone when the player already holds an item with that noun' do
+      look_replies << 'In the large crucible you see a steel bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+      expect(items).not_to have_received(:get_item_unsafe)
+      expect(items).not_to have_received(:dispose_trash)
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('Not clearing the bar')
+    end
+
+    it 'clears the other clutter, then gives up on the held noun without more passes' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'prints the held-noun message once, not again on the next pass' do
+      look_replies.push('In the large crucible you see a steel bar and a bronze nugget.',
+                        'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints the held-noun message once when two entries share the held noun' do
+      look_replies << 'In the large crucible you see a steel bar and an iron bar.'
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'prints the held-noun message on a later pass when it first shows up there' do
+      look_replies.push(molten, 'In the large crucible you see a steel bar.')
+      held << 'bar'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+      held_messages = Lich::Messaging.messages.select { |m| m[:message].include?('Not clearing the bar') }
+      expect(held_messages.length).to eq(1)
+    end
+
+    it 'prints one held-noun message per distinct noun' do
+      look_replies << 'In the large crucible you see a steel bar and a bronze nugget.'
+      held.push('bar', 'nugget')
+      expect(DRCC.empty_crucible?).to be(false)
+      held_messages = Lich::Messaging.messages.map { |m| m[:message] }.grep(/Not clearing the/)
+      expect(held_messages).to eq(['DRCC: Not clearing the bar from the crucible while you are holding something that matches it.',
+                                   'DRCC: Not clearing the nugget from the crucible while you are holding something that matches it.'])
+    end
+
+    it 'still tilts molten metal while holding an item with the same noun' do
+      look_replies.push(molten, empty)
+      held << 'bronze'
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'lets find_empty_crucible move on from a crucible that will not empty' do
+      look_replies << molten
+      travel = Lich::DragonRealms::DRCT
+      allow(DRCC).to receive(:get_data).with('crafting').and_return(
+        'blacksmithing' => { 'Crossing' => { 'crucibles' => [1, 2], 'idle-room' => 3 } }
+      )
+      allow(Lich::DragonRealms::DRRoom).to receive(:pcs).and_return([])
+      allow(Lich::DragonRealms::DRRoom).to receive(:group_members).and_return([])
+      allow(DRCC).to receive(:clean_anvil?)
+      predicate_results = []
+      allow(travel).to receive(:find_sorted_empty_room) do |_rooms, _idle, predicate|
+        predicate_results << predicate.call
+      end
+      DRCC.find_empty_crucible('Crossing')
+
+      expect(predicate_results).to eq([false])
+      expect(sent.first).to eq('tap crucible')
+      expect(sent.count('look in cruc')).to eq(8)
+    end
+  end
+
   describe '.get_crafting_item' do
     # Reference the modules the way production resolves them, so the stubs hit
     # the same objects whether or not other specs load the real commons.

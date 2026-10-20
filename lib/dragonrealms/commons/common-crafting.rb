@@ -9,7 +9,14 @@ module Lich
       LOOK_CRUCIBLE_NOT_FOUND = '^I could not find'
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
-      LOOK_CRUCIBLE_MOLTEN = 'crucible you see some molten'
+      # Splits the LOOK_CRUCIBLE_SEE_PATTERN items list into entries at ", ",
+      # ", and " or " and " followed by an article or a bare "molten ", keeping
+      # that word. The " and " must be a whole word, so "a gold wand and ..."
+      # is not cut.
+      LOOK_CRUCIBLE_ITEM_SEPARATOR = /(?:,\s+(?:and\s+)?|\s+and\s+)(?=(?:some|an?|molten)\s)/.freeze
+      # Matches one entry of the LOOK_CRUCIBLE_SEE_PATTERN items list.
+      LOOK_CRUCIBLE_MOLTEN = /\A(?:(?:some|an?)\s+)?molten\s/.freeze
+      EMPTY_CRUCIBLE_MAX_PASSES = 3
 
       LOOK_ANVIL_NOT_FOUND = '^I could not find'
       LOOK_ANVIL_CLEAN = 'surface looks clean and ready'
@@ -124,7 +131,17 @@ module Lich
 
       SIGIL_COUNT_NOTHING = 'but there is nothing in there like that'
 
-      def empty_crucible?
+      # Tilts out molten metal and clears clutter, then looks again, up to
+      # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
+      # Molten metal is found wherever it appears in the list. Clutter is only
+      # disposed of when it was actually picked up from the crucible, and
+      # clutter whose noun matches something already in hand (DRCI.in_hands?
+      # matches any held word starting with the noun) is left alone, so a held
+      # item cannot stand in for clutter that was not picked up. Each held
+      # noun is reported once per call, not once per entry or per pass.
+      # pass: and warned: are internal recursion state -- callers should not
+      # set them.
+      def empty_crucible?(pass: 0, warned: [])
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
                                LOOK_CRUCIBLE_EMPTY,
@@ -133,23 +150,45 @@ module Lich
           true
         when /I could not find/
           false
-        when LOOK_CRUCIBLE_MOLTEN
-          fput('tilt crucible')
-          fput('tilt crucible')
-          return DRCC.empty_crucible?
         when /crucible you see/
+          if pass >= EMPTY_CRUCIBLE_MAX_PASSES
+            Lich::Messaging.msg('bold', "DRCC: The crucible is still not empty after #{pass} attempts to tilt or clear it.")
+            return false
+          end
+
           match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
           return false unless match
 
-          clutter = match[:items]
-                    .split(/(?:,|and) (?:some|an|a)/)
-                    .map(&:strip)
-          clutter.each do |junk|
-            junk = DRC.get_noun(junk)
-            DRCI.get_item_unsafe(junk, 'crucible')
-            DRCI.dispose_trash(junk)
+          contents = match[:items]
+                     .split(LOOK_CRUCIBLE_ITEM_SEPARATOR)
+                     .map(&:strip)
+          if contents.any? { |entry| entry.match?(LOOK_CRUCIBLE_MOLTEN) }
+            fput('tilt crucible')
+            fput('tilt crucible')
+          else
+            attempted = false
+            contents.each do |junk|
+              junk = DRC.get_noun(junk)
+              next unless junk
+
+              # get_item_unsafe and dispose_trash only check that the noun is in
+              # hand, so a held matching item would be the one thrown away.
+              if DRCI.in_hands?(junk)
+                unless warned.include?(junk)
+                  Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding something that matches it.")
+                  warned += [junk]
+                end
+                next
+              end
+
+              attempted = true
+              # A failed GET leaves nothing in hand, and dispose_trash would
+              # then fetch a same-noun item from the player's own containers.
+              DRCI.dispose_trash(junk) if DRCI.get_item_unsafe(junk, 'crucible')
+            end
+            return false unless attempted
           end
-          return DRCC.empty_crucible?
+          DRCC.empty_crucible?(pass: pass + 1, warned: warned)
         else
           false
         end
