@@ -82,7 +82,7 @@ RSpec.describe 'Lich::Util::Update.request while a revert is running' do
         expect { Lich::Util::Update.request(command) }.not_to raise_error
       end
 
-      expect(messages).to include('A revert is running on this installation, so no snapshot was saved and nothing was changed.')
+      expect(messages).to include('Another update, snapshot or revert is running on this installation, so no snapshot was saved and nothing was changed.')
       expect(published).to be_empty
     end
   end

@@ -11,8 +11,9 @@
   A revert whose thread is killed (Lich shutting down) undoes the swap like
   a failed one. A revert whose process is killed during the swap cannot
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
-  Lich will not start and cannot run the revert again. The snapshot itself is untouched: copying its lib/, the core
-  scripts in its scripts/ and its lich.rbw back by hand, or running the
+  Lich will not start and cannot run the revert again. The snapshot itself
+  is untouched: copying its lib/, the core scripts in its scripts/ and its
+  lich.rbw back by hand, or running the
   revert from another session of this installation that is still running,
   restores it. On Windows each rename of the swap that Windows refuses
   keeps this window open for up to about 3 seconds while it is retried;
@@ -45,10 +46,10 @@ module Lich
         REVERT_TEMP_PREFIX = '.lich5-revert-'
 
         # Lock file in BACKUP_DIR. #revert holds it exclusively for its whole
-        # run and #snapshot holds it shared while it copies, so two reverts
-        # never swap files at the same time and a snapshot never copies a
-        # lib/ that a revert has half swapped. Snapshots do not exclude each
-        # other.
+        # run and #snapshot holds it exclusively while it copies (and, for an
+        # update, while it downloads and installs), so two reverts never swap
+        # files at the same time, a snapshot never copies a lib/ that a revert
+        # has half swapped, and two updates never install at the same time.
         REVERT_LOCK_NAME = '.lich5-revert.lock'
 
         # Empty file #snapshot writes into the staging directory once every
@@ -58,9 +59,9 @@ module Lich
         # #legacy_cut_off).
         STAGED_MARKER_NAME = '.lich5-staged'
 
-        # Raised by #snapshot when a revert on the same installation is
-        # running, so the update that asked for the snapshot stops before
-        # changing anything.
+        # Raised by #snapshot when a revert, another snapshot or another
+        # update on the same installation is running, so the update that
+        # asked for the snapshot stops before changing anything.
         class RevertRunningError < StandardError; end
 
         # How many same-second name collisions #snapshot tolerates before
@@ -108,11 +109,12 @@ module Lich
         # in an ensure. A process killed mid-copy leaves only an
         # L5-staging-* directory, which #revert never restores from.
         #
-        # Holds the revert lock shared while copying and publishing. If a
-        # revert on the same installation holds it, says so and raises
-        # without copying anything, as copying a lib/ in the middle of a
-        # revert's swap could publish a mix of two versions that looks
-        # complete. Other snapshots do not block it.
+        # Holds the revert lock exclusively while copying and publishing. If
+        # a revert, another snapshot or another update on the same
+        # installation holds it, says so and raises without copying
+        # anything: copying a lib/ in the middle of a revert's swap could
+        # publish a mix of two versions that looks complete, and two updates
+        # installing at once could leave a mix of both releases.
         #
         # Given a block, yields the published snapshot's path to it and keeps
         # holding the lock until the block returns, so an update that
@@ -123,7 +125,8 @@ module Lich
         # @return [String, Object] path to the published snapshot directory,
         #   or the block's value when given a block
         # @raise [SystemCallError] if any copy fails; no snapshot is published
-        # @raise [RevertRunningError] if a revert is running; nothing is copied
+        # @raise [RevertRunningError] if a revert, snapshot or update is
+        #   running; nothing is copied
         def snapshot
           respond
           respond 'Creating a snapshot of current Lich core files ONLY.'
@@ -135,7 +138,7 @@ module Lich
           FileUtils.mkdir_p(BACKUP_DIR)
           snapshot_subdir = nil
           result = nil
-          locked = with_revert_lock(File::LOCK_SH) do
+          locked = with_revert_lock(File::LOCK_EX) do
             # Interrupts are deferred except while copying and publishing, so
             # a kill can never land between creating the staging directory
             # and the ensure that removes it.
@@ -172,9 +175,9 @@ module Lich
           return result if locked
 
           respond
-          respond 'A revert is running on this installation, so no snapshot was saved and nothing was changed.'
-          respond 'Run the update again once the revert has finished.'
-          raise RevertRunningError, 'a revert is running on this installation'
+          respond 'Another update, snapshot or revert is running on this installation, so no snapshot was saved and nothing was changed.'
+          respond 'Run the command again once it has finished.'
+          raise RevertRunningError, 'another update, snapshot or revert is running on this installation'
         end
 
         # Restores most recent snapshot from BACKUP_DIR.
@@ -182,10 +185,10 @@ module Lich
         # Refuses, without changing anything, when the newest L5-snapshot-*
         # directory is incomplete (no lib/version.rb declaring LICH_VERSION,
         # no lich.rbw, no scripts/, or, in one an older Lich took, core
-        # scripts that may have been cut off part way). It names every incomplete directory
-        # newer than the next complete snapshot, and that snapshot if there
-        # is one, but never falls back to it on its own: an older snapshot
-        # may be several versions back.
+        # scripts that may have been cut off part way). It names every
+        # incomplete directory newer than the next complete snapshot, and
+        # that snapshot if there is one, but never falls back to it on its
+        # own: an older snapshot may be several versions back.
         #
         # Holds the revert lock exclusively for the whole run. If another
         # revert, a snapshot, or an update past its snapshot (see #snapshot)
@@ -209,11 +212,12 @@ module Lich
         private
 
         # Runs the block while holding a non-blocking flock of +mode+
-        # (File::LOCK_EX for #revert, File::LOCK_SH for #snapshot) on
+        # (File::LOCK_EX for both #revert and #snapshot) on
         # BACKUP_DIR/REVERT_LOCK_NAME. Two reverts that swap files in the
         # same lib/ at once rename each other's entries and can lose files,
-        # and a snapshot copying lib/ during a swap copies a mix of both
-        # versions, so when the lock is taken this returns false without
+        # a snapshot copying lib/ during a swap copies a mix of both
+        # versions, and two updates installing at once can leave a mix of
+        # both releases, so when the lock is taken this returns false without
         # yielding. The lock is released when the file is closed, including
         # when the holder is killed, so it can never go stale. If the lock
         # file cannot be created or the filesystem does not support flock
@@ -444,10 +448,10 @@ module Lich
         #
         # They copied in CORE_SCRIPTS order, except that versions from
         # September 2023 to May 2024 copied map.lic after version.lic (and
-        # earlier ones xnarost.lic, no longer a core script). So an empty copy of
-        # the last core script it has is taken as an interruption (see
-        # #interruption_problems), while an empty one before it either was
-        # empty in the install then or is such a map.lic (see
+        # earlier ones xnarost.lic, no longer a core script). So an empty
+        # copy of the last core script it has is taken as an interruption
+        # (see #interruption_problems), while an empty one before it either
+        # was empty in the install then or is such a map.lic (see
         # #doubtful_problems). Core scripts installed now that come after
         # every core script it has either never started copying, or were not
         # installed when it was taken, and nothing on disk tells the two

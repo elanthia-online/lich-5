@@ -268,7 +268,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     end
 
     context 'when a revert on the same installation is running' do
-      let(:refusal) { 'A revert is running on this installation, so no snapshot was saved and nothing was changed.' }
+      let(:refusal) { 'Another update, snapshot or revert is running on this installation, so no snapshot was saved and nothing was changed.' }
 
       it 'raises, says so and copies nothing while the lock is held exclusively' do
         messages = capture_responses
@@ -327,12 +327,48 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(total).to be >= 10
       end
 
-      it 'does not wait for or block another snapshot' do
-        dir = nil
+      it 'refuses, and copies nothing, while another snapshot holds the lock' do
+        messages = capture_responses
+        error = nil
 
-        hold_revert_lock(File::LOCK_SH) { dir = manager.snapshot }
+        hold_revert_lock(File::LOCK_EX) do
+          manager.snapshot
+        rescue StandardError => e
+          error = e
+        end
 
-        expect(published).to eq([dir])
+        expect(published).to be_empty
+        expect(staging).to be_empty
+        expect(error).to be_a(described_class::RevertRunningError)
+        expect(messages).to include(refusal)
+      end
+
+      # Two updates in different sessions of one installation installing at
+      # the same time could leave a mix of both releases, so the second one is
+      # refused while the first is still inside its snapshot block.
+      it 'refuses a second update while the first is downloading and installing' do
+        second = described_class.new
+        second_messages = []
+        allow(second).to receive(:respond) { |msg = ''| second_messages << msg.to_s }
+        outcome = nil
+        blocked = false
+
+        first_dir = manager.snapshot do |dir|
+          outcome = begin
+            second.snapshot { blocked = true }
+          rescue StandardError => e
+            e
+          end
+          dir
+        end
+
+        expect(outcome).to be_a(described_class::RevertRunningError)
+        expect(blocked).to be(false)
+        expect(second_messages).to include(refusal)
+        expect(second_messages).to include('Run the command again once it has finished.')
+        expect(published).to eq([first_dir])
+        expect(staging).to be_empty
+        expect(revert_lock_free?).to be(true)
       end
 
       it 'stops a revert started while it is copying, and still publishes' do
@@ -1528,11 +1564,11 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(messages).not_to include('Restoring Lich5 version 5.21.0 from:')
       end
 
-      it 'changes nothing while a snapshot holds the lock shared' do
+      it 'changes nothing while a snapshot holds the lock' do
         before = live_state
         messages = capture_responses
 
-        hold_revert_lock(File::LOCK_SH) { manager.revert }
+        hold_revert_lock(File::LOCK_EX) { manager.revert }
 
         expect(live_state).to eq(before)
         expect(messages).to include(refusal)

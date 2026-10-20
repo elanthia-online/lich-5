@@ -91,10 +91,11 @@ module Lich
 
       # Routes update commands to appropriate handler classes.
       #
-      # An update or snapshot asked for while a revert is running on this
-      # installation stops before changing anything. SnapshotManager#snapshot
-      # has already told the user why, so its RevertRunningError ends the
-      # command here instead of reaching the client thread as an error.
+      # An update or snapshot asked for while a revert, another snapshot or
+      # another update is running on this installation stops before
+      # changing anything. SnapshotManager#snapshot has already told the
+      # user why, so its RevertRunningError ends the command here instead of
+      # reaching the client thread as an error.
       #
       # @param type [String] command flag (e.g. '--announce', '--update', '--sync')
       # @return [void]
