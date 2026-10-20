@@ -194,11 +194,19 @@ module Lich
         # logged and swallowed so it cannot replace the error that caused the
         # save to fail.
         #
+        # A close that fails is ignored and the removal continues: after a
+        # failed write or flush, close retries the pending buffer and raises
+        # the same error again, but Ruby has already released the descriptor.
+        #
         # @param file [File] temporary file created by write_file
         # @return [void]
         # @api private
         def remove_temp_file(file)
-          file.close unless file.closed?
+          begin
+            file.close unless file.closed?
+          rescue IOError, SystemCallError
+            nil
+          end
           return unless File.exist?(file.path)
 
           retry_sharing_violation { File.unlink(file.path) }

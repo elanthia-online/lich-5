@@ -681,6 +681,42 @@ RSpec.describe Lich::Common::FrontendSettings do
       expect(leftover_temp_files).to be_empty
     end
 
+    it 'removes the temporary file when a full disk fails both the flush and the close' do
+      previous_configuration
+      previous_bytes = File.binread(settings_file)
+      unlink_attempts.clear
+      staged = []
+      # Mirrors Ruby on a full disk: the failed flush leaves the buffer
+      # pending, so the next close retries it and raises again, although the
+      # descriptor has already been released by then. Only the first save is
+      # faulted so the outer cleanup can still write.
+      fail_writes = lambda do |file|
+        next file unless staged.empty?
+
+        staged << file.path
+        file.define_singleton_method(:flush) { raise Errno::ENOSPC, path }
+        file.define_singleton_method(:close) do
+          super()
+          raise Errno::ENOSPC, path
+        end
+        file
+      end
+      allow(Tempfile).to receive(:create).and_wrap_original do |original, *args, **options, &block|
+        next fail_writes.call(original.call(*args, **options)) unless block
+
+        original.call(*args, **options) { |file| block.call(fail_writes.call(file)) }
+      end
+
+      expect { save_wrayth_override }.to raise_error(IOError, /\Acould not save frontends\.yml: No space left on device/)
+
+      expect(staged.length).to eq(1)
+      expect(unlink_attempts.flatten.uniq).to eq(staged)
+      expect(Lich).not_to have_received(:log)
+      expect(File.binread(settings_file)).to eq(previous_bytes)
+      expect(described_class.current).to eq(previous_configuration)
+      expect(leftover_temp_files).to be_empty
+    end
+
     it 'follows the native rename rule when a reader holds the destination open' do
       previous_configuration
       reader = File.open(settings_file, 'r')
