@@ -132,9 +132,16 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       expect(sent).to eq(['prepare fireball 10', 'prepare fireball 10'])
     end
 
-    it "skips the can't-move line rather than returning '' for it" do
+    it "reads past the can't-move line when no message matches it" do
       game('prepare fireball 10' => ["You don't seem to be able to move to do that.", 'You begin to chant.'])
-      expect(drca.prepare?('fireball', 10, custom_spell_prep: "(?=You don't)|You chant")).to eq('You begin to')
+      expect(drca.prepare?('fireball', 10, custom_spell_prep: 'You chant')).to eq('You begin to')
+      expect(sent).to eq(['prepare fireball 10'])
+    end
+
+    it "returns '' for the can't-move line, as for any other line, when the custom prep message makes an empty match on it" do
+      game('prepare fireball 10' => ["You don't seem to be able to move to do that.", 'You begin to chant.'])
+      expect(drca.prepare?('fireball', 10, custom_spell_prep: "(?=You don't)|You chant")).to eq('')
+      expect(buffer).to eq(['You begin to chant.'])
       expect(sent).to eq(['prepare fireball 10'])
     end
   end

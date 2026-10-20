@@ -150,6 +150,10 @@ module Lich
       DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
       DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
 
+      # Seconds check_discern waits before discerning a spell again after a
+      # discern drew no recognised reply, at most check_discern_timer_in_hours.
+      DISCERN_RETRY_SECONDS = 300
+
       USELESS_RUNESTONE_PATTERNS = [
         /^You get a useless/
       ].freeze
@@ -1100,6 +1104,7 @@ module Lich
       def check_discern(data, settings, spell_is_sorcery = false, more_override = nil)
         UserVars.discerns = {} unless UserVars.discerns
         discern_data = UserVars.discerns[data['abbrev']] || {}
+        held = false
         if data['symbiosis'] || spell_is_sorcery
           if discern_data.empty? || discern_data['min'].nil? || more_override
             DRC.retreat
@@ -1113,23 +1118,57 @@ module Lich
             end
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
-        elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)
-          discern_data['time_stamp'] = Time.now
+        elsif (discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)) && !discern_retry_pending?(discern_data, settings)
           DRC.retreat
           case discern = DRC.bput("discern #{data['abbrev']}", 'The spell requires at minimum \d+ mana streams and you think you can reinforce it with \d+ more', 'You don\'t think you are able to cast this spell', 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that')
-          when /you don't think you are able/i, 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that'
+          when /you don't think you are able/i, 'You have no idea how to cast that spell'
+            discern_data.delete('failed_at')
+            discern_data['time_stamp'] = Time.now
             discern_data['mana'] = 1
             discern_data['cambrinth'] = nil
+          when 'You don\'t seem to be able to move to do that'
+            # Held or rooted: the reply says nothing about the spell, so this
+            # cast is at the minimum. The stored entry is left alone: it keeps
+            # any earlier real answer, and its time stamp, so the next cast
+            # discerns again.
+            held = true
           else
+            # Only a real answer is cached. A discern with no recognised reply
+            # is tried again after DISCERN_RETRY_SECONDS, so each cast in
+            # between doesn't pay for another retreat and bput timeout.
             match = discern.match(DISCERN_FULL_PATTERN)
-            calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings) if match
+            if match
+              discern_data.delete('failed_at')
+              discern_data['time_stamp'] = Time.now
+              calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings)
+            else
+              discern_data['failed_at'] = Time.now
+            end
           end
         end
         waitrt?
         UserVars.discerns[data['abbrev']] = discern_data
-        data['mana'] = discern_data['mana']
-        data['cambrinth'] = discern_data['cambrinth']
+        # With no stored answer (a discern that drew no recognised reply, and
+        # its retry window), cast at the minimum as when held, not with nil.
+        minimum = held || discern_data['mana'].nil?
+        data['mana'] = minimum ? 1 : discern_data['mana']
+        data['cambrinth'] = minimum ? nil : discern_data['cambrinth']
         data
+      end
+
+      # Whether a discern that drew no recognised reply was sent too recently
+      # to try again: within DISCERN_RETRY_SECONDS, or within
+      # check_discern_timer_in_hours when that is shorter.
+      #
+      # @param discern_data [Hash] the spell's entry in UserVars.discerns
+      # @param settings [OpenStruct] character settings
+      # @return [Boolean]
+      # @api private
+      def discern_retry_pending?(discern_data, settings)
+        failed_at = discern_data['failed_at']
+        return false unless failed_at
+
+        Time.now - failed_at < [DISCERN_RETRY_SECONDS, settings.check_discern_timer_in_hours * 60 * 60].min
       end
 
       def calculate_mana(min, more, discern_data, cyclic_or_ritual, settings)
