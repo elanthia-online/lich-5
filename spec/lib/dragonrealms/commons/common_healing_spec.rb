@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
+require 'timeout'
 require_relative '../../../spec_helper'
 
 # Load production code
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing.rb')
+require File.join(LIB_DIR, 'util', 'util.rb')
 
 RSpec.describe Lich::DragonRealms::DRCH do
   # --- Wound class ------------------------------------------------------
@@ -183,6 +186,16 @@ RSpec.describe Lich::DragonRealms::DRCH do
         expect(result.score).to eq(0)
         expect(result.dead).to be false
         expect(result.vitality).to eq(100)
+        expect(result.captured).to be true
+        expect(result.captured?).to be true
+      end
+
+      it 'accepts captured false without changing the other defaults' do
+        result = described_class.new(captured: false)
+        expect(result.captured?).to be false
+        expect(result['captured']).to be false
+        expect(result.injured?).to be false
+        expect(result.wounds).to eq({})
       end
     end
 
@@ -865,48 +878,117 @@ RSpec.describe Lich::DragonRealms::DRCH do
   # --- Game I/O methods ------------------------------------------------
 
   describe '.check_health' do
-    it 'returns HealthResult on timeout' do
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
-      allow(Lich::Messaging).to receive(:msg)
-      result = described_class.check_health
-      expect(result).to be_a(described_class::HealthResult)
-      expect(result.score).to eq(0)
+    let(:prompt) { '<prompt time="1787075465">&gt;</prompt>' }
+
+    before { allow(Lich::Messaging).to receive(:msg) }
+
+    # Lich::Util.issue_command returns [] on a timeout before the start line;
+    # it never returns nil.
+    context 'when issue_command times out before the start line ([])' do
+      before { allow(Lich::Util).to receive(:issue_command).and_return([]) }
+
+      it 'prints the timeout message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture HEALTH output (timeout).')
+        described_class.check_health
+      end
+
+      it 'returns a HealthResult with captured false' do
+        result = described_class.check_health
+        expect(result).to be_a(described_class::HealthResult)
+        expect(result.captured?).to be false
+        expect(result['captured']).to be false
+      end
+
+      it 'keeps empty collections so legacy callers do not crash' do
+        result = described_class.check_health
+        expect(result['wounds']).to eq({})
+        expect(result['score']).to eq(0)
+      end
     end
 
-    it 'logs timeout message' do
+    it 'treats nil from issue_command the same as a timeout' do
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
-      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH:.*timeout/)
-      described_class.check_health
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH: Failed to capture HEALTH output/)
+      expect(described_class.check_health.captured?).to be false
     end
 
-    it 'parses successful health output' do
-      raw_lines = [
-        '<output class=""/>Your body feels at full strength.',
-        'Your spirit feels full of life.',
-        'You have some tiny scratches to the neck.'
-      ]
-      allow(Lich::Util).to receive(:issue_command).and_return(raw_lines)
-      result = described_class.check_health
-      expect(result).to be_a(described_class::HealthResult)
-      expect(result.wounds).not_to be_empty
+    context 'when the prompt never arrives (cut-off reply)' do
+      let(:partial) do
+        [
+          'Your body feels at full strength.',
+          'Your spirit feels full of life.',
+          'You have a mildly poisoned right leg.'
+        ]
+      end
+
+      before { allow(Lich::Util).to receive(:issue_command).and_return(partial) }
+
+      it 'prints the cut-off message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH: HEALTH output was cut off/)
+        described_class.check_health
+      end
+
+      it 'returns captured false but keeps what was parsed' do
+        result = described_class.check_health
+        expect(result.captured?).to be false
+        expect(result.poisoned).to be true
+      end
     end
 
-    it 'calls issue_command with correct params' do
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
-      allow(Lich::Messaging).to receive(:msg)
+    context 'when the full reply arrives' do
+      let(:raw_lines) do
+        [
+          '<output class=""/>Your body feels at full strength.',
+          'Your spirit feels full of life.',
+          'You have some tiny scratches to the neck.',
+          prompt
+        ]
+      end
+
+      before { allow(Lich::Util).to receive(:issue_command).and_return(raw_lines) }
+
+      it 'parses the wounds and reports captured true' do
+        result = described_class.check_health
+        expect(result.captured?).to be true
+        expect(result.wounds).not_to be_empty
+      end
+
+      it 'prints no message' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        described_class.check_health
+      end
+    end
+
+    it 'treats a lone prompt line as cut off, not complete' do
+      # A reply needs its start line before the prompt; one line can never be both.
+      allow(Lich::Util).to receive(:issue_command).and_return([prompt])
+      expect(described_class.check_health.captured?).to be false
+    end
+
+    it 'asks issue_command for the prompt line so it can tell complete from cut off' do
       expect(Lich::Util).to receive(:issue_command).with(
         'health',
         /^Your body feels\b/,
         /<prompt/,
-        hash_including(usexml: true, quiet: true, include_end: false)
-      )
+        hash_including(usexml: true, quiet: true, include_end: true, timeout: 5)
+      ).and_return([])
       described_class.check_health
     end
   end
 
   describe '.perceive_health' do
+    let(:prompt) { '<prompt time="1787075465">&gt;</prompt>' }
+    let(:perceived) do
+      [
+        'Your injuries include...',
+        'Wounds to the HEAD:',
+        'Fresh External:  light scratches -- negligible'
+      ]
+    end
+
     before do
       allow(Lich::Messaging).to receive(:msg)
+      allow(described_class).to receive(:waitrt?)
     end
 
     it 'returns nil when not an empath' do
@@ -920,23 +1002,85 @@ RSpec.describe Lich::DragonRealms::DRCH do
       described_class.perceive_health
     end
 
-    it 'returns nil on timeout' do
-      allow(DRStats).to receive(:empath?).and_return(true)
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
-      expect(described_class.perceive_health).to be_nil
+    context 'when issue_command times out before the start line ([])' do
+      before do
+        allow(DRStats).to receive(:empath?).and_return(true)
+        allow(Lich::Util).to receive(:issue_command).and_return([])
+      end
+
+      it 'logs the timeout message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        described_class.perceive_health
+      end
+
+      it 'returns a HealthResult with captured false, not nil' do
+        result = described_class.perceive_health
+        expect(result).to be_a(described_class::HealthResult)
+        expect(result.captured?).to be false
+        expect(result['wounds']).to eq({})
+      end
+
+      it 'still sends HEALTH and returns its diagnostics with captured false' do
+        health_reply = [
+          'Your body feels in bad shape.',
+          'You have a dormant infection.',
+          'You have a mildly poisoned right leg.',
+          'Bleeding',
+          'Area       Rate',
+          '-----------------------------------------',
+          'tail       slight',
+          prompt
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return([], health_reply)
+        result = described_class.perceive_health
+        expect(Lich::Util).to have_received(:issue_command).with('health', any_args)
+        expect(result.captured?).to be false
+        expect(result.wounds).to eq({})
+        expect(result.bleeders.values.flatten.length).to eq(1)
+        expect(result.poisoned).to be true
+        expect(result.diseased).to be true
+      end
+
+      it 'reports captured false even when the HEALTH reply is complete' do
+        allow(Lich::Util).to receive(:issue_command).and_return([], ['Your body feels at full strength.', prompt])
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        expect(Lich::Messaging).not_to receive(:msg).with('bold', /HEALTH output was cut off|Failed to capture HEALTH/)
+        expect(described_class.perceive_health.captured?).to be false
+      end
     end
 
-    it 'logs timeout message' do
+    it 'returns captured true when both replies are complete' do
       allow(DRStats).to receive(:empath?).and_return(true)
-      allow(Lich::Util).to receive(:issue_command).and_return(nil)
-      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH:.*PERCEIVE HEALTH.*timeout/)
-      described_class.perceive_health
+      allow(Lich::Util).to receive(:issue_command).and_return(perceived + [prompt])
+      allow(described_class).to receive(:check_health).and_return(described_class::HealthResult.new(poisoned: true))
+      result = described_class.perceive_health
+      expect(result.captured?).to be true
+      expect(result.poisoned).to be true
+      expect(result.wounds.values.flatten.length).to eq(1)
+    end
+
+    it 'returns captured false with a message when the PERCEIVE reply is cut off' do
+      allow(DRStats).to receive(:empath?).and_return(true)
+      allow(Lich::Util).to receive(:issue_command).and_return(perceived)
+      allow(described_class).to receive(:check_health).and_return(described_class::HealthResult.new)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH: PERCEIVE HEALTH output was cut off/)
+      result = described_class.perceive_health
+      expect(result.captured?).to be false
+      expect(result.wounds.values.flatten.length).to eq(1)
+    end
+
+    it 'propagates captured false from the inner HEALTH check' do
+      allow(DRStats).to receive(:empath?).and_return(true)
+      allow(Lich::Util).to receive(:issue_command).and_return(perceived + [prompt])
+      allow(described_class).to receive(:check_health).and_return(described_class::HealthResult.new(captured: false))
+      result = described_class.perceive_health
+      expect(result.captured?).to be false
+      expect(result.wounds.values.flatten.length).to eq(1)
     end
 
     it 'falls back to check_health when permashocked' do
       allow(DRStats).to receive(:empath?).and_return(true)
-      allow(described_class).to receive(:waitrt?)
-      permashock_lines = ['You feel only an aching emptiness where your sense of empathy should be.']
+      permashock_lines = ['You feel only an aching emptiness where your sense of empathy should be.', prompt]
       allow(Lich::Util).to receive(:issue_command).and_return(permashock_lines)
       # check_health will be called as fallback
       health_result = described_class::HealthResult.new(score: 5)
@@ -947,6 +1091,15 @@ RSpec.describe Lich::DragonRealms::DRCH do
   end
 
   describe '.perceive_health_other' do
+    let(:prompt) { '<prompt time="1787075465">&gt;</prompt>' }
+    let(:touch_lines) do
+      [
+        'You sense a successful empathic link has been forged between you and Muleoak.',
+        'Wounds to the HEAD:',
+        'Fresh External:  light scratches -- negligible'
+      ]
+    end
+
     before do
       allow(Lich::Messaging).to receive(:msg)
     end
@@ -956,41 +1109,228 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(described_class.perceive_health_other('Muleoak')).to be_nil
     end
 
-    it 'returns nil on timeout' do
+    it 'returns nil and logs the timeout message when issue_command returns []' do
+      allow(DRStats).to receive(:empath?).and_return(true)
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture TOUCH output for Muleoak (timeout).')
+      expect(described_class.perceive_health_other('Muleoak')).to be_nil
+    end
+
+    it 'returns nil on a nil from issue_command' do
       allow(DRStats).to receive(:empath?).and_return(true)
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
       expect(described_class.perceive_health_other('Muleoak')).to be_nil
     end
 
+    it 'returns nil with a message when the TOUCH reply is cut off' do
+      allow(DRStats).to receive(:empath?).and_return(true)
+      allow(Lich::Util).to receive(:issue_command).and_return(touch_lines)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH: TOUCH output for Muleoak was cut off/)
+      expect(described_class.perceive_health_other('Muleoak')).to be_nil
+    end
+
     it 'returns nil when touch fails' do
       allow(DRStats).to receive(:empath?).and_return(true)
+      allow(Lich::Util).to receive(:issue_command).and_return(['Touch what?', prompt])
+      expect(described_class.perceive_health_other('Muleoak')).to be_nil
+    end
+
+    it 'reports a failed touch as unable even when the prompt is missing' do
+      allow(DRStats).to receive(:empath?).and_return(true)
       allow(Lich::Util).to receive(:issue_command).and_return(['Touch what?'])
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH:.*Unable.*Muleoak/)
       expect(described_class.perceive_health_other('Muleoak')).to be_nil
     end
 
     it 'returns nil when target avoids touch' do
       allow(DRStats).to receive(:empath?).and_return(true)
-      allow(Lich::Util).to receive(:issue_command).and_return(['Muleoak avoids your touch.'])
+      allow(Lich::Util).to receive(:issue_command).and_return(['Muleoak avoids your touch.', prompt])
       expect(described_class.perceive_health_other('Muleoak')).to be_nil
     end
 
     it 'logs unable message on touch failure' do
       allow(DRStats).to receive(:empath?).and_return(true)
-      allow(Lich::Util).to receive(:issue_command).and_return(['Touch what?'])
+      allow(Lich::Util).to receive(:issue_command).and_return(['Touch what?', prompt])
       expect(Lich::Messaging).to receive(:msg).with('bold', /DRCH:.*Unable.*Muleoak/)
       described_class.perceive_health_other('Muleoak')
     end
 
     it 'extracts character name from empathic link message' do
       allow(DRStats).to receive(:empath?).and_return(true)
-      touch_lines = [
+      allow(Lich::Util).to receive(:issue_command).and_return(touch_lines + [prompt])
+      result = described_class.perceive_health_other('mule')
+      expect(result).to be_a(described_class::HealthResult)
+      expect(result.captured?).to be true
+      expect(result.wounds.values.flatten.length).to eq(1)
+    end
+  end
+
+  # Drives the REAL Lich::Util.issue_command (not a stub), so these examples
+  # pin the actual timeout contract: [] or the lines so far, never nil.
+  describe 'timeouts through the real Lich::Util.issue_command' do
+    let(:prompt) { '<prompt time="1787075465">&gt;</prompt>' }
+    let(:replies) { [] }
+    let(:health_reply) { ['Your body feels at full strength.', 'You have a mildly poisoned right leg.'] }
+    let(:perceive_reply) do
+      ['Your injuries include...', 'Wounds to the HEAD:', 'Fresh External:  light scratches -- negligible']
+    end
+    let(:touch_reply) do
+      [
         'You sense a successful empathic link has been forged between you and Muleoak.',
         'Wounds to the HEAD:',
         'Fresh External:  light scratches -- negligible'
       ]
-      allow(Lich::Util).to receive(:issue_command).and_return(touch_lines)
-      result = described_class.perceive_health_other('mule')
-      expect(result).to be_a(described_class::HealthResult)
+    end
+
+    before do
+      allow(Lich::Messaging).to receive(:msg)
+      allow(described_class).to receive(:waitrt?)
+      allow(DRStats).to receive(:empath?).and_return(true)
+      stub_const('DownstreamHook', Class.new do
+        def self.add(*_args, **_kwargs); end
+
+        def self.remove(*_args); end
+      end)
+      allow(Script).to receive(:current).and_return(
+        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+      )
+      allow(Lich::Util).to receive(:fput)
+      queue = replies.dup
+      # Hand out the scripted lines, then block like a quiet game would.
+      allow(Lich::Util).to receive(:get) { queue.empty? ? sleep(5) : queue.shift }
+      # Keep the real method but shorten its timeout so the examples run fast.
+      allow(Lich::Util).to receive(:issue_command).and_wrap_original do |original, *args, **kwargs|
+        original.call(*args, **kwargs, timeout: 0.2)
+      end
+    end
+
+    context 'when no reply arrives' do
+      it 'check_health prints the timeout message and reports captured false' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture HEALTH output (timeout).')
+        expect(described_class.check_health.captured?).to be false
+      end
+
+      it 'perceive_health prints the timeout message and reports captured false' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        expect(described_class.perceive_health.captured?).to be false
+      end
+
+      it 'perceive_health_other prints the timeout message and returns nil' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture TOUCH output for Muleoak (timeout).')
+        expect(described_class.perceive_health_other('Muleoak')).to be_nil
+      end
+    end
+
+    context 'when PERCEIVE HEALTH gets no reply and HEALTH replies in full' do
+      let(:sent) { [] }
+
+      before do
+        per_command = {
+          'health' => [
+            'Your body feels in bad shape.',
+            'You have a dormant infection.',
+            'You have a mildly poisoned right leg.',
+            'Bleeding',
+            'Area       Rate',
+            '-----------------------------------------',
+            'tail       slight',
+            prompt
+          ]
+        }
+        reply_queue = []
+        allow(Lich::Util).to receive(:fput) do |command|
+          sent << command
+          reply_queue.concat(per_command.fetch(command, []))
+        end
+        allow(Lich::Util).to receive(:get) { reply_queue.empty? ? sleep(5) : reply_queue.shift }
+      end
+
+      it 'perceive_health sends HEALTH and keeps its bleeders, poison and disease with captured false' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: Failed to capture PERCEIVE HEALTH output (timeout).')
+        result = described_class.perceive_health
+        expect(sent).to eq(['perceive health self', 'health'])
+        expect(result.captured?).to be false
+        expect(result.wounds).to eq({})
+        expect(result.bleeders.values.flatten.length).to eq(1)
+        expect(result.poisoned).to be true
+        expect(result.diseased).to be true
+      end
+    end
+
+    context 'when the start line arrives but the prompt does not' do
+      let(:replies) { ['Your body feels at full strength.', 'You have a mildly poisoned right leg.'] }
+
+      it 'check_health reports captured false and keeps the parsed data' do
+        result = described_class.check_health
+        expect(result.captured?).to be false
+        expect(result.poisoned).to be true
+      end
+    end
+
+    context 'when the PERCEIVE reply arrives without its prompt' do
+      let(:replies) { perceive_reply }
+
+      it 'perceive_health prints the cut-off message, reports captured false and keeps the wounds' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: PERCEIVE HEALTH output was cut off (timeout); the result is incomplete.')
+        result = described_class.perceive_health
+        expect(result.captured?).to be false
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the PERCEIVE reply is complete but the HEALTH reply is cut off' do
+      let(:replies) { perceive_reply + [prompt] + health_reply }
+
+      it 'perceive_health reports captured false and keeps both parses' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: HEALTH output was cut off (timeout); the result is incomplete.')
+        result = described_class.perceive_health
+        expect(result.captured?).to be false
+        expect(result.poisoned).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the TOUCH reply arrives without its prompt' do
+      let(:replies) { touch_reply }
+
+      it 'perceive_health_other prints the cut-off message and returns nil' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCH: TOUCH output for Muleoak was cut off (timeout).')
+        expect(described_class.perceive_health_other('Muleoak')).to be_nil
+      end
+    end
+
+    context 'when the full reply arrives' do
+      let(:replies) { ['Your body feels at full strength.', 'You have a mildly poisoned right leg.', prompt] }
+
+      it 'check_health reports captured true and prints nothing' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        result = described_class.check_health
+        expect(result.captured?).to be true
+        expect(result.poisoned).to be true
+      end
+    end
+
+    context 'when the full PERCEIVE and HEALTH replies arrive' do
+      let(:replies) { perceive_reply + [prompt] + health_reply + [prompt] }
+
+      it 'perceive_health reports captured true and prints nothing' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        result = described_class.perceive_health
+        expect(result.captured?).to be true
+        expect(result.poisoned).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
+    end
+
+    context 'when the full TOUCH reply arrives' do
+      let(:replies) { touch_reply + [prompt] }
+
+      it 'perceive_health_other returns a captured result and prints nothing' do
+        expect(Lich::Messaging).not_to receive(:msg)
+        result = described_class.perceive_health_other('Muleoak')
+        expect(result.captured?).to be true
+        expect(result.wounds.values.flatten.length).to eq(1)
+      end
     end
   end
 
