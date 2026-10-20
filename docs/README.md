@@ -23,10 +23,10 @@ skip the RSpec run in CI.
 | [GTK hardening](engine/gtk-hardening.md) | Behavior | Shared GTK main loop protection and callback retention |
 | [SQLite busy timeout](engine/sqlite-busy-timeout.md) | Behavior | 5 s busy timeout on core DB connections |
 | **Connection** | | |
-| [EAccess protocol](connection/eaccess-protocol-analysis.md) | Protocol research | `eaccess.play.net:7910` command reference |
+| [EAccess protocol](connection/eaccess-protocol-analysis.md) | Research | `eaccess.play.net:7910` command reference |
 | [EAccess failure diagnostics](connection/eaccess-failure-diagnostics.md) | Behavior | Stage taxonomy for auth failure log lines |
-| [Web login protocol](connection/web-login-protocol-analysis.md) | Protocol research | HTTPS `play.net` fallback auth (`WebLogin`) |
-| [WebSocket shim findings](connection/websocket-shim-probe-findings.md) | Protocol research | `--game-transport=websocket`, direct→WS fallback |
+| [Web login protocol](connection/web-login-protocol-analysis.md) | Research | HTTPS `play.net` fallback auth (`WebLogin`) |
+| [WebSocket shim findings](connection/websocket-shim-probe-findings.md) | Research | `--game-transport=websocket`, direct→WS fallback |
 | **Frontends** | | |
 | [Capability declaration](frontends/capability-declaration.md) | Protocol | `SET_FRONTEND_CAPS` per-client stream rewrites |
 | [Saved frontend editing](frontends/saved-frontend-editing.md) | Behavior | Launcher frontend assignment, `frontends.yml` |
@@ -46,8 +46,8 @@ live probing that can go stale. *Tracking*: open-item log. *Guide*: how-to.
 
 ## Adding a doc
 
-- Put it in the folder for the subsystem it describes. Folders follow `lib/`:
-  game-specific docs go under `gemstone/` or `dragonrealms/`. Make a new
+- Put it in the folder for the subsystem it describes. Folders group docs by
+  subsystem; game-specific docs mirror `lib/` under `gemstone/` or `dragonrealms/`. Make a new
   folder only when an existing one doesn't fit; one-doc folders are fine
   for game namespaces, otherwise prefer the nearest existing folder.
 - File names are lowercase kebab-case and don't repeat the folder name.
