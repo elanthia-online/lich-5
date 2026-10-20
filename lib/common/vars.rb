@@ -61,7 +61,7 @@ module Lich
                 hash = Marshal.load(h)
                 # Normalize all keys to strings during load
                 hash.each { |k, v| @@vars[normalize_key(k)] = v }
-                @@md5 = Digest::MD5.hexdigest(hash.to_s)
+                @@md5 = Digest::MD5.hexdigest(Marshal.dump(hash))
               rescue StandardError => e
                 respond "--- Lich: error: #{e}"
                 respond e.backtrace[0..2]
@@ -77,9 +77,12 @@ module Lich
       @@save = proc {
         Lich.db_mutex.synchronize {
           if @@load_state == LoadState::LOADED
-            current_md5 = Digest::MD5.hexdigest(@@vars.to_s)
+            # Checksum the bytes we write, so a var changed by another thread between
+            # checksum and dump can't leave @@md5 describing a state that was never saved
+            dump = Marshal.dump(@@vars)
+            current_md5 = Digest::MD5.hexdigest(dump)
             if current_md5 != @@md5
-              blob = SQLite3::Blob.new(Marshal.dump(@@vars))
+              blob = SQLite3::Blob.new(dump)
               begin
                 Lich.db.execute(
                   'INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);',

@@ -89,6 +89,29 @@ RSpec.describe Lich::Common::Vars do
     end
   end
 
+  describe '.save with a concurrent change' do
+    it 'checksums the state it writes, so a later revert is still saved' do
+      described_class['k'] = 'A'
+      described_class.save
+      described_class['k'] = 'B'
+      # Another thread sets 'C' after save starts but before the state is serialized.
+      changed = false
+      allow(Marshal).to receive(:dump).and_wrap_original do |orig, obj|
+        unless changed
+          changed = true
+          described_class['k'] = 'C'
+        end
+        orig.call(obj)
+      end
+      described_class.save
+      expect(stored).to eq('k' => 'C')
+
+      described_class['k'] = 'B'
+      described_class.save
+      expect(stored).to eq('k' => 'B')
+    end
+  end
+
   describe 'autosave' do
     let(:autosave) { described_class.class_variable_get(:@@autosave) }
 
