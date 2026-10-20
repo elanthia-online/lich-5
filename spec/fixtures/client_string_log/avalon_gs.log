@@ -1,0 +1,23 @@
+2026-10-17 17:11:34: info: Lich 5.23.0
+2026-10-17 17:11:34: info: Branch - release-please--branches--main
+2026-10-17 17:11:34: info: Repo - elanthia-online/lich-5
+2026-10-17 17:11:34: info: Ruby 4.0.5
+2026-10-17 17:11:34: info: arm64-darwin25
+2026-10-17 17:11:35: info: no force-mode info given
+2026-10-17 17:11:35: debug: Login arguments from CLI login -> ["--login", "Testchar", "--GST", "--avalon", "--dark-mode=true"]
+2026-10-17 17:11:35: debug: Resolved instance: "GST", frontend: "avalon", custom_launch: :__unset
+2026-10-17 17:11:35: info: Returning exact match count of 1
+2026-10-17 17:11:36: info: authenticated via eaccess
+2026-10-17 17:11:36: info: CLI login successful for Testchar
+2026-10-17 17:11:36: info: gamehost: storm.gs4.game.play.net
+2026-10-17 17:11:36: info: gameport: 10624
+2026-10-17 17:11:36: info: game: AVALON
+2026-10-17 17:11:36: info: waiting for client to connect...
+2026-10-17 17:11:38: info: connected
+2026-10-17 17:11:38: info: connecting to game server (storm.gs4.game.play.net:10624)
+2026-10-17 17:11:38: info: connected via direct TCP transport (storm.gs4.game.play.net:10624)
+2026-10-17 17:11:38: info: connected
+2026-10-17 17:11:38: info: client string from front end: /FE:WIZARD /VERSION:2.02 /P:WIN32
+2026-10-17 17:11:38: info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML
+2026-10-17 17:11:38: info: ActiveSessions accept thread started pid=57626 port=57919
+2026-10-17 17:11:40: info: logged in as GST:Testchar
