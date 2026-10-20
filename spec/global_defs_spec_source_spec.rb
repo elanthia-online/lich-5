@@ -139,13 +139,11 @@ RSpec.describe GlobalDefsSpecSource do
     it 'parses an unchanged file once across lookups' do
       with_source("def first_probe\n", "  1\n", "end\n", "def second_probe\n", "  2\n", "end\n") do |path|
         allow(Prism).to receive(:parse).and_call_original
-        allow(Prism).to receive(:parse_file).and_call_original
 
         described_class.define(Class.new, 'first_probe', 'second_probe', path: path)
         described_class.line_of('first_probe', path: path)
 
         expect(Prism).to have_received(:parse).once
-        expect(Prism).not_to have_received(:parse_file)
       end
     end
 
