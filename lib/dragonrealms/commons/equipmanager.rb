@@ -90,10 +90,15 @@ module Lich
       #
       # Compares currently worn combat items against the target gear set,
       # removes items not in the set, and wears any missing items.
-      # Notifies the user about items that could not be found.
+      # Alerts the user about items that could not be found, worn, or put away.
       #
       # @param set_name [String, nil] gear set name from settings (e.g., "standard", "swimming")
-      # @return [Boolean] true if all items in the set are now worn
+      # @return [Boolean] false if the set is unknown or any set item could not be
+      #   found, worn, or put away; true otherwise. A set item that was in hand
+      #   counts once its put-away is confirmed: by a recognised reply, or, for
+      #   one put away with WEAR, by INV COMBAT showing it worn. A non-worn one
+      #   whose put-away reply was not recognised and that has left the hand is
+      #   reported missing, since nothing confirms where it went.
       #
       # @example
       #   @equipment_manager.wear_equipment_set?("standard")
@@ -112,8 +117,8 @@ module Lich
 
         remove_unmatched_items(combat_items, gear_set_items)
 
-        lost_items = wear_missing_items(gear_set_items, combat_items)
-        notify_missing(lost_items)
+        lost_items, in_hand_items = wear_missing_items(gear_set_items, combat_items)
+        notify_missing(lost_items, in_hand_items)
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
 
@@ -136,29 +141,66 @@ module Lich
         items.find { |item| item.short_regex =~ description }
       end
 
-      # Alerts the user about equipment items that could not be found.
+      # Alerts the user about equipment items that could not be worn.
       #
-      # @param lost_items [Array<DRC::Item>, nil] items that were not located
+      # Items left in hand are named in a check-your-hands line, followed by
+      # what the hands actually hold (a transformed item, or one matched by a
+      # shorter gear description, can look different from its gear name);
+      # every other item that could not be found or worn gets the MISSING
+      # EQUIPMENT listing, which asks the user to check their containers. One
+      # item never gets both instructions. Either way the alert is bracketed
+      # by a beep and a pause.
+      #
+      # @param lost_items [Array<DRC::Item>, nil] every item that could not be worn or put away
+      # @param in_hand_items [Array<DRC::Item>] the subset of lost_items left in hand;
+      #   when omitted, every item gets the MISSING EQUIPMENT listing
       # @return [void]
       # @api private
-      def notify_missing(lost_items)
+      def notify_missing(lost_items, in_hand_items = [])
         return unless lost_items && !lost_items.empty?
 
+        in_hand, not_found = lost_items.partition { |item| in_hand_items.include?(item) }
+
         DRC.beep
-        Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
-        Lich::Messaging.msg("bold", "EquipmentManager: #{lost_items.map(&:short_name).join(', ')}")
+        unless not_found.empty?
+          Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
+          Lich::Messaging.msg("bold", "EquipmentManager: #{not_found.map(&:short_name).join(', ')}")
+        end
+        unless in_hand.empty?
+          holding = [DRC.right_hand, DRC.left_hand].compact
+          holding_text = holding.empty? ? 'nothing' : holding.join(', ')
+          Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{in_hand.map(&:short_name).join(', ')} (holding: #{holding_text})")
+        end
         pause
         DRC.beep
       end
 
       # Wears items from the target set that are not currently in the combat inventory.
       #
-      # Stows any target items found in hands before wearing. Returns items
-      # that could not be worn (missing from containers).
+      # Target items already in a hand are put away first via {#stow_gear_item},
+      # which sends the WEAR itself for worn items. The set item itself is put
+      # away, not a fresh lookup by its short name, so the put-away and the
+      # check after the wears (see {#put_away_forms}) follow the same item
+      # and use that item's own storage settings. A held item whose put-away
+      # fails is reported rather than retried. The hands are checked again just
+      # before each put-away; a held item that has left the hand by then joins
+      # the unheld items, which are then fetched and worn in gear-set order.
+      # When two set descriptions resolve to the same gear item, a held item
+      # that failed is not tried again. After the wears, a held failure counts
+      # as in hand if a hand matches the item or any form {#stow_gear_item} turned
+      # it into (see {#put_away_forms}). One that has left the hand is looked
+      # for in one INV COMBAT if its put-away was a WEAR: if it is worn it is
+      # not a failure. Any other held failure that has left the hand, worn or
+      # not, is reported missing but not in hand, since nothing confirms where
+      # it went. Returns, in gear-set order and without repeats, every item
+      # that could not be worn or put away, and the subset of those left in
+      # hand: every held failure in hand as above, plus every fetched item
+      # whose WEAR failed and that still matches a hand afterwards.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
-      # @return [Array<DRC::Item>] items that could not be worn
+      # @return [Array(Array<DRC::Item>, Array<DRC::Item>)] items that could not
+      #   be worn or put away, and the ones among them left in hand
       # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
@@ -167,16 +209,87 @@ module Lich
           Lich::Messaging.msg("plain", "EquipmentManager: target: #{target_items.map(&:short_name).join(',')}")
         end
 
-        missing_items = target_items
-                        .reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
-                        .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
+        not_worn = target_items.reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
+        # Tracked by position: two set descriptions can resolve to the same gear item.
+        held = not_worn.map { |item| DRCI.in_hands?(item) }
+        to_wear = held.map(&:!)
+
+        # Put held items away first so the hands are free for the wears below.
+        # stow_gear_item already sent the WEAR for a worn item, so a failure here
+        # is final: the item is reported for the user to check rather than
+        # sent the same command again, so a second entry for an item that
+        # already failed is skipped. An item that is no longer in hand by its
+        # turn (an earlier put-away took the hand it matched) is fetched and
+        # worn instead, in its gear-set position.
+        held_failures = []
+        not_worn.each_with_index do |item, index|
+          next unless held[index]
+          next if held_failures.include?(item)
+
+          if !DRCI.in_hands?(item)
+            to_wear[index] = true
+          elsif !stow_gear_item(item)
+            held_failures << item
+          end
+        end
+        missing_items = not_worn.select.with_index { |_item, index| to_wear[index] }
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
-        missing_items.reject do |item|
+        wear_failures = missing_items.reject do |item|
           item_copy = item.dup
           item_copy.instance_variable_set(:@worn, false)
           wear_item?(item_copy)
         end
+
+        # Held put-away failures are checked again now that every wear has
+        # been tried. One whose hand still shows the item, or a form it was
+        # transformed into on the way, is left in hand. One that has left the
+        # hand after a put-away that ended in a WEAR may have been worn after
+        # all (a WEAR whose reply never arrived), so a single INV COMBAT
+        # settles those: an item now worn is not a failure. INV COMBAT cannot
+        # confirm any other put-away, so every other item that has left the
+        # hand is reported missing rather than in hand. A refused fetch is in
+        # hand only if it still matches a hand.
+        held_in_hand, held_gone = held_failures.partition do |item|
+          put_away_forms(item).any? { |form| DRCI.in_hands?(form) }
+        end
+        worn_forms = held_gone.to_h { |item| [item, put_away_forms(item).last] }
+                              .select { |_item, form| !form.is_a?(String) && form.worn }
+        unless worn_forms.empty?
+          worn_now = get_combat_items
+          held_gone.reject! { |item| worn_forms.key?(item) && worn_now.any? { |c_item| worn_forms[item].short_regex =~ c_item } }
+        end
+        failures = held_in_hand + held_gone + wear_failures
+        in_hand = held_in_hand + wear_failures.select { |item| DRCI.in_hands?(item) }
+        [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
+      end
+
+      # Lists the forms {#stow_gear_item} goes through to put a held item away:
+      # the item itself (the same object {#wear_missing_items} put away), then,
+      # for a non-worn transform item, each form it is transformed into,
+      # following +transforms_to+ at most +transform_depth+ times as
+      # {#stow_gear_item} does. The last form is the one whose put-away (a WEAR
+      # when it is worn) {#stow_gear_item} sent. A transformed form that
+      # is not in the gear list ends the list as its description String.
+      #
+      # @param item [DRC::Item] held gear item
+      # @param transform_depth [Integer] transforms {#stow_gear_item} follows
+      # @return [Array<DRC::Item, String>] forms in the order they are handled
+      # @api private
+      def put_away_forms(item, transform_depth: 3)
+        forms = [item]
+        form = item
+        while !form.worn && form.transforms_to && transform_depth > 0
+          next_form = item_by_desc(form.transforms_to)
+          unless next_form
+            forms << form.transforms_to
+            break
+          end
+          forms << next_form
+          form = next_form
+          transform_depth -= 1
+        end
+        forms
       end
 
       # Removes currently worn combat items that are not in the target gear set.
@@ -847,7 +960,9 @@ module Lich
       #
       # @param description [String, nil] weapon description to match, or nil to stow both hands
       # @param transform_depth [Integer] remaining transform recursion depth
-      # @return [void]
+      # @return [Boolean, nil] true if the item was put away, false if the put-away
+      #   command failed, nil if the description is not in the gear list or the
+      #   transform depth ran out; always nil when called without a description
       def stow_weapon(description = nil, transform_depth: 3)
         unless description
           return unless DRC.right_hand || DRC.left_hand
@@ -859,6 +974,20 @@ module Lich
         weapon = item_by_desc(description)
         return unless weapon
 
+        stow_gear_item(weapon, transform_depth: transform_depth)
+      end
+
+      # Puts a gear item away by its own configuration (WEAR for a worn item,
+      # the transform for a transform item, otherwise {#stow_by_type}).
+      # {#stow_weapon} resolves a description to the item first; callers that
+      # already hold the gear item pass it here so the item put away is the
+      # one they hold, not whichever gear item first matches its short name.
+      #
+      # @param weapon [DRC::Item] gear item to put away
+      # @param transform_depth [Integer] remaining transform recursion depth
+      # @return [Boolean, nil] as {#stow_weapon}
+      # @api private
+      def stow_gear_item(weapon, transform_depth: 3)
         # Is this a weapon that needs to be unloaded before it is put away?
         # This is an optimization attempt so that the script
         # isn't trying to unload every weapon that gets put away.

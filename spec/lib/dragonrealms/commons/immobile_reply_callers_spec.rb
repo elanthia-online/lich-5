@@ -49,7 +49,13 @@ RSpec.describe 'Callers that list the immobile reply' do
   before { Lich::Messaging.clear_messages! }
 
   describe 'DRCI' do
-    before { game(default: immobile) }
+    # Empty hands unless an example says otherwise, so the hand checks
+    # (dispose_trash's, for one) don't read whatever GameObj holds.
+    before do
+      game(default: immobile)
+      allow(drc).to receive(:left_hand).and_return(nil)
+      allow(drc).to receive(:right_hand).and_return(nil)
+    end
 
     # [description, call, expected result]
     {
@@ -815,6 +821,18 @@ RSpec.describe 'Callers that list the immobile reply' do
         settings.check_discern_timer_in_hours = 0.01 # 36 s
         game('discern bs' => [])
         [0, 30, 37].each { |seconds| discern_after(seconds) }
+        expect(sent).to eq(['discern bs'] * 2)
+      end
+
+      it 'casts at the minimum, not with nil mana, while retrying with nothing stored' do
+        UserVars.discerns = {}
+        game('discern bs' => -> { sent.size == 1 ? 'Some other discern wording.' : answer })
+        expect(discern_after(0)).to include('mana' => 1, 'cambrinth' => nil)
+        expect(discern_after(299)).to include('mana' => 1, 'cambrinth' => nil)
+        expect(sent).to eq(['discern bs'])
+        expect(UserVars.discerns['bs'].keys).to eq(['failed_at'])
+
+        expect(discern_after(301)['mana']).to eq(15)
         expect(sent).to eq(['discern bs'] * 2)
       end
 
