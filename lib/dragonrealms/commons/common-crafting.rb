@@ -306,15 +306,24 @@ module Lich
       # Menu labels for recipe_lookup. A name that appears more than once is
       # suffixed with its type and chapter so the entries can be told apart,
       # and with its volume too when the type and chapter are also shared.
+      # Entries that are still identical after that (a duplicate in the data)
+      # are numbered "entry k of n" so every menu line is distinct.
       def recipe_menu_labels(matches)
         name_counts = matches.map { |x| x['name'] }.tally
         place_counts = matches.map { |x| x.values_at('name', 'type', 'chapter') }.tally
-        matches.map do |x|
+        labels = matches.map do |x|
           next x['name'] if name_counts[x['name']] == 1
 
           details = [x['type'], "chapter #{x['chapter']}"]
           details << "volume #{x['volume']}" if x['volume'] && place_counts[x.values_at('name', 'type', 'chapter')] > 1
           "#{x['name']} (#{details.join(', ')})"
+        end
+        label_counts = labels.tally
+        seen = Hash.new(0)
+        labels.map do |label|
+          next label if label_counts[label] == 1
+
+          "#{label.delete_suffix(')')}, entry #{seen[label] += 1} of #{label_counts[label]})"
         end
       end
 

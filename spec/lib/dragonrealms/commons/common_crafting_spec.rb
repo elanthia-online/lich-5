@@ -540,6 +540,37 @@ describe DRCC do
       end
     end
 
+    # Synthetic data: an entry duplicated in full (name, type, chapter and
+    # volume) would otherwise give two identical menu lines.
+    context 'when two recipes share the name, type, chapter and volume' do
+      let(:dup_staff) { { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9, 'volume' => 9 } }
+
+      it 'numbers the identical entries so every menu line differs' do
+        feed_input('3')
+
+        result = DRCC.recipe_lookup(recipes + [dup_staff], 'a weighted staff')
+
+        expect(menu_lines).to eq(['    1: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    2: a weighted staff (shaping, chapter 9, volume 9, entry 1 of 2)',
+                                  '    3: a weighted staff (shaping, chapter 9, volume 9, entry 2 of 2)'])
+        expect(menu_lines.uniq.length).to eq(3)
+        expect(result).to equal(dup_staff)
+      end
+
+      it 'numbers identical entries that have no volume' do
+        bare_a = { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9 }
+        bare_b = { 'name' => 'a weighted staff', 'type' => 'shaping', 'chapter' => 9 }
+        feed_input('3')
+
+        result = DRCC.recipe_lookup([smith_staff, bare_a, bare_b], 'a weighted staff')
+
+        expect(menu_lines).to eq(['    1: a weighted staff (weaponsmithing, chapter 8)',
+                                  '    2: a weighted staff (shaping, chapter 9, entry 1 of 2)',
+                                  '    3: a weighted staff (shaping, chapter 9, entry 2 of 2)'])
+        expect(result).to equal(bare_b)
+      end
+    end
+
     context 'menu helpers' do
       it 'keeps them off the public DRCC interface' do
         expect(DRCC).not_to respond_to(:recipe_menu_labels)
