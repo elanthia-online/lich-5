@@ -9,7 +9,14 @@ module Lich
       LOOK_CRUCIBLE_NOT_FOUND = '^I could not find'
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
-      LOOK_CRUCIBLE_MOLTEN = 'crucible you see some molten'
+      # Splits the LOOK_CRUCIBLE_SEE_PATTERN items list into entries at ", ",
+      # ", and " or " and " followed by an article or a bare "molten ", keeping
+      # that word. The " and " must be a whole word, so "a gold wand and ..."
+      # is not cut.
+      LOOK_CRUCIBLE_ITEM_SEPARATOR = /(?:,\s+(?:and\s+)?|\s+and\s+)(?=(?:some|an?|molten)\s)/.freeze
+      # Matches one entry of the LOOK_CRUCIBLE_SEE_PATTERN items list.
+      LOOK_CRUCIBLE_MOLTEN = /\A(?:(?:some|an?)\s+)?molten\s/.freeze
+      EMPTY_CRUCIBLE_MAX_PASSES = 3
 
       LOOK_ANVIL_NOT_FOUND = '^I could not find'
       LOOK_ANVIL_CLEAN = 'surface looks clean and ready'
@@ -48,8 +55,7 @@ module Lich
       UNTIE_NOT_FOUND = /^Untie what/
       UNTIE_WOUNDED = /^Your wounds hinder your ability to do that/
 
-      TIE_BELT_SUCCESS = 'you attach'
-      TIE_BELT_WOUNDED = 'Your wounds hinder'
+      TIE_BELT_WOUNDED = UNTIE_WOUNDED
 
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
@@ -124,7 +130,17 @@ module Lich
 
       SIGIL_COUNT_NOTHING = 'but there is nothing in there like that'
 
-      def empty_crucible?
+      # Tilts out molten metal and clears clutter, then looks again, up to
+      # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
+      # Molten metal is found wherever it appears in the list. Clutter is only
+      # disposed of when it was actually picked up from the crucible, and
+      # clutter whose noun matches something already in hand (DRCI.in_hands?
+      # matches any held word starting with the noun) is left alone, so a held
+      # item cannot stand in for clutter that was not picked up. Each held
+      # noun is reported once per call, not once per entry or per pass.
+      # pass: and warned: are internal recursion state -- callers should not
+      # set them.
+      def empty_crucible?(pass: 0, warned: [])
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
                                LOOK_CRUCIBLE_EMPTY,
@@ -133,23 +149,45 @@ module Lich
           true
         when /I could not find/
           false
-        when LOOK_CRUCIBLE_MOLTEN
-          fput('tilt crucible')
-          fput('tilt crucible')
-          return DRCC.empty_crucible?
         when /crucible you see/
+          if pass >= EMPTY_CRUCIBLE_MAX_PASSES
+            Lich::Messaging.msg('bold', "DRCC: The crucible is still not empty after #{pass} attempts to tilt or clear it.")
+            return false
+          end
+
           match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
           return false unless match
 
-          clutter = match[:items]
-                    .split(/(?:,|and) (?:some|an|a)/)
-                    .map(&:strip)
-          clutter.each do |junk|
-            junk = DRC.get_noun(junk)
-            DRCI.get_item_unsafe(junk, 'crucible')
-            DRCI.dispose_trash(junk)
+          contents = match[:items]
+                     .split(LOOK_CRUCIBLE_ITEM_SEPARATOR)
+                     .map(&:strip)
+          if contents.any? { |entry| entry.match?(LOOK_CRUCIBLE_MOLTEN) }
+            fput('tilt crucible')
+            fput('tilt crucible')
+          else
+            attempted = false
+            contents.each do |junk|
+              junk = DRC.get_noun(junk)
+              next unless junk
+
+              # get_item_unsafe and dispose_trash only check that the noun is in
+              # hand, so a held matching item would be the one thrown away.
+              if DRCI.in_hands?(junk)
+                unless warned.include?(junk)
+                  Lich::Messaging.msg('bold', "DRCC: Not clearing the #{junk} from the crucible while you are holding something that matches it.")
+                  warned += [junk]
+                end
+                next
+              end
+
+              attempted = true
+              # A failed GET leaves nothing in hand, and dispose_trash would
+              # then fetch a same-noun item from the player's own containers.
+              DRCI.dispose_trash(junk) if DRCI.get_item_unsafe(junk, 'crucible')
+            end
+            return false unless attempted
           end
-          return DRCC.empty_crucible?
+          DRCC.empty_crucible?(pass: pass + 1, warned: warned)
         else
           false
         end
@@ -488,24 +526,44 @@ module Lich
 
         waitrt?
         if belt && belt['items'].find { |item| /\b#{name}/i =~ item || /\b#{item}/i =~ name }
-          unless DRCI.tie_item?(name, belt['name'])
-            Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}.")
-            craft_room = Room.current.id
-            DRC.wait_for_script_to_complete('safe-room', ['force'])
-            DRCT.walk_to(craft_room)
-            return stow_crafting_item(name, bag, belt)
-          end
-        else
-          case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
-          when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
-            fput("stow my #{name}")
-          when PUT_BAG_CANT_THERE
-            fput("put my #{name} in my other #{bag}")
-            return false
-          end
+          return true if tie_to_crafting_belt?(name, belt)
+
+          # Not tied: wounds outlasted the safe-room trip, or the reply was a
+          # refusal that retrying won't clear. Put the tool in the bag instead;
+          # get_crafting_item's `get my <name>` finds it there.
+          Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
+        end
+
+        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
+        when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
+          fput("stow my #{name}")
+        when PUT_BAG_CANT_THERE
+          fput("put my #{name} in my other #{bag}")
+          return false
         end
         true
       end
+
+      # Ties a crafting tool to the belt. When wounds hinder the tie, visits
+      # safe-room once and tries once more; any other reply is final.
+      #
+      # @param name [String] tool noun, as passed to stow_crafting_item
+      # @param belt [Hash] crafting belt settings ('name' is tied to)
+      # @return [Boolean] true if the tool is tied (or was already tied off)
+      def tie_to_crafting_belt?(name, belt)
+        command = "tie my #{name} to my #{belt['name']}"
+        patterns = [DRCI::TIE_ITEM_SUCCESS_PATTERNS, DRCI::TIE_ITEM_EMPTY_PATTERN, DRCI::TIE_ITEM_FAILURE_PATTERNS]
+        result = DRC.bput(command, *patterns)
+        if result.match?(TIE_BELT_WOUNDED)
+          Lich::Messaging.msg('bold', "DRCC: Wounds hinder tying #{name} to #{belt['name']}. Visiting safe-room, then trying once more.")
+          craft_room = Room.current.id
+          DRC.wait_for_script_to_complete('safe-room', ['force'])
+          DRCT.walk_to(craft_room)
+          result = DRC.bput(command, *patterns)
+        end
+        DRCI::TIE_ITEM_SUCCESS_PATTERNS.any? { |pattern| result.match?(pattern) }
+      end
+      private_class_method :tie_to_crafting_belt?
 
       def crafting_cost(recipe, hometown, parts, quantity, material)
         # To use this method, you'll need to pass:
