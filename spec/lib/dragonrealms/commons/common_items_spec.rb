@@ -182,11 +182,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
+  # dispose_trash reads the hands around each command, so pin them: the rock
+  # in the right hand (get_item_if_not_held? is stubbed to say it is held).
+  def stub_rock_in_right_hand
+    allow(DRC).to receive(:right_hand).and_return('rock')
+    allow(DRC).to receive(:left_hand).and_return(nil)
+    allow(GameObj).to receive(:right_hand).and_return(double('right', id: '101', name: 'rock'))
+    allow(GameObj).to receive(:left_hand).and_return(double('left', id: nil, name: 'Empty'))
+  end
+
   describe '#dispose_trash' do
     before do
       allow(described_class).to receive(:get_item_if_not_held?).and_return(true)
       allow(Room).to receive(:current).and_return(OpenStruct.new(tags: []))
       allow(DRRoom).to receive(:room_objs).and_return([])
+      stub_rock_in_right_hand
     end
 
     context 'when item is nil' do
@@ -2453,17 +2463,28 @@ RSpec.describe Lich::DragonRealms::DRCI do
   # --- DRY helper methods -------------------------------------------
 
   describe '#execute_dispose_command' do
+    before { stub_rock_in_right_hand }
+
     it 'returns :success when drop succeeds' do
       allow(DRC).to receive(:bput).and_return('You drop a rock.')
       expect(described_class.send(:execute_dispose_command, 'drop my rock', 'rock', 3)).to eq(:success)
     end
 
-    it 'retries when game says to hold item first (not caught by generic failure)' do
+    # The item was in hand before the command, so "get my rock" here would
+    # take a same-named rock from inventory and trash it.
+    it 'never gets the item again when the game says to hold it first' do
       allow(DRC).to receive(:bput).and_return('Perhaps you should be holding that first.')
-      allow(described_class).to receive(:get_item?).with('rock').and_return(true)
-      allow(described_class).to receive(:dispose_trash).and_return(true)
-      result = described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)
-      expect(result).to be true
+      allow(DRC).to receive(:right_hand).and_return(nil)
+      expect(described_class).not_to receive(:get_item?)
+      expect(described_class).not_to receive(:get_item)
+      expect(described_class).not_to receive(:dispose_trash)
+      expect(described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)).to be false
+    end
+
+    it 'returns :failure, without a get, when the hands still show the item' do
+      allow(DRC).to receive(:bput).and_return("But you aren't holding that.")
+      expect(described_class).not_to receive(:get_item)
+      expect(described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)).to eq(:failure)
     end
 
     it 'returns :failure for unrecoverable errors' do
@@ -2496,6 +2517,263 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(Lich::Messaging).to receive(:msg).with('bold', /rummage exceeded max retries/)
       result = described_class.send(:list_container_contents, 'rummage', 'backpack', retries: 0) { |c| c }
       expect(result).to be_nil
+    end
+  end
+
+  # dispose_trash runs against a small model of the game: two hands and a
+  # backpack. As with put/drop/feed, a dispose command acts only on a held
+  # item; when the noun is not held but is in the backpack, the game answers
+  # "Perhaps you should be holding that first". The model can lose a reply
+  # (the command takes effect but bput times out and returns ''), or remove
+  # the held item before a command runs (it decayed or was taken).
+  describe '#dispose_trash after a lost or not-holding reply' do
+    let(:model_class) do
+      Class.new do
+        attr_reader :commands, :trashed, :pack, :hands
+        attr_accessor :script, :before_command
+
+        def initialize(right: nil, left: nil, pack: [])
+          @hands = { 'right' => right, 'left' => left }
+          @pack = pack
+          @commands = []
+          @trashed = []
+          @script = {}
+          @before_command = {}
+          @dispose_count = 0
+        end
+
+        def hand_name(hand)
+          @hands[hand] && @hands[hand][:name]
+        end
+
+        def hand_obj(hand)
+          obj = @hands[hand]
+          obj ? OpenStruct.new(id: obj[:id], name: obj[:name], noun: obj[:name].split.last) : OpenStruct.new(id: nil, name: 'Empty', noun: nil)
+        end
+
+        def held_hand(noun)
+          %w[right left].find { |hand| @hands[hand] && @hands[hand][:name].split.last == noun }
+        end
+
+        def handle(command)
+          @commands << command
+          case command
+          when /^get my (\S+)/ then handle_get(Regexp.last_match(1))
+          when /^(?:put|drop|feed) my (\S+)/ then handle_dispose(command, Regexp.last_match(1))
+          when /^tap my / then 'You drum your fingers on your shroud.'
+          else ''
+          end
+        end
+
+        def handle_get(noun)
+          return 'You are already holding that.' if held_hand(noun)
+
+          item = @pack.find { |obj| obj[:name].split.last == noun }
+          free = %w[right left].find { |hand| @hands[hand].nil? }
+          return 'What were you referring to?' unless item && free
+
+          @pack.delete(item)
+          @hands[free] = item
+          "You get #{item[:name]} from inside your backpack."
+        end
+
+        def handle_dispose(command, noun)
+          index = @dispose_count
+          @dispose_count += 1
+          @before_command[index]&.call(self)
+          mode = @script.fetch(index, :normal)
+          return mode.call(self) if mode.respond_to?(:call)
+
+          hand = held_hand(noun)
+          unless hand
+            return @pack.any? { |obj| obj[:name].split.last == noun } ? 'Perhaps you should be holding that first.' : 'What were you referring to?'
+          end
+          return mode if mode.is_a?(String)
+          return '' if mode == :ignored
+
+          @trashed << @hands[hand]
+          @hands[hand] = nil
+          return '' if mode == :lost
+
+          command.start_with?('drop') ? "You drop #{noun}." : "You put your #{noun} in the #{command.split.last}."
+        end
+      end
+    end
+
+    let(:model) do
+      model_class.new(right: { id: '101', name: 'smooth rock' }, pack: [{ id: '202', name: 'smooth rock' }])
+    end
+
+    let(:room_objs) { [] }
+
+    before do
+      Lich::Messaging.clear_messages!
+      allow(DRC).to receive(:bput) { |command, *_patterns| model.handle(command) }
+      allow(DRC).to receive(:left_hand) { model.hand_name('left') }
+      allow(DRC).to receive(:right_hand) { model.hand_name('right') }
+      allow(DRC).to receive(:get_noun) { |name| name.to_s.split.last }
+      allow(GameObj).to receive(:left_hand) { model.hand_obj('left') }
+      allow(GameObj).to receive(:right_hand) { model.hand_obj('right') }
+      allow(Room).to receive(:current).and_return(OpenStruct.new(tags: []))
+      allow(DRRoom).to receive(:room_objs) { room_objs }
+      allow(XMLData).to receive(:room_title).and_return('[Town Square]')
+      allow(described_class).to receive(:sleep)
+    end
+
+    def gets
+      model.commands.grep(/^get /)
+    end
+
+    def messages
+      Lich::Messaging.messages.map { |m| m[:message] }.join("\n")
+    end
+
+    context 'when the reply to the first receptacle is lost after the item left the hand' do
+      let(:room_objs) { ['waste bin', 'oak barrel'] }
+
+      before { model.script = { 0 => :lost } }
+
+      it 'reports the item disposed without trying another receptacle' do
+        expect(described_class.dispose_trash('rock')).to be true
+        expect(model.commands).to eq(['put my rock in waste bin'])
+      end
+
+      it 'never gets and trashes the same-noun item from the backpack' do
+        described_class.dispose_trash('rock')
+        expect(gets).to be_empty
+        expect(model.pack.map { |obj| obj[:id] }).to eq(['202'])
+        expect(model.trashed.map { |obj| obj[:id] }).to eq(['101'])
+      end
+
+      it 'says why it treated the unanswered command as done' do
+        described_class.dispose_trash('rock')
+        expect(messages).to match(/No reply to 'put my rock in waste bin'.*treating it as disposed/)
+      end
+    end
+
+    context 'when one same-noun item is held in each hand and a reply is lost' do
+      let(:room_objs) { ['waste bin', 'oak barrel'] }
+      let(:model) do
+        model_class.new(right: { id: '101', name: 'smooth rock' }, left: { id: '102', name: 'jagged rock' })
+      end
+
+      before { model.script = { 0 => :lost } }
+
+      it 'does not put the other held rock in the next receptacle' do
+        expect(described_class.dispose_trash('rock')).to be true
+        expect(model.trashed.map { |obj| obj[:id] }).to eq(['101'])
+        expect(model.hand_name('left')).to eq('jagged rock')
+      end
+    end
+
+    context 'when a command goes unanswered and the item is still in hand' do
+      let(:room_objs) { ['waste bin', 'oak barrel'] }
+
+      before { model.script = { 0 => :ignored } }
+
+      it 'tries the next receptacle, as before' do
+        expect(described_class.dispose_trash('rock')).to be true
+        expect(model.commands).to eq(['put my rock in waste bin', 'put my rock in barrel'])
+        expect(model.trashed.map { |obj| obj[:id] }).to eq(['101'])
+        expect(gets).to be_empty
+      end
+    end
+
+    context 'when the worn-trashcan put goes unanswered and the item is still in hand' do
+      before { model.script = { 0 => :ignored } }
+
+      it 'falls through to the next way of disposing instead of stopping with the item in hand' do
+        expect(described_class.dispose_trash('rock', 'shroud', 'tap')).to be true
+        expect(model.commands).to eq(['put my rock in my shroud', 'drop my rock'])
+        expect(model.hand_name('right')).to be_nil
+      end
+    end
+
+    context 'when the worn-trashcan put reply is lost after the item left the hand' do
+      before { model.script = { 0 => :lost } }
+
+      it 'reports success and works the worn trashcan as for an answered put' do
+        expect(described_class.dispose_trash('rock', 'shroud', 'tap')).to be true
+        expect(model.commands).to eq(['put my rock in my shroud', 'tap my shroud', 'tap my shroud'])
+      end
+    end
+
+    context 'when the item has left the hand before the dispose command runs' do
+      before { model.before_command = { 0 => ->(m) { m.hands['right'] = nil } } }
+
+      it 'returns false and never gets a same-noun item from the backpack' do
+        expect(described_class.dispose_trash('rock')).to be false
+        expect(gets).to be_empty
+        expect(model.pack.map { |obj| obj[:id] }).to eq(['202'])
+        expect(model.trashed).to be_empty
+      end
+
+      it 'says the item is no longer in hand without claiming it was not disposed of' do
+        described_class.dispose_trash('rock')
+        expect(messages).to match(/'rock' is no longer in your hands \(it may already have been disposed of\)/)
+        expect(messages).not_to match(/was not disposed of/)
+      end
+    end
+
+    context 'when the game says the item is not held but the hands still show it' do
+      before { model.script = { 0 => 'But you aren\'t holding that.' } }
+
+      it 'never sends get and reports the failure' do
+        expect(described_class.dispose_trash('rock')).to be false
+        expect(gets).to be_empty
+        expect(model.commands).to eq(['drop my rock'])
+        expect(messages).to match(/Failed to dispose of 'rock'/)
+      end
+    end
+
+    context 'when a retry prompt arrives but the item has left the hand' do
+      before do
+        model.script = {
+          0 => lambda do |m|
+            m.hands['right'] = nil
+            'Something appears different about the rock, perhaps try doing that again.'
+          end
+        }
+      end
+
+      it 'does not fetch a same-noun item to retry with' do
+        expect(described_class.dispose_trash('rock')).to be false
+        expect(gets).to be_empty
+        expect(model.pack.map { |obj| obj[:id] }).to eq(['202'])
+        expect(model.commands).to eq(['drop my rock'])
+      end
+    end
+
+    context 'when a retry prompt arrives and the item is still in hand' do
+      before { model.script = { 0 => 'If you still wish to drop it, you will need to DROP it again.' } }
+
+      it 'sends the command again and succeeds' do
+        expect(described_class.dispose_trash('rock')).to be true
+        expect(model.commands).to eq(['drop my rock', 'drop my rock'])
+      end
+    end
+
+    context 'when a retry in the receptacle loop fails' do
+      let(:room_objs) { ['waste bin', 'oak barrel'] }
+
+      before do
+        model.script = {
+          0 => 'Something appears different about the rock, perhaps try doing that again.',
+          1 => 'You can\'t do that.', 2 => 'You can\'t do that.', 3 => 'You can\'t do that.'
+        }
+      end
+
+      it 'returns the retry result instead of running the remaining receptacles again' do
+        expect(described_class.dispose_trash('rock')).to be false
+        expect(model.commands).to eq(['put my rock in waste bin', 'put my rock in waste bin', 'put my rock in barrel', 'drop my rock'])
+      end
+    end
+
+    it 'still gets an item that is not held before disposing of it' do
+      model.hands['right'] = nil
+      expect(described_class.dispose_trash('rock')).to be true
+      expect(model.commands.map(&:strip)).to eq(['get my rock', 'drop my rock'])
+      expect(model.trashed.map { |obj| obj[:id] }).to eq(['202'])
     end
   end
 end
