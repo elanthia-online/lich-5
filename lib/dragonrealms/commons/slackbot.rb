@@ -80,8 +80,8 @@ module Lich
       SEND_REQUEST_BUDGET = 5
 
       # Hard cap, in seconds, on each Slack API step (token check, users.list)
-      # while the bot starts. SlackBot.new runs on the calling script's thread
-      # (afk.lic creates it before its health watch starts), so startup must
+      # while the bot starts. SlackBot.new runs on the calling script's thread,
+      # often before that script's own safety checks start, so startup must
       # not wait out the full network or rate-limit backoff either. A bot that
       # gives up here retries on the next message.
       STARTUP_REQUEST_BUDGET = 10

@@ -172,8 +172,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
   end
 
   # SlackBot.new runs on the calling script's thread (dr-scripts'
-  # register_slackbot, e.g. afk.lic before its health watch starts), so
-  # every Slack call it makes is capped by STARTUP_REQUEST_BUDGET. A bot
+  # register_slackbot), often before that script's own safety checks start,
+  # so every Slack call it makes is capped by STARTUP_REQUEST_BUDGET. A bot
   # that gives up retries on the next message.
   describe 'startup time budget' do
     # The documented startup cap per Slack API step (SlackBot::STARTUP_REQUEST_BUDGET).
@@ -238,6 +238,36 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
       expect(elapsed).to be < startup_budget
       expect(delta['auth.test']).to eq(1)
       expect(calls['users.list']).to eq(0)
+    end
+
+    # Under the cap a network error is not retried (the first backoff is
+    # longer), so one dropped connection ends the stored-token check. Slack
+    # did not answer, so the token is kept, no LNet discovery runs, and the
+    # next message checks the stored token again.
+    it 'skips the LNet discovery after one network error on the stored-token check, and the next message recovers' do
+      started = []
+      allow(Script).to receive(:exists?).with('lnet').and_return(true)
+      allow(Script).to receive(:running?).with('lnet').and_return(false)
+      allow_any_instance_of(described_class).to receive(:start_script) { |_bot, name| started << name }
+      allow_any_instance_of(described_class).to receive(:wait_for_lnet_connection).and_return(false)
+      plan['auth.test'].clear
+      plan['auth.test'] << failure(:econnreset)
+      plan['auth.test'] << ok({})
+      plan['users.list'] << users_ok
+
+      bot, elapsed, delta = start_bot
+
+      expect(started).to eq([])
+      expect(bot.initialized?).to be false
+      expect(bot.error_message).to include('Slack unavailable')
+      expect(UserVars.slack_token).to eq('valid-token')
+      expect(elapsed).to be < startup_budget
+      expect(delta['auth.test']).to eq(1)
+      expect(calls['users.list']).to eq(0)
+
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(calls).to include('auth.test' => 2, 'users.list' => 1)
+      expect(started).to eq([])
     end
 
     it 'caps the check of a token found over LNet' do
