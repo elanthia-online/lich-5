@@ -94,6 +94,19 @@ module Lich
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
+      # cache_key => [data_version, root]: the database's data_version just
+      # before root was read into @settings_cache (see cached_root).
+      @cache_versions = {}
+      # cache_key => [data_version, root]: the data_version taken just before
+      # the read that put root in @settings_cache (cached_root's re-read or
+      # cache-miss fill), whether or not it was also recorded in
+      # @cache_versions. A write compares it with the version seen after its
+      # own store (see store_after_database).
+      @reread_versions = {}
+      # Held while a root is put in @settings_cache, so that cached_root can
+      # cache a re-read row only if no other thread has changed the cache
+      # entry since the read began (see store_in_cache).
+      @cache_mutex = Mutex.new
       # One lock per cache entry (script and scope), see with_cache_lock.
       @cache_locks = {}
       @cache_locks_guard = Mutex.new
@@ -108,7 +121,14 @@ module Lich
       # one order in the database and in the other order in the cache: the
       # cache then holds an older row over a newer one, and this process's
       # reads miss the newer keys until the row is written again. Cache hits
-      # do not take the lock.
+      # do not take the lock, and neither does re-reading a cached row after a
+      # commit (see cached_root), so it never waits for a write in progress:
+      # that re-read is cached only if the entry is unchanged, and while
+      # another thread holds the lock it is cached without a version (the
+      # lock is taken without waiting, then @cache_mutex).
+      #
+      # Lock order: an entry's lock, then @cache_mutex. @cache_mutex is never
+      # held while taking an entry's lock.
       #
       # The lock is per entry, so a top-level write retrying while another
       # session keeps changing the row holds up only threads using the same
@@ -121,10 +141,15 @@ module Lich
       # the same thread does not deadlock. No code takes two entries' locks at
       # once.
       def self.with_cache_lock(cache_key, &block)
-        lock = @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
-        lock.synchronize(&block)
+        cache_lock(cache_key).synchronize(&block)
       end
       private_class_method :with_cache_lock
+
+      # The Monitor behind with_cache_lock for cache_key, created on first use.
+      def self.cache_lock(cache_key)
+        @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
+      end
+      private_class_method :cache_lock
 
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
@@ -184,8 +209,7 @@ module Lich
         raise ArgumentError, "scope must be a non-empty String" if scope.nil? || scope.to_s.strip.empty?
 
         script_name ||= ""
-        cache_key = "#{script_name}::#{scope}"
-        root = @settings_cache[cache_key] || with_cache_lock(cache_key) { @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope) }
+        root = cached_root(script_name, scope)
 
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
@@ -205,24 +229,9 @@ module Lich
         path        = proxy.path
         scope       = proxy.scope
         cache_key   = "#{script_name || ""}::#{scope}"
-
-        # Local helper to keep cache in sync with the just-persisted root
-        sync_cache = lambda do |root_obj|
-          cached = @settings_cache[cache_key]
-          if cached && !cached.equal?(root_obj)
-            if cached.is_a?(Hash) && root_obj.is_a?(Hash)
-              cached.replace(root_obj)
-            elsif cached.is_a?(Array) && root_obj.is_a?(Array)
-              cached.clear
-              cached.concat(root_obj)
-            else
-              @settings_cache[cache_key] = root_obj
-            end
-          elsif cached.nil?
-            @settings_cache[cache_key] = root_obj
-          end
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
-        end
+        # Whatever happens below (a save, a failed save, an early return), the
+        # next read checks the database again instead of trusting the cache.
+        @cache_versions.delete(cache_key)
 
         # --- Refresh-before-save to prevent stale-cache overwrites ---
         # IMPORTANT: If proxy.target IS the cached object, we must NOT replace it
@@ -244,12 +253,12 @@ module Lich
             cached.concat(fresh_root)
             current_root_for_scope = cached
           else
-            @settings_cache[cache_key] = fresh_root
+            store_in_cache(cache_key, fresh_root)
             current_root_for_scope = fresh_root
           end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache state for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         else
-          @settings_cache[cache_key] = fresh_root
+          store_in_cache(cache_key, fresh_root)
           current_root_for_scope = fresh_root
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache populated from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         end
@@ -262,13 +271,12 @@ module Lich
           unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
             _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
             current_root_for_scope = {}
-            @settings_cache[cache_key] = current_root_for_scope
+            store_in_cache(cache_key, current_root_for_scope)
           end
 
           if proxy.respond_to?(:detached?) && proxy.detached?
             _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Proxy is detached (view); persisting current root without copying view target." })
-            save_to_database(current_root_for_scope, scope, script_name: script_name)
-            sync_cache.call(current_root_for_scope)
+            save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
             return nil
           end
 
@@ -286,8 +294,7 @@ module Lich
             end
           end
 
-          save_to_database(current_root_for_scope, scope, script_name: script_name)
-          sync_cache.call(current_root_for_scope)
+          save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
           return nil
         end
 
@@ -297,7 +304,7 @@ module Lich
         unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
           current_root_for_scope = {}
-          @settings_cache[cache_key] = current_root_for_scope
+          store_in_cache(cache_key, current_root_for_scope)
         end
 
         parent_path = path[0...-1]
@@ -372,34 +379,205 @@ module Lich
         end
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: root after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        save_to_database(current_root_for_scope, scope, script_name: script_name)
-        sync_cache.call(current_root_for_scope)
+        save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
       end
       private_class_method :store_proxy_changes
 
       def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
         script_name = script_name || Script.current.name
-        cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "current_script_settings: Request for scope: #{scope.inspect}, cache_key: #{cache_key}" })
-
-        cached_data = @settings_cache[cache_key]
-        if cached_data
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache hit for #{cache_key} (object_id: #{cached_data.object_id}). Returning DUP: #{cached_data.inspect}" })
-          return cached_data.dup
-        else
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache miss for #{cache_key}. Loading from DB." })
-          settings = with_cache_lock(cache_key) do
-            # Another thread may have filled the entry while this one waited.
-            @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
-          end
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Loaded from DB (object_id: #{settings.object_id}): #{settings.inspect}" })
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Stored in cache (object_id: #{@settings_cache[cache_key].object_id}). Returning DUP." })
-          return settings.dup
-        end
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "current_script_settings: Request for scope: #{scope.inspect}, script_name: #{script_name.inspect}" })
+        cached_root(script_name, scope).dup
       end
 
-      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil)
+      # Returns this process's cached root for (script_name, scope), reading it
+      # from the database first when it is not cached or may have changed.
+      #
+      # Every Lich session is a separate process with its own cache, and all
+      # of them share lich.db3. A cached row is used only while the database's
+      # data_version (DatabaseAdapter#data_version) is the one seen just before
+      # the row was read; any commit since then, by another session or by this
+      # one, changes it, and the row is read again. The check is one pragma on
+      # an idle connection, so a read of an unchanged database still costs no
+      # query of the settings table. The version is only good for the object
+      # it was taken for: code that puts another object in the cache (a write)
+      # makes the next read check again.
+      #
+      # When the version can't be read (another process is committing or holds
+      # the lock), the cached row is used, as it was before this check
+      # existed. When the row itself can't be read for a database error, a
+      # cached row is used rather than raising into the script; with nothing
+      # cached, the error is raised as before.
+      #
+      # A row read after a cache miss is read and cached under the entry's lock
+      # (see with_cache_lock), keeping a row another thread cached while this
+      # one waited. A cached row read again after a commit is read without
+      # that lock, so a write in progress in this process doesn't hold up the
+      # read; it is cached only if no other thread changed the cache entry
+      # while it was read, so a later row (a write, a newer re-read,
+      # Settings.load) is never replaced by an older one. While another thread
+      # writes the entry, the row is cached without a version: a write that
+      # changes the cached root in place never leaves it with a version it
+      # doesn't match, and a thread that read a newer row doesn't go back to
+      # the older one when the version can't be read next. The write then
+      # caches its own row only if this re-read may have begun before its
+      # store (see store_after_database). The row is returned either way.
+      #
+      # @return [Hash, Array, Object] the cached root itself (not a copy), or
+      #   a freshly read row that another thread's change kept out of the cache
+      def self.cached_root(script_name, scope)
+        cache_key = "#{script_name || ""}::#{scope}"
+        version = @db_adapter.data_version
+        cached = @settings_cache[cache_key]
+        unless cached
+          return with_cache_lock(cache_key) do
+            # Another thread may have filled the entry while this one waited.
+            # Otherwise the version is read again, as the database may have
+            # changed while this thread waited for the lock.
+            @settings_cache[cache_key] || read_into_cache(script_name, scope, cache_key, @db_adapter.data_version, nil)
+          end
+        end
+
+        stamp = @cache_versions[cache_key]
+        if version.nil? || (stamp && stamp[0] == version && stamp[1].equal?(cached))
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: Cache hit for #{cache_key} (object_id: #{cached.object_id}, data_version: #{version.inspect})" })
+          return cached
+        end
+
+        read_into_cache(script_name, scope, cache_key, version, cached)
+      end
+      private_class_method :cached_root
+
+      # Reads the row for cached_root and caches it if the cache entry is
+      # still cached (the root cached_root saw, nil after a miss). version is
+      # recorded with it only if no other thread holds the entry's lock.
+      # Returns the row read; on a database error, returns cached, or raises
+      # when cached is nil.
+      def self.read_into_cache(script_name, scope, cache_key, version, cached)
+        begin
+          root = @db_adapter.get_settings(script_name, scope)
+        rescue Sequel::Error, SQLite3::Exception => e
+          raise unless cached
+
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "cached_root: Could not re-read #{cache_key} (#{e.class}: #{e.message}); using the cached row." })
+          return cached
+        end
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: Loaded #{cache_key} from DB (object_id: #{root.object_id}, data_version: #{version.inspect})" })
+        # Another thread may have put a newer row in the cache while this one
+        # was reading (its own write, a re-read that began later, or
+        # Settings.load). This row is cached only if the entry is still the one
+        # seen before the read; otherwise it is returned without caching.
+        #
+        # While another thread holds the entry's lock, the row is cached with
+        # no version: a write in progress may change the cached root in place
+        # (save_proxy_changes refreshes it from a row it read earlier), and a
+        # version recorded for that root now would vouch for whatever the
+        # write leaves in it, even when the write saves nothing. Without a
+        # version, the next read checks the database again, and while the
+        # version can't be read it serves this row, not the older one it
+        # replaced. Taking the lock without waiting here (a miss fill already
+        # holds it) means no write starts between this check and recording
+        # the version, and every write drops or replaces what is recorded
+        # here once it has the lock. The version is recorded in
+        # @reread_versions either way, so that a write finishing later can
+        # tell whether this read began after its store (see
+        # store_after_database).
+        lock = cache_lock(cache_key)
+        free = lock.try_enter
+        begin
+          cached_now = @cache_mutex.synchronize do
+            next false unless @settings_cache[cache_key].equal?(cached)
+
+            @settings_cache[cache_key] = root
+            @reread_versions[cache_key] = [version, root]
+            if free
+              @cache_versions[cache_key] = [version, root]
+            else
+              @cache_versions.delete(cache_key)
+            end
+            true
+          end
+        ensure
+          lock.exit if free
+        end
+        if !cached_now
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: #{cache_key} changed in the cache while it was read; not caching this copy" })
+        elsif !free
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "cached_root: #{cache_key} is being written; cached this copy without a version" })
+        end
+        root
+      end
+      private_class_method :read_into_cache
+
+      # Puts root in the cache for cache_key. Every write that replaces a
+      # cached root goes through here or store_after_database, holding
+      # @cache_mutex, so that it can't land between cached_root's check that
+      # the entry is unchanged and its own assignment (which would put an
+      # older row over this one).
+      #
+      # @return root
+      def self.store_in_cache(cache_key, root)
+        @cache_mutex.synchronize { @settings_cache[cache_key] = root }
+      end
+      private_class_method :store_in_cache
+
+      # Puts a row in the cache once this thread, holding the entry's lock,
+      # has finished with the database: the row it just stored (a write), or
+      # the row it just read (refresh_data). The row is not cached when
+      # another thread's re-read (cached_root, which doesn't wait for the
+      # lock) has cached a row that holds at least what this thread stored or
+      # read. This is the write's last change to the cache entry: nothing
+      # after it may change the cached row, which may by then be that re-read.
+      #
+      # Without this check, a re-read in the gap between the store and the
+      # cache update could see a commit another session made in that gap, and
+      # the cache update would then put this thread's older row over it.
+      # While the version can't be read, the re-reading thread would be
+      # served that older row and lose sight of the newer one it had read.
+      #
+      # version tells which re-reads hold this thread's row:
+      # - A write passes data_version read after its commit. A re-read whose
+      #   version (taken before its SELECT) is at least that value saw no
+      #   commit between its version and this one, so it began after the
+      #   store and its row includes it: this thread's reads still see its
+      #   own write.
+      # - refresh_data passes data_version read before its own read, with
+      #   newer_only. Only a re-read whose version is greater saw a commit
+      #   this read may have missed; one at the same version read the same
+      #   database state, and refresh_data's row replaces it, dropping changes
+      #   made only to the cached row (Settings.load's contract).
+      # Every other case caches this row, as before: a re-read that began
+      # earlier, a commit by another session after the re-read's version, or
+      # a version that can't be read. In those cases the re-reading thread
+      # may be served this row until the version can be read again.
+      #
+      # @return [Boolean] whether the cache now holds row
+      def self.store_after_database(cache_key, row, version, newer_only: false)
+        @cache_mutex.synchronize do
+          seen = @reread_versions[cache_key]
+          current = @settings_cache[cache_key]
+          if version && seen && seen[0] && current && seen[1].equal?(current)
+            next false if newer_only ? seen[0] > version : seen[0] >= version
+          end
+
+          @settings_cache[cache_key] = row
+          true
+        end
+      end
+      private_class_method :store_after_database
+
+      # Saves a whole row and caches it (see store_after_database).
+      #
+      # With keep_entries (save_proxy_changes), the cached row holds
+      # data_to_save's own top-level values rather than copies of them, so
+      # that the containers the caller's proxies wrap stay part of the cached
+      # row. They are put in the saved copy before it is cached, in the same
+      # step as the cache update.
+      #
+      # @return [Boolean, nil] whether the cache took the saved row (false
+      #   when a newer row another thread re-read after the save is kept), or
+      #   nil when nothing was saved for lack of a script name
+      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil, keep_entries: false)
         # Use provided script_name or fall back to Script.current.name
         script_name = script_name || Script.current.name
 
@@ -421,12 +599,23 @@ module Lich
           # row was committed does not leave this process's cache behind the
           # database. As in DatabaseAdapter#update_settings, only the store is
           # held back.
-          Thread.handle_interrupt(Object => :never) do
+          stored = Thread.handle_interrupt(Object => :never) do
             @db_adapter.save_settings(script_name, unwrapped_settings, scope)
-            @settings_cache[cache_key] = unwrapped_settings
+
+            cached_row = unwrapped_settings
+            cached_row.replace(data_to_save) if keep_entries && (data_to_save.is_a?(Hash) || data_to_save.is_a?(Array))
+
+            store_after_database(cache_key, cached_row, @db_adapter.data_version)
           end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+
+          if stored
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+            true
+          else
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Kept the newer row another thread re-read for #{cache_key} after the save." })
+            false
+          end
         end
       end
 
@@ -436,9 +625,18 @@ module Lich
         _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Reloading cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
         # Reload under the entry's lock, replacing whatever is cached. A cache
         # miss fill keeps a row another thread cached while it waited, which
-        # could be one read before this call began.
+        # could be one read before this call began. If the read raises, the
+        # cached row and its recorded version stay as they were.
         settings = with_cache_lock(cache_key) do
-          @settings_cache[cache_key] = @db_adapter.get_settings(script_name, scope)
+          version = @db_adapter.data_version
+          root = @db_adapter.get_settings(script_name, scope)
+          # The version recorded for the old root no longer matches the
+          # cached object, so the next read checks the database again (see
+          # cached_root). A row another thread re-read after a commit this
+          # read may have missed is kept (see store_after_database); this
+          # call still returns its own.
+          store_after_database(cache_key, root, version, newer_only: true)
+          root
         end
         settings.dup
       end
@@ -518,7 +716,7 @@ module Lich
       # part of the store (on_stored), so a script killed right after the row
       # was committed does not leave the cache without it.
       def self.store_top_level_key(script_name, cache_key, scope, name, value)
-        cache_stored_row = ->(row) { @settings_cache[cache_key] = row }
+        cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
         stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
           if fresh_root.is_a?(Hash)
             fresh_root[name] = value
