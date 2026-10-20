@@ -764,6 +764,136 @@ RSpec.describe 'Lich.open_sequel_sqlite lock waits' do
     end
   end
 
+  # Pooled connections wait for the lock side by side and keep their
+  # connections meanwhile; Sequel's pool holds 4. Threads beyond that queue on
+  # the pool.
+  describe 'more writers than pooled connections' do
+    # Starts `count` writers at once and returns [outcome, seconds] for each,
+    # where outcome is :ok or the class of the Sequel::Error raised.
+    def concurrent_writers(db, count)
+      start = Queue.new
+      threads = (1..count).map do |n|
+        Thread.new do
+          start.pop
+          started = monotonic
+          begin
+            db[:rows].insert(n: n)
+            [:ok, monotonic - started]
+          rescue Sequel::Error => e
+            [e.class, monotonic - started]
+          end
+        end
+      end
+      count.times { start << true }
+      threads
+    end
+
+    it 'waits for a free connection for three busy timeouts' do
+      expect(open_db.opts[:pool_timeout]).to eq(15.0)
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(300)
+      expect(open_db.opts[:pool_timeout]).to eq(0.9)
+    end
+
+    it 'gives a writer queued behind four waiting connections its own lock wait instead of a pool timeout' do
+      db = open_db
+      holder = hold_write_lock
+      threads = concurrent_writers(db, 10)
+      # Past the 5 s busy timeout: the four writers holding connections give up
+      # and hand them to queued writers, which must still be waiting for them.
+      sleep 5.6
+      holder.execute('COMMIT')
+      outcomes = threads.map { |t| t.value.first }
+
+      expect(outcomes).not_to include(Sequel::PoolTimeout)
+      expect(outcomes - [:ok]).to all(eq(Sequel::DatabaseError))
+      expect(outcomes.count(:ok)).to be >= 6
+      expect(db[:rows].count).to eq(1 + outcomes.count(:ok))
+    end
+
+    # Boundary: a lock held past every waiter's budget. Each writer fails, and
+    # one still queued on the pool fails with Sequel::PoolTimeout, but only
+    # after waiting the pool timeout.
+    it 'raises Sequel::PoolTimeout only after a queued writer has waited the pool timeout' do
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+      db = open_db
+      holder = hold_write_lock
+      threads = concurrent_writers(db, 24)
+      results = threads.map(&:value)
+      holder.execute('COMMIT')
+      pool_timeouts = results.select { |outcome, _| outcome == Sequel::PoolTimeout }
+      busy = results.select { |outcome, _| outcome == Sequel::DatabaseError }
+
+      expect(results.map(&:first)).to all(eq(Sequel::PoolTimeout).or(eq(Sequel::DatabaseError)))
+      expect(pool_timeouts).not_to be_empty
+      expect(pool_timeouts.map(&:last)).to all(be >= 0.6)
+      expect(busy.map(&:last)).to all(be >= 0.2)
+      expect(db[:rows].select_order_map(:n)).to eq([0])
+    end
+
+    # A caller that defers interrupts around a write (Thread.handle_interrupt)
+    # and is killed while it is queued on the pool holds the kill back for the
+    # pool wait plus, once it has a connection, one lock wait: the kill is
+    # pending when that call starts, so the call waits out its busy timeout.
+    describe 'a kill sent to a writer queued with interrupts deferred' do
+      # Takes all four pooled connections until `gate` gets four values.
+      def take_every_connection(db, gate)
+        holders = Array.new(4) { Thread.new { db.synchronize { gate.pop } } }
+        holders.each { |t| wait_until_sleeping(t) }
+        holders
+      end
+
+      # Starts a write inside Thread.handle_interrupt(Object => :never), kills
+      # it once it is queued on the pool, and returns [thread, start time].
+      def kill_masked_writer(db)
+        started = monotonic
+        victim = Thread.new do
+          Thread.handle_interrupt(Object => :never) { db[:rows].insert(n: 1) }
+          :survived
+        end
+        wait_until_sleeping(victim)
+        victim.kill
+        [victim, started]
+      end
+
+      it 'dies without writing when the pool wait ends with Sequel::PoolTimeout' do
+        allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+        db = open_db
+        gate = Queue.new
+        holders = take_every_connection(db, gate)
+        victim, started = kill_masked_writer(db)
+        result = victim.value
+        dead_after = monotonic - started
+        4.times { gate << true }
+        holders.each(&:join)
+
+        expect(result).to be_nil
+        expect(dead_after).to be >= 0.6
+        expect(dead_after).to be < 0.6 + 0.4
+        expect(db[:rows].count).to eq(0)
+      end
+
+      it 'dies without writing after a full lock wait when a connection frees up while another process holds the lock' do
+        allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(200)
+        db = open_db
+        holder = hold_write_lock
+        gate = Queue.new
+        holders = take_every_connection(db, gate)
+        victim, started = kill_masked_writer(db)
+        sleep 0.3
+        4.times { gate << true }
+        holders.each(&:join)
+        result = victim.value
+        dead_after = monotonic - started
+        holder.execute('COMMIT')
+
+        expect(result).to be_nil
+        expect(dead_after).to be >= 0.3 + 0.2
+        expect(dead_after).to be < 0.6 + 0.2 + 0.4
+        expect(db[:rows].select_order_map(:n)).to eq([0])
+      end
+    end
+  end
+
   it 'does not track a statement that is closed at birth (comment-only SQL)' do
     db = open_db
     20.times { db.run('UPDATE rows SET n = n; -- trailing comment') }
