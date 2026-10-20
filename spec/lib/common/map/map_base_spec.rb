@@ -485,13 +485,14 @@ RSpec.describe Lich::Common::MapBase do
       it 'returns nil and reports the error when the search raises' do
         room = test_class.test_list[0]
         # Fail inside the real search: expanding room 1 reads its wayto.
-        allow(test_class.test_list[1]).to receive(:wayto).and_raise(StandardError, 'boom')
+        error = StandardError.new('boom')
+        allow(test_class.test_list[1]).to receive(:wayto).and_raise(error)
         allow(room).to receive(:echo)
         allow(room).to receive(:respond)
 
         expect(room.dijkstra).to be_nil
         expect(room).to have_received(:echo).with('Map.dijkstra: error: boom')
-        expect(room).to have_received(:respond).with(array_including(a_string_matching(/map_base\.rb/)))
+        expect(room).to have_received(:respond).with(error.backtrace)
       end
     end
 
