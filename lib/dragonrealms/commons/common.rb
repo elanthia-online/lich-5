@@ -20,6 +20,11 @@ module Lich
       # previous line, and player speech containing "Wait N" ends in a quote.
       WAIT_RESPONSE_PATTERN = /(?:\.\.\. ?wait|\AWait) (?<seconds>[0-9]+) seconds?\.(?:<[^>]+>)*\s*\z/.freeze
 
+      # Most collect attempts per DRC.collect call while the room is too
+      # cluttered. Chosen to equal DRC.forage?'s default tries (5), which is
+      # its own literal and does not follow this constant.
+      COLLECT_CLUTTER_ATTEMPTS = 5
+
       # Collect command response messages
       COLLECT_MESSAGES = [
         'As you rummage around',
@@ -366,19 +371,27 @@ module Lich
         true
       end
 
+      # Each refused collect kicks one pile (KICK PILE destroys it) and tries
+      # again. Capped at COLLECT_CLUTTER_ATTEMPTS collects per call so a room
+      # that stays cluttered cannot loop forever.
+      # Returns nil when it gives up (no pile, missed kick, or still cluttered
+      # after the last attempt), otherwise the result of waitrt?.
       def collect(item, practice = true)
         command = practice ? "collect #{item} practice" : "collect #{item}"
 
-        case bput(command, COLLECT_MESSAGES)
-        when 'The room is too cluttered'
-          # Giving up still waits out any roundtime, e.g. from an earlier kick.
+        attempts = 0
+        while bput(command, COLLECT_MESSAGES) == 'The room is too cluttered'
+          attempts += 1
+          if attempts >= COLLECT_CLUTTER_ATTEMPTS
+            Lich::Messaging.msg("bold", "DRC: Room still too cluttered to collect #{item} after #{attempts} tries, giving up.")
+            # Giving up still waits out any roundtime, e.g. from an earlier kick.
+            waitrt?
+            return
+          end
           unless kick_pile?
             waitrt?
             return
           end
-
-          # The retry waits out its own roundtime.
-          return collect(item, practice)
         end
         waitrt?
       end

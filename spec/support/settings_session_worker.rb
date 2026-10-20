@@ -16,6 +16,10 @@
 #
 #   set   <api> <key> <json>    api[key] = value               => "ok"
 #   get   <api> <key>           api[key], proxies unwrapped     => value
+#   nset  <api> <key> <sub> <json>
+#                               api[key][sub] = value (through the proxy)
+#                                                               => "ok"
+#   push  <api> <key> <json>    api[key].push(value)            => "ok"
 #   burst <api> <prefix> <n>    api["<prefix>_<i>"] = i, i < n  => "ok"
 #   row   <api>                 the row as stored in the database
 #   threads <api> <prefix> <t> <n> <f>
@@ -27,7 +31,8 @@
 #                               table through Lich.db           => "ok"
 #   msgs                        Messaging and log lines so far  => [[kind, text], ...]
 #
-# <api> is G (GameSettings), C (CharSettings), S (Settings) or I (InstanceSettings).
+# <api> is G (GameSettings), C (CharSettings), S (Settings), I (InstanceSettings)
+# or IG (InstanceSettings.game, which reads and writes through a root proxy).
 # Set LICH_SPEC_BUSY_TIMEOUT_MS to shorten the SQLite busy timeout.
 # Set LICH_SPEC_STORE_LOG to a file path to have the worker append one line to
 # it each time update_settings is about to try its conditional store (after it
@@ -105,10 +110,11 @@ if ENV['LICH_SPEC_STORE_LOG']
 end
 
 APIS = {
-  'G' => Lich::Common::GameSettings,
-  'C' => Lich::Common::CharSettings,
-  'S' => Lich::Common::Settings,
-  'I' => Lich::Common::InstanceSettings,
+  'G'  => Lich::Common::GameSettings,
+  'C'  => Lich::Common::CharSettings,
+  'S'  => Lich::Common::Settings,
+  'I'  => Lich::Common::InstanceSettings,
+  'IG' => Lich::Common::InstanceSettings.game,
 }.freeze
 
 def row_for(api)
@@ -117,6 +123,7 @@ def row_for(api)
                   when 'C' then ["#{XMLData.game}:#{XMLData.name}", Script.current.name]
                   when 'S' then [':', Script.current.name]
                   when 'I' then ["#{XMLData.game}:#{XMLData.name}", Lich::Common::InstanceSettings::SCRIPT_NAME]
+                  when 'IG' then [XMLData.game, Lich::Common::InstanceSettings::SCRIPT_NAME]
                   end
   Lich::Common::Settings.instance_variable_get(:@db_adapter).get_settings(script, scope)
 end
@@ -158,6 +165,13 @@ while (line = $stdin.gets)
       'ok'
     when 'get'
       plain(APIS.fetch(api)[key])
+    when 'nset'
+      sub, json = rest.split(' ', 2)
+      APIS.fetch(api)[key][sub] = JSON.parse(json)
+      'ok'
+    when 'push'
+      APIS.fetch(api)[key].push(JSON.parse(rest))
+      'ok'
     when 'burst'
       Integer(rest).times { |i| APIS.fetch(api)["#{key}_#{i}"] = i }
       'ok'

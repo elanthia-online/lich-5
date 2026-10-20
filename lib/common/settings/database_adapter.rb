@@ -6,6 +6,11 @@ module Lich
         @file = File.join(data_dir, "lich.db3")
         @db = Lich.open_sequel_sqlite(@file)
         @table_name = table_name
+        @version_mutex = Mutex.new
+        @version_db = nil
+        @version_base = 0
+        @version_epoch = -1
+        @version_error_reported = false
         setup!
       end
 
@@ -25,6 +30,67 @@ module Lich
       def get_settings(script_name, scope = ":")
         entry = @table.first(script: script_name, scope: scope)
         entry.nil? ? {} : Marshal.load(entry[:hash])
+      end
+
+      # A number that changes whenever lich.db3 has had a commit since it was
+      # last read, or nil when that can't be told right now.
+      #
+      # Every Lich session is a separate process, and Settings caches rows per
+      # process. SQLite's PRAGMA data_version changes when another connection
+      # commits, so a cache can compare it with the value seen when a row was
+      # read and re-read the row only when it may have changed. The pragma
+      # reports changes by *other* connections only, and Sequel may hand each
+      # thread a different connection, so it is read on a connection of its
+      # own that never writes: every commit, from another process or from this
+      # one, changes it.
+      #
+      # The connection has no busy timeout. While another process holds the
+      # database's exclusive lock (a commit in progress, or a script holding
+      # it), the read fails at once and this returns nil, rather than waiting
+      # inside SQLite, which keeps the GVL and would stall every thread of
+      # this process. Callers then keep what they have; a read that overlaps a
+      # commit may see the database as it was before it. The read runs in one
+      # C call (sqlite3_exec), so no lock is held while Ruby code runs.
+      #
+      # The pragma counts per connection, starting again from 1 on a new one,
+      # so after an error has closed the connection the reopened one could
+      # repeat a value already handed out while the database has since
+      # changed. Each connection therefore gets a range of its own: its values
+      # are offset by 2**40 times the number of connections opened before it.
+      # No value is handed out twice for different states of the database,
+      # and every value from a reopened connection is greater than every
+      # earlier one (a connection would need 2**40 commits to reach the next
+      # range).
+      #
+      # No Ruby lock is held on the way, so a cache hit never waits for one.
+      # Ruby's Mutex is not fair: a thread calling this in a tight loop would
+      # take the lock back before a waiting thread got to run, and stall other
+      # threads' Settings reads (measured: up to seconds with the lock held
+      # around the pragma, about 100 ms now and then with it held only to
+      # record the value). The GVL already keeps two threads out of the C call
+      # at once. @version_mutex guards only opening and closing the
+      # connection; a value read on a connection that another thread has
+      # closed or replaced meanwhile is discarded (nil).
+      #
+      # @return [Integer, nil]
+      def data_version
+        db = @version_db || open_version_connection
+        # Read after db: a connection is published only after its offset is
+        # set, and a connection replaced after this point fails the identity
+        # check below.
+        base = @version_base
+        raw = Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
+        return nil unless @version_db.equal?(db)
+
+        base + raw
+      rescue SQLite3::BusyException
+        nil
+      rescue SQLite3::Exception, ArgumentError, TypeError => e
+        if close_version_connection(db) && !@version_error_reported
+          @version_error_reported = true
+          Lich.log("--- Error: cannot tell whether settings changed in lich.db3 (#{e.class}: #{e.message}); settings may not show other sessions' changes ---")
+        end
+        nil
       end
 
       def save_settings(script_name, settings, scope = ":")
@@ -143,6 +209,42 @@ module Lich
       end
 
       private
+
+      # Opens the version connection unless another thread already has. Its
+      # offset is set before the connection is published, so a thread that
+      # sees the new connection also sees its offset.
+      def open_version_connection
+        @version_mutex.synchronize do
+          @version_db || begin
+            fresh = SQLite3::Database.new(@file).tap { |conn| conn.busy_timeout(0) }
+            @version_base = (@version_epoch += 1) << 40
+            @version_db = fresh
+          end
+        end
+      end
+
+      # Closes the version connection if it is still +db+, so that the next
+      # check opens a new one. A thread whose read failed on a connection
+      # another thread has already replaced leaves the new one alone. +db+ is
+      # required, so no caller can skip that check by closing "whatever is
+      # current". It is nil when opening the connection failed; with no
+      # connection open, that counts as current.
+      #
+      # @param db [SQLite3::Database, nil] the connection the failed read used
+      # @return [Boolean] whether +db+ was the current connection
+      def close_version_connection(db)
+        @version_mutex.synchronize do
+          return false unless @version_db.equal?(db)
+
+          @version_db = nil
+        end
+        begin
+          db&.close
+        rescue SQLite3::Exception
+          nil
+        end
+        true
+      end
 
       # Unmarshals a stored row for update_settings, reporting a row that
       # cannot be read before raising its error.
