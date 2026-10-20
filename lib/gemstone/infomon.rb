@@ -35,6 +35,8 @@ module Lich
       # keys whose last attempted write failed; cleared by a later successful write.
       # Plain Hash like Cache: mutated by the worker thread and reset!; single ops are GVL-atomic.
       @unpersisted ||= {}
+      # true once a write failure has been shown in game; any successful write clears it
+      @failure_reported = false
 
       def self.cache
         @cache
@@ -94,6 +96,7 @@ module Lich
         Infomon.db.drop_table?(self.table_name)
         self.cache.clear
         @unpersisted.clear
+        @failure_reported = false
         @cache_loaded = false
         Infomon.setup!
       end
@@ -275,26 +278,28 @@ module Lich
             # Normal SQL statement processing
             sql, keys = item
             write_error = nil
-            new_streak = false
+            report_in_game = false
             Infomon.mutex.synchronize do
               begin
                 Infomon.db.run(sql)
                 # Safe to clear: the queue is FIFO, so any later write for these keys
                 # runs after this and re-marks them if it fails.
                 keys.each { |key| @unpersisted.delete(key) }
+                @failure_reported = false
               rescue StandardError => e
                 # Keep the cached value (Infomon's view of the game) and mark the keys so
                 # the next set/upsert_batch of the same value is retried instead of a :noop.
-                new_streak = @unpersisted.empty?
+                report_in_game = !@failure_reported
+                @failure_reported = true
                 keys.each { |key| @unpersisted[key] = true }
                 write_error = e
               end
             end
             # Reported after releasing the DB mutex so a slow client write can't hold it.
-            # The game window gets one short line per failure streak (until a successful
-            # write leaves nothing unpersisted); the log gets every failure in full.
+            # The game window gets one short line per failure streak (a streak ends at
+            # the next successful write); the log gets every failure in full.
             if write_error
-              if new_streak
+              if report_in_game
                 shown = keys.first(3).join(', ')
                 shown += ', ...' if keys.size > 3
                 respond "--- Lich: error: Infomon write failed for #{keys.size} key(s) (#{shown}): #{write_error.message}"

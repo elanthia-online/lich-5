@@ -888,6 +888,17 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(infomon).to have_received(:respond).twice
     end
 
+    it "ends a failure streak at any successful write, even if a failed key is never re-set" do
+      infomon = Lich::Gemstone::Infomon
+      allow(Lich).to receive(:log)
+      allow(infomon).to receive(:respond)
+      with_rejected_write("status.calmed") { infomon.set("status.calmed", true) }
+      10.times { |i| infomon.set("streak.ok#{i}", i) }
+      infomon.flush
+      with_rejected_write("currency.silver") { infomon.set("currency.silver", 5) }
+      expect(infomon).to have_received(:respond).twice
+    end
+
     it "allows a failed write to be retried" do
       infomon = Lich::Gemstone::Infomon
       k = "write_failure.test"
