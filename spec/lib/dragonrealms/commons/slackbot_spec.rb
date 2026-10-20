@@ -115,6 +115,20 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       err = described_class::ThrottlingError.new('throttled')
       expect(err.retry_after).to be_nil
     end
+
+    # A token check treats ApiError as "Slack rejected the token" (which starts
+    # LNet discovery) unless the error is in SLACK_UNAVAILABLE_ERRORS. A new
+    # ApiError subclass must be placed on one side deliberately.
+    it 'puts every ApiError subclass in SLACK_UNAVAILABLE_ERRORS' do
+      expect(described_class::ApiError.subclasses)
+        .to match_array(described_class::SLACK_UNAVAILABLE_ERRORS - [described_class::NetworkError])
+    end
+
+    it 'lists NetworkError but not the plain ApiError as Slack unavailable' do
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to include(described_class::NetworkError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).not_to include(described_class::ApiError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to be_frozen
+    end
   end
 
   # ---- #initialize ----

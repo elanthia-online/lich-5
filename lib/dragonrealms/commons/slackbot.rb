@@ -46,6 +46,13 @@ module Lich
         end
       end
 
+      # Errors meaning Slack could not answer a request (as opposed to Slack
+      # answering it with a refusal). A token check that fails with one of
+      # these neither judges nor replaces the token. A new ApiError subclass
+      # for "Slack could not answer" belongs here, or a token check that hits
+      # it is treated as a rejected token and starts LNet token discovery.
+      SLACK_UNAVAILABLE_ERRORS = [NetworkError, ThrottlingError, MalformedResponseError].freeze
+
       # @return [String, nil] human-readable error from the last failed operation
       attr_reader :error_message
 
@@ -147,7 +154,7 @@ module Lich
       # @return [Boolean]
       def authed?(token, budget: nil)
         token_accepted?(token, budget)
-      rescue NetworkError, ThrottlingError, MalformedResponseError => e
+      rescue *SLACK_UNAVAILABLE_ERRORS => e
         Lich.log "SlackBot: Could not check a Slack token: #{e.message}"
         false
       end
@@ -217,7 +224,7 @@ module Lich
       def verify_token(budget)
         ensure_slack_token(budget) unless token_accepted?(UserVars.slack_token, budget)
         @error_message.nil?
-      rescue NetworkError, ThrottlingError, MalformedResponseError => e
+      rescue *SLACK_UNAVAILABLE_ERRORS => e
         Lich.log "SlackBot: Slack unavailable while checking the token: #{e.message}"
         set_error("Slack unavailable: #{e.message}")
         false
@@ -236,7 +243,7 @@ module Lich
         return false unless token
 
         post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
-      rescue ThrottlingError, MalformedResponseError
+      rescue *SLACK_UNAVAILABLE_ERRORS
         raise
       rescue ApiError => e
         Lich.log "SlackBot: Slack token not accepted: #{e.message}"
