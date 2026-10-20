@@ -48,7 +48,13 @@ RSpec.describe 'Callers that list the immobile reply' do
   before { Lich::Messaging.clear_messages! }
 
   describe 'DRCI' do
-    before { game(default: immobile) }
+    # Empty hands unless an example says otherwise, so the hand checks
+    # (dispose_trash's, for one) don't read whatever GameObj holds.
+    before do
+      game(default: immobile)
+      allow(drc).to receive(:left_hand).and_return(nil)
+      allow(drc).to receive(:right_hand).and_return(nil)
+    end
 
     # [description, call, expected result]
     {
