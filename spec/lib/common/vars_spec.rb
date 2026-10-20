@@ -20,6 +20,14 @@ RSpec.describe Lich::Common::Vars do
     blob && Marshal.load(blob)
   end
 
+  # Restore Vars' class state so a later spec that loads vars.rb doesn't inherit it.
+  around do |example|
+    saved = %i[@@vars @@md5 @@load_state @@autosave_error].to_h { |v| [v, described_class.class_variable_get(v)] }
+    example.run
+  ensure
+    saved.each { |v, val| described_class.class_variable_set(v, val) }
+  end
+
   before do
     db.execute('CREATE TABLE uservars(scope TEXT PRIMARY KEY, hash BLOB)')
     allow(Lich).to receive(:db).and_return(db)
@@ -27,6 +35,7 @@ RSpec.describe Lich::Common::Vars do
     described_class.class_variable_set(:@@vars, {})
     described_class.class_variable_set(:@@md5, nil)
     described_class.class_variable_set(:@@load_state, described_class::LoadState::LOADED)
+    described_class.class_variable_set(:@@autosave_error, nil)
   end
 
   after { db.close }
@@ -65,6 +74,40 @@ RSpec.describe Lich::Common::Vars do
 
       described_class.save
       expect(calls).to eq(2)
+    end
+
+    it 'raises on every save while a value cannot be marshaled, and persists once it is removed' do
+      described_class['key'] = 'v'
+      described_class['p'] = proc {}
+
+      2.times { expect { described_class.save }.to raise_error(TypeError) }
+      expect(stored).to be_nil
+
+      described_class['p'] = nil
+      described_class.save
+      expect(stored).to eq('key' => 'v')
+    end
+  end
+
+  describe 'autosave' do
+    let(:autosave) { described_class.class_variable_get(:@@autosave) }
+
+    it 'retries a failing save every pass but shows the same error once' do
+      allow(described_class).to receive(:respond)
+      described_class['key'] = 'v'
+      described_class['p'] = proc {}
+
+      3.times { autosave.call }
+      expect(described_class).to have_received(:respond).once
+
+      described_class['p'] = nil
+      autosave.call
+      expect(stored).to eq('key' => 'v')
+
+      # after a successful save, a new failure is shown again
+      described_class['p'] = proc {}
+      autosave.call
+      expect(described_class).to have_received(:respond).twice
     end
   end
 end

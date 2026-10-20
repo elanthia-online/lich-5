@@ -97,16 +97,25 @@ module Lich
         nil
       }
 
+      # One autosave pass. A failed save stays dirty and is retried every pass,
+      # but the same error is shown to the user once, not every 5 minutes.
+      @@autosave_error = nil
+      @@autosave = proc {
+        begin
+          @@save.call
+          @@autosave_error = nil
+        rescue StandardError => e
+          Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
+          respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}" unless e.message == @@autosave_error
+          @@autosave_error = e.message
+        end
+      }
+
       # Background thread that auto-saves variables every 5 minutes
       Thread.new {
         loop {
           sleep 300
-          begin
-            @@save.call
-          rescue StandardError => e
-            Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
-            respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}"
-          end
+          @@autosave.call
         }
       }
 
