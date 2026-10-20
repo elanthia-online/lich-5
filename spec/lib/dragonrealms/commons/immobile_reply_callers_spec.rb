@@ -589,6 +589,18 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(sent).to eq(['discern bs'] * 2)
       end
 
+      it 'casts at the minimum, not with nil mana, while retrying with nothing stored' do
+        UserVars.discerns = {}
+        game('discern bs' => -> { sent.size == 1 ? 'Some other discern wording.' : answer })
+        expect(discern_after(0)).to include('mana' => 1, 'cambrinth' => nil)
+        expect(discern_after(299)).to include('mana' => 1, 'cambrinth' => nil)
+        expect(sent).to eq(['discern bs'])
+        expect(UserVars.discerns['bs'].keys).to eq(['failed_at'])
+
+        expect(discern_after(301)['mana']).to eq(15)
+        expect(sent).to eq(['discern bs'] * 2)
+      end
+
       it 'still casts at the minimum and discerns on the next cast when held' do
         game('discern bs' => -> { sent.size == 1 ? 'Some other discern wording.' : immobile })
         discern_after(0)

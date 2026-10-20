@@ -962,8 +962,11 @@ module Lich
         end
         waitrt?
         UserVars.discerns[data['abbrev']] = discern_data
-        data['mana'] = held ? 1 : discern_data['mana']
-        data['cambrinth'] = held ? nil : discern_data['cambrinth']
+        # With no stored answer (a discern that drew no recognised reply, and
+        # its retry window), cast at the minimum as when held, not with nil.
+        minimum = held || discern_data['mana'].nil?
+        data['mana'] = minimum ? 1 : discern_data['mana']
+        data['cambrinth'] = minimum ? nil : discern_data['cambrinth']
         data
       end
 
