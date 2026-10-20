@@ -28,7 +28,8 @@ def get_data(_type)
   )
 end
 
-# Load the module under test
+# Load the module under test (common.rb provides DRC.capture_reply)
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
@@ -1285,7 +1286,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
         'The developing streams of Enlightened Geometry mana flowing through',
         'The developing streams of Moonlight Manipulation mana flowing through',
         'The developing streams of Perception mana flowing through',
-        'The developing streams of Psychic Projection mana flowing through'
+        'The developing streams of Psychic Projection mana flowing through',
+        'Roundtime: 3 sec.'
       ]
       allow(Lich::Util).to receive(:issue_command).and_return(mock_lines)
       allow(DRCA).to receive(:parse_mana_message).and_return(3)
@@ -1294,9 +1296,67 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(result.keys).to contain_exactly('enlightened_geometry', 'moonlight_manipulation', 'perception', 'psychic_projection')
     end
 
+    context 'when the moon mage reply ends on Roundtime or is cut off' do
+      let(:stream_lines) do
+        [
+          'The developing streams of Enlightened Geometry mana flowing through',
+          'The developing streams of Moonlight Manipulation mana flowing through',
+          'The developing streams of Perception mana flowing through',
+          'The developing streams of Psychic Projection mana flowing through'
+        ]
+      end
+
+      before do
+        DRStats.guild = 'Moon Mage'
+        allow(DRCA).to receive(:parse_mana_message).and_return(3)
+      end
+
+      it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
+        allow(Lich::Util).to receive(:issue_command).and_return([])
+        DRCA.perc_mana
+        expect(Lich::Util).to have_received(:issue_command).with(
+          'perc mana', described_class::PERC_MANA_START_PATTERN, described_class::PERC_MANA_END_PATTERN,
+          usexml: false, quiet: true, include_end: true, timeout: 5
+        )
+      end
+
+      it 'prints no message on a complete reply' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines + ['Roundtime: 3 sec.'])
+        expect(Lich::Messaging).not_to receive(:msg)
+        DRCA.perc_mana
+      end
+
+      it 'prints a cut-off message and still parses when all four streams arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines)
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
+        expect(DRCA.perc_mana).to be_a(Hash)
+      end
+
+      it 'prints a cut-off message and returns nil when fewer than four streams arrived' do
+        allow(Lich::Util).to receive(:issue_command).and_return(stream_lines.first(2))
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.')
+        expect(DRCA.perc_mana).to be_nil
+      end
+    end
+
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
     it 'returns nil when issue_command times out for moon mage' do
       DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'prints a timeout message when issue_command returns [] for moon mage' do
+      DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRCA: Failed to capture PERC MANA output (timeout).')
+      DRCA.perc_mana
+    end
+
+    it 'treats nil from issue_command the same as a timeout for moon mage' do
+      DRStats.guild = 'Moon Mage'
       allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRCA: Failed to capture PERC MANA output/)
       expect(DRCA.perc_mana).to be_nil
     end
 
