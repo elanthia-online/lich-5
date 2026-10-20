@@ -23,9 +23,14 @@ RSpec.describe Lich::Gemstone::ReadyList do
       expect(described_class.checked?).to be(false)
     end
 
-    it 'accepts a ready item held in either hand by exact id' do
+    it 'accepts a ready item held in the left hand by exact id' do
       allow(Lich::Common::GameObj).to receive(:right_hand).and_return(item.new(nil))
       allow(Lich::Common::GameObj).to receive(:left_hand).and_return(item.new('123456'))
+      expect(described_class.valid?).to be(true)
+    end
+
+    it 'accepts a ready item held in the right hand by exact id' do
+      allow(Lich::Common::GameObj).to receive(:right_hand).and_return(item.new('123456'))
       expect(described_class.valid?).to be(true)
     end
   end
