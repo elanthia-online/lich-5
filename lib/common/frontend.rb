@@ -675,7 +675,7 @@ module Lich
         platform = handshake_platform(line)
         return [line, "the front end's own: it already asks for /P:#{platform}"] if platform&.casecmp?(handshake_platform(replacement).to_s)
 
-        ["#{match[:prefix]}#{replacement}#{match[:eol]}", "Lich's, in place of the front end's"]
+        ["#{match[:prefix]}#{replacement}#{match[:eol]}", CLIENT_STRING_REPLACED_NOTE]
       end
       private_class_method :proxy_handshake_decision
 
@@ -696,6 +696,10 @@ module Lich
       LOGGABLE_CLIENT_STRING = %r{\A(?:<c>)?/?FE:}i
 
       CLIENT_STRING_LOG_LABELS = { frontend: 'from front end', game: 'sent to game' }.freeze
+
+      # log_client_string's note when Lich sent its client string in place of
+      # the front end's (proxy_handshake, send_handshake).
+      CLIENT_STRING_REPLACED_NOTE = "Lich's, in place of the front end's"
 
       # Log one side of the login handshake: the client string the front end
       # sent Lich (:frontend) or the one Lich sent the game (:game).
@@ -741,10 +745,11 @@ module Lich
       private_class_method :loggable_client_string
 
       # Send version string, ready signals, and setup commands to the game server.
-      # Used during login handshake for wizard/avalon/frostbite frontends. Logs
-      # the version string (log_client_string).
+      # Used during login handshake for wizard/avalon/frostbite frontends, whose
+      # own version line is discarded. Logs the version string as sent in place
+      # of the front end's (log_client_string).
       def self.send_handshake(version_string)
-        log_client_string(:game, version_string)
+        log_client_string(:game, version_string, note: CLIENT_STRING_REPLACED_NOTE)
         $_CLIENTBUFFER_.push(version_string.dup)
         Game._puts(version_string)
         2.times do
