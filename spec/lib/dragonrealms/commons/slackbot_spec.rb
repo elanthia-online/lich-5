@@ -24,6 +24,14 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     allow(http).to receive(:use_ssl=)
     allow(http).to receive(:verify_mode=)
     allow(http).to receive(:request).and_return(auth_success_response)
+    # SlackBot.new caps each Slack call, so its requests go through the
+    # deadline transport (SlackBot#request_before).
+    allow(http).to receive(:proxy?).and_return(false)
+    allow(http).to receive(:open_timeout=)
+    allow(http).to receive(:read_timeout=)
+    allow(http).to receive(:write_timeout=)
+    allow(http).to receive(:start)
+    allow(http).to receive(:do_finish)
     http
   end
 
