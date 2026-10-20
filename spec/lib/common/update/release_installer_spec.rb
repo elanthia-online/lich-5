@@ -265,7 +265,7 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       end
     end
 
-    # GemStone's autostart runs `--announce` on a script thread at login,
+    # The autostart script runs `--announce` on a script thread at login,
     # while `lich5-update` runs on the client thread, so the two can overlap.
     context 'when another command runs during an install' do
       let(:in_snapshot) { Queue.new }

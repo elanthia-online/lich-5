@@ -40,7 +40,7 @@ module Lich
         BETA_LOCK = Mutex.new unless const_defined?(:BETA_LOCK, false)
         # Serialises every command that sets, reads or clears the release
         # target (announce, update, beta install). One installer serves the
-        # whole session, and GemStone's autostart runs --announce on a script
+        # whole session, and the login autostart runs --announce on a script
         # thread while lich5-update runs on the client thread, so without it
         # one command could clear the target another is installing. Reentrant,
         # because the beta install calls #download_release_update and both
