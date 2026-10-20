@@ -1075,16 +1075,6 @@ RSpec.shared_examples 'a game Map class' do |game|
 
         expect { map_class.save_json(path) }.not_to raise_error
       end
-
-      it 'save_json does not reload when the map is empty' do
-        path = File.join(map_dir, 'saved.json')
-        FileUtils.mkdir_p(map_dir)
-        allow(map_class).to receive(:reload)
-
-        map_class.save_json(path)
-
-        expect(map_class).not_to have_received(:reload)
-      end
     end
 
     describe '.match_multi_ids' do
@@ -1488,6 +1478,88 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(files.size).to eq(1)
       expect(File.basename(files.first)).to match(/\Amap-\d+\.json\z/)
       expect(saved_ids(files.first)).to eq([1, 2])
+    end
+
+    # The list is indexed by room id, and a real mapdb has far more unused ids
+    # than rooms, so it is mostly nil gaps. Serializing used to compact the list
+    # in place, which moved every room after the first gap to the wrong index,
+    # and the save then reloaded the newest map-<epoch>.json to repair it. The
+    # rooms here leave gaps at 0, 3 and 4.
+    describe 'the live map across a save' do
+      let!(:far_room) { shared_room(5, title: '[Far End]', description: 'The street ends here.') }
+
+      def ids_at_their_index
+        map_class.class_variable_get(:@@list).each_with_index.map { |room, index| room && [index, room.id] }.compact
+      end
+
+      it 'Map.to_json serializes every room without moving any of them' do
+        rooms = map_class.class_variable_get(:@@list).dup
+
+        ids = JSON.parse(map_class.to_json).map { |room| room['id'] }
+
+        expect(ids).to eq([1, 2, 5])
+        expect(map_class.class_variable_get(:@@list)).to eq(rooms)
+        expect(map_class[5]).to equal(far_room)
+      end
+
+      it 'leaves every room at its id after saving to a named file' do
+        map_class.save_json(target)
+
+        expect(saved_ids(target)).to eq([1, 2, 5])
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+        expect(map_class[5]).to equal(far_room)
+      end
+
+      it 'keeps the live rooms rather than loading the newest map file' do
+        File.write(File.join(map_dir, 'map-9999999999.json'),
+                   JSON.generate([{ 'id' => 1, 'title' => ['[Stale Copy]'] }]))
+        map_class[1].title = ['[Edited Row]']
+
+        map_class.save_json(target)
+
+        expect(map_class[1].title).to eq(['[Edited Row]'])
+        expect(map_class[5]).to equal(far_room)
+        expect(map_class).not_to have_received(:respond).with(/Map loaded/)
+      end
+
+      it 'does not reload the map after a save to the default file' do
+        allow(map_class).to receive(:reload)
+
+        map_class.save_json
+
+        expect(map_class).not_to have_received(:reload)
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+      end
+
+      # Other scripts look rooms up while a save is writing the file.
+      it 'keeps every room at its id while the file is being written' do
+        seen = nil
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          seen ||= [map_class[2]&.id, map_class[5]&.id]
+          original.call(from, to)
+        end
+
+        map_class.save_json(target)
+
+        expect(seen).to eq([2, 5])
+      end
+
+      it 'leaves every room at its id when the map cannot be serialized' do
+        map_class[2].timeto['1'] = Float::NAN
+
+        expect { map_class.save_json(target) }.to raise_error(JSON::GeneratorError)
+
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+      end
+
+      it 'leaves every room at its id when writing the file fails' do
+        missing = File.join(map_dir, 'nope', 'new.json')
+
+        expect { map_class.save_json(missing) }.to raise_error(Errno::ENOENT)
+
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+        expect(map_class[5]).to equal(far_room)
+      end
     end
 
     context 'when the map cannot be serialized' do

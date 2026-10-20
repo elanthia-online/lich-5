@@ -102,7 +102,9 @@ module Lich
   # - SQLite3::Statement#initialize (sqlite3_prepare) and #step (sqlite3_step),
   #   which carry #execute, #query, #prepare, #execute_batch, #transaction and
   #   everything Sequel sends;
-  # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2.
+  # - Database#exec_batch (sqlite3_exec), which carries #execute_batch2;
+  # - SQLite3::Backup#step (sqlite3_backup_step), when either end of the
+  #   backup is one of these connections (see SQLiteBusyWait::Backup).
   #
   # An interrupt that arrives during a lock wait ends the wait: the handler
   # gives up at its next poll (within about 1 ms), SQLite returns SQLITE_BUSY,
@@ -126,8 +128,6 @@ module Lich
   #
   # A caller that defers interrupts itself and is interrupted during the
   # wait gets the BusyException; the interrupt stays deferred, as it asked.
-  # SQLite3::Backup#step is not covered; nothing in Lich backs up into or out
-  # of lich.db3.
   #
   # While one thread sleeps in the handler, SQLite holds that connection's
   # mutex and other threads run, garbage collection included. GC finalizes an
@@ -269,6 +269,65 @@ module Lich
       end
     end
 
+    # Prepended to SQLite3::Backup. Only backups with a marked connection at
+    # either end change behaviour. sqlite3_backup_step takes both
+    # connections' mutexes and can wait for a lock through the Ruby busy
+    # handler, so:
+    #
+    # - #step defers interrupts as Statement#step does: an interrupt ends the
+    #   wait, the mutexes are released, and it is delivered in place of
+    #   SQLITE_BUSY.
+    # - A shared connection may be the source. #initialize, #step and #finish
+    #   run under its Monitor, so other threads wait on the Monitor rather
+    #   than on the mutex with the GVL held. #finish defers interrupts while
+    #   it waits for the Monitor, so a kill in `ensure backup.finish` can't
+    #   skip sqlite3_backup_finish and leave the destination locked; the kill
+    #   can take as long as the Monitor's holder (up to its busy timeout).
+    # - A shared connection may not be the destination (#initialize raises
+    #   ArgumentError): SQLite requires nothing else use the destination
+    #   until #finish, and a Monitor only serializes single calls.
+    #
+    # Pooled and plain ends are neither tracked nor serialized. Until #finish
+    # returns nothing else may use them (no other thread, no other backup,
+    # and no Sequel call on the same pool from the backing-up thread), or a
+    # caller blocks on the mutex with the GVL held and the process freezes
+    # or the destination is corrupted. Close statements on both ends first,
+    # so GC can't finalize one mid-wait, and call #finish in an ensure.
+    # #remaining and #pagecount only read counters.
+    module Backup
+      def initialize(dstdb, dstname, srcdb, srcname)
+        if dstdb.is_a?(SerializedDatabase)
+          raise ArgumentError, 'a shared lich.db3 connection cannot be a backup destination: ' \
+                               'SQLite requires that no other thread use it until the backup finishes; ' \
+                               'back up into a pooled or plain connection'
+        end
+
+        if dstdb.is_a?(Connection) || srcdb.is_a?(Connection)
+          @lich_busy_wait = true
+          @lich_monitor = srcdb.instance_variable_get(:@lich_monitor) if srcdb.is_a?(SerializedDatabase)
+        end
+        synchronize_source { super }
+      end
+
+      def step(pages)
+        return super unless @lich_busy_wait
+
+        synchronize_source { SQLiteBusyWait.wait_uninterrupted { super } }
+      end
+
+      def finish
+        return super unless @lich_monitor
+
+        Thread.handle_interrupt(Object => :never) { @lich_monitor.synchronize { super } }
+      end
+
+      private
+
+      def synchronize_source(&block)
+        @lich_monitor ? @lich_monitor.synchronize(&block) : yield
+      end
+    end
+
     # Extended onto the Sequel::Database that Lich.open_sequel_sqlite returns.
     #
     # With interrupts deferred, a Thread#kill that arrives while BEGIN or
@@ -396,9 +455,9 @@ module Lich
       Thread.pending_interrupt? && !Thread.current.thread_variable_get(KEEP_WAITING_KEY)
     end
 
-    # Prepends Statement to SQLite3::Statement and defines the Monitor
-    # wrappers for every C method of SQLite3::Database and SQLite3::Statement
-    # not listed as unserialized. Runs once.
+    # Prepends Statement to SQLite3::Statement and Backup to SQLite3::Backup,
+    # and defines the Monitor wrappers for every C method of SQLite3::Database
+    # and SQLite3::Statement not listed as unserialized. Runs once.
     def self.prepare_sqlite3
       SETUP_LOCK.synchronize do
         return if @sqlite3_prepared
@@ -406,6 +465,8 @@ module Lich
         serialize_c_methods(SerializedDatabase, ::SQLite3::Database, UNSERIALIZED_DATABASE_METHODS)
         serialize_c_methods(SerializedStatement, ::SQLite3::Statement, UNSERIALIZED_STATEMENT_METHODS)
         ::SQLite3::Statement.prepend(Statement) unless ::SQLite3::Statement <= Statement
+        # SQLite3::Backup exists only when sqlite3 was built with the backup API.
+        ::SQLite3::Backup.prepend(Backup) if defined?(::SQLite3::Backup) && !(::SQLite3::Backup <= Backup)
         @sqlite3_prepared = true
       end
     end
