@@ -1901,7 +1901,7 @@ def dothis(action, success_line)
         return line
       elsif (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(line))
         if wait_match[:seconds].to_i > 1
-          Script.execution_sleep(wait_match[:seconds].to_i - "0.5".to_f)
+          Script.execution_sleep(wait_match[:seconds].to_i - 0.5)
         else
           Script.execution_sleep 0.3
         end
@@ -1966,7 +1966,7 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
         return line
       elsif (wait_match = Lich::Common::WAIT_RESPONSE_PATTERN.match(line))
         if wait_match[:seconds].to_i > 1
-          Script.execution_sleep(wait_match[:seconds].to_i - "0.5".to_f)
+          Script.execution_sleep(wait_match[:seconds].to_i - 0.5)
         else
           Script.execution_sleep 0.3
         end

@@ -365,7 +365,7 @@ module Lich
             elsif (wait_match = WAIT_RESPONSE_PATTERN.match(line))
               # Waiting is not a remedy that can fail; roundtime always ends.
               if wait_match[:seconds].to_i > 1
-                Script.execution_sleep(wait_match[:seconds].to_i - "0.2".to_f)
+                Script.execution_sleep(wait_match[:seconds].to_i - 0.2)
               else
                 Script.execution_sleep 0.3
               end
