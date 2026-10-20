@@ -52,6 +52,59 @@ module Lich
       # Minimum minutes remaining before a celestial body sets to be considered "visible."
       MOON_VISIBILITY_TIMER_THRESHOLD = 4
 
+      # The moons moonwatch publishes in UserVars.moons, each with a 'timer'.
+      MOON_NAMES = %w[katamba yavash xibar].freeze
+
+      # Seconds check_moonwatch waits, after starting moonwatch or when
+      # moonwatch is already running, for it to publish real moon data (and,
+      # separately, for another caller's start of moonwatch to finish).
+      MOONWATCH_READY_TIMEOUT = 10
+
+      # Extra seconds a caller queued behind another caller's start of
+      # moonwatch waits for that start to finish, beyond its own timeout. The
+      # holder's wait for the data begins only once start_script returns, so
+      # without this margin a caller that queued while the holder was still in
+      # start_script would time out just before the holder's own wait does.
+      MOONWATCH_LOCK_WAIT_MARGIN = 1
+
+      # Seconds between polls while check_moonwatch waits for moonwatch.
+      MOONWATCH_POLL_INTERVAL = 0.1
+
+      # Seconds check_moonwatch waits before starting moonwatch again after
+      # its own start of moonwatch failed (moonwatch could not be found, did
+      # not start, or stopped before publishing). Without this, a moonwatch
+      # that crashes at startup would be restarted by every moon check.
+      MOONWATCH_RESTART_COOLDOWN = 60
+
+      # Serializes check_moonwatch's not-running -> reset -> start sequence so two
+      # callers never both start moonwatch, and a late caller never wipes data a
+      # freshly started moonwatch has already published.
+      MOONWATCH_START_LOCK = Mutex.new
+
+      # Makes the stuck-start latch's set and clear atomic with taking and
+      # releasing MOONWATCH_START_LOCK (see note_moonwatch_start_stuck).
+      MOONWATCH_STATE_LOCK = Mutex.new
+
+      # Set when a wait for moonwatch's data timed out while moonwatch kept
+      # running: by await_running_moonwatch, or by check_moonwatch's own start
+      # (via note_moonwatch_start_failure). See note_moonwatch_stall.
+      @moonwatch_data_stalled = false
+
+      # Monotonic time before which check_moonwatch does not start moonwatch
+      # again (see note_moonwatch_start_failure); nil when it may.
+      @moonwatch_restart_blocked_until = nil
+
+      # Set when a caller timed out waiting for another caller's start of
+      # moonwatch to finish (that caller's script is paused, or its start is
+      # stuck). While that start still holds MOONWATCH_START_LOCK, later
+      # callers queued on the lock do not wait for it again. Cleared when a
+      # caller gets the lock and again when it releases the lock.
+      @moonwatch_start_stuck = false
+
+      # Counts check_moonwatch's acquisitions of MOONWATCH_START_LOCK, so a
+      # caller that timed out on one start never latches a later one as stuck.
+      @moonwatch_start_generation = 0
+
       # Expected game responses when centering a telescope on a target.
       CENTER_TELESCOPE_MESSAGES = [
         'Center what',
@@ -461,15 +514,25 @@ module Lich
 
       # returns true if at least one bright moon (yavash, xibar) or the sun are
       #  above the horizon and won't set for at least another ~4 minutes.
+      #  False when moonwatch's data is unavailable (see check_moonwatch), the
+      #  same answer as "nothing up". A caller that must not act on unknown
+      #  data (for example a spell gated on nothing being up) should check
+      #  that check_moonwatch returns true first.
       def bright_celestial_object?
-        check_moonwatch
+        return false unless check_moonwatch
+
         (UserVars.sun['day'] && UserVars.sun['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD) || moon_visible?('xibar') || moon_visible?('yavash')
       end
 
       # returns true if at least one moon (katamba, yavash, xibar) or the sun are
       #  above the horizon and won't set for at least another ~4 minutes.
+      #  False when moonwatch's data is unavailable (see check_moonwatch), the
+      #  same answer as "nothing up". A caller that must not act on unknown
+      #  data (for example a spell gated on nothing being up) should check
+      #  that check_moonwatch returns true first.
       def any_celestial_object?
-        check_moonwatch
+        return false unless check_moonwatch
+
         (UserVars.sun['day'] && UserVars.sun['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD) || moons_visible?
       end
 
@@ -486,20 +549,357 @@ module Lich
 
       # Returns list of moon names (e.g. katamba, yavash, xibar)
       # that are above the horizon and won't set for at least another ~4 minutes.
+      # Empty when moonwatch's data is unavailable (see check_moonwatch), even
+      # if UserVars.moons still holds saved timers.
       def visible_moons
-        check_moonwatch
+        return [] unless check_moonwatch
+
         UserVars.moons.select { |moon_name, moon_data| UserVars.moons['visible'].include?(moon_name) && moon_data['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD }
                       .map { |moon_name, _moon_data| moon_name }
       end
 
-      def check_moonwatch
-        return if Script.running?('moonwatch')
+      # Whether UserVars.moons holds real moon data: every moon has a numeric
+      # 'timer' and 'visible' is a list. moonwatch first writes an empty
+      # skeleton ({'katamba' => {}, ..., 'visible' => []}) and fills in the
+      # timers afterwards, so the skeleton does not count as ready.
+      #
+      # moonwatch sets 'running' to false when it exits. UserVars persist
+      # between sessions, so data marked that way is left over from a
+      # moonwatch that has stopped and does not count as ready either. Data
+      # without a 'running' key (older moonwatch versions) is judged by the
+      # timers alone.
+      #
+      # moonwatch publishes the moons first and the sun right after, and the
+      # celestial checks read both. So while moonwatch has marked
+      # UserVars.sun as running but not yet written its 'timer' (the last key
+      # those checks read, written after 'day'), the data is not ready. Sun
+      # data without a 'running' key (older moonwatch versions) is not
+      # checked.
+      #
+      # moonwatch's 'running' => false marker is saved only when Lich shuts
+      # down in an orderly way. After a crash the saved data can still say
+      # 'running' => true, and while a newly started moonwatch has not yet
+      # written its skeleton (normally a few milliseconds) that saved data
+      # counts as ready.
+      #
+      # @return [Boolean]
+      def moon_data_ready?
+        moons = UserVars.moons
+        return false unless moons.is_a?(Hash) && moons['visible'].is_a?(Array)
+        return false if moons['running'] == false
+        return false unless MOON_NAMES.all? { |moon| moons[moon].is_a?(Hash) && moons[moon]['timer'].is_a?(Numeric) }
 
-        Lich::Messaging.msg("bold", "DRCMM: moonwatch is not running. Starting it now.")
-        UserVars.moons = {}
-        start_script('moonwatch')
-        Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.")
-        pause 0.5 while UserVars.moons.empty?
+        sun = UserVars.sun
+        !(sun.is_a?(Hash) && sun['running'] == true && !sun['timer'].is_a?(Numeric))
+      end
+
+      # Makes sure moonwatch is running, starting it if needed, and waits a
+      # bounded time for it to publish real moon data (see moon_data_ready?).
+      #
+      # When moonwatch is running and the data is ready, this returns at once.
+      # When moonwatch is running but the data is not ready yet (it was
+      # started elsewhere, for example by autostart, and is still starting
+      # up), this waits for the data. If any wait for the data (this one or
+      # the one after starting moonwatch) times out while moonwatch keeps
+      # running, later calls return false at once instead of waiting again,
+      # until the data becomes ready or moonwatch is seen stopped. That
+      # includes calls already queued behind another caller's start or wait.
+      # When another caller's start is in progress, it waits for that start
+      # to finish (returning as soon as the data is ready), allowing
+      # MOONWATCH_LOCK_WAIT_MARGIN beyond the timeout. If that wait times out
+      # (the other caller's script is paused, or its start is stuck), later
+      # calls do not wait on that start again until it finishes: they return
+      # false at once while moonwatch is not running, and wait only for the
+      # data of a running moonwatch. Otherwise it
+      # clears the saved UserVars.moons and UserVars.sun (they may be stale),
+      # starts moonwatch and waits until moon_data_ready? is true. The wait
+      # ends early, with a message, when moonwatch cannot be found or stops
+      # before publishing, and ends at the deadline when it never starts or
+      # never publishes. The saved data is never restored on failure, so moon
+      # and sun checks see nothing up rather than stale timers. After such a
+      # failure, while moonwatch is not running, calls return false without
+      # starting it again until MOONWATCH_RESTART_COOLDOWN seconds have
+      # passed; a moonwatch started some other way in the meantime is still
+      # used.
+      #
+      # A nil from start_script is not treated as a failure unless moonwatch
+      # cannot be found (see moonwatch_findable?): Lich also returns nil while
+      # another start of moonwatch is still in progress, so in that case this
+      # waits (up to the deadline) for that start to finish.
+      #
+      # The timeout bounds each wait separately. A caller queued behind
+      # another caller's start waits up to timeout + MOONWATCH_LOCK_WAIT_MARGIN
+      # for the lock. If, once it has the lock, it finds a moonwatch that was
+      # started elsewhere in the meantime and has not published yet, it then
+      # waits up to timeout for that data too. So one call can take up to
+      # 2 * timeout + MOONWATCH_LOCK_WAIT_MARGIN (21 s by default) in that
+      # sequence; every other call takes at most timeout + the margin.
+      #
+      # Only waits of at least MOONWATCH_READY_TIMEOUT set the stall latch or
+      # the stuck-start latch. A caller passing a shorter timeout gets false
+      # when its own wait runs out, but does not make other callers skip
+      # theirs.
+      #
+      # @param timeout [Numeric] seconds to wait for another caller's start to
+      #   finish (plus MOONWATCH_LOCK_WAIT_MARGIN), and again for moonwatch to
+      #   publish (after starting it, or when it is already running). Must be a
+      #   positive, finite number.
+      # @return [Boolean] true when moonwatch is running and has published
+      #   real moon data; false when moon data is unavailable
+      # @raise [ArgumentError] when timeout is not a positive, finite number
+      def check_moonwatch(timeout: MOONWATCH_READY_TIMEOUT)
+        validate_moonwatch_timeout!(timeout)
+
+        if Script.running?('moonwatch')
+          return moonwatch_data_ready! if moon_data_ready?
+          return await_running_moonwatch(timeout) unless MOONWATCH_START_LOCK.locked?
+        else
+          @moonwatch_data_stalled = false
+        end
+
+        lock_deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout + MOONWATCH_LOCK_WAIT_MARGIN
+        start_generation = @moonwatch_start_generation
+        until MOONWATCH_START_LOCK.try_lock
+          # The other start may publish while the lock is still held (its
+          # holder can be paused or slow to return), so keep checking. When
+          # the holder's wait has just timed out on a running moonwatch (the
+          # stall latch is set), stop waiting too. When an earlier wait on
+          # this start timed out (the holder is stuck), wait only on a running
+          # moonwatch itself, not on the holder.
+          if Script.running?('moonwatch')
+            return true if moon_data_ready?
+            return false if @moonwatch_data_stalled
+            return await_running_moonwatch(timeout) if @moonwatch_start_stuck
+          elsif @moonwatch_start_stuck
+            return false
+          end
+          if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= lock_deadline
+            Lich::Messaging.msg("bold", "DRCMM: Timed out waiting for another start of moonwatch to finish. Moon data is unavailable.")
+            note_moonwatch_start_stuck(start_generation) if full_moonwatch_wait?(timeout)
+            return false
+          end
+          pause MOONWATCH_POLL_INTERVAL
+        end
+
+        begin
+          # A stuck start, if any, has released the lock.
+          moonwatch_start_lock_taken
+          # Another caller started moonwatch (or another wait on it ran) while
+          # this one waited for the lock: wait for its data, honouring the latch.
+          return await_running_moonwatch(timeout) if Script.running?('moonwatch')
+          if moonwatch_restart_blocked?
+            # A start failed moments ago. moonwatch is not running, so any
+            # saved data is stale; clear it as a start would, so moon and sun
+            # checks see nothing up rather than old timers. Look again first:
+            # a moonwatch started another way since the check above has just
+            # written its skeleton, which must not be wiped. Writing only when
+            # there is something to clear keeps this off the usual path (the
+            # failed start already cleared the data). A moonwatch started in
+            # the moment between that last look and the write can still lose
+            # its skeleton; only moonwatch itself could close that window.
+            return await_running_moonwatch(timeout) if Script.running?('moonwatch')
+
+            UserVars.moons = {} unless UserVars.moons == {}
+            UserVars.sun = {} unless UserVars.sun == {}
+            return false
+          end
+
+          Lich::Messaging.msg("bold", "DRCMM: moonwatch is not running. Starting it now.")
+          @moonwatch_data_stalled = false
+          UserVars.moons = {}
+          UserVars.sun = {}
+          started = start_script('moonwatch') ? true : false
+          if !started && !Script.running?('moonwatch') && !moonwatch_findable?
+            Lich::Messaging.msg("bold", "DRCMM: moonwatch could not be found. Moon data is unavailable.")
+            note_moonwatch_start_failure(timeout)
+            return false
+          end
+          if await_moonwatch_data(started, timeout)
+            # Only suggest autostart once this start has actually worked.
+            Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.") if started
+            return moonwatch_data_ready!
+          end
+
+          note_moonwatch_start_failure(timeout)
+          false
+        ensure
+          release_moonwatch_start_lock if MOONWATCH_START_LOCK.owned?
+        end
+      end
+
+      # Waits for an already-running moonwatch (started outside check_moonwatch,
+      # for example by autostart) to publish real moon data. Returns false at
+      # once while a previous wait is latched as stalled (see
+      # note_moonwatch_stall), unless the data has become ready since.
+      #
+      # @param timeout [Numeric] seconds to wait
+      # @return [Boolean] true when moon data is ready
+      def await_running_moonwatch(timeout)
+        return false if @moonwatch_data_stalled && !(Script.running?('moonwatch') && moon_data_ready?)
+
+        return moonwatch_data_ready! if await_moonwatch_data(true, timeout)
+
+        note_moonwatch_stall if full_moonwatch_wait?(timeout)
+        false
+      end
+
+      # Raises unless timeout is a positive, finite number of seconds. A zero,
+      # negative or infinite timeout would make the waits end at once or
+      # never; nil would fail deep inside a wait.
+      #
+      # @param timeout [Object] the value passed as check_moonwatch's timeout:
+      # @raise [ArgumentError]
+      def validate_moonwatch_timeout!(timeout)
+        return if timeout.is_a?(Numeric) && timeout.real? && timeout.finite? && timeout.positive?
+
+        raise ArgumentError, "DRCMM.check_moonwatch: timeout must be a positive, finite number of seconds, got #{timeout.inspect}"
+      end
+
+      # Whether a wait of timeout seconds was long enough to latch its failure
+      # for other callers (see note_moonwatch_stall, note_moonwatch_start_stuck).
+      # A caller that chose a shorter wait only answers for itself.
+      #
+      # @param timeout [Numeric] seconds the wait allowed
+      # @return [Boolean]
+      def full_moonwatch_wait?(timeout)
+        timeout >= MOONWATCH_READY_TIMEOUT
+      end
+
+      # Called when a wait for another caller's start of moonwatch timed out:
+      # until that start releases the lock, callers queued on it return false
+      # at once while moonwatch is not running (see check_moonwatch).
+      #
+      # Latches only while the start that was waited on still holds the lock.
+      # If it released the lock after the deadline check (and another caller
+      # may already have taken it for a fresh start), nothing is latched.
+      #
+      # @param start_generation [Integer] @moonwatch_start_generation when the
+      #   wait began
+      def note_moonwatch_start_stuck(start_generation)
+        latched = MOONWATCH_STATE_LOCK.synchronize do
+          next false unless start_generation == @moonwatch_start_generation && MOONWATCH_START_LOCK.locked?
+
+          @moonwatch_start_stuck = true
+        end
+        return unless latched
+
+        Lich::Messaging.msg("plain", "DRCMM: Not waiting for that start of moonwatch again until it finishes. Moon checks report no moon until then, unless moonwatch is running.")
+      end
+
+      # Called by check_moonwatch right after it takes MOONWATCH_START_LOCK:
+      # starts a new generation and clears the stuck-start latch.
+      def moonwatch_start_lock_taken
+        MOONWATCH_STATE_LOCK.synchronize do
+          @moonwatch_start_generation += 1
+          @moonwatch_start_stuck = false
+        end
+      end
+
+      # Clears the stuck-start latch and releases MOONWATCH_START_LOCK as one
+      # step, so a waiter cannot latch this start after the clear.
+      def release_moonwatch_start_lock
+        MOONWATCH_STATE_LOCK.synchronize do
+          @moonwatch_start_stuck = false
+          MOONWATCH_START_LOCK.unlock
+        end
+      end
+
+      # Called when moonwatch is running with real moon data: clears the stall
+      # latch and the restart cooldown.
+      #
+      # @return [true]
+      def moonwatch_data_ready!
+        @moonwatch_data_stalled = false
+        @moonwatch_restart_blocked_until = nil
+        true
+      end
+
+      # Called after check_moonwatch's own start of moonwatch failed. When
+      # moonwatch is running (it never published), latches the stall (see
+      # note_moonwatch_stall) if the wait was a full one (see
+      # full_moonwatch_wait?). Otherwise blocks further starts for
+      # MOONWATCH_RESTART_COOLDOWN seconds, so a moonwatch that cannot start
+      # is not restarted, with its messages, by every moon check.
+      #
+      # @param timeout [Numeric] seconds the failed wait allowed
+      def note_moonwatch_start_failure(timeout)
+        if Script.running?('moonwatch')
+          note_moonwatch_stall if full_moonwatch_wait?(timeout)
+          return
+        end
+
+        @moonwatch_restart_blocked_until = Process.clock_gettime(Process::CLOCK_MONOTONIC) + MOONWATCH_RESTART_COOLDOWN
+        Lich::Messaging.msg("plain", "DRCMM: Not starting moonwatch again for #{MOONWATCH_RESTART_COOLDOWN} seconds. Moon checks report no moon until then, unless moonwatch is started another way.")
+      end
+
+      # Whether a recent failed start (see note_moonwatch_start_failure) still
+      # blocks check_moonwatch from starting moonwatch.
+      #
+      # Reads the deadline once: another thread's moonwatch_data_ready! may
+      # clear it at any moment.
+      #
+      # @return [Boolean]
+      def moonwatch_restart_blocked?
+        blocked_until = @moonwatch_restart_blocked_until
+        !blocked_until.nil? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < blocked_until
+      end
+
+      # Called after a wait for moon data has failed. When moonwatch is still
+      # running, it is running without publishing, so later calls return false
+      # at once rather than stalling every caller for the full timeout; that
+      # latch clears when the data becomes ready or moonwatch is seen stopped.
+      def note_moonwatch_stall
+        return unless Script.running?('moonwatch')
+
+        @moonwatch_data_stalled = true
+        Lich::Messaging.msg("plain", "DRCMM: Not waiting for moonwatch's moon data again until it publishes the data or stops.")
+      end
+
+      # Whether Lich can find a moonwatch script file. Script.exists? does not
+      # look in custom/<subdir>/, which Script.start does, so when it says no
+      # this asks Script.version, which resolves names the same way
+      # Script.start does and returns nil when no file matches.
+      #
+      # @return [Boolean]
+      def moonwatch_findable?
+        return true if Script.exists?('moonwatch')
+
+        !Script.version('moonwatch').nil?
+      rescue ArgumentError
+        true # the file was found, but its version header is malformed
+      end
+
+      # Polls until moonwatch is running with real moon data, moonwatch stops
+      # after having been seen running, or the deadline passes.
+      #
+      # @param seen_running [Boolean] whether moonwatch is known to have started;
+      #   until it has, only the deadline ends the wait
+      # @param timeout [Numeric] seconds to wait
+      # @return [Boolean] true when moon data is ready
+      def await_moonwatch_data(seen_running, timeout)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+        loop do
+          running = Script.running?('moonwatch')
+          return true if running && moon_data_ready?
+
+          if running
+            seen_running = true
+          elsif seen_running
+            Lich::Messaging.msg("bold", "DRCMM: moonwatch stopped before its moon data was ready. Moon data is unavailable.")
+            return false
+          end
+
+          if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+            if seen_running
+              Lich::Messaging.msg("bold", "DRCMM: moonwatch did not publish moon data within #{timeout} seconds. Moon data is unavailable.")
+            else
+              Lich::Messaging.msg("bold", "DRCMM: moonwatch did not start within #{timeout} seconds. Moon data is unavailable.")
+            end
+            return false
+          end
+
+          pause MOONWATCH_POLL_INTERVAL
+        end
       end
     end
   end
