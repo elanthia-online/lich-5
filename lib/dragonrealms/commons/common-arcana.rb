@@ -483,7 +483,12 @@ module Lich
       # listed or not: it counts if a spell shows as being prepared within
       # PREP_CONFIRM_WAIT_SECONDS, which also covers a prep reply that lands
       # just after an empty-matching custom prep message made bput return
-      # early. Otherwise a bold message says so and the result is false.
+      # early. Otherwise a bold message says so, +release spell+ is sent and
+      # the result is false. The game handles commands in order, so during a
+      # server stall that release lands behind the prep still waiting there
+      # and cancels it, rather than leaving it prepared for the next caller
+      # (whose own release is skipped while the indicator still shows no
+      # spell) to charge and cast as its own.
       #
       # The indicator rule covers preps made with a prep command. An invoke
       # (a runestone, or a tattoo whose prep command is +invoke+) is not
@@ -510,6 +515,7 @@ module Lich
         return true if spell_preparing?
 
         Lich::Messaging.msg("bold", "DRCA: no prep reply was recognised for '#{abbrev}' and no spell is being prepared - not casting")
+        DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell")
         false
       end
 

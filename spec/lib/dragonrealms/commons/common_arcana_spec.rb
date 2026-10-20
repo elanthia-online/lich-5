@@ -566,10 +566,11 @@ RSpec.describe Lich::DragonRealms::DRCA do
 
     before { allow(DRCA).to receive(:pause) }
 
-    it 'returns false for a failed prep without reading the indicator or waiting' do
+    it 'returns false for a failed prep without reading the indicator, waiting or releasing' do
       expect(XMLData).not_to receive(:prepared_spell)
       expect(DRCA.prep_confirmed?(false, 'fb')).to be false
       expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
       expect(bold_messages).to be_empty
     end
 
@@ -583,6 +584,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(XMLData).to receive(:prepared_spell).and_return('Fire Ball')
       expect(DRCA.prep_confirmed?('', 'fb')).to be true
       expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
       expect(bold_messages).to be_empty
     end
 
@@ -606,6 +608,15 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(bold_messages).to eq([not_casting])
     end
 
+    # A prep still queued behind a server stall is cancelled in order by the
+    # release, instead of being left for the next caller to cast as its own.
+    it "sends release spell, after the wait, when it rejects ''" do
+      allow(XMLData).to receive(:prepared_spell).and_return('None')
+      expect(DRCA).to receive(:pause).exactly(polls).times.ordered
+      expect(DRC).to receive(:bput).with('release spell', 'You let your concentration lapse', "You aren't preparing a spell").once.ordered
+      expect(DRCA.prep_confirmed?('', 'fb')).to be false
+    end
+
     it "treats an empty indicator like 'None'" do
       allow(XMLData).to receive(:prepared_spell).and_return('')
       expect(DRCA.prep_confirmed?('', 'fb')).to be false
@@ -618,6 +629,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(DRCA.prep_confirmed?('', 'fb', command: 'invoke', runestone_name: 'rune')).to be true
       expect(DRCA.prep_confirmed?('', 'fb', runestone_name: 'rune')).to be true
       expect(DRCA).not_to have_received(:pause)
+      expect(DRC).not_to have_received(:bput)
       expect(bold_messages).to be_empty
     end
 
@@ -639,6 +651,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
         allow(XMLData).to receive(:prepared_spell).and_return('None')
         expect(DRCA.prep_confirmed?('', 'fb', command: command)).to be false
         expect(DRCA).to have_received(:pause).exactly(polls).times
+        expect(DRC).to have_received(:bput).with('release spell', anything, anything).once
         expect(bold_messages).to eq([not_casting])
       end
     end
@@ -861,12 +874,12 @@ RSpec.describe Lich::DragonRealms::DRCA do
         allow(DRCA).to receive(:find_charge_invoke_stow)
       end
 
-      it 'stops after the prep, charging and casting nothing, when no spell shows as prepared' do
+      it 'stops after the prep and releases it, charging and casting nothing, when no spell shows as prepared' do
         allow(XMLData).to receive(:prepared_spell).and_return('None')
         silent_game(sent)
         expect(DRCA.cast_spell?(cast_data, settings)).to be false
         expect(DRCA).not_to have_received(:find_charge_invoke_stow)
-        expect(sent).to eq(['release mana', 'prep fb 10'])
+        expect(sent).to eq(['release mana', 'prep fb 10', 'release spell'])
         expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
       end
 
@@ -937,13 +950,13 @@ RSpec.describe Lich::DragonRealms::DRCA do
         expect(bold_messages).to be_empty
       end
 
-      # cast?'s spell-fail branch used to release the symbiosis after the
+      # cast?'s spell-fail branch used to send release symbiosis after the
       # cast drew "You don't have a spell prepared!"; cast? is no longer run.
-      it 'leaves a symbiosis prepared when no spell shows as prepared' do
+      it 'sends release spell but no release symbiosis when no spell shows as prepared' do
         allow(XMLData).to receive(:prepared_spell).and_return('None')
         silent_game(sent, 'prepare symbiosis' => 'You recall the exact details of the')
         expect(DRCA.cast_spell?(cast_data('symbiosis' => true), settings)).to be false
-        expect(sent).to eq(['release mana', 'prepare symbiosis', 'prep fb 10'])
+        expect(sent).to eq(['release mana', 'prepare symbiosis', 'prep fb 10', 'release spell'])
       end
     end
 
@@ -953,14 +966,14 @@ RSpec.describe Lich::DragonRealms::DRCA do
 
       before { allow(DRCA).to receive(:pause) }
 
-      it 'stops after the prep, without touching the focus or casting, when no spell shows as prepared' do
+      it 'stops after the prep and releases it, without touching the focus or casting, when no spell shows as prepared' do
         allow(XMLData).to receive(:prepared_spell).and_return('None')
         expect(DRCA).not_to receive(:find_focus)
         expect(DRCA).not_to receive(:invoke)
         expect(DRCA).not_to receive(:stow_focus)
         silent_game(sent)
         expect(DRCA.ritual(data, settings)).to be_nil
-        expect(sent).to eq(['prepare fb 10'])
+        expect(sent).to eq(['prepare fb 10', 'release spell'])
         expect(bold_messages).to include("DRCA: no prep reply was recognised for 'fb' and no spell is being prepared - not casting")
       end
 

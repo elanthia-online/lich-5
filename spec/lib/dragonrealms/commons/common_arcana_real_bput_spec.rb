@@ -182,25 +182,32 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
   # indicator, which the game sets on the same line as its prep reply. Here a
   # prep reply can be held back until the script pauses, as a reply that lands
   # just after bput returned would be, and it sets the indicator when it
-  # arrives.
-  describe '.ritual after an empty-matching custom prep message' do
+  # arrives. bput's own timeout runs on a virtual clock, so a prep that bput
+  # times out on costs no real time.
+  describe '.ritual after a prep that bput matched nothing for' do
     let(:settings) { OpenStruct.new(ignored_npcs: [], custom_spell_prep: nil) }
     let(:data) do
       { 'abbrev' => 'fireball', 'mana' => 10, 'skip_retreat' => true, 'focus' => 'totem', 'cast' => 'cast',
-        'before' => [], 'after' => [], 'custom_prep_message' => 'You chant|' }
+        'before' => [], 'after' => [] }
     end
     let(:held_back) { [] }
+    let(:not_casting) { "DRCA: no prep reply was recognised for 'fireball' and no spell is being prepared - not casting" }
 
     before do
       Lich::Messaging.clear_messages!
       @indicator = 'None'
+      @clock = 0.0
+      base = Time.at(1_700_000_000)
+      allow(Time).to receive(:now) { base + @clock }
+      allow(drc).to receive(:pause) { |seconds = 1| @clock += seconds.to_f }
       allow(XMLData).to receive(:prepared_spell) { @indicator }
       allow(drc).to receive(:release_invisibility)
       allow(drca).to receive(:find_focus)
       allow(drca).to receive(:invoke)
       allow(drca).to receive(:stow_focus)
       allow(drca).to receive(:waitcastrt?)
-      allow(drca).to receive(:pause) do |_seconds|
+      allow(drca).to receive(:pause) do |seconds|
+        @clock += seconds.to_f
         line = held_back.shift
         next unless line
 
@@ -209,20 +216,133 @@ RSpec.describe 'DRCA spell helpers through the real DRC.bput' do
       end
     end
 
-    it 'goes on to the focus and the cast when the prep reply lands during the wait' do
-      game('prepare fireball 10' => ['A goblin arrives.'], 'cast' => ['You gesture.'])
-      held_back << 'You begin to chant.'
-      drca.ritual(data, settings)
-      expect(drca).to have_received(:invoke).with('totem', nil, nil)
-      expect(sent).to eq(['prepare fireball 10', 'cast'])
+    # The empty-matching custom message makes bput return '' at once, on the
+    # unrelated first line; without one, bput returns '' when it times out.
+    [['an empty-matching custom prep message', { 'custom_prep_message' => 'You chant|' }, 0.0],
+     ['a bput timeout', {}, 15.0]].each do |label, extra, bput_wait|
+      context "after #{label}" do
+        it 'goes on to the focus and the cast when the prep reply lands during the wait' do
+          game('prepare fireball 10' => ['A goblin arrives.'], 'cast' => ['You gesture.'])
+          held_back << 'You begin to chant.'
+          drca.ritual(data.merge(extra), settings)
+          expect(drca).to have_received(:invoke).with('totem', nil, nil)
+          expect(sent).to eq(['prepare fireball 10', 'cast'])
+        end
+
+        it 'stops without touching the focus or casting, and releases the prep, when no prep reply lands' do
+          game('prepare fireball 10' => ['A goblin arrives.'], 'release spell' => ["You aren't preparing a spell."])
+          expect(drca.ritual(data.merge(extra), settings)).to be_nil
+          expect(drca).not_to have_received(:find_focus)
+          expect(sent).to eq(['prepare fireball 10', 'release spell'])
+          expect(@clock).to be_within(0.5).of(bput_wait + DRCA::PREP_CONFIRM_WAIT_SECONDS)
+          expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(not_casting)
+        end
+      end
+    end
+  end
+
+  # The game handles commands in order. During a server stall nothing is
+  # answered until it ends, then every queued command is answered in turn.
+  # Two cast_spell? calls run back to back on a virtual clock, the first one
+  # sent while the server is stalled for longer than bput's timeouts plus
+  # prep_confirmed?'s wait.
+  describe '.cast_spell? across a server stall' do
+    let(:settings) { OpenStruct.new(custom_spell_prep: nil, runestone_storage: 'bag', use_harness_when_arcana_locked: false) }
+    let(:spell_data) do
+      OpenStruct.new(
+        prep_messages: ['You begin to', 'You are already preparing', 'Something in the area interferes with your spell preparations'],
+        cast_messages: ['You gesture', "You don't have a spell prepared"],
+        invoke_messages: []
+      )
     end
 
-    it 'stops without touching the focus or casting when no prep reply lands' do
-      game('prepare fireball 10' => ['A goblin arrives.'])
-      expect(drca.ritual(data, settings)).to be_nil
-      expect(drca).not_to have_received(:find_focus)
-      expect(sent).to eq(['prepare fireball 10'])
-      expect(Lich::Messaging.messages.map { |m| m[:message] }).to include("DRCA: no prep reply was recognised for 'fireball' and no spell is being prepared - not casting")
+    before do
+      @clock = 0.0
+      @prepared = nil
+      @queue = []
+      @casts = []
+      @charged = []
+      base = Time.at(1_700_000_000)
+      allow(Time).to receive(:now) { base + @clock }
+      allow(XMLData).to receive(:prepared_spell) { @prepared ? 'Some Spell' : 'None' }
+      allow(drca).to receive(:checkprep) { @prepared ? 'Some Spell' : 'None' }
+      allow(drc).to receive(:pause) { |seconds = 1| advance(seconds.to_f) }
+      allow(drca).to receive(:pause) { |seconds = 1| advance(seconds.to_f) }
+      allow(drc).to receive(:get?) do
+        deliver
+        buffer.shift
+      end
+      allow(drc).to receive(:put) do |message|
+        sent << message
+        answer_at = [@clock < @stall_end ? @stall_end : @clock, @queue.map(&:first).max || 0.0].max
+        @queue << [answer_at, message]
+      end
+      allow(drca).to receive(:waitcastrt?)
+      allow(drca).to receive(:normalize_cambrinth_items)
+      allow(drca).to receive(:check_to_harness).and_return(false)
+      allow(drca).to receive(:charge_cambrinth_items) { @charged << @prepared }
+      allow(DRCMM).to receive(:update_astral_data) { |data, _settings| data }
+      allow(DRSpells).to receive(:active_spells).and_return({})
+    end
+
+    def advance(seconds)
+      @clock += seconds
+      deliver
+    end
+
+    # Answer every command whose turn has come, in the order it was sent.
+    def deliver
+      while @queue.first && @queue.first.first <= @clock + 1e-9
+        _at, message = @queue.shift
+        case message
+        when 'release spell'
+          arrive(@prepared ? 'You let your concentration lapse.' : "You aren't preparing a spell.")
+          @prepared = nil
+        when 'release mana'
+          arrive("You aren't harnessing any mana.")
+        when /\Aprep (\w+)/
+          if @prepared
+            arrive('You are already preparing a spell.')
+          else
+            @prepared = Regexp.last_match(1)
+            arrive('You begin to chant.')
+          end
+        when 'cast'
+          if @prepared
+            @casts << @prepared
+            @prepared = nil
+            arrive('You gesture.')
+          else
+            arrive("You don't have a spell prepared!")
+          end
+        end
+      end
+    end
+
+    def cast(abbrev)
+      Flags.reset!
+      drca.cast_spell?({ 'abbrev' => abbrev, 'mana' => 5, 'cast' => 'cast', 'before' => [], 'after' => [] }, settings)
+    end
+
+    [35, 60, 80].each do |stall|
+      it "casts the second call's own spell, and leaves nothing prepared, after a #{stall} s stall" do
+        @stall_end = stall.to_f
+        first = cast('fb')
+        advance(0.5)
+        second = cast('ws')
+        advance(200)
+        expect([first, second]).to eq([false, true])
+        expect(@casts).to eq(['ws'])
+        expect(@charged).to eq(['ws'])
+        expect(@prepared).to be_nil
+      end
+    end
+
+    it 'casts both spells when the stall ends before the first prep times out' do
+      @stall_end = 10.0
+      expect([cast('fb'), cast('ws')]).to eq([true, true])
+      expect(@casts).to eq(%w[fb ws])
+      expect(sent).not_to include('release spell')
     end
   end
 end
