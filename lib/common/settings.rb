@@ -416,10 +416,16 @@ module Lich
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_to_database: Data AFTER unwrap_proxies (object_id: #{unwrapped_settings.object_id}): #{unwrapped_settings.inspect}" })
 
         with_cache_lock(cache_key) do
-          @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+          # Thread#kill and Thread#raise (Script#kill) wait until the cache
+          # holds what was just written, so a script killed right after the
+          # row was committed does not leave this process's cache behind the
+          # database. As in DatabaseAdapter#update_settings, only the store is
+          # held back.
+          Thread.handle_interrupt(Object => :never) do
+            @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+            @settings_cache[cache_key] = unwrapped_settings
+          end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
-
-          @settings_cache[cache_key] = unwrapped_settings
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
         end
       end
