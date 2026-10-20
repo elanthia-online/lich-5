@@ -2469,9 +2469,21 @@ RSpec.describe Lich::Common::Settings do
 
         game_read('rows').each { |row| row['sub']['k'] = 1 }
         game_read('rows').each { |row| row.dig('sub')['j'] = 1 }
+        game_read('rows').each { |row| row['sub'].merge({})['m'] = 1 }
 
         expect(stored).to eq("rows" => [{ "sub" => { "x" => 1 } }], "sub" => "top")
-        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not found in the settings")).twice
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container inside an element yielded by each, not part of the settings")).twice
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container built from a container inside an element yielded by each, not part")).once
+        expect(Lich::Messaging).not_to have_received(:msg).with("error", a_string_including("not found in the settings"))
+      end
+
+      it "names an element yielded by each as the cause for a container any depth under it" do
+        their_write("rows" => [{ "a" => { "b" => { "c" => 1 } } }])
+
+        game_read('rows').each { |row| row['a']['b']['k'] = 1 }
+
+        expect(stored).to eq("rows" => [{ "a" => { "b" => { "c" => 1 } } }])
+        expect(Lich::Messaging).to have_received(:msg).with("error", a_string_including("not saved", "this is a container inside an element yielded by each, not part of the settings")).once
       end
 
       it "stores nothing and says so for an element of a Hash view whose key now holds another kind of value" do

@@ -809,6 +809,14 @@ module Lich
                                                                 pathless_cause: cause)
       end
 
+      # The #pathless_cause of a container inside this pathless proxy: the
+      # same cause one level down, without repeating "a container inside"
+      # for every level.
+      private def inside_cause
+        prefix = "a container inside "
+        @pathless_cause.start_with?(prefix) ? @pathless_cause : "#{prefix}#{@pathless_cause}"
+      end
+
       # The #pathless_cause of a view (+is_view+) taken from this proxy when
       # it has no path: a view of the whole settings, or of this proxy's own
       # cause; nil for anything else.
@@ -877,11 +885,16 @@ module Lich
       # the container has since taken a stored row that has no container of
       # the element's kind at its key or index, see #take_stored_container), the proxy
       # is detached and unlocated, so a write through it is refused instead
-      # of being saved by position somewhere else. nil when +value+ is not an
-      # element of the view (a new container, such as what merge returns).
+      # of being saved by position somewhere else. Under a proxy that was
+      # never part of the settings (#pathless_cause, such as an element
+      # yielded by each) there is nothing to look in, so the proxy is
+      # detached and pathless with a cause that names it. nil when +value+
+      # is not an element of the view (a new container, such as what merge
+      # returns).
       private def view_element_proxy(keys, value)
         segments = segments_to(keys, value, @target)
         return nil unless segments
+        return pathless_derived_proxy(value, inside_cause) if @source.nil? && @pathless_cause
 
         base = @source && source_segment(segments.first)
         if base
