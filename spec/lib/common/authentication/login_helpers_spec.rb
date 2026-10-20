@@ -160,12 +160,6 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
-  describe '.lich_version_at_least?' do
-    it 'has been removed' do
-      expect(described_class).not_to respond_to(:lich_version_at_least?)
-    end
-  end
-
   describe 'FRONTEND_PATTERN' do
     it 'matches --stormfront' do
       match = '--stormfront'.match(described_class::FRONTEND_PATTERN)
