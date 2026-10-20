@@ -44,9 +44,24 @@ module Lich
         # live lib/, scripts/ and lich.rbw while it restores them.
         REVERT_TEMP_PREFIX = '.lich5-revert-'
 
-        # Lock file in BACKUP_DIR that #revert holds for its whole run, so two
-        # reverts on one installation never swap files at the same time.
+        # Lock file in BACKUP_DIR. #revert holds it exclusively for its whole
+        # run and #snapshot holds it exclusively while it copies (and, for an
+        # update, while it downloads and installs), so two reverts never swap
+        # files at the same time, a snapshot never copies a lib/ that a revert
+        # has half swapped, and two updates never install at the same time.
         REVERT_LOCK_NAME = '.lich5-revert.lock'
+
+        # Empty file #snapshot writes into the staging directory once every
+        # copy has succeeded, just before publishing it. A snapshot without
+        # it was taken by an older Lich, which copied straight into
+        # L5-snapshot-<DATE-TIME> and could leave it cut short (see
+        # #legacy_cut_off).
+        STAGED_MARKER_NAME = '.lich5-staged'
+
+        # Raised by #snapshot when a revert, another snapshot or another
+        # update on the same installation is running, so the update that
+        # asked for the snapshot stops before changing anything.
+        class RevertRunningError < StandardError; end
 
         # How many same-second name collisions #snapshot tolerates before
         # giving up on publishing.
@@ -83,8 +98,9 @@ module Lich
         # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
         #
         # The copies go into a staging directory under BACKUP_DIR whose name
-        # #revert ignores. Only once every copy has succeeded is it renamed
-        # to L5-snapshot-<DATE-TIME>. If a copy fails, the staging directory
+        # #revert ignores. Only once every copy has succeeded is
+        # STAGED_MARKER_NAME written into it and it renamed to
+        # L5-snapshot-<DATE-TIME>. If a copy fails, the staging directory
         # is removed and the error is re-raised, so the caller's update
         # aborts before changing anything. The staging directory is also
         # removed when the thread is killed (Lich kills the client thread
@@ -92,8 +108,24 @@ module Lich
         # in an ensure. A process killed mid-copy leaves only an
         # L5-staging-* directory, which #revert never restores from.
         #
-        # @return [String] path to the published snapshot directory
+        # Holds the revert lock exclusively while copying and publishing. If
+        # a revert, another snapshot or another update on the same
+        # installation holds it, says so and raises without copying
+        # anything: copying a lib/ in the middle of a revert's swap could
+        # publish a mix of two versions that looks complete, and two updates
+        # installing at once could leave a mix of both releases.
+        #
+        # Given a block, yields the published snapshot's path to it and keeps
+        # holding the lock until the block returns, so an update that
+        # downloads and installs in the block cannot have a revert swap lib/
+        # under it.
+        #
+        # @yieldparam snapshot_dir [String] path to the published snapshot
+        # @return [String, Object] path to the published snapshot directory,
+        #   or the block's value when given a block
         # @raise [SystemCallError] if any copy fails; no snapshot is published
+        # @raise [RevertRunningError] if a revert, snapshot or update is
+        #   running; nothing is copied
         def snapshot
           respond
           respond 'Creating a snapshot of current Lich core files ONLY.'
@@ -104,71 +136,97 @@ module Lich
 
           FileUtils.mkdir_p(BACKUP_DIR)
           snapshot_subdir = nil
-          # Interrupts are deferred except while copying and publishing, so a
-          # kill can never land between creating the staging directory and
-          # the ensure that removes it.
-          Thread.handle_interrupt(Object => :never) do
-            staging_dir = Dir.mktmpdir(STAGING_PREFIX, BACKUP_DIR)
-            begin
-              Thread.handle_interrupt(Object => :immediate) do
-                # Dir.mktmpdir creates 0700; a published snapshot keeps the
-                # permissions a plain mkdir would have given it.
-                File.chmod(0o777 & ~File.umask, staging_dir)
-                copy_core_files(staging_dir)
-                snapshot_subdir = publish_snapshot(staging_dir)
+          result = nil
+          locked = with_revert_lock(File::LOCK_EX) do
+            # Interrupts are deferred except while copying and publishing, so
+            # a kill can never land between creating the staging directory
+            # and the ensure that removes it.
+            Thread.handle_interrupt(Object => :never) do
+              staging_dir = Dir.mktmpdir(STAGING_PREFIX, BACKUP_DIR)
+              begin
+                Thread.handle_interrupt(Object => :immediate) do
+                  # Dir.mktmpdir creates 0700; a published snapshot keeps the
+                  # permissions a plain mkdir would have given it.
+                  File.chmod(0o777 & ~File.umask, staging_dir)
+                  copy_core_files(staging_dir)
+                  File.write(File.join(staging_dir, STAGED_MARKER_NAME), '')
+                  snapshot_subdir = publish_snapshot(staging_dir)
+                end
+              rescue StandardError => e
+                respond
+                respond "Snapshot failed (#{e.class}: #{e.message})."
+                respond 'No snapshot was saved and nothing was changed.'
+                raise
+              ensure
+                # Once published, staging_dir no longer exists, so this only
+                # ever removes this call's own unpublished copy.
+                FileUtils.rm_rf(staging_dir) unless snapshot_subdir
               end
-            rescue StandardError => e
-              respond
-              respond "Snapshot failed (#{e.class}: #{e.message})."
-              respond 'No snapshot was saved and nothing was changed.'
-              raise
-            ensure
-              # Once published, staging_dir no longer exists, so this only
-              # ever removes this call's own unpublished copy.
-              FileUtils.rm_rf(staging_dir) unless snapshot_subdir
             end
+
+            respond
+            respond 'Current Lich ecosystem files (only) backed up to:'
+            respond "    #{snapshot_subdir}"
+
+            result = block_given? ? yield(snapshot_subdir) : snapshot_subdir
+            true
           end
+          return result if locked
 
           respond
-          respond 'Current Lich ecosystem files (only) backed up to:'
-          respond "    #{snapshot_subdir}"
-
-          snapshot_subdir
+          respond 'Another update, snapshot or revert is running on this installation, so no snapshot was saved and nothing was changed.'
+          respond 'Run the command again once it has finished.'
+          raise RevertRunningError, 'another update, snapshot or revert is running on this installation'
         end
 
         # Restores most recent snapshot from BACKUP_DIR.
         #
         # Refuses, without changing anything, when the newest L5-snapshot-*
         # directory is incomplete (no lib/version.rb declaring LICH_VERSION,
-        # no lich.rbw, or no scripts/). It names every incomplete directory
-        # newer than the next complete snapshot, and that snapshot if there
-        # is one, but never falls back to it on its own: an older snapshot
-        # may be several versions back.
+        # no lich.rbw, no scripts/, or, in one an older Lich took, core
+        # scripts that may have been cut off part way). It names every
+        # incomplete directory newer than the next complete snapshot, and
+        # that snapshot if there is one, but never falls back to it on its
+        # own: an older snapshot may be several versions back.
         #
-        # Holds an exclusive lock for the whole run. If another revert on the
-        # same installation holds it, says so and changes nothing.
+        # Holds the revert lock exclusively for the whole run. If another
+        # revert, a snapshot, or an update past its snapshot (see #snapshot)
+        # on the same installation holds it, says so and changes nothing.
         #
         # @return [void]
         def revert
           respond
           respond 'Reverting Lich5 to previously installed version.'
 
-          with_revert_lock { revert_newest_snapshot }
+          ran = with_revert_lock(File::LOCK_EX) do
+            revert_newest_snapshot
+            true
+          end
+          return if ran
+
+          respond
+          respond 'Another revert, a snapshot or an update is running on this installation. Nothing was changed.'
         end
 
         private
 
-        # Runs the block while holding an exclusive, non-blocking flock on
+        # Runs the block while holding a non-blocking flock of +mode+
+        # (File::LOCK_EX for both #revert and #snapshot) on
         # BACKUP_DIR/REVERT_LOCK_NAME. Two reverts that swap files in the
         # same lib/ at once rename each other's entries and can lose files,
-        # so a revert that finds the lock taken returns without yielding.
-        # The lock is released when the file is closed, including when the
-        # holder is killed, so it can never go stale. If the lock file cannot
-        # be created or the filesystem does not support flock (some network
-        # shares), the block runs unlocked rather than blocking every revert.
+        # a snapshot copying lib/ during a swap copies a mix of both
+        # versions, and two updates installing at once can leave a mix of
+        # both releases, so when the lock is taken this returns false without
+        # yielding. The lock is released when the file is closed, including
+        # when the holder is killed, so it can never go stale. If the lock
+        # file cannot be created or the filesystem does not support flock
+        # (some network shares), the block runs unlocked rather than blocking
+        # every revert and update.
         #
-        # @return [void]
-        def with_revert_lock
+        # @param mode [Integer] File::LOCK_EX or File::LOCK_SH
+        # @return [Object, false] the block's value, or false if the lock is
+        #   held by someone else
+        def with_revert_lock(mode)
           lock = begin
             FileUtils.mkdir_p(BACKUP_DIR)
             File.open(File.join(BACKUP_DIR, REVERT_LOCK_NAME), File::RDWR | File::CREAT, 0o644)
@@ -179,16 +237,12 @@ module Lich
 
           begin
             locked = begin
-              lock.flock(File::LOCK_EX | File::LOCK_NB)
+              lock.flock(mode | File::LOCK_NB)
             rescue NotImplementedError, SystemCallError => e
               respond "Could not lock #{lock.path} (#{e.class}: #{e.message}); continuing without the lock."
               :unsupported
             end
-            unless locked
-              respond
-              respond 'Another revert is already running on this installation. Nothing was changed.'
-              return
-            end
+            return false unless locked
 
             yield
           ensure
@@ -234,16 +288,15 @@ module Lich
         # Core scripts installed now that +snapshot_dir+ has no copy of.
         # #restore_from leaves them as they are. A snapshot lacks one when
         # the script was not installed when it was taken (a core script
-        # added since), or when an older Lich was interrupted while copying
-        # the core scripts one by one into scripts/.
+        # added since, or one installed later). An older Lich interrupted
+        # while copying the core scripts also left some out, but #revert
+        # refuses such a snapshot (see #legacy_cut_off).
         #
         # @param snapshot_dir [String] snapshot directory
         # @return [Array<String>] file names, in CORE_SCRIPTS order
         def core_scripts_not_in(snapshot_dir)
           CORE_SCRIPTS.select do |file|
-            live = File.join(SCRIPT_DIR, file)
-            saved = File.join(snapshot_dir, 'scripts', file)
-            (File.exist?(live) || File.symlink?(live)) && !(File.exist?(saved) || File.symlink?(saved))
+            entry?(File.join(SCRIPT_DIR, file)) && !entry?(File.join(snapshot_dir, 'scripts', file))
           end
         end
 
@@ -313,10 +366,25 @@ module Lich
         end
 
         # Lists what a snapshot directory lacks for #revert to restore it.
+        # Problems that may also mean the snapshot is complete (see
+        # #doubtful_problems) get a hint for using it then, unless it has
+        # another problem as well that is not fixed by renaming its legacy
+        # --lib-dir directory (see #legacy_lib_dir_name).
         #
         # @param dir [String] snapshot directory
         # @return [Array<String>] human-readable problems; empty if complete
         def snapshot_problems(dir)
+          problems = interruption_problems(dir)
+          doubts, hints = doubtful_problems(dir)
+          problems + doubts + (problems.empty? || legacy_lib_dir_name(dir) ? hints : [])
+        end
+
+        # Every problem #snapshot_problems lists except those
+        # #doubtful_problems lists.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Array<String>] human-readable problems; empty if none
+        def interruption_problems(dir)
           problems = []
           if !File.file?(File.join(dir, 'lib', 'version.rb'))
             problems << 'lib/version.rb is missing'
@@ -326,17 +394,173 @@ module Lich
             problems << 'lib/version.rb does not declare LICH_VERSION'
           end
           problems << "#{lich_file_name} is missing" unless File.file?(File.join(dir, lich_file_name))
-          problems << 'scripts/ is missing' unless File.directory?(File.join(dir, 'scripts'))
+          if File.directory?(File.join(dir, 'scripts'))
+            last = legacy_last_script(dir)
+            problems << "scripts/#{last} is empty" if legacy_empty_scripts(dir).include?(last)
+          else
+            problems << 'scripts/ is missing'
+          end
           problems
+        end
+
+        # Problems of an older snapshot (see #legacy_cut_off) that may also
+        # mean it is complete: an empty core script before the last one it
+        # has, and a missing tail of core scripts. #revert refuses it either
+        # way, since nothing on disk tells the two causes apart.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Array(Array<String>, Array<String>)] the problems, each
+        #   naming both causes, and the hints for using the snapshot if it
+        #   is complete
+        def doubtful_problems(dir)
+          doubts = []
+          hints = []
+          empty = legacy_empty_scripts(dir) - [legacy_last_script(dir)]
+          unless empty.empty?
+            doubts.concat(empty.map { |file| empty_script_problem(file) })
+            hints << empty_script_hint
+          end
+          cut_off = legacy_cut_off(dir)
+          if cut_off
+            doubts << cut_off_problem(*cut_off)
+            hints << cut_off_hint
+          end
+          [doubts, hints]
+        end
+
+        # True when the only things keeping #revert from restoring +dir+ are
+        # problems that may also mean it is complete (see
+        # #doubtful_problems), which #snapshot_problems gives hints for.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Boolean]
+        def only_doubtful_problems?(dir)
+          interruption_problems(dir).empty? && !doubtful_problems(dir).first.empty?
+        end
+
+        # Older Lich versions copied straight into L5-snapshot-<DATE-TIME>,
+        # the core scripts last and one at a time, so one interrupted while
+        # copying them left only the first few in scripts/, the last of them
+        # possibly cut short, and passes every other check. A snapshot
+        # #snapshot published (it has STAGED_MARKER_NAME) was copied in full
+        # before publishing, so it is never checked this way.
+        #
+        # They copied in CORE_SCRIPTS order, except that versions from
+        # September 2023 to May 2024 copied map.lic after version.lic (and
+        # earlier ones xnarost.lic, no longer a core script). So an empty
+        # copy of the last core script it has is taken as an interruption
+        # (see #interruption_problems), while an empty one before it either
+        # was empty in the install then or is such a map.lic (see
+        # #doubtful_problems). Core scripts installed now that come after
+        # every core script it has either never started copying, or were not
+        # installed when it was taken, and nothing on disk tells the two
+        # apart. #revert refuses it either way, since the last script it has
+        # may be cut short. One missing from between two it has was simply
+        # not installed then, and is kept by #restore_from.
+        #
+        # Cannot tell a copy cut short part way through its bytes when it is
+        # the last core script installed (version.lic, normally), or when it
+        # is a map.lic copied after version.lic. Does not check xnarost.lic
+        # at all.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Array(String, Array<String>), nil] the last core script it
+        #   has (nil if none) and the installed ones after it, or nil if no
+        #   installed core script comes after every one it has
+        def legacy_cut_off(dir)
+          return nil if File.exist?(File.join(dir, STAGED_MARKER_NAME))
+          return nil unless File.directory?(File.join(dir, 'scripts'))
+
+          last = legacy_last_script(dir)
+          after = last ? CORE_SCRIPTS.drop(CORE_SCRIPTS.index(last) + 1) : CORE_SCRIPTS
+          never_copied = after.select { |file| entry?(File.join(SCRIPT_DIR, file)) }
+          never_copied.empty? ? nil : [last, never_copied]
+        end
+
+        # @param dir [String] snapshot directory
+        # @return [String, nil] the last core script, in CORE_SCRIPTS order,
+        #   that +dir+ has in scripts/
+        def legacy_last_script(dir)
+          CORE_SCRIPTS.reverse.find { |file| entry?(File.join(dir, 'scripts', file)) }
+        end
+
+        # Core scripts an older Lich left empty in +dir+ (see
+        # #legacy_cut_off): either copying them was interrupted before any
+        # byte was written, or they were empty in the install then.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Array<String>] file names, in CORE_SCRIPTS order
+        def legacy_empty_scripts(dir)
+          return [] if File.exist?(File.join(dir, STAGED_MARKER_NAME))
+          return [] unless File.directory?(File.join(dir, 'scripts'))
+
+          CORE_SCRIPTS.select do |file|
+            path = File.join(dir, 'scripts', file)
+            entry?(path) && File.zero?(path)
+          end
+        end
+
+        # @param file [String] an empty core script before the last one the
+        #   snapshot has
+        # @return [String] the problem, naming both possible causes
+        def empty_script_problem(file)
+          "scripts/#{file} is empty: either it was empty when the snapshot was taken, or copying it was interrupted"
+        end
+
+        # Tells the user how to use a snapshot with empty core scripts
+        # before its last one, if they know those were empty then. Without
+        # them in the snapshot, #restore_from keeps the installed copies.
+        #
+        # @return [String] the hint
+        def empty_script_hint
+          'if the scripts named above as empty were also empty when it was taken, it is complete; ' \
+            'to use it, delete them from its scripts/ (a revert then leaves the installed ones as they are)'
+        end
+
+        # @param last [String, nil] last core script the snapshot has
+        # @param never_copied [Array<String>] installed core scripts after it
+        # @return [String] the problem, naming both possible causes
+        def cut_off_problem(last, never_copied)
+          names = never_copied.join(' ')
+          not_installed = 'or they were not installed when it was taken'
+          if last
+            "scripts/ ends at #{last} and has none of the installed core scripts after it (#{names}): " \
+              "either copying them stopped early and #{last} may be cut short, #{not_installed}"
+          else
+            "scripts/ has none of the installed core scripts (#{names}): " \
+              "either copying them stopped early, #{not_installed}"
+          end
+        end
+
+        # Tells the user how to use a snapshot whose only problem is a
+        # missing tail of core scripts, if they know those were not
+        # installed then. A copy of the live script restores it as it is,
+        # which is what #restore_from does for a core script a snapshot
+        # lacks.
+        #
+        # @return [String] the hint
+        def cut_off_hint
+          'if the scripts named above were not installed when it was taken, it is complete; ' \
+            "to use it, copy them from #{SCRIPT_DIR} into its scripts/ (a revert would leave them as they are anyway)"
+        end
+
+        # @param path [String]
+        # @return [Boolean] true if +path+ exists or is a (possibly dangling) symlink
+        def entry?(path)
+          File.exist?(path) || File.symlink?(path)
         end
 
         # Older Lich versions copied LIB_DIR into a snapshot under its own
         # name, so with --lib-dir pointing at a directory not named "lib" the
         # files landed in <snapshot>/<name>/ and lib/ stayed empty. Only a
-        # snapshot that renaming would make complete counts: lib/ must be
-        # absent or empty, and lich.rbw and scripts/ must be present (older
-        # versions copied them before and after LIB_DIR, so a missing one
-        # means that snapshot was interrupted, possibly mid-copy).
+        # snapshot that renaming would leave with no problem blamed on an
+        # interruption counts: lib/ must be absent or empty, lich.rbw and
+        # scripts/ must be present (older versions copied them before and
+        # after LIB_DIR, so a missing one means that snapshot was
+        # interrupted, possibly mid-copy), and the last core script it has
+        # must not be empty (see #interruption_problems; older versions
+        # copied those last). Problems that may also mean it is complete
+        # (see #doubtful_problems) remain, with their own hints.
         #
         # @param dir [String] snapshot directory
         # @return [String, nil] that directory name if +dir+ has this layout
@@ -345,6 +569,7 @@ module Lich
           return nil if name == 'lib'
           return nil unless File.file?(File.join(dir, name, 'version.rb'))
           return nil unless File.file?(File.join(dir, lich_file_name)) && File.directory?(File.join(dir, 'scripts'))
+          return nil if legacy_empty_scripts(dir).include?(legacy_last_script(dir))
 
           lib = File.join(dir, 'lib')
           if File.symlink?(lib) || File.exist?(lib)
@@ -410,13 +635,16 @@ module Lich
             respond "    #{path}"
             problems.each { |problem| respond "  - #{problem}" }
           end
-          interrupted = incomplete.count { |path, _| legacy_lib_dir_name(path).nil? }
+          # A snapshot with a hint is not blamed on an interruption: it may
+          # only need renaming, or be complete (see #doubtful_problems).
+          interrupted_flags = incomplete.map { |path, _| legacy_lib_dir_name(path).nil? && !only_doubtful_problems?(path) }
+          interrupted = interrupted_flags.count(true)
           if interrupted == incomplete.size && interrupted == 1
             respond 'It was most likely left by a snapshot that was interrupted.'
           elsif interrupted == incomplete.size
             respond 'They were most likely left by snapshots that were interrupted.'
           elsif interrupted.positive?
-            respond 'The ones without a rename hint were most likely left by snapshots that were interrupted.'
+            respond 'The ones without a hint were most likely left by snapshots that were interrupted.'
           end
 
           if fallback
@@ -429,6 +657,10 @@ module Lich
               respond "To revert to it, move or delete all #{incomplete.size} incomplete directories above,"
             end
             respond 'then run the revert again.'
+          elsif !interrupted_flags.first
+            # The newest one has a hint, and following it may make it
+            # usable; the revert only ever restores the newest snapshot.
+            respond 'No complete snapshot was found. If a hint above applies, follow it; otherwise seek assistance.'
           else
             respond 'No complete snapshot was found. Seek assistance.'
           end

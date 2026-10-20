@@ -78,7 +78,9 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       allow(client).to receive(:fetch_github_json) { latest.first }
       allow(client).to receive(:http_get).and_return(nil)
       allow(client).to receive(:last_error).and_return(nil)
-      allow(snapshot_manager).to receive(:snapshot).and_return(nil)
+      # Like the real snapshot, yields its directory to the install that
+      # runs while it holds the lock (nil here: nothing is copied).
+      allow(snapshot_manager).to receive(:snapshot) { |&block| block ? block.call(nil) : nil }
       allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| messages << msg }
       archive = ruby_floor_archive('9.0')
       allow(URI).to receive(:parse).and_wrap_original do |original, url|
@@ -272,10 +274,10 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       let(:release_snapshot) { Queue.new }
 
       before do
-        allow(snapshot_manager).to receive(:snapshot) do
+        allow(snapshot_manager).to receive(:snapshot) do |&block|
           in_snapshot << true
           release_snapshot.pop
-          nil
+          block ? block.call(nil) : nil
         end
       end
 
