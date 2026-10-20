@@ -659,6 +659,16 @@ module Lich
           # net/http's own cleanup for start with a block. Unlike finish, it
           # also closes a socket from a start interrupted after connecting
           # but before the session was marked started.
+          #
+          # do_finish is private. The public route to it is start with a
+          # block, but that puts connecting and the request under one
+          # Timeout, so the connect deadline could no longer raise
+          # Net::OpenTimeout separately from the request deadline. If a
+          # net/http upgrade renames do_finish, every request here fails
+          # with NoMethodError, and the "closes the socket when start is
+          # interrupted after connecting" example in
+          # spec/lib/dragonrealms/commons/slackbot_request_deadline_spec.rb
+          # fails with it.
           http.send(:do_finish)
         end
       end
