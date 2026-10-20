@@ -19,25 +19,33 @@ module Lich
 
       # Uses HEALTH command to check for poisons, diseases, bleeders, parasites, and lodged items.
       # Returns a HealthResult with diagnostic information for healing prioritization.
+      #
+      # When the reply is not captured in full (no start line, or no prompt before
+      # the timeout), a bold message is printed and the result has +captured+ false.
+      # A result with +captured+ false says nothing about the character's health:
+      # treat it as "check again", not as healthy.
+      #
+      # @return [HealthResult]
       def check_health
-        health_lines = Lich::Util.issue_command(
-          'health',
-          /^Your body feels\b/,
-          /<prompt/,
-          usexml: true,
-          quiet: true,
-          include_end: false
-        )
-        if health_lines.nil?
+        health_lines, complete = DRC.capture_to_prompt('health', /^Your body feels\b/)
+        if health_lines.empty?
           Lich::Messaging.msg("bold", "DRCH: Failed to capture HEALTH output (timeout).")
-          return HealthResult.new
+          return HealthResult.new(captured: false)
         end
 
-        parse_health_lines(strip_xml(health_lines))
+        unless complete
+          Lich::Messaging.msg("bold", "DRCH: HEALTH output was cut off (timeout); the result is incomplete.")
+        end
+
+        parse_health_lines(strip_xml(health_lines), captured: complete)
       end
 
       # Parses stripped HEALTH command output lines into a HealthResult.
-      def parse_health_lines(health_lines)
+      #
+      # @param health_lines [Array<String>] HEALTH reply lines with XML stripped
+      # @param captured [Boolean] false when the lines are a cut-off reply
+      # @return [HealthResult]
+      def parse_health_lines(health_lines, captured: true)
         parasites_regex = Regexp.union(PARASITES_REGEX)
         wounds_line = nil
         parasites_line = nil
@@ -75,37 +83,48 @@ module Lich
           lodged: lodged_items,
           poisoned: poisoned,
           diseased: diseased,
-          score: score
+          score: score,
+          captured: captured
         )
       end
 
       # Uses PERCEIVE HEALTH SELF command to check for wounds and scars.
       # Returns a HealthResult with perceived wound details merged with check_health diagnostics.
+      #
+      # Returns nil only for a non-empath. When either reply (PERCEIVE HEALTH or the
+      # HEALTH check merged into it) is not captured in full, a bold message is
+      # printed and the result has +captured+ false. HEALTH is sent even when
+      # PERCEIVE HEALTH times out, so its bleeders, parasites, lodged items,
+      # poison and disease are still returned (with no perceived wounds).
+      #
+      # @return [HealthResult, nil]
       def perceive_health
         unless DRStats.empath?
           Lich::Messaging.msg("bold", "DRCH: Only empaths can perceive health.")
           return nil
         end
 
-        lines = Lich::Util.issue_command(
+        lines, complete = DRC.capture_to_prompt(
           'perceive health self',
           /injuries include\.\.\.|feel only an aching emptiness/,
-          /<prompt/,
-          usexml: true,
-          quiet: true,
-          include_end: false,
           timeout: 15
         )
-        if lines.nil?
+        if lines.empty?
+          # Still send HEALTH: its bleeders, poison and disease are worth having
+          # even when the perceived wounds are unknown. The result is flagged
+          # captured: false because the perceived wounds are missing.
           Lich::Messaging.msg("bold", "DRCH: Failed to capture PERCEIVE HEALTH output (timeout).")
-          return nil
-        end
+        else
+          lines = strip_xml(lines)
 
-        lines = strip_xml(lines)
+          if lines.any? { |line| line =~ /feel only an aching emptiness/ }
+            waitrt?
+            return check_health
+          end
 
-        if lines.any? { |line| line =~ /feel only an aching emptiness/ }
-          waitrt?
-          return check_health
+          unless complete
+            Lich::Messaging.msg("bold", "DRCH: PERCEIVE HEALTH output was cut off (timeout); the result is incomplete.")
+          end
         end
 
         perceived = parse_perceived_health_lines(lines)
@@ -122,26 +141,30 @@ module Lich
           diseased: health_data.diseased,
           vitality: perceived.vitality,
           dead: perceived.dead,
-          score: perceived.score
+          score: perceived.score,
+          captured: complete && health_data.captured?
         )
       end
 
+      # Uses TOUCH to perceive another character's health.
+      #
+      # Returns nil when the character is not an empath, when the touch fails, or
+      # when the TOUCH reply is not captured in full (each with a bold message).
+      #
+      # @param target [String] the character to touch
+      # @return [HealthResult, nil]
       def perceive_health_other(target)
         unless DRStats.empath?
           Lich::Messaging.msg("bold", "DRCH: Only empaths can perceive health of others.")
           return nil
         end
 
-        touch_lines = Lich::Util.issue_command(
+        touch_lines, complete = DRC.capture_to_prompt(
           "touch #{target}",
           /You sense a successful empathic link|Touch what|feels cold|avoids your touch|You quickly recoil/,
-          /<prompt/,
-          usexml: true,
-          quiet: true,
-          include_end: false,
           timeout: 10
         )
-        if touch_lines.nil?
+        if touch_lines.empty?
           Lich::Messaging.msg("bold", "DRCH: Failed to capture TOUCH output for #{target} (timeout).")
           return nil
         end
@@ -150,6 +173,11 @@ module Lich
 
         if touch_lines.any? { |line| line =~ /Touch what|feels cold|avoids your touch|You quickly recoil/ }
           Lich::Messaging.msg("bold", "DRCH: Unable to perceive health of #{target}.")
+          return nil
+        end
+
+        unless complete
+          Lich::Messaging.msg("bold", "DRCH: TOUCH output for #{target} was cut off (timeout).")
           return nil
         end
 
@@ -402,13 +430,20 @@ module Lich
 
       # Structured result from check_health or perceive_health.
       # Supports backward-compatible string-key access via [] for dr-scripts callers.
+      #
+      # +captured+ is false when the game reply was not captured in full (a
+      # timeout). The other fields then hold defaults or partial data and do not
+      # mean "healthy": callers should treat the result as unknown and check again.
+      # +captured+ true means a complete reply was read; it does not prove the
+      # reply was sent in answer to this call (a reply that arrives after an
+      # earlier call timed out can still be read by the next call).
       class HealthResult
         attr_reader :wounds, :bleeders, :parasites, :lodged,
-                    :poisoned, :diseased, :score, :dead, :vitality
+                    :poisoned, :diseased, :score, :dead, :vitality, :captured
 
         def initialize(wounds: {}, bleeders: {}, parasites: {}, lodged: {},
                        poisoned: false, diseased: false, score: 0, dead: false,
-                       vitality: 100)
+                       vitality: 100, captured: true)
           @wounds = wounds
           @bleeders = bleeders
           @parasites = parasites
@@ -418,6 +453,12 @@ module Lich
           @score = score
           @dead = dead
           @vitality = vitality
+          @captured = captured
+        end
+
+        # @return [Boolean] true when the game reply was captured in full
+        def captured?
+          @captured
         end
 
         # Backward compatibility for dr-scripts callers using health_data['wounds'] etc.
