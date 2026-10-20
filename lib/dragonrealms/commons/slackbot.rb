@@ -314,11 +314,6 @@ module Lich
         members.is_a?(Array) && !members.empty?
       end
 
-      # @return [Float] monotonic clock reading in seconds
-      def monotonic_now
-        Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      end
-
       # @param budget [Numeric, nil] seconds from now
       # @return [Float, nil] monotonic deadline, or nil when there is no budget
       def deadline_for(budget)
@@ -580,25 +575,64 @@ module Lich
 
       # Requests a Slack token from a LichBot via LNet private message.
       #
+      # The reply arrives on the calling script's downstream, so each read is
+      # bounded by the time left before TOKEN_REQUEST_TIMEOUT. A quiet stream
+      # therefore ends the wait on time instead of blocking until the next
+      # game line.
+      #
       # @param lichbot [String] name of the LichBot to request from
       # @return [String, false] token string, or false on failure/timeout
       def request_token(lichbot)
         return false unless lnet_available?
 
-        send_time = Time.now
+        script = Script.current
+        unless script
+          Lich.log 'SlackBot: No calling script to read a token reply from'
+          return false
+        end
+        # LNet delivers the reply through Script.new_downstream and
+        # Script.new_downstream_xml only, so a script that reads neither
+        # stream (one reading only script output, say) can never see it.
+        # Check before sending, so the request is not sent and the wait
+        # does not run for nothing.
+        unless script.want_downstream || script.want_downstream_xml
+          Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
+          return false
+        end
+
+        deadline = monotonic_now + TOKEN_REQUEST_TIMEOUT
         @lnet.unique_buffer.push("chat to #{lichbot} RequestSlackToken")
         token_pattern = /\[Private\]-.*:#{Regexp.escape(lichbot)}: "slack_token: (?<token>.*)"/
 
         loop do
-          line = get
-          pause 0.05
-          return false if Time.now - send_time > TOKEN_REQUEST_TIMEOUT
+          remaining = deadline - monotonic_now
+          return false if remaining <= 0
 
-          if (match = line&.match(token_pattern))
+          line = script.gets(remaining)
+          # Script#gets returns false when the script stopped reading
+          # downstream during the wait, so no reply can arrive any more.
+          # send_to_script pushes its arguments as given, so a pushed false
+          # cannot be told apart from this case and also ends the wait.
+          if line == false
+            Lich.log "SlackBot: #{script.name} reads no downstream, cannot receive a token reply"
+            return false
+          end
+
+          # nil means this read timed out (or a pushed nil); the loop re-checks
+          # the deadline. Other non-String objects pushed through
+          # send_to_script are skipped the same way.
+          next unless line.is_a?(String)
+
+          if (match = line.match(token_pattern))
             return match[:token] == 'Not Found' ? false : match[:token]
           end
-          return false if line&.match?(NO_USER_PATTERN)
+          return false if line.match?(NO_USER_PATTERN)
         end
+      end
+
+      # @return [Float] seconds from a clock that wall-clock changes do not move
+      def monotonic_now
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       # Posts to the Slack API with retry and exponential backoff on network errors.
@@ -748,6 +782,16 @@ module Lich
           # net/http's own cleanup for start with a block. Unlike finish, it
           # also closes a socket from a start interrupted after connecting
           # but before the session was marked started.
+          #
+          # do_finish is private. The public route to it is start with a
+          # block, but that puts connecting and the request under one
+          # Timeout, so the connect deadline could no longer raise
+          # Net::OpenTimeout separately from the request deadline. If a
+          # net/http upgrade renames do_finish, every request here fails
+          # with NoMethodError, and the "closes the socket when start is
+          # interrupted after connecting" example in
+          # spec/lib/dragonrealms/commons/slackbot_request_deadline_spec.rb
+          # fails with it.
           http.send(:do_finish)
         end
       end
