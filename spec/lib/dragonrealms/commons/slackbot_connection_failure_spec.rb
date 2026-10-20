@@ -87,8 +87,12 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       ssl.write("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
       return ssl.sysclose
     end
+    if token == 'outage-token'
+      ssl.write("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+      return ssl.sysclose
+    end
     if token == 'html-token'
-      # A 200 page that is not JSON, as a proxy or captive portal might send.
+      # A 200 page that is not JSON, as a TLS-inspecting proxy might send.
       page = '<html><body>Access denied</body></html>'
       ssl.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: #{page.bytesize}\r\nConnection: close\r\n\r\n#{page}")
       return ssl.sysclose
@@ -360,6 +364,25 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       expect(bot.authed?('throttle-token')).to be false
       expect(logs).to include('SlackBot: Could not check a Slack token: Throttled by Slack API')
     end
+
+    it 'treats a token check answered with an HTTP error status as Slack unavailable, not as a rejected token' do
+      install_lnet(token: 'valid-token')
+      UserVars.slack_token = 'outage-token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(lnet_chats).to be_empty
+      expect(bot.error_message).to eq('Slack unavailable: HTTP Error: 503 Service Unavailable')
+      expect(UserVars.slack_token).to eq('outage-token')
+
+      3.times { expect(bot.direct_message('alice', 'help')).to be_nil }
+      expect(lnet_chats).to be_empty
+      expect(logs).to include('SlackBot: Slack unavailable while checking the token: HTTP Error: 503 Service Unavailable')
+      expect(bot.authed?('outage-token')).to be false
+      expect(logs).to include('SlackBot: Could not check a Slack token: HTTP Error: 503 Service Unavailable')
+    end
+
     it 'treats a token check answered with a page that is not JSON as Slack unavailable, not as a rejected token' do
       install_lnet(token: 'valid-token')
       UserVars.slack_token = 'html-token'

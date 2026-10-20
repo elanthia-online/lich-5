@@ -18,16 +18,18 @@ module Lich
       # Base error for all SlackBot failures.
       class Error < StandardError; end
 
-      # Raised on network-level failures: timeouts, connection resets, a
-      # refused connection, an unreachable host or network, and TLS errors.
-      # The original exception is kept as #cause.
+      # Raised when no HTTP 2xx reply comes back from Slack: timeouts,
+      # connection resets, DNS failures, a refused connection, an unreachable
+      # host or network, TLS errors, an HTTP error status (other than 429,
+      # which raises ThrottlingError) and a request whose time budget runs
+      # out. When an exception led to it, that exception is kept as #cause.
       class NetworkError < Error; end
 
       # Raised when the Slack API returns a non-ok response.
       class ApiError < Error; end
 
       # Raised when a reply cannot be parsed as JSON, such as an HTML page
-      # from a proxy or captive portal. Slack did not answer, so a token
+      # from a TLS-inspecting proxy. Slack did not answer, so a token
       # check treats this as Slack being unavailable, not as a rejected token.
       class MalformedResponseError < ApiError; end
 
