@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'timeout'
 
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
@@ -805,6 +806,92 @@ RSpec.describe DRCT do
       result = DRCT.find_empty_room([100], nil, nil, 50, false, 2)
       expect(result).to eq(true)
       expect(Lich::Messaging.messages.any? { |m| m[:message].include?('not with the right mana') }).to eq(true)
+    end
+
+    context 'when walk_to gives up on a room' do
+      # Room.current stays wherever the last successful walk left the character;
+      # walk_to returns false without moving.
+      let(:current) { OpenStruct.new(id: 50) }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(DRCT).to receive(:walk_to) do |room|
+          next false if room == 100
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'moves on to the next search room' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(100).ordered
+        expect(DRCT).to have_received(:walk_to).with(200).ordered
+      end
+
+      it 'does not check the predicate for the room it never reached' do
+        checked = []
+        predicate = ->(_attempt) { checked << current.id }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1) }
+        expect(checked).to eq([200])
+      end
+
+      it 'returns false once max_search_attempts is spent when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100], nil, nil, 0, false, 1) }
+        expect(result).to eq(false)
+      end
+
+      it 'walks to the idle room and searches again when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 2) }
+        expect(result).to eq(false)
+        expect(DRCT).to have_received(:walk_to).with(100).twice
+        expect(DRCT).to have_received(:walk_to).with(300).once
+      end
+
+      it 'still counts the unreachable room when prioritizing buddies' do
+        # 100 is skipped, 200 has nobody: 200 is the last room of the buddy
+        # pass, so the search falls back to an empty-room pass and takes 200.
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(200).twice
+      end
+
+      it 'takes a reachable room with a buddy when prioritizing buddies' do
+        allow(DRRoom).to receive(:pcs).and_return(['Buddy'])
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return([])
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(200).once
+      end
+    end
+
+    context 'when a search room is not an Integer room id' do
+      # walk_to accepts numeric strings and go2 tags; Room.current.id is an Integer.
+      let(:current) { OpenStruct.new(id: 50) }
+
+      before do
+        allow(Room).to receive(:current) { current }
+      end
+
+      it 'stops after walking to a room given as a numeric string' do
+        allow(DRCT).to receive(:walk_to) do |room|
+          current.id = room.to_i
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room(['100'], nil) }
+        expect(result).to eq(true)
+      end
+
+      it 'stops after walking to a room given as a go2 tag' do
+        allow(DRCT).to receive(:walk_to) do |_room|
+          current.id = 4321
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room(['some_tag'], nil) }
+        expect(result).to eq(true)
+      end
     end
   end
 

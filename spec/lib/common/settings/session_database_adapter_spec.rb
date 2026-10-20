@@ -60,11 +60,12 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
       expect(row['name']).to eq('session_summary_state')
     end
 
-    it 'opens fallback storage with the core sqlite busy timeout when available' do
+    it 'opens fallback storage with the core sqlite lock-wait handling when available' do
       adapter = described_class.new(data_dir: tmp_dir)
       @fallback_db = adapter.instance_variable_get(:@db)
 
-      expect(@fallback_db.get_first_value('PRAGMA busy_timeout;')).to eq(Lich.sqlite_busy_timeout_ms)
+      expect(@fallback_db).to be_a(Lich::SQLiteBusyWait::Connection)
+      expect(@fallback_db).to be_a(Lich::SQLiteBusyWait::SerializedDatabase)
     end
   end
 
