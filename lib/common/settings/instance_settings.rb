@@ -15,9 +15,15 @@
 #   InstanceSettings['my_key'] = 'value'
 #   value = InstanceSettings['my_key']
 #
-#   # Game-scoped access (for cross-character data like banking)
-#   InstanceSettings.game['banking'] = { ... }
-#   all_data = InstanceSettings.game['banking']
+#   # Game-scoped access (one row shared by every character's session)
+#   InstanceSettings.game['key'] = { ... }
+#   all_data = InstanceSettings.game['key']
+#
+#   NOTE: every session of the game, each its own Lich process, shares this
+#   row. Before keeping data here that several sessions update, check how
+#   Settings caches rows and what a write through this proxy saves (see
+#   lib/common/settings.rb). DRBanking keeps one row per character instead,
+#   read and written in one database transaction.
 #
 #   # Direct proxy access for complex operations
 #   proxy = InstanceSettings.character_proxy
@@ -64,7 +70,7 @@ module Lich
       end
 
       # Returns a root proxy for game-scoped settings
-      # Use this for data shared across all characters (e.g., banking aggregation)
+      # (see the note at the top of this file about several sessions)
       # @return [SettingsProxy] A proxy wrapping the game settings root
       def self.game_proxy
         Settings.root_proxy_for(game_scope, script_name: SCRIPT_NAME)

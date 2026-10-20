@@ -7,8 +7,20 @@ module Lich
     # Bank balances are tracked passively by parsing game output when players
     # deposit, withdraw, or check their balance at banks across Elanthia.
     #
-    # Data is persisted using Lich::Common::InstanceSettings.game (game-scoped) so that
-    # the `;banks all` command can aggregate balances across all characters.
+    # Storage: each character's balances live in that character's own row of
+    # the shared settings table (script STORE_SCRIPT, scope "<game>:<name>",
+    # value { "Town" => copper }). Normally only that character's session
+    # writes its row; the one-time migration and `;banks reset all` write all
+    # of this game's rows, each in one transaction. Every read comes straight
+    # from the database, and every write is an atomic read-modify-write. So
+    # several sessions on one install can't overwrite each other's balances,
+    # and `;banks all` always shows every character's latest recorded
+    # balances. A row that can't be loaded is logged and treated as empty.
+    #
+    # Older versions kept every character in one game-wide row (script 'core',
+    # scope "<game>", key 'banking'), and each session wrote back its own stale
+    # copy of it. The first read or write that finds that row moves it into
+    # per-character rows (see migrate_legacy!).
     #
     # Usage:
     #   DRBanking.my_accounts                    # Current character's bank balances
@@ -68,36 +80,52 @@ module Lich
         'Dokoras' => DOKORA_BANKS
       }.freeze
 
-      # Settings key for banking data
+      # Key that held every character's balances in the legacy game-wide row
       SETTINGS_KEY = 'banking'
+
+      # Script name of the per-character balance rows in script_auto_settings
+      STORE_SCRIPT = 'core.banking'
+
+      # Script name of the legacy game-wide row (InstanceSettings.game)
+      LEGACY_SCRIPT = 'core'
 
       # Pattern for parsing balance amounts from strings
       BALANCE_AMOUNT_PATTERN = /(\d+)\s+(platinum|gold|silver|bronze|copper)/i.freeze
 
-      # In-memory cache of accounts data
-      @@accounts_cache = nil
+      # Thread-local key of the log lines held back while a transaction runs
+      # (see in_transaction)
+      DEFERRED_LOG_KEY = :lich_drbanking_deferred_log
+
+      # Added to a failed balance write's error: nothing is cached, so the
+      # change is gone and the recorded balance stays off until a BALANCE.
+      SYNC_HINT = 'check BALANCE to sync'
 
       class << self
-        # Returns all bank accounts for all characters (game-scoped)
+        # Returns the bank accounts of every character in this game, read
+        # fresh from the database on every call (nothing is cached).
+        # Characters with no recorded balance are left out. A database error
+        # is reported and gives {}.
         # @return [Hash] { "CharName" => { "Town" => copper_amount } }
         def all_accounts
-          load_accounts unless @@accounts_cache
-          @@accounts_cache
+          read_all_accounts || {}
         end
 
-        # Returns bank accounts for the current character
+        # Returns bank accounts for the current character (a fresh copy)
         # @return [Hash] { "Town" => copper_amount }
         def my_accounts
-          all_accounts[character_name] ||= {}
+          read_my_accounts || {}
         end
 
         # Updates a bank balance for the current character
         # @param town [String] The town/bank name
         # @param copper [Integer] The balance in copper
         def update_balance(town, copper)
-          all_accounts[character_name] ||= {}
-          all_accounts[character_name][town] = copper.to_i
-          save_accounts
+          stored = modify_my_accounts("save the #{town} balance", hint: SYNC_HINT) do |accounts|
+            accounts[town] = copper.to_i
+            accounts
+          end
+          return unless stored
+
           Lich::Messaging.msg('info', "DRBanking: Updated #{town} balance to #{format_currency(copper)}")
         end
 
@@ -199,7 +227,10 @@ module Lich
 
         # Displays bank balances for current character
         def display_banks
-          accounts = my_accounts
+          # One read: the per-bank lines and the totals come from the same copy.
+          accounts = read_my_accounts
+          return unless accounts # the failed read was already reported
+
           if accounts.empty?
             Lich::Messaging.msg('info', 'DRBanking: No bank account info recorded.')
             return
@@ -222,12 +253,14 @@ module Lich
           end
 
           Lich::Messaging.msg('info', '-' * 50)
-          Lich::Messaging.msg('info', "  #{'Grand Total:'.rjust(25)} #{format_currency(total_wealth)}")
+          Lich::Messaging.msg('info', "  #{'Grand Total:'.rjust(25)} #{format_currency(accounts.values.sum)}")
         end
 
         # Displays bank balances for all characters
         def display_banks_all
-          accounts = all_accounts
+          accounts = read_all_accounts
+          return unless accounts # the failed read was already reported
+
           if accounts.empty?
             Lich::Messaging.msg('info', 'DRBanking: No bank account info recorded for any character.')
             return
@@ -255,24 +288,46 @@ module Lich
           Lich::Messaging.msg('info', "Grand Total (all characters): #{format_currency(grand_total)}")
         end
 
-        # Force reload from database (useful for testing)
+        # Balances are no longer cached, so there is nothing to reload.
+        # Kept for compatibility; returns a fresh read, like all_accounts.
         def reload!
-          @@accounts_cache = nil
-          load_accounts
+          all_accounts
         end
 
-        # Reset current character's bank data
+        # Reset current character's bank data. The row is overwritten without
+        # being read, so a row that can't be loaded is cleared too.
         def reset_character!
-          all_accounts.delete(character_name)
-          save_accounts
+          cleared = in_my_row_transaction('clear your bank data') do |db, scope|
+            db.save_settings!(STORE_SCRIPT, {}, scope)
+          end
+          return unless cleared
+
           Lich::Messaging.msg('info', "DRBanking: Cleared bank data for #{character_name}.")
         end
 
-        # Reset all bank data for all characters
+        # Reset all bank data for all characters in this game.
+        # Empties every character's row and removes the old game-wide row's
+        # 'banking' key, in one transaction. Character rows are overwritten
+        # without being read, so a character row that can't be loaded is
+        # cleared too. An old game-wide row that can't be loaded is left as it
+        # is, since it isn't DRBanking's alone.
         def reset_all!
-          @@accounts_cache = {}
-          save_accounts
+          game = game_code
+          unless game
+            Lich::Messaging.msg('info', "DRBanking: Can't clear bank data before the game is known.")
+            return
+          end
+
+          db = adapter
+          in_transaction(db) do
+            migrate_legacy!(db)
+            db.scopes_by_prefix(STORE_SCRIPT, "#{game}:").each do |scope|
+              db.save_settings!(STORE_SCRIPT, {}, scope)
+            end
+          end
           Lich::Messaging.msg('info', 'DRBanking: Cleared all bank data for all characters.')
+        rescue StandardError => e
+          report_storage_error('clear all bank data', e)
         end
 
         private
@@ -281,32 +336,278 @@ module Lich
           XMLData.name
         end
 
-        # Load accounts from InstanceSettings (game-scoped)
-        def load_accounts
-          @@accounts_cache = Lich::Common::InstanceSettings.game[SETTINGS_KEY] || {}
-          # Convert SettingsProxy to plain hash if needed
-          @@accounts_cache = @@accounts_cache.to_h if @@accounts_cache.respond_to?(:to_h) && !@@accounts_cache.is_a?(Hash)
+        # @return [String, nil] the game code ("DR", "DRF"...), nil if not known yet
+        def game_code
+          game = XMLData.game.to_s
+          game.empty? ? nil : game
         end
 
-        # Save accounts to InstanceSettings (game-scoped)
-        def save_accounts
-          Lich::Common::InstanceSettings.game[SETTINGS_KEY] = @@accounts_cache
+        # @return [String, nil] this character's row scope, nil if not known yet
+        def my_scope
+          game = game_code
+          name = character_name.to_s
+          return nil if game.nil? || name.empty?
+
+          "#{game}:#{name}"
+        end
+
+        def adapter
+          Lich::Common::Settings.db_adapter
+        end
+
+        # Reads every character's accounts (see all_accounts).
+        # @return [Hash, nil] nil if the read failed (already reported)
+        def read_all_accounts
+          game = game_code
+          return {} unless game
+
+          db = adapter
+          legacy = migrate_before_read(db, game)
+          accounts = stored_accounts(db, game)
+          # If the move failed, still show the old entries, read-only, for
+          # characters with no row (the move would keep an existing row).
+          if legacy
+            prefix = "#{game}:"
+            existing = db.scopes_by_prefix(STORE_SCRIPT, prefix)
+            legacy.each { |name, towns| accounts[name] = towns unless existing.include?("#{prefix}#{name}") }
+          end
+          # An empty row is a character whose data was cleared.
+          accounts.reject { |_name, towns| towns.empty? }
+        rescue StandardError => e
+          report_storage_error('read bank data', e)
+          nil
+        end
+
+        # Reads this character's accounts: only this character's row, plus the
+        # old shared row (loaded on every call to check for data left to
+        # move). Gives what all_accounts gives for this character, or {}.
+        # @return [Hash, nil] {} if the character or game isn't known yet;
+        #   nil if the read failed (already reported)
+        def read_my_accounts
+          scope = my_scope
+          return {} unless scope
+
+          db = adapter
+          name = character_name.to_s
+          legacy = migrate_before_read(db, game_code)
+          if legacy&.key?(name) && !db.scopes_by_prefix(STORE_SCRIPT, scope).include?(scope)
+            return legacy[name] # the move failed; shown read-only
+          end
+
+          read_row(db, STORE_SCRIPT, scope)
+        rescue StandardError => e
+          report_storage_error('read bank data', e)
+          nil
+        end
+
+        # Before a read: moves any legacy data into per-character rows.
+        # @return [Hash, nil] the legacy entries if there were some and moving
+        #   them failed (already reported); nil otherwise
+        # @raise [Sequel::Error] if the legacy row can't be read
+        def migrate_before_read(db, game)
+          legacy = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
+          return nil unless legacy
+
+          begin
+            in_transaction(db) { migrate_legacy!(db) }
+            nil
+          rescue StandardError => e
+            report_storage_error('move old bank data to per-character storage', e)
+            legacy
+          end
+        end
+
+        # Reads every character's row for this game.
+        # @return [Hash] { "CharName" => { "Town" => copper } }
+        def stored_accounts(db, game)
+          prefix = "#{game}:"
+          db.get_settings_by_scope_prefix(STORE_SCRIPT, prefix).each_with_object({}) do |(scope, towns), accounts|
+            name = scope.delete_prefix(prefix)
+            next if name.empty? || !towns.is_a?(Hash)
+
+            accounts[name] = towns
+          end
+        end
+
+        # Atomically changes this character's row, after moving any legacy
+        # data in the same transaction. Yields a fresh copy of the row ({}
+        # when there is none or it can't be loaded); the block returns the
+        # Hash to store, or nil to store nothing.
+        # @param action [String] what is being done, for error messages
+        # @param hint [String, nil] added to the error message on failure
+        # @return [Hash, nil] the stored Hash; nil if nothing was stored
+        def modify_my_accounts(action, hint: nil)
+          in_my_row_transaction(action, hint: hint) do |db, scope|
+            updated = yield read_row(db, STORE_SCRIPT, scope)
+            db.save_settings!(STORE_SCRIPT, updated, scope) unless updated.nil?
+            updated
+          end
+        end
+
+        # Runs the block in one transaction with this character's row scope,
+        # after moving any legacy data. Any error is reported and gives nil.
+        # @param action [String] what is being done, for error messages
+        # @param hint [String, nil] added to the error message on failure
+        # @yieldparam db [Lich::Common::DatabaseAdapter]
+        # @yieldparam scope [String] this character's row scope
+        # @return [Object, nil] what the block returned; nil on error
+        def in_my_row_transaction(action, hint: nil)
+          scope = my_scope
+          unless scope
+            Lich::Messaging.msg('info', "DRBanking: Can't #{action} before the character is known.")
+            return nil
+          end
+
+          db = adapter
+          in_transaction(db) do
+            migrate_legacy!(db)
+            yield db, scope
+          end
+        rescue StandardError => e
+          report_storage_error(action, e, hint: hint)
+          nil
+        end
+
+        # Runs the block in one write transaction (adapter.transaction), and
+        # holds back the row problems logged meanwhile (see log_row_problem)
+        # until the transaction has ended. Nested calls share the outermost
+        # call's buffer. The held-back lines are written however the block
+        # ends, error or not.
+        #
+        # This is defence in depth, not a fix for a known stall. Every
+        # connection Lich opens to lich.db3 (the Sequel pool, Lich.db, the
+        # session summary connection) waits for the lock in Ruby (see
+        # Lich::SQLiteBusyWait), so another thread's write that starts while
+        # this transaction holds the lock just waits for the commit. Holding
+        # the log lines back still keeps log IO out of the write lock, which
+        # every Lich session on this install waits on, and covers a connection
+        # left on SQLite's C busy timeout (sqlite3 without the busy_handler
+        # API): that waits with the GVL held, so this thread couldn't run again
+        # to commit and the whole process would stall for the busy timeout.
+        # @return [Object] what the block returned
+        def in_transaction(db, &block)
+          outer = Thread.current[DEFERRED_LOG_KEY]
+          Thread.current[DEFERRED_LOG_KEY] = outer || []
+          db.transaction(&block)
+        ensure
+          unless outer
+            held = Thread.current[DEFERRED_LOG_KEY] || []
+            Thread.current[DEFERRED_LOG_KEY] = nil
+            held.each { |line| Lich.log(line) }
+          end
+        end
+
+        # Logs a problem with a stored row: right away, or after the
+        # transaction when called inside in_transaction.
+        def log_row_problem(line)
+          held = Thread.current[DEFERRED_LOG_KEY]
+          held ? held << line : Lich.log(line)
+        end
+
+        # Moves the legacy game-wide blob into per-character rows. Must run
+        # inside in_transaction. Safe to run any number of times, and
+        # from several sessions at once:
+        # - A character that already has a row keeps it (even one that can't
+        #   be loaded). That row is newer than the blob, or was cleared on
+        #   purpose.
+        # - The 'banking' key leaves the old row in the same transaction, so
+        #   the next run finds nothing to do.
+        # @return [Boolean] true if there was legacy data to move
+        def migrate_legacy!(db)
+          game = game_code
+          return false unless game
+
+          entries = legacy_entries(read_row(db, LEGACY_SCRIPT, game), present_only: true)
+          return false unless entries
+
+          prefix = "#{game}:"
+          existing = db.scopes_by_prefix(STORE_SCRIPT, prefix)
+          entries.each do |name, towns|
+            scope = "#{prefix}#{name}"
+            next if existing.include?(scope)
+
+            db.save_settings!(STORE_SCRIPT, towns, scope)
+          end
+          db.update_settings!(LEGACY_SCRIPT, game) do |row|
+            row.delete(SETTINGS_KEY)
+            row
+          end
+          true
+        end
+
+        # Reads one row. A row that can't be loaded (a damaged blob can make
+        # Marshal.load raise almost any StandardError), or doesn't hold a
+        # Hash, is logged and treated as empty, so one corrupted row can't
+        # block every read and write of balances (a BALANCE line or
+        # `;banks reset` overwrites a character's own row; the old game-wide
+        # row is left as it is). Database errors still raise.
+        # @return [Hash]
+        def read_row(db, script, scope)
+          row = db.get_settings(script, scope)
+          return row if row.is_a?(Hash)
+
+          log_row_problem("error: DRBanking ignoring settings row #{script}/#{scope} holding a #{row.class}")
+          {}
+        rescue Sequel::Error
+          raise
+        rescue StandardError => e
+          log_row_problem("error: DRBanking ignoring unreadable settings row #{script}/#{scope}: #{e.class}: #{e.message}")
+          {}
+        end
+
+        # Extracts the well-formed character entries from a legacy row.
+        # DRBanking only ever stored Integer amounts; anything else (a
+        # non-finite Float, a Rational...) is dropped, so it can't raise later.
+        # @param row [Hash] the legacy game-wide row
+        # @param present_only [Boolean] return nil when the row has no 'banking' key
+        # @return [Hash, nil] { "CharName" => { "Town" => copper } }
+        def legacy_entries(row, present_only: false)
+          return nil if present_only && !(row.is_a?(Hash) && row.key?(SETTINGS_KEY))
+
+          blob = row.is_a?(Hash) ? row[SETTINGS_KEY] : nil
+          return {} unless blob.is_a?(Hash)
+
+          blob.each_with_object({}) do |(name, towns), entries|
+            next unless name.is_a?(String) && name.valid_encoding? && !name.strip.empty? && towns.is_a?(Hash)
+
+            entries[name] = towns.each_with_object({}) do |(town, copper), clean|
+              next unless town.is_a?(String)
+
+              clean[town] = copper.to_i if copper.is_a?(Integer) || (copper.is_a?(Float) && copper.finite?)
+            end
+          end
+        end
+
+        def report_storage_error(action, error, hint: nil)
+          suffix = hint ? " - #{hint}." : ''
+          Lich::Messaging.msg('bold', "DRBanking: could not #{action}: #{error.class}: #{error.message}#{suffix}")
+          Lich.log("error: DRBanking could not #{action}: #{error.class}: #{error.message}\n\t#{(error.backtrace || []).first(5).join("\n\t")}")
+        end
+
+        # Applies a deposit or withdrawal to the recorded balance, atomically.
+        # Without a recorded balance there is nothing to apply it to.
+        def change_balance(town, delta, description)
+          unknown = false
+          stored = modify_my_accounts("save the #{town} balance", hint: SYNC_HINT) do |accounts|
+            if accounts[town].nil?
+              unknown = true
+              nil
+            else
+              accounts[town] = [accounts[town].to_i + delta, 0].max
+              accounts
+            end
+          end
+
+          if unknown
+            Lich::Messaging.msg('info', "DRBanking: #{description}. No prior balance recorded - #{SYNC_HINT}.")
+          elsif stored
+            Lich::Messaging.msg('info', "DRBanking: Updated #{town} balance to #{format_currency(stored[town])}")
+          end
         end
 
         def handle_deposit_portion(town, match)
-          amount = match[:amount].to_i
-          denomination = match[:denomination]
-          copper = to_copper(amount, denomination)
-
-          current = my_accounts[town]
-          if current.nil?
-            # No prior balance recorded - can't calculate new balance
-            Lich::Messaging.msg('info', "DRBanking: Deposited #{format_currency(copper)} at #{town}. " \
-                                        'No prior balance recorded - check BALANCE to sync.')
-            return
-          end
-
-          update_balance(town, current.to_i + copper)
+          copper = to_copper(match[:amount].to_i, match[:denomination])
+          change_balance(town, copper, "Deposited #{format_currency(copper)} at #{town}")
         end
 
         def handle_deposit_all(town)
@@ -317,20 +618,8 @@ module Lich
         end
 
         def handle_withdraw_portion(town, match)
-          amount = match[:amount].to_i
-          denomination = match[:denomination]
-          copper = to_copper(amount, denomination)
-
-          current = my_accounts[town]
-          if current.nil?
-            # No prior balance recorded - can't calculate new balance
-            Lich::Messaging.msg('info', "DRBanking: Withdrew #{format_currency(copper)} from #{town}. " \
-                                        'No prior balance recorded - check BALANCE to sync.')
-            return
-          end
-
-          new_balance = [current.to_i - copper, 0].max
-          update_balance(town, new_balance)
+          copper = to_copper(match[:amount].to_i, match[:denomination])
+          change_balance(town, -copper, "Withdrew #{format_currency(copper)} from #{town}")
         end
 
         def handle_withdraw_all(town)

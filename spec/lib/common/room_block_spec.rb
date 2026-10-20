@@ -3,6 +3,7 @@
 require_relative '../../spec_helper'
 require 'common/room_block'
 require 'common/markup'
+require_relative '../../support/global_defs_spec_source'
 
 # Saga-identity <room> blocks (verbatim shape, names pseudonymized) and the
 # legacy layout they map to.
@@ -365,8 +366,7 @@ end
 # suite does not load whole) so the spec exercises the shipped code.
 RSpec.describe 'reget on Saga-identity <room> blocks' do
   let(:reget_host) do
-    source = File.read(File.join(LIB_DIR, 'global_defs.rb'))[/^def reget\(.*?^end\n/m]
-    Object.new.tap { |o| o.singleton_class.class_eval(source) }
+    Object.new.tap { |o| GlobalDefsSpecSource.define(o.singleton_class, 'reget') }
   end
 
   before do
