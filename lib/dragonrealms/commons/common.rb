@@ -62,9 +62,9 @@ module Lich
       ].freeze
 
       # Seconds from the first immobile reply that retreat keeps trying,
-      # about once a second, while held or rooted. bput's default timeout, so
-      # a hold costs about as long as one RETREAT that drew no recognised
-      # reply.
+      # about once a second, while held or rooted. One budget per call,
+      # shared by every hold in it. bput's default timeout, so a hold costs
+      # about as long as one RETREAT that drew no recognised reply.
       RETREAT_HOLD_TIMEOUT = 15
 
       # Assess teach parsing patterns
@@ -804,9 +804,11 @@ module Lich
       # While held or rooted (the immobile reply, to RETREAT or to STAND) it
       # pauses 1 s and tries again for RETREAT_HOLD_TIMEOUT seconds from the
       # first immobile reply, so entry roundtime and earlier steps don't use
-      # up that time. The last try goes out up to 1 s after that deadline, so
-      # a hold that ends within RETREAT_HOLD_TIMEOUT still ends in a retreat.
-      # A longer hold returns false. When the character must stand but can't
+      # up that time. That one budget covers every hold in the call, so holds
+      # that alternate with steps back can't go on unbounded. The last try
+      # goes out up to 1 s after the deadline, so holds that end within
+      # RETREAT_HOLD_TIMEOUT of the first immobile reply still end in a
+      # retreat; longer ones return false. When the character must stand but can't
       # (overburdened, unconscious, no room), no reply says when that ends,
       # so it returns false. It pauses 1 s before it gives up either way, so
       # a caller that calls it again at once sends at most about one RETREAT

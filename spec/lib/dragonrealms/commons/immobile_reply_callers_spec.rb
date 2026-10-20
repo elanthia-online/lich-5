@@ -584,6 +584,35 @@ RSpec.describe 'Callers that list the immobile reply' do
         expect(sent).to eq(['retreat'] * 4)
       end
 
+      # One budget covers every hold in a call. A per-hold deadline would let
+      # holds that alternate with steps back to pole range go on unbounded.
+      it 'shares one deadline across holds in one call' do
+        # Each step back to pole range takes 1 s. Holds come at 0, 2 ... 16 s;
+        # the one at 16 s is past the deadline set by the first (15 s).
+        game_with_clock('retreat' => lambda {
+          next immobile if sent.size.odd?
+
+          clock[:offset] += 1
+          'You retreat back to pole range.'
+        })
+        expect(drc.retreat).to be false
+        expect(sent.size).to eq(17)
+        expect(clock[:offset]).to eq(17)
+      end
+
+      it 'gives up when a second hold in the same call runs past the first hold\'s deadline' do
+        game_with_clock('retreat' => lambda {
+          case clock[:offset]
+          when 0...12 then immobile
+          when 12...13 then (clock[:offset] += 1; 'You retreat back to pole range.')
+          when 13...17 then immobile
+          else 'You retreat from combat.'
+          end
+        })
+        expect(drc.retreat).to be false
+        expect(clock[:offset]).to eq(hold_timeout + 1)
+      end
+
       it 'starts a new deadline on each call' do
         game_with_clock('retreat' => held_after(hold_timeout + 2, 'You retreat from combat.'))
         expect(drc.retreat).to be false
