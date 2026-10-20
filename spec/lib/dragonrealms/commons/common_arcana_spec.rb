@@ -2,8 +2,9 @@
 
 require_relative '../../../spec_helper'
 
-# drvariables publishes the $MANA_MAP global that parse_mana_message reads; it
-# is a pure constants file, so requiring it here is safe.
+# drvariables publishes the $MANA_MAP global that perc_mana and
+# parse_mana_message read; it is a pure constants file, so requiring it here is
+# safe.
 require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drvariables.rb')
 
 # Ensure XMLData has prepared_spell accessor for tests
@@ -1151,6 +1152,19 @@ RSpec.describe Lich::DragonRealms::DRCA do
         line = 'You reach out with your senses and see blazing (20/21) streams of golden Holy mana radiating through the area.'
         allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
         expect(DRCA.perc_mana).to be_nil
+      end
+
+      it 'reads the level from the adjective when the figure is out of a maximum other than 21' do
+        line = 'You reach out with your senses and see glaring (9/10) streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to eq('illusion' => 19)
+      end
+
+      it 'skips a book whose figure is out of a maximum other than 21 and whose adjective is unknown' do
+        line = 'You reach out with your senses and see intense (9/10) streams of cold, white Lunar mana available for the Illusion book.'
+        allow(Lich::Util).to receive(:issue_command).and_return([line, 'Roundtime: 3 sec.'])
+        expect(DRCA.perc_mana).to be_nil
+        expect(bold_messages.any? { |m| m.include?("unknown mana level 'intense'") }).to be true
       end
 
       it 'takes the (N/M) figure over the adjective when they disagree' do

@@ -141,7 +141,7 @@ module Lich
       # One line of a Moon Mage's PERC MANA reply, one per Lunar spellbook, e.g.
       # "You reach out with your senses and see glaring (19/21) streams of cold,
       # white Lunar mana available for the Illusion book."
-      PERC_MANA_BOOK_PATTERN = %r{\A\s*You reach out with your .+? and (?:see|hear) (?<adj>\w+) (?:\((?<level>\d+)/\d+\) )?streams of .* mana available for the (?<book>.+?) book}
+      PERC_MANA_BOOK_PATTERN = %r{\A\s*You reach out with your .+? and (?:see|hear) (?<adj>\w+) (?:\((?<level>\d+)/(?<max>\d+)\) )?streams of .* mana available for the (?<book>.+?) book}
       SYMBIOSIS_PATTERN = /combine the weaves of the (?<type>\w+) symbiosis/
       DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
       DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
@@ -785,8 +785,8 @@ module Lich
       # 'fabrication', 'illusion', 'noematics') to its level on the 21-step mana
       # scale (1 = faint, 21 = blinding). Only the books named in the reply are
       # keys. The level is the reply's (N/21) figure, or the adjective's place on
-      # the scale when the figure is missing; a book line with neither is skipped
-      # with a bold message. A cut-off reply prints a bold message and returns
+      # the scale when the figure is missing or out of some other maximum; a book
+      # line with neither is skipped with a bold message. A cut-off reply prints a bold message and returns
       # the books that arrived. Returns nil when no book line was captured.
       #
       # Other magic users send PERC and get a single Integer level.
@@ -814,7 +814,7 @@ module Lich
             match = PERC_MANA_BOOK_PATTERN.match(line)
             next unless match
 
-            level = if match[:level]
+            level = if match[:level] && match[:max].to_i == $MANA_MAP['good'].length
                       match[:level].to_i
                     elsif (idx = $MANA_MAP['good'].index(match[:adj]))
                       idx + 1
