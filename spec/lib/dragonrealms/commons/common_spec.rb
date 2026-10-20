@@ -579,17 +579,186 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
   end
 
+  describe '.capture_reply' do
+    it 'asks issue_command for the end line, quietly, with the given stream and timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_reply('commune sense', /benevolent/, /Roundtime/, usexml: false, timeout: 7)
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'commune sense', /benevolent/, /Roundtime/,
+        usexml: false, quiet: true, include_end: true, timeout: 7
+      )
+    end
+
+    it 'defaults the timeout to 5 seconds' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)
+      expect(Lich::Util).to have_received(:issue_command).with(anything, anything, anything, hash_including(timeout: 5))
+    end
+
+    it 'requires usexml to be given' do
+      expect { described_class.capture_reply('assess teach', /teaching/, /Roundtime/) }.to raise_error(ArgumentError, /usexml/)
+    end
+
+    it 'drops the end line and reports complete when the reply ends on it' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', 'Roundtime: 3 sec.'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class'], true])
+    end
+
+    it 'keeps every line and reports incomplete when the end line never arrived' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', 'Bar is teaching a class'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class', 'Bar is teaching a class'], false])
+    end
+
+    it 'returns [[], false] on a timeout before the start line ([])' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)).to eq([[], false])
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false)).to eq([[], false])
+    end
+
+    it 'does not count a lone start line that matches the end pattern as complete' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Roundtime teaching'])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Roundtime teaching'], false])
+    end
+
+    it 'judges completeness against the end pattern it was given, not the prompt' do
+      prompt = '<prompt time="1700000000">&gt;</prompt>'
+      allow(Lich::Util).to receive(:issue_command).and_return(['Foo is teaching a class', prompt])
+      expect(described_class.capture_reply('assess teach', /teaching/, /Roundtime/, usexml: false))
+        .to eq([['Foo is teaching a class', prompt], false])
+    end
+  end
+
+  describe '.capture_to_prompt' do
+    let(:prompt) { '<prompt time="1700000000">&gt;</prompt>' }
+
+    it 'asks issue_command for the prompt line, quietly, over XML, with the given timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('wealth', /^Wealth:/, timeout: 12)
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'wealth', /^Wealth:/, /<prompt/,
+        usexml: true, quiet: true, include_end: true, timeout: 12
+      )
+    end
+
+    it 'defaults the timeout to 5 seconds' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.capture_to_prompt('health', /^Your body feels/)
+      expect(Lich::Util).to have_received(:issue_command).with(anything, anything, anything, hash_including(timeout: 5))
+    end
+
+    it 'drops the prompt line and reports complete when the reply ends on the prompt' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.', prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], true])
+    end
+
+    it 'returns [[], false] on a timeout before the start line ([])' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[], false])
+    end
+
+    it 'keeps every line and reports incomplete when the prompt never arrived' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['Wealth:', '  5 copper Kronars.'])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([['Wealth:', '  5 copper Kronars.'], false])
+    end
+
+    it 'does not count a lone prompt line as a complete reply' do
+      allow(Lich::Util).to receive(:issue_command).and_return([prompt])
+      expect(described_class.capture_to_prompt('wealth', /^Wealth:/)).to eq([[prompt], false])
+    end
+
+    it 'does not mutate the array issue_command returned' do
+      raw = ['Wealth:', prompt].freeze
+      allow(Lich::Util).to receive(:issue_command).and_return(raw)
+      expect { described_class.capture_to_prompt('wealth', /^Wealth:/) }.not_to raise_error
+      expect(raw).to eq(['Wealth:', prompt])
+    end
+  end
+
   describe '.assess_teach' do
-    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return(nil); expect(described_class.assess_teach).to eq({}) }
+    # Lich::Util.issue_command returns [] on a timeout; it never returns nil.
+    it('returns empty hash on timeout') { allow(Lich::Util).to receive(:issue_command).and_return([]); expect(described_class.assess_teach).to eq({}) }
+
+    it 'prints a timeout message when issue_command returns []' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      expect(Lich::Messaging).to receive(:msg).with('bold', 'DRC: Failed to capture ASSESS TEACH output (timeout).')
+      described_class.assess_teach
+    end
+
+    it 'treats nil from issue_command the same as a timeout' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /DRC: Failed to capture ASSESS TEACH output/)
+      expect(described_class.assess_teach).to eq({})
+    end
+
+    it 'prints no timeout message when no one is teaching' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching'])
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.assess_teach
+    end
     it('returns empty hash when no one is teaching') { allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching']); expect(described_class.assess_teach).to eq({}) }
     it('returns empty hash when "You are teaching"') { allow(Lich::Util).to receive(:issue_command).and_return(['You are teaching a class']); expect(described_class.assess_teach).to eq({}) }
 
     it 'returns parsed hash when teachers found' do
       allow(Lich::Util).to receive(:issue_command).and_return([
                                                                 'Foo is teaching a class on Sorcery which is still open to new students',
-                                                                'Bar is teaching a class on Scholarship which is still open to new students'
+                                                                'Bar is teaching a class on Scholarship which is still open to new students',
+                                                                'Roundtime: 2 sec.'
                                                               ])
       expect(described_class.assess_teach).to eq({ 'Foo' => 'Sorcery', 'Bar' => 'Scholarship' })
+    end
+
+    it 'asks issue_command for the Roundtime line so a cut-off reply can be told apart' do
+      allow(Lich::Util).to receive(:issue_command).and_return([])
+      described_class.assess_teach
+      expect(Lich::Util).to have_received(:issue_command).with(
+        'assess teach', anything, /Roundtime/,
+        usexml: false, quiet: true, include_end: true, timeout: 5
+      )
+    end
+
+    it 'prints no message on a complete reply' do
+      allow(Lich::Util).to receive(:issue_command).and_return([
+                                                                'Foo is teaching a class on Sorcery which is still open to new students',
+                                                                'Roundtime: 2 sec.'
+                                                              ])
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.assess_teach
+    end
+
+    context 'when the reply is cut off before its Roundtime line' do
+      before do
+        allow(Lich::Util).to receive(:issue_command).and_return([
+                                                                  'Foo is teaching a class on Sorcery which is still open to new students'
+                                                                ])
+      end
+
+      it 'prints a cut-off message' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', 'DRC: ASSESS TEACH output was cut off (timeout); the result is incomplete.')
+        described_class.assess_teach
+      end
+
+      it 'returns the classes that did arrive' do
+        allow(Lich::Messaging).to receive(:msg)
+        expect(described_class.assess_teach).to eq({ 'Foo' => 'Sorcery' })
+      end
+    end
+
+    it 'prints no cut-off message for a "no one is teaching" reply without a Roundtime line' do
+      allow(Lich::Util).to receive(:issue_command).and_return(['No one seems to be teaching.'])
+      expect(Lich::Messaging).not_to receive(:msg)
+      expect(described_class.assess_teach).to eq({})
     end
   end
 
