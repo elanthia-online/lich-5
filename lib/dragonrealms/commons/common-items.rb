@@ -819,7 +819,11 @@ module Lich
           dispose_held_trash(item, *retry_args, retries: retries - 1)
         else
           # No reply matched before bput's timeout. If a hand that held the
-          # item now holds something else, the command took effect.
+          # item now holds something else, count it as disposed. That only
+          # says the item left the hand, for any reason (the command took
+          # effect, or it decayed, was stolen or dissipated), not that it
+          # reached the receptacle. Either way it is gone, and getting
+          # another to dispose of is the one thing to avoid.
           return :failure if hands_before.all? { |hand, held| dispose_hand_state(hand) == held }
 
           Lich::Messaging.msg("bold", "DRCI: No reply to '#{command}', but '#{item}' has left your hands; treating it as disposed.")
