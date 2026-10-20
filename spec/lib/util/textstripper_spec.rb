@@ -27,6 +27,16 @@ RSpec.describe Lich::Util::TextStripper do
     end
   end
 
+  describe '.strip when Kramdown failed to load' do
+    it 'still returns the input when XML parsing fails' do
+      hide_const('Kramdown')
+      allow(described_class).to receive(:strip_xml_with_ox).and_raise(Ox::ParseError, 'bad xml')
+      allow(described_class).to receive(:log_error)
+
+      expect(described_class.strip('x ]]> y <z', :xml)).to eq('x ]]> y <z')
+    end
+  end
+
   describe '.strip with XML mode (Ox-backed)' do
     # U+00A0 (nbsp) and other non-ASCII expected values are built via pack to
     # keep this source file ASCII-only (enforced by the custom RuboCop cop).

@@ -201,16 +201,13 @@ module Lich
           else
             strip_with_kramdown(text, validated_mode)
           end
-        rescue Kramdown::Error => e
-          # Handle Kramdown parsing errors (HTML/MARKUP/MARKDOWN modes)
-          log_error("Failed to parse #{validated_mode}", e)
-          text
         rescue Ox::ParseError => e
           # Handle Ox parsing errors (XML mode)
           log_error("Failed to parse #{validated_mode}", e)
           text
         rescue StandardError => e
-          # Catch any other unexpected errors during parsing
+          # Kramdown errors land here too: naming Kramdown::Error in a rescue
+          # raises NameError when kramdown failed to load
           log_error("Unexpected error during #{validated_mode} parsing", e)
           text
         end
