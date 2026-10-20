@@ -200,7 +200,8 @@ RSpec.describe Lich::Common::Settings, "Settings[]= under a navigation path, thr
     expect(write_under([:list], -1, 'x')).to be_nil
 
     expect(stored).to eq(list: [1, 2])
-    expect(@errors).to include(a_string_including("not saved"))
+    expect(@errors).to include(a_string_including("not saved", "-1 under [:list]", "only written at a position from 0 up"))
+    expect(@errors).not_to include(a_string_including("can't index"))
   end
 
   it "refuses a path through a value that is not a container, and tells the user" do

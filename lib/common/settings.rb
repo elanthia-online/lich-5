@@ -1084,7 +1084,7 @@ module Lich
         if !container?(container)
           [nil, "#{path.inspect} does not lead to a container"]
         elsif container.is_a?(Array) && !(name.is_a?(Integer) && name >= 0)
-          [nil, "#{path.inspect} holds an Array, which #{name.inspect} can't index"]
+          [nil, "#{path.inspect} holds an Array, which is only written at a position from 0 up, not #{name.inspect}"]
         else
           [container, nil]
         end
