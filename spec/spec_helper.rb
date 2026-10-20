@@ -651,6 +651,7 @@ end
 # These methods are used throughout lich-5 for output to the game client.
 # In tests, they either suppress output or print to stdout (if DEBUG=1).
 
+# Returns nil, as the production respond and _respond do.
 def respond(first = "", *messages)
   return unless ENV['DEBUG']
 
@@ -660,6 +661,7 @@ def respond(first = "", *messages)
     puts first.to_s.chomp
   end
   messages.flatten.each { |message| puts message.to_s.chomp }
+  nil
 end
 
 def _respond(first = "", *messages)
@@ -690,7 +692,7 @@ module XMLData
   @dr_active_spells_stellar_percentage = 0
 
   class << self
-    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm, :show_room_id
+    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm, :nav_count, :show_room_id
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
     attr_accessor :current_target_ids
 
@@ -726,6 +728,7 @@ module XMLData
       @injuries = {}
       @room_id = 0
       @previous_nav_rm = nil
+      @nav_count = 0
       @show_room_id = false
       @room_title = ''
       @room_description = ''
@@ -890,10 +893,12 @@ module Lich
       def msg_format(_format, _msg); end unless respond_to?(:msg_format)
       def mono(_msg); end unless respond_to?(:mono)
 
+      # Returns nil, as the production msg does.
       def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
         puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
+        nil
       end unless respond_to?(:msg)
 
       def messages
