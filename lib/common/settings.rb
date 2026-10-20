@@ -6,6 +6,7 @@ module Lich
     # rubocop:disable Lint/RedundantRequireStatement
     require 'set' # Ensure Set is required for Ruby < 3.2, may be removed in future versions
     # rubocop:enable Lint/RedundantRequireStatement
+    require 'monitor'
 
     # settings_proxy.rb is now loaded after Settings module is defined, to allow it to call Settings._log
     # require_relative 'settings/settings_proxy'
@@ -93,8 +94,37 @@ module Lich
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
+      # One lock per cache entry (script and scope), see with_cache_lock.
+      @cache_locks = {}
+      @cache_locks_guard = Mutex.new
       DEFAULT_SCOPE = ":".freeze
       @safe_navigation_active = false
+
+      # Runs the block holding the lock for one cache entry.
+      #
+      # Every write (top-level, nested through a SettingsProxy, or a whole row)
+      # and every fill after a cache miss runs its database calls and its cache
+      # update under the entry's lock. Without it, two threads can finish in
+      # one order in the database and in the other order in the cache: the
+      # cache then holds an older row over a newer one, and this process's
+      # reads miss the newer keys until the row is written again. Cache hits
+      # do not take the lock.
+      #
+      # The lock is per entry, so a top-level write retrying while another
+      # session keeps changing the row holds up only threads using the same
+      # script and scope, not every script (its pauses release the GVL). A
+      # write waiting for a locked database is different: SQLite's busy
+      # timeout waits with the GVL held, so it stalls every thread of the
+      # process whatever lock it holds.
+      #
+      # A Monitor, so a write that calls another write for the same entry in
+      # the same thread does not deadlock. No code takes two entries' locks at
+      # once.
+      def self.with_cache_lock(cache_key, &block)
+        lock = @cache_locks_guard.synchronize { @cache_locks[cache_key] ||= Monitor.new }
+        lock.synchronize(&block)
+      end
+      private_class_method :with_cache_lock
 
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
@@ -155,19 +185,25 @@ module Lich
 
         script_name ||= ""
         cache_key = "#{script_name}::#{scope}"
-        root = @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+        root = @settings_cache[cache_key] || with_cache_lock(cache_key) { @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope) }
 
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
 
       def self.save_proxy_changes(proxy)
+        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
+        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
+        with_cache_lock("#{script_name || ""}::#{proxy.scope}") { store_proxy_changes(proxy, script_name) }
+      end
+
+      # save_proxy_changes's refresh, database write and cache update, under
+      # the cache entry's lock.
+      def self.store_proxy_changes(proxy, script_name)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Initiated for proxy.scope: #{proxy.scope.inspect}, proxy.path: #{proxy.path.inspect}, proxy.target_object_id: #{proxy.target.object_id}" })
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: proxy.target data: #{proxy.target.inspect}" })
 
         path        = proxy.path
         scope       = proxy.scope
-        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
-        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
         cache_key   = "#{script_name || ""}::#{scope}"
 
         # Local helper to keep cache in sync with the just-persisted root
@@ -339,6 +375,7 @@ module Lich
         save_to_database(current_root_for_scope, scope, script_name: script_name)
         sync_cache.call(current_root_for_scope)
       end
+      private_class_method :store_proxy_changes
 
       def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
@@ -352,9 +389,11 @@ module Lich
           return cached_data.dup
         else
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Cache miss for #{cache_key}. Loading from DB." })
-          settings = @db_adapter.get_settings(script_name, scope)
+          settings = with_cache_lock(cache_key) do
+            # Another thread may have filled the entry while this one waited.
+            @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+          end
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Loaded from DB (object_id: #{settings.object_id}): #{settings.inspect}" })
-          @settings_cache[cache_key] = settings
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "current_script_settings: Stored in cache (object_id: #{@settings_cache[cache_key].object_id}). Returning DUP." })
           return settings.dup
         end
@@ -376,19 +415,32 @@ module Lich
         unwrapped_settings = unwrap_proxies(data_to_save)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_to_database: Data AFTER unwrap_proxies (object_id: #{unwrapped_settings.object_id}): #{unwrapped_settings.inspect}" })
 
-        @db_adapter.save_settings(script_name, unwrapped_settings, scope)
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
-
-        @settings_cache[cache_key] = unwrapped_settings
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+        with_cache_lock(cache_key) do
+          # Thread#kill and Thread#raise (Script#kill) wait until the cache
+          # holds what was just written, so a script killed right after the
+          # row was committed does not leave this process's cache behind the
+          # database. As in DatabaseAdapter#update_settings, only the store is
+          # held back.
+          Thread.handle_interrupt(Object => :never) do
+            @db_adapter.save_settings(script_name, unwrapped_settings, scope)
+            @settings_cache[cache_key] = unwrapped_settings
+          end
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+        end
       end
 
       def self.refresh_data(scope = DEFAULT_SCOPE)
         script_name = Script.current.name
         cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
-        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Deleting cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
-        @settings_cache.delete(cache_key)
-        current_script_settings(scope)
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "refresh_data: Reloading cache for scope: #{scope.inspect}, cache_key: #{cache_key}" })
+        # Reload under the entry's lock, replacing whatever is cached. A cache
+        # miss fill keeps a row another thread cached while it waited, which
+        # could be one read before this call began.
+        settings = with_cache_lock(cache_key) do
+          @settings_cache[cache_key] = @db_adapter.get_settings(script_name, scope)
+        end
+        settings.dup
       end
 
       def self.reset_path_and_return(value)
@@ -426,26 +478,66 @@ module Lich
         unwrapped_value = unwrap_proxies(value)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: unwrapped_value: #{unwrapped_value.inspect}" })
 
-        current_root = current_script_settings(scope, script_name: script_name)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: current_root (DUP) for scope #{scope.inspect} (object_id: #{current_root.object_id}): #{current_root.inspect}" })
-
-        if @path_navigator.path.empty?
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: Path is empty. Setting '#{name}' on current_root." })
-          current_root[name] = unwrapped_value
-          save_to_database(current_root, scope, script_name: script_name)
-        else
-          if !@path_navigator.path.empty?
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: WARNING: Called with non-empty path_navigator path: #{@path_navigator.path.inspect}. This is unusual for Char/GameSettings direct assignment." })
-          end
-          if current_root.is_a?(Hash)
-            current_root[name] = unwrapped_value
-            save_to_database(current_root, scope, script_name: script_name)
-          else
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: current_root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{current_root.class}" })
-          end
+        unless @path_navigator.path.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: WARNING: Called with non-empty path_navigator path: #{@path_navigator.path.inspect}. This is unusual for Char/GameSettings direct assignment." })
         end
+
+        write_top_level_key(scope, name, unwrapped_value, script_name: script_name)
         reset_path_and_return(value)
       end
+
+      # Stores one top-level key without rewriting the rest of the row.
+      #
+      # Other Lich sessions (separate processes) write the same row, and this
+      # process's cached copy does not know about their keys. So the key is
+      # applied to the row as it is in the database right now, and stored only
+      # if no one changed the row in between (DatabaseAdapter#update_settings
+      # retries otherwise). The cache then takes the row as stored. If the
+      # write fails, the cache is left as it was: it never received the value
+      # (the block changes the row just read, not the cached one), and
+      # dropping it would send the next read to a database that may still be
+      # locked, where get_settings raises into the script. Changes made only to
+      # the cached row (for example through SettingsProxy#to_h) are not saved
+      # by this write; the stored row replaces them.
+      #
+      # @return [Hash, nil] the stored row, or nil when nothing was written
+      def self.write_top_level_key(scope, name, value, script_name: nil)
+        script_name ||= Script.current.name
+        if script_name.nil? || script_name.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
+          return nil
+        end
+
+        cache_key = "#{script_name}::#{scope}"
+        with_cache_lock(cache_key) { store_top_level_key(script_name, cache_key, scope, name, value) }
+      end
+      private_class_method :write_top_level_key
+
+      # write_top_level_key's database write and cache update, under the cache
+      # entry's lock (see with_cache_lock). The adapter updates the cache as
+      # part of the store (on_stored), so a script killed right after the row
+      # was committed does not leave the cache without it.
+      def self.store_top_level_key(script_name, cache_key, scope, name, value)
+        cache_stored_row = ->(row) { @settings_cache[cache_key] = row }
+        stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
+          if fresh_root.is_a?(Hash)
+            fresh_root[name] = value
+            fresh_root
+          else
+            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: stored root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{fresh_root.class}" })
+            Lich::Messaging.msg("error", "--- Error: Report this - settings for #{script_name} (#{scope}) are stored as #{fresh_root.class}, not a Hash; '#{name}' was not saved ---")
+            nil
+          end
+        end
+
+        if stored
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "write_top_level_key: Saved '#{name}' for #{cache_key}; cache now holds the stored row." })
+        else
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "write_top_level_key: '#{name}' was NOT saved for #{cache_key}; cache left as it was." })
+        end
+        stored
+      end
+      private_class_method :store_top_level_key
 
       def self.[](name)
         scope_to_use = DEFAULT_SCOPE
@@ -483,15 +575,20 @@ module Lich
         if @path_navigator.path.empty?
           set_script_settings(scope_to_use, name, value)
         else
-          target, root_settings = navigate_to_path(true, scope_to_use)
-          if target && (target.is_a?(Hash) || target.is_a?(Array))
-            actual_value = value.is_a?(SettingsProxy) ? unwrap_proxies(value) : value
-            target[name] = actual_value
-            save_to_database(root_settings, scope_to_use)
-            reset_path_and_return(value)
-          else
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: Cannot assign to non-container or nil target at path #{@path_navigator.path.inspect}" })
-            reset_path_and_return(nil)
+          # This saves the whole row it navigated, so the read and the save run
+          # under one hold of the entry's lock (see with_cache_lock). Otherwise
+          # a write another thread stores in between is erased by the save.
+          with_cache_lock("#{Script.current.name || ""}::#{scope_to_use}") do
+            target, root_settings = navigate_to_path(true, scope_to_use)
+            if target && (target.is_a?(Hash) || target.is_a?(Array))
+              actual_value = value.is_a?(SettingsProxy) ? unwrap_proxies(value) : value
+              target[name] = actual_value
+              save_to_database(root_settings, scope_to_use)
+              reset_path_and_return(value)
+            else
+              _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "Settings.[]=: Cannot assign to non-container or nil target at path #{@path_navigator.path.inspect}" })
+              reset_path_and_return(nil)
+            end
           end
         end
       end

@@ -114,6 +114,19 @@ module Lich
           VALID_REALMS.include?(realm)
         end
 
+        # Compares the running Lich's `LICH_VERSION` against a minimum version.
+        #
+        # Kept only for backward compatibility: nothing in Lich calls it since
+        # {format_launch_flag} stopped checking the version, and it will be
+        # removed in a later change.
+        #
+        # @param major [Integer] minimum major version
+        # @param minor [Integer] minimum minor version
+        # @param patch [Integer] minimum patch version
+        # @return [Boolean] true when `LICH_VERSION` is defined and at least
+        #   major.minor.patch (a prerelease ranks below its release)
+        # @deprecated Compare `Gem::Version.new(LICH_VERSION)` against the
+        #   minimum version directly.  Deprecated 10/2026
         def self.lich_version_at_least?(major, minor = 0, patch = 0)
           return false unless defined?(LICH_VERSION)
 
@@ -619,27 +632,20 @@ module Lich
           requested_frontend
         end
 
-        # Formats the game instance launch flag for Lich based on version.
+        # Formats the game instance launch flag for a spawned Lich session.
         #
-        # Older versions of Lich (pre-5.12) only recognize specific lowercase flags
-        # (e.g., `--gst`, `--drt`). Newer versions (5.12+) accept generalized `--GAMECODE` format.
+        # Always emits the generalized `--GAMECODE` form that
+        # {resolve_instance} parses. Every Lich that ships this method
+        # (5.13.0-beta.3 and later) accepts that form. A non-blank code is
+        # upcased and passed through unvalidated; the child Lich reports an
+        # invalid instance itself.
         #
-        # @param game_code [String, Symbol] the game instance code (e.g., 'GS3', 'GST', 'GSX')
-        # @return [String, nil] the correctly formatted launch flag (e.g., '--gst', '--GSX'), or nil if not needed
+        # @param game_code [String, Symbol, nil] the game instance code (e.g., 'GS3', 'GST', 'DRX')
+        # @return [String, nil] the upcased launch flag (e.g., '--GS3', '--GST'), or nil when game_code is blank
         def self.format_launch_flag(game_code)
           return nil if game_code.to_s.strip.empty?
 
-          normalized_code = game_code.to_s.upcase
-
-          if LoginHelpers.lich_version_at_least?(5, 12, 0)
-            "--#{normalized_code}"
-          else
-            case normalized_code
-            when 'GST' then '--gst'
-            when 'DRT' then '--drt'
-            else nil
-            end
-          end
+          "--#{game_code.to_s.upcase}"
         end
       end
     end

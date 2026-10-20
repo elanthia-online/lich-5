@@ -266,30 +266,80 @@ module Lich
         end
       end
 
+      # Finds the recipe whose name matches item_name (a case-insensitive
+      # regex). A single match, or a single exact-name match, is returned
+      # directly. Otherwise the matches are listed as a numbered menu and the
+      # user picks one with ;send #. Lines that are not a bare number are
+      # ignored (they may be game output); a number outside the menu
+      # re-prompts. The chosen recipe is returned by its menu position, so a
+      # pick never resolves to a different recipe with a similar or
+      # duplicate name.
+      #
+      # @param recipes [Array<Hash>] recipe entries with at least 'name'
+      # @param item_name [String] full or partial recipe name
+      # @return [Hash, nil] the chosen recipe, or nil when nothing matches
       def recipe_lookup(recipes, item_name)
-        match_names = recipes.map { |x| x['name'] }.select { |x| x =~ /#{item_name}/i }
-        case match_names.length
+        matches = recipes.select { |x| x['name'] =~ /#{item_name}/i }
+        case matches.length
         when 0
           Lich::Messaging.msg('bold', "DRCC: No recipe in base-recipes.yaml matches #{item_name}")
           nil
         when 1
-          recipes.find { |x| x['name'] =~ /#{item_name}/i }
+          matches.first
         else
-          exact_matches = recipes.map { |x| x['name'] }.select { |x| x == item_name }
+          exact_matches = matches.select { |x| x['name'] == item_name }
+          return exact_matches.first if exact_matches.length == 1
 
-          if exact_matches.length == 1
-            return recipes.find { |x| x['name'] == item_name }
+          # The full-name hint only helps when the full name was not typed and
+          # at least one listed name is unique; a name shared by several
+          # recipes shows this menu however it is typed.
+          if exact_matches.empty? && matches.map { |x| x['name'] }.tally.value?(1)
+            Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
           end
-
-          Lich::Messaging.msg('bold', "DRCC: Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
           Lich::Messaging.msg('plain', "DRCC: Please select desired recipe #{$clean_lich_char}send #")
-          match_names.each_with_index { |x, i| respond "    #{i + 1}: #{x}" }
-          line = get until line.strip =~ /^(\d+)$/
-          match = line.strip.match(/^(?<num>\d+)$/)
-          item_name = match_names[match[:num].to_i - 1]
-          recipes.find { |x| x['name'] =~ /#{item_name}/i }
+          recipe_menu_labels(matches).each_with_index { |label, i| respond "    #{i + 1}: #{label}" }
+          matches[recipe_menu_choice(matches.length) - 1]
         end
       end
+
+      # Menu labels for recipe_lookup. A name that appears more than once is
+      # suffixed with its type and chapter so the entries can be told apart,
+      # and with its volume too when the type and chapter are also shared.
+      # Entries that are still identical after that (a duplicate in the data)
+      # are numbered "entry k of n" so every menu line is distinct.
+      def recipe_menu_labels(matches)
+        name_counts = matches.map { |x| x['name'] }.tally
+        place_counts = matches.map { |x| x.values_at('name', 'type', 'chapter') }.tally
+        labels = matches.map do |x|
+          next x['name'] if name_counts[x['name']] == 1
+
+          details = [x['type'], "chapter #{x['chapter']}"]
+          details << "volume #{x['volume']}" if x['volume'] && place_counts[x.values_at('name', 'type', 'chapter')] > 1
+          "#{x['name']} (#{details.join(', ')})"
+        end
+        label_counts = labels.tally
+        seen = Hash.new(0)
+        labels.map do |label|
+          next label if label_counts[label] == 1
+
+          "#{label.delete_suffix(')')}, entry #{seen[label] += 1} of #{label_counts[label]})"
+        end
+      end
+
+      # Reads lines until one is a bare number from 1 to count and returns it.
+      def recipe_menu_choice(count)
+        loop do
+          line = get.to_s.strip
+          next unless line =~ /\A\d+\z/
+
+          choice = line.to_i
+          return choice if choice.between?(1, count)
+
+          Lich::Messaging.msg('bold', "DRCC: #{choice} is not on the list. Enter a number from 1 to #{count} with #{$clean_lich_char}send #")
+        end
+      end
+
+      private_class_method :recipe_menu_labels, :recipe_menu_choice
 
       def find_recipe(chapter, match_string, book = 'book')
         case DRC.bput("turn my #{book} to chapter #{chapter}", BOOK_CHAPTER_TURN_SUCCESS, BOOK_CHAPTER_DISTRACTED, BOOK_CHAPTER_ALREADY)
