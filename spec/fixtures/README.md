@@ -284,3 +284,31 @@ name (a disk owner's) was replaced with a pseudonym. Line endings were
 normalised to LF.
 
 Used by `spec/lib/common/xmlparser_crtr_status_spec.rb`.
+
+## client_string_log/
+
+Lich's debug log from six live sessions on 2026-10-17, one per front end,
+each from start-up to "logged in as": five on Windows (Lich 5.22.0, Ruby
+4.0.7) and Avalon on macOS (Lich 5.23.0, Ruby 4.0.5). Each
+holds the two lines `Frontend.log_client_string` writes at login: the client
+string the front end sent and the one Lich sent the game.
+
+| File | Front end | Game | Login path |
+|---|---|---|---|
+| `wizard_gs.log` | Wizard 2.04 | GemStone | launcher (eaccess), GSL branch |
+| `avalon_gs.log` | Avalon | GemStone (GST) | CLI login (eaccess), GSL branch |
+| `frostbite_dr.log` | Frostbite | DragonRealms | game-host spoof, Frostbite branch |
+| `genie_dr.log` | Genie | DragonRealms | game-host spoof, proxy (`proxy_handshake`) |
+| `warlock_dr.log` | Warlock | DragonRealms | game-host spoof, proxy |
+| `wrayth_gs.log` | Wrayth | GemStone | launcher (eaccess), proxy |
+
+Avalon introduces itself as Wizard (`/FE:WIZARD /VERSION:2.02 /P:WIN32`), even
+on macOS. The Wizard, Avalon and Frostbite captures predate the "(Lich's, in
+place of the front end's)" note on those paths' sent-to-game line.
+
+The character names were replaced with `Testchar`. The login key was already
+scrubbed by Lich. The Avalon log is cut at "logged in as", which drops a later
+error from an unrelated script, and everything else is as captured.
+
+Used by `spec/lib/main/client_string_log_spec.rb`, which replays each
+front-end line through its login path.

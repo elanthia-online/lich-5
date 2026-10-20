@@ -377,6 +377,291 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
   end
 
+  describe 'travel time estimates' do
+    # 1 -(12)-> 2 -(1)-> 3 -(0.2)-> 4, plus 1 -(StringProc 3.5)-> 5. The first
+    # leg out of room 1 is the expensive one, so dropping it is visible.
+    before do
+      (1..5).each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      map_class[1].wayto['2'] = 'climb wall'
+      map_class[1].timeto['2'] = 12
+      map_class[2].wayto['3'] = 'north'
+      map_class[2].timeto['3'] = 1.0
+      map_class[3].wayto['4'] = 'north'
+      map_class[3].timeto['4'] = 0.2
+      map_class[1].wayto['5'] = 'go door'
+      map_class[1].timeto['5'] = StringProc.new('3.5')
+    end
+
+    it 'keeps treating the first element as the start without from:' do
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(map_class[1].path_to(3))).to be_within(0.001).of(1.0)
+    end
+
+    it 'counts the leg out of the from: room on a path_to result' do
+      path = map_class[1].path_to(3)
+
+      expect(path).to eq([2, 3])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'gives a one-step trip its leg instead of 0.0' do
+      path = map_class[1].path_to(2)
+
+      expect(path).to eq([2])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(12.0)
+    end
+
+    it 'evaluates a StringProc timeto on the first leg' do
+      expect(map_class.estimate_time(map_class[1].path_to(5), from: 1)).to be_within(0.001).of(3.5)
+    end
+
+    it 'counts the first leg on a Map.findpath result' do
+      expect(map_class.estimate_time(map_class.findpath(1, 4), from: 1)).to be_within(0.001).of(13.2)
+    end
+
+    it 'accepts the from: room as a room or a numeric id String' do
+      path = [2, 3]
+
+      expect(map_class.estimate_time(path, from: map_class[1])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(path, from: '1')).to be_within(0.001).of(13.0)
+    end
+
+    it 'accepts a real room as from: when called through Room' do
+      # Rooms are built with Map.new, so they are Map instances, not Room ones.
+      # Scripts call class methods through Room as often as through Map.
+      room_class = Lich::Common::Room
+      origin = map_class[1]
+
+      expect(origin).not_to be_a(room_class)
+      expect(room_class.estimate_time([2, 3], from: origin)).to be_within(0.001).of(13.0)
+      expect(room_class.estimate_time([2], from: origin)).to be_within(0.001).of(12.0)
+      expect(room_class.estimate_time([1, 2, 3], from: origin)).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses an explicit from: nil instead of dropping the first leg' do
+      # Room.current is nil in an unmapped room. Treating that like a missing
+      # from: would quietly return the short estimate from: exists to fix.
+      expect { map_class.estimate_time([2, 3], from: nil) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (NilClass)')
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'names the class of a rejected from: rather than dumping it' do
+      expect { map_class.estimate_time([2], from: Object.new) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Object)')
+    end
+
+    it 'does not count the start twice when the path already begins there' do
+      expect(map_class.estimate_time([1, 2, 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[1 2 3], from: map_class[1])).to be_within(0.001).of(13.0)
+    end
+
+    it 'estimates an empty path from a room as 0.0' do
+      expect(map_class.estimate_time([], from: 1)).to eq(0.0)
+    end
+
+    it 'refuses a from: id that names no room instead of guessing the first leg' do
+      # A GemStone uid passed as a bare Integer where a Lich id belongs lands
+      # here; counting the leg as 0.2 would hand back a quietly wrong estimate.
+      expect { map_class.estimate_time([2, 3], from: 7777) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room id that is not in the map (7777)')
+      expect { map_class.estimate_time([2, 3], from: '7777') }
+        .to raise_error(ArgumentError, /from: room id that is not in the map \(7777\)/)
+      # Room 0 is not built here, so list[0] is an empty slot, not a room.
+      expect { map_class.estimate_time([2], from: 0) }.to raise_error(ArgumentError, /not in the map \(0\)/)
+    end
+
+    it 'refuses a from: id far past the room list with ArgumentError, not RangeError' do
+      expect { map_class.estimate_time([2, 3], from: 2**70) }
+        .to raise_error(ArgumentError, /not in the map \(#{2**70}\)/)
+      expect { map_class.estimate_time([2, 3], from: (2**70).to_s) }
+        .to raise_error(ArgumentError, /not in the map/)
+    end
+
+    it 'refuses a from: room that is no longer in the map' do
+      gone = map_class[1]
+      map_class.class_variable_get(:@@list)[1] = nil
+
+      expect { map_class.estimate_time([2, 3], from: gone) }
+        .to raise_error(ArgumentError, /not in the map \(1\)/)
+    end
+
+    it 'reads the from: room once, so a map cleared mid-call cannot crash the exit check' do
+      # Map.clear on another thread can empty the list after the room is found.
+      # An Array whose #first clears it lands that clear between the two reads.
+      list = map_class.class_variable_get(:@@list)
+      path = Class.new(Array) do
+        define_method(:first) do
+          list.clear
+          super()
+        end
+      end.new([2])
+
+      expect { map_class.estimate_time(path, from: 1) }.not_to raise_error
+    end
+
+    it 'refuses a from: room whose id is not a room id' do
+      # Rooms the loader builds always have an Integer id; a hand-built one
+      # may not, and must not reach the list lookup.
+      [nil, -1, '1'].each do |bad|
+        room = map_class.allocate
+        room.instance_variable_set(:@id, bad)
+
+        expect { map_class.estimate_time([2], from: room) }
+          .to raise_error(ArgumentError, "Map.estimate_time was given a from: room with an invalid id (#{bad.class})")
+      end
+    end
+
+    it 'accepts room 0 as from: when the map has it' do
+      shared_room(0, title: '[Room 0]', description: 'room 0')
+      map_class[0].wayto['2'] = 'south'
+
+      # An exit with no timeto counts the 0.2 default, as any other leg does.
+      expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
+    end
+
+    it 'refuses a from: room with no exit to the first room of the path' do
+      # A stale start room (Room.current read again after a move) would
+      # otherwise count the first leg as the 0.2 default.
+      expect { map_class.estimate_time([3, 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (3)')
+      expect { map_class.estimate_time([4], from: map_class[2]) }
+        .to raise_error(ArgumentError, /from: room \(2\) with no exit to the path start \(4\)/)
+      expect { map_class.estimate_time(%w[3 4], from: '1') }
+        .to raise_error(ArgumentError, /no exit to the path start \(3\)/)
+    end
+
+    it 'names only the class of a non-id path start in the no-exit message' do
+      # A room's to_s is its whole multi-line description, so a room object as
+      # the path start must not be pasted into the message.
+      expect { map_class.estimate_time([map_class[2], 3], from: 4) }
+        .to raise_error(ArgumentError, "Map.estimate_time was given a from: room (4) with no exit to the path start (#{map_class})")
+      expect { map_class.estimate_time(["3\nmore", 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (String)')
+    end
+
+    it 'accepts a from: room further along a two-way path, which the array cannot reveal' do
+      # The exit check catches a start room with no exit to the path start. A
+      # room read again after a step along a two-way path has an exit back to
+      # the path start, so it is accepted; read Room.current once instead.
+      map_class[3].wayto['2'] = 'south'
+      map_class[3].timeto['2'] = 7
+
+      expect(map_class.estimate_time([2, 3, 4], from: 3)).to be_within(0.001).of(8.2)
+    end
+
+    it 'checks the exit, not the timeto, so an exit with no timeto still counts 0.2' do
+      map_class[4].wayto['1'] = 'climb down'
+
+      expect(map_class.estimate_time([1], from: 4)).to be_within(0.001).of(0.2)
+      expect(map_class.estimate_time([1, 2], from: 4)).to be_within(0.001).of(12.2)
+    end
+
+    it 'accepts a StringProc exit to the first room of the path' do
+      map_class[4].wayto['2'] = StringProc.new('nil')
+      map_class[4].timeto['2'] = 2.5
+
+      expect(map_class.estimate_time([2, 3], from: 4)).to be_within(0.001).of(3.5)
+    end
+
+    it 'matches a zero-padded first id to the from: room numerically' do
+      expect(map_class.estimate_time(%w[01 2 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3], from: '01')).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses a zero-padded first id the walk would look up as a missing exit' do
+      # The legs are looked up by the id as written, so '02' is not the '2'
+      # exit and that leg would count the 0.2 default instead of 12.
+      expect { map_class.estimate_time(%w[02 3], from: 1) }
+        .to raise_error(ArgumentError, /no exit to the path start \(02\)/)
+    end
+
+    it 'still counts a gone room inside the path as 0.2' do
+      map_class.class_variable_get(:@@list)[3] = nil
+
+      expect(map_class.estimate_time([2, 3, 4], from: 1)).to be_within(0.001).of(13.2)
+    end
+
+    it 'matches the distance dijkstra found for every reachable room' do
+      # A different method than the fixed graph above: a seeded random graph,
+      # where the estimate along each returned path must equal the distance the
+      # search itself computed to that room.
+      rng = Random.new(1729)
+      ids = (10..40).to_a
+      ids.each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      ids.each do |id|
+        ids.sample(3, random: rng).each do |to|
+          next if to == id
+
+          map_class[id].wayto[to.to_s] = 'go path'
+          map_class[id].timeto[to.to_s] = rng.rand(1..50) / 4.0
+        end
+      end
+      source = map_class[10]
+      _previous, distances = source.dijkstra
+      reachable = distances.keys - [10]
+
+      expect(reachable.size).to be > 10
+      reachable.each do |dest|
+        path = source.path_to(dest)
+
+        estimate = map_class.estimate_time(path, from: source)
+
+        expect(estimate).to be_within(0.0001).of(distances[dest]), "room #{dest} via #{path.inspect}"
+      end
+    end
+
+    it 'leaves the caller array untouched' do
+      path = [2, 3]
+      full = [1, 2, 3]
+
+      map_class.estimate_time(path, from: 1)
+      map_class.estimate_time(full)
+
+      expect(path).to eq([2, 3])
+      expect(full).to eq([1, 2, 3])
+    end
+
+    it 'estimates a frozen path' do
+      expect(map_class.estimate_time([1, 2, 3].freeze)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time([2, 3].freeze, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'raises an ordinary StandardError for the nil an unreachable path_to returns' do
+      expect(map_class[4].path_to(1)).to be_nil
+      expect { map_class.estimate_time(map_class[4].path_to(1)) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given something not an array!')
+      expect { map_class.estimate_time(nil, from: 4) }.to raise_error(ArgumentError)
+    end
+
+    it 'is caught by a bare rescue' do
+      result = begin
+        map_class.estimate_time(nil)
+      rescue => e
+        e
+      end
+
+      expect(result).to be_a(StandardError)
+    end
+
+    it 'rejects a from: that does not name a room id' do
+      # Map.[] would treat this text as a fuzzy title search.
+      expect { map_class.estimate_time([2], from: 'Room 1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: :'1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: 1.0) }.to raise_error(ArgumentError, /invalid from: room/)
+    end
+
+    it 'rejects a negative from: instead of indexing from the end of the room list' do
+      # DR's Map.current_room_id is -1 until the first room match after load,
+      # and Map.[] indexes the room list, so -1 would name the last room.
+      expect { map_class.estimate_time([2, 3], from: -1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Integer)')
+      expect { map_class.estimate_time([2], from: -2) }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: '-1') }.to raise_error(ArgumentError, /invalid from: room/)
+    end
+  end
+
   describe 'pathfinding' do
     before do
       shared_room(1, title: '[One]', description: 'first', tags: ['shop'])
