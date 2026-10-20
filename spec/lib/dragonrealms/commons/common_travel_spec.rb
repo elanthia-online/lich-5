@@ -296,9 +296,22 @@ RSpec.describe DRCT do
           end
         end
 
-        context 'with a map tag that has no reachable room, through the real walk_to' do
-          it 'sends nothing to the game' do
+        context 'with a map tag that has no rooms' do
+          it 'sends nothing to the game and prints one line naming the tag and the skipped action' do
             allow(Map).to receive(:rooms_by_tag).with('pawnshop').and_return([])
+            allow(DRCT).to receive(:walk_to).and_call_original
+            expect(call.call('pawnshop')).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).not_to have_received(:walk_to)
+            expect(Lich::Messaging.messages.map { |m| m[:message] })
+              .to eq(["DRCT: No go2 targets matching 'pawnshop' found, so #{action}."])
+          end
+        end
+
+        context 'with a map tag whose rooms are all unreachable, through the real walk_to' do
+          it "sends nothing to the game and names the tag after walk_to's own reason" do
+            allow(Map).to receive(:rooms_by_tag).with('pawnshop').and_return([200])
+            allow(Room).to receive(:current).and_return(double('room', id: 100, dijkstra: [nil, {}]))
             expect(call.call('pawnshop')).to equal(failed_value)
             expect(DRC).not_to have_received(:bput)
             expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach a room tagged pawnshop, so #{action}."])
@@ -358,7 +371,7 @@ RSpec.describe DRCT do
         '100' => false, '' => false, 100 => false, nil => false, :bank => false
       }.each do |room, expected|
         it "map_tag?(#{room.inspect}) is #{expected}" do
-          expect(DRCT.map_tag?(room)).to equal(expected)
+          expect(DRCT.send(:map_tag?, room)).to equal(expected)
         end
       end
 
@@ -380,12 +393,19 @@ RSpec.describe DRCT do
       it 'walk_to and the message both follow map_tag?' do
         allow(DRCT).to receive(:map_tag?).and_call_original
         allow(DRCT).to receive(:map_tag?).with('100').and_return(true)
+        allow(Map).to receive(:rooms_by_tag).with('100').and_return([100])
         allow(DRCT).to receive(:tag_to_id).with('100').and_return(nil)
 
         expect(DRCT.sell_item('100', 'sword')).to eq(false)
         expect(DRCT).to have_received(:tag_to_id).with('100')
         expect(failure_messages.map { |m| m[:message] }).to eq(['DRCT: Could not reach a room tagged 100, so not selling sword.'])
       end
+    end
+
+    it 'keeps walk_to_merchant and map_tag? off the public DRCT API' do
+      expect(DRCT).not_to respond_to(:walk_to_merchant)
+      expect(DRCT).not_to respond_to(:map_tag?)
+      expect(DRCT.private_methods).to include(:walk_to_merchant, :map_tag?)
     end
 
     it 'sell_item still checks the hands before walking' do

@@ -146,8 +146,15 @@ module Lich
       # minutes, like walk_to) and returns walk_to's result. When the walk
       # fails it says which purchase or sale was skipped, because walk_to is
       # silent on some failures, e.g. a nil room or a locked shop door.
+      # A map tag with no rooms gets one line here instead of walk_to's own
+      # "No go2 targets" line followed by this one.
       # @api private
       def walk_to_merchant(room, action)
+        if map_tag?(room) && Map.rooms_by_tag(room).empty?
+          Lich::Messaging.msg('bold', "DRCT: No go2 targets matching '#{room}' found, so not #{action}.")
+          return false
+        end
+
         return true if walk_to(room)
 
         where = if room.nil?
@@ -169,6 +176,8 @@ module Lich
       def map_tag?(room)
         room.is_a?(String) && room.count('a-zA-Z') > 0
       end
+
+      private_class_method :walk_to_merchant, :map_tag?
 
       def dispose(item, trash_room = nil, worn_trashcan = nil, worn_trashcan_verb = nil)
         return unless item
