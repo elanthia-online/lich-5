@@ -427,6 +427,10 @@ module Lich
         end
       end
 
+      # Repairs each tool with a wire brush and oil, stowing every item it takes out.
+      # Stops at the first engaged reply and leaves the remaining tools for later.
+      #
+      # @return [Symbol, nil] :engaged when repairs stopped because the character is engaged; nil otherwise
       def repair_own_tools(info, tools, bag, bag_items, belt)
         UserVars.immune_list ||= {} # declaring a hash unless hash already
         tools = tools.to_a # Convert single tool string to array
@@ -456,8 +460,13 @@ module Lich
             when REPAIR_POUR_WHAT
               DRCC.check_consumables('oil', info['finisher-room'], info['finisher-number'], bag, bag_items, belt) # somehow ran out of oil, fetching more
               DRCC.get_crafting_item(x, bag, bag_items, belt)
-              DRC.bput("pour my oil on my #{tool_name}", REPAIR_SUCCESS)
+              retry_result = DRC.bput("pour my oil on my #{tool_name}", REPAIR_SUCCESS, REPAIR_ENGAGED)
               DRCC.stow_crafting_item(x, bag, belt)
+              if retry_result == REPAIR_ENGAGED # engaged while fetching more oil: stop like the first reply would
+                Lich::Messaging.msg('bold', 'DRCC: Cannot repair in combat.')
+                stop_repairs = true
+                break
+              end
               next # oil done, next tool
             when REPAIR_ENGAGED
               Lich::Messaging.msg('bold', 'DRCC: Cannot repair in combat.')
@@ -473,7 +482,7 @@ module Lich
           UserVars.immune_list.store(tool_name, Time.now + 7000) if Flags['proper-repair'] # if our flag picks up a Proper Forging Tool Care successful repair, we add that tool and a time of now plus 7000 seconds (just shy of 2 hours) to the list of immune tools
           Flags.reset('proper-repair')
           DRCC.stow_crafting_item(tool_name, bag, belt)
-          break if stop_repairs # skip the remaining tools
+          return :engaged if stop_repairs # skip the remaining tools
         end
         nil
       end

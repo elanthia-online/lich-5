@@ -165,11 +165,13 @@ describe DRCC do
     let(:stowed) { [] }
 
     # Replies keyed by the repair command; any command not listed succeeds.
+    # An Array value gives successive replies to the same command.
     # DRC.bput returns the matched text, so the stubs return the pattern constants.
     def stub_repair_replies(replies = {})
       allow(DRC).to receive(:bput) do |command, *_patterns|
         sent << command
-        replies.fetch(command, DRCC::REPAIR_SUCCESS)
+        reply = replies.fetch(command, DRCC::REPAIR_SUCCESS)
+        reply.is_a?(Array) ? (reply.shift || DRCC::REPAIR_SUCCESS) : reply
       end
     end
 
@@ -249,6 +251,59 @@ describe DRCC do
 
         expect(stowed).to eq(['wire brush', 'oil', 'hammer'])
         expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer'])
+      end
+    end
+
+    context 'when the pour reply is Pour what and the retry says the character is engaged' do
+      before { stub_repair_replies('pour my oil on my hammer' => [DRCC::REPAIR_POUR_WHAT, DRCC::REPAIR_ENGAGED]) }
+
+      it 'stows the oil and the tool once each and skips the next tool' do
+        DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(sent).to eq(['rub my hammer with my wire brush', 'pour my oil on my hammer', 'pour my oil on my hammer'])
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer'])
+      end
+
+      it 'waits for the engaged reply on the retry and tells the user why repairs stopped' do
+        result = DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRC).to have_received(:bput)
+          .with('pour my oil on my hammer', DRCC::REPAIR_SUCCESS, DRCC::REPAIR_ENGAGED)
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to eq(['DRCC: Cannot repair in combat.'])
+        expect(result).to eq(:engaged)
+      end
+    end
+
+    context 'when the pour reply is Pour what and the retry succeeds' do
+      before { stub_repair_replies('pour my oil on my hammer' => [DRCC::REPAIR_POUR_WHAT, DRCC::REPAIR_SUCCESS]) }
+
+      it 'fetches more oil and goes on to the next tool' do
+        result = DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)
+
+        expect(DRCC).to have_received(:check_consumables).with('oil', 8776, 6, bag, bag_items, belt)
+        expect(stowed).to eq(['wire brush', 'oil', 'hammer', 'wire brush', 'oil', 'tongs'])
+        expect(result).to be_nil
+      end
+    end
+
+    describe 'return value' do
+      it 'is :engaged when an engaged reply stops the repairs' do
+        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_ENGAGED)
+
+        expect(DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)).to eq(:engaged)
+      end
+
+      it 'is nil when every tool is worked through' do
+        stub_repair_replies('rub my hammer with my wire brush' => DRCC::REPAIR_CONFUSED)
+
+        expect(DRCC.repair_own_tools(info, %w[hammer tongs], bag, bag_items, belt)).to be_nil
+      end
+
+      it 'is nil when no tool is eligible' do
+        stub_repair_replies
+
+        expect(DRCC.repair_own_tools(info, [], bag, bag_items, belt)).to be_nil
+        expect(sent).to be_empty
       end
     end
 
