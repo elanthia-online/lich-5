@@ -138,8 +138,14 @@ module Lich
       # process whatever lock it holds.
       #
       # A Monitor, so a write that calls another write for the same entry in
-      # the same thread does not deadlock. No code takes two entries' locks at
-      # once.
+      # the same thread does not deadlock. Lich's own code never takes two
+      # entries' locks at once. The block of an in-place method called through
+      # a SettingsProxy (delete_if { ... }) runs under its entry's lock, on
+      # this session's copy and again when it is replayed (see
+      # with_proxy_lock and save_proxy_changes); a block that reads another
+      # entry not yet cached takes that entry's lock as well. Such blocks must
+      # have no side effects (SettingsProxy::MUTATING_METHODS), and shipped
+      # scripts' are plain predicates.
       def self.with_cache_lock(cache_key, &block)
         cache_lock(cache_key).synchronize(&block)
       end
@@ -222,174 +228,347 @@ module Lich
         SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
 
-      def self.save_proxy_changes(proxy)
-        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
-        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
-        with_cache_lock("#{script_name || ""}::#{proxy.scope}") { store_proxy_changes(proxy, script_name) }
+      # Saves a change made through +proxy+ without losing what other sessions
+      # saved in the meantime, in the same container or elsewhere in the row.
+      #
+      # Every Lich session is a separate process, and a proxy holds this
+      # session's copy of one container, read some time before the write. So
+      # the operation itself (+method+ with +args+ and +block+, already applied
+      # to proxy.target) is applied again to the container at proxy.path in the
+      # row as it is stored now, and the row is stored only if no one changed
+      # it in between (DatabaseAdapter#update_settings starts over otherwise).
+      # Missing containers on the way are created, as before.
+      #
+      # This session's copy of the container is stored instead (as every
+      # nested write did before) when there is no operation to replay
+      # (+method+ nil), when the proxy is a detached view with a path (its
+      # contents are not the container's), when the stored row has no
+      # container of the proxy's class at its path (another session removed or
+      # replaced it), or when the operation raises on the stored container.
+      # Nothing is stored, and the user is told, for a detached proxy without
+      # a path (an element yielded by each, a view of a root proxy, the
+      # default fetch returned, or a container built from one), nor for the
+      # proxy of a view's element that can't be found in the settings
+      # (SettingsProxy#unlocated?). Nothing is stored either, and the user is
+      # told, when +block+ leaves early (break, throw or return), is
+      # interrupted or its thread is killed while it runs on the stored
+      # container.
+      #
+      # On success the cache takes the row as stored, unless another thread
+      # has re-read a newer one after the store (see store_after_database). On
+      # failure the cache is left as it was, and the next read checks the
+      # database again. All of it runs under the cache entry's lock (see
+      # with_cache_lock).
+      #
+      # @param proxy [SettingsProxy] the proxy the change was made through
+      # @param method [Symbol, nil] the operation applied to proxy.target, or
+      #   REPLAY_ENTRY_CHANGES for the entries a script's call changed
+      # @param args [Array] its arguments; they are stored as copies (proxies
+      #   unwrapped, everything copied as a read of the stored row would give
+      #   it back), so the stored and cached row share no object with them
+      # @param block [Proc, nil] its block
+      # @param label [Symbol, nil] the script's method that made the change,
+      #   named in messages (defaults to +method+)
+      # @return [Array(Object, Hash|Array), nil] when the operation was
+      #   replayed and stored: its result on the stored container, and that
+      #   container (part of the row now cached); nil otherwise
+      def self.save_proxy_changes(proxy, method = nil, args = [], block = nil, label: nil)
+        script_name = proxy_script_name(proxy)
+        with_cache_lock("#{script_name || ""}::#{proxy.scope}") { store_proxy_changes(proxy, script_name, method, args, block, label) }
       end
 
-      # save_proxy_changes's refresh, database write and cache update, under
-      # the cache entry's lock.
-      def self.store_proxy_changes(proxy, script_name)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Initiated for proxy.scope: #{proxy.scope.inspect}, proxy.path: #{proxy.path.inspect}, proxy.target_object_id: #{proxy.target.object_id}" })
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: proxy.target data: #{proxy.target.inspect}" })
+      # Runs the block holding the lock of +proxy+'s cache entry, the one
+      # save_proxy_changes takes (see with_cache_lock). SettingsProxy holds
+      # it from the change to its copy until it shows the stored container,
+      # so that two threads writing through proxies of one entry show the
+      # stored containers in the order they were stored: a slower thread
+      # can't put an older one over a newer one.
+      def self.with_proxy_lock(proxy, &block)
+        with_cache_lock("#{proxy_script_name(proxy) || ""}::#{proxy.scope}", &block)
+      end
 
+      # The script whose row +proxy+ writes to: proxy.script_name if it has
+      # one (InstanceSettings), otherwise the current script's name.
+      def self.proxy_script_name(proxy)
+        proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
+      end
+      private_class_method :proxy_script_name
+
+      # save_proxy_changes's database write and cache update, under the cache
+      # entry's lock (see with_cache_lock). The replayed block runs under that
+      # lock too, inside DatabaseAdapter#update_settings.
+      def self.store_proxy_changes(proxy, script_name, method, args, block, label)
         path        = proxy.path
         scope       = proxy.scope
         cache_key   = "#{script_name || ""}::#{scope}"
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: scope: #{scope.inspect}, path: #{path.inspect}, method: #{method.inspect}, script_name: #{script_name.inspect}" })
         # Whatever happens below (a save, a failed save, an early return), the
         # next read checks the database again instead of trusting the cache.
         @cache_versions.delete(cache_key)
 
-        # --- Refresh-before-save to prevent stale-cache overwrites ---
-        # IMPORTANT: If proxy.target IS the cached object, we must NOT replace it
-        # from the database, as that would wipe out the changes we're trying to save.
-        # Only refresh when the proxy is detached or working with a different object.
-        fresh_root = @db_adapter.get_settings(script_name, scope)
-
-        cached = @settings_cache[cache_key]
-        if cached
-          # Skip refresh if proxy.target is the same object as cached - we'd wipe out our changes!
-          if cached.equal?(proxy.target)
-            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Skipping refresh - proxy.target IS the cached object (object_id: #{cached.object_id})" })
-            current_root_for_scope = cached
-          elsif cached.is_a?(Hash) && fresh_root.is_a?(Hash)
-            cached.replace(fresh_root)
-            current_root_for_scope = cached
-          elsif cached.is_a?(Array) && fresh_root.is_a?(Array)
-            cached.clear
-            cached.concat(fresh_root)
-            current_root_for_scope = cached
-          else
-            store_in_cache(cache_key, fresh_root)
-            current_root_for_scope = fresh_root
-          end
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache state for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        else
-          store_in_cache(cache_key, fresh_root)
-          current_root_for_scope = fresh_root
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache populated from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        end
-        # -------------------------------------------------------------
-
-        # EMPTY PATH -> Save *current root* (not proxy.target). Also covers detached "view" proxies.
-        if path.empty?
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Empty path; saving CURRENT ROOT for scope #{scope.inspect}" })
-
-          unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
-            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
-            current_root_for_scope = {}
-            store_in_cache(cache_key, current_root_for_scope)
-          end
-
-          if proxy.respond_to?(:detached?) && proxy.detached?
-            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Proxy is detached (view); persisting current root without copying view target." })
-            save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
-            return nil
-          end
-
-          # Root identity drift: sync proxy.target into cached root if different objects (same-type containers).
-          if !current_root_for_scope.equal?(proxy.target)
-            if proxy.target.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
-              _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Root identity mismatch (cache #{current_root_for_scope.object_id} vs proxy #{proxy.target.object_id}); copying via Hash#replace" })
-              current_root_for_scope.replace(proxy.target)
-            elsif proxy.target.is_a?(Array) && current_root_for_scope.is_a?(Array)
-              _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Root identity mismatch (Array); copying elements" })
-              current_root_for_scope.clear
-              current_root_for_scope.concat(proxy.target)
-            else
-              _log(LOG_LEVEL_WARN, @@log_prefix, -> { "save_proxy_changes: Root/target type mismatch; persisting current root only (root=#{current_root_for_scope.class}, target=#{proxy.target.class})." })
-            end
-          end
-
-          save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
+        if script_name.nil? || script_name.empty?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
           return nil
         end
 
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: script_name: #{script_name.inspect}, cache_key: #{cache_key}" })
-
-        # From here on, we're saving into a nested path. Ensure root is a container.
-        unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
-          current_root_for_scope = {}
-          store_in_cache(cache_key, current_root_for_scope)
+        if proxy.respond_to?(:detached?) && proxy.detached?
+          if proxy.respond_to?(:unlocated?) && proxy.unlocated?
+            return refuse_proxy_save(script_name, proxy, "this element of a view (select, sort, each, ...) is not found in the settings it was taken from")
+          end
+          if path.empty?
+            cause = proxy.respond_to?(:pathless_cause) && proxy.pathless_cause
+            return refuse_proxy_save(script_name, proxy, cause ? "this is #{cause}, not part of the settings" : "this is not part of the settings (an element yielded by each, a view of the whole settings, the default fetch returned, or a container built from one)")
+          end
+          label ||= method
+          method = nil
         end
 
-        parent_path = path[0...-1]
-        leaf_key    = path.last
-
-        # Pre-navigation diagnostics
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> {
-          "save_proxy_changes: Navigation preflight - parent_path=#{parent_path.inspect} (#{parent_path.map { |s| s.class }.inspect}), leaf_key=#{leaf_key.inspect} (#{leaf_key.class}), root_class=#{current_root_for_scope.class}"
-        })
-
-        # Navigate **within the freshly-loaded root** (do NOT re-fetch via PathNavigator here).
         begin
-          parent = current_root_for_scope
-          parent_path.each_with_index do |seg, idx|
-            next_seg = parent_path[idx + 1]
-
-            if parent.is_a?(Hash)
-              unless parent.key?(seg)
-                parent[seg] = next_seg.is_a?(Integer) ? [] : {}
-                _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Created #{parent[seg].class} at #{parent_path[0..idx].inspect} for scope #{scope.inspect}" })
-              end
-              parent = parent[seg]
-            elsif parent.is_a?(Array)
-              unless seg.is_a?(Integer) && seg >= 0
-                _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Non-integer or negative index #{seg.inspect} for Array at #{parent_path[0..idx].inspect} in scope #{scope.inspect}" })
-                return nil
-              end
-              if seg >= parent.length
-                (parent.length..seg).each { parent << nil }
-                _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Extended Array to index #{seg} at #{parent_path[0..idx].inspect} for scope #{scope.inspect}" })
-              end
-              parent[seg] ||= (next_seg.is_a?(Integer) ? [] : {})
-              parent = parent[seg]
-            else
-              _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Parent is not a container at #{parent_path[0..idx].inspect} (#{parent.class}) for scope #{scope.inspect}" })
-              return nil
-            end
-          end
-        rescue => e
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> {
-            "save_proxy_changes: Local navigation raised #{e.class}: #{e.message}. "\
-            "scope=#{scope.inspect}, script_name=#{script_name.inspect}, cache_key=#{cache_key}, "\
-            "parent_path=#{parent_path.inspect}, leaf_key=#{leaf_key.inspect}"
-          })
-          bt = (e.backtrace || [])[0, 5]
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Backtrace (top 5): #{bt.join(' | ')}" })
-          return nil
+          stored_args = stored_copy(args)
+        rescue TypeError => e
+          what = method == REPLAY_ENTRY_CHANGES ? "a value changed by #{label || "a method"}" : "an argument of #{label || method}"
+          return refuse_proxy_save(script_name, proxy, "#{what} can't be stored (#{e.message})")
         end
-
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Navigated/created parent (object_id: #{parent.object_id}, class=#{parent.class}): #{parent.inspect}" })
-
-        if parent.is_a?(Hash)
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Setting Hash key #{leaf_key.inspect} with proxy.target (object_id: #{proxy.target.object_id})" })
-          parent[leaf_key] = proxy.target
-        elsif parent.is_a?(Array) && leaf_key.is_a?(Integer)
-          if leaf_key < 0
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Negative array index #{leaf_key} not supported at path #{path.inspect} in scope #{scope.inspect}" })
-            return nil
-          end
-          if leaf_key >= parent.length
-            (parent.length..leaf_key).each { parent << nil }
-            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Extended Array to index #{leaf_key} for parent at path #{parent_path.inspect}" })
-          end
-          parent[leaf_key] = proxy.target
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Set Array index #{leaf_key} with proxy.target (object_id: #{proxy.target.object_id})" })
-        else
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> {
-            "save_proxy_changes: Cannot set value at path #{path.inspect} in scope #{scope.inspect}; "\
-            "parent_class=#{parent.class}, leaf_key_class=#{leaf_key.class}"
-          })
-          return nil
+        replayed = nil
+        # The adapter updates the cache as part of the store (on_stored), as
+        # for a top-level write, so a script killed right after the row was
+        # committed does not leave the cache without it, and a newer row
+        # another thread re-read after the store is kept (see
+        # store_after_database).
+        cache_stored_row = ->(row) { store_after_database(cache_key, row, @db_adapter.data_version) }
+        stored = @db_adapter.update_settings(script_name, scope, on_stored: cache_stored_row) do |fresh_root|
+          replayed = nil
+          apply_to_stored_row(fresh_root, proxy, method, stored_args, block, script_name, label) { |result| replayed = result }
         end
+        return nil unless stored
 
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: root after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        save_to_database(current_root_for_scope, scope, script_name: script_name, keep_entries: true)
+        _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Saved #{path.inspect} for #{cache_key} (#{replayed ? "replayed #{label || method}" : "this session's copy"})." })
+        replayed
       end
       private_class_method :store_proxy_changes
+
+      # Applies a proxy's change to +root+, the row as stored. Yields
+      # [result, container] when +method+ was replayed on the container.
+      #
+      # @return [Hash, nil] the row to store, or nil to store nothing
+      def self.apply_to_stored_row(root, proxy, method, args, block, script_name, label = nil)
+        path = proxy.path
+        unless root.is_a?(Hash)
+          return refuse_proxy_save(script_name, proxy, "settings are stored as #{root.class}, not a Hash")
+        end
+
+        # An element of an Array is addressed by its position. When the stored
+        # Array no longer reaches that position, the element this session saw
+        # there has moved or gone, so storing this session's copy there would
+        # pad the Array with nil or store an element twice.
+        classes = proxy.respond_to?(:path_classes) ? proxy.path_classes : nil
+        if (array_path = position_gone(root, path, classes))
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} is no longer there (another session removed elements from #{array_path.inspect})")
+        end
+
+        parent = path.empty? ? nil : container_at(root, path, classes)
+        unless path.empty? || parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer) && path.last >= 0)
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} does not lead to a container")
+        end
+
+        existing = path.empty? ? root : parent[path.last]
+        if method && existing.instance_of?(proxy.target.class)
+          # A break, throw or return in +block+ that fires only here, on the
+          # stored container, leaves this method (and update_settings) before
+          # anything is stored, and the rescue below can't catch it. So the
+          # user is told that nothing was saved, as for an interrupt.
+          # The exception is taken from the rescue clause, not $!, which in a
+          # script's own rescue clause is the exception that clause handles.
+          finished = false
+          begin
+            result = case method
+                     when REPLAY_ENTRY_CHANGES then replay_entry_changes(existing, *args)
+                     when REPLAY_AT_POSITIONS then replay_at_positions(existing, *args, &block)
+                     else existing.public_send(method, *args, &block)
+                     end
+            finished = true
+            yield [result, existing]
+            return root
+          rescue PositionGoneError
+            finished = true
+            return refuse_proxy_save(script_name, proxy, "#{label || method} changed a position of #{path.inspect} that is no longer there (another session removed elements from it)")
+          rescue StandardError => e
+            finished = true
+            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{label || method} raised #{e.class} (#{e.message}) on the stored container at #{path.inspect}; storing this session's copy" })
+          rescue Exception => e # rubocop:disable Lint/RescueException -- reported, then raised again
+            finished = true
+            refuse_proxy_save(script_name, proxy, "#{label || method} was interrupted (#{e.class}) while it ran on the stored settings")
+            raise
+          ensure
+            unless finished
+              how = Thread.current.status == "aborting" ? "was stopped (its thread was killed)" : "left early (break, throw or return)"
+              refuse_proxy_save(script_name, proxy, "#{label || method} #{how} while it ran on the stored settings")
+            end
+          end
+        end
+
+        begin
+          copy = stored_copy(proxy.target)
+        rescue TypeError => e
+          return refuse_proxy_save(script_name, proxy, "#{path.inspect} can't be stored (#{e.message})")
+        end
+        if path.empty?
+          return copy if copy.is_a?(Hash)
+
+          return refuse_proxy_save(script_name, proxy, "a #{copy.class} can't be the whole row")
+        end
+
+        parent[path.last] = copy
+        root
+      end
+      private_class_method :apply_to_stored_row
+
+      # The operation save_proxy_changes replays for a method outside both of
+      # SettingsProxy's method lists that changed several entries of a
+      # container (SettingsProxy#save_changes_since). Its one argument is the
+      # list of [operation, args] entry changes ([:delete, [key]] or
+      # [:[]=, [key_or_index, value]]); they are all applied, in order, in one
+      # update of the row (see #replay_entry_changes).
+      REPLAY_ENTRY_CHANGES = :replay_entry_changes
+
+      # The operation save_proxy_changes replays for an Array method whose
+      # arguments include a position (SettingsProxy::POSITION_METHODS). Its
+      # arguments are [size, first_changed, method, args]: the size of this
+      # session's copy before the call, the first position the call changed
+      # in that copy (nil when it changed none), and the call itself, its
+      # positions counted from the start of that copy (see
+      # #replay_at_positions).
+      REPLAY_AT_POSITIONS = :replay_at_positions
+
+      # Raised by replay_at_positions when the call changed a position of
+      # this session's copy that the stored Array no longer has; nothing is
+      # stored, and the user is told (see #apply_to_stored_row).
+      class PositionGoneError < StandardError; end
+      private_constant :PositionGoneError
+
+      # Replays +method+ (with +args+ and +block+) on +container+, a stored
+      # Array, the way it ran on this session's copy of +size+ elements.
+      #
+      # When the stored Array has at least +size+ elements, the call runs on
+      # its first +size+ elements only, and the elements past them (those
+      # another session appended) follow what it leaves. So a position at or
+      # past this session's end (list.delete_at(5), list.slice!(2..),
+      # list.fill('z', 1, 9), list[size] = v) reaches none of them, and the
+      # call returns what it returned on this session's copy, as the
+      # positions counted from the end already do.
+      #
+      # When the stored Array is shorter (another session removed elements),
+      # the call runs on it as it is, unless the first position it changed in
+      # this session's copy (+first_changed+) is past the stored Array's end:
+      # the element this session saw there is gone, so PositionGoneError is
+      # raised, rather than padding the Array with nil or changing nothing.
+      #
+      # @return the call's result
+      def self.replay_at_positions(container, size, first_changed, method, args, &block)
+        if container.size >= size
+          appended = container.slice!(size..)
+          begin
+            container.public_send(method, *args, &block)
+          ensure
+            container.concat(appended)
+          end
+        elsif first_changed && first_changed >= container.size
+          raise PositionGoneError
+        else
+          container.public_send(method, *args, &block)
+        end
+      end
+      private_class_method :replay_at_positions
+
+      # The part of +path+ that leads to the stored Array that no longer has
+      # the position +path+ goes through next (an Array that another session
+      # removed counts as an empty one); nil when every position along +path+
+      # is still there. Whether a removed container was an Array is told by
+      # +classes+ (SettingsProxy#path_classes), else by the segment (see
+      # #container_class_at).
+      def self.position_gone(root, path, classes = nil)
+        node = root
+        path.each_with_index do |segment, i|
+          if node.is_a?(Array) || (node.nil? && container_class_at(path, classes, i) == Array)
+            return nil unless segment.is_a?(Integer) && segment >= 0 # refused by apply_to_stored_row
+
+            return path[0...i] if segment >= (node.nil? ? 0 : node.size)
+          elsif !node.nil? && !node.is_a?(Hash)
+            return nil
+          end
+          node = node.nil? ? nil : node[segment]
+        end
+        nil
+      end
+      private_class_method :position_gone
+
+      # Applies +changes+, a list of [operation, args] entry changes, to
+      # +container+, in order.
+      #
+      # @return nil
+      def self.replay_entry_changes(container, changes)
+        changes.each { |operation, args| container.public_send(operation, *args) }
+        nil
+      end
+      private_class_method :replay_entry_changes
+
+      # A copy of +value+, with proxies unwrapped, that shares no object with
+      # it (not even a String), as a read of the stored row would give it back.
+      #
+      # @raise [TypeError] when +value+ can't be stored (a Proc, a Hash with a
+      #   default proc, an object with singleton methods, ...)
+      def self.stored_copy(value)
+        Marshal.load(Marshal.dump(unwrap_proxies(value)))
+      end
+      private_class_method :stored_copy
+
+      # The container under +root+ that holds the last segment of +path+
+      # (the container at all the segments before it), creating missing (or
+      # nil) Hash and Array entries on the way, as nested saves always have,
+      # of the class #container_class_at gives.
+      #
+      # @return [Hash, Array, nil] nil when a segment can't be followed: a
+      #   value that is not a container, or an Array index that is not a
+      #   non-negative Integer
+      def self.container_at(root, path, classes = nil)
+        path[0...-1].each_with_index.reduce(root) do |node, (seg, idx)|
+          return nil unless node.is_a?(Hash) || (node.is_a?(Array) && seg.is_a?(Integer) && seg >= 0)
+
+          node[seg] = container_class_at(path, classes, idx + 1).new if node[seg].nil?
+          node[seg]
+        end
+      end
+      private_class_method :container_at
+
+      # The class (Hash or Array) of the container that +path+[+i+] indexes:
+      # the one this session's copy held there (+classes+, from
+      # SettingsProxy#path_classes) when known, otherwise an Array for an
+      # Integer segment and a Hash for anything else.
+      def self.container_class_at(path, classes, i)
+        classes&.at(i) || (path[i].is_a?(Integer) ? Array : Hash)
+      end
+      private_class_method :container_class_at
+
+      # Tells the user that a write through a proxy could not be saved.
+      #
+      # For writes through the elements one call to SettingsProxy#each
+      # yielded (SettingsProxy#refusals), the user is told about the first
+      # one, and that the others are not saved either; each of them is still
+      # logged.
+      #
+      # @return nil
+      def self.refuse_proxy_save(script_name, proxy, reason)
+        refusals = proxy.respond_to?(:refusals) ? proxy.refusals : nil
+        if refusals
+          refusals[:count] += 1
+          reason = "#{reason}; any other writes through this loop's elements are not saved either" if refusals[:count] == 1
+        end
+        message = "--- Error: settings for #{script_name} (#{proxy.scope}) not saved: #{reason} ---"
+        _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: #{message}" })
+        Lich::Messaging.msg("error", message) if defined?(Lich::Messaging) && (refusals.nil? || refusals[:count] == 1)
+        nil
+      end
+      private_class_method :refuse_proxy_save
 
       def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
@@ -478,10 +657,11 @@ module Lich
         #
         # While another thread holds the entry's lock, the row is cached with
         # no version: a write in progress may change the cached root in place
-        # (save_proxy_changes refreshes it from a row it read earlier), and a
-        # version recorded for that root now would vouch for whatever the
-        # write leaves in it, even when the write saves nothing. Without a
-        # version, the next read checks the database again, and while the
+        # (Settings.[]= under a path changes a container it shares with the
+        # cached root before it saves the row), and a version recorded for
+        # that root now would vouch for whatever the write leaves in it, even
+        # when the write saves nothing. Without a version, the next read
+        # checks the database again, and while the
         # version can't be read it serves this row, not the older one it
         # replaced. Taking the lock without waiting here (a miss fill already
         # holds it) means no write starts between this check and recording
@@ -576,16 +756,10 @@ module Lich
 
       # Saves a whole row and caches it (see store_after_database).
       #
-      # With keep_entries (save_proxy_changes), the cached row holds
-      # data_to_save's own top-level values rather than copies of them, so
-      # that the containers the caller's proxies wrap stay part of the cached
-      # row. They are put in the saved copy before it is cached, in the same
-      # step as the cache update.
-      #
       # @return [Boolean, nil] whether the cache took the saved row (false
       #   when a newer row another thread re-read after the save is kept), or
       #   nil when nothing was saved for lack of a script name
-      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil, keep_entries: false)
+      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil)
         # Use provided script_name or fall back to Script.current.name
         script_name = script_name || Script.current.name
 
@@ -602,23 +776,11 @@ module Lich
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_to_database: Data AFTER unwrap_proxies (object_id: #{unwrapped_settings.object_id}): #{unwrapped_settings.inspect}" })
 
         with_cache_lock(cache_key) do
-          # Thread#kill and Thread#raise (Script#kill) wait until the cache
-          # holds what was just written, so a script killed right after the
-          # row was committed does not leave this process's cache behind the
-          # database. As in DatabaseAdapter#update_settings, only the store is
-          # held back.
-          stored = Thread.handle_interrupt(Object => :never) do
-            @db_adapter.save_settings(script_name, unwrapped_settings, scope)
-
-            cached_row = unwrapped_settings
-            cached_row.replace(data_to_save) if keep_entries && (data_to_save.is_a?(Hash) || data_to_save.is_a?(Array))
-
-            store_after_database(cache_key, cached_row, @db_adapter.data_version)
-          end
+          @db_adapter.save_settings(script_name, unwrapped_settings, scope)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Data saved to DB for script '#{script_name}'." })
 
-          if stored
-            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{@settings_cache[cache_key].object_id})." })
+          if store_after_database(cache_key, unwrapped_settings, @db_adapter.data_version)
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Cache updated for #{cache_key} with saved data (object_id: #{unwrapped_settings.object_id})." })
             true
           else
             _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_to_database: Kept the newer row another thread re-read for #{cache_key} after the save." })

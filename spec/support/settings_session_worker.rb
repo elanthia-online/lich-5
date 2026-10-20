@@ -29,7 +29,30 @@
 #                               api["<prefix>_<thread>_<i>"] = i for i < n,
 #                               while another thread keeps writing the uservars
 #                               table through Lich.db           => "ok"
+#   nburst <api> <key> <prefix> <n>
+#                               api[key]["<prefix>_<i>"] = i, i < n, each through
+#                               a fresh proxy                   => "ok"
+#   pburst <api> <key> <prefix> <n>
+#                               api[key].push("<prefix>_<i>"), i < n => "ok"
 #   msgs                        Messaging and log lines so far  => [[kind, text], ...]
+#
+# A script may keep a proxy and write through it later. These commands keep
+# one under a name and use it:
+#
+#   keep  <name> <api> <key>    kept[name] = api[key]           => "ok"
+#   keep  <name> <api> <key> <sub>
+#                               kept[name] = api[key][sub]      => "ok"
+#   keeproot <name> <api>       kept[name] = the root proxy: to_hash for G and
+#                               C, character_proxy for I, game_proxy for IG
+#                                                               => "ok"
+#   keepfind <name> <api> <key> <field> <json>
+#                               kept[name] = api[key].find { |e| e[field] == value }
+#                                                               => "ok"
+#   kset  <name> <sub> <json>   kept[name][sub] = value         => "ok"
+#   kcall <name> <method> <json array>
+#                               kept[name].<method>(*args)      => result
+#   kdelete_if <name> <json>    kept[name].delete_if { |e| e == value } => "ok"
+#   kget  <name>                kept[name], unwrapped           => value
 #
 # <api> is G (GameSettings), C (CharSettings), S (Settings), I (InstanceSettings)
 # or IG (InstanceSettings.game, which reads and writes through a root proxy).
@@ -151,6 +174,17 @@ def run_threads(api, prefix, thread_count, writes, filler)
   'ok'
 end
 
+KEPT = {}
+
+def keep_root(api)
+  case api
+  when 'G' then Lich::Common::GameSettings.to_hash
+  when 'C' then Lich::Common::CharSettings.to_hash
+  when 'I' then Lich::Common::InstanceSettings.character_proxy
+  when 'IG' then Lich::Common::InstanceSettings.game_proxy
+  end
+end
+
 def plain(value)
   value.is_a?(Lich::Common::SettingsProxy) ? JSON.parse(JSON.generate(value.target)) : value
 end
@@ -175,6 +209,45 @@ while (line = $stdin.gets)
     when 'burst'
       Integer(rest).times { |i| APIS.fetch(api)["#{key}_#{i}"] = i }
       'ok'
+    when 'nburst'
+      sub_prefix, count = rest.split
+      Integer(count).times { |i| APIS.fetch(api)[key]["#{sub_prefix}_#{i}"] = i }
+      'ok'
+    when 'pburst'
+      sub_prefix, count = rest.split
+      Integer(count).times { |i| APIS.fetch(api)[key].push("#{sub_prefix}_#{i}") }
+      'ok'
+    when 'keep'
+      source_key, sub = rest.split
+      KEPT[api] = sub ? APIS.fetch(key)[source_key][sub] : APIS.fetch(key)[source_key]
+      'ok'
+    when 'iset' # an entry with an Integer key, which JSON can't give: iset G rooms 1 {"a":1}
+      sub, json = rest.split(' ', 2)
+      APIS.fetch(api)[key] = { Integer(sub) => JSON.parse(json) }
+      'ok'
+    when 'ikeep' # ikeep room G rooms 1
+      source_key, sub = rest.split
+      KEPT[api] = APIS.fetch(key)[source_key][Integer(sub)]
+      'ok'
+    when 'keeproot'
+      KEPT[api] = keep_root(key)
+      'ok'
+    when 'keepfind'
+      source_key, field, json = rest.split(' ', 3)
+      wanted = JSON.parse(json)
+      KEPT[api] = APIS.fetch(key)[source_key].find { |e| e[field] == wanted }
+      'ok'
+    when 'kset'
+      KEPT.fetch(api)[key] = JSON.parse(rest)
+      'ok'
+    when 'kcall'
+      plain(KEPT.fetch(api).public_send(key.to_sym, *JSON.parse(rest)))
+    when 'kdelete_if'
+      wanted = JSON.parse([key, rest].compact.join(' '))
+      KEPT.fetch(api).delete_if { |e| e == wanted }
+      'ok'
+    when 'kget'
+      plain(KEPT.fetch(api))
     when 'row'
       row_for(api)
     when 'threads'
