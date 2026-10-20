@@ -4,6 +4,7 @@ require 'fileutils'
 require 'tempfile'
 require 'yaml'
 require_relative 'frontend'
+require_relative 'sharing_violation_retry'
 
 module Lich
   module Common
@@ -20,11 +21,9 @@ module Lich
       MAX_SCALAR_BYTES = 4096
       MAX_ARGUMENTS = 256
       MUTEX = Mutex.new
-      # Bounded backoff (0.31 s total, the same schedule ActiveSessions uses for
-      # its discovery file) for publishing or removing a file while Windows
-      # reports a sharing violation because another process briefly holds it
-      # open.
-      SHARING_VIOLATION_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16].freeze
+      # Bounded backoff for publishing or removing the settings file while
+      # Windows reports a sharing violation. Shared with ActiveSessions.
+      SHARING_VIOLATION_RETRY_DELAYS = SharingViolationRetry::DELAYS
 
       # Raised when saving would overwrite a settings document created by a
       # newer, unsupported schema version.
@@ -39,6 +38,8 @@ module Lich
       )
 
       @current = EMPTY_CONFIGURATION
+
+      extend SharingViolationRetry
 
       class << self
         # Loads, validates, and applies frontends.yml from a Lich data directory.
@@ -214,28 +215,6 @@ module Lich
           nil
         rescue StandardError => error
           log_warning("could not remove temporary #{FILE_NAME} file #{file.path}: #{error.message}")
-        end
-
-        # Runs a filesystem mutation, retrying the transient sharing violations
-        # Windows reports as EACCES while another process holds the file open.
-        # Every other error is raised immediately.
-        #
-        # @yield the filesystem mutation to attempt
-        # @return [Object] the mutation result
-        # @raise [Errno::EACCES] when every bounded retry is exhausted
-        # @raise [SystemCallError] for any other failure
-        # @api private
-        def retry_sharing_violation
-          attempt = 0
-          begin
-            yield
-          rescue Errno::EACCES
-            raise if attempt >= SHARING_VIOLATION_RETRY_DELAYS.length
-
-            sleep(SHARING_VIOLATION_RETRY_DELAYS.fetch(attempt))
-            attempt += 1
-            retry
-          end
         end
 
         # Converts an arbitrary settings document into the supported immutable schema.
