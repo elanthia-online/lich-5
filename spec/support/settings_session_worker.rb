@@ -221,6 +221,14 @@ while (line = $stdin.gets)
       source_key, sub = rest.split
       KEPT[api] = sub ? APIS.fetch(key)[source_key][sub] : APIS.fetch(key)[source_key]
       'ok'
+    when 'iset' # an entry with an Integer key, which JSON can't give: iset G rooms 1 {"a":1}
+      sub, json = rest.split(' ', 2)
+      APIS.fetch(api)[key] = { Integer(sub) => JSON.parse(json) }
+      'ok'
+    when 'ikeep' # ikeep room G rooms 1
+      source_key, sub = rest.split
+      KEPT[api] = APIS.fetch(key)[source_key][Integer(sub)]
+      'ok'
     when 'keeproot'
       KEPT[api] = keep_root(key)
       'ok'
