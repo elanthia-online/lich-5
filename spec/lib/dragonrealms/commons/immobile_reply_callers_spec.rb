@@ -11,6 +11,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-items.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'equipmanager.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-arcana.rb')
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
 
 RSpec.describe 'Callers that list the immobile reply' do
   let(:drc) { Lich::DragonRealms::DRC }
@@ -478,6 +479,234 @@ RSpec.describe 'Callers that list the immobile reply' do
           expect(sent).to eq([command])
           expect(messages.grep(/No response from game|No match was found/)).to be_empty
         end
+      end
+    end
+  end
+
+  describe 'DRC.retreat' do
+    let(:standing) { [true] }
+    let(:must_stand) { 'You must stand first.' }
+    let(:hold_timeout) { Lich::DragonRealms::DRC::BPUT_DEFAULT_TIMEOUT }
+    # Seconds added to Time.now. Each pause moves the clock on, so a hold that
+    # outlasts retreat's deadline runs without real waiting.
+    let(:clock) { { offset: 0 } }
+
+    before do
+      allow(DRRoom).to receive(:npcs).and_return(['goblin'])
+      allow(drc).to receive(:standing?) { standing.first }
+    end
+
+    def game_with_clock(replies)
+      game(replies)
+      allow(Time).to(receive(:now).and_wrap_original { |now| now.call + clock[:offset] })
+      allow(drc).to receive(:pause) { |seconds| clock[:offset] += seconds }
+    end
+
+    def held_after(count, then_reply)
+      -> { sent.count('retreat') > count ? then_reply : immobile }
+    end
+
+    context 'while held or rooted' do
+      it 'retreats once the hold ends, about one RETREAT a second, with no timeout report' do
+        game_with_clock('retreat' => held_after(3, 'You retreat from combat.'))
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 4)
+        expect(drc).to have_received(:pause).with(1).exactly(3).times
+        expect(messages.grep(/No match was found/)).to be_empty
+      end
+
+      # The last RETREAT goes out up to 1 s after the deadline, then retreat
+      # pauses 1 s before it gives up, so a caller that calls it again at once
+      # is paced.
+      it 'returns false when the hold outlasts the deadline, without waiting for a RETREAT timeout' do
+        game_with_clock('retreat' => immobile)
+        expect(drc.retreat).to be false
+        expect(sent).to eq(['retreat'] * (hold_timeout + 1))
+        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout + 1).times
+        expect(clock[:offset]).to eq(hold_timeout + 1)
+        expect(messages.grep(/No match was found/)).to be_empty
+      end
+
+      it 'counts the time RETREAT replies take toward the deadline' do
+        game_with_clock('retreat' => -> { clock[:offset] += 0.5; immobile })
+        expect(drc.retreat).to be false
+        # The deadline starts at the first reply (0.5 s). Each try then takes
+        # 1.5 s (0.5 s reply, 1 s pause), so RETREATs go out at 0, 1.5 ... 15,
+        # the last one after the reply at 14 s, inside the deadline.
+        expect(sent.size).to eq((hold_timeout / 1.5).floor + 1)
+      end
+
+      # The hold budget starts at the first immobile reply, so entry roundtime
+      # (bput waits it out before the first RETREAT) doesn't use it up.
+      it 'retreats when an entry roundtime and a hold together outlast the deadline' do
+        game_with_clock('retreat' => -> { clock[:offset] < 18 ? immobile : 'You retreat from combat.' })
+        roundtime = [10]
+        allow(drc).to receive(:waitrt?) { clock[:offset] += roundtime.shift.to_i }
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 9)
+      end
+
+      it 'retreats when a slow first step and a hold together outlast the deadline' do
+        game_with_clock('retreat' => lambda {
+          next(clock[:offset] += 10; 'You retreat back to pole range.') if sent.size == 1
+
+          clock[:offset] < 24 ? immobile : 'You retreat from combat.'
+        })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 16)
+      end
+
+      it 'retreats when the hold ends in the last second before the deadline' do
+        game_with_clock('retreat' => -> { clock[:offset] < hold_timeout - 0.5 ? immobile : 'You retreat from combat.' })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * (hold_timeout + 1))
+      end
+
+      it 'keeps every try 1 s apart, the last one less than 1 s after the deadline' do
+        sent_at = []
+        game_with_clock('retreat' => -> { sent_at << clock[:offset]; clock[:offset] += 0.3; immobile })
+        expect(drc.retreat).to be false
+        expect(drc).to have_received(:pause).with(1).exactly(sent_at.size).times
+        # Deadline: the first reply (0.3 s) plus the hold timeout. Tries go
+        # out every 1.3 s; the last reply before the deadline comes at 14.6 s.
+        expect(sent_at.last).to be_within(0.01).of(15.6)
+      end
+
+      it 'does not send STAND when held while standing' do
+        game_with_clock('retreat' => held_after(2, 'You retreat from combat.'))
+        drc.retreat
+        expect(sent).not_to include('stand')
+      end
+
+      it 'finishes the retreat when a hold starts after a first step back to pole range' do
+        game_with_clock('retreat' => lambda {
+          case sent.count('retreat')
+          when 1 then 'You retreat back to pole range.'
+          when 2, 3 then immobile
+          else 'You retreat from combat.'
+          end
+        })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(['retreat'] * 4)
+      end
+
+      # One budget covers every hold in a call. A per-hold deadline would let
+      # holds that alternate with steps back to pole range go on unbounded.
+      it 'shares one deadline across holds in one call' do
+        # Each step back to pole range takes 1 s. Holds come at 0, 2 ... 16 s;
+        # the one at 16 s is past the deadline set by the first (15 s).
+        game_with_clock('retreat' => lambda {
+          next immobile if sent.size.odd?
+
+          clock[:offset] += 1
+          'You retreat back to pole range.'
+        })
+        expect(drc.retreat).to be false
+        expect(sent.size).to eq(17)
+        expect(clock[:offset]).to eq(17)
+      end
+
+      it 'gives up when a second hold in the same call runs past the first hold\'s deadline' do
+        game_with_clock('retreat' => lambda {
+          case clock[:offset]
+          when 0...12 then immobile
+          when 12...13 then (clock[:offset] += 1; 'You retreat back to pole range.')
+          when 13...17 then immobile
+          else 'You retreat from combat.'
+          end
+        })
+        expect(drc.retreat).to be false
+        expect(clock[:offset]).to eq(hold_timeout + 1)
+      end
+
+      it 'starts a new deadline on each call' do
+        game_with_clock('retreat' => held_after(hold_timeout + 2, 'You retreat from combat.'))
+        expect(drc.retreat).to be false
+        expect(drc.retreat).to be true
+        expect(sent.size).to eq(hold_timeout + 3)
+      end
+
+      it 'DRCT.retreat passes the false through' do
+        game_with_clock('retreat' => immobile)
+        expect(Lich::DragonRealms::DRCT.retreat).to be false
+      end
+    end
+
+    it 'still retreats in two steps when not held, with no pause' do
+      game('retreat' => -> { sent.size == 1 ? 'You retreat back to pole range.' : 'You retreat from combat.' })
+      expect(drc.retreat).to be true
+      expect(sent).to eq(%w[retreat retreat])
+      expect(drc).not_to have_received(:pause)
+    end
+
+    context 'when sitting' do
+      before { standing.replace([false]) }
+
+      it 'stands and retreats when able to stand' do
+        game('retreat' => -> { sent.count('retreat') == 1 ? must_stand : 'You retreat from combat.' },
+             'stand'   => -> { standing.replace([true]); 'You stand back up.' })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(%w[retreat stand retreat])
+        expect(drc).not_to have_received(:pause)
+      end
+
+      it 'stands and retreats once a hold ends' do
+        game_with_clock('retreat' => -> { standing.first ? 'You retreat from combat.' : must_stand },
+                        'stand'   => lambda {
+                          next immobile if sent.count('stand') < 3
+
+                          standing.replace([true])
+                          'You stand back up.'
+                        })
+        expect(drc.retreat).to be true
+        expect(sent).to eq(%w[retreat stand retreat stand retreat stand retreat])
+        expect(drc).to have_received(:pause).with(1).twice
+      end
+
+      it 'returns false when the hold outlasts the deadline, one RETREAT and STAND a second' do
+        game_with_clock('retreat' => must_stand, 'stand' => immobile)
+        expect(drc.retreat).to be false
+        expect(sent).to eq(%w[retreat stand] * (hold_timeout + 1))
+        expect(drc).to have_received(:pause).with(1).exactly(hold_timeout + 1).times
+      end
+
+      # Overburdened, unconscious and the like: standing can't succeed, and no
+      # reply says when that ends, so retreat gives up at once. It pauses 1 s
+      # first so that a caller that loops on retreat is paced.
+      ["You are overburdened and cannot manage to stand.", "You're unconscious!",
+       "There's no room to do much of anything here."].each do |reply|
+        it "returns false after one RETREAT, one STAND and a 1 s pause when STAND draws #{reply.inspect}" do
+          game_with_clock('retreat' => must_stand, 'stand' => reply)
+          expect(drc.retreat).to be false
+          expect(sent).to eq(%w[retreat stand])
+          expect(drc).to have_received(:pause).with(1).once
+        end
+      end
+    end
+
+    # summon_admittance calls retreat again at once while SUMMON draws "You
+    # are a bit too distracted", with no pause of its own.
+    context 'from DRCS.summon_admittance' do
+      before do
+        require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-summoning.rb')
+        allow(Lich::DragonRealms::DRCS).to receive(:pause)
+        allow(Lich::DragonRealms::DRCS).to receive(:waitrt?)
+      end
+
+      it 'is paced at one pause per loop while the character cannot stand' do
+        standing.replace([false])
+        game_with_clock('summon admittance' => 'You are a bit too distracted to do that.',
+                        'retreat'           => must_stand,
+                        'stand'             => 'You are overburdened and cannot manage to stand.')
+        expect { Lich::DragonRealms::DRCS.summon_admittance }.to raise_error(/sent 21 times/)
+        expect(drc).to have_received(:pause).with(1).exactly(sent.count('retreat')).times
+      end
+
+      it 'summons once the hold ends' do
+        game_with_clock('summon admittance' => -> { sent.include?('retreat') ? 'You align yourself to it.' : 'You are a bit too distracted to do that.' },
+                        'retreat'           => held_after(2, 'You retreat from combat.'))
+        Lich::DragonRealms::DRCS.summon_admittance
+        expect(sent).to eq(['summon admittance', 'retreat', 'retreat', 'retreat', 'summon admittance'])
       end
     end
   end
