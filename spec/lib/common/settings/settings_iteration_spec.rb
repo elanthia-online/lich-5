@@ -363,7 +363,22 @@ RSpec.describe Lich::Common::Settings, "writes made while iterating, through the
       expect(stored).to eq(before_write)
       expect(copies).to eq([{ extra: 1, k: 1 }, { extra: 1, k: 1 }])
       expect(error_messages.size).to eq(3)
-      expect(error_messages).to all(include("not saved", "a new container built from an element an each loop yielded"))
+      expect(error_messages).to all(include("not saved", "a new container built from an element an each loop yielded", "a plain copy",
+                                            "to store a change, write to the element itself"))
+      expect(error_messages.map { |message| message[/this is what (\w+) returned/, 1] }).to eq(["merge", "merge", "select"])
+    end
+
+    it "names the method that made the copy for a plain local copy of an element, and still tells it once per loop" do
+      settings[:rows] = [{ k: 0 }, { k: 1 }]
+      before_write = stored
+
+      settings[:rows].each { |row| row = row.merge(d: 0); row[:k] = 9 }
+      settings[:rows].each { |row| row.reject { false }.first(1).push([:z, 1]) }
+
+      expect(stored).to eq(before_write)
+      expect(error_messages.size).to eq(2)
+      expect(error_messages[0]).to include("--- Error: settings for test_script", "this is what merge returned, a new container built from an element an each loop yielded")
+      expect(error_messages[1]).to include("this is what first returned, a new container built from an element an each loop yielded")
     end
 
     it "still stores a write through an element of such a container where the settings hold that element" do

@@ -30,7 +30,8 @@ module Lich
       # (row.merge(..), row.select { ... }, row.first(2)): like a plain
       # Hash's, it is not part of the settings, so a write to it is refused
       # with a message; its elements are found where the settings hold them
-      # (+source+ is that element's container).
+      # (+source+ is that element's container). It is the method that built
+      # it (see #copied_by), or true.
       #
       # +path_classes+ (see #path_classes) defaults, for a path of at most
       # one segment, to the root's class (a Hash), and otherwise to nil.
@@ -132,6 +133,12 @@ module Lich
       # #initialize); Settings.save_proxy_changes refuses a write to it.
       def copy?
         !!@copy
+      end
+
+      # For a #copy?, the method that built it (merge, select, first, ...);
+      # nil when not known.
+      def copied_by
+        @copy if @copy.is_a?(Symbol)
       end
 
       def nil?
@@ -921,7 +928,7 @@ module Lich
           elsif @settings_module.container?(result) && (pathless_element? || fetch_default?(method, args))
             pathless_derived_proxy(result, fetch_default?(method, args) ? "the default fetch returned" : nil)
           elsif @settings_module.container?(result) && yielded?
-            SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: true,
+            SettingsProxy.new(@settings_module, @scope, @path.dup, result, script_name: @script_name, source: view_source, refusals: @refusals, copy: method,
                                                                              path_classes: @path_classes)
           elsif @settings_module.container?(result)
             if @target.is_a?(Array) && [:find, :detect].include?(method)

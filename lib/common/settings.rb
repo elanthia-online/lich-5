@@ -338,7 +338,9 @@ module Lich
         end
 
         if proxy.respond_to?(:copy?) && proxy.copy?
-          return refuse_proxy_save(script_name, proxy, "this is a new container built from an element an each loop yielded (merge, select, first(2), ...), not part of the settings")
+          copied_by = proxy.respond_to?(:copied_by) && proxy.copied_by
+          what = copied_by ? "what #{copied_by} returned" : "a copy (what merge, select, first(2), ... returned)"
+          return refuse_proxy_save(script_name, proxy, "this is #{what}, a new container built from an element an each loop yielded: a plain copy, not part of the settings (to store a change, write to the element itself)")
         end
 
         if proxy.respond_to?(:detached?) && proxy.detached?
