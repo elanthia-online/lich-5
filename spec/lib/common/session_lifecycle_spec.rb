@@ -269,7 +269,8 @@ RSpec.describe Lich::Common::SessionLifecycle do
         writes += 1
         if writes == 1
           events << :failed_write
-          raise IOError, 'summary store temporarily unavailable'
+          raise IOError, 'summary store temporarily unavailable',
+                %w[summary_store.rb:10 sessions_settings.rb:20 session_lifecycle.rb:30 thread.rb:40]
         end
 
         events << :successful_write
@@ -281,7 +282,10 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(events).to eq([[:sleep, 0], [:sleep, 2], :failed_write, [:sleep, 2], :successful_write, [:sleep, 2]])
       expect(Lich::Common::SessionsSettings).to have_received(:heartbeat_admitted).twice
       expect(Lich::Common::SessionsSettings).to have_received(:register_session_admitted).once
-      expect(Lich).to have_received(:log).with('warning: SessionLifecycle heartbeat tick failed (continuing): IOError: summary store temporarily unavailable').once
+      expect(Lich).to have_received(:log).with(
+        'warning: SessionLifecycle heartbeat tick failed (continuing): IOError: summary store temporarily unavailable' \
+        "\n\tsummary_store.rb:10\n\tsessions_settings.rb:20\n\tsession_lifecycle.rb:30"
+      ).once
       expect(Lich).not_to have_received(:log).with(a_string_matching(/heartbeat thread stopped/))
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(false)
       expect(described_class.stop).to be(true)
