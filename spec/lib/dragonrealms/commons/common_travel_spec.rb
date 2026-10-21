@@ -1264,6 +1264,25 @@ RSpec.describe DRCT do
         expect(searches).to eq(5)
       end
 
+      it 'does not ask the predicate again in a rejected buddy room during the relaxed-mana pass' do
+        # 100 has a buddy the predicate rejects; 200 is accepted but short on
+        # mana, so the search relaxes mana and passes again without idling.
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(asked).to eq([100, 200, 200])
+        expect(current.id).to eq(200)
+      end
+
+      it 'keeps the public signature to the seven positional arguments' do
+        expect(DRCT.method(:find_empty_room).parameters.map(&:first)).to eq(%i[req req opt opt opt opt opt])
+        expect(DRCT.respond_to?(:find_empty_room_search)).to be false
+      end
+
       it 'asks again in that room on a later search attempt' do
         allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
         result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, 2, true) }
