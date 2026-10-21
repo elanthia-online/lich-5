@@ -14,7 +14,7 @@ module Lich
       # Mirrors EAccess's public interface (.auth / .auth_with_timeout) and
       # returns the same login_info hash shape (lowercase GAMEHOST/GAMEPORT/KEY
       # keys, etc.) so Authenticator can select a backend without callers
-      # changing. See docs/web-login-protocol-analysis.md for how this
+      # changing. See docs/connection/web-login-protocol-analysis.md for how this
       # contract was reverse-engineered from a live browser capture, and for
       # what remains unconfirmed.
       #
@@ -33,7 +33,7 @@ module Lich
       module WebLogin
         # Raised on login failure or when a character/game code can't be resolved.
         # error_code is a best-effort label, not a stable server-provided code
-        # like EAccess's REJECT/NORECORD/etc -- see docs/web-login-protocol-analysis.md
+        # like EAccess's REJECT/NORECORD/etc -- see docs/connection/web-login-protocol-analysis.md
         # "Open Questions" for what remains unconfirmed.
         class AuthenticationError < StandardError
           attr_reader :error_code
@@ -123,7 +123,7 @@ module Lich
         # DR/DRT/GSF -- only GS3->GS4 has ever diverged) so a tester who does
         # have access can exercise this without a code change. See
         # .extract_connection_info for what "unverified" relaxes and what it
-        # still enforces, and docs/web-login-protocol-analysis.md for what to
+        # still enforces, and docs/connection/web-login-protocol-analysis.md for what to
         # do once a real result comes back: hardcode the observed host/port
         # here and this comment no longer applies.
         #
@@ -307,7 +307,7 @@ module Lich
 
         # Step 1a: scrape the requested instance's character-selection page
         # for the charID matching `character`. See
-        # docs/web-login-protocol-analysis.md for the exact markup this
+        # docs/connection/web-login-protocol-analysis.md for the exact markup this
         # depends on and why it's the most fragile part of this module.
         #
         # @param http [Net::HTTP] open connection to BASE_HOST
@@ -380,7 +380,7 @@ module Lich
           request.body = URI.encode_www_form(
             charID: char_code,
             # Present in every confirmed live capture except GemStone Test's
-            # (see docs/web-login-protocol-analysis.md) -- sent unconditionally
+            # (see docs/connection/web-login-protocol-analysis.md) -- sent unconditionally
             # since an extra form field the server doesn't need for that one
             # case is far cheaper than silently omitting one it does need.
             NEWCHARSUB: "TRUE",

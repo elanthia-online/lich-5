@@ -3,6 +3,7 @@
 require 'open3'
 require 'rbconfig'
 require_relative '../spec_helper'
+require_relative '../../lib/common/wait_response'
 
 # NOTE: We intentionally do NOT `require 'global_defs.rb'` here.
 # Loading the entire file redefines global methods (respond, get, put, etc.)
@@ -148,6 +149,25 @@ RSpec.describe '#fput' do
       result = fput('get sword')
 
       expect(result).to eq('You pick up a sword.')
+    end
+
+    it 'honors the "... wait" spelling and a wait appended to the previous line' do
+      stub_game_responses('... wait 2 seconds.', 'You reach for it....wait 1 second.', 'You pick up a sword.')
+      expect(self).to receive(:sleep).with(2).ordered
+      expect(self).to receive(:sleep).with(1).ordered
+      expect(self).to receive(:put).with('get sword').exactly(3).times
+
+      expect(fput('get sword')).to eq('You pick up a sword.')
+    end
+
+    it 'does not treat player speech containing "Wait N" as a refusal' do
+      ['Soandso says, "Wait 5 minutes before we go."', 'You whisper to Bob, "Wait 10 and then follow."'].each do |speech|
+        stub_game_responses(speech)
+        expect(self).not_to receive(:sleep)
+        expect(self).to receive(:put).with('get sword').once
+
+        expect(fput('get sword')).to eq(speech)
+      end
     end
   end
 
@@ -730,7 +750,7 @@ RSpec.describe '#handle_detachable_client' do
 end
 
 # A client may send SET_FRONTEND_CAPS at any time to name the rich-stream
-# rewrites it handles itself (docs/frontend-capability-declaration.md). The
+# rewrites it handles itself (docs/frontends/capability-declaration.md). The
 # real handler runs in a subprocess, as above; the client's lines are scripted
 # and every line that reaches dispatch is recorded.
 RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do

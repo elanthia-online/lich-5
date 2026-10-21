@@ -79,6 +79,10 @@ RSpec.describe Lich::DragonRealms::DRC do
       expect("Bob says, \"You don't seem to be able to move to do that.\"").not_to match(described_class::CANNOT_STAND_PATTERN)
     end
 
+    it 'WAIT_RESPONSE_PATTERN is the core pattern fput uses' do
+      expect(described_class::WAIT_RESPONSE_PATTERN).to equal(Lich::Common::WAIT_RESPONSE_PATTERN)
+    end
+
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
       match = "...wait 3 seconds.".match(described_class::WAIT_RESPONSE_PATTERN)
       expect(match).not_to be_nil
@@ -86,7 +90,8 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
 
     it 'WAIT_RESPONSE_PATTERN matches the singular, appended and tagged forms the game sends' do
-      ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>'].each do |line|
+      # 'sec.' is newly accepted here (dothis/move already allowed it before the pattern was shared)
+      ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>', '...wait 5 sec.'].each do |line|
         expect(line).to match(described_class::WAIT_RESPONSE_PATTERN)
       end
     end

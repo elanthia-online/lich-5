@@ -26,7 +26,7 @@ module Lich
     #   session -- whose frontend sends a plain "{key}\n/FE:WRAYTH .../XML"
     #   (no "<c>" prefix, a different /FE: value) -- played for an extended,
     #   interactive session and shut down cleanly. See
-    #   docs/websocket-shim-probe-findings.md (pass 3) for the full writeup.
+    #   docs/connection/websocket-shim-probe-findings.md (pass 3) for the full writeup.
     #
     # @see Lich::Common::WebSocket::Stream
     module GameTransport
@@ -100,7 +100,7 @@ module Lich
 
       # Defaults for the WebSocket shim path/headers. Confirmed live against
       # play.net's own web client (`style/js/all_web_fe_min.js`,
-      # `SimuSocket.tryWebSocket`) -- see docs/websocket-shim-probe-findings.md
+      # `SimuSocket.tryWebSocket`) -- see docs/connection/websocket-shim-probe-findings.md
       # for the full writeup and how these were pulled directly from that
       # bundle rather than guessed.
       DEFAULT_SHIM_PORT        = 443
@@ -126,7 +126,7 @@ module Lich
       # mismatch a naive literal-GAMEHOST connect hits: hydra.play.net and
       # chimera.play.net are both covered by the shared edge certificate's
       # *.play.net SAN; the raw GAMEHOST (e.g. dr.simutronics.net, a .net
-      # name) is not. See docs/websocket-shim-probe-findings.md.
+      # name) is not. See docs/connection/websocket-shim-probe-findings.md.
       WEBSOCKET_HOST_OVERRIDES = [
         [/gs|chimera/i, "chimera.play.net"],
         [/dr|hydra/i,   "hydra.play.net"]
