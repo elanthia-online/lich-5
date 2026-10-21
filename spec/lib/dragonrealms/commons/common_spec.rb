@@ -72,6 +72,12 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('RACIAL_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::RACIAL_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('FLAVOR_TEXT_PATTERN is frozen') { expect(described_class::FLAVOR_TEXT_PATTERN).to be_frozen }
     it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
+    it('IMMOBILE_PATTERN is frozen') { expect(described_class::IMMOBILE_PATTERN).to be_frozen }
+
+    it 'CANNOT_STAND_PATTERN matches the immobile reply only at the start of the line' do
+      expect("You don't seem to be able to move to do that.").to match(described_class::CANNOT_STAND_PATTERN)
+      expect("Bob says, \"You don't seem to be able to move to do that.\"").not_to match(described_class::CANNOT_STAND_PATTERN)
+    end
 
     it 'WAIT_RESPONSE_PATTERN is the core pattern fput uses' do
       expect(described_class::WAIT_RESPONSE_PATTERN).to equal(Lich::Common::WAIT_RESPONSE_PATTERN)
@@ -905,10 +911,12 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'handles a line held during the wait like any other reply' do
-        allow(described_class).to receive(:fix_standing)
+        allow(described_class).to receive(:stand_before?).and_return(true)
         game(['...wait 1 seconds.', 'You must be standing to do that.'], ['You get a gem from inside your pouch.'])
         expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
-        expect(described_class).to have_received(:fix_standing).once
+        expect(described_class).to have_received(:stand_before?).once
+        # Resent once for the wait line, then once more after standing.
+        expect(sent.size).to eq(3)
       end
 
       it 'lists the wait lines it skipped when reporting no match' do
@@ -943,6 +951,190 @@ RSpec.describe Lich::DragonRealms::DRC do
         game(['Bob whispers, "Wait 0"', 'You drop a gem.'])
         expect { described_class.bput('drop my gem', 'You drop') }.not_to raise_error
         expect(sent).to eq(['drop my gem'])
+      end
+    end
+
+    # The same model of the game stream, answering by command. get? raises
+    # when no reply has arrived for a second, so a reply bput skips fails
+    # the example at once instead of waiting out the 15 s timeout.
+    context "the immobile reply (\"You don't seem to be able to move to do that.\")" do
+      let(:immobile) { "You don't seem to be able to move to do that." }
+      let(:buffer) { [] }
+      let(:sent) { [] }
+
+      def game(replies)
+        last_reply = Time.now
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          raise "#{message.inspect} sent #{sent.count(message)} times" if sent.count(message) > 5
+
+          reply = replies[message]
+          buffer.concat(Array(reply.respond_to?(:call) ? reply.call : reply))
+          last_reply = Time.now
+        end
+        allow(described_class).to receive(:get?) do
+          raise 'bput skipped the reply and waited for another' if buffer.empty? && Time.now - last_reply > 1
+
+          buffer.shift
+        end
+        allow(described_class).to receive(:pause) { sleep(0.001) }
+      end
+
+      it 'returns it when a String pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', 'You get', "You don't seem to be able to move to do that"))
+          .to eq("You don't seem to be able to move to do that")
+        expect(sent).to eq(['get my gem'])
+      end
+
+      it 'returns it when a Regexp pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/))
+          .to eq("You don't seem to be able to move")
+        expect(sent).to eq(['get my gem'])
+      end
+
+      it "returns it to a broad 'You' pattern instead of waiting out the timeout" do
+        game('invoke my orb' => immobile)
+        expect(described_class.bput('invoke my orb', 'You')).to eq('You')
+        expect(sent).to eq(['invoke my orb'])
+      end
+
+      it 'waits out the timeout without resending when no pattern lists it' do
+        game('get my gem' => immobile)
+        expect(described_class.bput('get my gem', { 'timeout' => 0.2 }, 'You get')).to eq('')
+        expect(sent).to eq(['get my gem'])
+        expect(Lich::Messaging.messages.map { |m| m[:message] }).to include("DRC: > #{immobile}")
+      end
+
+      it 'does not return a quoted copy in speech to an anchored pattern' do
+        game('get my gem' => ["Bob says, \"#{immobile}\"", 'You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/)).to eq('You get')
+      end
+
+      it 'returns it when it was read during a roundtime hold' do
+        game('get my gem' => -> { sent.size == 1 ? ['...wait 1 seconds.', immobile] : ['You get a gem.'] })
+        expect(described_class.bput('get my gem', /^You get/, /^You don't seem to be able to move/))
+          .to eq("You don't seem to be able to move")
+        expect(sent).to eq(['get my gem'] * 2)
+      end
+
+      context 'when a command needs the character standing' do
+        before { allow(described_class).to receive(:standing?).and_return(false) }
+
+        it 'does not resend the command when standing fails for being overburdened' do
+          game('get my gem' => 'You must be standing to do that.',
+               'stand'      => 'You are overburdened and cannot manage to stand.')
+          expect(described_class.bput('get my gem', { 'timeout' => 0.3 }, 'You get')).to eq('')
+          expect(sent).to eq(['get my gem', 'stand'])
+        end
+
+        it 'resends the command once standing succeeds' do
+          standing = false
+          allow(described_class).to receive(:standing?) { standing }
+          game('get my gem' => -> { standing ? ['You get a gem.'] : ['You must be standing to do that.'] },
+               'stand'      => -> { standing = true; ['You stand back up.'] })
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(sent).to eq(['get my gem', 'stand', 'get my gem'])
+        end
+      end
+
+      # The command draws a posture line and the STAND draws the immobile
+      # reply until the hold ends. A virtual clock runs bput's 15 s timeout
+      # and the 1 s pauses at once; every reply arrives 0.3 s after its send.
+      context 'when a command needs the character standing and a hold refuses the STAND' do
+        let(:log) { [] }
+        let(:clock) { { now: 0.0 } }
+
+        # posture_line_at delays the reply to the first send of the command,
+        # a posture line that arrives late.
+        def held_game(hold_for:, stand_refusal: immobile, posture_line_at: nil)
+          standing = false
+          queue = []
+          allow(Time).to receive(:now) { Time.at(1_000_000 + clock[:now]) }
+          allow(described_class).to receive(:pause) { |seconds = 1| clock[:now] += seconds.to_f }
+          allow(described_class).to receive(:standing?) { standing }
+          allow(described_class).to receive(:clear) { queue.reject! { |at, _| at <= clock[:now] } }
+          allow(described_class).to receive(:get?) do
+            index = queue.index { |at, _| at <= clock[:now] }
+            index && queue.delete_at(index).last
+          end
+          allow(described_class).to receive(:put) do |message|
+            log << [clock[:now], message]
+            raise "#{log.size} sends" if log.size > 100
+
+            at = clock[:now] + 0.3
+            reply = if message == 'stand'
+                      next queue << [at, stand_refusal] if at < hold_for
+
+                      standing = true
+                      'You stand back up.'
+                    else
+                      at = posture_line_at if posture_line_at && log.size == 1
+                      standing ? 'You get a gem.' : 'You must be standing to do that.'
+                    end
+            queue << [at, reply]
+          end
+        end
+
+        def sent_at(message) = log.select { |_, m| m == message }.map(&:first)
+
+        it 'keeps trying to stand and resends the command when the hold ends within the timeout' do
+          held_game(hold_for: 5)
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(log.map(&:last).uniq).to eq(['get my gem', 'stand', 'get my gem'].uniq)
+          expect(log.first.last).to eq('get my gem')
+          expect(log.last.last).to eq('get my gem')
+          expect(sent_at('get my gem').size).to eq(2)
+          expect(sent_at('stand').size).to be_between(4, 6)
+          expect(clock[:now]).to be < 7
+        end
+
+        it 'still resends when the hold ends 2 s before the timeout' do
+          held_game(hold_for: 13)
+          expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+          expect(sent_at('get my gem').size).to eq(2)
+        end
+
+        # The posture line comes 1.1 s before the timeout and the hold ends
+        # 0.5 s after it, so the next STAND has to go out at the deadline.
+        [[13.9, 14.4], [14.2, 14.7]].each do |posture_at, hold_end|
+          it "resends when a late posture line (#{posture_at} s) leaves under 1 s of a hold that ends at #{hold_end} s" do
+            held_game(hold_for: hold_end, posture_line_at: posture_at)
+            expect(described_class.bput('get my gem', 'You get')).to eq('You get')
+            expect(sent_at('get my gem').size).to eq(2)
+            expect(sent_at('stand').size).to eq(2)
+            expect(sent_at('stand').last).to be_within(0.001).of(15)
+          end
+        end
+
+        it 'sends no STAND after the deadline when a late posture line comes as the timeout runs out' do
+          held_game(hold_for: 1_000, posture_line_at: 14.8)
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          expect(sent_at('stand').size).to eq(1)
+          expect(sent_at('get my gem').size).to eq(1)
+        end
+
+        it 'tries about once a second until the timeout, then gives up without resending' do
+          held_game(hold_for: 1_000)
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          stands = sent_at('stand')
+          expect(sent_at('get my gem').size).to eq(1)
+          expect(stands.size).to be_between(10, 16)
+          # Only the last STAND, sent at the deadline, may come sooner.
+          expect(stands[0..-2].each_cons(2).map { |a, b| b - a }.min).to be >= 1
+          expect(stands.last).to be <= 15
+          expect(clock[:now]).to be < 17
+          expect(Lich::Messaging.messages.map { |m| m[:message] }).to include(a_string_including('No match was found'))
+        end
+
+        it 'stands only once over the whole timeout when unconscious' do
+          held_game(hold_for: 1_000, stand_refusal: "You're unconscious!")
+          expect(described_class.bput('get my gem', 'You get')).to eq('')
+          expect(sent_at('stand').size).to eq(1)
+          expect(sent_at('get my gem').size).to eq(1)
+        end
       end
     end
   end
@@ -999,6 +1191,123 @@ RSpec.describe Lich::DragonRealms::DRC do
 
     it 'does not treat a plain "You stand" success as a non-recoverable state' do
       expect('You stand').not_to match(described_class::CANNOT_STAND_PATTERN)
+    end
+
+    # Through the real bput: only put, get?, clear and pause are stubbed.
+    context 'through the real bput' do
+      let(:sent) { [] }
+
+      def stand_replies(*replies)
+        buffer = []
+        last_reply = Time.now
+        allow(described_class).to receive(:waitrt?)
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:pause) { sleep(0.001) }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          raise 'fix_standing looped: STAND sent again' if sent.size > replies.size
+
+          buffer << replies[sent.size - 1]
+          last_reply = Time.now
+        end
+        allow(described_class).to receive(:get?) do
+          raise 'bput skipped the reply to STAND' if buffer.empty? && Time.now - last_reply > 1
+
+          buffer.shift
+        end
+      end
+
+      it "stands once and returns false on \"You don't seem to be able to move to do that.\"" do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You don't seem to be able to move to do that.")
+        expect(described_class.fix_standing).to be false
+        expect(sent).to eq(['stand'])
+      end
+
+      # A caller that loops on fix_standing with no delay of its own would
+      # otherwise send STAND as fast as the game answers for the whole hold.
+      it 'pauses 1 s before returning false on the immobile reply' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You don't seem to be able to move to do that.")
+        expect(described_class.fix_standing).to be false
+        expect(described_class).to have_received(:pause).with(1).once
+      end
+
+      it 'sends at most one STAND per 1 s pause to a caller that loops on it while held' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies(*["You don't seem to be able to move to do that."] * 5)
+        5.times { described_class.fix_standing }
+        expect(sent).to eq(['stand'] * 5)
+        expect(described_class).to have_received(:pause).with(1).exactly(5).times
+      end
+
+      it 'returns false on another state that prevents standing' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You're unconscious!")
+        expect(described_class.fix_standing).to be false
+      end
+
+      it 'does not pause on the other states that prevent standing' do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_replies("You're unconscious!")
+        described_class.fix_standing
+        expect(described_class).not_to have_received(:pause).with(1)
+      end
+
+      it 'returns true once standing, after an unbalanced attempt' do
+        standing = [false, false, true]
+        allow(described_class).to receive(:standing?) { standing.shift }
+        stand_replies('You are so unbalanced you cannot manage to stand.', 'You stand back up.')
+        expect(described_class.fix_standing).to be true
+        expect(sent).to eq(%w[stand stand])
+      end
+
+      it 'returns true without standing when already standing' do
+        allow(described_class).to receive(:standing?).and_return(true)
+        stand_replies
+        expect(described_class.fix_standing).to be true
+        expect(sent).to be_empty
+      end
+    end
+  end
+
+  describe '.stand_before?' do
+    let(:deadline) { Time.at(1_000_000) }
+
+    before { allow(described_class).to receive(:stand_result).and_return(:immobile) }
+
+    # The deadline passes between the check and the pause. A pause of a
+    # negative interval raises ArgumentError, as Kernel#sleep does.
+    it 'gives up without a negative pause when the deadline passes during the check' do
+      reads = [deadline - 1e-6, deadline + 1e-6]
+      allow(Time).to receive(:now) { reads.shift || deadline + 1 }
+      paused = []
+      allow(described_class).to receive(:pause) do |seconds|
+        raise ArgumentError, 'time interval must not be negative' if seconds.negative?
+
+        paused << seconds
+      end
+      result = nil
+      expect { result = described_class.stand_before?(deadline) }.not_to raise_error
+      expect(paused).to all(be >= 0)
+      expect(result).to be false
+    end
+
+    it 'gives up at once at the deadline, without a pause' do
+      allow(Time).to receive(:now).and_return(deadline)
+      allow(described_class).to receive(:pause)
+      expect(described_class.stand_before?(deadline)).to be false
+      expect(described_class).not_to have_received(:pause)
+      expect(described_class).to have_received(:stand_result).once
+    end
+
+    it 'pauses only the time left when the deadline is under 1 s away' do
+      now = deadline - 0.25
+      allow(Time).to receive(:now) { now }
+      allow(described_class).to receive(:pause) { |seconds| now += seconds }
+      expect(described_class.stand_before?(deadline)).to be false
+      expect(described_class).to have_received(:pause).once.with(be_within(1e-9).of(0.25))
+      expect(described_class).to have_received(:stand_result).twice
     end
   end
 
@@ -1181,6 +1490,114 @@ RSpec.describe Lich::DragonRealms::DRC do
           expect(described_class.collect('rock')).to be_nil
           expect(sent).to eq(['collect rock practice'])
           expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'when the room stays cluttered after every successful kick' do
+        # Every collect is refused, a pile is always in the room and every kick lands.
+        # The cap is the only thing that can stop it; the guard turns a runaway loop
+        # into a plain failure instead of a SystemStackError.
+        before do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          allow(described_class).to receive(:fix_standing)
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        def endless_clutter(success_on_attempt: nil)
+          attempts = 0
+          allow(described_class).to receive(:bput) do |command, *_patterns|
+            sent << command
+            raise "runaway collect: #{sent.length} commands sent" if sent.length > 50
+
+            if command.start_with?('kick')
+              'take a step back and run up to'
+            else
+              attempts += 1
+              attempts == success_on_attempt ? 'You begin to forage around,' : 'The room is too cluttered'
+            end
+          end
+        end
+
+        it 'gives up after the fifth refused collect without a fifth kick' do
+          endless_clutter
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(sent.last).to eq('collect rock practice')
+          expect(described_class).to have_received(:waitrt?).once
+        end
+
+        it 'keeps the caller mode on every capped attempt' do
+          endless_clutter
+          described_class.collect('rock', false)
+          expect(sent.uniq).to eq(['collect rock', 'kick pile'])
+          expect(sent.length).to eq(9)
+        end
+
+        it 'says why it gave up' do
+          endless_clutter
+          described_class.collect('rock')
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+        end
+
+        it 'still collects when the last allowed attempt goes through' do
+          endless_clutter(success_on_attempt: 5)
+          allow(described_class).to receive(:waitrt?).and_return(true)
+          expect(described_class.collect('rock')).to be(true)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(described_class).to have_received(:waitrt?).once
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'gives every call its own budget' do
+          endless_clutter
+          described_class.collect('rock')
+          sent.clear
+          described_class.collect('rock')
+          expect(sent.count('collect rock practice')).to eq(5)
+        end
+      end
+
+      context 'when the last pile is kicked just before the cap' do
+        # Four piles, each destroyed by its kick, and every collect refused. The fifth
+        # refusal hits the cap before kick_pile? would find the room empty, so the
+        # give-up is the loud one.
+        before do
+          room_states = Array.new(4) { ['a pile of rocks'] }
+          allow(DRRoom).to receive(:room_objs) { room_states.shift || [] }
+          allow(Lich::Messaging).to receive(:msg)
+        end
+
+        it 'gives up at the cap with the message and without looking for a fifth pile' do
+          script_replies(*(['The room is too cluttered', 'take a step back and run up to'] * 4), 'The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(sent.count('collect rock practice')).to eq(5)
+          expect(sent.count('kick pile')).to eq(4)
+          expect(DRRoom).to have_received(:room_objs).exactly(4).times
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRC: Room still too cluttered to collect rock after 5 tries, giving up.").once
+          expect(described_class).to have_received(:waitrt?).once
+        end
+      end
+
+      context 'when it gives up before the cap' do
+        # Only the cap prints a message; a missing pile or a missed kick stays silent.
+        before { allow(Lich::Messaging).to receive(:msg) }
+
+        it 'prints nothing when there is no pile to kick' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a granite boulder'])
+          script_replies('The room is too cluttered')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+
+        it 'prints nothing when the kick misses' do
+          allow(DRRoom).to receive(:room_objs).and_return(['a pile of rocks'])
+          script_replies('The room is too cluttered', 'take a step back and run up to',
+                         'The room is too cluttered', 'I could not find')
+          expect(described_class.collect('rock')).to be_nil
+          expect(Lich::Messaging).not_to have_received(:msg)
         end
       end
 

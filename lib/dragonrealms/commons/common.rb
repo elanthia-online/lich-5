@@ -20,6 +20,11 @@ module Lich
       # see lib/common/wait_response.rb.
       WAIT_RESPONSE_PATTERN = Lich::Common::WAIT_RESPONSE_PATTERN
 
+      # Most collect attempts per DRC.collect call while the room is too
+      # cluttered. Chosen to equal DRC.forage?'s default tries (5), which is
+      # its own literal and does not follow this constant.
+      COLLECT_CLUTTER_ATTEMPTS = 5
+
       # Collect command response messages
       COLLECT_MESSAGES = [
         'As you rummage around',
@@ -61,6 +66,11 @@ module Lich
         /You are already/
       ].freeze
 
+      # Seconds bput waits for a matching reply when the caller passes no
+      # 'timeout'. retreat also uses it as its hold budget, so a hold costs
+      # about as long as one RETREAT that drew no recognised reply.
+      BPUT_DEFAULT_TIMEOUT = 15
+
       # Assess teach parsing patterns
       ASSESS_TEACH_TEACHER_PATTERN = /(?<teacher>.*) is teaching a class on (?<skill>.*) which is still open to new students/.freeze
       ASSESS_TEACH_SKILL_FILTER_PATTERN = /.* \(compared to what you already know\) (?<filtered_skill>.*)/.freeze
@@ -77,12 +87,18 @@ module Lich
       # https://regex101.com/r/4lGY6u/13
       FLAVOR_TEXT_PATTERN = /\s?\b(?:(?:colorfully and )?(?:artfully|artistically|attractively|beautifully|bl?ack-|cleverly|clumsily|crudely|deeply|delicately|edged|elaborately|faintly|flamboyantly|front-|fully|gracefully|heavily|held|intricately|lavishly|masterfully|plentifully|prominantly|roughly|securely|sewn|shabbily|shadow-|simply|somberly|skillfully|sloppily|starkly|stitched|tied and|tightly|well-)\s?)?(?:accented|accentuated|acid-etched|adorned|affixed|appliqued|assembled|attached|augmented|awash|backed|back-laced|balanced|banded|batiked|beaded|bearded|bearing|bedazzled|bedecked|bejeweled|beset|bestrewn|blazoned|bordered|bound|braided|branded|brocaded|bristling|brushed|buckled|burned|buttoned|caked|camouflaged|capped|carved|caught|centered|chased|chiseled|cinched|circled|clasped|cloaked|closed|coated|cobbled together|coiled|colored|composed|concealed|connected|constructed|countoured|covered|crafted|crested|crisscrossed|crowded|crowned|cuffed|cut|dangling|dappled|decked|decorated|deformed|depicting|designed|detailed|discolored|displaying|divided|done|dotted|draped|drawn|dressed|drizzled|dusted|edged|elaborately|embedded|embell?ished|emblazed|emblazoned|embossed|embroidered(?: all over| painstakingly)?|enameled(?: across)?|encircled|encrusted|engraved|engulfed|enhanced|entwined|equipped|etched|fashioned(?: so)?|fastened|feathered|featuring|festooned|fettered|filed|filled|firestained|fit|fitted|fixed|flecked|fletched|forged|formed|framed|fringed|frosted|full|gathered|gleaming|glimmering|glittering|goldworked|growing|gypsy-set|hafted|hand-tooled|hanging|heavily(?:-beaded| covered)?|held fast|hemmed|hewn|hideously|highlighted|hilted|honed|hung|impressed|incised|ingeniously repurposed|inscribed|inlaid|inset|interlaced|interspersed|interwoven|jeweled|joined|laced(?: up)?|lacquered|laden|layered|limned|lined|linked|looped|knotted|made|marbled|marked|marred|meshed|mosaicked|mottled|mounted|oiled|oozing|outlined|ornamented|overlai(?:d|n)|padded|painted|paired|patched|pattern-welded|patterned|pinned|plumed|polished|printed|reinforced|reminiscent|rendered|revealing|riddled|ridged|rimed|ringed|riveted|sashed|scarred|scattered|scorched|sculpted|sealed|seamed|secured|securely|set|sewn|shaped|shimmering|shod|shot|shrouded|side-laced|slashed|slung|smeared|smudged|spangled|speckled|spiraled|splatter-dyed|splattered|spotted|sprinkled|stacked|surmounted|surrounded|suspended|stained|stamped|starred|stenciled|stippled|stitched(?: together)?|strapped|streaked|strengthened|strewn|striated|striped|strung|studded|swathed|swirled|tailored|tangled|tapered|tethered|textured|threaded|tied|tightly|tinged|tinted|tipped|tooled|topped|traced|trimmed|twined|veined|vivified|washed|webbed|weighted|whorled|worked|worn|woven|wrapped|wreathed|wrought)?\b ["]?\b(?:a hand-tooled|across|along|an|around|atop|bearing|belted|bright streaks|dangling|designed|detailing|down (?:each leg|one side)|dyed (?:a|and|deep|of|in|night|rust|shimmering|the|to|with)|engravings|entitled|errant pieces|featuring|flaunting|frescoed|from|Gnomish Pride|(?:encased |quartered )?in(?: the)?|into|labeled|leading|like|lining|matching|(?<!stick|slice|chunk|flask|hunk|series|set|pair|piece) of|on|out|overlayed gleaming silver|resembling|shades of color|sporting|surrounding|that|the|through|tinged somber black|titled|to|upon|WAR MONGER|with|within|\b(?:at|bearing|(?:accented |held |secured )?by|carrying|clutching|colored|cradling|dangling|depicting|(?:prominently )?displaying|embossed|etched|featuring|for(?:ming)?|holding|(?<!slice |chunk |flask |hunk |series |set |pair |piece )of|over|patterned|striped|suspending|textured|that)\b \b(?:a (?:band|beaded|brass|cascade|cluster|coral|crown|dead|.+ (?:ingot|boulder|stone|rock|nugget)|fierce|fanged|fringe|glowing|golden|grinning|howling|large|lotus|mosaic|pair|poorly|rainbow|roaring|row|silver(?:y|weave)?|small|snarling|spray|tailored|thick|tiny|trio|turquoise|yellowed)|(?:squared )?agonite (?:links|decorated)|alternating|an|(?:purple |blue )?and|ash|beaded fringe|blackened (?:steel(?: accents| bearing| with|$)|ironwood)|blue (?:gold|steel)|burnished golden|cascading layers|carved ivory|chain-lined|chitinous|(?:deep red|dull black|pale blue) cloth|cloudberry blossoms|colorful tightly|cotton candy|crimson steel|crisscrossed|curious design|curved|crystaline charm|dark (?:blue|green|grey|metals|windsteel) (?:and|exuding|glaes|hues|khor'vela|muracite|pennon|with)|dark supple|deepest|deeply blending|delicate|dusky (?:dreamweave|green-grey)|ebonwood$|emblazoned|enamel?led (?:steel|bronze)|etched|fine(?:-grained| black| crushed)|finely wrought|flame-kissed|forest|fused-together|fuzzy grey|gauze atop|gilded steel|glass eyeballs|glistening green|golden oak|grey fur|hammered|haralun|has|heavy (?:grey|pearl|silver)|horn|Ilithi cedar|inky black|interlocking silver|interwoven|iridescent|jagged interlocking plates|(?:soft dark|supple|thick|woven) (?:bolts|leather)|lightweight|long swaths|lustrous|kertig ravens|made|metal cogs|mirror-finished|mottled|multiple woods|naphtha|oak|oblong sanguine|one|onyx buttons|opposing images|overlapping|pale cerulean|pallid links|pastel-hued|pins|pitted (?:black iron|steel)|plush velvet|polished (?:bronze|hemlock|steel)|raccoon tails|ram's horns|rat pelts|raw|red and blue|rich (?:purple|golden)|riveted bindings|roughened|rowan|sanguine thornweave|scattered star|scorch marks|sculpted|shadows|shark cartilage|shifting (?:celadon|shades)|shipboard|(?:braided |cobalt |deep black |desert-tan |dusky red Taisidon |ebony |exquisite spider|fine leaf-green |flowing night|glimmering ebony |heavy |marigold |pale gold marquisette and virid |rich copper |spiral-braided |steel|unadorned black Musparan )?silk(?:cress)?|(?:coiled |shimmering )?silver(?:steel| and |y)?|sirese blue spun glitter|six crossed|slender|small bones|smoothly interlocking|snow leopard|soft brushed|somber black|sprawled|sun-bleached|steel links|stones|strips of|sunny yellow|teardrop plates|telothian|the|tiny (?:golden|indurium|scales|skull)|tightly braided|tomiek|torn|twists|two|undyed|vibrant multicolored|viscous|waves of|weighted|well-cured|white ironwood|windstorm gossamer|wintry faeweave|woven diamondwood))\b.*/.freeze
 
+      # The game's reply to a command while the character is held or rooted.
+      IMMOBILE_PATTERN = /^You don't seem to be able to move/.freeze
+
       # Game responses to STAND that mean standing cannot currently succeed,
       # so fix_standing must stop instead of looping forever (issue #3668).
       # These are already in the STAND match list, but matching one does not
       # change posture, so without this guard the loop spams STAND endlessly
       # (e.g. while unconscious, plummeting, held, or overburdened).
-      CANNOT_STAND_PATTERN = /unconscious|plummeting to your death|prevents you from standing|don't seem to be able to move|overburdened and cannot|weight of all your possessions|no room to do much of anything/.freeze
+      CANNOT_STAND_PATTERN = Regexp.union(
+        /unconscious|plummeting to your death|prevents you from standing|overburdened and cannot|weight of all your possessions|no room to do much of anything/,
+        IMMOBILE_PATTERN
+      ).freeze
 
       # -- Shared Utility Methods ------------------------------------------
 
@@ -155,14 +171,14 @@ module Lich
 
       # Like `fput` but better because will wait for RT
       # before performing command and do smart retries.
-      # Will wait for matching text up to 15 seconds then timeout.
+      # Will wait for matching text up to BPUT_DEFAULT_TIMEOUT seconds then timeout.
       # Also recovers from some limited failures wherein we want to
       # simply fix the issue and retry the bput, like when we're prone
       # and need to be standing. Complex handling should be done within
       # the calling script.
       def bput(message, *matches)
         options = (matches.shift if matches.first.is_a?(Hash)) || {}
-        options['timeout'] ||= 15
+        options['timeout'] ||= BPUT_DEFAULT_TIMEOUT
         options['ignore_rt'] ||= false
 
         timeout = options['timeout']
@@ -229,8 +245,6 @@ module Lich
             put message
             timer = Time.now
             next
-          when /^You don't seem to be able to move to do that/
-            next unless matches.include?(response)
           when /^You are still stunned/
             pause 0.5 while stunned?
             pause 0.5
@@ -244,7 +258,12 @@ module Lich
             timer = Time.now
             next
           when /^You must be standing/, /^You should stand up first/, /^You'll need to stand up first/, /^You can't do that while (sitting|kneeling|lying)/, /^You should be sitting up/, /^You really should be standing to play/, /^After failing to draw a breath for what feels like forever/
-            fix_standing
+            # Stand, then resend. When standing can't succeed (unconscious,
+            # overburdened, or a hold that outlasts the timeout), resending
+            # would draw the same reply again at once, so keep reading until
+            # the timeout instead.
+            next unless stand_before?(timer + timeout)
+
             waitrt?
             put message
             timer = Time.now
@@ -357,19 +376,27 @@ module Lich
         true
       end
 
+      # Each refused collect kicks one pile (KICK PILE destroys it) and tries
+      # again. Capped at COLLECT_CLUTTER_ATTEMPTS collects per call so a room
+      # that stays cluttered cannot loop forever.
+      # Returns nil when it gives up (no pile, missed kick, or still cluttered
+      # after the last attempt), otherwise the result of waitrt?.
       def collect(item, practice = true)
         command = practice ? "collect #{item} practice" : "collect #{item}"
 
-        case bput(command, COLLECT_MESSAGES)
-        when 'The room is too cluttered'
-          # Giving up still waits out any roundtime, e.g. from an earlier kick.
+        attempts = 0
+        while bput(command, COLLECT_MESSAGES) == 'The room is too cluttered'
+          attempts += 1
+          if attempts >= COLLECT_CLUTTER_ATTEMPTS
+            Lich::Messaging.msg("bold", "DRC: Room still too cluttered to collect #{item} after #{attempts} tries, giving up.")
+            # Giving up still waits out any roundtime, e.g. from an earlier kick.
+            waitrt?
+            return
+          end
           unless kick_pile?
             waitrt?
             return
           end
-
-          # The retry waits out its own roundtime.
-          return collect(item, practice)
         end
         waitrt?
       end
@@ -656,13 +683,71 @@ module Lich
       # the CANNOT_STAND_PATTERN guard these states loop forever spamming
       # STAND, because matching the message never makes standing? true
       # (issue #3668: safe-room spamming STAND while unconscious).
-      # @return [void]
+      #
+      # On the immobile reply (held or rooted) this pauses 1 s before
+      # returning false, so a caller that loops on fix_standing with no delay
+      # of its own sends at most about one STAND a second while the hold
+      # lasts.
+      # @return [Boolean] true once standing, false when the game says
+      #   standing cannot succeed now
       def fix_standing
+        case stand_result
+        when :standing
+          true
+        when :immobile
+          pause 1
+          false
+        else
+          false
+        end
+      end
+
+      # Stands for bput's posture recovery. Like {fix_standing}, but while the
+      # STAND draws the immobile reply (held or rooted) it tries again about
+      # once a second until the deadline, so a hold that ends in time still
+      # lets bput resend the command. The other states that prevent standing
+      # (unconscious, overburdened, ...) give up at once, as there is no reply
+      # that says they have ended.
+      #
+      # @param deadline [Time] when bput's own timeout runs out
+      # @return [Boolean] true once standing, false when standing can't
+      #   succeed or the hold outlasts the deadline
+      # @api private
+      def stand_before?(deadline)
         loop do
-          break if standing?
+          case stand_result
+          when :standing
+            return true
+          when :immobile
+            # The last STAND goes out at the deadline at the latest, so a
+            # hold that ends just before it still lets bput resend. Waiting
+            # for that STAND's reply can take bput up to one round trip past
+            # its timeout. The clock is read once, so the pause can't be
+            # negative (pause raises on a negative interval).
+            remaining = deadline - Time.now
+            return false if remaining <= 0
+
+            pause [1, remaining].min
+          else
+            return false
+          end
+        end
+      end
+
+      # Sends STAND until standing or until the game says standing can't
+      # succeed now.
+      #
+      # @return [Symbol] :standing; :immobile on the held-or-rooted reply;
+      #   :cannot_stand for the other replies in CANNOT_STAND_PATTERN
+      # @api private
+      def stand_result
+        loop do
+          return :standing if standing?
 
           result = bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
-          break if result =~ CANNOT_STAND_PATTERN
+          next unless result =~ CANNOT_STAND_PATTERN
+
+          return IMMOBILE_PATTERN.match?(result) ? :immobile : :cannot_stand
         end
       end
 
@@ -805,16 +890,45 @@ module Lich
         $ENC_MAP[encumbrance]
       end
 
+      # Retreats until out of combat, standing first when the game asks.
+      #
+      # While held or rooted (the immobile reply, to RETREAT or to STAND) it
+      # pauses 1 s and tries again for BPUT_DEFAULT_TIMEOUT seconds from the
+      # first immobile reply, so entry roundtime and earlier steps don't use
+      # up that time. That one budget covers every hold in the call, so holds
+      # that alternate with steps back can't go on unbounded. The last try
+      # goes out up to 1 s after the deadline, so holds that end within
+      # BPUT_DEFAULT_TIMEOUT of the first immobile reply still end in a
+      # retreat; longer ones return false. When the character must stand but can't
+      # (overburdened, unconscious, no room), no reply says when that ends,
+      # so it returns false. It pauses 1 s before it gives up either way, so
+      # a caller that calls it again at once sends at most about one RETREAT
+      # a second.
+      #
+      # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
+      # @return [Boolean, nil] nil when no other NPC is in the room, true once
+      #   out of combat, false when retreating can't succeed now
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
+        deadline = nil
         loop do
-          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, *RETREAT_MESSAGES)
+          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, IMMOBILE_PATTERN, *RETREAT_MESSAGES)
           when *RETREAT_ESCAPE_MESSAGES
             return true
+          when IMMOBILE_PATTERN
+            state = :immobile
           else
-            DRC.fix_standing
+            state = DRC.stand_result
           end
+          next if state == :standing
+
+          # The deadline is checked before the pause, so the last RETREAT goes
+          # out up to 1 s after it and every try stays 1 s apart.
+          deadline ||= Time.now + BPUT_DEFAULT_TIMEOUT if state == :immobile
+          try_again = state == :immobile && Time.now < deadline
+          pause 1
+          return false unless try_again
         end
       end
 

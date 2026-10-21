@@ -651,6 +651,7 @@ end
 # These methods are used throughout lich-5 for output to the game client.
 # In tests, they either suppress output or print to stdout (if DEBUG=1).
 
+# Returns nil, as the production respond and _respond do.
 def respond(first = "", *messages)
   return unless ENV['DEBUG']
 
@@ -660,6 +661,7 @@ def respond(first = "", *messages)
     puts first.to_s.chomp
   end
   messages.flatten.each { |message| puts message.to_s.chomp }
+  nil
 end
 
 def _respond(first = "", *messages)
@@ -891,10 +893,12 @@ module Lich
       def msg_format(_format, _msg); end unless respond_to?(:msg_format)
       def mono(_msg); end unless respond_to?(:mono)
 
+      # Returns nil, as the production msg does.
       def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
         puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
+        nil
       end unless respond_to?(:msg)
 
       def messages
@@ -1535,6 +1539,10 @@ module Lich; module DragonRealms; end; end
 # DRC - Common module (bput, hands, messaging)
 # -----------------------------------------------------------------------------
 module DRC
+  # Same as Lich::DragonRealms::DRC::IMMOBILE_PATTERN, for code that matches
+  # the immobile reply when the real DRC isn't loaded.
+  IMMOBILE_PATTERN = /^You don't seem to be able to move/.freeze
+
   @right_hand = nil
   @left_hand = nil
 

@@ -759,10 +759,15 @@ module Lich
           uids[uid] || []
         end
 
-        # Convert map to JSON
+        # Convert the map to a JSON array of its rooms, in id order.
+        #
+        # Serializes a compacted copy and leaves the list alone. The list is
+        # indexed by room id and a real mapdb has far more unused ids than rooms,
+        # so removing its nil gaps in place would move every room after the
+        # first gap to the wrong index for every script looking rooms up.
+        # @return [String]
         def to_json(*args)
-          list.delete_if(&:nil?)
-          list.sort_by(&:id).to_json(args)
+          list.compact.sort_by(&:id).to_json(args)
         end
 
         # Save the map as a JSON file.
@@ -814,11 +819,6 @@ module Lich
             raise map_save_error(e, "could not write #{filename}; #{left}")
           end
           respond "#{filename} saved"
-          # Reload if the map index appears corrupted: the last entry's id should
-          # index back to itself. Nothing to check when the map holds no rooms,
-          # where self[-1] is nil and only the NilClass patch made this pass.
-          last = list.compact.last
-          reload if !last.nil? && self[last.id]&.id != last.id
         end
 
         alias_method :save, :save_json
@@ -887,6 +887,10 @@ module Lich
         # from the user's profile via get_settings. Ensures the map is loaded before
         # accessing room data, consistent with other ClassMethods.
         #
+        # personal_map_targets are merged into go2's custom targets, so they are
+        # written to go2's settings row whichever script calls this (autostart,
+        # at login). See merge_personal_map_targets.
+        #
         # @return [void]
         def apply_wayto_overrides
           self.load unless loaded?
@@ -914,12 +918,33 @@ module Lich
           end
 
           personal_map_targets = settings.personal_map_targets
-          if personal_map_targets.is_a?(Hash)
-            custom_targets = (GameSettings['custom targets'] || {})
-            custom_targets.merge!(personal_map_targets)
-            GameSettings['custom targets'] = custom_targets
-          end
+          merge_personal_map_targets(personal_map_targets) if personal_map_targets.is_a?(Hash)
         end
+
+        # The script whose GameSettings row holds the custom targets go2 reads.
+        CUSTOM_TARGETS_SCRIPT = 'go2'
+        private_constant :CUSTOM_TARGETS_SCRIPT
+
+        # Merge targets into go2's custom targets, keeping go2's own and letting a
+        # target of the same name replace go2's. GameSettings['custom targets']
+        # would read and write the calling script's row (GameSettings keys rows by
+        # Script.current.name), which go2 never reads, so this names go2's row.
+        # The cached value is never mutated in place; the merge builds a new Hash.
+        # Nothing is written when the merge changes nothing (an empty profile
+        # hash, or targets already there from an earlier login), so a login does
+        # not rewrite the row other sessions' ;go2 save and delete also write.
+        # @param targets [Hash] target name => room id or Array of room ids
+        # @return [void]
+        def merge_personal_map_targets(targets)
+          scope = GameSettings.active_scope
+          stored = Settings.current_script_settings(scope, script_name: CUSTOM_TARGETS_SCRIPT)['custom targets'] || {}
+          merged = stored.merge(targets)
+          return if merged == stored
+
+          Settings.set_script_settings(scope, 'custom targets', merged, script_name: CUSTOM_TARGETS_SCRIPT)
+        end
+
+        private :merge_personal_map_targets
       end
 
       # Instance methods for Room/Map objects

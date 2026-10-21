@@ -6,6 +6,11 @@ module Lich
         @file = File.join(data_dir, "lich.db3")
         @db = Lich.open_sequel_sqlite(@file)
         @table_name = table_name
+        @version_mutex = Mutex.new
+        @version_db = nil
+        @version_base = 0
+        @version_epoch = -1
+        @version_error_reported = false
         setup!
       end
 
@@ -25,6 +30,67 @@ module Lich
       def get_settings(script_name, scope = ":")
         entry = @table.first(script: script_name, scope: scope)
         entry.nil? ? {} : Marshal.load(entry[:hash])
+      end
+
+      # A number that changes whenever lich.db3 has had a commit since it was
+      # last read, or nil when that can't be told right now.
+      #
+      # Every Lich session is a separate process, and Settings caches rows per
+      # process. SQLite's PRAGMA data_version changes when another connection
+      # commits, so a cache can compare it with the value seen when a row was
+      # read and re-read the row only when it may have changed. The pragma
+      # reports changes by *other* connections only, and Sequel may hand each
+      # thread a different connection, so it is read on a connection of its
+      # own that never writes: every commit, from another process or from this
+      # one, changes it.
+      #
+      # The connection has no busy timeout. While another process holds the
+      # database's exclusive lock (a commit in progress, or a script holding
+      # it), the read fails at once and this returns nil, rather than waiting
+      # inside SQLite, which keeps the GVL and would stall every thread of
+      # this process. Callers then keep what they have; a read that overlaps a
+      # commit may see the database as it was before it. The read runs in one
+      # C call (sqlite3_exec), so no lock is held while Ruby code runs.
+      #
+      # The pragma counts per connection, starting again from 1 on a new one,
+      # so after an error has closed the connection the reopened one could
+      # repeat a value already handed out while the database has since
+      # changed. Each connection therefore gets a range of its own: its values
+      # are offset by 2**40 times the number of connections opened before it.
+      # No value is handed out twice for different states of the database,
+      # and every value from a reopened connection is greater than every
+      # earlier one (a connection would need 2**40 commits to reach the next
+      # range).
+      #
+      # No Ruby lock is held on the way, so a cache hit never waits for one.
+      # Ruby's Mutex is not fair: a thread calling this in a tight loop would
+      # take the lock back before a waiting thread got to run, and stall other
+      # threads' Settings reads (measured: up to seconds with the lock held
+      # around the pragma, about 100 ms now and then with it held only to
+      # record the value). The GVL already keeps two threads out of the C call
+      # at once. @version_mutex guards only opening and closing the
+      # connection; a value read on a connection that another thread has
+      # closed or replaced meanwhile is discarded (nil).
+      #
+      # @return [Integer, nil]
+      def data_version
+        db = @version_db || open_version_connection
+        # Read after db: a connection is published only after its offset is
+        # set, and a connection replaced after this point fails the identity
+        # check below.
+        base = @version_base
+        raw = Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
+        return nil unless @version_db.equal?(db)
+
+        base + raw
+      rescue SQLite3::BusyException
+        nil
+      rescue SQLite3::Exception, ArgumentError, TypeError => e
+        if close_version_connection(db) && !@version_error_reported
+          @version_error_reported = true
+          Lich.log("--- Error: cannot tell whether settings changed in lich.db3 (#{e.class}: #{e.message}); settings may not show other sessions' changes ---")
+        end
+        nil
       end
 
       def save_settings(script_name, settings, scope = ":")
@@ -142,7 +208,139 @@ module Lich
         nil
       end
 
+      # Runs the block inside one SQLite write transaction (BEGIN IMMEDIATE).
+      # The write lock is taken before the first read, so a read-modify-write
+      # inside the block cannot interleave with another process's write.
+      # A nested call joins the outer transaction. If the block raises, nothing
+      # it wrote is kept. (Sequel's SQLite adapter re-raises an ArgumentError
+      # from the block as Sequel::DatabaseError.)
+      #
+      # @raise [Sequel::DatabaseError] if the database stays locked past the
+      #   busy timeout.
+      def transaction(&block)
+        @db.transaction(mode: :immediate, &block)
+      end
+
+      # Lists the scopes of every row for script_name whose scope starts with
+      # scope_prefix, without loading the stored values (so a row that can't
+      # be loaded is still listed).
+      #
+      # @param script_name [String]
+      # @param scope_prefix [String] matched literally (not as a LIKE pattern)
+      # @return [Array<String>]
+      def scopes_by_prefix(script_name, scope_prefix)
+        prefix = scope_prefix.to_s
+        @table.where(script: script_name).select_map(:scope).map(&:to_s).select { |scope| scope.start_with?(prefix) }
+      end
+
+      # Reads every row for script_name whose scope starts with scope_prefix,
+      # straight from the database (no cache).
+      #
+      # A row whose stored value can't be loaded is skipped and logged, so one
+      # bad row doesn't hide the others.
+      #
+      # @param script_name [String]
+      # @param scope_prefix [String] matched literally (not as a LIKE pattern)
+      # @return [Hash{String => Object}] scope => stored settings
+      def get_settings_by_scope_prefix(script_name, scope_prefix)
+        prefix = scope_prefix.to_s
+        @table.where(script: script_name).select(:scope, :hash).each_with_object({}) do |row, result|
+          scope = row[:scope].to_s
+          next unless scope.start_with?(prefix)
+
+          begin
+            result[scope] = Marshal.load(row[:hash])
+          rescue StandardError => e
+            Lich.log("--- Error: skipping unreadable settings row script=#{script_name} scope=#{scope}: #{e.class}: #{e.message} ---")
+          end
+        end
+      end
+
+      # Writes one settings row without reading it first.
+      #
+      # Unlike #save_settings, which reports errors and returns false, this
+      # raises, so a caller inside #transaction gets the whole transaction
+      # rolled back and can tell that nothing was written.
+      #
+      # @param script_name [String]
+      # @param settings [Hash]
+      # @param scope [String]
+      # @return [Hash] settings
+      # @raise [TypeError] if settings is not a Hash or can't be serialized
+      # @raise [Sequel::DatabaseError] if the database is locked or the write fails
+      def save_settings!(script_name, settings, scope)
+        raise TypeError, "settings must be a Hash, got #{settings.class}" unless settings.is_a?(Hash)
+
+        upsert_settings(script_name, scope, Sequel::SQL::Blob.new(Marshal.dump(settings)))
+        settings
+      end
+
+      # Atomically reads, changes and writes one settings row.
+      #
+      # Yields a fresh copy of the stored hash ({} when there is no row) inside
+      # #transaction. If the block returns a Hash, that Hash is written to the
+      # row; if it returns nil, the row is left as it was.
+      #
+      # Raises on every failure, like #save_settings!, so the caller can tell
+      # that nothing was written.
+      #
+      # @return [Hash, nil] what the block returned
+      # @raise [Sequel::DatabaseError] if the database is locked or the write
+      #   fails, or if loading the stored row raises ArgumentError (truncated
+      #   Marshal data, for example; Sequel re-raises an ArgumentError from
+      #   the block as Sequel::DatabaseError, with the ArgumentError as cause)
+      # @raise [StandardError] whatever else Marshal.load raises on a stored
+      #   row that can't be loaded (usually TypeError), without yielding
+      # @raise [TypeError] if the block returns something other than a Hash or nil
+      def update_settings!(script_name, scope)
+        transaction do
+          updated = yield(get_settings(script_name, scope))
+          unless updated.nil? || updated.is_a?(Hash)
+            raise TypeError, "update_settings! block must return a Hash or nil, got #{updated.class}"
+          end
+
+          save_settings!(script_name, updated, scope) if updated
+          updated
+        end
+      end
+
       private
+
+      # Opens the version connection unless another thread already has. Its
+      # offset is set before the connection is published, so a thread that
+      # sees the new connection also sees its offset.
+      def open_version_connection
+        @version_mutex.synchronize do
+          @version_db || begin
+            fresh = SQLite3::Database.new(@file).tap { |conn| conn.busy_timeout(0) }
+            @version_base = (@version_epoch += 1) << 40
+            @version_db = fresh
+          end
+        end
+      end
+
+      # Closes the version connection if it is still +db+, so that the next
+      # check opens a new one. A thread whose read failed on a connection
+      # another thread has already replaced leaves the new one alone. +db+ is
+      # required, so no caller can skip that check by closing "whatever is
+      # current". It is nil when opening the connection failed; with no
+      # connection open, that counts as current.
+      #
+      # @param db [SQLite3::Database, nil] the connection the failed read used
+      # @return [Boolean] whether +db+ was the current connection
+      def close_version_connection(db)
+        @version_mutex.synchronize do
+          return false unless @version_db.equal?(db)
+
+          @version_db = nil
+        end
+        begin
+          db&.close
+        rescue SQLite3::Exception
+          nil
+        end
+        true
+      end
 
       # Unmarshals a stored row for update_settings, reporting a row that
       # cannot be read before raising its error.

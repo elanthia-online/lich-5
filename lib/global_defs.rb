@@ -1759,6 +1759,13 @@ def status_tags(onoff = "none")
   end
 end
 
+# Sends text to the main frontend and every attached detachable frontend,
+# escaped for frontends that need it, and to scripts watching script output.
+#
+# @param first [String, Array<String>] a line, or lines
+# @param messages [Array<String>] more lines
+# @return [nil] always, so a method that ends with respond returns nil
+#   whether or not any frontend is attached or a write fails
 def respond(first = "", *messages)
   str = ''
   begin
@@ -1780,8 +1787,16 @@ def respond(first = "", *messages)
   rescue => e
     Lich.log "error: respond: #{e}\n\t#{e.backtrace.first}"
   end
+  nil
 end
 
+# Like respond, but sends the text as is, without escaping, so it can carry
+# frontend markup.
+#
+# @param first [String, Array<String>] a line, or lines
+# @param messages [Array<String>] more lines
+# @return [nil] always, so a method that ends with _respond (or with
+#   Lich::Messaging.msg, which calls it) returns nil
 def _respond(first = "", *messages)
   str = ''
   begin
@@ -1798,6 +1813,7 @@ def _respond(first = "", *messages)
   rescue => e
     Lich.log "error: _respond: #{e}\n\t#{e.backtrace.first}"
   end
+  nil
 end
 
 def noded_pulse

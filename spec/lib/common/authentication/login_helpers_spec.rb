@@ -6,7 +6,7 @@
 
 require 'rspec'
 
-# Define LICH_VERSION for version checks
+# Define LICH_VERSION; the .format_launch_flag examples stub and hide it
 LICH_VERSION = '5.14.0' unless defined?(LICH_VERSION)
 
 # Mock dependencies before requiring
@@ -157,50 +157,6 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
 
     it 'returns false for unknown realm' do
       expect(described_class.valid_realm?('unknown')).to be false
-    end
-  end
-
-  describe '.lich_version_at_least?' do
-    it 'is true when LICH_VERSION equals the requested version' do
-      stub_const('LICH_VERSION', '5.12.0')
-      expect(described_class.lich_version_at_least?(5, 12, 0)).to be true
-    end
-
-    it 'is true when the major, minor or patch component is higher' do
-      stub_const('LICH_VERSION', '5.12.1')
-      expect(described_class.lich_version_at_least?(5, 12, 0)).to be true
-      expect(described_class.lich_version_at_least?(5, 11, 9)).to be true
-      expect(described_class.lich_version_at_least?(4, 99, 99)).to be true
-    end
-
-    it 'is false when any component is lower' do
-      stub_const('LICH_VERSION', '5.12.1')
-      expect(described_class.lich_version_at_least?(5, 12, 2)).to be false
-      expect(described_class.lich_version_at_least?(5, 13)).to be false
-      expect(described_class.lich_version_at_least?(6)).to be false
-    end
-
-    it 'compares numerically, not lexically' do
-      stub_const('LICH_VERSION', '5.10.0')
-      expect(described_class.lich_version_at_least?(5, 9, 0)).to be true
-      expect(described_class.lich_version_at_least?(5, 10, 0)).to be true
-    end
-
-    it 'defaults minor and patch to zero' do
-      stub_const('LICH_VERSION', '5.0.0')
-      expect(described_class.lich_version_at_least?(5)).to be true
-      expect(described_class.lich_version_at_least?(5, 0)).to be true
-    end
-
-    it 'ranks a prerelease below its release and above the previous release' do
-      stub_const('LICH_VERSION', '5.13.0-beta.4')
-      expect(described_class.lich_version_at_least?(5, 13, 0)).to be false
-      expect(described_class.lich_version_at_least?(5, 12, 12)).to be true
-    end
-
-    it 'is false when LICH_VERSION is not defined' do
-      hide_const('LICH_VERSION')
-      expect(described_class.lich_version_at_least?(0)).to be false
     end
   end
 

@@ -8,6 +8,8 @@
   updates and SnapshotManager for backups.
 =end
 
+require 'monitor'
+
 module Lich
   module Util
     module Update
@@ -36,6 +38,15 @@ module Lich
         # installer built before this file was reloaded still has a lock; the
         # guard keeps a reload from swapping the mutex while it is held.
         BETA_LOCK = Mutex.new unless const_defined?(:BETA_LOCK, false)
+        # Serialises every command that sets, reads or clears the release
+        # target (announce, update, beta install). One installer serves the
+        # whole session, and the login autostart runs --announce on a script
+        # thread while lich5-update runs on the client thread, so without it
+        # one command could clear the target another is installing. Reentrant,
+        # because the beta install calls #download_release_update under the
+        # lock, and #announce and #download_release_update call #prep_update.
+        # Class-level for the same reload reason as BETA_LOCK.
+        RELEASE_LOCK = Monitor.new unless const_defined?(:RELEASE_LOCK, false)
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -54,10 +65,18 @@ module Lich
           @beta_prompted_at = nil
         end
 
-        # Displays announcement if new version available.
+        # Displays announcement if new version available. Waits for any
+        # install in progress to finish first.
         #
         # @return [void]
         def announce
+          RELEASE_LOCK.synchronize { announce_release }
+        end
+
+        # Body of #announce; the caller holds RELEASE_LOCK.
+        #
+        # @return [void]
+        def announce_release
           prep_update
           return unless @update_to
 
@@ -89,36 +108,60 @@ module Lich
           else
             respond "This script does not support Lich #{LICH_VERSION}."
           end
+        ensure
+          clear_release_target
         end
+        private :announce_release
 
-        # Fetches latest stable release metadata from GitHub.
+        # Fetches latest stable release metadata from GitHub. Any target left
+        # from an earlier command is dropped first, so a failed check leaves no
+        # target rather than the previous one. Holds RELEASE_LOCK so that the
+        # target it sets is the one the calling command acts on.
         #
         # @return [void]
         def prep_update
-          latest = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases/latest")
-          if latest.is_a?(Hash) && latest['prerelease']
-            all = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases")
-            if all.is_a?(Array)
-              stable = all.select { |r| !r['prerelease'] && r['tag_name'] }.max_by { |r| @resolver.version_key(r['tag_name']) }
-              latest = stable if stable
+          RELEASE_LOCK.synchronize do
+            clear_release_target
+            latest = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases/latest")
+            if latest.is_a?(Hash) && latest['prerelease']
+              all = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases")
+              if all.is_a?(Array)
+                stable = all.select { |r| !r['prerelease'] && r['tag_name'] }.max_by { |r| @resolver.version_key(r['tag_name']) }
+                latest = stable if stable
+              end
             end
-          end
-          unless latest.is_a?(Hash)
-            StatusReporter.respond_github_failure(@client.last_error, 'Could not check for a new Lich version; your current installation is unaffected.')
-            return
-          end
+            unless latest.is_a?(Hash)
+              StatusReporter.respond_github_failure(@client.last_error, 'Could not check for a new Lich version; your current installation is unaffected.')
+              return
+            end
 
-          @holder = latest['assets']
-          release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
-          unless release_asset
-            respond "Update notice: no release tarball found in assets (prep_update)."
-            return
+            @holder = latest['assets']
+            release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
+            unless release_asset
+              respond "Update notice: no release tarball found in assets (prep_update)."
+              return
+            end
+            @release_tag = latest['tag_name'].to_s
+            @update_to = @release_tag.sub(/^v/, '')
+            @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+            @zipfile = release_asset.fetch('browser_download_url')
           end
-          @release_tag = latest['tag_name'].to_s
-          @update_to = @release_tag.sub(/^v/, '')
-          @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
-          @zipfile = release_asset.fetch('browser_download_url')
         end
+
+        # Forgets the release chosen by the current command. The installer
+        # lives for the whole session, so a target that outlived its command
+        # would be installed by the next `--update` without checking GitHub.
+        #
+        # @return [void]
+        def clear_release_target
+          @update_to = nil
+          @holder = nil
+          @new_features = nil
+          @zipfile = nil
+          @release_tag = nil
+          @required_ruby = nil
+        end
+        private :clear_release_target
 
         # Reads the target release's Ruby floor without downloading its archive.
         # A failed metadata read must not suppress an otherwise valid update notice.
@@ -185,14 +228,37 @@ module Lich
           end
 
           respond 'Beta test installation accepted.  Thank you for considering!'
-          install_beta
+          # Held from setting the beta target until the install clears it. The
+          # ensure also clears a target set before the install began, such as
+          # when reading the release record raises.
+          RELEASE_LOCK.synchronize do
+            install_beta
+          ensure
+            clear_release_target
+          end
         end
 
         # Downloads and installs latest stable release.
         #
+        # Also installs the beta target that the beta install set up just
+        # before calling this. The target is cleared when this returns or
+        # raises, so it never carries over into the next command. Holds
+        # RELEASE_LOCK for the whole install, so a concurrent announcement
+        # waits rather than clearing the target mid-download.
+        #
         # @return [void]
         def download_release_update
+          RELEASE_LOCK.synchronize { install_release }
+        end
+
+        # Body of #download_release_update; the caller holds RELEASE_LOCK.
+        #
+        # @return [void]
+        def install_release
           prep_update if @update_to.nil? || @update_to.empty?
+          # prep_update has already reported why there is nothing to install.
+          return if @update_to.nil? || @update_to.empty? || @zipfile.nil?
+
           if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !defined?(LICH_BRANCH)
             respond ''
             respond "Lich version #{LICH_VERSION} is good.  Enjoy!"
@@ -202,49 +268,55 @@ module Lich
             respond 'Getting ready to update.  First we will create a'
             respond 'snapshot in case there are problems with the update.'
 
-            snapshot_dir = @snapshot_manager.snapshot
+            # The snapshot holds the revert lock until the block returns, so a
+            # revert in another session cannot swap lib/ during the download or
+            # the install.
+            @snapshot_manager.snapshot do |snapshot_dir|
+              respond
+              respond "Downloading Lich5 version #{@update_to}"
+              respond
+              filename = "lich5-#{@update_to}"
+              File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
+                file.write URI.parse(@zipfile).open.read
+              end
 
-            respond
-            respond "Downloading Lich5 version #{@update_to}"
-            respond
-            filename = "lich5-#{@update_to}"
-            File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-              file.write URI.parse(@zipfile).open.read
+              FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
+              Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"),
+                                                  File.join(TEMP_DIR, filename))
+              new_target = Dir.children(File.join(TEMP_DIR, filename))
+              FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
+              FileUtils.remove_dir(File.join(TEMP_DIR, filename))
+              FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
+
+              source_dir = File.join(TEMP_DIR, filename)
+
+              unless check_ruby_compatibility(source_dir, @update_to)
+                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
+                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+                next
+              end
+
+              unless perform_update(source_dir, @update_to, snapshot_dir)
+                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
+                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+                next
+              end
+
+              FileUtils.remove_dir(source_dir)
+              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+
+              Lich::Util::Update.clear_branch_tracking
+
+              respond
+              respond "Lich5 has been updated to Lich5 version #{@update_to}"
+              respond "You should exit the game, then log back in.  This will start the game"
+              respond "with your updated Lich.  Enjoy!"
             end
-
-            FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
-            Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"),
-                                                File.join(TEMP_DIR, filename))
-            new_target = Dir.children(File.join(TEMP_DIR, filename))
-            FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
-            FileUtils.remove_dir(File.join(TEMP_DIR, filename))
-            FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-
-            source_dir = File.join(TEMP_DIR, filename)
-
-            unless check_ruby_compatibility(source_dir, @update_to)
-              FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-              return
-            end
-
-            unless perform_update(source_dir, @update_to, snapshot_dir)
-              FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-              return
-            end
-
-            FileUtils.remove_dir(source_dir)
-            FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-
-            Lich::Util::Update.clear_branch_tracking
-
-            respond
-            respond "Lich5 has been updated to Lich5 version #{@update_to}"
-            respond "You should exit the game, then log back in.  This will start the game"
-            respond "with your updated Lich.  Enjoy!"
           end
+        ensure
+          clear_release_target
         end
+        private :install_release
 
         # Copies lib files and lich.rbw from extracted source to install dirs.
         #

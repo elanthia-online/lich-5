@@ -6,24 +6,15 @@ require_relative '../../../lib/common/feature_flags'
 require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/common/upstreamhook'
 require_relative '../../../lib/common/wait_response'
+require_relative '../../support/global_defs_spec_source'
 
 # Load exact production definitions into an isolated receiver. Requiring all of
 # global_defs would replace shared helpers used by unrelated randomized specs.
 # Only Script's constant reference changes to its fully qualified native class.
 module NativeWaitExecutionGuardSpec
   class Harness; end
-  path = File.expand_path('../../../lib/global_defs.rb', __dir__)
-  lines = File.readlines(path)
-  %w[fput dothis dothistimeout get get? clear pause waitrt? waitcastrt? wait_until wait_while].each do |name|
-    first = lines.index { |line| line.match?(/^def #{Regexp.escape(name)}(?:\(|\s*$)/) }
-    raise "native #{name} missing" unless first
-
-    offset = lines[(first + 1)..].index { |line| line.match?(/^end\s*$/) }
-    raise "native #{name} terminator missing" unless offset
-
-    code = lines[first..(first + offset + 1)].join.gsub(/\bScript\./, 'Lich::Common::Script.')
-    Harness.class_eval(code, path, first + 1)
-  end
+  METHODS = %w[fput dothis dothistimeout get get? clear pause waitrt? waitcastrt? wait_until wait_while].freeze
+  GlobalDefsSpecSource.define(Harness, *METHODS, qualify_script: true)
 end
 
 RSpec.describe 'Native command and roundtime execution guard checkpoints' do
@@ -89,6 +80,13 @@ RSpec.describe 'Native command and roundtime execution guard checkpoints' do
   ensure
     worker&.kill if worker&.alive?
     worker&.join(0.1)
+  end
+
+  it 'runs the methods defined in lib/global_defs.rb' do
+    NativeWaitExecutionGuardSpec::METHODS.each do |name|
+      expect(NativeWaitExecutionGuardSpec::Harness.instance_method(name).source_location)
+        .to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of(name)])
+    end
   end
 
   it 'unwinds fput during a wait-30 response without resending the command' do

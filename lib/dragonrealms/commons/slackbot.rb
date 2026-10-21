@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -10,19 +11,32 @@ module Lich
   module DragonRealms
     # Slack API client for sending direct messages via DragonRealms LNet.
     #
-    # Caches the Slack users list in a shared SQLite store (DB_Store) so all
-    # characters on the same game instance share a single cached copy with
-    # a 1-hour TTL. Randomized startup jitter prevents thundering herd on
-    # simultaneous character logins.
+    # Caches the Slack users list in a shared SQLite store (DB_Store) with a
+    # 1-hour TTL. The cache is kept per token, so characters on the same game
+    # instance that use the same token share one cached copy, and a character
+    # never reads another workspace's users. Entries are never deleted:
+    # DB_Store has no delete and the TTL is checked on read, so lich.db keeps
+    # one row per token ever used.
+    # Randomized startup jitter prevents thundering herd on simultaneous
+    # character logins.
     class SlackBot
       # Base error for all SlackBot failures.
       class Error < StandardError; end
 
-      # Raised on network-level failures (timeouts, connection resets).
+      # Raised when no HTTP 2xx reply comes back from Slack: timeouts,
+      # connection resets, DNS failures, a refused connection, an unreachable
+      # host or network, TLS errors, an HTTP error status (other than 429,
+      # which raises ThrottlingError) and a request whose time budget runs
+      # out. When an exception led to it, that exception is kept as #cause.
       class NetworkError < Error; end
 
       # Raised when the Slack API returns a non-ok response.
       class ApiError < Error; end
+
+      # Raised when a reply cannot be parsed as JSON, such as an HTML page
+      # from a TLS-inspecting proxy. Slack did not answer, so a token
+      # check treats this as Slack being unavailable, not as a rejected token.
+      class MalformedResponseError < ApiError; end
 
       # Raised on HTTP 429 responses from Slack.
       class ThrottlingError < ApiError
@@ -36,6 +50,13 @@ module Lich
           @retry_after = retry_after
         end
       end
+
+      # Errors meaning Slack could not answer a request (as opposed to Slack
+      # answering it with a refusal). A token check that fails with one of
+      # these neither judges nor replaces the token. A new ApiError subclass
+      # for "Slack could not answer" belongs here, or a token check that hits
+      # it is treated as a rejected token and starts LNet token discovery.
+      SLACK_UNAVAILABLE_ERRORS = [NetworkError, ThrottlingError, MalformedResponseError].freeze
 
       # @return [String, nil] human-readable error from the last failed operation
       attr_reader :error_message
@@ -63,6 +84,18 @@ module Lich
       # never wait out the full network or rate-limit backoff.
       SEND_REQUEST_BUDGET = 5
 
+      # Hard cap, in seconds, on each Slack API step (token check, users.list)
+      # while the bot starts. SlackBot.new runs on the calling script's thread,
+      # often before that script's own safety checks start, so startup must
+      # not wait out the full network or rate-limit backoff either. A bot that
+      # gives up here retries on the next message.
+      STARTUP_REQUEST_BUDGET = 10
+
+      # Most seconds the startup waits before users.list, so characters that
+      # log in together let the first one fill the shared cache. Not counted
+      # against STARTUP_REQUEST_BUDGET.
+      STARTUP_JITTER_SECONDS = 5.0
+
       # Part of a deadline request's remaining budget that net/http's own
       # connect timeouts share out. The rest is headroom before the hard
       # Timeout on the whole connect, so the two do not fire together.
@@ -76,6 +109,11 @@ module Lich
 
       USERS_LIST_UNAVAILABLE = 'Slack user list unavailable'
 
+      # Connects at once: checks (or discovers) the token and loads the users
+      # list, capping each Slack API step at STARTUP_REQUEST_BUDGET. If a step
+      # fails or runs out of time, the bot is left uninitialized and the next
+      # #direct_message tries again. The LNet token discovery keeps its own
+      # timeouts.
       def initialize
         @initialized = false
         @error_message = nil
@@ -85,7 +123,7 @@ module Lich
         @restore_mutex = Mutex.new
         @restore_attempts = 0
 
-        connect
+        connect(budget: STARTUP_REQUEST_BUDGET, jitter: true)
       end
 
       # @return [Boolean] true if the bot has a valid token and a non-empty users list
@@ -99,14 +137,16 @@ module Lich
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
       #   (token check, users.list), or nil for the full retry policy. The LNet
       #   token discovery keeps its own timeouts.
+      # @param jitter [Boolean] wait a random moment before calling users.list
+      #   (on for a manual reconnect; the in-send reconnect turns it off)
       # @return [Boolean] true if the token is valid and a non-empty users list
       #   (fresh, cached, or the one loaded earlier) is available
-      def reconnect!(budget: nil)
+      def reconnect!(budget: nil, jitter: true)
         @error_message = nil
         @initialized = false
         @token_verified = false
 
-        connect(budget: budget)
+        connect(budget: budget, jitter: jitter)
       end
 
       # Checks whether the LNet connection is alive and responsive.
@@ -128,15 +168,18 @@ module Lich
 
       # Tests whether a Slack API token is valid.
       #
+      # Answers false both when Slack rejects the token and when Slack cannot
+      # be asked (a network failure, a rate limit or a reply that is not
+      # JSON); the cause of the latter is logged.
+      #
       # @param token [String, nil] the token to test
       # @param budget [Numeric, nil] seconds allowed for the check, or nil for
       #   the full retry policy
       # @return [Boolean]
       def authed?(token, budget: nil)
-        return false unless token
-
-        post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
-      rescue ApiError, NetworkError
+        token_accepted?(token, budget)
+      rescue *SLACK_UNAVAILABLE_ERRORS => e
+        Lich.log "SlackBot: Could not check a Slack token: #{e.message}"
         false
       end
 
@@ -176,6 +219,7 @@ module Lich
       rescue Error => e
         Lich.log "SlackBot: Failed to send Slack message to #{username}: #{e.message}"
         Lich::Messaging.msg('bold', "SlackBot: Failed to send Slack message to #{username}: #{e.message}")
+        nil
       end
 
       private
@@ -184,21 +228,60 @@ module Lich
       # The bot is initialized only when a non-empty users list is loaded.
       #
       # @param budget [Numeric, nil] seconds allowed for each Slack API step
+      # @param jitter [Boolean] wait a random moment before calling users.list
       # @return [Boolean] the new initialized? state
-      def connect(budget: nil)
-        ensure_slack_token(budget) unless authed?(UserVars.slack_token, budget: budget)
-        return false if @error_message
+      def connect(budget:, jitter:)
+        return false unless verify_token(budget)
 
         @token_verified = true
-        load_users_list(budget)
+        load_users_list(budget, jitter: jitter)
+      end
+
+      # Checks the stored token and, only if Slack rejects it (or there is
+      # none), looks for a new one over LNet. When Slack cannot be asked (a
+      # network failure, a rate limit or a reply that is not JSON) the token
+      # is neither judged nor replaced: the cause is logged and kept in
+      # error_message, no LNet discovery runs, and the next message checks
+      # again.
+      #
+      # @param budget [Numeric, nil] seconds allowed for each token check
+      # @return [Boolean] true if a token Slack accepts is in UserVars.slack_token
+      def verify_token(budget)
+        ensure_slack_token(budget) unless token_accepted?(UserVars.slack_token, budget)
+        @error_message.nil?
+      rescue *SLACK_UNAVAILABLE_ERRORS => e
+        Lich.log "SlackBot: Slack unavailable while checking the token: #{e.message}"
+        set_error("Slack unavailable: #{e.message}")
+        false
+      end
+
+      # Asks Slack whether a token is valid.
+      #
+      # @param token [String, nil] the token to test
+      # @param budget [Numeric, nil] seconds allowed for the check, or nil for
+      #   the full retry policy
+      # @return [Boolean] true if Slack accepts the token; false if there is no
+      #   token or Slack rejects it
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack could not be asked
+      def token_accepted?(token, budget)
+        return false unless token
+
+        post('auth.test', { 'token' => token }, deadline: deadline_for(budget))['ok']
+      rescue *SLACK_UNAVAILABLE_ERRORS
+        raise
+      rescue ApiError => e
+        Lich.log "SlackBot: Slack token not accepted: #{e.message}"
+        false
       end
 
       # Loads the users list and updates initialized? and error_message.
       #
       # @param budget [Numeric, nil] seconds allowed, or nil for the full retry policy
+      # @param jitter [Boolean] wait a random moment before calling users.list
       # @return [Boolean] the new initialized? state
-      def load_users_list(budget)
-        fetch_users_list(deadline_for(budget))
+      def load_users_list(budget, jitter: false)
+        fetch_users_list(budget, jitter: jitter)
         @initialized = users_list_loaded?
         @error_message = @initialized ? nil : USERS_LIST_UNAVAILABLE
         @initialized
@@ -243,7 +326,7 @@ module Lich
       def restore_connection_once
         return load_users_list(SEND_REQUEST_BUDGET) if @token_verified
 
-        reconnect!(budget: SEND_REQUEST_BUDGET)
+        reconnect!(budget: SEND_REQUEST_BUDGET, jitter: false)
       rescue StandardError => e
         Lich.log "SlackBot: Reconnect failed: #{e.class}: #{e.message}"
         @initialized = false
@@ -287,6 +370,8 @@ module Lich
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [void]
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack cannot be asked about a token found over LNet
       def ensure_slack_token(budget = nil)
         unless lnet_connected?
           unless Script.exists?(LNET_SCRIPT_NAME)
@@ -327,23 +412,25 @@ module Lich
       # Loads the users list from shared DB cache or Slack API.
       # On failure the current list (if any) is left untouched.
       #
-      # @param deadline [Float, nil] monotonic deadline for the API attempt; when
-      #   set, the startup jitter is skipped
+      # @param budget [Numeric, nil] seconds allowed for the API attempt, counted
+      #   after the jitter, or nil for the full retry policy
+      # @param jitter [Boolean] wait up to STARTUP_JITTER_SECONDS, then re-check
+      #   the cache, before calling the API
       # @return [Boolean] true if a non-empty users list was loaded
-      def fetch_users_list(deadline = nil)
+      def fetch_users_list(budget, jitter:)
         return true if load_users_from_cache('Using cached users list')
 
-        unless deadline
-          sleep rand(0.0..5.0)
+        if jitter
+          sleep rand(0.0..STARTUP_JITTER_SECONDS)
           return true if load_users_from_cache('Using cached users list after jitter')
         end
 
-        if deadline && users_list_cooling_down?
+        if budget && users_list_cooling_down?
           Lich.log 'SlackBot: Skipping users.list until the retry cooldown ends'
           return false
         end
 
-        members = fetch_users_from_api(deadline)
+        members = fetch_users_from_api(deadline_for(budget))
         return false unless members
 
         @users_list = { 'members' => members }
@@ -356,7 +443,7 @@ module Lich
       # @param label [String] log message prefix
       # @return [Boolean] true if the cache was loaded
       def load_users_from_cache(label)
-        members = cached_members
+        members = cached_members(token: UserVars.slack_token)
         return false unless members
 
         @users_list = { 'members' => members }
@@ -365,10 +452,11 @@ module Lich
       end
 
       # Called by #direct_message when an initialized bot does not know the
-      # user: looks the user up in the shared cache in case another character
-      # refreshed it, and adds that one entry to the current list. The list is
-      # never replaced here, so a mistyped name or a cache written under
-      # another token cannot drop users the bot already knows.
+      # user: looks the user up in the shared cache for the current token in
+      # case another character refreshed it, and adds that one entry to the
+      # current list. The list is never replaced here, so a mistyped name or a
+      # cache refreshed after users left cannot drop users the bot already
+      # knows.
       # Never raises; a cache read error (e.g. a locked database) is logged and
       # the current list is kept, so the message still ends in "user not found"
       # rather than an exception in the calling script.
@@ -376,7 +464,7 @@ module Lich
       # @param username [String] the user the current list does not know
       # @return [Boolean] true if the cache listed the user
       def reload_users_cache(username)
-        member = cached_members&.find { |u| u.is_a?(Hash) && u['name'] == username }
+        member = cached_members(token: UserVars.slack_token)&.find { |u| u.is_a?(Hash) && u['name'] == username }
         return false unless member
 
         @users_list = { 'members' => @users_list['members'] + [member] }
@@ -403,23 +491,26 @@ module Lich
         nil
       end
 
+      # @param token [String, nil] the token whose cache to read
       # @return [Array<Hash>, nil] members from a fresh, non-empty shared cache
-      def cached_members
-        cached = read_users_cache
+      def cached_members(token:)
+        cached = read_users_cache(token: token)
         members = cached && cached['members']
         members.is_a?(Array) && !members.empty? ? members : nil
       end
 
       # Fetches the users list from the Slack API with throttle retry, and
-      # writes a successful result to the shared cache.
+      # writes a successful result to the shared cache. The token is read
+      # once, so the list is cached under the token that fetched it.
       #
       # @param deadline [Float, nil] monotonic deadline; retries that would
       #   overrun it are skipped
       # @return [Array<Hash>, nil] members, or nil on failure
       def fetch_users_from_api(deadline = nil)
+        token = UserVars.slack_token
         retries = 0
         begin
-          members = post('users.list', { 'token' => UserVars.slack_token }, deadline: deadline)['members']
+          members = post('users.list', { 'token' => token }, deadline: deadline)['members']
           unless members.is_a?(Array) && !members.empty?
             Lich.log 'SlackBot: users.list returned no members'
             Lich::Messaging.msg('bold', 'SlackBot: Failed to fetch Slack user list: Slack returned no members')
@@ -427,12 +518,12 @@ module Lich
           end
 
           @users_list_retry_at = nil
-          write_users_cache(members)
+          write_users_cache(members, token: token)
           members
         rescue ThrottlingError => e
-          members = cached_members
+          members = cached_members(token: token)
           if members
-            Lich.log "SlackBot: Throttled, but another character cached the users list"
+            Lich.log "SlackBot: Throttled, but another character using this token cached the users list"
             return members
           end
 
@@ -463,18 +554,35 @@ module Lich
           Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
           users_list_failed
         rescue StandardError
-          # An error post does not wrap (e.g. ECONNREFUSED) still counts as a
+          # An error post does not wrap (an unexpected one, e.g. a bug) still counts as a
           # failed users.list call; the caller decides whether to rescue it.
           users_list_failed
           raise
         end
       end
 
+      # DB_Store script name of the users cache for a token. Each token has
+      # its own entry, so a list fetched with one workspace's token is never
+      # used with another's. The key holds a SHA-256 digest, not the token.
+      #
+      # @param token [String, nil] Slack API token
+      # @return [String, nil] the cache key, or nil when there is no token
+      def users_cache_key(token)
+        return nil unless token.is_a?(String) && !token.empty?
+
+        "#{USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
+      end
+
       # Reads cached users list from DB_Store.
       #
-      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil if missing/expired
-      def read_users_cache
-        data = Lich::Common::DB_Store.get_data(XMLData.game, USERS_CACHE_SCRIPT)
+      # @param token [String, nil] the token whose cache to read
+      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil
+      #   if missing/expired or there is no token
+      def read_users_cache(token:)
+        key = users_cache_key(token)
+        return nil unless key
+
+        data = Lich::Common::DB_Store.get_data(XMLData.game, key)
         return nil if data.nil? || data.empty?
         return nil unless data['fetched_at']
         return nil if (Time.now.to_i - data['fetched_at']) > USERS_CACHE_TTL
@@ -485,20 +593,27 @@ module Lich
       # Writes users list to DB_Store cache with a timestamp.
       #
       # @param members [Array<Hash>] Slack user objects to cache
+      # @param token [String, nil] the token that fetched the list; nothing is
+      #   written without one
       # @return [void]
-      def write_users_cache(members)
+      def write_users_cache(members, token:)
+        key = users_cache_key(token)
+        return unless key
+
         Lich::Common::DB_Store.store_data(
           XMLData.game,
-          USERS_CACHE_SCRIPT,
+          key,
           { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
-        Lich.log "SlackBot: Cached #{members.length} Slack users for all characters"
+        Lich.log "SlackBot: Cached #{members.length} Slack users for characters using this token"
       end
 
       # Searches LICHBOTS for a valid Slack token via LNet chat.
       #
       # @param budget [Numeric, nil] seconds allowed for checking each token found
       # @return [Boolean] true if a valid token was found and stored
+      # @raise [NetworkError, ThrottlingError, MalformedResponseError] when
+      #   Slack cannot be asked about a token found
       def find_token(budget = nil)
         return false unless lnet_available?
 
@@ -506,7 +621,7 @@ module Lich
 
         LICHBOTS.any? do |bot|
           token = request_token(bot)
-          authed = token && authed?(token, budget: budget)
+          authed = token && token_accepted?(token, budget)
           UserVars.slack_token = token if authed
           authed
         end
@@ -576,14 +691,35 @@ module Lich
 
       # Posts to the Slack API with retry and exponential backoff on network errors.
       #
+      # Timeouts, resets, EOF, malformed HTTP responses and DNS failures are
+      # retried with backoff. Any other socket error (a refused connection,
+      # an unreachable host or network, ...) and any TLS error (a rejected
+      # certificate, a failed handshake, a connection dropped mid-response)
+      # is raised as NetworkError without retrying: most come back at once
+      # from the OS or the peer, and the backoff would only hold the calling
+      # script. The next call tries again.
+      #
+      # The split is by exception class, not by what happened on the wire. A
+      # dropped connection is retried when it arrives as ECONNRESET or
+      # EOFError, but raised at once when it arrives as ECONNABORTED, EPIPE or
+      # an OpenSSL error (OpenSSL 3 reports a connection closed without a TLS
+      # close_notify as "unexpected eof while reading"). Which class a drop
+      # arrives as depends on the platform and the OpenSSL version. Likewise
+      # a host that never answers is retried when open_timeout fires first
+      # (Net::OpenTimeout), but raised without a retry when the OS gives up
+      # first (Errno::ETIMEDOUT), which takes as long as the OS connect
+      # timeout.
+      #
       # @param method [String] Slack API method name (e.g. 'chat.postMessage')
       # @param params [Hash] request parameters including token
       # @param deadline [Float, nil] monotonic deadline; when set, each attempt
       #   is cut off at the deadline and retries that would overrun it are skipped
       # @return [Hash] parsed JSON response body
       # @raise [ThrottlingError] on HTTP 429
-      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, or when the deadline is reached
-      # @raise [ApiError] on non-ok Slack responses or JSON parse errors
+      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted, when the deadline is reached,
+      #   or at once on a socket or TLS error that is not retried
+      # @raise [MalformedResponseError] when the reply is not JSON
+      # @raise [ApiError] on non-ok Slack responses
       def post(method, params, deadline: nil)
         retries = 0
 
@@ -610,20 +746,27 @@ module Lich
 
           body
         rescue JSON::ParserError => e
-          raise ApiError, "Failed to parse Slack API response: #{e.message}"
+          raise MalformedResponseError, "Failed to parse Slack API response: #{e.message}"
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
-          raise NetworkError, "SlackBot: Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
+          raise NetworkError, "Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
 
           delay = [BASE_RETRY_DELAY_SECONDS * (2**retries), MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.25).to_i)
           total_delay = delay + jitter
-          raise NetworkError, "SlackBot: Network error, no time left to retry: #{e.message}" if deadline && total_delay >= seconds_left(deadline)
+          raise NetworkError, "Network error, no time left to retry: #{e.message}" if deadline && total_delay >= seconds_left(deadline)
 
           retries += 1
           Lich.log "SlackBot: Network error: #{e.message}. Retry ##{retries} in #{total_delay}s..."
           sleep total_delay
           retry
+        rescue SystemCallError, IOError, OpenSSL::OpenSSLError => e
+          # EOFError (an IOError), ECONNRESET and EINVAL are retried above.
+          # IOError is kept broad on purpose: it also catches local faults
+          # such as "closed stream", which are not network failures. Callers
+          # like direct_message must never stop the calling script, and the
+          # class name in the message keeps such a fault diagnosable.
+          raise NetworkError, "Network error: #{e.message} (#{e.class})"
         end
       end
 
@@ -666,7 +809,7 @@ module Lich
       #   proxy's CONNECT reply) or the request is still running at the deadline
       def request_before(http, req, deadline)
         remaining = seconds_left(deadline)
-        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+        raise NetworkError, 'Time budget for the request is exhausted' if remaining <= 0
 
         # With http_proxy set, deciding whether to use it resolves the target
         # host, which has no timeout of its own. No socket is open yet, so
@@ -674,7 +817,7 @@ module Lich
         # connect.
         proxied = Timeout.timeout(remaining) { http.proxy? }
         remaining = seconds_left(deadline)
-        raise NetworkError, 'SlackBot: Time budget for the request is exhausted' if remaining <= 0
+        raise NetworkError, 'Time budget for the request is exhausted' if remaining <= 0
 
         # TCP connect and TLS handshake, plus the CONNECT reply through a proxy.
         share = remaining * CONNECT_SHARE_OF_BUDGET / (proxied ? 3.0 : 2.0)
@@ -682,9 +825,9 @@ module Lich
         http.read_timeout = share
         http.write_timeout = share
         begin
-          Timeout.timeout(remaining, Net::OpenTimeout, 'SlackBot: connecting ran into the send deadline') { http.start }
+          Timeout.timeout(remaining, Net::OpenTimeout, 'connecting ran into the send deadline') { http.start }
           remaining = seconds_left(deadline)
-          raise NetworkError, 'SlackBot: Time budget for the request ran out while connecting' if remaining <= 0
+          raise NetworkError, 'Time budget for the request ran out while connecting' if remaining <= 0
 
           http.read_timeout = remaining
           http.write_timeout = remaining

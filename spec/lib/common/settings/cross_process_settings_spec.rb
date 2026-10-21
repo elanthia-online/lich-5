@@ -241,6 +241,403 @@ RSpec.describe 'Settings writes across Lich processes' do
     end
   end
 
+  describe 'reads (a session sees what other sessions committed)' do
+    it 'shows a GameSettings key another session wrote after this one loaded the row' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      expect(alpha.call('get G target')).to be_nil # alpha has cached the row
+
+      beta.call('set G target "bank"')
+
+      expect(alpha.call('get G target')).to eq('bank')
+    end
+
+    it 'shows a changed value, not only a new key' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G mode "slow"')
+      expect(beta.call('get G mode')).to eq('slow')
+
+      alpha.call('set G mode "fast"')
+
+      expect(beta.call('get G mode')).to eq('fast')
+    end
+
+    it 'shows a DragonRealms session\'s Settings key to a GemStone session' do
+      dr = start('DR', 'Alpha', 'autostart')
+      gs = start('GSIV', 'Zed', 'autostart')
+      expect(gs.call('get S scripts')).to be_nil
+
+      dr.call('set S scripts ["lnet"]')
+
+      expect(gs.call('get S scripts')).to eq(['lnet'])
+    end
+
+    it 'shows a CharSettings key written by the same character in another process' do
+      first = start('DR', 'Alpha', 'kill-counter')
+      second = start('DR', 'Alpha', 'kill-counter')
+      expect(second.call('get C kills')).to be_nil
+
+      first.call('set C kills 7')
+
+      expect(second.call('get C kills')).to eq(7)
+    end
+
+    it 'shows InstanceSettings keys, character-scoped and game-scoped (root proxy)' do
+      alpha = start('DR', 'Alpha', 'any-script')
+      other = start('DR', 'Alpha', 'other-script')
+      beta = start('DR', 'Beta', 'any-script')
+      expect(other.call('get I note')).to be_nil
+      expect(beta.call('get IG shared')).to be_nil
+
+      alpha.call('set I note "hi"')
+      alpha.call('set IG shared {"Alpha":1}')
+
+      expect(other.call('get I note')).to eq('hi')
+      expect(beta.call('get IG shared')).to eq('Alpha' => 1)
+    end
+
+    it 'keeps a game-scoped InstanceSettings key another character wrote when writing its own' do
+      alpha = start('DR', 'Alpha', 'any-script')
+      beta = start('DR', 'Beta', 'any-script')
+      beta.call('get IG anything')
+      alpha.call('set IG alpha {"bank":1}')
+
+      beta.call('set IG beta {"bank":2}')
+
+      expect(stored_row('core', 'DR')).to eq('alpha' => { 'bank' => 1 }, 'beta' => { 'bank' => 2 })
+    end
+
+    it 'keeps both entries of a read-modify-write of one key done in turn by two sessions' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('get G anything')
+      beta.call('get G anything')
+
+      # targets = GameSettings['custom targets'] || {}; targets[name] = room; GameSettings['custom targets'] = targets
+      alpha.call('set G custom_targets {"foo":"1"}')
+      targets = beta.call('get G custom_targets') || {}
+      beta.call("set G custom_targets #{JSON.generate(targets.merge('bar' => '2'))}")
+
+      expect(stored_row('go2', 'DR')).to eq('custom_targets' => { 'foo' => '1', 'bar' => '2' })
+    end
+
+    it 'keeps both entries when two sessions in turn write into one nested hash' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      first.call('set G opts {"x":0}')
+      second.call('get G opts')
+
+      first.call('nset G opts n 1')
+      second.call('nset G opts m 2')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'n' => 1, 'm' => 2 })
+    end
+
+    it 'saves a nested write into a hash another session created after this one loaded the row' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      second.call('get G anything')
+      first.call('set G opts {"x":0}')
+
+      second.call('nset G opts z 3')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'z' => 3 })
+    end
+
+    it 'keeps both elements when two sessions in turn push onto one array' do
+      first = start('DR', 'Alpha', 'go2')
+      second = start('DR', 'Beta', 'go2')
+      first.call('set G arr []')
+      second.call('get G arr')
+
+      first.call('push G arr "k1"')
+      second.call('push G arr "l1"')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => %w[k1 l1])
+    end
+
+    it 'does not show a change another process rolled back' do
+      alpha = start('DR', 'Alpha', 'go2')
+      alpha.call('set G mode "slow"')
+
+      db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      begin
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('UPDATE script_auto_settings SET hash = ? WHERE script = ? AND scope = ?',
+                   [SQLite3::Blob.new(Marshal.dump('mode' => 'rolled back')), 'go2', 'DR'])
+        expect(alpha.call('get G mode')).to eq('slow') # the change is not committed yet
+        db.execute('ROLLBACK')
+      ensure
+        db.close
+      end
+
+      expect(alpha.call('get G mode')).to eq('slow')
+    end
+
+    it 'answers from its cache at once, without waiting out the busy timeout, while another process holds the lock' do
+      alpha = start('DR', 'Alpha', 'go2') # default busy timeout (5 s)
+      alpha.call('set G mode "slow"')
+      alpha.call('get G mode')
+
+      db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+      begin
+        db.execute('BEGIN EXCLUSIVE') # blocks readers too
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        expect(alpha.call('get G mode')).to eq('slow')
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 2.5
+        db.execute('UPDATE script_auto_settings SET hash = ? WHERE script = ? AND scope = ?',
+                   [SQLite3::Blob.new(Marshal.dump('mode' => 'fast')), 'go2', 'DR'])
+        db.execute('COMMIT')
+      ensure
+        db.close
+      end
+
+      expect(alpha.call('get G mode')).to eq('fast')
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+  end
+
+  # A proxy holds this session's copy of one container. Another session may
+  # write into that container between the read and the write through the
+  # proxy; the write replays its operation on the stored container.
+  describe 'writes through a proxy read before another session wrote' do
+    it 'keeps the other session\'s entry when writing a key through a kept nested proxy' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G opts {"x":0}')
+      alpha.call('keep opts G opts')
+
+      beta.call('nset G opts b 1')
+      alpha.call('kset opts a 2')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'b' => 1, 'a' => 2 })
+      expect(alpha.call('kget opts')).to eq('x' => 0, 'b' => 1, 'a' => 2) # the proxy shows what was stored
+    end
+
+    it 'keeps the other session\'s element when pushing through a kept array proxy' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G arr ["a0"]')
+      alpha.call('keep arr G arr')
+
+      beta.call('push G arr "b1"')
+      alpha.call('kcall arr push ["a1"]')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => %w[a0 b1 a1])
+    end
+
+    it 'runs delete_if on the stored array, keeping what the other session added' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G arr ["old","keep"]')
+      alpha.call('keep arr G arr')
+
+      beta.call('push G arr "new"')
+      beta.call('push G arr "old"') # also matches: removed from the stored array too
+      alpha.call('kdelete_if arr "old"')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => %w[keep new])
+    end
+
+    it 'pops the last stored element, which another session pushed, and returns it' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G arr ["a0"]')
+      alpha.call('keep arr G arr')
+
+      beta.call('push G arr "b1"')
+
+      expect(alpha.call('kcall arr pop []')).to eq('b1')
+      expect(stored_row('go2', 'DR')).to eq('arr' => %w[a0])
+    end
+
+    it 'keeps entries another session wrote into a nested container two levels down' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G outer {"inner":{"x":0}}')
+      alpha.call('keep inner G outer inner')
+
+      beta.call('nset G outer other 1')
+      beta.call('keep inner G outer inner')
+      beta.call('kset inner b 1')
+      alpha.call('kset inner a 2')
+
+      expect(stored_row('go2', 'DR')).to eq('outer' => { 'inner' => { 'x' => 0, 'b' => 1, 'a' => 2 }, 'other' => 1 })
+    end
+
+    it 'writes into the container another session put in place of the one this session read' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G opts {"x":0}')
+      alpha.call('keep opts G opts')
+
+      beta.call('set G opts {"y":1}')
+      alpha.call('kset opts z 2')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'y' => 1, 'z' => 2 })
+    end
+
+    it 'stores this session\'s copy when another session removed the container' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G opts {"x":0}')
+      alpha.call('keep opts G opts')
+
+      beta.call('set G opts null')
+      alpha.call('kset opts z 2')
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'z' => 2 })
+    end
+
+    it 'recreates a removed Hash with Integer keys around a kept child\'s copy' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('iset G rooms 1 {"a":1}')
+      alpha.call('ikeep room G rooms 1')
+
+      beta.call('set G rooms null')
+      alpha.call('kset room b 2')
+
+      expect(stored_row('go2', 'DR')).to eq('rooms' => { 1 => { 'a' => 1, 'b' => 2 } })
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
+    it 'stores nothing, and says so, when assigning the value already there at a position another session removed' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G arr [1,2,3]')
+      alpha.call('keep arr G arr')
+
+      beta.call('set G arr [1]')
+      alpha.call('kcall arr []= [2,3]')
+
+      expect(stored_row('go2', 'DR')).to eq('arr' => [1])
+      expect(alpha.call('msgs')).to include(['error', a_string_including('not saved', 'no longer there')])
+    end
+
+    it 'keeps a container another session created when writing through a kept GameSettings.to_hash' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G mine 0')
+      alpha.call('keeproot root G')
+
+      beta.call('set G opts {"b":1}')
+      alpha.call('kset root mine 1')
+
+      expect(stored_row('go2', 'DR')).to eq('mine' => 1, 'opts' => { 'b' => 1 })
+    end
+
+    it 'keeps another character\'s key when writing through a kept InstanceSettings game proxy' do
+      alpha = start('DR', 'Alpha', 'any-script')
+      beta = start('DR', 'Beta', 'any-script')
+      alpha.call('keeproot bank IG') # the cached row itself (root_proxy_for)
+
+      beta.call('set IG Beta {"copper":2}')
+      alpha.call('kset bank Alpha {"copper":1}')
+
+      expect(stored_row('core', 'DR')).to eq('Alpha' => { 'copper' => 1 }, 'Beta' => { 'copper' => 2 })
+    end
+
+    it 'keeps the other process\'s field when the same character updates one element found in an array' do
+      first = start('DR', 'Alpha', 'sloot')
+      second = start('DR', 'Alpha', 'sloot')
+      first.call('set C jars [{"gem":"ruby","count":1,"full":false},{"gem":"onyx","count":3,"full":false}]')
+      first.call('keepfind jar C jars gem "ruby"')
+      second.call('keepfind jar C jars gem "ruby"')
+
+      second.call('kset jar full true')
+      first.call('kset jar count 2')
+
+      expect(stored_row('sloot', 'DR:Alpha')).to eq(
+        'jars' => [{ 'gem' => 'ruby', 'count' => 2, 'full' => true }, { 'gem' => 'onyx', 'count' => 3, 'full' => false }]
+      )
+    end
+
+    it 'keeps the other session\'s field and element when each element of a kept array is written in an each loop' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G rows [{"name":"a","count":0},{"name":"b","count":0}]')
+      alpha.call('keep rows G rows')
+      beta.call('keepfind row G rows name "a"')
+
+      beta.call('kset row theirs 1')
+      beta.call('push G rows {"name":"c","count":0}')
+      alpha.call('keach rows count 1')
+
+      expect(stored_row('sloot', 'DR')).to eq(
+        'rows' => [{ 'name' => 'a', 'count' => 1, 'theirs' => 1 }, { 'name' => 'b', 'count' => 1 }, { 'name' => 'c', 'count' => 0 }]
+      )
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
+    it 'keeps the other session\'s entry when each value of a kept hash is written in a |key, value| loop' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G by_name {"a":{"n":0},"b":{"n":1}}')
+      alpha.call('keep by_name G by_name')
+
+      beta.call('nset G by_name c {"n":2}')
+      alpha.call('kveach by_name seen true')
+
+      expect(stored_row('sloot', 'DR')).to eq(
+        'by_name' => { 'a' => { 'n' => 0, 'seen' => true }, 'b' => { 'n' => 1, 'seen' => true }, 'c' => { 'n' => 2 } }
+      )
+    end
+
+    it 'pushes through a sort view onto the stored array, then stores an unrelated top-level key' do
+      alpha = start('DR', 'Alpha', 'sloot')
+      beta = start('DR', 'Beta', 'sloot')
+      alpha.call('set G items [3,1,2]')
+      alpha.call('keep items G items')
+
+      beta.call('push G items 9')
+      expect(alpha.call('ksortpush items 4')).to eq('ok')
+      expect(alpha.call('set G other 1')).to eq('ok')
+
+      expect(stored_row('sloot', 'DR')).to eq('items' => [3, 1, 2, 9, 4], 'other' => 1)
+      expect(alpha.call('msgs').select { |kind, _| kind == 'error' }).to be_empty
+    end
+
+    it 'does not write when a method that changes nothing is called through a kept proxy' do
+      alpha = start('DR', 'Alpha', 'go2')
+      beta = start('DR', 'Beta', 'go2')
+      alpha.call('set G opts {"x":0}')
+      alpha.call('keep opts G opts')
+
+      beta.call('nset G opts b 1')
+      expect(alpha.call('kcall opts key? ["x"]')).to be(true)
+
+      expect(stored_row('go2', 'DR')).to eq('opts' => { 'x' => 0, 'b' => 1 })
+    end
+
+    it 'keeps every entry when several sessions write into one nested hash at the same time' do
+      writers = %w[Alpha Beta Gamma].map { |char| start('DR', char, 'go2') }
+      writers.first.call('set G opts {}')
+      writers.each { |w| w.call('get G opts') }
+
+      writers.each { |w| w.send_command("nburst G opts #{w.label.split('/').first} 25") }
+      writers.each { |w| expect(w.answer(120)).to eq('ok') }
+
+      expected = %w[Alpha Beta Gamma].flat_map { |char| (0...25).map { |i| ["#{char}_#{i}", i] } }.to_h
+      expect(stored_row('go2', 'DR')).to eq('opts' => expected)
+      writers.each { |w| expect(w.call('msgs').select { |kind, _| kind == 'error' }).to be_empty }
+    end
+
+    it 'keeps every element when several sessions push onto one array at the same time' do
+      writers = %w[Alpha Beta Gamma].map { |char| start('DR', char, 'go2') }
+      writers.first.call('set G arr []')
+      writers.each { |w| w.call('get G arr') }
+
+      writers.each { |w| w.send_command("pburst G arr #{w.label.split('/').first} 25") }
+      writers.each { |w| expect(w.answer(120)).to eq('ok') }
+
+      expected = %w[Alpha Beta Gamma].flat_map { |char| (0...25).map { |i| "#{char}_#{i}" } }
+      expect(stored_row('go2', 'DR')['arr']).to match_array(expected)
+      writers.each { |w| expect(w.call('msgs').select { |kind, _| kind == 'error' }).to be_empty }
+    end
+  end
+
   describe 'write lock' do
     def with_write_lock
       db = SQLite3::Database.new(File.join(data_dir, 'lich.db3'))

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -23,6 +24,14 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     allow(http).to receive(:use_ssl=)
     allow(http).to receive(:verify_mode=)
     allow(http).to receive(:request).and_return(auth_success_response)
+    # SlackBot.new caps each Slack call, so its requests go through the
+    # deadline transport (SlackBot#request_before).
+    allow(http).to receive(:proxy?).and_return(false)
+    allow(http).to receive(:open_timeout=)
+    allow(http).to receive(:read_timeout=)
+    allow(http).to receive(:write_timeout=)
+    allow(http).to receive(:start)
+    allow(http).to receive(:do_finish)
     http
   end
 
@@ -54,6 +63,11 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
   after(:each) do
     UserVars.slack_token = nil
+  end
+
+  # DB_Store script name of the users cache kept for a token.
+  def users_cache_script(token = 'valid-token')
+    "#{described_class::USERS_CACHE_SCRIPT}:#{Digest::SHA256.hexdigest(token)}"
   end
 
   # Helper: build a bot with valid token and users list, skipping cache
@@ -115,6 +129,20 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       err = described_class::ThrottlingError.new('throttled')
       expect(err.retry_after).to be_nil
     end
+
+    # A token check treats ApiError as "Slack rejected the token" (which starts
+    # LNet discovery) unless the error is in SLACK_UNAVAILABLE_ERRORS. A new
+    # ApiError subclass must be placed on one side deliberately.
+    it 'puts every ApiError subclass in SLACK_UNAVAILABLE_ERRORS' do
+      expect(described_class::ApiError.subclasses)
+        .to match_array(described_class::SLACK_UNAVAILABLE_ERRORS - [described_class::NetworkError])
+    end
+
+    it 'lists NetworkError but not the plain ApiError as Slack unavailable' do
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to include(described_class::NetworkError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).not_to include(described_class::ApiError)
+      expect(described_class::SLACK_UNAVAILABLE_ERRORS).to be_frozen
+    end
   end
 
   # ---- #initialize ----
@@ -163,7 +191,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         UserVars.slack_token = 'valid-token'
         allow(mock_http).to receive(:request).and_return(auth_success_response)
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'cached_user', 'id' => 'U99999' }], 'fetched_at' => Time.now.to_i }
         )
       end
@@ -263,6 +291,18 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         expect { bot.direct_message('testuser', 'hello') }.not_to raise_error
       end
     end
+
+    context 'when the in-game message call returns a value' do
+      it 'still returns nil on failure' do
+        bot = build_initialized_bot
+        allow(mock_http).to receive(:request) do
+          raise described_class::ApiError, 'test error'
+        end
+        # Lich's _respond returns the list of attached clients, not nil.
+        allow(Lich::Messaging).to receive(:msg).and_return([])
+        expect(bot.direct_message('testuser', 'hello')).to be_nil
+      end
+    end
   end
 
   # ---- Users Cache ----
@@ -273,48 +313,48 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     describe '#read_users_cache' do
       it 'returns nil when cache is empty' do
         Lich::Common::DB_Store.reset!
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache has no fetched_at' do
-        Lich::Common::DB_Store.store_data('DR', '_slackbot_users_cache', { 'members' => [] })
-        expect(bot.send(:read_users_cache)).to be_nil
+        Lich::Common::DB_Store.store_data('DR', users_cache_script, { 'members' => [] })
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when cache is expired' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'old', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 7200 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns data when cache is fresh' do
         members = [{ 'name' => 'fresh', 'id' => 'U2' }]
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => members, 'fetched_at' => Time.now.to_i - 60 }
         )
-        cached = bot.send(:read_users_cache)
+        cached = bot.send(:read_users_cache, token: 'valid-token')
         expect(cached['members']).to eq(members)
       end
 
       it 'uses XMLData.game for scope isolation' do
         allow(XMLData).to receive(:game).and_return('GS')
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'dr_user', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
     describe '#write_users_cache' do
       it 'stores members with timestamp' do
         members = [{ 'name' => 'new', 'id' => 'U3' }]
-        bot.send(:write_users_cache, members)
+        bot.send(:write_users_cache, members, token: 'valid-token')
 
-        cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+        cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
         expect(cached['members']).to eq(members)
         expect(cached['fetched_at']).to be_within(2).of(Time.now.to_i)
       end
@@ -327,7 +367,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     it 'uses cache when available and skips API' do
       members = [{ 'name' => 'cached', 'id' => 'U100' }]
       Lich::Common::DB_Store.store_data(
-        'DR', '_slackbot_users_cache',
+        'DR', users_cache_script,
         { 'members' => members, 'fetched_at' => Time.now.to_i }
       )
 
@@ -348,7 +388,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       described_class.new
 
-      cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+      cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
       expect(cached['members']).to include({ 'name' => 'testuser', 'id' => 'U12345' })
     end
 
@@ -367,7 +407,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       described_class.new
 
-      cached = Lich::Common::DB_Store.get_data('DR', '_slackbot_users_cache')
+      cached = Lich::Common::DB_Store.get_data('DR', users_cache_script)
       expect(cached).to be_empty
     end
   end
@@ -387,7 +427,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         members = [{ 'name' => 'other_char_cached', 'id' => 'U777' }]
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => members, 'fetched_at' => Time.now.to_i }
         )
 
@@ -532,7 +572,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'JSON parse error' do
-      it 'raises ApiError' do
+      it 'raises MalformedResponseError, still an ApiError' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -541,7 +581,8 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
-        }.to raise_error(described_class::ApiError, /Failed to parse/)
+        }.to raise_error(described_class::MalformedResponseError, /Failed to parse/)
+        expect(described_class::MalformedResponseError.superclass).to eq(described_class::ApiError)
       end
     end
 
@@ -568,18 +609,18 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       it 'accepts cache at exactly TTL - 1 second' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3599 }
         )
-        expect(bot.send(:read_users_cache)).not_to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).not_to be_nil
       end
 
       it 'rejects cache at TTL + 1 second' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [{ 'name' => 'edge', 'id' => 'U1' }], 'fetched_at' => Time.now.to_i - 3601 }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
@@ -588,16 +629,16 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
       it 'returns nil when fetched_at is nil' do
         Lich::Common::DB_Store.store_data(
-          'DR', '_slackbot_users_cache',
+          'DR', users_cache_script,
           { 'members' => [], 'fetched_at' => nil }
         )
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
 
       it 'returns nil when data is nil' do
         Lich::Common::DB_Store.reset!
         allow(Lich::Common::DB_Store).to receive(:get_data).and_return(nil)
-        expect(bot.send(:read_users_cache)).to be_nil
+        expect(bot.send(:read_users_cache, token: 'valid-token')).to be_nil
       end
     end
 
