@@ -18,6 +18,7 @@ skip the RSpec run in CI.
 | [Events](scripting/events.md) | API | `Events.on/emit/off` script-to-script notifications |
 | [Script execution guards](scripting/script-execution-guard.md) | API | Cooperative command/time/cancellation boundaries for supervised scripts |
 | [Static map routing](scripting/static-map-routing.md) | API | `Map.dijkstra(static_only: true)` |
+| [Map travel time estimates](scripting/map-travel-estimates.md) | API | `Map.estimate_time(path)` and the `from:` start room |
 | **Engine** | | |
 | [Runtime I/O](engine/runtime-io.md) | Behavior | Detachable frontends, `Script#gets` timeouts, socket-read hooks |
 | [GTK hardening](engine/gtk-hardening.md) | Behavior | Shared GTK main loop protection and callback retention |
