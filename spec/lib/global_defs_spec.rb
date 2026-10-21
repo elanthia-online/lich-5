@@ -750,7 +750,7 @@ RSpec.describe '#handle_detachable_client' do
 end
 
 # A client may send SET_FRONTEND_CAPS at any time to name the rich-stream
-# rewrites it handles itself (docs/frontend-capability-declaration.md). The
+# rewrites it handles itself (docs/frontends/capability-declaration.md). The
 # real handler runs in a subprocess, as above; the client's lines are scripted
 # and every line that reaches dispatch is recorded.
 RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
