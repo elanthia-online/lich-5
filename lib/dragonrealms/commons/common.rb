@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../custom_substitutions'
+require_relative '../../common/wait_response'
 
 module Lich
   module DragonRealms
@@ -15,10 +16,9 @@ module Lich
       # Pattern for XML tags
       XML_TAG_PATTERN = /<[^>]+>/.freeze
 
-      # Pattern for game wait/roundtime responses in bput. Anchored at the end
-      # of the line: the game sometimes appends "...wait N seconds." to the
-      # previous line, and player speech containing "Wait N" ends in a quote.
-      WAIT_RESPONSE_PATTERN = /(?:\.\.\. ?wait|\AWait) (?<seconds>[0-9]+) seconds?\.(?:<[^>]+>)*\s*\z/.freeze
+      # Pattern for game wait/roundtime responses in bput; shared with fput,
+      # see lib/common/wait_response.rb.
+      WAIT_RESPONSE_PATTERN = Lich::Common::WAIT_RESPONSE_PATTERN
 
       # Most collect attempts per DRC.collect call while the room is too
       # cluttered. Chosen to equal DRC.forage?'s default tries (5), which is
