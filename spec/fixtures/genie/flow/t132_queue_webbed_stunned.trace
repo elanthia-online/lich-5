@@ -1,0 +1,20 @@
+WAIT 100
+VAR webbed 1
+IN Do it
+WAIT 1000
+IN Queue bypass
+WAIT 1000
+VAR webbed 0
+WAIT 500
+VAR stunned 1
+IN Do it
+WAIT 500
+IN Send it
+WAIT 500
+VAR stunned 0
+WAIT 500
+VAR webbed 1
+IN Send it
+WAIT 500
+VAR webbed 0
+WAIT 200

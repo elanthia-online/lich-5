@@ -1,0 +1,41 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t87_hands_prompt_rt"}
+{"t":0,"ev":"script-start","script":"t87_hands_prompt_rt","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t87_hands_prompt_rt.cmd]","script":"t87_hands_prompt_rt"}
+{"t":10,"ev":"in","text":"<app char=\"Tester\" game=\"DR: Prime\" title=\"[DR: Prime] Tester\"/>"}
+{"t":10,"ev":"in","text":"<left exist=\"41807070\" noun=\"sword\">steel sword</left><right>Empty</right>"}
+{"t":10,"ev":"in","text":"<spell exist='spell'>Dragon's Breath</spell><castTime value='1700000006'/>"}
+{"t":10,"ev":"in","text":"<indicator id='IconHIDDEN' visible='y'/><indicator id='IconSTANDING' visible='y'/><indicator id='IconINVISIBLE' visible='n'/>"}
+{"t":10,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='87' text='health 87%' left='0%' customText='t' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/><progressBar id='encumlevel' value='3' text='light burden' left='60%'/></dialogData>"}
+{"t":10,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":3}
+{"t":10,"ev":"prompt-event"}
+{"t":3520,"ev":"in","text":"STEP1"}
+{"t":3530,"ev":"echo","text":"lh=[steel sword] lhn=[sword] lhid=[41807070] rh=[Empty] rhn=[] rhid=[]","script":"t87_hands_prompt_rt"}
+{"t":3530,"ev":"echo","text":"ps=[Dragon's Breath] ct=[1700000006] rt=[3] gt=[1700000000] pr=[HR> ] hid=[1] st=[1]","script":"t87_hands_prompt_rt"}
+{"t":3530,"ev":"echo","text":"hp=[87] hbt=[Health 87%] mana=[98] mbt=[Mana 98%] enc=[3] cn=[Tester] gn=[DRPrime]","script":"t87_hands_prompt_rt"}
+{"t":3730,"ev":"in","text":"<prompt time=\"1700000003\">&gt;</prompt>"}
+{"t":3730,"ev":"prompt-event"}
+{"t":3740,"ev":"in","text":"<left>Empty</left><spell>None</spell>"}
+{"t":3740,"ev":"in","text":"STEP2"}
+{"t":3750,"ev":"echo","text":"rt3=[0] pr=[H> ] lh=[Empty] lhid=[] ps=[None]","script":"t87_hands_prompt_rt"}
+{"t":3950,"ev":"in","text":"<indicator id='IconHIDDEN' visible='n'/><indicator id='IconDEAD' visible='y'/>"}
+{"t":3950,"ev":"in","text":"<prompt time=\"1700000003\">&gt;</prompt>"}
+{"t":3950,"ev":"prompt-event"}
+{"t":3960,"ev":"in","text":"STEP3"}
+{"t":3970,"ev":"echo","text":"pr=[DEAD> ] dead=[1]","script":"t87_hands_prompt_rt"}
+{"t":4170,"ev":"in","text":"<indicator id='IconJOINED' visible='y'/><indicator id='IconBLEEDING' visible='y'/>"}
+{"t":4170,"ev":"in","text":"<prompt time=\"1700000004\">J&gt;</prompt>"}
+{"t":4170,"ev":"prompt-event"}
+{"t":4170,"ev":"in","text":"STEP4"}
+{"t":4180,"ev":"echo","text":"pr=[J> ] joined=[1] bleeding=[0]","script":"t87_hands_prompt_rt"}
+{"t":4380,"ev":"in","text":"<roundTime value='1700000006'/>"}
+{"t":4380,"ev":"in","text":"<prompt time=\"1700000004\">&gt;</prompt>"}
+{"t":4380,"ev":"roundtime-event","seconds":2}
+{"t":4380,"ev":"prompt-event"}
+{"t":6890,"ev":"in","text":"STEP5"}
+{"t":6900,"ev":"echo","text":"pr=[> ] rt=[2]","script":"t87_hands_prompt_rt"}
+{"t":6900,"ev":"print","text":"[Script finished (In 6.90 seconds): t87_hands_prompt_rt.cmd]","script":"t87_hands_prompt_rt"}
+{"t":6900,"ev":"script-finish","script":"t87_hands_prompt_rt"}
+{"t":6900,"ev":"end","live":0}

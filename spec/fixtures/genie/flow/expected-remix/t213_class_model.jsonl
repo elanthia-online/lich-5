@@ -1,0 +1,71 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t213_class_model"}
+{"t":0,"ev":"script-start","script":"t213_class_model","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t213_class_model.cmd]","script":"t213_class_model"}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Bar=False","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=False","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"foo=True","window":""}
+{"t":0,"ev":"cmdecho","text":"qux=False","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: ba","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=False","window":""}
+{"t":0,"ev":"cmdecho","text":"All Classes Activated","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Bar=True","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=True","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"foo=True","window":""}
+{"t":0,"ev":"cmdecho","text":"qux=True","window":""}
+{"t":0,"ev":"cmdecho","text":"zed=True","window":""}
+{"t":0,"ev":"cmdecho","text":"All Classes InActivated","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Bar=False","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=False","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"foo=False","window":""}
+{"t":0,"ev":"cmdecho","text":"qux=False","window":""}
+{"t":0,"ev":"cmdecho","text":"zed=False","window":""}
+{"t":0,"ev":"cmdecho","text":"All Classes Activated","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Bar=True","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=True","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"foo=True","window":""}
+{"t":0,"ev":"cmdecho","text":"qux=True","window":""}
+{"t":0,"ev":"cmdecho","text":"zed=True","window":""}
+{"t":0,"ev":"cmdecho","text":"All Classes InActivated","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Bar=False","window":""}
+{"t":0,"ev":"cmdecho","text":"baz=False","window":""}
+{"t":0,"ev":"cmdecho","text":"default=False","window":""}
+{"t":0,"ev":"cmdecho","text":"foo=False","window":""}
+{"t":0,"ev":"cmdecho","text":"qux=False","window":""}
+{"t":0,"ev":"cmdecho","text":"zed=False","window":""}
+{"t":0,"ev":"trigger-fire","pattern":"^ping$","text":"ping"}
+{"t":0,"ev":"cmdecho","text":"pinged2","window":""}
+{"t":0,"ev":"trigger-fire","pattern":"^pong$","text":"pong"}
+{"t":0,"ev":"cmdecho","text":"ponged","window":""}
+{"t":0,"ev":"trigger-fire","pattern":"^tick$","text":"tick"}
+{"t":0,"ev":"cmdecho","text":"ticked again","window":""}
+{"t":0,"ev":"cmdecho","text":"Classes Cleared","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: mixed","window":""}
+{"t":0,"ev":"cmdecho","text":"None.","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"default=True","window":""}
+{"t":0,"ev":"cmdecho","text":"Mixed=True","window":""}
+{"t":0,"ev":"cmdecho","text":"Classes Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Classes Loaded","window":""}
+{"t":0,"ev":"cmdecho","text":"Active classes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: foo","window":""}
+{"t":0,"ev":"cmdecho","text":"None.","window":""}
+{"t":0,"ev":"echo","text":"done","script":"t213_class_model"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t213_class_model.cmd]","script":"t213_class_model"}
+{"t":0,"ev":"script-finish","script":"t213_class_model"}
+{"t":10,"ev":"end","live":0}

@@ -1,0 +1,7 @@
+IN <indicator id='IconINVISIBLE' visible='y'/>
+IN <component id='room objs'>You also see a rock.</component>
+IN STEP1
+WAIT 300
+IN <indicator id='IconINVISIBLE' visible='y'/>
+IN <component id='room objs'>You also see a pebble.</component>
+IN STEP2

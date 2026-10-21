@@ -1,0 +1,69 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t244_js_arrays_c878a96"}
+{"t":0,"ev":"script-start","script":"t244_js_arrays_c878a96","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t244_js_arrays_c878a96.cmd]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p1 [x|y]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p2 [x|y|y|z]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p3 [x|y|y|z|]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p4 [x|y|y|z||$foo]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p5 [q]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p6 [x|y|y|z||$foo|x]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"p7 [x|y|y|z||$foo|x|undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"u1 [r|]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"u2 [$foo|y|z]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"u3 [|$foo|y|z]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"u4 [s]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(32): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"o1 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(34): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"o2 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(36): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"o3 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"r1 [%pv|$foo|y|z]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"r2 [%pv|$foo|y|z]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(42): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"z1 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(44): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f1 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(46): Cannot read property '0' of undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f2 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(48): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f3 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(50): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f4 [undefined] [x|y|y|z||$foo|x|undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(52): Cannot read property '0' of undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f5 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(54): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f6 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(56): Cannot read property '0' of undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f7 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(58): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"f8 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"c1 [x|y|y|z||$foo|x|undefined|m|n]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"c2 [undefined|12]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"ba1 [foo|bar|baz|apple and pie]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"ba2 [foo|bar]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(68): srch is not defined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"bs1 [undefined] [%pv|$foo|y|zs]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(70): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"bs2 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(72): Cannot read property '0' of undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"bs3 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(74): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"s1 [x|y|y|z||$foo|x|undefined|m|n]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"s2 [x|y|y|z||$foo|x|undefined|m|n]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(78): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"m1 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"m2 [1]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(82): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"m3 [undefined]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"m4 [0]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(86): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(87): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(88): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"error","text":"[Script error in t244_js_arrays_c878a96.cmd(89): Property 'length' of object is not a function]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"m5 [0]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"echo","text":"end","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t244_js_arrays_c878a96.cmd]","script":"t244_js_arrays_c878a96"}
+{"t":0,"ev":"script-finish","script":"t244_js_arrays_c878a96"}
+{"t":10,"ev":"end","live":0}

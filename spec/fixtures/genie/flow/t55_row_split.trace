@@ -1,0 +1,19 @@
+# N20: Remix ParseGameRow splits one server row into several TriggerParse lines (scripts + #triggers):
+# (a) a roomDesc preset is printed on its own and the rest of the row later (Game.cs:689-693 R);
+#     real row shape from a tester's live capture (DESC shortened);
+# (b) a stream-target change mid-row flushes the buffered text first (Game.cs:628-658, 2941-2956 R).
+# The Lich glue delivers each row as ONE joined line.
+INPUT #trigger {^\s*You also see the stairway} {#echo trig-own-line}
+INPUT #trigger {^A stone-paved walkway lies to the west\.$} {#echo trig-desc-own-line}
+INPUT #trigger {lies to the west\.\s+You also see} {#echo trig-joined}
+INPUT #trigger {^PRE MID POST$} {#echo trig-whole}
+INPUT #trigger {^PRE\s*$} {#echo trig-pre}
+INPUT #trigger {^MID$} {#echo trig-mid}
+INPUT #trigger {^ POST$} {#echo trig-post}
+WAIT 100
+IN <style id=""/><preset id='roomDesc'>A stone-paved walkway lies to the west.</preset>  You also see the stairway to the street.
+WAIT 300
+IN PRE <pushStream id='thoughts'/>MID<popStream/> POST
+WAIT 300
+IN DONETOK
+WAIT 300

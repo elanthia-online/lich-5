@@ -1,0 +1,6 @@
+EXPECT look
+IN Something irrelevant.
+PROMPT
+WAIT 6000
+IN The orc dies.
+PROMPT

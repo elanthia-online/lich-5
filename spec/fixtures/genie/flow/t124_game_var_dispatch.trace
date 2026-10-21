@@ -1,0 +1,16 @@
+INPUT #trigger {e/$north = 1/} {#echo NORTH}
+INPUT #trigger {e/$health < 60/} {#echo TRIG-HEALTH $health}
+INPUT #trigger {e/$standing/} {#echo TRIG-STANDING $standing}
+INPUT #trigger {e/contains("$roomname", "Hall")/} {#echo TRIG-ROOM $roomname}
+WAIT 200
+IN <compass><dir value="n"/><dir value="s"/></compass>
+IN <dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+IN Ouch, that hurt.
+IN <indicator id="IconSTANDING" visible="n"/>
+PROMPT
+WAIT 200
+IN <streamWindow id='room' title='Room' subtitle=" - [Great Hall]"/>
+IN <component id='room objs'>You also see <pushBold/>a goblin<popBold/>.</component>
+IN <right exist="123" noun="sword">steel sword</right>
+PROMPT 3
+WAIT 200

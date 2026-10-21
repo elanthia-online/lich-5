@@ -1,0 +1,10 @@
+EXPECT swing
+IN You swing.
+PROMPT 3
+WAIT 500
+IN Instant now
+PROMPT
+WAIT 500
+IN Normal now
+PROMPT
+WAIT 4000

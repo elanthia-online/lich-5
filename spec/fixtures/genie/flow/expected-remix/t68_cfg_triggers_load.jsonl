@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"config","files":"<lab>/flow-oracle/tests/t68_cfg/variables.cfg <lab>/flow-oracle/tests/t68_cfg/triggers.cfg","ignorescriptwarnings":false,"triggeroninput":true,"abortdupescript":true,"maxgosubdepth":50,"scripttimeout":5000}
+{"t":0,"ev":"input","text":".t68_cfg_triggers_load"}
+{"t":0,"ev":"script-start","script":"t68_cfg_triggers_load","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t68_cfg_triggers_load.cmd]","script":"t68_cfg_triggers_load"}
+{"t":0,"ev":"echo","text":"start charges=0 loaded=1","script":"t68_cfg_triggers_load"}
+{"t":210,"ev":"in","text":"You prime a large amount of energy into your canvas widget."}
+{"t":210,"ev":"trigger-fire","pattern":"^You charge the widget|^You prime","text":"You prime a large amount of energy into your canvas widget."}
+{"t":210,"ev":"var","name":"$charges","value":"1","src":"cmd"}
+{"t":1000,"ev":"echo","text":"charges=1","script":"t68_cfg_triggers_load"}
+{"t":1520,"ev":"in","text":"You prime a large amount of energy into your canvas widget."}
+{"t":1520,"ev":"trigger-fire","pattern":"^You charge the widget|^You prime","text":"You prime a large amount of energy into your canvas widget."}
+{"t":1520,"ev":"var","name":"$charges","value":"2","src":"cmd"}
+{"t":2000,"ev":"echo","text":"charges2=2","script":"t68_cfg_triggers_load"}
+{"t":2000,"ev":"cmdecho","text":"Triggers Loaded","window":""}
+{"t":2130,"ev":"in","text":"You prime a large amount of energy into your canvas widget."}
+{"t":2500,"ev":"echo","text":"charges3=2","script":"t68_cfg_triggers_load"}
+{"t":2500,"ev":"print","text":"[Script finished (In 2.50 seconds): t68_cfg_triggers_load.cmd]","script":"t68_cfg_triggers_load"}
+{"t":2500,"ev":"script-finish","script":"t68_cfg_triggers_load"}
+{"t":2500,"ev":"end","live":0}

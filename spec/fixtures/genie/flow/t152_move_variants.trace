@@ -1,0 +1,11 @@
+EXPECT north
+IN Obvious paths: north.
+PROMPT
+WAIT 300
+ROOM North Room
+IN You also see a rock.
+PROMPT
+EXPECT south
+ROOM South Room
+PROMPT 2
+WAIT 3000

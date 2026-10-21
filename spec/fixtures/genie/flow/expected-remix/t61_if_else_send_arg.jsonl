@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t61_if_else_send_arg"}
+{"t":0,"ev":"script-start","script":"t61_if_else_send_arg","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t61_if_else_send_arg.cmd]","script":"t61_if_else_send_arg"}
+{"t":0,"ev":"queue","text":"get my blue vial","delay":0,"script":"t61_if_else_send_arg"}
+{"t":10,"ev":"send","text":"get my blue vial","origin":"","user":false}
+{"t":100,"ev":"queue","text":"pour my blue vial on Tester","delay":0,"script":"t61_if_else_send_arg"}
+{"t":110,"ev":"send","text":"pour my blue vial on Tester","origin":"","user":false}
+{"t":200,"ev":"queue","text":"stow my blue vial","delay":0,"script":"t61_if_else_send_arg"}
+{"t":200,"ev":"print","text":"[Script finished (In 0.20 seconds): t61_if_else_send_arg.cmd]","script":"t61_if_else_send_arg"}
+{"t":200,"ev":"script-finish","script":"t61_if_else_send_arg"}
+{"t":210,"ev":"send","text":"stow my blue vial","origin":"","user":false}
+{"t":510,"ev":"end","live":0}

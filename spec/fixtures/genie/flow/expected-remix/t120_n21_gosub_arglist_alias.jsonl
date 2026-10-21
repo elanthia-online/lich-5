@@ -1,0 +1,27 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"script-start","script":"t120_n21_gosub_arglist_alias","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t120_n21_gosub_arglist_alias.cmd]","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"A0 [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"X [a] [b]","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"A1 [a] [b]","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"Y [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"A2 [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"A3 [c] [d]","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"echo","text":"A4 [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":0,"ev":"send","text":"look","origin":"t120_n21_gosub_arglist_alias","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"foo here"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"M1 [foo]","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"M2 []","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"M3 []","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"S0 [x] [y]","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"S1 [e]","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"S2 []","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"S3 [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"echo","text":"B1 [] []","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t120_n21_gosub_arglist_alias.cmd(19)]","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"script-finish","script":"t120_n21_gosub_arglist_alias"}
+{"t":20,"ev":"end","live":0}

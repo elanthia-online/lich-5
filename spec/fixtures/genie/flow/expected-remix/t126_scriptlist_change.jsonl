@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t126_scriptlist_change"}
+{"t":0,"ev":"script-start","script":"t126_scriptlist_change","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t126_scriptlist_change.cmd]","script":"t126_scriptlist_change"}
+{"t":0,"ev":"script-start","script":"_t126_helper","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t126_helper.cmd]","script":"_t126_helper"}
+{"t":10,"ev":"echo","text":"SL t126_scriptlist_change|_t126_helper","script":"t126_scriptlist_change"}
+{"t":100,"ev":"print","text":"[Script paused: _t126_helper.cmd]","script":"_t126_helper"}
+{"t":100,"ev":"script-pause","script":"_t126_helper"}
+{"t":100,"ev":"echo","text":"SL t126_scriptlist_change|_t126_helper","script":"t126_scriptlist_change"}
+{"t":200,"ev":"print","text":"[Script resumed: _t126_helper.cmd]","script":"_t126_helper"}
+{"t":200,"ev":"script-resume","script":"_t126_helper"}
+{"t":200,"ev":"echo","text":"SL t126_scriptlist_change|_t126_helper","script":"t126_scriptlist_change"}
+{"t":310,"ev":"in","text":"some text"}
+{"t":500,"ev":"print","text":"[Script finished (In 0.50 seconds): _t126_helper.cmd]","script":"_t126_helper"}
+{"t":500,"ev":"script-finish","script":"_t126_helper"}
+{"t":510,"ev":"echo","text":"resumed t126_scriptlist_change","script":"t126_scriptlist_change"}
+{"t":510,"ev":"print","text":"[Script finished (In 0.51 seconds): t126_scriptlist_change.cmd]","script":"t126_scriptlist_change"}
+{"t":510,"ev":"script-finish","script":"t126_scriptlist_change"}
+{"t":1320,"ev":"end","live":0}

@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t230_js_blocks"}
+{"t":0,"ev":"script-start","script":"t230_js_blocks","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t230_js_blocks.cmd]","script":"t230_js_blocks"}
+{"t":0,"ev":"echo","text":"start","script":"t230_js_blocks"}
+{"t":0,"ev":"echo","text":"x=1 y=2","script":"t230_js_blocks"}
+{"t":0,"ev":"echo","text":"z=%z","script":"t230_js_blocks"}
+{"t":0,"ev":"send","text":"from-block","origin":"t230_js_blocks","user":false}
+{"t":0,"ev":"echo","text":"m=multi m2=two","script":"t230_js_blocks"}
+{"t":0,"ev":"error","text":"[Javascript error in t230_js_blocks.cmd(21): nosuch is not defined]","script":"t230_js_blocks"}
+{"t":0,"ev":"print","text":"[Script moving to scripterror label (t230_js_blocks.cmd)]","script":"t230_js_blocks"}
+{"t":20,"ev":"echo","text":"at-scripterror","script":"t230_js_blocks"}
+{"t":20,"ev":"echo","text":"w=9","script":"t230_js_blocks"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t230_js_blocks.cmd]","script":"t230_js_blocks"}
+{"t":20,"ev":"script-finish","script":"t230_js_blocks"}
+{"t":20,"ev":"end","live":0}

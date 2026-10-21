@@ -1,0 +1,26 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t04_actions"}
+{"t":0,"ev":"script-start","script":"t04_actions","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t04_actions.cmd]","script":"t04_actions"}
+{"t":0,"ev":"send","text":"look","origin":"t04_actions","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"goblin attacks you!"}
+{"t":10,"ev":"send","text":"kick goblin","origin":"t04_actions","user":false}
+{"t":10,"ev":"in","text":"bang one"}
+{"t":10,"ev":"echo","text":"grp-fired bang one","script":"t04_actions"}
+{"t":10,"ev":"in","text":"You hit 3 times"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"echo","text":"hits=3","script":"t04_actions"}
+{"t":1020,"ev":"in","text":"bang two"}
+{"t":1020,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1020,"ev":"prompt-event"}
+{"t":2000,"ev":"echo","text":"after-off","script":"t04_actions"}
+{"t":2030,"ev":"in","text":"bang three"}
+{"t":2030,"ev":"echo","text":"grp-fired bang three","script":"t04_actions"}
+{"t":2030,"ev":"in","text":"<prompt time=\"1700000002\">&gt;</prompt>"}
+{"t":2030,"ev":"prompt-event"}
+{"t":3000,"ev":"echo","text":"done","script":"t04_actions"}
+{"t":3000,"ev":"print","text":"[Script finished (In 3.00 seconds): t04_actions.cmd]","script":"t04_actions"}
+{"t":3000,"ev":"script-finish","script":"t04_actions"}
+{"t":3000,"ev":"end","live":0}

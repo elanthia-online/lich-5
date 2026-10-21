@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t14_matchre_slash"}
+{"t":0,"ev":"script-start","script":"t14_matchre_slash","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t14_matchre_slash.cmd]","script":"t14_matchre_slash"}
+{"t":0,"ev":"send","text":"look","origin":"t14_matchre_slash","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"The orc dies."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"lower orc","script":"t14_matchre_slash"}
+{"t":20,"ev":"send","text":"look2","origin":"t14_matchre_slash","user":false}
+{"t":20,"ev":"expect-ok","want":"look2","got":"look2"}
+{"t":20,"ev":"in","text":"A rock falls."}
+{"t":20,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":20,"ev":"prompt-event"}
+{"t":30,"ev":"echo","text":"plain rock","script":"t14_matchre_slash"}
+{"t":30,"ev":"print","text":"[Script finished (In 0.03 seconds): t14_matchre_slash.cmd]","script":"t14_matchre_slash"}
+{"t":30,"ev":"script-finish","script":"t14_matchre_slash"}
+{"t":30,"ev":"end","live":0}

@@ -1,0 +1,68 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t229_js_host"}
+{"t":0,"ev":"script-start","script":"t229_js_host","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t229_js_host.cmd]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"changed-v 5","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"after-setvar","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(6): nosuch is not defined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"changed-w undefined","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"after-jscall","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"vals 3 2.5 1E+21 True False","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"hello","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"1E+21","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"-0","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"0.1","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"True","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"undefined","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"undefined","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"10000000000000000","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"3","script":"t229_js_host"}
+{"t":0,"ev":"send","text":"look","origin":"t229_js_host","user":false}
+{"t":0,"ev":"send","text":"42","origin":"t229_js_host","user":false}
+{"t":0,"ev":"echo","text":"glob gv","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"g1 [gv]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"g2 []","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"g3 [undefined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"g4 [onefive]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"g5 [undefined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l1 [1e+21]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l2 [0]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l3 [0.000001]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l4 [1e-7]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l5 [undefined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l6 [undefined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l7 [true]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l8 [b]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l9 [15]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l10 [8]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l11 [31]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l12 [1000]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l13 [0.5]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l14 [it's ABCA]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l15 [NaN]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l16 [Infinity]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l17 [undefined]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"l18 [3]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"c=1","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(84): nosuch is not defined]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(85): Invalid or unexpected token (<anonymous>:1:15)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(86): Unexpected end of input (<anonymous>:1:14)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(87): Unexpected string (<anonymous>:1:14)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(88): Unexpected number (<anonymous>:1:17)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(89): Unexpected identifier 'y' (<anonymous>:1:17)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(90): Unexpected token ')' (<anonymous>:1:1)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(91): Unexpected token ';' (<anonymous>:1:12)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(92): Invalid hexadecimal escape sequence (<anonymous>:1:15)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(93): Invalid Unicode escape sequence (<anonymous>:1:15)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(94): Undefined Unicode code-point (<anonymous>:1:15)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(95): Invalid or unexpected token (<anonymous>:1:13)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(96): Invalid or unexpected token (<anonymous>:1:13)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(97): Invalid or unexpected token (<anonymous>:1:13)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(98): Unexpected identifier 'bar' (<anonymous>:1:5)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(99): Unexpected identifier 'setVar' (<anonymous>:1:18)]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(100): undefinedname is not defined]","script":"t229_js_host"}
+{"t":0,"ev":"error","text":"[Script error in t229_js_host.cmd(101): Invalid or unexpected token (<anonymous>:1:1)]","script":"t229_js_host"}
+{"t":0,"ev":"echo","text":"done","script":"t229_js_host"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t229_js_host.cmd]","script":"t229_js_host"}
+{"t":0,"ev":"script-finish","script":"t229_js_host"}
+{"t":10,"ev":"end","live":0}

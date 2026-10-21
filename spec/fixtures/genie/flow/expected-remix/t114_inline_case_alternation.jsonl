@@ -1,0 +1,38 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t114_inline_case_alternation"}
+{"t":0,"ev":"script-start","script":"t114_inline_case_alternation","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t114_inline_case_alternation.cmd]","script":"t114_inline_case_alternation"}
+{"t":0,"ev":"var","name":"$pvptarget","value":"Bob","src":"cmd"}
+{"t":0,"ev":"var","name":"$prioritytarget","value":"Zed","src":"cmd"}
+{"t":0,"ev":"send","text":"look","origin":"t114_inline_case_alternation","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"Your lucky charm goes dark under the strain."}
+{"t":10,"ev":"echo","text":"HIT Your lucky charm goes dark under the strain.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"your lucky charm goes dark under the strain."}
+{"t":10,"ev":"in","text":"You notice bob attempting to hide himself."}
+{"t":10,"ev":"echo","text":"HIT You notice bob attempting to hide himself.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"BOB just arrived."}
+{"t":10,"ev":"echo","text":"HIT BOB just arrived.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"Zed reveals himself."}
+{"t":10,"ev":"echo","text":"HIT Zed reveals himself.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"ZED REVEALS HIMSELF."}
+{"t":10,"ev":"in","text":"bobby fades into view."}
+{"t":10,"ev":"echo","text":"HIT bobby fades into view.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"You catch sight of BOB"}
+{"t":10,"ev":"echo","text":"HIT You catch sight of BOB","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"bob is revealed!"}
+{"t":10,"ev":"echo","text":"HIT bob is revealed!","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"Somebody turns a cold stare upon you."}
+{"t":10,"ev":"echo","text":"HIT Somebody turns a cold stare upon you.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"SOMEBODY TURNS A COLD STARE UPON YOU."}
+{"t":10,"ev":"in","text":"A shadow is trying to slip quietly past you."}
+{"t":10,"ev":"echo","text":"HIT A shadow is trying to slip quietly past you.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"A SHADOW IS TRYING TO SLIP QUIETLY PAST YOU."}
+{"t":10,"ev":"in","text":"You notice a cloaked figure attempting to quietly creep upon you."}
+{"t":10,"ev":"echo","text":"HIT You notice a cloaked figure attempting to quietly creep upon you.","script":"t114_inline_case_alternation"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"echo","text":"end","script":"t114_inline_case_alternation"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t114_inline_case_alternation.cmd]","script":"t114_inline_case_alternation"}
+{"t":1000,"ev":"script-finish","script":"t114_inline_case_alternation"}
+{"t":1000,"ev":"end","live":0}

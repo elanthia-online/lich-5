@@ -1,0 +1,12 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t188_wp9_return_fail"}
+{"t":0,"ev":"script-start","script":"t188_wp9_return_fail","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t188_wp9_return_fail.cmd]","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"echo","text":"one","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"echo","text":"after","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"error","text":"[Script error in t188_wp9_return_fail.cmd(7): RETURN command failed. There are no more gosub bookmarks to return to!]","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"print","text":"Trace follows:","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"print","text":"\tgoto two (3)\n\tgosub three (5)\n\treturn (9)","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"print","text":"[Script aborted! (Run time: 0.00 seconds): t188_wp9_return_fail.cmd]","script":"t188_wp9_return_fail"}
+{"t":0,"ev":"script-finish","script":"t188_wp9_return_fail"}
+{"t":10,"ev":"end","live":0}

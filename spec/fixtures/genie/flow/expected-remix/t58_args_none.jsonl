@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t58_args_none"}
+{"t":0,"ev":"script-start","script":"t58_args_none","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t58_args_none.cmd]","script":"t58_args_none"}
+{"t":0,"ev":"echo","text":"argc=0 0=[] 1=[] 9=[] d1=[] dargc=-1","script":"t58_args_none"}
+{"t":0,"ev":"echo","text":"one-empty","script":"t58_args_none"}
+{"t":0,"ev":"echo","text":"after argc=0 0=[] 1=[]","script":"t58_args_none"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t58_args_none.cmd]","script":"t58_args_none"}
+{"t":0,"ev":"script-finish","script":"t58_args_none"}
+{"t":10,"ev":"end","live":0}
