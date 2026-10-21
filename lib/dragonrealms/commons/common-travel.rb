@@ -397,6 +397,15 @@ module Lich
       MAX_UNREACHABLE_SEARCHES = 3
 
       def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, prioritize_buddies = false)
+        find_empty_room_search(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, prioritize_buddies, [])
+      end
+
+      # The search behind find_empty_room. rejected_by_predicate holds the
+      # positions (indexes into search_rooms, so a room id listed twice is
+      # judged per visit) the buddy pass's predicate just rejected; the
+      # empty-room search skips them until it idles, instead of running the
+      # predicate (and its side effects) in those rooms again straight away.
+      def find_empty_room_search(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, prioritize_buddies, rejected_by_predicate)
         # With an idle room and no max_search_attempts, an empty list would
         # idle forever without searching anything.
         if search_rooms.nil? || search_rooms.empty?
@@ -406,6 +415,7 @@ module Lich
 
         search_attempt = 0
         unreachable_searches = 0
+        buddy_pass_rejected = []
         check_mana = min_mana > 0
         loop do
           search_attempt += 1
@@ -413,6 +423,12 @@ module Lich
           found_empty = false
           reached_any = false
           search_rooms.each_with_index do |room_id, index|
+            if rejected_by_predicate.include?(index)
+              # Reached and judged by the buddy pass a moment ago.
+              reached_any = true
+              next
+            end
+
             # walk_to returns true when it believes it reached the target and
             # false when it could not confirm arrival (see walk_to); such a room
             # is skipped for this pass rather than waiting for Room.current to
@@ -422,15 +438,24 @@ module Lich
 
             last_buddy_room = false
             nemesis_with_buddy = false
+            predicate_rejected = false
             if prioritize_buddies
               # The buddy pass is the first pass over the rooms, and it never
               # runs past its last room: it returns at a buddy room or, at the
               # last room, through the fallback below. A room is a buddy room
-              # if it has a friend and no nemesis; an unreachable room is
-              # skipped.
+              # if it has a friend and no nemesis, and the caller's predicate
+              # (if any) accepts it -- the predicate is only asked in rooms
+              # with a friend, so the buddy pass doesn't run the caller's
+              # checks (which may search or speak) in other rooms. An
+              # unreachable room is skipped.
               buddy_here = reached && (DRRoom.pcs & UserVars.friends).any?
               nemesis_with_buddy = buddy_here && (DRRoom.pcs & UserVars.hunting_nemesis).any?
               suitable_room = buddy_here && !nemesis_with_buddy
+              if suitable_room && predicate
+                suitable_room = predicate.call(search_attempt)
+                predicate_rejected = !suitable_room
+                buddy_pass_rejected << index if predicate_rejected
+              end
               last_buddy_room = index == search_rooms.size - 1
             else
               # walk_to returned false: skip the room for this pass.
@@ -457,11 +482,13 @@ module Lich
                         'Reached last room in list, and found buddies but not the right mana.'
                       elsif nemesis_with_buddy
                         'Reached last room in list, and found buddies but also a nemesis.'
+                      elsif predicate_rejected
+                        'Reached last room in list, and found buddies but the room did not suit.'
                       else
                         'Reached last room in list, and found no buddies.'
                       end
             Lich::Messaging.msg('plain', "DRCT: #{outcome} Retrying for empty room.")
-            return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, false)
+            return find_empty_room_search(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, false, buddy_pass_rejected)
           end
 
           if found_empty && check_mana && !strict_mana
@@ -483,6 +510,8 @@ module Lich
           end
 
           if idle_room && search_attempt < max_search_attempts
+            # After waiting, rooms the buddy pass rejected are worth asking again.
+            rejected_by_predicate = []
             idle_room = idle_room.sample if idle_room.is_a?(Array)
             walk_to(idle_room)
             wait_time = rand(20..40)
@@ -494,6 +523,8 @@ module Lich
           end
         end
       end
+
+      private_class_method :find_empty_room_search
 
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
