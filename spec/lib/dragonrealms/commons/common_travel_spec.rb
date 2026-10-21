@@ -1213,8 +1213,22 @@ RSpec.describe DRCT do
         accepts << 200
         result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
         expect(result).to eq(true)
-        expect(walks).to eq([100, 200, 100, 200])
+        expect(walks).to eq([100, 200, 200])
         expect(current.id).to eq(200)
+      end
+
+      it 'does not ask the predicate again in a buddy room it just rejected' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        accepts << 200
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(asked).to eq([100, 200])
+      end
+
+      it 'asks again in that room on a later search attempt' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, 2, true) }
+        expect(result).to eq(false)
+        expect(asked).to eq([100, 200, 100, 200])
       end
 
       it 'asks the predicate only in rooms with a buddy during the buddy pass' do
