@@ -135,6 +135,17 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
     end
 
+    it 'refuses a master-password update when the prior keychain state is unknown' do
+      allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
+
+      expect(described_class.change_master_password(old_master, new_master)).to eq(1)
+
+      expect(manager).not_to have_received(:store_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
+      expect(keychain[:password]).to eq(old_master)
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+    end
+
     [nil, 'SyntheticStaleKeychain789!'].each do |previous|
       it "restores #{previous.nil? ? 'absent' : 'preexisting'} keychain state when publication fails" do
         keychain[:password] = previous

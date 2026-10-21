@@ -100,6 +100,48 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       expect(YAML.safe_load_file(yaml_file)['accounts'][username.upcase]['password']).to eq('SyntheticChanged123!')
     end
 
+    it 'retains the exact previous account bytes in an owner-only backup on every save' do
+      File.binwrite("#{yaml_file}.bak", 'older backup')
+      File.chmod(0o644, "#{yaml_file}.bak")
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(true)
+
+      expect(File.binread("#{yaml_file}.bak")).to eq(original)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      previous = File.binread(yaml_file)
+      expect(described_class.remove_account(data_dir, username)).to be(true)
+      expect(File.binread("#{yaml_file}.bak")).to eq(previous)
+    end
+
+    it 'keeps the backup when entry publication fails and logs safe OS diagnostics' do
+      allow(Lich).to receive(:log)
+      allow(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+        raise Errno::EACCES, 'SyntheticSecretMustNotAppear' if destination == yaml_file
+        rename.call(source, destination)
+      end
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(File.binread("#{yaml_file}.bak")).to eq(original)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      expect(Lich).to have_received(:log).with("error: Could not save account data to #{yaml_file.inspect}: Errno::EACCES (errno=#{Errno::EACCES::Errno})")
+      expect(Lich).not_to have_received(:log).with(/SyntheticSecretMustNotAppear/)
+    end
+
+    it 'does not include serialization exception contents in diagnostics or overwrite the backup' do
+      File.binwrite("#{yaml_file}.bak", 'older backup')
+      allow(Lich).to receive(:log)
+      allow(YAML).to receive(:dump).and_raise(TypeError, 'SyntheticSecretMustNotAppear')
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(File.binread("#{yaml_file}.bak")).to eq('older backup')
+      expect(Lich).to have_received(:log).with("error: Could not save account data to #{yaml_file.inspect}: TypeError")
+      expect(Lich).not_to have_received(:log).with(/SyntheticSecretMustNotAppear/)
+    end
+
     it 'preserves original bytes and removes temporary files after a partial write' do
       allow(Tempfile).to receive(:create).and_wrap_original do |create, *args, &block|
         create.call(*args) do |file|

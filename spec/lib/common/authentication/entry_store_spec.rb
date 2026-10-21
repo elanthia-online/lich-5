@@ -77,12 +77,74 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
     end
 
-    it 'preserves an existing owner read-only restriction' do
+    it 'refuses to replace an owner read-only file and preserves its bytes' do
       File.chmod(0o400, yaml_file)
 
-      described_class.write_yaml_file(yaml_file, yaml_data)
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
 
       expect(File.stat(yaml_file).mode & 0o777).to eq(0o400)
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'refuses replacement when the OS denies write access despite writable mode bits' do
+      allow(File).to receive(:writable?).with(yaml_file).and_return(false)
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+    end
+
+    context 'with symlinks', unless: OS.windows? do
+      let(:target) { File.join(data_dir, 'linked', 'credentials.yaml') }
+
+      before do
+        FileUtils.mkdir_p(File.dirname(target))
+        File.rename(yaml_file, target)
+        File.symlink('linked/credentials.yaml', yaml_file)
+      end
+
+      it 'preserves the link and atomically replaces the target in its own directory' do
+        expect(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+          expect(File.dirname(source)).to eq(File.realpath(File.dirname(target)))
+          expect(destination).to eq(File.realpath(target))
+          rename.call(source, destination)
+        end
+
+        described_class.write_yaml_file(yaml_file, yaml_data)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(YAML.safe_load_file(target)['accounts']).to eq(yaml_data['accounts'])
+        expect(Dir.children(File.dirname(target))).to eq(['credentials.yaml'])
+      end
+
+      it 'refuses a dangling link without replacing it or creating a target' do
+        File.unlink(target)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::ENOENT)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.exist?(target)).to be(false)
+      end
+
+      it 'preserves a read-only target and its link on refusal' do
+        File.chmod(0o400, target)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.binread(target)).to eq(original_bytes)
+      end
+
+      it 'preserves the target and link when replacement fails' do
+        allow(File).to receive(:rename).and_raise(Errno::EACCES)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.binread(target)).to eq(original_bytes)
+        expect(Dir.children(File.dirname(target))).to eq(['credentials.yaml'])
+      end
     end
 
     it 'removes group and other access when replacing a permissive entry file' do
@@ -249,6 +311,27 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       expect(keychain[:password]).to be_nil
       expect_original_accounts(original)
+    end
+
+    it 'refuses a mode change before mutation when the keychain snapshot fails' do
+      original = write_synthetic_accounts(:standard)
+      allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect(manager).not_to have_received(:store_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'reports unknown rollback state instead of treating a failed read as absence' do
+      allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
+
+      expect(described_class.send(:restore_master_password, nil)).to be(false)
+
+      expect(manager).not_to have_received(:delete_master_password)
+      expect(Lich).to have_received(:log).with(/manual keychain recovery is required/)
     end
 
     [:return_false, :raise].each do |failure|

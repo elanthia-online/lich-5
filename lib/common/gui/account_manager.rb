@@ -530,10 +530,13 @@ module Lich
         # @param yaml_data [Hash] YAML data structure
         # @return [Boolean] True if write succeeded
         def self.write_yaml_with_headers(yaml_file, yaml_data)
-          Lich::Common::Authentication::EntryStore.write_yaml_file(yaml_file, yaml_data)
+          Lich::Common::Authentication::EntryStore.write_yaml_file(yaml_file, yaml_data, backup: true)
           true
         rescue StandardError => e
-          Lich.log "error: Could not save account data: #{e.class}"
+          # Exception messages can contain serialized credentials; log only safe
+          # operation, destination and OS error context.
+          detail = e.is_a?(SystemCallError) ? " (errno=#{e.errno})" : ''
+          Lich.log "error: Could not save account data to #{yaml_file.inspect}: #{e.class}#{detail}"
           false
         end
         private_class_method :write_yaml_with_headers

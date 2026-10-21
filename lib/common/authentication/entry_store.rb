@@ -373,7 +373,7 @@ module Lich
           backup_file = "#{yaml_file}.bak"
           begin
             if current_mode == :enhanced || new_mode == :enhanced
-              previous_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
+              previous_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password(strict: true)
             end
             if current_mode == :enhanced && previous_master_password.nil?
               raise StandardError, "Master password not found in keychain for encryption mode change"
@@ -428,6 +428,8 @@ module Lich
               end
             elsif current_mode == :enhanced
               # Remove validation test and keychain when leaving Enhanced
+              # Refuse the transition if deletion fails; success must not leave a
+              # stale master password behind in the credential store.
               yaml_data.delete('master_password_validation_test')
               keychain_touched = true
               unless Lich::Common::GUI::MasterPasswordManager.delete_master_password
@@ -438,6 +440,7 @@ module Lich
             # Save YAML with headers
             write_yaml_file(yaml_file, yaml_data)
           rescue StandardError => e
+            # Retain the owner-only backup for recovery after any failed transition.
             restore_master_password(previous_master_password) if keychain_touched
             Lich.log "error: Encryption mode change failed: #{e.class}: #{e.message}"
             return false
@@ -462,14 +465,14 @@ module Lich
         # @return [Boolean] whether the previous observable state was restored
         def self.restore_master_password(previous_password)
           manager = Lich::Common::GUI::MasterPasswordManager
-          return true if manager.retrieve_master_password == previous_password
+          return true if manager.retrieve_master_password(strict: true) == previous_password
 
           restored = if previous_password.nil?
                        manager.delete_master_password
                      else
                        manager.store_master_password(previous_password)
                      end
-          unless restored && manager.retrieve_master_password == previous_password
+          unless restored && manager.retrieve_master_password(strict: true) == previous_password
             Lich.log "error: Could not restore previous master password; manual keychain recovery is required"
             return false
           end
@@ -1061,9 +1064,12 @@ module Lich
         #
         # @param yaml_file [String] Path to YAML file to write
         # @param yaml_data [Hash] YAML data structure to save
+        # @param backup [Boolean] preserve the previous bytes in an owner-only .bak
         # @return [void]
-        def self.write_yaml_file(yaml_file, yaml_data)
-          write_file_atomically(yaml_file, generate_yaml_content(yaml_data))
+        def self.write_yaml_file(yaml_file, yaml_data, backup: false)
+          content = generate_yaml_content(yaml_data)
+          write_file_atomically("#{yaml_file}.bak", File.binread(yaml_file)) if backup && File.exist?(yaml_file)
+          write_file_atomically(yaml_file, content)
         end
 
         # Publishes prepared credentials with a new keychain password. On handled
@@ -1078,7 +1084,7 @@ module Lich
         def self.write_yaml_with_master_password(yaml_file, yaml_data, password)
           content = generate_yaml_content(yaml_data)
           manager = Lich::Common::GUI::MasterPasswordManager
-          previous_password = manager.retrieve_master_password
+          previous_password = manager.retrieve_master_password(strict: true)
           begin
             unless manager.store_master_password(password)
               raise StandardError, "Failed to update keychain"
@@ -1095,6 +1101,8 @@ module Lich
         # Publishes bytes by renaming a flushed, closed file in the same directory.
         # Temporary files start owner-only; existing owner read/write restrictions
         # are retained while group, other, and executable access is removed.
+        # Existing symlinks are followed to their target; dangling links are refused.
+        # The temporary file lives beside the resolved target for atomic replacement.
         # Failures before rename leave the destination untouched and remove the temp.
         #
         # @param path [String] destination path, including backup paths
@@ -1103,6 +1111,9 @@ module Lich
         # @raise [StandardError] when preparation or atomic replacement fails
         # @api private
         def self.write_file_atomically(path, content)
+          path = File.realpath(path) if File.symlink?(path)
+          raise Errno::EACCES, path if File.exist?(path) && !File.writable?(path)
+
           mode = File.exist?(path) ? File.stat(path).mode & 0o600 : 0o600
           Tempfile.create(['.entry-', '.tmp'], File.dirname(path)) do |file|
             file.binmode

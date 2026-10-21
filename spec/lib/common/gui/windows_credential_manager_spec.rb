@@ -161,15 +161,15 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     end
 
     context 'with special characters in password' do
-      # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixtures exercise credential encoding.
       special_passwords = [
         'p@ssw0rd!',
-        'pässwörd',
-        '密码',
+        # rubocop:disable Custom/AsciiOnlySource -- Preserve existing Unicode credential fixtures using ASCII source.
+        "p\u00e4ssw\u00f6rd",
+        "\u5bc6\u7801",
+        # rubocop:enable Custom/AsciiOnlySource
         "p'ss\"w@rd",
         'p\nw\t\r'
       ]
-      # rubocop:enable Custom/AsciiOnlySource
 
       special_passwords.each do |special_pass|
         it "handles password with special characters: #{special_pass.inspect}" do
@@ -254,6 +254,45 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     end
   end
 
+  describe 'strict credential retrieval with simulated Win32 results' do
+    before do
+      # Exercise the production native adapter without loading DLLs or accessing
+      # any real credential store, even when this spec runs on Windows.
+      dummy = Module.new
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', dummy)
+      dummy.define_singleton_method(:ffi_lib) { |*_args| nil }
+      dummy.define_singleton_method(:attach_function) do |name, *_args|
+        dummy.define_singleton_method(name) { |*_values| nil }
+      end
+      allow(OS).to receive(:windows?).and_return(true)
+      allow(Lich::Util).to receive(:install_gem_requirements)
+      load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
+      @reader = dummy
+      allow(@reader).to receive(:CredReadW).and_return(false)
+    end
+
+    it 'returns nil only for ERROR_NOT_FOUND' do
+      allow(@reader).to receive(:GetLastError).and_return(1168)
+      expect(@reader.retrieve_credential(target_name, strict: true)).to be_nil
+    end
+
+    it 'raises for access denied instead of returning absence' do
+      allow(@reader).to receive(:GetLastError).and_return(5)
+      expect { @reader.retrieve_credential(target_name, strict: true) }.to raise_error(IOError, /error code 5/)
+    end
+
+    it 'raises when the API is unavailable' do
+      allow(@reader).to receive(:available?).and_return(false)
+      expect { @reader.retrieve_credential(target_name, strict: true) }.to raise_error(IOError, /unavailable/)
+    end
+
+    it 'preserves the legacy nil-on-error behavior for other callers' do
+      allow(@reader).to receive(:GetLastError).and_return(5)
+      allow(Lich).to receive(:log)
+      expect(@reader.retrieve_credential(target_name)).to be_nil
+    end
+  end
+
   describe '.delete_credential' do
     context 'when credential exists' do
       it 'deletes the credential' do
@@ -312,9 +351,9 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
         # Store credential with UTF-8 string to test encoding
         # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode strings exercise UTF-16LE boundary conversion.
         result = described_class.store_credential(
-          'тест.service',
-          'пользователь',
-          'пароль'
+          "\u0442\u0435\u0441\u0442.service",
+          "\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c",
+          "\u043f\u0430\u0440\u043e\u043b\u044c"
         )
         # rubocop:enable Custom/AsciiOnlySource
 
