@@ -1224,6 +1224,46 @@ RSpec.describe DRCT do
         expect(asked).to eq([100, 200])
       end
 
+      it 'judges a room listed twice per visit, keeping a mana-short visit for the relaxed pass' do
+        # 100 is listed twice; the predicate rejects 200 and the first visit
+        # to 100 only, so the second visit (mana-short) is the only room the
+        # relaxed-mana pass can take.
+        visits = 0
+        rejecting = lambda do |_attempt|
+          asked << current.id
+          next false unless current.id == 100
+
+          visits += 1
+          visits > 1
+        end
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200, 100], nil, rejecting, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(current.id).to eq(100)
+      end
+
+      it 'counts a skipped room as reached when deciding whether every room is unreachable' do
+        # The buddy pass reaches and rejects 100; afterwards 100 can't be
+        # reached, and 200 never can.
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        buddy_pass_done = false
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          reachable = room == 300 || (room == 100 && !buddy_pass_done)
+          buddy_pass_done = true if room == 200
+          current.id = room if reachable
+          reachable
+        end
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, Float::INFINITY, true) }
+        searches = Lich::Messaging.messages.map { |m| m[:message] }.grep(/Search attempt/).size
+        # The buddy pass, then attempt 1 (100 skipped counts as reached), then
+        # three unreachable attempts before giving up.
+        expect(searches).to eq(5)
+      end
+
       it 'asks again in that room on a later search attempt' do
         allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
         result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, 2, true) }
