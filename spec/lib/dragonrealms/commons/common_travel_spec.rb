@@ -1183,6 +1183,66 @@ RSpec.describe DRCT do
       end
     end
 
+    context 'when prioritizing buddies with a predicate' do
+      # Every room is reachable. 100 and 200 are the search rooms; the
+      # predicate records where it was asked and answers from `accepts`.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:asked) { [] }
+      let(:accepts) { [] }
+      let(:predicate) do
+        lambda do |_attempt|
+          asked << current.id
+          accepts.include?(current.id)
+        end
+      end
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return([])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          current.id = room
+          true
+        end
+      end
+
+      it 'skips a buddy room the predicate rejects and falls back to the empty-room search' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(current.id).to eq(200)
+      end
+
+      it 'asks the predicate only in rooms with a buddy during the buddy pass' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(asked).to eq([200])
+        expect(walks).to eq([100, 200])
+      end
+
+      it 'still takes the first buddy room the predicate accepts' do
+        allow(DRRoom).to receive(:pcs) { ['Buddy'] }
+        accepts.push(100, 200)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100])
+      end
+
+      it 'says the last buddy room did not suit, not that it had no buddies' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but the room did not suit. Retrying for empty room.')
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+    end
+
     context 'when the last room of the buddy pass has a nemesis' do
       # Every room is reachable. 200 is the last search room; nobody is in any
       # room unless a test says so.

@@ -422,15 +422,23 @@ module Lich
 
             last_buddy_room = false
             nemesis_with_buddy = false
+            predicate_rejected = false
             if prioritize_buddies
               # The buddy pass is the first pass over the rooms, and it never
               # runs past its last room: it returns at a buddy room or, at the
               # last room, through the fallback below. A room is a buddy room
-              # if it has a friend and no nemesis; an unreachable room is
-              # skipped.
+              # if it has a friend and no nemesis, and the caller's predicate
+              # (if any) accepts it -- the predicate is only asked in rooms
+              # with a friend, so the buddy pass doesn't run the caller's
+              # checks (which may search or speak) in other rooms. An
+              # unreachable room is skipped.
               buddy_here = reached && (DRRoom.pcs & UserVars.friends).any?
               nemesis_with_buddy = buddy_here && (DRRoom.pcs & UserVars.hunting_nemesis).any?
               suitable_room = buddy_here && !nemesis_with_buddy
+              if suitable_room && predicate
+                suitable_room = predicate.call(search_attempt)
+                predicate_rejected = !suitable_room
+              end
               last_buddy_room = index == search_rooms.size - 1
             else
               # walk_to returned false: skip the room for this pass.
@@ -457,6 +465,8 @@ module Lich
                         'Reached last room in list, and found buddies but not the right mana.'
                       elsif nemesis_with_buddy
                         'Reached last room in list, and found buddies but also a nemesis.'
+                      elsif predicate_rejected
+                        'Reached last room in list, and found buddies but the room did not suit.'
                       else
                         'Reached last room in list, and found no buddies.'
                       end
