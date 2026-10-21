@@ -587,10 +587,15 @@ module Lich
           # port's `#var`s), its events and its printed texts go to the #triggers and the scripts
           # (a game row's from the trigger worker).
           Lich::Genie.variable_listener = ->(names) { game_state_listener(names) }
+          # Game lines from outside the row parser (the assess-ids shim).
+          Lich::Genie.text_listener = ->(lines) { text_lines(lines) }
           # Reserved variables from the raw game stream (Remix Game.cs), and the commands
           # the user types ($lastcommand/$lastinput).
           install_game_state_tap!
           install_upstream_hook!
+          # Self-install the opt-in assess exist-id shim (off by default) so it survives relogin
+          # under the in-Lich engine (native-Genie users install it from autostart instead).
+          Lich::Genie::AssessIds.install! if Lich::Genie::AssessIds.enabled?
           # Feed matchwait AND #triggers with text ECHOED BY LICH (go2 messages,
           # script-exit notices, other scripts' output) -- but not `[name]>` command
           # echoes -- in addition to the raw game stream (see feed_script_output).
@@ -660,6 +665,19 @@ module Lich
           Lich::Genie.engine_active? ? true : false
         rescue StandardError
           false
+        end
+
+        # Game lines Lich made outside the row parser (the assess-ids shim's enriched lines, on
+        # Lich's parser thread, in its DownstreamHook -- after the row's own GameState feed): posted
+        # to the trigger worker, so they follow that row's texts, and delivered like them
+        # (GameEvents::TextLine: the #triggers, then the unpaused listed scripts as game lines).
+        # @param lines [Array<String>]
+        # @return [void]
+        def text_lines(lines)
+          texts = lines.map { |line| Text.trim_crlf(GameState.decode(line.to_s)) }.select { |text| GameEvents.offered?(text) }
+          return if texts.empty?
+
+          Lich::Genie.trigger_worker.post { deliver_events(texts.map { |text| GameEvents::TextLine.new(text) }) if engine_on? }
         end
 
         # Print the engine's own text (an echo, `#echo`, a diagnostic) through Lich's respond,

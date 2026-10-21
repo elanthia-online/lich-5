@@ -19,7 +19,7 @@ module Lich
     # path (`;lich5-update --branch=...`) overwrites files from a tarball WITHOUT moving
     # git HEAD, so `git log`/commit hashes are not a reliable "which version am I on"
     # signal -- this constant is. Format: MAJOR.MINOR.PATCH (YYYY-MM-DD).
-    VERSION = '0.26.8 (2026-10-22)'
+    VERSION = '0.26.9 (2026-10-22)'
 
     # Raised for any Genie-engine evaluation/parse error. Callers that mirror
     # Genie's "swallow and default" behavior (e.g. `evalmath`) rescue this.
@@ -354,6 +354,13 @@ module Lich
       # @return [#call, nil] callable(names): one row's (or send's) changes, in order
       attr_accessor :variable_listener
 
+      # The engine's intake for game text Lich produces outside the row parser (the opt-in
+      # assess-ids shim's enriched lines, {AssessIds.deliver}, only while the engine is on): the
+      # glue sets it once the engine runs, and hands each batch to its #triggers and scripts as
+      # game lines from the trigger worker. Lich scripts never get these lines.
+      # @return [#call, nil] callable(lines)
+      attr_accessor :text_listener
+
       # The display-time ParseGlobalVars of a substitute's replacement ({StreamFilters#globals}):
       # the glue sets it to its own globals (LichGameState's reserved values); nil = the bare
       # capture's.
@@ -485,6 +492,7 @@ require_relative 'genie/math_eval'
 require_relative 'genie/eval'
 require_relative 'genie/reserved'
 require_relative 'genie/write_clock'
+require_relative 'genie/assess_ids'
 require_relative 'genie/collation'
 require_relative 'genie/config_file'
 require_relative 'genie/variable_file'

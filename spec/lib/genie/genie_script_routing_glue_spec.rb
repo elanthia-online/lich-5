@@ -116,6 +116,100 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
     end
   end
 
+  # The assess-ids shim's lines (AssessIds.deliver, on Lich's parser thread in its DownstreamHook,
+  # after the row's GameState feed) reach the #triggers and the genie scripts, and no .lic script.
+  describe '.text_lines (game lines from outside the row parser)' do
+    let(:log) { [] }
+
+    before do
+      events = log
+      registry.add('\\[#(\\d+)\\]', '#echo id')
+      allow(glue).to receive(:trigger_runner).and_return(
+        Object.new.tap { |r| r.define_singleton_method(:fire) { |c, cap, **| events << [:fire, c, cap] } }
+      )
+      port = Object.new.tap { |p| p.define_singleton_method(:push) { |*items| events.concat(items.map { |i| [:push, i] }) } }
+      allow(glue).to receive(:genie_recipients).and_return([Lich::Genie::ParseDispatch::Recipient.new(interpreter: nil, buffer: port, paused: false)])
+      allow(glue).to receive(:variable_broadcast)
+    end
+
+    it 'posts them after the row posted before them, then delivers each as a game line: #triggers first' do
+      glue.game_state_listener(Lich::Genie::GameState::Row.new([], [Lich::Genie::GameEvents::TextLine.new('You assess.')]))
+      glue.text_lines(["a goblin [#12] (1) at melee range.\r\n", 'an orc [#13]'])
+      expect([log, posted.length]).to eq([[], 2])
+      posted.each(&:call)
+      expect(log).to eq([[:push, 'You assess.'], [:fire, '#echo id', ['12']], [:push, 'a goblin [#12] (1) at melee range.'],
+                         [:fire, '#echo id', ['13']], [:push, 'an orc [#13]']])
+    end
+
+    it 'decodes invalid UTF-8 (U+FFFD) and posts nothing for blank lines' do
+      glue.text_lines(["\r\n", '   '])
+      expect(posted).to eq([])
+      glue.text_lines([[0x63, 0xE9].pack('C*')])
+      posted.shift.call
+      expect(log).to eq([[:push, "c#{[0xFFFD].pack('U')}"]])
+    end
+
+    # The reviewer's live case (misc_live.rb): with the shim and the engine on, a plain .lic doing
+    # `get` must not see a synthetic `[#id]` line. The rows go through the shim's DownstreamHook
+    # body on Lich's parser thread and Lich's real Script.new_downstream path stays untouched.
+    describe 'AssessIds end to end: Genie scripts only, never a .lic script' do
+      let(:server_rows) do
+        [%(<pushStream id="assess"/>You assess your combat situation...\r\n),
+         %(You (1) are facing <d cmd='look #78195083'>an elder Adan'f sorcerer</d> (2).\r\n),
+         %(<popStream/><prompt time="1">&gt;</prompt>\r\n)]
+      end
+      let(:lic_buffer) { Lich::Common::LimitedArray.new }
+      let(:genie_buffer) { buffer }
+      let(:flag) { [true] }
+
+      before do
+        stub_const('Script', Lich::Common::Script) # lich.rbw's top-level `include Lich::Common`
+        lic_script = Struct.new(:downstream_buffer, :want_downstream, :watchfor).new(lic_buffer, true, {})
+        genie_script = Struct.new(:downstream_buffer, :want_downstream, :watchfor).new(genie_buffer, true, {})
+        allow(Lich::Common::Script).to receive(:__running_snapshot).and_return([lic_script, genie_script])
+        allow(glue).to receive(:genie_recipients).and_return([Lich::Genie::ParseDispatch::Recipient.new(interpreter: nil, buffer: genie_buffer.engine_port, paused: false)])
+        allow(Lich::Genie).to receive(:text_listener).and_return(->(lines) { glue.text_lines(lines) })
+        on = flag
+        allow(Lich::Genie::AssessIds).to receive(:enabled?) { on[0] }
+        allow(Lich::Common::DownstreamHook).to receive(:add) # the spec drives the hook body (observe) itself
+      end
+
+      after do
+        %i[@buffer @active @in_assess @installed].each { |ivar| Lich::Genie::AssessIds.instance_variable_set(ivar, nil) }
+      end
+
+      def run_rows
+        Lich::Genie::AssessIds.install!
+        Thread.new do
+          Thread.current[Lich::Genie::GameStateFeed::READER_KEY] = true # Lich's parser thread
+          server_rows.each { |row| Lich::Genie::AssessIds.observe(row) }
+        end.join
+        posted.each(&:call)
+      end
+
+      it 'delivers the enriched line to the genie script and the #triggers, and nothing to the .lic script' do
+        allow(Lich::Common::Script).to receive(:new_downstream).and_call_original
+        run_rows
+        expect(Lich::Common::Script).not_to have_received(:new_downstream)
+        expect(lic_buffer.to_a).to eq([])
+        expect(genie_buffer.to_a).to eq(["You (1) are facing an elder Adan'f sorcerer [#78195083] (2)."])
+        expect(log).to include([:fire, '#echo id', ['78195083']])
+      end
+
+      it 'delivers nothing while the engine is off' do
+        allow(Lich::Genie).to receive(:engine_active?).and_return(false)
+        run_rows
+        expect([posted, lic_buffer.to_a, genie_buffer.to_a]).to eq([[], [], []])
+      end
+
+      it 'delivers nothing while the flag is off' do
+        flag[0] = false
+        run_rows
+        expect([posted, lic_buffer.to_a, genie_buffer.to_a]).to eq([[], [], []])
+      end
+    end
+  end
+
   describe 'engine output (Genie never parses its own echo)' do
     it 'marks the echo port, the trigger error and the diagnostics as engine output' do
       glue.respond_in_chain('echo text')
@@ -270,10 +364,12 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
       expect(glue.engine_on?).to be(false)
     end
 
-    it 'skips the trigger worker job of a game row queued before the turn-off' do
+    it 'skips the trigger worker job of a game row (and of game lines) queued before the turn-off' do
       ran = []
       allow(glue).to receive(:game_state_changed) { |names| ran << names }
+      allow(glue).to receive(:deliver_events) { |events| ran << events }
       glue.game_state_listener(Lich::Genie::GameState::Row.new(%w[$health], []))
+      glue.text_lines(['a goblin'])
       active[0] = false
       posted.each(&:call)
       active[0] = true
@@ -458,21 +554,25 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
   end
 
   describe 'the engine start (install_downstream_hook!)' do
-    it 'wires the game-state listener and the #trigger shut-off report' do
-      saved = [Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener]
+    it 'wires the game-state listener, the game-text intake and the #trigger shut-off report' do
+      saved = [Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener]
       allow(Lich::Genie).to receive(:global_store)
+      allow(Lich::Genie::AssessIds).to receive(:enabled?).and_return(false)
       %i[install_game_state_tap! install_upstream_hook! install_script_output_trigger_tap!].each { |name| allow(glue).to receive(name) }
       allow(Lich::Common::DownstreamHook).to receive(:add)
       glue.send(:install_downstream_hook!)
       allow(glue).to receive(:game_state_listener)
+      allow(glue).to receive(:text_lines)
       Lich::Genie.variable_listener.call(%w[$x])
+      Lich::Genie.text_listener.call(%w[line])
       expect(glue).to have_received(:game_state_listener).with(%w[$x])
+      expect(glue).to have_received(:text_lines).with(%w[line])
       # wired on the module, not on the registry of the moment
       expect(registry.on_disabled).to be_nil
       Lich::Genie.trigger_disabled_listener.call('(a+)+b')
       expect(said.last).to eq(['--- Lich: genie #trigger disabled: /(a+)+b/ timed out 3 times in a row (add it again to re-enable it)', true])
     ensure
-      Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener = saved
+      Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener = saved
     end
   end
 
@@ -484,15 +584,16 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
     before do
       store = hooks
       allow(Lich::Genie).to receive(:global_store)
+      allow(Lich::Genie::AssessIds).to receive(:enabled?).and_return(false)
       %i[install_game_state_tap! install_upstream_hook! install_script_output_trigger_tap! start_command_queue!].each { |name| allow(glue).to receive(name) }
       allow(Lich::Common::DownstreamHook).to receive(:add) { |name, action, **| store[name] = action }
-      @saved = [Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener,
+      @saved = [Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener,
                 Lich::Genie.filter_disabled_listener, Lich::Genie.display_globals]
       glue.send(:install_downstream_hook!)
     end
 
     after do
-      Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener,
+      Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener,
         Lich::Genie.filter_disabled_listener, Lich::Genie.display_globals = @saved
     end
 
@@ -565,9 +666,10 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
       store = hooks
       stub_const('Lich::Genie::LichGameState::READINGS', readings)
       allow(Lich::Genie).to receive(:global_store).and_return(Lich::Genie::GlobalStore.new)
+      allow(Lich::Genie::AssessIds).to receive(:enabled?).and_return(false)
       %i[install_game_state_tap! install_upstream_hook! install_script_output_trigger_tap! start_command_queue!].each { |name| allow(glue).to receive(name) }
       allow(Lich::Common::DownstreamHook).to receive(:add) { |name, action, **| store[name] = action }
-      @saved = [Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener,
+      @saved = [Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener,
                 Lich::Genie.filter_disabled_listener, Lich::Genie.display_globals]
       glue.send(:install_downstream_hook!)
       expander = Lich::Genie.display_globals
@@ -576,7 +678,7 @@ RSpec.describe 'Genie glue: game-text routing, the trigger worker, engine output
     end
 
     after do
-      Lich::Genie.variable_listener, Lich::Genie.trigger_disabled_listener,
+      Lich::Genie.variable_listener, Lich::Genie.text_listener, Lich::Genie.trigger_disabled_listener,
         Lich::Genie.filter_disabled_listener, Lich::Genie.display_globals = @saved
     end
 

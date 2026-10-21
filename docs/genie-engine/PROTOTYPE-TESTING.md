@@ -116,8 +116,8 @@ parentheses.
    ,eq echo Lich::Genie::VERSION
    ```
 
-   It should print `0.26.8 (2026-10-22)` or later. The engine also prints
-   `--- Genie engine v0.26.8 (2026-10-22) active` once per session.
+   It should print `0.26.9 (2026-10-22)` or later. The engine also prints
+   `--- Genie engine v0.26.9 (2026-10-22) active` once per session.
 4. The engine stays on for a character once you turned it on. If it is off
    (`,eq echo Lich::Genie.enabled?` shows `false`), turn it on: `,e Lich::Genie.enabled = true`.
 

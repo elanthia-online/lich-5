@@ -34,6 +34,7 @@ No prior experience required. Every section has examples you can copy and try.
 11. [Effects and triggers: `#` commands](#11-effects-and-triggers--commands)
 12. [Splitting a script into multiple files: `include`](#12-splitting-a-script-into-multiple-files-include)
 13. [Reserved variables reference](#13-reserved-variables-reference)
+   - [13b. Surfacing creature IDs in ASSESS (opt-in, an addition Genie lacks)](#13b-surfacing-creature-ids-in-assess-opt-in-an-addition-genie-lacks)
 14. [Running, listing, and stopping scripts](#14-running-listing-and-stopping-scripts)
 15. [Troubleshooting](#15-troubleshooting)
    - [Reporting problems (you're a tester)](#reporting-problems-youre-a-tester)
@@ -1374,6 +1375,72 @@ written as underscores (e.g. `Small_Edged`, `Targeted_Magic`):
 
 > If you know a Genie reserved variable that isn't listed here, please report it with its exact
 > name.
+
+---
+
+## 13b. Surfacing creature IDs in ASSESS (opt-in, an addition Genie lacks)
+
+DragonRealms tags every creature in the `assess` combat stream with its **exist-id**, but Lich
+normally strips that tag before your script sees it, so the id is gone from the visible text. Some
+front ends re-add it as `[#nnnnn]`, and Genie scripts written against them capture the id with a
+pattern such as `\[#(\d+)\]`. That ties those scripts to one front end.
+
+The **assess-ids shim** moves that surfacing into Lich. **Genie itself has no such feature**: this
+is an addition, so it is off by default. When on, it re-emits each assess creature line with the
+id spliced back into the visible text, where such a front end puts it:
+
+```
+You (1) are facing an elder Adan'f sorcerer [#78195083] (2) at melee range.
+```
+
+A pattern that expects the id then works unchanged:
+
+```
+matchre Target ^You .*facing .*\[#(\d+)\]
+put assess
+matchwait
+# $1 now holds the creature's exist-id
+```
+
+Who sees the added lines:
+
+- **In-Lich engine:** your Genie scripts and `#trigger`s, right after the assess output they belong
+  to, and only while the engine is on (`Lich::Genie.enabled?`). With the engine off, nothing is
+  added.
+- **Native Genie in front of Lich** (Lich started with the Genie front end): the lines go to
+  Genie's game window, so Genie's own scripts can match them.
+- **Lich scripts (`.lic`) never see them.** They get the game text exactly as without the shim.
+
+The normal assess output and Lich's own creature tracking are untouched.
+
+### Turning it on
+
+It is **off by default** and set **per character** (like the engine toggle). Turn it on with:
+
+```
+;e Lich::Genie::AssessIds.enabled = true
+```
+
+(If your front end uses `,` as its Lich command character, type `,e` instead of `;e`.)
+
+- **In-Lich engine:** that's it. The shim re-arms itself each session when the engine starts (at
+  login, see Step 1), so you set it once.
+- **Native Genie in front of Lich:** the setting persists, but the hook must be re-installed each
+  login. Add this line to your Lich autostart (for example a small `.lic`, or your existing startup
+  script); it does nothing while the setting is off:
+
+  ```ruby
+  Lich::Genie::AssessIds.install!
+  ```
+
+Check status any time:
+
+```
+;e echo Lich::Genie::AssessIds.enabled?   # saved on/off
+;e echo Lich::Genie::AssessIds.active?    # hook armed this session?
+```
+
+Turn it back off with `;e Lich::Genie::AssessIds.enabled = false` (it stops at once).
 
 ---
 
