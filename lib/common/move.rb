@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'wait_response'
+
 module Lich
   module Common
     # The movement primitive. Scripts call the top-level +move+ shim in
@@ -70,7 +72,7 @@ module Lich
         [:drag,       /try to drag/i],
         [:denied,     /may not pass|unseen force prevents|aren't allowed to enter|only performers|see your ticket|registered groups|reputation precedes|"Abandoned\."|leave promptly|open to invitees|unable to follow you|check in/i],
         [:map,        /can't go there|can't (?:go|swim) in that direction|could not find what you were referring|what were you referring|where are you trying to go|plan to do that here|can't go to|become impassable|too far away|too far above/i],
-        [:roundtime,  /^\.{3}wait \d|^wait \d/i]
+        [:roundtime,  WAIT_RESPONSE_PATTERN]
       ].freeze
 
       LAST_FAILURE_KEY = :lich_move_last_failure
@@ -360,10 +362,10 @@ module Lich
                 command.call(dir.sub(/go|climb/, 'open'), :open)
                 put_dir.call
               end
-            elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
+            elsif (wait_match = WAIT_RESPONSE_PATTERN.match(line))
               # Waiting is not a remedy that can fail; roundtime always ends.
-              if $2.to_i > 1
-                Script.execution_sleep($2.to_i - "0.2".to_f)
+              if wait_match[:seconds].to_i > 1
+                Script.execution_sleep(wait_match[:seconds].to_i - 0.2)
               else
                 Script.execution_sleep 0.3
               end

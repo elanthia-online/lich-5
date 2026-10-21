@@ -77,6 +77,10 @@ module Lich
       INFUSE_OM_MAX_RETRIES = 20
       PREPARE_MAX_RETRIES = 3
       CAST_MAX_RETRIES = 3
+      # How long, and how often, prep_confirmed? polls the prepared-spell
+      # indicator after prepare? returned '' (see prep_confirmed?).
+      PREP_CONFIRM_WAIT_SECONDS = 3
+      PREP_CONFIRM_POLL_SECONDS = 0.1
       BARB_BUFF_MAX_RETRIES = 3
       STOW_FOCUS_MAX_RETRIES = 3
 
@@ -138,9 +142,17 @@ module Lich
 
       PERC_MANA_START_PATTERN = /streams of .* mana/
       PERC_MANA_END_PATTERN = /Roundtime/
+      # One line of a Moon Mage's PERC MANA reply, one per Lunar spellbook, e.g.
+      # "You reach out with your senses and see glaring (19/21) streams of cold,
+      # white Lunar mana available for the Illusion book."
+      PERC_MANA_BOOK_PATTERN = %r{\A\s*You reach out with your .+? and (?:see|hear) (?<adj>\w+) (?:\((?<level>\d+)/(?<max>\d+)\) )?streams of .* mana available for the (?<book>.+?) book}
       SYMBIOSIS_PATTERN = /combine the weaves of the (?<type>\w+) symbiosis/
       DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
       DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
+
+      # Seconds check_discern waits before discerning a spell again after a
+      # discern drew no recognised reply, at most check_discern_timer_in_hours.
+      DISCERN_RETRY_SECONDS = 300
 
       USELESS_RUNESTONE_PATTERNS = [
         /^You get a useless/
@@ -327,14 +339,26 @@ module Lich
         return false
       end
 
+      # Probe text for {#zero_width_pattern?}: a short sentence, a pangram in both
+      # cases, every digit and every ASCII punctuation mark, then a double space
+      # and a sentence ending the probe with a period. Word-boundary assertions
+      # and lookarounds for any single printable character, a double space, a
+      # line-final period, or a word in the probe find a position to match at.
+      # Must stay ASCII-only: a non-ASCII probe raises
+      # Encoding::CompatibilityError (not a RegexpError) against a binary pattern
+      # that carries high bytes.
+      ZERO_WIDTH_PROBE = %q(You a. 1! The quick brown fox jumps over the lazy dog, THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG 0123456789 !"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~  You a.)
+
       # Compiles a single player-supplied message into a case-insensitive Regexp
       # for use as a bput pattern, matching how bput treats the built-in string
       # patterns; leading/trailing whitespace is trimmed so an accidental space in
       # yaml does not silently break matching. Returns nil -- so the entry is
       # dropped rather than applied -- when the message is not a String, is
       # blank/whitespace-only (an empty pattern compiles to //, matching every
-      # line), or is not a valid regular expression (which would otherwise raise
-      # inside bput). Shared guard for every custom_*_message key.
+      # line), is not a valid regular expression (which would otherwise raise
+      # inside bput), or can match without consuming any text (see
+      # {#zero_width_pattern?}; like //, such a pattern matches every line).
+      # Shared guard for every custom_*_message key.
       #
       # @param message [String, nil] the player-supplied message
       # @return [Regexp, nil] a case-insensitive pattern, or nil if not a usable string
@@ -344,9 +368,34 @@ module Lich
         stripped = message.strip
         return nil if stripped.empty?
 
-        Regexp.new(stripped, Regexp::IGNORECASE)
+        pattern = Regexp.new(stripped, Regexp::IGNORECASE)
+        return nil if zero_width_pattern?(pattern)
+
+        pattern
       rescue RegexpError
         nil
+      end
+
+      # Whether +pattern+ can succeed without consuming any text -- e.g. '.*',
+      # 'You|', '(foo)?', '^', '\b' or '(?=.)'. bput returns on the first line a
+      # pattern matches, so such a pattern accepts whatever line arrives first
+      # (returning it, or '') as though it were the expected message. Detected by
+      # an empty-string match, or a zero-length match at any position of
+      # {ZERO_WIDTH_PROBE}. A lookaround that needs a word or other multi-character
+      # context the probe lacks (e.g. '(?=Your)' or '(?=You feel a surge)') is
+      # not detected; it still makes an empty match, but only on lines that
+      # contain that text. The probe is matched like any game line, so a pattern
+      # with catastrophic backtracking hangs here just as it would inside bput.
+      #
+      # @param pattern [Regexp] a compiled custom message pattern
+      # @return [Boolean] true if the pattern can match zero characters
+      def zero_width_pattern?(pattern)
+        return true if pattern.match?('')
+
+        (0..ZERO_WIDTH_PROBE.length).any? do |position|
+          match = pattern.match(ZERO_WIDTH_PROBE, position)
+          match && match[0].empty?
+        end
       end
 
       # Appends the player's validated custom message patterns to a built-in
@@ -387,7 +436,39 @@ module Lich
       # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
       # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
-      # @return [String, false] the matched prep message, or false on failure
+      # @return [String, false] the matched prep message; or +''+ (truthy) when
+      #   bput matched nothing: normally because no prep message arrived before
+      #   bput gave up (it still reads any lines already waiting when its
+      #   timeout passes, and restarts its timer on the replies it retries,
+      #   such as a wait or a stun). bput also returns +''+ at once for a line
+      #   that no built-in message matches when the first custom pattern that
+      #   matches the line makes an empty match there (bput returns the leftmost
+      #   match of the first pattern that matches), such as
+      #   +'(?=A goblin)'+ on a line starting "A goblin"; an empty match in a
+      #   per-spell pattern also hides a later custom_spell_prep one. That
+      #   applies only to a custom pattern {#custom_message_pattern} lets
+      #   through, and never to a line bput handles itself: it retries on a
+      #   wait, a stun or a type-ahead reply and skips the "can't move" line.
+      #   Or false on one of
+      #   the failure replies prepare? itself checks for (its +when+ arms other
+      #   than the retried "slips away" one, which returns the retry's result),
+      #   a nil +abbrev+, or exhausted retries. Any other matched reply is
+      #   returned as is, even one that reads like a failure.
+      #
+      # @note A timeout is not a failure. When nothing prepare? accepts (the
+      #   prep_messages plus the custom prep messages, or {#invoke_messages}
+      #   for a runestone) arrives before bput gives up, bput returns +''+
+      #   and prepare? returns it unchanged, after still sending the
+      #   tattoo/runestone +target+. A timeout is ambiguous: the prep may
+      #   have succeeded with a message that is not in the list (the reason
+      #   custom_prep_message exists) or with a reply delayed by a server
+      #   stall, and returning false there would abort a real prep. It can
+      #   also mean nothing was prepared at all. Callers that would otherwise
+      #   charge cambrinth, harness mana or cast on the strength of this
+      #   result should pass it to {#prep_confirmed?}, which accepts +''+
+      #   after a prep command only when the game shows a spell being
+      #   prepared (and after an invoke as is). {#cast_spell} and
+      #   {#ritual} do; {#crafting_prepare_spell} returns the result as is.
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
@@ -439,6 +520,51 @@ module Lich
         name
       end
 
+      # Whether a {#prepare?} result means a spell is now being prepared, so a
+      # caller can go on to charge cambrinth, harness mana, invoke a focus or
+      # cast. A matched prep message counts and false does not. For +''+
+      # (bput matched nothing; see {#prepare?}) the answer comes from the
+      # game's prepared-spell indicator ({#spell_preparing?}), which the game
+      # sends with its prep reply (on the same line or just before it),
+      # listed or not: it counts if a spell shows as being prepared within
+      # PREP_CONFIRM_WAIT_SECONDS, which also covers a prep reply that lands
+      # just after bput returned early (see {#prepare?}). Otherwise a bold
+      # message says so, +release spell+ is sent and the result is false.
+      # The game handles commands in order, so during a server stall that
+      # release lands behind the prep still waiting there and cancels it,
+      # rather than leaving it prepared for the next caller (whose own
+      # release is skipped while the indicator still shows no spell) to
+      # charge and cast as its own.
+      #
+      # The indicator rule covers preps made with a prep command. An invoke
+      # (a runestone, or a tattoo whose prep command is +invoke+) is not
+      # checked: there is no record of whether the game sets the indicator
+      # for those, and rejecting a real invoke would leave its spell
+      # prepared and uncast. For them +''+ counts, as it did before.
+      #
+      # @param prep_result [String, false] what {#prepare?} returned
+      # @param abbrev [String, nil] the spell's abbreviation, for the message
+      # @param command [String, nil] the prep command passed to {#prepare?}
+      # @param runestone_name [String, nil] the runestone passed to {#prepare?}
+      # @return [Boolean]
+      def prep_confirmed?(prep_result, abbrev, command: 'prepare', runestone_name: nil)
+        return false unless prep_result
+        return true unless prep_result == ''
+        return true if runestone_name || command.to_s.strip.match?(/\Ainvoke\b/i)
+
+        polls = (PREP_CONFIRM_WAIT_SECONDS / PREP_CONFIRM_POLL_SECONDS).round
+        polls.times do
+          return true if spell_preparing?
+
+          pause PREP_CONFIRM_POLL_SECONDS
+        end
+        return true if spell_preparing?
+
+        Lich::Messaging.msg("bold", "DRCA: no prep reply was recognised for '#{abbrev}' and no spell is being prepared - not casting")
+        DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell")
+        false
+      end
+
       def ritual(data, settings)
         DRC.retreat(settings.ignored_npcs) unless data['skip_retreat']
         DRC.release_invisibility
@@ -448,7 +574,12 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        # As in cast_spell: drop a spell left prepared by an earlier caller, so
+        # the focus invoke and the cast below act on this ritual's prep.
+        DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
+
+        prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        return unless prep_confirmed?(prepared, data['abbrev'], command: command, runestone_name: data['runestone_name'])
 
         prepare_time = Time.now
         find_focus(data['focus'], data['worn_focus'], data['tied_focus'], data['sheathed_focus'])
@@ -510,7 +641,40 @@ module Lich
       # @param after [Array<Hash>] actions to bput after casting
       # @param custom_cast_message [String, nil] a per-spell cast message to also accept (see {#with_custom_messages})
       # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
-      # @return [Boolean] true if the spell cast without a failure flag being set
+      # @return [Boolean] true if the spell cast without a failure flag being set,
+      #   including when no cast message arrived before DRC.bput gave up, and
+      #   when bput returned +''+ at once for a line that no built-in message
+      #   matches because the first custom pattern that matches the line makes
+      #   an empty match there (as +'(?=A goblin)'+ does on a line starting
+      #   "A goblin"; only a custom pattern {#custom_message_pattern} lets
+      #   through can do this, and never on a line bput handles itself: it
+      #   retries on a wait, a stun or a type-ahead reply and skips the
+      #   "can't move" line); false if the +spell-fail+ flag was set or a retry
+      #   limit ran out. In both +''+ cases the result rests on +spell-fail+ at
+      #   the moment it is read (see the note).
+      #
+      # @note A timeout counts as success. When nothing cast? accepts (the
+      #   cast_messages plus the custom cast message) arrives before bput gives
+      #   up (a server stall, or a successful cast whose message is not
+      #   listed), bput returns +''+, which no +when+ arm handles: the
+      #   barrage and cyclic/full-prep retry flags still apply, and the result
+      #   rests on the +spell-fail+ flag. That flag is read only after the cast
+      #   bput, the roundtime wait and the +after+ actions, so
+      #   the result is true unless a failure line arrived before then (in
+      #   which case mana, and any symbiosis, is released and the result is
+      #   false); a failure line that arrives later is missed. This is
+      #   deliberate. Mapping a timeout to false would make retry loops such as
+      #   +until cast_spell?(...)+ prepare and cast again after a cast that went
+      #   off but was not recognised (a stall, or a message that is not listed;
+      #   the reason custom_cast_message exists). A missed late failure line is
+      #   not always harmless: if it arrives while a later cast? is running,
+      #   that call takes it as its own failure, returns false and releases
+      #   mana (and any symbiosis) even if its own cast went off.
+      #   {#cast_spell}, {#cast_spell?} and {#crafting_cast_spell} pass this
+      #   result through ({#cast_spell} returns nil, and so {#cast_spell?}
+      #   returns false, for a ritual spell, after a successful segue, and
+      #   when the prep failed or {#prep_confirmed?} rejected it, in which
+      #   case cast? is not called).
       def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
@@ -774,32 +938,55 @@ module Lich
         manalevels.index(adj).to_i + 1
       end
 
+      # Perceives the local mana level.
+      #
+      # A Moon Mage sends PERC MANA and gets one line per Lunar spellbook; the
+      # result is a Hash of book name (downcased, spaces as underscores, e.g.
+      # 'fabrication', 'illusion', 'noematics') to its level on the 21-step mana
+      # scale (1 = faint, 21 = blinding). Only the books named in the reply are
+      # keys. The level is the reply's (N/21) figure, or the adjective's place on
+      # the scale when the figure is missing or out of some other maximum; a book
+      # line with neither is skipped with a bold message. A cut-off reply prints a bold message and returns
+      # the books that arrived. Returns nil when no book line was captured.
+      #
+      # Other magic users send PERC and get a single Integer level.
+      #
+      # @return [Hash{String => Integer}, Integer, nil] nil for Barbarians,
+      #   Thieves, Traders and Commoners, and when a Moon Mage reply names no book
       def perc_mana
         return nil if DRStats.barbarian? || DRStats.thief? || DRStats.trader? || DRStats.commoner?
 
         if DRStats.moon_mage?
-          lines = Lich::Util.issue_command(
+          lines, complete = DRC.capture_reply(
             'perc mana',
             PERC_MANA_START_PATTERN,
             PERC_MANA_END_PATTERN,
             usexml: false,
-            include_end: false,
-            quiet: true,
             timeout: 5
           )
-          return nil if lines.nil?
+          if lines.empty?
+            Lich::Messaging.msg("bold", "DRCA: Failed to capture PERC MANA output (timeout).")
+            return nil
+          end
+          Lich::Messaging.msg("bold", "DRCA: PERC MANA output was cut off (timeout); the result may be incomplete.") unless complete
 
-          mana_msgs = lines.map(&:strip).select { |line| line.include?('streams') }[0..3]
-          return nil if mana_msgs.length < 4
+          books = lines.each_with_object({}) do |line, levels|
+            match = PERC_MANA_BOOK_PATTERN.match(line)
+            next unless match
 
-          mana_msgs.collect! { |mana_msg| mana_msg.split(' streams')[0] }
+            level = if match[:level] && match[:max].to_i == $MANA_MAP['good'].length
+                      match[:level].to_i
+                    elsif (idx = $MANA_MAP['good'].index(match[:adj]))
+                      idx + 1
+                    end
+            unless level
+              Lich::Messaging.msg("bold", "DRCA: PERC MANA reported an unknown mana level '#{match[:adj]}' for the #{match[:book]} book; skipping it.")
+              next
+            end
 
-          {
-            'enlightened_geometry'   => parse_mana_message(mana_msgs[0]),
-            'moonlight_manipulation' => parse_mana_message(mana_msgs[1]),
-            'perception'             => parse_mana_message(mana_msgs[2]),
-            'psychic_projection'     => parse_mana_message(mana_msgs[3])
-          }
+            levels[match[:book].downcase.tr(' ', '_')] = level
+          end
+          books.empty? ? nil : books
         else
           mana_msg = DRC.bput('perc', '^You reach out with your .* and (see|hear) \w+')
           parse_mana_message(mana_msg)
@@ -876,9 +1063,12 @@ module Lich
         DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
         DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        prepared = prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
+        return unless prepared
 
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
+        return unless prep_confirmed?(prepared, data['abbrev'], command: command, runestone_name: data['runestone_name'])
+
         prepare_time = Time.now
 
         normalize_cambrinth_items(settings)
@@ -914,6 +1104,7 @@ module Lich
       def check_discern(data, settings, spell_is_sorcery = false, more_override = nil)
         UserVars.discerns = {} unless UserVars.discerns
         discern_data = UserVars.discerns[data['abbrev']] || {}
+        held = false
         if data['symbiosis'] || spell_is_sorcery
           if discern_data.empty? || discern_data['min'].nil? || more_override
             DRC.retreat
@@ -927,23 +1118,57 @@ module Lich
             end
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
-        elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)
-          discern_data['time_stamp'] = Time.now
+        elsif (discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)) && !discern_retry_pending?(discern_data, settings)
           DRC.retreat
           case discern = DRC.bput("discern #{data['abbrev']}", 'The spell requires at minimum \d+ mana streams and you think you can reinforce it with \d+ more', 'You don\'t think you are able to cast this spell', 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that')
-          when /you don't think you are able/i, 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that'
+          when /you don't think you are able/i, 'You have no idea how to cast that spell'
+            discern_data.delete('failed_at')
+            discern_data['time_stamp'] = Time.now
             discern_data['mana'] = 1
             discern_data['cambrinth'] = nil
+          when 'You don\'t seem to be able to move to do that'
+            # Held or rooted: the reply says nothing about the spell, so this
+            # cast is at the minimum. The stored entry is left alone: it keeps
+            # any earlier real answer, and its time stamp, so the next cast
+            # discerns again.
+            held = true
           else
+            # Only a real answer is cached. A discern with no recognised reply
+            # is tried again after DISCERN_RETRY_SECONDS, so each cast in
+            # between doesn't pay for another retreat and bput timeout.
             match = discern.match(DISCERN_FULL_PATTERN)
-            calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings) if match
+            if match
+              discern_data.delete('failed_at')
+              discern_data['time_stamp'] = Time.now
+              calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings)
+            else
+              discern_data['failed_at'] = Time.now
+            end
           end
         end
         waitrt?
         UserVars.discerns[data['abbrev']] = discern_data
-        data['mana'] = discern_data['mana']
-        data['cambrinth'] = discern_data['cambrinth']
+        # With no stored answer (a discern that drew no recognised reply, and
+        # its retry window), cast at the minimum as when held, not with nil.
+        minimum = held || discern_data['mana'].nil?
+        data['mana'] = minimum ? 1 : discern_data['mana']
+        data['cambrinth'] = minimum ? nil : discern_data['cambrinth']
         data
+      end
+
+      # Whether a discern that drew no recognised reply was sent too recently
+      # to try again: within DISCERN_RETRY_SECONDS, or within
+      # check_discern_timer_in_hours when that is shorter.
+      #
+      # @param discern_data [Hash] the spell's entry in UserVars.discerns
+      # @param settings [OpenStruct] character settings
+      # @return [Boolean]
+      # @api private
+      def discern_retry_pending?(discern_data, settings)
+        failed_at = discern_data['failed_at']
+        return false unless failed_at
+
+        Time.now - failed_at < [DISCERN_RETRY_SECONDS, settings.check_discern_timer_in_hours * 60 * 60].min
       end
 
       def calculate_mana(min, more, discern_data, cyclic_or_ritual, settings)
