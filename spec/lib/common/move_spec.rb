@@ -40,10 +40,11 @@ module MoveFakePrimitives
   def put(cmd) = game.put(cmd)
 
   # The bounded fput of #1587, reduced to what move relies on: a refusal
-  # ("...wait N", "You struggle, but fail to stand.") triggers a resend -
-  # 'stand' in frame for the struggle - up to max_resends, then the failure
-  # symbol; any other line is returned as the reply. An unbounded call is
-  # the bug #1622 exists to fix, so it raises.
+  # (a WAIT_RESPONSE_PATTERN wait, as production fput matches it, or "You
+  # struggle, but fail to stand.") triggers a resend - 'stand' in frame for
+  # the struggle - up to max_resends, then the failure symbol; any other line
+  # is returned as the reply. An unbounded call is the bug #1622 exists to
+  # fix, so it raises.
   def fput(cmd, *_waitingfor, **opts)
     raise "move called fput(#{cmd.inspect}) without max_resends" unless opts[:max_resends]
 
@@ -53,7 +54,7 @@ module MoveFakePrimitives
       game.sent << message.dup
       reply = game.get?
       return :no_response if reply.nil?
-      return reply unless reply =~ /^\.{3}wait \d|^You.+struggle.+stand/
+      return reply unless Lich::Common::WAIT_RESPONSE_PATTERN.match?(reply) || reply =~ /^You.+struggle.+stand/
 
       resends += 1
       return :too_many_resends if resends > opts[:max_resends]
@@ -269,6 +270,18 @@ RSpec.describe Lich::Common::Move do
     expect(g.sent.count('north')).to eq(9)
   end
 
+  it 'waits out the "... wait" spelling and a wait appended to the previous line' do
+    g = game(['... wait 1 second.', 'You slip....wait 1 seconds.'], arrive_after: 3)
+    expect(move.move('north')).to be(true)
+    expect(g.sent.count('north')).to eq(3)
+  end
+
+  it 'does not resend on player speech containing "Wait N"' do
+    g = game(['Soandso says, "Wait 5 seconds."', 'You walk north.'], arrive_after: 1)
+    expect(move.move('north')).to be(true)
+    expect(g.sent).to eq(['north'])
+  end
+
   it 'no longer mutates the caller string when swapping go for climb' do
     way = 'go ledge'
     g = game(['You will have to climb that.'], arrive_after: 2)
@@ -325,6 +338,7 @@ RSpec.describe Lich::Common::Move do
       "You can't swim in that direction."                        => :map,
       'You flounder around in the water.'                        => :swim,
       '...wait 3 seconds.'                                       => :roundtime,
+      'You slip....wait 1 seconds.'                              => :roundtime,
       'Something new the game said.'                             => :unknown,
       nil                                                        => :unknown
     }.each { |line, cause| expect(described_class.classify(line)).to eq(cause), line.inspect }

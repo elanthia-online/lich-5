@@ -40,7 +40,7 @@ module Lich
         # @param key [String] this request's Sec-WebSocket-Key (see {generate_key})
         # @param origin [String, nil] Origin header -- play.net's WAF has previously
         #   been observed rejecting requests missing a browser-like identity (see
-        #   docs/web-login-protocol-analysis.md); unconfirmed whether the shim itself checks it
+        #   docs/connection/web-login-protocol-analysis.md); unconfirmed whether the shim itself checks it
         # @param subprotocol [String, nil] Sec-WebSocket-Protocol to request
         # @param user_agent [String, nil]
         # @param extra_headers [Hash] additional/overriding headers, applied last

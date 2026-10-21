@@ -171,7 +171,7 @@ action, BCS tiers shift the timer −2..+2 (+4 grizzled, −4 AG-dangerous).
 | Fixtures | `logs/examples/` (user adds captures continuously — rerun the fixture replay when new files appear) |
 | Corpus + replay tooling | `C:\Gemstone\dev\combat_corpus\` |
 | Deaths catalog | `combat_corpus/deaths_catalog.txt` (miner: `combat_corpus/tools/death_miner.rb`) |
-| Prior proposals/catalogs | `docs/COMBAT_DEFS_*.md` |
+| Prior proposals/catalogs | `docs/gemstone/combat/` |
 
 ## Suggested first tasks (increasing difficulty)
 
