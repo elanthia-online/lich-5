@@ -14,7 +14,6 @@ RSpec.describe Lich::Common::SessionLauncher do
   end
 
   before(:each) do
-    allow(Lich::Common::Authentication::LoginHelpers).to receive(:format_launch_flag).and_return('--GST')
     allow(RbConfig).to receive(:ruby).and_return('/usr/bin/ruby')
     # Keep legacy spawn assertions stable unless explicitly testing optional passthrough.
     allow(described_class).to receive(:optional_spawn_flags).and_return([])
@@ -378,6 +377,41 @@ RSpec.describe Lich::Common::SessionLauncher do
       '--stormfront',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: '/tmp/override-home')
+    )
+  end
+
+  it 'hands the child an instance flag that resolves back to the requested game code' do
+    login_helpers = Lich::Common::Authentication::LoginHelpers
+    spawned = []
+    allow(described_class).to receive(:spawn) do |*args|
+      spawned << args
+      1234
+    end
+
+    login_helpers::VALID_GAME_CODES.each do |code|
+      described_class.launch(launch_data, launch_context: { char_name: 'Tsetem', game_code: code.downcase })
+    end
+
+    expect(spawned.size).to eq(login_helpers::VALID_GAME_CODES.size)
+    login_helpers::VALID_GAME_CODES.zip(spawned).each do |code, args|
+      child_argv = args[2..].grep(String)
+      expect(child_argv[0, 3]).to eq(['--login', 'Tsetem', "--#{code}"])
+      expect(login_helpers.resolve_login_args(child_argv).first).to eq(code)
+    end
+  end
+
+  it 'omits the instance flag when neither launch_context nor launch_data names a game code' do
+    no_code_launch_data = launch_data.reject { |line| line.start_with?('GAMECODE=') }
+
+    described_class.launch(no_code_launch_data, launch_context: { char_name: 'Tsetem' })
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
     )
   end
 end

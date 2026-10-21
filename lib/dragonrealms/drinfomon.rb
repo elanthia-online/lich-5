@@ -23,7 +23,9 @@ module Lich
       # - Persisted: if user toggles it off, stays off across sessions
       # Use ";display expgains" command to toggle on/off manually
       # Use ";display inlineexp" to toggle inline gains in EXP window (off by default)
-      DRExpMonitor.start if Lich.display_expgains
+      # - `;hmr drinfomon` re-runs this file; a reporter that is already running
+      #   keeps running rather than printing "already active"
+      DRExpMonitor.start if Lich.display_expgains && !DRExpMonitor.active?
     end
   end
 end

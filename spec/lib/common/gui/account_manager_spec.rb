@@ -1,19 +1,16 @@
 # frozen_string_literal: true
 
 require_relative '../../../login_spec_helper'
+require 'tmpdir'
 
 RSpec.describe Lich::Common::GUI::AccountManager do
-  let(:data_dir) { "/tmp/test_data" }
+  # A fresh directory per example: a fixed path is shared with other spec
+  # files (and other runs), whose cleanup would delete it mid-example.
+  let(:data_dir) { Dir.mktmpdir("lich-account-manager-spec-") }
   let(:username) { "test_user" }
   let(:password) { "test_password" }
 
-  before do
-    # Setup test directory and files
-    FileUtils.mkdir_p(data_dir)
-  end
-
   after do
-    # Clean up test directory
     FileUtils.rm_rf(data_dir)
   end
 

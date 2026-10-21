@@ -1,27 +1,6 @@
 require 'time'
+require_relative 'common/sqlite_connection'
 module Lich
-  DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
-
-  def Lich.sqlite_busy_timeout_ms
-    DEFAULT_SQLITE_BUSY_TIMEOUT_MS
-  end
-
-  def Lich.configure_sqlite_connection(db)
-    db.busy_timeout(sqlite_busy_timeout_ms) if db.respond_to?(:busy_timeout)
-    db
-  end
-
-  def Lich.open_sqlite_db(path)
-    configure_sqlite_connection(SQLite3::Database.new(path))
-  end
-
-  def Lich.open_sequel_sqlite(path)
-    db = Sequel.sqlite(path)
-    # Sequel does not expose sqlite3's busy_timeout API on its database wrapper.
-    db.run("PRAGMA busy_timeout = #{sqlite_busy_timeout_ms.to_i}")
-    db
-  end
-
   # --- Minimal DB maintenance helpers (simple + safe) ---
   # Stores last maintenance timestamp and summary in lich_settings.
   # Uses an advisory OS file lock so only one Lich instance attempts VACUUM.
@@ -197,6 +176,13 @@ module Lich
     nil
   end
 
+  # WARNING: do not call Lich.db.transaction { } (or run BEGIN/COMMIT by hand
+  # on Lich.db) without handling a failed or interrupted COMMIT. If the thread
+  # is killed while COMMIT waits for the lock, the transaction stays open on
+  # this shared connection and holds the write lock until Lich exits. Nothing
+  # calls Lich.db.transaction today. Databases opened with
+  # Lich.open_sequel_sqlite roll back a failed or interrupted COMMIT; see
+  # SQLiteBusyWait::Transactions.
   def Lich.db
     @@lich_db ||= open_sqlite_db("#{DATA_DIR}/lich.db3")
   end

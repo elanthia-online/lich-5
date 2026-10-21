@@ -377,6 +377,291 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
   end
 
+  describe 'travel time estimates' do
+    # 1 -(12)-> 2 -(1)-> 3 -(0.2)-> 4, plus 1 -(StringProc 3.5)-> 5. The first
+    # leg out of room 1 is the expensive one, so dropping it is visible.
+    before do
+      (1..5).each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      map_class[1].wayto['2'] = 'climb wall'
+      map_class[1].timeto['2'] = 12
+      map_class[2].wayto['3'] = 'north'
+      map_class[2].timeto['3'] = 1.0
+      map_class[3].wayto['4'] = 'north'
+      map_class[3].timeto['4'] = 0.2
+      map_class[1].wayto['5'] = 'go door'
+      map_class[1].timeto['5'] = StringProc.new('3.5')
+    end
+
+    it 'keeps treating the first element as the start without from:' do
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(map_class[1].path_to(3))).to be_within(0.001).of(1.0)
+    end
+
+    it 'counts the leg out of the from: room on a path_to result' do
+      path = map_class[1].path_to(3)
+
+      expect(path).to eq([2, 3])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'gives a one-step trip its leg instead of 0.0' do
+      path = map_class[1].path_to(2)
+
+      expect(path).to eq([2])
+      expect(map_class.estimate_time(path, from: 1)).to be_within(0.001).of(12.0)
+    end
+
+    it 'evaluates a StringProc timeto on the first leg' do
+      expect(map_class.estimate_time(map_class[1].path_to(5), from: 1)).to be_within(0.001).of(3.5)
+    end
+
+    it 'counts the first leg on a Map.findpath result' do
+      expect(map_class.estimate_time(map_class.findpath(1, 4), from: 1)).to be_within(0.001).of(13.2)
+    end
+
+    it 'accepts the from: room as a room or a numeric id String' do
+      path = [2, 3]
+
+      expect(map_class.estimate_time(path, from: map_class[1])).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(path, from: '1')).to be_within(0.001).of(13.0)
+    end
+
+    it 'accepts a real room as from: when called through Room' do
+      # Rooms are built with Map.new, so they are Map instances, not Room ones.
+      # Scripts call class methods through Room as often as through Map.
+      room_class = Lich::Common::Room
+      origin = map_class[1]
+
+      expect(origin).not_to be_a(room_class)
+      expect(room_class.estimate_time([2, 3], from: origin)).to be_within(0.001).of(13.0)
+      expect(room_class.estimate_time([2], from: origin)).to be_within(0.001).of(12.0)
+      expect(room_class.estimate_time([1, 2, 3], from: origin)).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses an explicit from: nil instead of dropping the first leg' do
+      # Room.current is nil in an unmapped room. Treating that like a missing
+      # from: would quietly return the short estimate from: exists to fix.
+      expect { map_class.estimate_time([2, 3], from: nil) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (NilClass)')
+      expect(map_class.estimate_time([1, 2, 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'names the class of a rejected from: rather than dumping it' do
+      expect { map_class.estimate_time([2], from: Object.new) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Object)')
+    end
+
+    it 'does not count the start twice when the path already begins there' do
+      expect(map_class.estimate_time([1, 2, 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[1 2 3], from: map_class[1])).to be_within(0.001).of(13.0)
+    end
+
+    it 'estimates an empty path from a room as 0.0' do
+      expect(map_class.estimate_time([], from: 1)).to eq(0.0)
+    end
+
+    it 'refuses a from: id that names no room instead of guessing the first leg' do
+      # A GemStone uid passed as a bare Integer where a Lich id belongs lands
+      # here; counting the leg as 0.2 would hand back a quietly wrong estimate.
+      expect { map_class.estimate_time([2, 3], from: 7777) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room id that is not in the map (7777)')
+      expect { map_class.estimate_time([2, 3], from: '7777') }
+        .to raise_error(ArgumentError, /from: room id that is not in the map \(7777\)/)
+      # Room 0 is not built here, so list[0] is an empty slot, not a room.
+      expect { map_class.estimate_time([2], from: 0) }.to raise_error(ArgumentError, /not in the map \(0\)/)
+    end
+
+    it 'refuses a from: id far past the room list with ArgumentError, not RangeError' do
+      expect { map_class.estimate_time([2, 3], from: 2**70) }
+        .to raise_error(ArgumentError, /not in the map \(#{2**70}\)/)
+      expect { map_class.estimate_time([2, 3], from: (2**70).to_s) }
+        .to raise_error(ArgumentError, /not in the map/)
+    end
+
+    it 'refuses a from: room that is no longer in the map' do
+      gone = map_class[1]
+      map_class.class_variable_get(:@@list)[1] = nil
+
+      expect { map_class.estimate_time([2, 3], from: gone) }
+        .to raise_error(ArgumentError, /not in the map \(1\)/)
+    end
+
+    it 'reads the from: room once, so a map cleared mid-call cannot crash the exit check' do
+      # Map.clear on another thread can empty the list after the room is found.
+      # An Array whose #first clears it lands that clear between the two reads.
+      list = map_class.class_variable_get(:@@list)
+      path = Class.new(Array) do
+        define_method(:first) do
+          list.clear
+          super()
+        end
+      end.new([2])
+
+      expect { map_class.estimate_time(path, from: 1) }.not_to raise_error
+    end
+
+    it 'refuses a from: room whose id is not a room id' do
+      # Rooms the loader builds always have an Integer id; a hand-built one
+      # may not, and must not reach the list lookup.
+      [nil, -1, '1'].each do |bad|
+        room = map_class.allocate
+        room.instance_variable_set(:@id, bad)
+
+        expect { map_class.estimate_time([2], from: room) }
+          .to raise_error(ArgumentError, "Map.estimate_time was given a from: room with an invalid id (#{bad.class})")
+      end
+    end
+
+    it 'accepts room 0 as from: when the map has it' do
+      shared_room(0, title: '[Room 0]', description: 'room 0')
+      map_class[0].wayto['2'] = 'south'
+
+      # An exit with no timeto counts the 0.2 default, as any other leg does.
+      expect(map_class.estimate_time([2], from: 0)).to be_within(0.001).of(0.2)
+    end
+
+    it 'refuses a from: room with no exit to the first room of the path' do
+      # A stale start room (Room.current read again after a move) would
+      # otherwise count the first leg as the 0.2 default.
+      expect { map_class.estimate_time([3, 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (3)')
+      expect { map_class.estimate_time([4], from: map_class[2]) }
+        .to raise_error(ArgumentError, /from: room \(2\) with no exit to the path start \(4\)/)
+      expect { map_class.estimate_time(%w[3 4], from: '1') }
+        .to raise_error(ArgumentError, /no exit to the path start \(3\)/)
+    end
+
+    it 'names only the class of a non-id path start in the no-exit message' do
+      # A room's to_s is its whole multi-line description, so a room object as
+      # the path start must not be pasted into the message.
+      expect { map_class.estimate_time([map_class[2], 3], from: 4) }
+        .to raise_error(ArgumentError, "Map.estimate_time was given a from: room (4) with no exit to the path start (#{map_class})")
+      expect { map_class.estimate_time(["3\nmore", 4], from: 1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given a from: room (1) with no exit to the path start (String)')
+    end
+
+    it 'accepts a from: room further along a two-way path, which the array cannot reveal' do
+      # The exit check catches a start room with no exit to the path start. A
+      # room read again after a step along a two-way path has an exit back to
+      # the path start, so it is accepted; read Room.current once instead.
+      map_class[3].wayto['2'] = 'south'
+      map_class[3].timeto['2'] = 7
+
+      expect(map_class.estimate_time([2, 3, 4], from: 3)).to be_within(0.001).of(8.2)
+    end
+
+    it 'checks the exit, not the timeto, so an exit with no timeto still counts 0.2' do
+      map_class[4].wayto['1'] = 'climb down'
+
+      expect(map_class.estimate_time([1], from: 4)).to be_within(0.001).of(0.2)
+      expect(map_class.estimate_time([1, 2], from: 4)).to be_within(0.001).of(12.2)
+    end
+
+    it 'accepts a StringProc exit to the first room of the path' do
+      map_class[4].wayto['2'] = StringProc.new('nil')
+      map_class[4].timeto['2'] = 2.5
+
+      expect(map_class.estimate_time([2, 3], from: 4)).to be_within(0.001).of(3.5)
+    end
+
+    it 'matches a zero-padded first id to the from: room numerically' do
+      expect(map_class.estimate_time(%w[01 2 3], from: 1)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3], from: '01')).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time(%w[01 2 3])).to be_within(0.001).of(13.0)
+    end
+
+    it 'refuses a zero-padded first id the walk would look up as a missing exit' do
+      # The legs are looked up by the id as written, so '02' is not the '2'
+      # exit and that leg would count the 0.2 default instead of 12.
+      expect { map_class.estimate_time(%w[02 3], from: 1) }
+        .to raise_error(ArgumentError, /no exit to the path start \(02\)/)
+    end
+
+    it 'still counts a gone room inside the path as 0.2' do
+      map_class.class_variable_get(:@@list)[3] = nil
+
+      expect(map_class.estimate_time([2, 3, 4], from: 1)).to be_within(0.001).of(13.2)
+    end
+
+    it 'matches the distance dijkstra found for every reachable room' do
+      # A different method than the fixed graph above: a seeded random graph,
+      # where the estimate along each returned path must equal the distance the
+      # search itself computed to that room.
+      rng = Random.new(1729)
+      ids = (10..40).to_a
+      ids.each { |id| shared_room(id, title: "[Room #{id}]", description: "room #{id}") }
+      ids.each do |id|
+        ids.sample(3, random: rng).each do |to|
+          next if to == id
+
+          map_class[id].wayto[to.to_s] = 'go path'
+          map_class[id].timeto[to.to_s] = rng.rand(1..50) / 4.0
+        end
+      end
+      source = map_class[10]
+      _previous, distances = source.dijkstra
+      reachable = distances.keys - [10]
+
+      expect(reachable.size).to be > 10
+      reachable.each do |dest|
+        path = source.path_to(dest)
+
+        estimate = map_class.estimate_time(path, from: source)
+
+        expect(estimate).to be_within(0.0001).of(distances[dest]), "room #{dest} via #{path.inspect}"
+      end
+    end
+
+    it 'leaves the caller array untouched' do
+      path = [2, 3]
+      full = [1, 2, 3]
+
+      map_class.estimate_time(path, from: 1)
+      map_class.estimate_time(full)
+
+      expect(path).to eq([2, 3])
+      expect(full).to eq([1, 2, 3])
+    end
+
+    it 'estimates a frozen path' do
+      expect(map_class.estimate_time([1, 2, 3].freeze)).to be_within(0.001).of(13.0)
+      expect(map_class.estimate_time([2, 3].freeze, from: 1)).to be_within(0.001).of(13.0)
+    end
+
+    it 'raises an ordinary StandardError for the nil an unreachable path_to returns' do
+      expect(map_class[4].path_to(1)).to be_nil
+      expect { map_class.estimate_time(map_class[4].path_to(1)) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given something not an array!')
+      expect { map_class.estimate_time(nil, from: 4) }.to raise_error(ArgumentError)
+    end
+
+    it 'is caught by a bare rescue' do
+      result = begin
+        map_class.estimate_time(nil)
+      rescue => e
+        e
+      end
+
+      expect(result).to be_a(StandardError)
+    end
+
+    it 'rejects a from: that does not name a room id' do
+      # Map.[] would treat this text as a fuzzy title search.
+      expect { map_class.estimate_time([2], from: 'Room 1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: :'1') }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: 1.0) }.to raise_error(ArgumentError, /invalid from: room/)
+    end
+
+    it 'rejects a negative from: instead of indexing from the end of the room list' do
+      # DR's Map.current_room_id is -1 until the first room match after load,
+      # and Map.[] indexes the room list, so -1 would name the last room.
+      expect { map_class.estimate_time([2, 3], from: -1) }
+        .to raise_error(ArgumentError, 'Map.estimate_time was given an invalid from: room (Integer)')
+      expect { map_class.estimate_time([2], from: -2) }.to raise_error(ArgumentError, /invalid from: room/)
+      expect { map_class.estimate_time([2], from: '-1') }.to raise_error(ArgumentError, /invalid from: room/)
+    end
+  end
+
   describe 'pathfinding' do
     before do
       shared_room(1, title: '[One]', description: 'first', tags: ['shop'])
@@ -790,16 +1075,6 @@ RSpec.shared_examples 'a game Map class' do |game|
 
         expect { map_class.save_json(path) }.not_to raise_error
       end
-
-      it 'save_json does not reload when the map is empty' do
-        path = File.join(map_dir, 'saved.json')
-        FileUtils.mkdir_p(map_dir)
-        allow(map_class).to receive(:reload)
-
-        map_class.save_json(path)
-
-        expect(map_class).not_to have_received(:reload)
-      end
     end
 
     describe '.match_multi_ids' do
@@ -1128,6 +1403,467 @@ RSpec.shared_examples 'a game Map class' do |game|
       map_class.load
 
       expect(map_class).to have_received(:respond).with(/no map database found/)
+    end
+  end
+
+  # save_json used to truncate the destination before serializing, copy the
+  # backup with a binary read and a UTF-8 write (which raises on any non-ASCII
+  # byte, after truncating the old .bak), and carry on overwriting when that
+  # backup failed. These run on real files in a temp directory.
+  describe 'saving' do
+    let(:target) { File.join(map_dir, 'saved.json') }
+    let(:backup) { "#{target}.bak" }
+    # rubocop:disable Custom/AsciiOnlySource -- Intentional non-ASCII fixture; the old backup broke on any byte above 0x7F.
+    let(:non_ascii_title) { '[Café Row]' }
+    # rubocop:enable Custom/AsciiOnlySource
+    # A previous save holding non-ASCII text; JSON.generate emits it raw.
+    let(:existing_bytes) { JSON.generate([{ 'id' => 1, 'title' => [non_ascii_title] }]).b }
+
+    before do
+      FileUtils.mkdir_p(map_dir)
+      allow(map_class).to receive(:respond)
+      shared_room(1, title: '[Market Row]', description: 'Stalls line the muddy street.')
+      shared_room(2, title: '[Quiet Lane]', description: 'Marble counters gleam here.')
+    end
+
+    def saved_ids(path)
+      JSON.parse(File.read(path)).map { |room| room['id'] }
+    end
+
+    def stray_files
+      Dir.children(map_dir) - [File.basename(target), File.basename(backup)]
+    end
+
+    it 'writes the serialized map to a new file' do
+      map_class.save_json(target)
+
+      expect(saved_ids(target)).to eq([1, 2])
+      expect(File.exist?(backup)).to be false
+      expect(stray_files).to be_empty
+    end
+
+    it 'backs up an existing non-ASCII file byte for byte before replacing it' do
+      File.binwrite(target, existing_bytes)
+
+      map_class.save_json(target)
+
+      expect(File.binread(backup)).to eq(existing_bytes)
+      expect(saved_ids(target)).to eq([1, 2])
+      expect(stray_files).to be_empty
+    end
+
+    it 'replaces an older backup with the file it is about to overwrite' do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'older backup')
+
+      map_class.save_json(target)
+
+      expect(File.binread(backup)).to eq(existing_bytes)
+    end
+
+    it 'round-trips non-ASCII room text through save and load' do
+      map_class[1].title = [non_ascii_title]
+      map_class.save_json(target)
+      map_class.class_variable_get(:@@list).clear
+      map_class.class_variable_set(:@@loaded, false)
+
+      expect(map_class.load(target)).to be true
+      expect(map_class[1].title).to eq([non_ascii_title])
+    end
+
+    it 'saves to a new map-<epoch>.json that the loader picks up when given no name' do
+      map_class.save_json
+
+      files = map_class.send(:json_map_files)
+      expect(files.size).to eq(1)
+      expect(File.basename(files.first)).to match(/\Amap-\d+\.json\z/)
+      expect(saved_ids(files.first)).to eq([1, 2])
+    end
+
+    # The list is indexed by room id, and a real mapdb has far more unused ids
+    # than rooms, so it is mostly nil gaps. Serializing used to compact the list
+    # in place, which moved every room after the first gap to the wrong index,
+    # and the save then reloaded the newest map-<epoch>.json to repair it. The
+    # rooms here leave gaps at 0, 3 and 4.
+    describe 'the live map across a save' do
+      let!(:far_room) { shared_room(5, title: '[Far End]', description: 'The street ends here.') }
+
+      def ids_at_their_index
+        map_class.class_variable_get(:@@list).each_with_index.map { |room, index| room && [index, room.id] }.compact
+      end
+
+      it 'Map.to_json serializes every room without moving any of them' do
+        rooms = map_class.class_variable_get(:@@list).dup
+
+        ids = JSON.parse(map_class.to_json).map { |room| room['id'] }
+
+        expect(ids).to eq([1, 2, 5])
+        expect(map_class.class_variable_get(:@@list)).to eq(rooms)
+        expect(map_class[5]).to equal(far_room)
+      end
+
+      it 'leaves every room at its id after saving to a named file' do
+        map_class.save_json(target)
+
+        expect(saved_ids(target)).to eq([1, 2, 5])
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+        expect(map_class[5]).to equal(far_room)
+      end
+
+      it 'keeps the live rooms rather than loading the newest map file' do
+        File.write(File.join(map_dir, 'map-9999999999.json'),
+                   JSON.generate([{ 'id' => 1, 'title' => ['[Stale Copy]'] }]))
+        map_class[1].title = ['[Edited Row]']
+
+        map_class.save_json(target)
+
+        expect(map_class[1].title).to eq(['[Edited Row]'])
+        expect(map_class[5]).to equal(far_room)
+        expect(map_class).not_to have_received(:respond).with(/Map loaded/)
+      end
+
+      it 'does not reload the map after a save to the default file' do
+        allow(map_class).to receive(:reload)
+
+        map_class.save_json
+
+        expect(map_class).not_to have_received(:reload)
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+      end
+
+      # Other scripts look rooms up while a save is writing the file.
+      it 'keeps every room at its id while the file is being written' do
+        seen = nil
+        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+          seen ||= [map_class[2]&.id, map_class[5]&.id]
+          original.call(from, to)
+        end
+
+        map_class.save_json(target)
+
+        expect(seen).to eq([2, 5])
+      end
+
+      it 'leaves every room at its id when the map cannot be serialized' do
+        map_class[2].timeto['1'] = Float::NAN
+
+        expect { map_class.save_json(target) }.to raise_error(JSON::GeneratorError)
+
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+      end
+
+      it 'leaves every room at its id when writing the file fails' do
+        missing = File.join(map_dir, 'nope', 'new.json')
+
+        expect { map_class.save_json(missing) }.to raise_error(Errno::ENOENT)
+
+        expect(ids_at_their_index).to eq([[1, 1], [2, 2], [5, 5]])
+        expect(map_class[5]).to equal(far_room)
+      end
+    end
+
+    context 'when the map cannot be serialized' do
+      before do
+        # JSON refuses NaN, so Room#to_json raises part way through the list.
+        map_class[2].timeto['1'] = Float::NAN
+      end
+
+      it 'raises and leaves an existing file and its backup untouched' do
+        File.binwrite(target, existing_bytes)
+        File.binwrite(backup, 'older backup')
+
+        expect { map_class.save_json(target) }.to raise_error(JSON::GeneratorError)
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.binread(backup)).to eq('older backup')
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises without creating an empty map that would shadow older ones' do
+        expect { map_class.save_json }.to raise_error(JSON::GeneratorError)
+
+        expect(map_class.send(:json_map_files)).to be_empty
+        expect(Dir.children(map_dir)).to be_empty
+      end
+    end
+
+    context 'when the backup cannot be made' do
+      before do
+        File.binwrite(target, existing_bytes)
+        # A directory where the backup belongs: neither writing nor renaming
+        # a file onto it can succeed.
+        FileUtils.mkdir_p(File.join(backup, 'occupied'))
+      end
+
+      it 'raises and leaves the existing file untouched' do
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError)
+
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.directory?(backup)).to be true
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises an error saying the map was not saved' do
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError, /\Acould not back up .*; map not saved: /)
+
+        expect(map_class).not_to have_received(:respond).with(/saved\z/)
+      end
+
+      # Whatever runs the save (the ;e runner, a script's error handler)
+      # reports the raised error; reporting it here as well showed it twice.
+      it 'leaves reporting the error to the caller' do
+        allow(Lich).to receive(:log)
+
+        expect { map_class.save_json(target) }.to raise_error(SystemCallError)
+
+        expect(map_class).not_to have_received(:respond).with(/error/i)
+        expect(Lich).not_to have_received(:log)
+      end
+    end
+
+    context 'when the copy into the backup fails part way' do
+      before do
+        File.binwrite(target, existing_bytes)
+        File.binwrite(backup, 'older backup')
+        allow(IO).to receive(:copy_stream).and_wrap_original do |original, source, destination|
+          destination.write('partial')
+          raise Errno::ENOSPC if source == target
+
+          original.call(source, destination)
+        end
+      end
+
+      it 'keeps the older backup and the existing file intact' do
+        expect { map_class.save_json(target) }.to raise_error(Errno::ENOSPC)
+
+        expect(File.binread(backup)).to eq('older backup')
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises the original error even when the temp file cannot be removed' do
+        allow(File).to receive(:delete).and_raise(Errno::EACCES)
+
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::ENOSPC, /\Acould not back up .*; map not saved: No space left/)
+
+        expect(File.binread(backup)).to eq('older backup')
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(stray_files).to contain_exactly(match(/\Asaved\.json\.bak\.\d+\.\d+\.tmp\z/))
+      end
+    end
+
+    context 'when publishing the new file fails' do
+      before do
+        File.binwrite(target, existing_bytes)
+        allow(File).to receive(:rename).and_call_original
+        allow(File).to receive(:rename).with(anything, target).and_raise(Errno::EACCES)
+      end
+
+      it 'raises, saying so, and leaves the existing file and no temp file behind' do
+        expect { map_class.save_json(target) }
+          .to raise_error(Errno::EACCES, /\Acould not write .*; existing file left unchanged: Permission denied/)
+
+        expect(File.binread(target)).to eq(existing_bytes)
+        expect(File.binread(backup)).to eq(existing_bytes)
+        expect(stray_files).to be_empty
+      end
+
+      it 'raises a copy of the original error, keeping its errno, backtrace and cause' do
+        error = nil
+        begin
+          map_class.save_json(target)
+        rescue Errno::EACCES => e
+          error = e
+        end
+
+        expect(error.errno).to eq(Errno::EACCES::Errno)
+        expect(error.backtrace).not_to be_empty
+        expect(error.cause).to be_a(Errno::EACCES)
+        expect(error.cause.message).to eq(Errno::EACCES.new.message)
+      end
+    end
+
+    it 'writes through a symlinked map file, keeping the link', unless: Gem.win_platform? do
+      real = File.join(map_dir, 'real.json')
+      File.binwrite(real, existing_bytes)
+      File.symlink(real, target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(real)).to eq([1, 2])
+      expect(File.binread(backup)).to eq(existing_bytes)
+      expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json saved.json.bak])
+    end
+
+    it 'says no file was created when writing a new file fails' do
+      missing = File.join(map_dir, 'nope', 'new.json')
+
+      expect { map_class.save_json(missing) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(missing)}; no file created: /)
+    end
+
+    it 'creates the file a dangling symlink points to, keeping the link', unless: Gem.win_platform? do
+      File.symlink('gone.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'gone.json'))).to eq([1, 2])
+      expect(Dir.children(map_dir).sort).to eq(%w[gone.json saved.json])
+    end
+
+    it 'follows a chain of dangling symlinks relative to each link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'sub'))
+      File.symlink('sub/hop.json', target)
+      File.symlink('../final.json', File.join(map_dir, 'sub', 'hop.json'))
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'final.json'))).to eq([1, 2])
+    end
+
+    it 'resolves .. after a symlinked directory physically when following a dangling link', unless: Gem.win_platform? do
+      FileUtils.mkdir_p(File.join(map_dir, 'deep', 'dir'))
+      File.symlink('deep/dir', File.join(map_dir, 'sub'))
+      File.symlink('sub/../climbed.json', target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(File.join(map_dir, 'deep', 'climbed.json'))).to eq([1, 2])
+      expect(File.exist?(File.join(map_dir, 'climbed.json'))).to be false
+    end
+
+    it 'follows a dangling link with an absolute target', unless: Gem.win_platform? do
+      absolute = File.join(File.realpath(map_dir), 'abs.json')
+      File.symlink(absolute, target)
+
+      map_class.save_json(target)
+
+      expect(File.symlink?(target)).to be true
+      expect(saved_ids(absolute)).to eq([1, 2])
+    end
+
+    it 'raises on a symlink cycle without leaving a temp file', unless: Gem.win_platform? do
+      other = File.join(map_dir, 'other.json')
+      File.symlink(other, target)
+      File.symlink(target, other)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::ELOOP)
+
+      expect(Dir.children(map_dir).sort).to eq(%w[other.json saved.json])
+    end
+
+    it 'raises on a dangling symlink into a missing directory, keeping the link', unless: Gem.win_platform? do
+      File.symlink('nope/new.json', target)
+
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::ENOENT, /\Acould not write #{Regexp.escape(target)}; no file created: /)
+
+      expect(File.symlink?(target)).to be true
+      expect(File.readlink(target)).to eq('nope/new.json')
+      expect(Dir.children(map_dir).sort).to eq(%w[saved.json])
+    end
+
+    # Root can write any file, so the refusal (like the in-place write before
+    # it) does not apply there; Process.uid is also 0 on Windows.
+    it 'refuses to replace a read-only file, leaving it and its backup untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'older backup')
+      File.chmod(0o444, target)
+
+      error = nil
+      begin
+        map_class.save_json(target)
+      rescue Errno::EACCES => e
+        error = e
+      end
+
+      expect(error.message).to match(/\Acould not write .*; existing file left unchanged: Permission denied/)
+      # Raised, not just built, so whoever reports it has a backtrace to log.
+      expect(error.backtrace).not_to be_empty
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.stat(target).mode & 0o777).to eq(0o444)
+      expect(File.binread(backup)).to eq('older backup')
+      expect(stray_files).to be_empty
+      expect(map_class).not_to have_received(:respond).with(/Backing it up/)
+    end
+
+    it 'refuses to replace a read-only file reached through a symlink', unless: Gem.win_platform? || Process.uid.zero? do
+      real = File.join(map_dir, 'real.json')
+      File.binwrite(real, existing_bytes)
+      File.chmod(0o444, real)
+      File.symlink(real, target)
+
+      expect { map_class.save_json(target) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(real)).to eq(existing_bytes)
+      expect(Dir.children(map_dir).sort).to eq(%w[real.json saved.json])
+    end
+
+    it 'refuses to replace a read-only backup, leaving it and the file untouched',
+       unless: Gem.win_platform? || Process.uid.zero? do
+      File.binwrite(target, existing_bytes)
+      File.binwrite(backup, 'protected backup')
+      File.chmod(0o444, backup)
+
+      expect { map_class.save_json(target) }
+        .to raise_error(Errno::EACCES, /\Acould not back up .*; map not saved: Permission denied/)
+
+      expect(File.binread(target)).to eq(existing_bytes)
+      expect(File.binread(backup)).to eq('protected backup')
+      expect(File.stat(backup).mode & 0o777).to eq(0o444)
+      expect(stray_files).to be_empty
+    end
+
+    it 'keeps the permissions of the file it replaces', unless: Gem.win_platform? do
+      File.binwrite(target, existing_bytes)
+      File.chmod(0o640, target)
+
+      map_class.save_json(target)
+
+      expect(File.stat(target).mode & 0o777).to eq(0o640)
+      expect(File.stat(backup).mode & 0o777).to eq(0o640)
+    end
+
+    # The mode and the bytes must both be in place before the rename makes a
+    # temp file visible under the real name. Only events on each temp file
+    # are recorded, so other File.chmod or File.rename calls do not matter.
+    it 'flushes each temp file to disk and sets its mode before renaming it into place' do
+      File.binwrite(target, existing_bytes)
+      events = []
+      allow(File).to receive(:open).and_wrap_original do |original, path, *args, **kwargs, &block|
+        next original.call(path, *args, **kwargs, &block) unless block && path.to_s.end_with?('.tmp')
+
+        original.call(path, *args, **kwargs) do |io|
+          allow(io).to receive(:fsync).and_wrap_original do |fsync|
+            events << [:fsync, path]
+            fsync.call
+          end
+          block.call(io)
+        end
+      end
+      allow(File).to receive(:chmod).and_wrap_original do |original, mode, *paths|
+        paths.each { |path| events << [:chmod, path] }
+        original.call(mode, *paths)
+      end
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        events << [:rename, from, to]
+        original.call(from, to)
+      end
+
+      map_class.save_json(target)
+
+      [backup, target].each do |destination|
+        rename = events.index { |event| event[0] == :rename && event[2] == destination }
+        expect(rename).not_to be_nil
+        tmp = events[rename][1]
+        expect(events.map(&:first).values_at(*events.each_index.select { |i| events[i][1] == tmp }))
+          .to eq(%i[fsync chmod rename])
+      end
     end
   end
 end
