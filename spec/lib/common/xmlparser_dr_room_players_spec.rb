@@ -80,7 +80,7 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
     end
 
     # Shared with GemStone and parked until a GemStone capture exists
-    # (docs/saga-stream-deferred.md, P1): a title after " and " is not captured.
+    # (docs/xml-stream/saga-stream-deferred.md, P1): a title after " and " is not captured.
     it 'documents the parked " and <title>" gap' do
       feed(saga)
       expect(pcs[3][2]).to eq('Delphine')

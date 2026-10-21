@@ -28,6 +28,12 @@ module Lich
       # Maximum retry attempts for stow_helper before giving up.
       STOW_HELPER_MAX_RETRIES = 10
 
+      # GET attempts, about 1 s apart, for picking up an item this class
+      # lowered to the ground when a hold starts after the lowering.
+      #
+      # @see #pick_up_lowered_item?
+      LOWERED_ITEM_PICKUP_ATTEMPTS = 15
+
       # Creates a new EquipmentManager and loads gear configuration.
       #
       # @param settings [OpenStruct, nil] user settings from get_settings, or nil to load automatically
@@ -84,10 +90,15 @@ module Lich
       #
       # Compares currently worn combat items against the target gear set,
       # removes items not in the set, and wears any missing items.
-      # Notifies the user about items that could not be found.
+      # Alerts the user about items that could not be found, worn, or put away.
       #
       # @param set_name [String, nil] gear set name from settings (e.g., "standard", "swimming")
-      # @return [Boolean] true if all items in the set are now worn
+      # @return [Boolean] false if the set is unknown or any set item could not be
+      #   found, worn, or put away; true otherwise. A set item that was in hand
+      #   counts once its put-away is confirmed: by a recognised reply, or, for
+      #   one put away with WEAR, by INV COMBAT showing it worn. A non-worn one
+      #   whose put-away reply was not recognised and that has left the hand is
+      #   reported missing, since nothing confirms where it went.
       #
       # @example
       #   @equipment_manager.wear_equipment_set?("standard")
@@ -106,8 +117,8 @@ module Lich
 
         remove_unmatched_items(combat_items, gear_set_items)
 
-        lost_items = wear_missing_items(gear_set_items, combat_items)
-        notify_missing(lost_items)
+        lost_items, in_hand_items = wear_missing_items(gear_set_items, combat_items)
+        notify_missing(lost_items, in_hand_items)
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
 
@@ -130,29 +141,66 @@ module Lich
         items.find { |item| item.short_regex =~ description }
       end
 
-      # Alerts the user about equipment items that could not be found.
+      # Alerts the user about equipment items that could not be worn.
       #
-      # @param lost_items [Array<DRC::Item>, nil] items that were not located
+      # Items left in hand are named in a check-your-hands line, followed by
+      # what the hands actually hold (a transformed item, or one matched by a
+      # shorter gear description, can look different from its gear name);
+      # every other item that could not be found or worn gets the MISSING
+      # EQUIPMENT listing, which asks the user to check their containers. One
+      # item never gets both instructions. Either way the alert is bracketed
+      # by a beep and a pause.
+      #
+      # @param lost_items [Array<DRC::Item>, nil] every item that could not be worn or put away
+      # @param in_hand_items [Array<DRC::Item>] the subset of lost_items left in hand;
+      #   when omitted, every item gets the MISSING EQUIPMENT listing
       # @return [void]
       # @api private
-      def notify_missing(lost_items)
+      def notify_missing(lost_items, in_hand_items = [])
         return unless lost_items && !lost_items.empty?
 
+        in_hand, not_found = lost_items.partition { |item| in_hand_items.include?(item) }
+
         DRC.beep
-        Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
-        Lich::Messaging.msg("bold", "EquipmentManager: #{lost_items.map(&:short_name).join(', ')}")
+        unless not_found.empty?
+          Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
+          Lich::Messaging.msg("bold", "EquipmentManager: #{not_found.map(&:short_name).join(', ')}")
+        end
+        unless in_hand.empty?
+          holding = [DRC.right_hand, DRC.left_hand].compact
+          holding_text = holding.empty? ? 'nothing' : holding.join(', ')
+          Lich::Messaging.msg("bold", "EquipmentManager: could not wear or put away, check your hands: #{in_hand.map(&:short_name).join(', ')} (holding: #{holding_text})")
+        end
         pause
         DRC.beep
       end
 
       # Wears items from the target set that are not currently in the combat inventory.
       #
-      # Stows any target items found in hands before wearing. Returns items
-      # that could not be worn (missing from containers).
+      # Target items already in a hand are put away first via {#stow_gear_item},
+      # which sends the WEAR itself for worn items. The set item itself is put
+      # away, not a fresh lookup by its short name, so the put-away and the
+      # check after the wears (see {#put_away_forms}) follow the same item
+      # and use that item's own storage settings. A held item whose put-away
+      # fails is reported rather than retried. The hands are checked again just
+      # before each put-away; a held item that has left the hand by then joins
+      # the unheld items, which are then fetched and worn in gear-set order.
+      # When two set descriptions resolve to the same gear item, a held item
+      # that failed is not tried again. After the wears, a held failure counts
+      # as in hand if a hand matches the item or any form {#stow_gear_item} turned
+      # it into (see {#put_away_forms}). One that has left the hand is looked
+      # for in one INV COMBAT if its put-away was a WEAR: if it is worn it is
+      # not a failure. Any other held failure that has left the hand, worn or
+      # not, is reported missing but not in hand, since nothing confirms where
+      # it went. Returns, in gear-set order and without repeats, every item
+      # that could not be worn or put away, and the subset of those left in
+      # hand: every held failure in hand as above, plus every fetched item
+      # whose WEAR failed and that still matches a hand afterwards.
       #
       # @param target_items [Array<DRC::Item>] desired gear set items
       # @param combat_items [Array<String>] currently worn combat item descriptions
-      # @return [Array<DRC::Item>] items that could not be worn
+      # @return [Array(Array<DRC::Item>, Array<DRC::Item>)] items that could not
+      #   be worn or put away, and the ones among them left in hand
       # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
@@ -161,16 +209,87 @@ module Lich
           Lich::Messaging.msg("plain", "EquipmentManager: target: #{target_items.map(&:short_name).join(',')}")
         end
 
-        missing_items = target_items
-                        .reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
-                        .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
+        not_worn = target_items.reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
+        # Tracked by position: two set descriptions can resolve to the same gear item.
+        held = not_worn.map { |item| DRCI.in_hands?(item) }
+        to_wear = held.map(&:!)
+
+        # Put held items away first so the hands are free for the wears below.
+        # stow_gear_item already sent the WEAR for a worn item, so a failure here
+        # is final: the item is reported for the user to check rather than
+        # sent the same command again, so a second entry for an item that
+        # already failed is skipped. An item that is no longer in hand by its
+        # turn (an earlier put-away took the hand it matched) is fetched and
+        # worn instead, in its gear-set position.
+        held_failures = []
+        not_worn.each_with_index do |item, index|
+          next unless held[index]
+          next if held_failures.include?(item)
+
+          if !DRCI.in_hands?(item)
+            to_wear[index] = true
+          elsif !stow_gear_item(item)
+            held_failures << item
+          end
+        end
+        missing_items = not_worn.select.with_index { |_item, index| to_wear[index] }
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
-        missing_items.reject do |item|
+        wear_failures = missing_items.reject do |item|
           item_copy = item.dup
           item_copy.instance_variable_set(:@worn, false)
           wear_item?(item_copy)
         end
+
+        # Held put-away failures are checked again now that every wear has
+        # been tried. One whose hand still shows the item, or a form it was
+        # transformed into on the way, is left in hand. One that has left the
+        # hand after a put-away that ended in a WEAR may have been worn after
+        # all (a WEAR whose reply never arrived), so a single INV COMBAT
+        # settles those: an item now worn is not a failure. INV COMBAT cannot
+        # confirm any other put-away, so every other item that has left the
+        # hand is reported missing rather than in hand. A refused fetch is in
+        # hand only if it still matches a hand.
+        held_in_hand, held_gone = held_failures.partition do |item|
+          put_away_forms(item).any? { |form| DRCI.in_hands?(form) }
+        end
+        worn_forms = held_gone.to_h { |item| [item, put_away_forms(item).last] }
+                              .select { |_item, form| !form.is_a?(String) && form.worn }
+        unless worn_forms.empty?
+          worn_now = get_combat_items
+          held_gone.reject! { |item| worn_forms.key?(item) && worn_now.any? { |c_item| worn_forms[item].short_regex =~ c_item } }
+        end
+        failures = held_in_hand + held_gone + wear_failures
+        in_hand = held_in_hand + wear_failures.select { |item| DRCI.in_hands?(item) }
+        [not_worn.select { |item| failures.include?(item) }.uniq, not_worn.select { |item| in_hand.include?(item) }.uniq]
+      end
+
+      # Lists the forms {#stow_gear_item} goes through to put a held item away:
+      # the item itself (the same object {#wear_missing_items} put away), then,
+      # for a non-worn transform item, each form it is transformed into,
+      # following +transforms_to+ at most +transform_depth+ times as
+      # {#stow_gear_item} does. The last form is the one whose put-away (a WEAR
+      # when it is worn) {#stow_gear_item} sent. A transformed form that
+      # is not in the gear list ends the list as its description String.
+      #
+      # @param item [DRC::Item] held gear item
+      # @param transform_depth [Integer] transforms {#stow_gear_item} follows
+      # @return [Array<DRC::Item, String>] forms in the order they are handled
+      # @api private
+      def put_away_forms(item, transform_depth: 3)
+        forms = [item]
+        form = item
+        while !form.worn && form.transforms_to && transform_depth > 0
+          next_form = item_by_desc(form.transforms_to)
+          unless next_form
+            forms << form.transforms_to
+            break
+          end
+          forms << next_form
+          form = next_form
+          transform_depth -= 1
+        end
+        forms
       end
 
       # Removes currently worn combat items that are not in the target gear set.
@@ -239,6 +358,11 @@ module Lich
           # may have a timer on them that prevents you removing them.
           Lich::Messaging.msg("bold", "EquipmentManager: The #{item.short_name} is not ready to be removed yet. Try again later.")
           return false
+        when DRC::IMMOBILE_PATTERN
+          # Held or rooted: emptying the hands won't help, and what is lowered
+          # might not be picked up again while held.
+          Lich::Messaging.msg("bold", "EquipmentManager: Unable to move to remove #{item.short_name}. Try again later.")
+          return false
         when *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           # We may need to empty our hands to remove the item.
           # For example, exoskeletal armor requires two hands.
@@ -246,16 +370,18 @@ module Lich
           temp_right_item = DRC.right_hand
           # Lower the items because that preserves loaded bows.
           # Stowing them in a container would require unloading.
-          did_lower = [temp_left_item, temp_right_item].compact.all? { |item_in_hand| DRCI.lower_item?(item_in_hand) }
+          # Only what was lowered is picked up again: the lowering stops at
+          # the first failure.
+          lowered = []
+          did_lower = { 'left' => temp_left_item, 'right' => temp_right_item }.compact.all? do |hand, item_in_hand|
+            DRCI.lower_item?(item_in_hand).tap { |ok| lowered << [item_in_hand, hand] if ok }
+          end
           if did_lower
             remove_item(item, retries: retries - 1)
           else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end
-          # Pick up the items in reverse order you lowered them
-          # so that they end up in the correct hands again.
-          DRCI.get_item_if_not_held?(temp_right_item) if temp_right_item
-          DRCI.get_item_if_not_held?(temp_left_item) if temp_left_item
+          pick_up_lowered_items(lowered, item.short_name)
           # In case they end up in different hands, swap.
           if DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item
             swap_result = DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
@@ -800,12 +926,14 @@ module Lich
           # Ammo ended up on the GROUND (hands were full, or it tumbled). Lower the
           # weapon, stow the ammo from your feet, then pick the weapon back up.
           ammo = (ammo_match || ground_match)[:ammo]
+          # The hand DRCI.lower_item? lowers from.
+          weapon_hand = DRCI.in_left_hand?(name) ? 'left' : 'right'
           unless DRCI.lower_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
             return
           end
           DRCI.put_away_item?(ammo)
-          unless DRCI.get_item?(name)
+          unless pick_up_lowered_item?(name, from_hand: weapon_hand)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
         elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
@@ -832,7 +960,9 @@ module Lich
       #
       # @param description [String, nil] weapon description to match, or nil to stow both hands
       # @param transform_depth [Integer] remaining transform recursion depth
-      # @return [void]
+      # @return [Boolean, nil] true if the item was put away, false if the put-away
+      #   command failed, nil if the description is not in the gear list or the
+      #   transform depth ran out; always nil when called without a description
       def stow_weapon(description = nil, transform_depth: 3)
         unless description
           return unless DRC.right_hand || DRC.left_hand
@@ -844,6 +974,20 @@ module Lich
         weapon = item_by_desc(description)
         return unless weapon
 
+        stow_gear_item(weapon, transform_depth: transform_depth)
+      end
+
+      # Puts a gear item away by its own configuration (WEAR for a worn item,
+      # the transform for a transform item, otherwise {#stow_by_type}).
+      # {#stow_weapon} resolves a description to the item first; callers that
+      # already hold the gear item pass it here so the item put away is the
+      # one they hold, not whichever gear item first matches its short name.
+      #
+      # @param weapon [DRC::Item] gear item to put away
+      # @param transform_depth [Integer] remaining transform recursion depth
+      # @return [Boolean, nil] as {#stow_weapon}
+      # @api private
+      def stow_gear_item(weapon, transform_depth: 3)
         # Is this a weapon that needs to be unloaded before it is put away?
         # This is an optimization attempt so that the script
         # isn't trying to unload every weapon that gets put away.
@@ -863,19 +1007,6 @@ module Lich
         end
       end
 
-      # Executes a stow action with automatic recovery on common failure conditions.
-      #
-      # Handles unload prompts, fan close, combat busy, movement lock,
-      # container size, and wound/sheath failures by retrying with
-      # corrective actions.
-      #
-      # @param action [String] game command to execute (e.g., "sheath my sword")
-      # @param weapon_name [String] weapon noun for recovery commands
-      # @param accept_strings [Array<Regexp, String>] success patterns to match
-      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
-      # @param retries [Integer] remaining retry attempts
-      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
-      #
       # Stows an item based on its configured storage type (tie, sheath, container, or default stow).
       #
       # Handles the common tie/wield/container/stow decision shared by
@@ -898,6 +1029,118 @@ module Lich
         end
       end
 
+      # Picks up an item this class lowered to the ground.
+      #
+      # A hold that starts after the lowering draws the immobile reply to GET,
+      # and the item would stay on the ground. On that reply this pauses 1 s
+      # and tries again, up to {LOWERED_ITEM_PICKUP_ATTEMPTS} GETs. Any other
+      # reply ends the attempts at once.
+      #
+      # It always sends the first GET, without checking the hands first: a
+      # check by name also matches an item in the other hand whose name
+      # contains this one's noun (a crossbow and "crossbow bolts"), and the
+      # lowered item would stay on the ground. For the same reason it counts
+      # the item as picked up only when a hand whose contents changed now
+      # holds it ({#newly_in_hand?}), whatever the GET's reply: like
+      # {DRCI.get_item_unsafe}, it doesn't trust the success text, which a
+      # stray line can match ("You get down on one knee."). Callers pass only
+      # items they lowered.
+      #
+      # The hand update for the lowering can lag its reply. Until it arrives,
+      # from_hand still shows the item, and picking it up into that hand would
+      # look like no change. So before taking the snapshot of the hands it
+      # waits, up to 1 s, for from_hand to stop showing the item. If the update
+      # lags longer than that, a successful pick-up into that hand is reported
+      # as a failure (a warning and, from {#pick_up_lowered_items}, one more
+      # GET); the item is never counted as picked up while it is on the ground.
+      #
+      # It does not use {DRCI.get_item_unsafe}, which drops the GET reply
+      # this needs to decide on a retry.
+      #
+      # @param item [String] the lowered item's name or noun
+      # @param from_hand [String, nil] "left" or "right", the hand the item
+      #   was lowered from; nil to take the snapshot at once
+      # @param attempts [Integer] most GETs to send while the reply is the
+      #   immobile one
+      # @return [Boolean] true if the item was picked up
+      # @api private
+      def pick_up_lowered_item?(item, from_hand: nil, attempts: LOWERED_ITEM_PICKUP_ATTEMPTS)
+        if from_hand
+          10.times do
+            break unless DRCI.in_hand?(item, from_hand)
+
+            pause 0.1
+          end
+        end
+        hands_before = { 'left' => DRC.left_hand, 'right' => DRC.right_hand }
+        attempts.times do |attempt|
+          pause 1 if attempt.positive?
+          result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
+          break unless DRC::IMMOBILE_PATTERN.match?(result)
+        end
+
+        # As in DRCI.get_item_unsafe: allow for the hand update to lag the reply.
+        10.times do
+          return true if newly_in_hand?(item, hands_before)
+
+          pause 0.1
+        end
+        false
+      end
+
+      # Picks up the items {#remove_item} lowered, in reverse order so they
+      # end up in the same hands again. A long hold can use up one item's
+      # attempts and end during the next one's, so when an item is picked up,
+      # each earlier item given up on gets one more GET.
+      #
+      # @param lowered [Array<Array(String, String)>] the lowered items, each
+      #   as [name, hand lowered from], in the order lowered
+      # @param removed_name [String] the removed item's name, for the warning
+      # @return [void]
+      # @api private
+      def pick_up_lowered_items(lowered, removed_name)
+        left_down = []
+        lowered.reverse_each do |name, hand|
+          if pick_up_lowered_item?(name, from_hand: hand)
+            left_down.reject! { |earlier, earlier_hand| pick_up_lowered_item?(earlier, from_hand: earlier_hand, attempts: 1) }
+          else
+            left_down << [name, hand]
+          end
+        end
+        left_down.each do |name, _hand|
+          Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick up #{name} after removing #{removed_name}")
+        end
+      end
+
+      # Whether a hand whose contents changed since hands_before now holds
+      # the item. A hand that still holds the same thing doesn't count, even
+      # when its item's name contains the noun (a crossbow and "crossbow
+      # bolts").
+      #
+      # @param item [String] the item's name, noun or "#<id>"
+      # @param hands_before [Hash{String => String, nil}] hand contents
+      #   before the GET, keyed "left" and "right"
+      # @return [Boolean]
+      # @api private
+      def newly_in_hand?(item, hands_before)
+        { 'left' => DRC.left_hand, 'right' => DRC.right_hand }.any? do |hand, now|
+          now != hands_before[hand] && DRCI.in_hand?(item, hand)
+        end
+      end
+
+      # Executes a stow action with automatic recovery on common failure conditions.
+      #
+      # Handles unload prompts, fan close, combat busy, movement lock,
+      # container size, and wound/sheath failures by retrying with
+      # corrective actions.
+      #
+      # @param action [String] game command to execute (e.g., "sheath my sword")
+      # @param weapon_name [String] weapon noun for recovery commands
+      # @param accept_strings [Array<Regexp, String>] success patterns to match
+      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
+      # @param retries [Integer] remaining retry attempts
+      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
+      #
       # @see STOW_RECOVERY_PATTERNS
       # @see STOW_HELPER_MAX_RETRIES
       # @api private

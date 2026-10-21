@@ -46,17 +46,33 @@ module Lich
 
       # Data class for commune_sense results. Replaces raw hash return.
       # Supports [] for backward compat with callers using result['key'].
+      #
+      # +captured+ is false when the COMMUNE SENSE reply was not captured in
+      # full: no reply arrived (a timeout), or the reply was cut off before its
+      # Roundtime line. commune_ready is then false so the result never reads as
+      # ready; treat it as "unknown". After a timeout the lists are empty; after
+      # a cut-off reply they hold what arrived, which may not be everything.
+      # +captured+ true means a complete reply was read; it does not prove the
+      # reply was sent in answer to this call (the tail of a reply that arrives
+      # after an earlier call timed out can still be read by the next call,
+      # since COMMUNE_SENSE_START also matches lines from the middle of a reply).
       class CommuneSenseResult
-        attr_reader :active_communes, :recent_communes, :commune_ready
+        attr_reader :active_communes, :recent_communes, :commune_ready, :captured
 
-        def initialize(active_communes: [], recent_communes: [], commune_ready: true)
+        def initialize(active_communes: [], recent_communes: [], commune_ready: true, captured: true)
           @active_communes = active_communes.freeze
           @recent_communes = recent_communes.freeze
           @commune_ready = commune_ready
+          @captured = captured
         end
 
         def commune_ready?
           @commune_ready
+        end
+
+        # @return [Boolean] true when the COMMUNE SENSE reply was captured
+        def captured?
+          @captured
         end
 
         def [](key)
@@ -279,18 +295,35 @@ module Lich
       # Issues 'commune sense' and parses the output to determine active/recent communes
       # and whether the character is ready to commune again.
       # Returns a CommuneSenseResult (backward-compatible with hash access via []).
+      #
+      # A reply that is not captured in full never gives a "ready" reading:
+      # - no reply in time: prints a bold message and returns a result with
+      #   captured false, commune_ready false and empty lists.
+      # - a reply cut off before its Roundtime line: prints a bold message and
+      #   returns the communes that did arrive, with captured false and
+      #   commune_ready false.
       def commune_sense
-        lines = Lich::Util.issue_command(
+        lines, complete = DRC.capture_reply(
           'commune sense',
           COMMUNE_SENSE_START,
           /Roundtime/,
-          usexml: false,
-          quiet: true,
-          include_end: false
+          usexml: false
         )
-        return CommuneSenseResult.new if lines.nil?
+        if lines.empty?
+          Lich::Messaging.msg("bold", "DRCTH: Failed to capture COMMUNE SENSE output (timeout).")
+          return CommuneSenseResult.new(commune_ready: false, captured: false)
+        end
 
-        parse_commune_sense_lines(lines.map(&:strip).reject(&:empty?))
+        result = parse_commune_sense_lines(lines.map(&:strip).reject(&:empty?))
+        return result if complete
+
+        Lich::Messaging.msg("bold", "DRCTH: COMMUNE SENSE output was cut off (timeout); the result is incomplete.")
+        CommuneSenseResult.new(
+          active_communes: result.active_communes,
+          recent_communes: result.recent_communes,
+          commune_ready: false,
+          captured: false
+        )
       end
 
       # Pure parsing method for commune sense output lines.

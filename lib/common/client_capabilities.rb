@@ -13,7 +13,7 @@ module Lich
     # those three capabilities, resolved highest priority first:
     #
     # 1. what the client declared with a +SET_FRONTEND_CAPS+ line
-    #    (see docs/frontend-capability-declaration.md);
+    #    (see docs/frontends/capability-declaration.md);
     # 2. the session's +--frontend-caps=+ launch flag;
     # 3. the frontend catalog's capabilities for +$frontend+ (what every
     #    client got before declarations existed).

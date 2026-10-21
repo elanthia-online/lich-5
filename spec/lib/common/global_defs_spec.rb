@@ -16,35 +16,11 @@ require 'ostruct'
 # breaks allow_any_instance_of(Object) overrides in other files (for example
 # common_moonmage_spec's check_moonwatch examples).
 require_relative '../../spec_helper'
+require_relative '../../support/global_defs_spec_source'
 
 # Load the sentinel constants and start_scripts_if_available from global_defs.rb
-dep_path = File.join(File.dirname(__FILE__), '..', '..', '..', 'lib', 'global_defs.rb')
-dep_lines = File.readlines(dep_path)
-
-# Extract the sentinel constants block
-sentinel_start = dep_lines.index { |l| l =~ /Sentinel constants for dependency/ }
-if sentinel_start
-  ends_found = 0
-  sentinel_end = nil
-  (sentinel_start..dep_lines.length - 1).each do |i|
-    ends_found += 1 if dep_lines[i].strip == 'end'
-    if ends_found == 2
-      sentinel_end = i
-      break
-    end
-  end
-  eval(dep_lines[sentinel_start..sentinel_end].join, TOPLEVEL_BINDING, dep_path, sentinel_start + 1)
-end
-
-# Extract start_scripts_if_available
-fn_start = dep_lines.index { |l| l =~ /^def start_scripts_if_available\b/ }
-raise "start_scripts_if_available not found in #{dep_path}" unless fn_start
-fn_end = dep_lines[fn_start + 1..].index { |l| l =~ /^end\s*$/ }
-eval(dep_lines[fn_start..fn_start + 1 + fn_end].join, TOPLEVEL_BINDING, dep_path, fn_start + 1)
-
-# Verify get_settings and get_data exist in the source (structural test)
-GET_SETTINGS_DEFINED = dep_lines.any? { |l| l =~ /^def get_settings\b/ }
-GET_DATA_DEFINED = dep_lines.any? { |l| l =~ /^def get_data\b/ }
+GlobalDefsSpecSource.eval_toplevel_block('Sentinel constants for dependency')
+GlobalDefsSpecSource.define_toplevel('start_scripts_if_available')
 
 RSpec.describe 'global_defs.rb sentinel constants' do
   describe 'CORE_GET_SETTINGS' do
@@ -62,26 +38,25 @@ end
 
 RSpec.describe 'global_defs.rb function definitions' do
   it 'defines get_settings as a top-level function' do
-    expect(GET_SETTINGS_DEFINED).to be true
+    expect(GlobalDefsSpecSource.line_of('get_settings')).to be_a(Integer)
   end
 
   it 'defines get_data as a top-level function' do
-    expect(GET_DATA_DEFINED).to be true
+    expect(GlobalDefsSpecSource.line_of('get_data')).to be_a(Integer)
   end
 
   it 'get_settings delegates to $setupfiles' do
-    source = dep_lines.select { |l| l =~ /\$setupfiles/ }
-    expect(source.any? { |l| l.include?('$setupfiles.get_settings') }).to be true
+    expect(GlobalDefsSpecSource.method_source('get_settings').first).to include('$setupfiles.get_settings')
   end
 
   it 'get_data delegates to $setupfiles' do
-    source = dep_lines.select { |l| l =~ /\$setupfiles/ }
-    expect(source.any? { |l| l.include?('$setupfiles.get_data') }).to be true
+    expect(GlobalDefsSpecSource.method_source('get_data').first).to include('$setupfiles.get_data')
   end
 
-  it 'get_settings lazy-initializes $setupfiles' do
-    source = dep_lines.select { |l| l =~ /\$setupfiles\s*\|\|=/ }
-    expect(source).not_to be_empty
+  it 'get_settings and get_data lazy-initialize $setupfiles' do
+    %w[get_settings get_data].each do |name|
+      expect(GlobalDefsSpecSource.method_source(name).first).to match(/\$setupfiles\s*\|\|=/)
+    end
   end
 end
 

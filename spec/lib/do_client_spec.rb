@@ -867,6 +867,37 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('INLINE=true')
     end
 
+    # A front-end macro or a paste delivers both lines in one burst, so the
+    # second command runs before the stopped reporter thread has finished
+    # dying. That thread must not switch off the one the second command
+    # started.
+    it 'keeps reporting on after display expgains off and on in one burst' do
+      out = probe(<<~RUBY, game: 'DR')
+        require 'dragonrealms/drinfomon/drvariables'
+        require 'dragonrealms/drinfomon/drskill'
+        require 'dragonrealms/drinfomon/drexpmonitor'
+        require './spec/support/drexpmonitor_reporters'
+        Lich::DragonRealms::DRExpMonitor.class_variable_set(:@@report_interval, 0.05)
+        Object.send(:define_method, :running?) { |_| false }
+        reporters = -> { DRExpMonitorReporters.threads }
+        do_client(';display expgains on')
+        sleep 0.2
+        first = reporters.call
+        do_client(';display expgains off')
+        do_client(';display expgains on')
+        first.each { |t| t.join(2) }
+        sleep 0.2 # several of the survivor's loop checks
+        puts "ACTIVE=\#{DRExpMonitor.active?}"
+        puts "REPORTERS=\#{reporters.call.size}"
+        puts "SETTING=\#{Lich.display_expgains}"
+      RUBY
+      expect(out).to include('R:Disabling real-time experience gain reporting')
+      expect(out).to include('R:Enabling real-time experience gain reporting')
+      expect(out).to include('ACTIVE=true')
+      expect(out).to include('REPORTERS=1')
+      expect(out).to include('SETTING=true')
+    end
+
     it 'shows the experience monitor status' do
       out = probe(<<~RUBY, game: 'DR')
         Lich.define_singleton_method(:display_expgains) { true }

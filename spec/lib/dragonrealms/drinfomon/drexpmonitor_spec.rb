@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
+require 'open3'
+require 'rbconfig'
 require_relative '../../../spec_helper'
+require_relative '../../../support/drexpmonitor_reporters'
 
 # Load dependencies in correct order
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -371,6 +374,306 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
 
       # Should be able to call stop without deadlock
       expect { described_class.stop }.not_to raise_error
+    end
+  end
+
+  # Each start opens a new generation, and a reporter thread only acts while
+  # its own generation is current. These pin what that buys: a stopped
+  # thread, which dies some time after stop returns, can no longer switch off
+  # the reporter that replaced it.
+  describe 'reporter generations' do
+    let(:repo_root) { File.expand_path('../../../..', __dir__) }
+
+    # The reporter pauses 1 s between passes. A shorter pause lets these
+    # examples wait out several full passes without seconds of fixed sleeps.
+    # The waits below are multiples of it.
+    let(:interval) { 0.05 }
+
+    around do |example|
+      original = described_class.class_variable_get(:@@report_interval)
+      described_class.class_variable_set(:@@report_interval, interval)
+      example.run
+    ensure
+      described_class.class_variable_set(:@@report_interval, original)
+    end
+
+    def reporter_threads
+      DRExpMonitorReporters.threads
+    end
+
+    def wait_for(seconds = 5)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+      until yield
+        return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+        sleep 0.02
+      end
+      true
+    end
+
+    def start_and_capture_thread
+      described_class.start
+      expect(wait_for { reporter_threads.size == 1 }).to be(true)
+      reporter_threads.first
+    end
+
+    def reported?(text)
+      Lich::Messaging.messages.any? { |m| m[:message].include?(text) }
+    end
+
+    after(:each) do
+      described_class.stop if described_class.active?
+      reporter_threads.each(&:kill).each { |t| t.join(2) }
+    end
+
+    it 'keeps the replacement running when stop and start run back to back' do
+      old = start_and_capture_thread
+
+      described_class.stop
+      described_class.start
+      expect(old.join(2)).not_to be_nil # the stopped thread and its ensure have run
+
+      expect(described_class.active?).to be(true)
+      expect(reporter_threads.size).to eq(1)
+      drskill_class.gained_skills << { skill: 'Evasion', change: 1 }
+      expect(wait_for { reported?('DRExpMonitor: Evasion(+1)') }).to be(true)
+    end
+
+    it 'survives a burst of off/on pairs with exactly one reporter' do
+      start_and_capture_thread
+      3.times do
+        described_class.stop
+        described_class.start
+      end
+
+      # Let the stopped threads finish dying, then let the survivor pass the
+      # loop check a stale ensure would have tripped.
+      expect(wait_for { reporter_threads.size <= 1 }).to be(true)
+      sleep interval * 4
+
+      expect(described_class.active?).to be(true)
+      expect(reporter_threads.size).to eq(1)
+      drskill_class.gained_skills << { skill: 'Athletics', change: 2 }
+      expect(wait_for { reported?('DRExpMonitor: Athletics(+2)') }).to be(true)
+    end
+
+    it 'stops cleanly after an off/on pair' do
+      old = start_and_capture_thread
+      described_class.stop
+      described_class.start
+      old.join(2)
+
+      described_class.stop
+
+      expect(described_class.active?).to be(false)
+      expect(wait_for { reporter_threads.empty? }).to be(true)
+    end
+
+    it 'marks reporting off when the reporter dies on its own' do
+      fatal = Class.new(Exception) # rubocop:disable Lint/InheritException
+      raised = Queue.new
+      allow(described_class).to receive(:report_skill_gains) do
+        Thread.current.report_on_exception = false
+        raised << true
+        raise fatal
+      end
+
+      described_class.start
+      raised.pop
+
+      expect(wait_for { !described_class.active? }).to be(true)
+
+      # And a later start is not refused as "already active"
+      allow(described_class).to receive(:report_skill_gains).and_call_original
+      Lich::Messaging.clear_messages!
+      described_class.start
+      expect(described_class.active?).to be(true)
+      expect(reported?('already active')).to be(false)
+    end
+
+    # A reporter started by an older copy of this file, before an in-session
+    # update and `;hmr`, ends with an unconditional `@@running = false`. That
+    # clears the flag without bumping the generation, and active? must still
+    # agree with what is actually running.
+    it 'stops reporting when reporting is marked off without a generation bump' do
+      old = start_and_capture_thread
+
+      described_class.class_variable_set(:@@running, false)
+
+      expect(old.join(interval * 20)).not_to be_nil
+      expect(described_class.active?).to be(false)
+      drskill_class.gained_skills << { skill: 'Evasion', change: 1 }
+      sleep interval * 4
+      expect(reported?('Evasion(+1)')).to be(false)
+
+      # And `;display expgains on` brings back exactly one reporter
+      described_class.start
+      expect(described_class.active?).to be(true)
+      expect(wait_for { reported?('DRExpMonitor: Evasion(+1)') }).to be(true)
+      expect(reporter_threads.size).to eq(1)
+    end
+
+    context 'with the reporter in a long pause' do
+      # Long enough that a reporter left to run is still asleep when the join
+      # below gives up, so only a kill ends it in time.
+      let(:interval) { 30 }
+
+      it 'kills the reporter on reset! instead of leaving it to run' do
+        old = start_and_capture_thread
+
+        described_class.reset!
+
+        expect(old.join(2)).not_to be_nil
+        expect(described_class.active?).to be(false)
+      end
+    end
+
+    # `;hmr drinfomon` re-runs drexpmonitor.rb and then drinfomon.rb, whose
+    # autostart calls start again. Reloading in this process would leave the
+    # reloaded file's constants behind, so each case runs in a child process
+    # with the real files.
+    describe 'after a hot reload' do
+      def run_child(body)
+        source = <<~RUBY
+          $VERBOSE = nil
+          require './spec/spec_helper'
+          require 'common/hmr'
+          require './spec/support/drexpmonitor_reporters'
+          Object.send(:define_method, :respond) { |*| nil }
+          # The reload resets @@report_interval to 1 s, so shorten the
+          # reporter's pause with a prepend on the module, which survives it.
+          module Lich; module DragonRealms; module DRExpMonitor; end; end; end
+          Lich::DragonRealms::DRExpMonitor.singleton_class.prepend(Module.new do
+            private def sleep(*) = super(#{interval})
+          end)
+          def reporters = DRExpMonitorReporters.threads.size
+          def wait_until(seconds = 5)
+            deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+            sleep 0.02 until yield || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+          end
+          #{body}
+        RUBY
+        out = err = nil
+        status = nil
+        Open3.popen3(RbConfig.ruby, "-I#{File.join(repo_root, 'lib')}", '-e', source, chdir: repo_root) do |stdin, stdout, stderr, wait|
+          stdin.close
+          reader = Thread.new { [stdout.read, stderr.read] }
+          unless wait.join(30)
+            Process.kill('KILL', wait.pid)
+            raise 'hot reload child timed out'
+          end
+          out, err = reader.value
+          status = wait.value
+        end
+        raise "hot reload child failed:\n#{err}" unless status.success?
+
+        out
+      end
+
+      it 'keeps a single reporter through `;hmr drinfomon`' do
+        out = run_child(<<~RUBY)
+          Lich.display_expgains = true
+          require 'dragonrealms/drinfomon'
+          sleep 0.2
+          Lich::Messaging.clear_messages!
+          Lich::Common::HMR.reload(%r{dragonrealms/drinfomon})
+          sleep #{interval * 6} # past one full loop of any orphaned reporter
+          puts "REPORTERS=\#{reporters}"
+          puts "ACTIVE=\#{Lich::DragonRealms::DRExpMonitor.active?}"
+          puts "MESSAGES=\#{Lich::Messaging.messages.map { |m| m[:message] }.inspect}"
+          Lich::DragonRealms::DRSkill.gained_skills << { skill: 'Evasion', change: 1 }
+          wait_until { Lich::Messaging.messages.any? { |m| m[:message].include?('Evasion(+1)') } }
+          sleep #{interval * 6} # a second reporter would have drained and reported by now
+          puts "REPORTS=\#{Lich::Messaging.messages.count { |m| m[:message].include?('Evasion(+1)') }}"
+        RUBY
+
+        expect(out).to include('REPORTERS=1')
+        expect(out).to include('ACTIVE=true')
+        expect(out).not_to include('already active')
+        expect(out).to include('REPORTS=1')
+      end
+
+      it 'leaves reporting off through `;hmr drinfomon` when it was off' do
+        out = run_child(<<~RUBY)
+          Lich.display_expgains = false
+          require 'dragonrealms/drinfomon'
+          Lich::Common::HMR.reload(%r{dragonrealms/drinfomon})
+          sleep 0.2
+          puts "REPORTERS=\#{reporters}"
+          puts "ACTIVE=\#{Lich::DragonRealms::DRExpMonitor.active?}"
+        RUBY
+
+        expect(out).to include('REPORTERS=0')
+        expect(out).to include('ACTIVE=false')
+      end
+
+      it 'keeps owning the running reporter after reloading only drexpmonitor.rb' do
+        out = run_child(<<~RUBY)
+          require 'dragonrealms/drinfomon/drvariables'
+          require 'dragonrealms/drinfomon/drskill'
+          require 'dragonrealms/drinfomon/drexpmonitor'
+          Lich::DragonRealms::DRExpMonitor.start
+          sleep 0.2
+          Lich::Common::HMR.reload(%r{drinfomon/drexpmonitor})
+          puts "ACTIVE=\#{Lich::DragonRealms::DRExpMonitor.active?}"
+          Lich::DragonRealms::DRExpMonitor.start # ;display expgains on
+          Lich::DragonRealms::DRExpMonitor.stop  # ;display expgains off
+          wait_until { reporters.zero? }
+          puts "REPORTERS=\#{reporters}"
+        RUBY
+
+        expect(out).to include('ACTIVE=true')
+        expect(out).to include('REPORTERS=0')
+      end
+
+      it 'registers its exit hook once however many times it is reloaded' do
+        out = run_child(<<~RUBY)
+          $exit_hooks = 0
+          Object.prepend(Module.new do
+            private def at_exit(&)
+              $exit_hooks += 1 if caller_locations(1, 1)[0].path.include?('drinfomon/drexpmonitor.rb')
+              super
+            end
+          end)
+          require 'dragonrealms/drinfomon'
+          3.times { Lich::Common::HMR.reload(%r{dragonrealms/drinfomon}) }
+          puts "EXIT_HOOKS=\#{$exit_hooks}"
+        RUBY
+
+        expect(out).to include('EXIT_HOOKS=1')
+      end
+
+      it 'stops a running reporter on exit after reloads' do
+        # at_exit hooks run last-registered first, so this one, registered
+        # before the file loads, reports after the module's own hook has run.
+        out = run_child(<<~RUBY)
+          at_exit do
+            inactive = Lich::Messaging.messages.count { |m| m[:message].include?('already inactive') }
+            puts "ACTIVE_AT_END=\#{Lich::DragonRealms::DRExpMonitor.active?} INACTIVE_MSGS=\#{inactive}"
+          end
+          Lich.display_expgains = true
+          require 'dragonrealms/drinfomon'
+          3.times { Lich::Common::HMR.reload(%r{dragonrealms/drinfomon}) }
+          puts "ACTIVE=\#{Lich::DragonRealms::DRExpMonitor.active?}"
+        RUBY
+
+        expect(out).to include('ACTIVE=true')
+        expect(out).to include('ACTIVE_AT_END=false INACTIVE_MSGS=0')
+      end
+
+      it 'prints nothing on exit after reloads when reporting is off' do
+        out = run_child(<<~RUBY)
+          at_exit do
+            inactive = Lich::Messaging.messages.count { |m| m[:message].include?('already inactive') }
+            puts "INACTIVE_MSGS=\#{inactive}"
+          end
+          Lich.display_expgains = false
+          require 'dragonrealms/drinfomon'
+          3.times { Lich::Common::HMR.reload(%r{dragonrealms/drinfomon}) }
+        RUBY
+
+        expect(out).to include('INACTIVE_MSGS=0')
+      end
     end
   end
 end

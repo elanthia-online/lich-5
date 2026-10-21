@@ -209,8 +209,14 @@ module Lich
       # {.tie_item_result} reports it as +:already_tied+.
       TIE_ITEM_ALREADY_TIED_PATTERN = /has already been tied off/.freeze
 
+      # Success replies: "You tie up the soft gem pouch.", "You carefully tie
+      # ...", "You attach <item> to a strap on your <belt>." The verb must come
+      # right after "You" (one -ly adverb allowed) and be the whole word, so
+      # lines that only contain "tie" ("You untie ...", "...tactical
+      # abilities...", "...tied with...") can't pass for the reply while bput
+      # waits for it.
       TIE_ITEM_SUCCESS_PATTERNS = [
-        /^You .*tie/,
+        /^You (?:\w+ly )?tie\b/,
         /^You attach/,
         TIE_ITEM_ALREADY_TIED_PATTERN
       ].freeze
@@ -667,6 +673,13 @@ module Lich
       # @param retries [Integer] remaining retry attempts before giving up (default 3)
       # @return [Boolean, nil] true if disposed, false if failed, nil if item is nil or not held
       #
+      # The item is fetched only here, before the first command. Once it is in
+      # hand, no later step GETs it again: +get my <noun>+ would take a
+      # same-named item from inventory and trash that instead. If a command
+      # goes unanswered, the hands decide: the item left the hand (the reply
+      # was lost) counts as disposed, and an item still in hand moves on to
+      # the next way of disposing of it.
+      #
       # @example Dispose using room trash bins
       #   DRCI.dispose_trash("rock")
       #
@@ -674,13 +687,18 @@ module Lich
       #   DRCI.dispose_trash("rock", "shroud", "tap")
       def dispose_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil, retries: 3)
         return unless item
-
-        if retries <= 0
-          Lich::Messaging.msg("bold", "DRCI: dispose_trash exceeded max retries")
-          return false
-        end
-
+        return false if dispose_retries_exhausted?(retries)
         return unless DRCI.get_item_if_not_held?(item)
+
+        dispose_held_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries)
+      end
+
+      # Disposes of an item already in hand. Never GETs: see {dispose_trash}.
+      #
+      # @return [Boolean] true if disposed, false if not
+      # @api private
+      def dispose_held_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil, retries:)
+        return false if dispose_retries_exhausted?(retries)
 
         if worn_trashcan
           result = execute_dispose_command("put #{item_ref(item)} in #{item_ref(worn_trashcan)}", item, retries, worn_trashcan, worn_trashcan_verb)
@@ -754,7 +772,7 @@ module Lich
 
           result = execute_dispose_command(trash_command, item, retries)
           return true if result == :success
-          return true if result && result != :failure
+          return result unless result == :failure
         end
 
         # No trash bins or not able to put item in a bin, just drop it.
@@ -765,34 +783,80 @@ module Lich
         when :failure
           Lich::Messaging.msg("bold", "DRCI: Failed to dispose of '#{item}'.")
           false
-        when false, nil
-          Lich::Messaging.msg("bold", "DRCI: Unexpected response when dropping '#{item}'.")
-          false
         else
           result
         end
       end
 
+      # @return [Boolean] true (after saying so) when no retries remain
+      # @api private
+      def dispose_retries_exhausted?(retries)
+        return false if retries.positive?
+
+        Lich::Messaging.msg("bold", "DRCI: dispose_trash exceeded max retries")
+        true
+      end
+
       # Executes a dispose command and handles common retry/recovery patterns.
+      #
+      # The item is in hand when this runs, and it never GETs the item again:
+      # see {dispose_trash}.
       #
       # @param command [String] game command to execute
       # @param item [String] item being disposed
       # @param retries [Integer] remaining retry attempts
-      # @param retry_args [Array] extra args to pass to dispose_trash on retry
-      # @return [Symbol, Boolean] :success, :failure, or the boolean result of a retry
+      # @param retry_args [Array] extra args to pass to dispose_held_trash on retry
+      # @return [Symbol, Boolean] :success, :failure (try the next way), or a
+      #   final boolean for dispose_trash to return
       #
       # @api private
       def execute_dispose_command(command, item, retries, *retry_args)
+        hands_before = dispose_item_hands(item)
         case DRC.bput(command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
         when *DROP_TRASH_SUCCESS_PATTERNS
           :success
         when /^Perhaps you should be holding that first/, /^But you aren't holding that/
-          DRCI.get_item?(item) && dispose_trash(item, *retry_args, retries: retries - 1)
+          in_hands?(item) ? :failure : dispose_item_not_held(item)
         when *DROP_TRASH_FAILURE_PATTERNS
           :failure
         when *DROP_TRASH_RETRY_PATTERNS
-          dispose_trash(item, *retry_args, retries: retries - 1)
+          return dispose_item_not_held(item) unless in_hands?(item)
+
+          dispose_held_trash(item, *retry_args, retries: retries - 1)
+        else
+          # No reply matched before bput's timeout. If a hand that held the
+          # item now holds something else, count it as disposed. That only
+          # says the item left the hand, for any reason (the command took
+          # effect, or it decayed, was stolen or dissipated), not that it
+          # reached the receptacle. Either way it is gone, and getting
+          # another to dispose of is the one thing to avoid.
+          return :failure if hands_before.all? { |hand, held| dispose_hand_state(hand) == held }
+
+          Lich::Messaging.msg("bold", "DRCI: No reply to '#{command}', but '#{item}' has left your hands; treating it as disposed.")
+          :success
         end
+      end
+
+      # The hands holding the item, each with what it holds (id and name).
+      #
+      # @return [Hash{String => Array}] hand => [id, name]
+      # @api private
+      def dispose_item_hands(item)
+        %w[left right].select { |hand| in_hand?(item, hand) }.to_h { |hand| [hand, dispose_hand_state(hand)] }
+      end
+
+      # @return [Array] [id, name] of what the hand holds
+      # @api private
+      def dispose_hand_state(hand)
+        obj = hand == 'left' ? GameObj.left_hand : GameObj.right_hand
+        [obj&.id, obj&.name]
+      end
+
+      # @return [false]
+      # @api private
+      def dispose_item_not_held(item)
+        Lich::Messaging.msg("bold", "DRCI: '#{item}' is no longer in your hands (it may already have been disposed of). Not getting another to dispose of.")
+        false
       end
 
       #########################################
