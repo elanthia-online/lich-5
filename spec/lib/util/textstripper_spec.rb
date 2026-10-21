@@ -15,6 +15,48 @@ require 'util/textstripper'
 # parse-failure CDATA fallback, and whitespace -- the fixtures gathered during
 # that evaluation.
 RSpec.describe Lich::Util::TextStripper do
+  describe '.strip with an invalid mode' do
+    it 'raises ArgumentError for an unknown mode instead of returning the input' do
+      expect { described_class.strip('<b>x</b>', :bogus) }
+        .to raise_error(ArgumentError, /Invalid mode: bogus/)
+    end
+
+    it 'raises ArgumentError for a non-Symbol/String mode' do
+      expect { described_class.strip('<b>x</b>', 42) }
+        .to raise_error(ArgumentError, /Mode must be a Symbol or String/)
+    end
+
+    it 'raises ArgumentError for an invalid mode even when the text is empty' do
+      expect { described_class.strip('', :bogus) }.to raise_error(ArgumentError, /Invalid mode: bogus/)
+    end
+  end
+
+  describe 'Mode.valid?' do
+    it 'returns false for a non-Symbol/String mode instead of raising' do
+      expect(described_class::Mode.valid?(42)).to be(false)
+    end
+  end
+
+  describe '.strip when Kramdown raises' do
+    it 'logs it as a parse failure and returns the input' do
+      allow(described_class).to receive(:strip_with_kramdown).and_raise(Kramdown::Error, 'bad markup')
+      allow(described_class).to receive(:log_error)
+
+      expect(described_class.strip('<b>x</b>', :html)).to eq('<b>x</b>')
+      expect(described_class).to have_received(:log_error).with('Failed to parse html', kind_of(Kramdown::Error))
+    end
+  end
+
+  describe '.strip when Kramdown failed to load' do
+    it 'still returns the input when XML parsing fails' do
+      hide_const('Kramdown')
+      allow(described_class).to receive(:strip_xml_with_ox).and_raise(Ox::ParseError, 'bad xml')
+      allow(described_class).to receive(:log_error)
+
+      expect(described_class.strip('x ]]> y <z', :xml)).to eq('x ]]> y <z')
+    end
+  end
+
   describe '.strip with XML mode (Ox-backed)' do
     # U+00A0 (nbsp) and other non-ASCII expected values are built via pack to
     # keep this source file ASCII-only (enforced by the custom RuboCop cop).

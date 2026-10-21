@@ -14,6 +14,7 @@ require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
 require "attributes/skills"
+require "attributes/enhancive"
 require "gemstone/currency"
 require "gemstone/infomon/status"
 require "gemstone/experience"
@@ -821,6 +822,77 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
   end
 
+  context "error mid-section" do
+    let(:parser) { Lich::Gemstone::Infomon::Parser }
+    let(:state) { Lich::Gemstone::Infomon::Parser::State }
+
+    around(:each) do |example|
+      state.set(state::Ready)
+      example.run
+    ensure
+      state.set(state::Ready)
+      Lich::Gemstone::Infomon.mutex_unlock
+    end
+
+    it "does not take the DB lock when an enhancive header arrives in a stuck state" do
+      parser.parse("Skill goals updated!") # state is now Goals, with no "goals ended" line to come
+      parser.parse("Stats:") # State.set(EnhanciveStats) raises from Goals
+      parser.parse("      Strength (STR): 12/40")
+      parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "keeps collecting a skills section after a non-terminator line raises" do
+      parser.parse(" Testing (at level 12), your current skill bonuses and ranks (including all modifiers) are:")
+      parser.parse("  Two Weapon Combat..................|  12            2")
+      parser.parse("Skill goals updated!")
+      parser.parse("Skill goals updated!") # raises: state is already Goals
+      parser.parse("  Armor Use..........................|  40            8")
+      parser.parse("Training Points: 100 Phy 50 Mnt")
+      Lich::Gemstone::Infomon.flush
+
+      expect(Lich::Gemstone::Infomon.get("skill.two_weapon_combat")).to eq(2)
+      expect(Lich::Gemstone::Infomon.get("skill.armor_use")).to eq(8)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "keeps values parsed before a non-terminator raise in an enhancive section" do
+      parser.parse("Stats:")
+      parser.parse("      Strength (STR): 12/40")
+      parser.parse("Skill goals updated!") # raises: State.set(Goals) from an enhancive state
+      parser.parse("Skills:")
+      parser.parse("                Edged Weapons Ranks:  7/50")
+      parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+      Lich::Gemstone::Infomon.flush
+
+      expect(Lich::Gemstone::Enhancive.strength.value).to eq(12)
+      expect(Lich::Gemstone::Enhancive.edged_weapons.ranks).to eq(7)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+
+    it "releases the DB lock when a section terminator raises" do
+      Lich::Gemstone::Infomon::Parser.parse(" Testing (at level 12), your current skill bonuses and ranks (including all modifiers) are:")
+      expect(Lich::Gemstone::Infomon.mutex).to be_owned
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("  Two Weapon Combat..................|  12            2")
+      Lich::Gemstone::Infomon::Parser.parse("Training Points: 100 Phy 50 Mnt")
+
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+      reader = Thread.new { Lich::Gemstone::Infomon.get("uncached.key") }
+      expect(reader.join(2)).not_to be_nil, "Infomon.get blocked on a mutex left held by the parser"
+    end
+
+    it "resets enhancive state so the next enhancive header starts fresh" do
+      Lich::Gemstone::Infomon::Parser.parse("Stats:")
+      allow(Lich::Gemstone::Infomon).to receive(:upsert_batch).and_raise(StandardError, "boom")
+      Lich::Gemstone::Infomon::Parser.parse("For more details, see INVENTORY ENHANCIVE TOTALS DETAILS.")
+
+      expect(Lich::Gemstone::Infomon::Parser::State.get).to eq(Lich::Gemstone::Infomon::Parser::State::Ready)
+      expect(Lich::Gemstone::Infomon.mutex).not_to be_locked
+    end
+  end
+
   context "flush barrier" do
     it "returns true immediately when queue is empty" do
       # Ensure queue is empty first
@@ -850,13 +922,154 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
         expect(Lich::Gemstone::Infomon.get("rapid.#{i}")).to eq(i * 10)
       end
     end
+
+    # Rejects inserts of `key` (optionally only when the value is `value`) while the block runs.
+    def with_rejected_write(key, value = nil)
+      infomon = Lich::Gemstone::Infomon
+      cond = "NEW.key = #{infomon.db.literal(key)}"
+      cond += " AND NEW.value = #{infomon.db.literal(value)}" unless value.nil?
+      infomon.db.run("CREATE TRIGGER reject_write_failure_test BEFORE INSERT ON #{infomon.db.literal(infomon.table_name)} WHEN #{cond} BEGIN SELECT RAISE(FAIL, 'injected'); END")
+      yield
+      infomon.flush
+    ensure
+      infomon.db.run("DROP TRIGGER IF EXISTS reject_write_failure_test")
+    end
+
+    it "shows one short in-game line per failure streak" do
+      infomon = Lich::Gemstone::Infomon
+      allow(Lich).to receive(:log)
+      allow(infomon).to receive(:respond)
+      table = infomon.db.literal(infomon.table_name)
+      infomon.db.run("CREATE TRIGGER reject_all_writes_test BEFORE INSERT ON #{table} BEGIN SELECT RAISE(FAIL, 'injected'); END")
+      begin
+        infomon.upsert_batch((1..52).map { |i| ["streak.key#{i}", i] })
+        20.times { |i| infomon.set("streak.single", i) }
+        infomon.flush
+      ensure
+        infomon.db.run("DROP TRIGGER IF EXISTS reject_all_writes_test")
+      end
+      expect(infomon).to have_received(:respond).once
+      expect(infomon).to have_received(:respond).with(a_string_matching(/failed for 52 key\(s\) \(streak\.key1, streak\.key2, streak\.key3, \.\.\.\): .*injected/).and(satisfy { |m| m.length < 200 }))
+      expect(Lich).to have_received(:log).with(/Infomon write failed for/).exactly(21).times
+
+      # once a successful write clears every unpersisted key, a new failure is shown again
+      infomon.upsert_batch((1..52).map { |i| ["streak.key#{i}", i] })
+      infomon.set("streak.single", 19)
+      infomon.flush
+      with_rejected_write("streak.other") { infomon.set("streak.other", 1) }
+      expect(infomon).to have_received(:respond).twice
+    end
+
+    it "ends a failure streak at any successful write, even if a failed key is never re-set" do
+      infomon = Lich::Gemstone::Infomon
+      allow(Lich).to receive(:log)
+      allow(infomon).to receive(:respond)
+      with_rejected_write("status.calmed") { infomon.set("status.calmed", true) }
+      10.times { |i| infomon.set("streak.ok#{i}", i) }
+      infomon.flush
+      with_rejected_write("currency.silver") { infomon.set("currency.silver", 5) }
+      expect(infomon).to have_received(:respond).twice
+    end
+
+    it "allows a failed write to be retried" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.test"
+      infomon.set(k, 1)
+      infomon.flush
+      infomon.get(k) # ensure the cache is loaded so the next get is served from it
+      allow(Lich).to receive(:log)
+      allow(infomon).to receive(:respond)
+      with_rejected_write(k) { infomon.set(k, 2) }
+      expect(Lich).to have_received(:log).with(/Infomon write failed for #{k}: Sequel::\w+.*injected/)
+      expect(infomon).to have_received(:respond).with(/Infomon write failed for 1 key\(s\) \(#{k}\): .*injected/)
+      # the cache keeps the last value set; only the DB is behind
+      expect(infomon.get(k)).to eq(2)
+      expect(infomon.table[key: k][:value]).to eq(1)
+      expect(infomon.set(k, 2)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to eq(2)
+      expect(infomon.set(k, 2)).to eq(:noop)
+    end
+
+    it "persists nil set after a failed write" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.nil"
+      infomon.set(k, 1)
+      infomon.flush
+      allow(Lich).to receive(:log)
+      with_rejected_write(k, 2) { infomon.set(k, 2) }
+      expect(infomon.set(k, nil)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to be_nil
+      expect(infomon.get(k)).to be_nil
+    end
+
+    it "persists nil for a key the DB has but the cache does not" do
+      infomon = Lich::Gemstone::Infomon
+      k = "write_failure.uncached"
+      infomon.set(k, 1)
+      infomon.flush
+      infomon.cache.delete(k)
+      expect(infomon.set(k, nil)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: k][:value]).to be_nil
+    end
+
+    it "keeps relative updates across a failed write" do
+      infomon = Lich::Gemstone::Infomon
+      gain = "You violently shatter the bond on the soul of the troll.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence."
+      Lich::Gemstone::Infomon::Parser.parse("Accumulated Shadow Essence: 1")
+      infomon.flush
+      allow(Lich).to receive(:log)
+      with_rejected_write("resources.shadow_essence", 2) do
+        # flush between lines so the first write has failed before the second is parsed
+        2.times { Lich::Gemstone::Infomon::Parser.parse(gain); infomon.flush }
+      end
+      expect(Lich).to have_received(:log).with(/Infomon write failed for resources.shadow_essence/)
+      expect(Lich::Resources.shadow_essence).to eq(3)
+      expect(infomon.table[key: "resources.shadow_essence"][:value]).to eq(3)
+    end
+
+    it "re-queues a failed upsert_batch on retry" do
+      infomon = Lich::Gemstone::Infomon
+      batch = { "write_failure.batch_a" => 5, "write_failure.batch_b" => 6 }
+      allow(Lich).to receive(:log)
+      with_rejected_write("write_failure.batch_a") { infomon.upsert_batch(batch) }
+      expect(infomon.table[key: "write_failure.batch_a"]).to be_nil
+      expect(infomon.upsert_batch(batch)).not_to eq(:noop)
+      infomon.flush
+      expect(infomon.table[key: "write_failure.batch_a"][:value]).to eq(5)
+      expect(infomon.table[key: "write_failure.batch_b"][:value]).to eq(6)
+      expect(infomon.upsert_batch(batch)).to eq(:noop)
+    end
   end
 end
 
 RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
   context "NPC Death" do
+    let(:wraith) { Struct.new(:id, :status).new("1283966", nil) }
+
+    before { allow(GameObj).to receive(:npcs).and_return([wraith]) }
+
     it "handles NPC death message not handled by normal xmlparser" do
-      Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.]).eql?(:ok)
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
+      expect(wraith.status).to eq("dead")
+    end
+
+    it "leaves the NPC alive for a non-death line" do
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> glares at you.])).to eq(:noop)
+      expect(wraith.status).to be_nil
+    end
+
+    it "does not mark a different NPC dead" do
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="999" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
+      expect(wraith.status).to be_nil
+    end
+
+    it "does not overwrite a gone NPC" do
+      wraith.status = "gone"
+      expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
+      expect(wraith.status).to eq("gone")
     end
   end
 end

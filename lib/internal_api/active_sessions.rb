@@ -5,6 +5,8 @@ require 'json'
 require 'securerandom'
 require 'tmpdir'
 
+require_relative '../common/sharing_violation_retry'
+
 require_relative 'active_sessions/registry'
 require_relative 'active_sessions/server'
 require_relative 'active_sessions/client'
@@ -68,7 +70,9 @@ module Lich
       # validly publish a competing generation in the meantime.
       #
       # @return [Array<Float>]
-      DISCOVERY_FILESYSTEM_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16].freeze
+      DISCOVERY_FILESYSTEM_RETRY_DELAYS = Lich::Common::SharingViolationRetry::DELAYS
+
+      extend Lich::Common::SharingViolationRetry
 
       @registry = nil
       @server = nil
@@ -542,7 +546,7 @@ module Lich
       def self.cleanup_discovery_temp_file(temp_path)
         return unless File.exist?(temp_path)
 
-        retry_windows_sharing_violation do
+        retry_sharing_violation do
           File.delete(temp_path) if File.exist?(temp_path)
         end
       rescue StandardError => e
@@ -560,35 +564,13 @@ module Lich
       # @raise [IOError] when the local discovery ownership handle is absent
       # @raise [Errno::EACCES] when every bounded retry is exhausted
       def self.retry_discovery_filesystem_operation
-        retry_windows_sharing_violation do
+        retry_sharing_violation do
           raise IOError, 'ActiveSessions discovery ownership handle absent during filesystem operation' unless own_lock?
 
           yield
         end
       end
       private_class_method :retry_discovery_filesystem_operation
-
-      # Runs a filesystem mutation with bounded retries for Windows sharing
-      # violations. Unlike discovery publication/removal, cleanup of this
-      # process's private temp file does not require the service ownership lock.
-      #
-      # @yield the filesystem mutation to attempt
-      # @return [Object] the mutation result
-      # @raise [Errno::EACCES] when every bounded retry is exhausted
-      def self.retry_windows_sharing_violation
-        retry_index = 0
-
-        begin
-          yield
-        rescue Errno::EACCES
-          raise if retry_index >= DISCOVERY_FILESYSTEM_RETRY_DELAYS.length
-
-          sleep(DISCOVERY_FILESYSTEM_RETRY_DELAYS.fetch(retry_index))
-          retry_index += 1
-          retry
-        end
-      end
-      private_class_method :retry_windows_sharing_violation
 
       # Deletes the discovery file only when the current process still owns it.
       #
