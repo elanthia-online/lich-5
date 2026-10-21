@@ -118,8 +118,8 @@ RSpec.describe 'Combat replay fidelity' do
   end
 
   it 'records the companion vocal-cords critical as a neck hit' do
-    lines = File.readlines(File.join(fixture_dir, 'companion.txt'), chomp: true)
-                .reject { |line| line.start_with?('#') || line.strip.empty? }
+    lines = blobs.assoc('companion ff674ed44edd7fe2')&.last
+    expect(lines).not_to be_nil, 'Missing companion vocal-cords replay fixture'
     events = processor.parse_events(lines)
     expect(events.map { |event| event[:name] }).to eq([:companion])
     expect(events.first[:hits]).to contain_exactly(

@@ -9,12 +9,12 @@ module Lich
       # Every record reachable through the table, skipping the nil placeholder
       # rows some tables carry.
       def each_record
-        described_class.table.each_value do |typedata|
-          typedata.each_value do |locdata|
+        described_class.table.each do |type, typedata|
+          typedata.each do |location, locdata|
             next if locdata.nil?
-            locdata.each_value do |record|
+            locdata.each do |rank, record|
               next if record.nil?
-              yield record
+              yield record, type, location, rank
             end
           end
         end
@@ -34,13 +34,11 @@ module Lich
         end
       end
 
-      it 'keeps non-corporeal record classifications consistent with their table keys' do
-        described_class.table.fetch(:non_corporeal).each do |location, ranks|
-          ranks.each do |rank, record|
-            expect(described_class.clean_key(record[:type])).to eq('non_corporeal')
-            expect(described_class.clean_key(record[:location].to_s)).to eq(location.to_s)
-            expect(record[:rank]).to eq(rank)
-          end
+      it 'keeps all record classifications consistent with their table keys' do
+        each_record do |record, type, location, rank|
+          expect(described_class.clean_key(record[:type])).to eq(type.to_s)
+          expect(described_class.clean_key(record[:location].to_s)).to eq(location.to_s)
+          expect(record[:rank]).to eq(rank)
         end
       end
 
