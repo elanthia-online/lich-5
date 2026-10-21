@@ -283,7 +283,7 @@ module Lich
         end
 
         # Standalone probe of the HTTPS web-login fallback path (see
-        # docs/web-login-protocol-analysis.md). Exercises
+        # docs/connection/web-login-protocol-analysis.md). Exercises
         # WebLogin.auth_with_timeout directly against play.net -- independent
         # of the real login path (Authenticator.authenticate), which also
         # uses WebLogin, either forced via --auth-provider=web or

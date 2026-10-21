@@ -270,8 +270,11 @@ module Lich
             when Pattern::StatEnd
               match = Regexp.last_match
               @stat_hold.push(['currency.silver', match[:silver].delete(',').to_i])
-              Infomon.upsert_batch(@stat_hold)
-              Infomon.mutex_unlock
+              begin
+                Infomon.upsert_batch(@stat_hold)
+              ensure
+                Infomon.mutex_unlock
+              end
               :ok
             when Pattern::Fame # serves as ExprStart
               @expr_hold = []
@@ -299,8 +302,11 @@ module Lich
                               ['experience.deeds', match[:deeds].to_i])
               :ok
             when Pattern::ExprEnd
-              Infomon.upsert_batch(@expr_hold)
-              Infomon.mutex_unlock
+              begin
+                Infomon.upsert_batch(@expr_hold)
+              ensure
+                Infomon.mutex_unlock
+              end
               :ok
             when Pattern::SkillStart
               @skills_hold = []
@@ -325,8 +331,11 @@ module Lich
               end
             when Pattern::SkillEnd
               if Infomon.mutex.owned?
-                Infomon.upsert_batch(@skills_hold)
-                Infomon.mutex_unlock
+                begin
+                  Infomon.upsert_batch(@skills_hold)
+                ensure
+                  Infomon.mutex_unlock
+                end
                 :ok
               else
                 :noop
@@ -368,8 +377,11 @@ module Lich
               @psm_hold.push(["#{@psm_cat.downcase}.%s" % match[:command], match[:ranks].to_i])
               :ok
             when Pattern::PSMEnd
-              Infomon.upsert_batch(@psm_hold)
-              Infomon.mutex_unlock
+              begin
+                Infomon.upsert_batch(@psm_hold)
+              ensure
+                Infomon.mutex_unlock
+              end
               :ok
             when Pattern::NoWarcries
               Infomon.upsert_batch([['warcry.bertrandts_bellow', 0],
@@ -690,12 +702,14 @@ module Lich
             # === ENHANCIVE PARSING ===
             # Any section header can start enhancive parsing (output may not include all sections)
             when Pattern::EnhanciveStart
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveStats)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveStats)
               :ok
             when Pattern::EnhanciveStat
               if State.get == State::EnhanciveStats
@@ -707,12 +721,14 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveSkillsSection
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveSkills)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveSkills)
               :ok
             when Pattern::EnhanciveSkillRanks
               if State.get == State::EnhanciveSkills
@@ -733,12 +749,14 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveResourcesSection
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveResources)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveResources)
               :ok
             when Pattern::EnhanciveResource
               if State.get == State::EnhanciveResources
@@ -750,12 +768,14 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveMartialSection
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveMartial)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveMartial)
               :ok
             when Pattern::EnhanciveMartialSkill
               if State.get == State::EnhanciveMartial
@@ -767,12 +787,14 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveSpellsSection
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveSpells)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveSpells)
               :ok
             when Pattern::EnhanciveSpells
               if State.get == State::EnhanciveSpells
@@ -784,12 +806,14 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveStatisticsSection
-              unless State.enhancive_state?
+              # Transition first: if State.set raises, the lock has not been taken yet.
+              fresh = !State.enhancive_state?
+              State.set(State::EnhanciveStatistics)
+              if fresh
                 @enhancive_hold = []
                 Infomon.mutex_lock
                 Lich::Gemstone::Enhancive.reset_all
               end
-              State.set(State::EnhanciveStatistics)
               :ok
             when Pattern::EnhanciveStatistic
               if State.get == State::EnhanciveStatistics
@@ -808,9 +832,12 @@ module Lich
               end
             when Pattern::EnhanciveEnd
               if State.enhancive_state?
-                Infomon.upsert_batch(@enhancive_hold)
-                Infomon.mutex_unlock
-                State.set(State::Ready)
+                begin
+                  Infomon.upsert_batch(@enhancive_hold)
+                ensure
+                  Infomon.mutex_unlock
+                  State.set(State::Ready)
+                end
                 :ok
               else
                 :noop

@@ -33,11 +33,19 @@ module Lich
       # Stricter boolean matching pattern - anchored to avoid partial matches
       BOOLEAN_TRUE_PATTERN = /\A(on|true|yes)\z/i.freeze
 
-      @@reporter_thread = nil
-      @@running = false
+      # Reporter state. `;hmr drinfomon` re-runs this file, so these keep
+      # their values across a reload: resetting them would orphan a running
+      # reporter, and the autostart that follows would add a second one.
+      @@reporter_thread = nil unless defined?(@@reporter_thread)
+      @@running = false unless defined?(@@running)
+      # Bumped whenever start launches a reporter, stop retires one, or
+      # reset! runs. A reporter thread only acts while the generation it was
+      # started with is still current, so a stopped thread cannot clear or
+      # outlive the state of its replacement.
+      @@generation = 0 unless defined?(@@generation)
+      @@mutex = Mutex.new unless defined?(@@mutex) # Thread safety for start/stop operations
       @@report_interval = 1 # Hard-coded 1 second for real-time reporting
-      @@inline_display = nil # Lazy-loaded from DB, defaults to true
-      @@mutex = Mutex.new # Thread safety for start/stop operations
+      @@inline_display = nil # Lazy-loaded from DB, defaults to false
 
       # Start the background reporter thread
       # Thread-safe: uses mutex to prevent race conditions
@@ -55,31 +63,18 @@ module Lich
             return
           end
 
+          generation = (@@generation += 1)
           @@running = true
-
-          @@reporter_thread = Thread.new do
-            begin
-              loop do
-                break unless @@running
-
-                begin
-                  report_skill_gains
-                  sleep @@report_interval
-                rescue StandardError => e
-                  Lich::Messaging.msg('error', "DRExpMonitor: Error: #{e.message}") if $DREXPMONITOR_DEBUG
-                  Lich.log "DRExpMonitor error: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
-                  sleep @@report_interval
-                end
-              end
-            ensure
-              @@running = false
-            end
-          end
+          @@reporter_thread = Thread.new(generation) { |owned| run_reporter(owned) }
         end
       end
 
       # Stop the background reporter thread
       # Thread-safe: uses mutex to prevent race conditions
+      #
+      # Does not wait for the thread to finish. The thread's ensure takes
+      # @@mutex, so joining here would deadlock; the generation bump already
+      # keeps the dying thread from touching a later start's state.
       def self.stop
         @@mutex.synchronize do
           unless @@running
@@ -87,9 +82,7 @@ module Lich
             return
           end
 
-          @@running = false
-          @@reporter_thread&.kill
-          @@reporter_thread = nil
+          retire_reporter
         end
       end
 
@@ -103,10 +96,49 @@ module Lich
       def self.reset!
         @@mutex.synchronize do
           @@inline_display = nil
-          @@running = false
-          @@reporter_thread = nil
+          retire_reporter
         end
       end
+
+      # Body of the reporter thread. Loops while +generation+ is current and
+      # reporting is on, and gives up ownership on the way out, whatever ends
+      # it. Checking @@running too keeps active? truthful if the flag is
+      # cleared without a generation bump, as the ensure of a reporter started
+      # by an older copy of this file does after an in-session update.
+      # @param generation [Integer] the generation start assigned this thread
+      # @return [void]
+      def self.run_reporter(generation)
+        while @@generation == generation && @@running
+          begin
+            report_skill_gains
+          rescue StandardError => e
+            Lich::Messaging.msg('error', "DRExpMonitor: Error: #{e.message}") if $DREXPMONITOR_DEBUG
+            Lich.log "DRExpMonitor error: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
+          end
+          sleep @@report_interval
+        end
+      ensure
+        # A thread that dies on its own (a non-StandardError exception) is
+        # still current and marks reporting off. A stopped or replaced thread
+        # is not, and must leave the newer state alone.
+        @@mutex.synchronize do
+          if @@generation == generation
+            @@running = false
+            @@reporter_thread = nil
+          end
+        end
+      end
+
+      # Ends the current generation and kills its thread without waiting.
+      # Caller must hold @@mutex.
+      # @return [void]
+      def self.retire_reporter
+        @@generation += 1
+        @@running = false
+        @@reporter_thread&.kill
+        @@reporter_thread = nil
+      end
+      private_class_method :run_reporter, :retire_reporter
 
       # Check if inline display is enabled (lazy-loaded from DB, defaults to false)
       # BUG FIX: Added max retry count to prevent infinite loop on persistent SQLite lock
@@ -199,11 +231,15 @@ module Lich
         formatted_gains = format_gains(new_skills)
         Lich::Messaging.msg('info', "DRExpMonitor: #{formatted_gains.join(', ')}")
       end
+
+      # Stop the reporter on exit (handles disconnect and normal exit).
+      # Registered once: `;hmr drinfomon` re-runs this file, and each run
+      # would otherwise add another hook. Only stops a running reporter, so
+      # exiting with reporting off prints no "already inactive".
+      unless defined?(@@exit_hook_registered)
+        @@exit_hook_registered = true
+        at_exit { DRExpMonitor.stop if DRExpMonitor.active? }
+      end
     end
   end
-end
-
-# Register cleanup on exit (handles disconnect and normal exit)
-at_exit do
-  Lich::DragonRealms::DRExpMonitor.stop if defined?(Lich::DragonRealms::DRExpMonitor)
 end
