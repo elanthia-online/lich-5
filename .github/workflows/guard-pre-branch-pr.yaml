@@ -1,5 +1,5 @@
 # Automatically close pre/beta-to-main PRs; fixes belong in the source PRs.
-# Only comment on and close the triggering PR. Never execute PR code or cancel runs.
+# Only comment on and close the triggering PR. Never execute PR code or cancel other workflows.
 name: guard pre/beta PRs to main
 
 on:
@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: guard-prepr-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 permissions:
   pull-requests: write
 

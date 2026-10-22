@@ -29,7 +29,7 @@ function guardFrom(workflow) {
     ['opened', 'reopened', 'synchronize', 'ready_for_review', 'edited']);
   assert.deepEqual(workflow.permissions, { 'pull-requests': 'write' });
   assert.equal(workflow.concurrency.group, 'guard-prepr-${{ github.event.pull_request.number }}');
-  assert.equal(workflow.concurrency['cancel-in-progress'], false);
+  assert.equal(workflow.concurrency['cancel-in-progress'], true);
   assert.deepEqual(Object.keys(workflow.jobs), ['block']);
   const job = workflow.jobs.block;
   assert.equal(job.steps.length, 1);
@@ -43,8 +43,12 @@ function guardFrom(workflow) {
   assert.doesNotMatch(script, /\$\{\{/);
   return {
     allowed: pr => vm.runInNewContext(condition, {
-      github: { event: { pull_request: pr } },
-      startsWith: (value, prefix) => value.startsWith(prefix)
+      // GitHub string equality ignores case; normalize the compared fields.
+      github: { event: { pull_request: { ...pr,
+        state: pr.state.toLowerCase(),
+        base: { ...pr.base, ref: pr.base.ref.toLowerCase() }
+      } } },
+      startsWith: (value, prefix) => value.toLowerCase().startsWith(prefix.toLowerCase())
     }),
     execute: new vm.Script(`(async () => { ${script}\n})()`)
   };
@@ -62,7 +66,7 @@ guardFrom(parseWorkflow(JSON.stringify(workflow)));
 for (const mutate of [
   w => { w.on = { workflow_dispatch: {} }; },
   w => { w.permissions.actions = 'write'; },
-  w => { w.concurrency['cancel-in-progress'] = true; }
+  w => { w.concurrency['cancel-in-progress'] = false; }
 ]) {
   const changed = structuredClone(workflow);
   mutate(changed);
@@ -119,10 +123,12 @@ function expectClosed(result, number = 6) {
   for (const action of workflow.on.pull_request_target.types) {
     expectClosed(await run({ action }));
   }
-  for (const head of ['pre/beta/train', 'pre/beta-next', 'pre/beta"); throw new Error("injected")']) {
+  for (const head of ['pre/beta/train', 'pre/beta-next', 'PRE/BETA', 'Pre/Beta-x',
+    'pre/beta"); throw new Error("injected")']) {
     expectClosed(await run({ pr: p => { p.head.ref = head; } }));
   }
   expectClosed(await run({ pr: p => { p.number = 42; } }), 42);
+  expectClosed(await run({ pr: p => { p.base.ref = 'MAIN'; } }));
   // The existing guard also closes a qualifying fork's own PR, never its runs.
   expectClosed(await run({ pr: p => { p.head.repo = { id: 999, full_name: 'outsider/lich-5' }; } }));
   expectClosed(await run({ pr: p => { p.head.repo = null; } }));
@@ -145,5 +151,38 @@ function expectClosed(result, number = 6) {
   assert.equal(closeFailure.error, 'Close failed');
   assert.deepEqual(closeFailure.writes.map(([kind]) => kind), ['comment']);
   console.log(`PASS: automatic PR guard; ${cases} inert cases, YAML formatting and invalid-policy checks`);
+
+  // Exercise the actual CI preflight for both supported event types.
+  const ci = parseWorkflow(fs.readFileSync('.github/workflows/rspec_tests.yaml', 'utf8'));
+  const preflight = ci.jobs.test.steps.find(step => step.id === 'preflight').with.script;
+  const classify = new vm.Script(`(async () => { ${preflight}\n})()`);
+  const guardFiles = ['.github/workflows/guard-pre-branch-pr.yaml',
+    '.github/workflows/rspec_tests.yaml', '.github/tests/test-guard-pre-branch-pr.sh'];
+  let preflightCases = 0;
+  for (const eventName of ['pull_request', 'push']) {
+    for (const [paths, expected] of [
+      [guardFiles, 'false'],
+      [[...guardFiles, 'lib/lich.rb'], 'true'],
+      [['spec/example_spec.rb'], 'true'],
+      [['Gemfile'], 'true'],
+      [['.github/tests/test-other.sh'], 'true'],
+      [[], 'true']
+    ]) {
+      const files = paths.map(filename => ({ filename, status: 'modified' }));
+      const outputs = {};
+      await classify.runInNewContext({
+        context: { repo: { owner: 'fixture', repo: 'fixture' }, eventName,
+          payload: { pull_request: { number: 6 }, before: 'before' }, sha: 'after' },
+        github: { paginate: async () => files, rest: {
+          pulls: { listFiles: () => {} },
+          repos: { compareCommits: async () => ({ data: { files } }) }
+        } },
+        core: { notice: () => {}, setOutput: (key, value) => { outputs[key] = value; } }
+      });
+      assert.equal(outputs.should_test, expected, `${eventName}: ${paths.join(', ')}`);
+      preflightCases++;
+    }
+  }
+  console.log(`PASS: RSpec preflight; ${preflightCases} inert cases`);
 })().catch(error => { console.error(error); process.exitCode = 1; });
 JS
