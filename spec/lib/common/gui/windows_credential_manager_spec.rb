@@ -254,7 +254,9 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     end
   end
 
-  describe 'strict credential retrieval with simulated Win32 results' do
+  describe 'credential operations with simulated Win32 results' do
+    let(:saved_error) { double('FFI saved WinAPI error', winapi_error: 5) }
+
     before do
       # Exercise the production native adapter without loading DLLs or accessing
       # any real credential store, even when this spec runs on Windows.
@@ -268,16 +270,20 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
       allow(Lich::Util).to receive(:install_gem_requirements)
       load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
       @reader = dummy
+      # winapi_error exists only on Windows; model its saved value without
+      # depending on the host platform or reading the live WinAPI error again.
+      stub_const('FFI::LastError', saved_error)
+      expect(@reader).not_to receive(:GetLastError)
+      allow(Lich).to receive(:log)
       allow(@reader).to receive(:CredReadW).and_return(false)
     end
 
     it 'returns nil only for ERROR_NOT_FOUND' do
-      allow(@reader).to receive(:GetLastError).and_return(1168)
+      allow(saved_error).to receive(:winapi_error).and_return(1168)
       expect(@reader.retrieve_credential(target_name, strict: true)).to be_nil
     end
 
     it 'raises for access denied instead of returning absence' do
-      allow(@reader).to receive(:GetLastError).and_return(5)
       expect { @reader.retrieve_credential(target_name, strict: true) }.to raise_error(IOError, /error code 5/)
     end
 
@@ -287,9 +293,35 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     end
 
     it 'preserves the legacy nil-on-error behavior for other callers' do
-      allow(@reader).to receive(:GetLastError).and_return(5)
-      allow(Lich).to receive(:log)
       expect(@reader.retrieve_credential(target_name)).to be_nil
+    end
+
+    it 'reports the saved error code when storing fails' do
+      expect(@reader).to receive(:CredWriteW).and_return(false)
+      expect(Lich).to receive(:log).with('error: CredWriteW failed with error code 5')
+
+      expect(@reader.store_credential(target_name, username, password)).to be false
+    end
+
+    it 'reports the saved error code when deleting fails' do
+      expect(@reader).to receive(:CredDeleteW).and_return(false)
+      expect(Lich).to receive(:log).with('error: CredDeleteW failed with error code 5')
+
+      expect(@reader.delete_credential(target_name)).to be false
+    end
+
+    it 'does not interpret a saved error after a successful store' do
+      expect(@reader).to receive(:CredWriteW).and_return(true)
+      expect(saved_error).not_to receive(:winapi_error)
+
+      expect(@reader.store_credential(target_name, username, password)).to be true
+    end
+
+    it 'does not interpret a saved error after a successful deletion' do
+      expect(@reader).to receive(:CredDeleteW).and_return(true)
+      expect(saved_error).not_to receive(:winapi_error)
+
+      expect(@reader.delete_credential(target_name)).to be true
     end
   end
 

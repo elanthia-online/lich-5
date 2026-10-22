@@ -125,7 +125,7 @@ module Lich
                 Lich.log "debug: Credential stored successfully"
                 true
               else
-                error_code = GetLastError
+                error_code = FFI::LastError.winapi_error
                 Lich.log "error: CredWriteW failed with error code #{error_code}"
                 false
               end
@@ -168,7 +168,7 @@ module Lich
 
                 password
               else
-                error_code = GetLastError()
+                error_code = FFI::LastError.winapi_error
                 raise IOError, "CredReadW failed with error code #{error_code}" if strict && error_code != 1168
                 # ERROR_NOT_FOUND = 1168, so only log unexpected errors
                 Lich.log "error: CredReadW failed with error code #{error_code}" unless error_code == 1168
@@ -198,7 +198,7 @@ module Lich
               if result
                 true
               else
-                error_code = GetLastError
+                error_code = FFI::LastError.winapi_error
                 Lich.log "error: CredDeleteW failed with error code #{error_code}"
                 false
               end
