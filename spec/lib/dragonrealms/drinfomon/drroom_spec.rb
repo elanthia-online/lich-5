@@ -43,6 +43,35 @@ RSpec.describe Lich::DragonRealms::DRRoom do
         expect(described_class.dead_npcs).to eq(['a dead goblin'])
       end
     end
+
+    # Every script reads the same array, so one script's << or delete used to
+    # change what every other script saw until the next room refresh.
+    %i[npcs dead_npcs].each do |field|
+      describe ".#{field} is read-only" do
+        it 'raises FrozenError when a script mutates it in place' do
+          described_class.public_send(:"#{field}=", %w[goblin goblin])
+          expect { described_class.public_send(field) << 'troll' }.to raise_error(FrozenError)
+          expect { described_class.public_send(field).delete('goblin') }.to raise_error(FrozenError)
+          expect(described_class.public_send(field)).to eq(%w[goblin goblin])
+        end
+
+        it "leaves the caller's array unfrozen and unshared" do
+          source = %w[goblin]
+          described_class.public_send(:"#{field}=", source)
+          source << 'troll'
+          expect(source).not_to be_frozen
+          expect(described_class.public_send(field)).to eq(%w[goblin])
+        end
+
+        it 'hands out a copy the script can edit' do
+          described_class.public_send(:"#{field}=", %w[goblin])
+          copy = described_class.public_send(field).dup
+          copy << 'troll'
+          expect(copy).to eq(%w[goblin troll])
+          expect(described_class.public_send(field)).to eq(%w[goblin])
+        end
+      end
+    end
   end
 
   describe 'PC accessors' do

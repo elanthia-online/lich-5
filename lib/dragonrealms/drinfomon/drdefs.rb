@@ -170,21 +170,20 @@ module Lich
     end
 
     # Cleans and normalizes NPC strings to creature names.
-    # Handles XML tag removal, name normalization, and ordinal numbering.
+    # Handles XML tag removal and name normalization. Duplicates stay as
+    # repeated plain nouns (["goblin", "goblin"]), so `npcs - ignored` drops
+    # every copy. To address one particular creature, use its id from
+    # Lich::DragonRealms::Creature (`#<id>`), not a position in this list.
     # @param npc_string [Array<String>] Array of raw NPC strings
-    # @return [Array<String>] Array of cleaned creature names with ordinals
+    # @return [Array<String>] Sorted array of creature nouns
     def clean_npc_string(npc_string)
-      # Normalize NPC names
-      normalized_npcs = npc_string
-                        .map { |obj| normalize_creature_names(obj) }
-                        .map { |obj| remove_html_tags(obj) }
-                        .map { |obj| extract_last_creature(obj) }
-                        .map { |obj| extract_final_name(obj) }
-                        .compact
-                        .sort
-
-      # Count occurrences and add ordinals
-      add_ordinals_to_duplicates(normalized_npcs)
+      npc_string
+        .map { |obj| normalize_creature_names(obj) }
+        .map { |obj| remove_html_tags(obj) }
+        .map { |obj| extract_last_creature(obj) }
+        .map { |obj| extract_final_name(obj) }
+        .compact
+        .sort
     end
 
     # Normalizes creature names that have variant descriptions, collapsing any
@@ -240,35 +239,10 @@ module Lich
       text.strip.scan(DRDefsPattern::CREATURE_NAME).first
     end
 
-    # Adds ordinal prefixes to duplicate NPCs (e.g., "second goblin").
-    # @param npc_list [Array<String>] Array of NPC names
-    # @return [Array<String>] Array with ordinals added to duplicates
-    def add_ordinals_to_duplicates(npc_list)
-      flat_npcs = []
-
-      npc_list.uniq.each do |npc|
-        # Count how many times this NPC appears
-        count = npc_list.count(npc)
-
-        # Create entries with ordinals for duplicates
-        count.times do |index|
-          if index.zero?
-            flat_npcs << npc
-          else
-            # Use ordinal from $ORDINALS if available, otherwise generate one
-            ordinal = $ORDINALS[index] || "#{index + 1}th"
-            flat_npcs << "#{ordinal} #{npc}"
-          end
-        end
-      end
-
-      flat_npcs
-    end
-
     # Extract NPCs from room objects
     # @param room_objs [String] The room objects string from game output
     # @param select_dead [Boolean] If true, select only dead NPCs; if false, reject dead NPCs
-    # @return [Array<String>] List of NPC names
+    # @return [Array<String>] List of NPC nouns, duplicates repeated
     def extract_npcs(room_objs, select_dead: false)
       all_npcs = find_all_npcs(room_objs)
       filtered = if select_dead

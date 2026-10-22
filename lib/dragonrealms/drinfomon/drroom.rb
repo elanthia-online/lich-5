@@ -3,22 +3,29 @@
 module Lich
   module DragonRealms
     class DRRoom
-      @@npcs ||= []
+      @@npcs ||= [].freeze
       @@pcs ||= []
       @@group_members ||= []
       @@pcs_prone ||= []
       @@pcs_sitting ||= []
-      @@dead_npcs ||= []
+      @@dead_npcs ||= [].freeze
       @@room_objs ||= []
       @@exits ||= []
       # NOTE: @@title and @@description removed - getters delegate to XMLData
 
+      # Living NPC nouns in the room, sorted, duplicates repeated
+      # (["goblin", "goblin"]). Read-only: every script shares this array, so it
+      # is frozen; take a copy (`DRRoom.npcs.dup`) to edit. Address a particular
+      # creature by its Lich::DragonRealms::Creature id, not by position.
+      # @return [Array<String>] frozen
       def self.npcs
         @@npcs
       end
 
+      # Stores a frozen copy, leaving the caller's array untouched.
+      # @param val [Array<String>]
       def self.npcs=(val)
-        @@npcs = val
+        @@npcs = val.dup.freeze
       end
 
       def self.pcs
@@ -65,12 +72,16 @@ module Lich
         @@pcs_sitting = val
       end
 
+      # Dead NPC nouns in the room; same shape and rules as {.npcs}.
+      # @return [Array<String>] frozen
       def self.dead_npcs
         @@dead_npcs
       end
 
+      # Stores a frozen copy, leaving the caller's array untouched.
+      # @param val [Array<String>]
       def self.dead_npcs=(val)
-        @@dead_npcs = val
+        @@dead_npcs = val.dup.freeze
       end
 
       def self.room_objs
