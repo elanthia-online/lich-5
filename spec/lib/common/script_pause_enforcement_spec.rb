@@ -6,24 +6,14 @@ require_relative '../../../lib/common/limitedarray'
 require_relative '../../../lib/common/feature_flags'
 require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/common/upstreamhook'
+require_relative '../../support/global_defs_spec_source'
 
 # wait_while/wait_until live in global_defs.rb, which can't be required
 # wholesale in spec context (it pulls in many unrelated global dependencies).
-# Extract just those two definitions, mirroring the technique used in
-# global_defs_spec.rb.
-global_defs_path = File.join(File.dirname(__FILE__), '..', '..', '..', 'lib', 'global_defs.rb')
-global_defs_lines = File.readlines(global_defs_path)
-%w[wait_until wait_while].each do |method_name|
-  fn_start = global_defs_lines.index { |l| l =~ /^def #{method_name}\(/ }
-  raise "#{method_name} not found in #{global_defs_path}" unless fn_start
-
-  fn_end = global_defs_lines[fn_start + 1..].index { |l| l =~ /^end\s*$/ }
-  # Avoid depending on a top-level `Script` constant alias (only set up by
-  # `include Lich::Common` in the real lich.rbw boot path) -- reference the
-  # real class directly instead.
-  source = global_defs_lines[fn_start..fn_start + 1 + fn_end].join.gsub(/\bScript\./, 'Lich::Common::Script.')
-  eval(source, TOPLEVEL_BINDING, global_defs_path, fn_start + 1)
-end
+# Load just those two definitions. Avoid depending on a top-level `Script`
+# constant alias (only set up by `include Lich::Common` in the real lich.rbw
+# boot path) -- reference the real class directly instead.
+GlobalDefsSpecSource.define_toplevel('wait_until', 'wait_while', qualify_script: true)
 
 RSpec.describe 'Lich::Common::Script pause enforcement' do
   let(:thread_group) { ThreadGroup.new }
@@ -226,6 +216,12 @@ RSpec.describe 'Lich::Common::Script pause enforcement' do
   end
 
   describe 'wait_while / wait_until' do
+    it 'runs the wait_while and wait_until defined in lib/global_defs.rb' do
+      %w[wait_while wait_until].each do |name|
+        expect(Object.instance_method(name).source_location).to eq([GlobalDefsSpecSource::PATH, GlobalDefsSpecSource.line_of(name)])
+      end
+    end
+
     it 'wait_while re-checks pause state on every iteration, not just at entry' do
       script = build_script(name: 'waiter', paused: false)
       allow(script_class).to receive(:current).and_return(script)

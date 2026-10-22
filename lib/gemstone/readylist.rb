@@ -60,7 +60,7 @@ module Lich
           return false unless checked?
           @ready_list.each do |key, value|
             next unless all || ORIGINAL_READY_LIST.include?(key)
-            unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id) || GameObj.right_hand.id.include?(value.id) || GameObj.left_hand.id.include?(value.id)
+            unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id) || GameObj.right_hand.id.eql?(value.id) || GameObj.left_hand.id.eql?(value.id)
               @checked = false
               return false
             end

@@ -747,7 +747,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
 
       it 'does not report a doubled-bold dead creature as alive' do
-        expect(parse_room(saga_objs)[:npcs]).not_to include('second moradu')
+        expect(parse_room(saga_objs)[:npcs]).to eq(['moradu'])
       end
 
       it 'derives the same DRRoom.pcs from a Saga room players line as from its legacy equivalent' do

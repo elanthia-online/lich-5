@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'timeout'
 
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
@@ -230,6 +231,193 @@ RSpec.describe DRCT do
     end
   end
 
+  # --- merchant helpers after a failed walk --------------------------
+  #
+  # Each helper walks to the merchant first. When walk_to reports that the
+  # character did not arrive, the helper must not send its SELL / BUY / ASK /
+  # ORDER in whatever room the character is standing in.
+
+  describe 'merchant helpers when walk_to fails' do
+    # helper name => [call, value returned on a failed walk, action words]
+    helpers = {
+      sell_item: [->(room) { DRCT.sell_item(room, 'sword') }, false, 'not selling sword'],
+      buy_item: [->(room) { DRCT.buy_item(room, 'arrow') }, nil, 'not buying arrow'],
+      ask_for_item?: [->(room) { DRCT.ask_for_item?(room, 'merchant', 'bundling rope') }, false, 'not asking merchant for bundling rope'],
+      order_item: [->(room) { DRCT.order_item(room, 5) }, nil, 'not ordering 5']
+    }
+
+    before(:each) do
+      allow(DRCI).to receive(:in_hands?).with('sword').and_return(true)
+      allow(DRC).to receive(:bput).and_return('hands you 50 kronars')
+      allow(DRCT).to receive(:fput)
+    end
+
+    def failure_messages
+      Lich::Messaging.messages.select { |m| m[:type] == 'bold' && m[:message].include?('Could not reach') }
+    end
+
+    helpers.each do |name, (call, failed_value, action)|
+      describe ".#{name}" do
+        context 'when walk_to returns false' do
+          before(:each) { allow(DRCT).to receive(:walk_to).with(100).and_return(false) }
+
+          it 'sends nothing to the game' do
+            call.call(100)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).not_to have_received(:fput)
+          end
+
+          it "returns #{failed_value.inspect}" do
+            expect(call.call(100)).to equal(failed_value)
+          end
+
+          it 'says which room it could not reach and what it skipped' do
+            call.call(100)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach room 100, so #{action}."])
+          end
+        end
+
+        context 'when walk_to returns true' do
+          before(:each) { allow(DRCT).to receive(:walk_to).with(100).and_return(true) }
+
+          it 'talks to the merchant and reports no failure' do
+            call.call(100)
+            expect(DRC).to have_received(:bput).at_least(:once)
+            expect(failure_messages).to be_empty
+          end
+        end
+
+        # No walk_to stub from here on: the real walk_to decides.
+        context 'with no room (nil), through the real walk_to' do
+          it 'sends nothing to the game and says no room was given' do
+            expect(call.call(nil)).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(failure_messages.map { |m| m[:message] })
+              .to eq(["DRCT: Could not reach the shop (no room given), so #{action}."])
+          end
+        end
+
+        context 'with a map tag that has no rooms' do
+          it 'sends nothing to the game and prints one line naming the tag and the skipped action' do
+            allow(Map).to receive(:rooms_by_tag).with('pawnshop').and_return([])
+            allow(DRCT).to receive(:walk_to).and_call_original
+            expect(call.call('pawnshop')).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).not_to have_received(:walk_to)
+            expect(Lich::Messaging.messages.map { |m| m[:message] })
+              .to eq(["DRCT: No go2 targets matching 'pawnshop' found, so #{action}."])
+          end
+        end
+
+        context 'with a map tag whose rooms are all unreachable, through the real walk_to' do
+          it "sends nothing to the game and names the tag after walk_to's own reason" do
+            allow(Map).to receive(:rooms_by_tag).with('pawnshop').and_return([200])
+            allow(Room).to receive(:current).and_return(double('room', id: 100, dijkstra: [nil, {}]))
+            expect(call.call('pawnshop')).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach a room tagged pawnshop, so #{action}."])
+          end
+        end
+
+        context 'when go2 never arrives, through the real walk_to' do
+          before(:each) do
+            allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+            allow(DRC).to receive(:fix_standing)
+            allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+            allow(Script).to receive(:running).and_return([])
+            allow(Script).to receive(:running?).and_return(false)
+            allow(XMLData).to receive(:room_description).and_return('A room')
+            allow(XMLData).to receive(:room_title).and_return('[Room]')
+          end
+
+          it 'gives up on the walk and sends nothing to the game' do
+            expect(call.call(999)).to equal(failed_value)
+            expect(DRC).not_to have_received(:bput)
+            expect(DRCT).to have_received(:start_script).exactly(DRCT::MAX_WALK_TO_RETRIES + 1).times
+          end
+        end
+
+        # A shop locked for the night: walk_to gives up without retrying and
+        # without a message of its own, so the helper's message is the only one.
+        context 'when the shop door is locked, through the real walk_to' do
+          before(:each) do
+            allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+            allow(DRC).to receive(:fix_standing)
+            allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+            allow(DRCT).to receive(:kill_script)
+            allow(Script).to receive(:running).and_return([:go2_handle])
+            allow(Script).to receive(:running?).and_return(false)
+            allow(XMLData).to receive(:room_description).and_return('A room')
+            allow(XMLData).to receive(:room_title).and_return('[Room]')
+            allow(Flags).to receive(:[]).and_call_original
+            allow(Flags).to receive(:[]).with('travel-closed-shop').and_return(true)
+            allow(DRC).to receive(:bput).with('open door', any_args).and_return('It is locked')
+          end
+
+          it 'tries the door once, then sends nothing else to the game' do
+            expect(call.call(999)).to equal(failed_value)
+            expect(DRC).to have_received(:bput).once
+            expect(DRC).to have_received(:bput).with('open door', any_args)
+            expect(failure_messages.map { |m| m[:message] }).to eq(["DRCT: Could not reach room 999, so #{action}."])
+          end
+        end
+      end
+    end
+
+    # walk_to and the failure message share one tag-vs-id test, so a room
+    # walk_to treats as an id is never reported as a tag, and vice versa.
+    describe 'tag-vs-id test shared with walk_to' do
+      {
+        'bank' => true, 'a1' => true, 'Shop 7' => true,
+        '100' => false, '' => false, 100 => false, nil => false, :bank => false
+      }.each do |room, expected|
+        it "map_tag?(#{room.inspect}) is #{expected}" do
+          expect(DRCT.send(:map_tag?, room)).to equal(expected)
+        end
+      end
+
+      it 'reports a digit-only string as a room id, as walk_to reads it' do
+        allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
+        allow(DRCT).to receive(:tag_to_id)
+        allow(DRC).to receive(:fix_standing)
+        allow(DRCT).to receive(:start_script).and_return(:go2_handle)
+        allow(Script).to receive(:running).and_return([])
+        allow(Script).to receive(:running?).and_return(false)
+        allow(XMLData).to receive(:room_description).and_return('A room')
+        allow(XMLData).to receive(:room_title).and_return('[Room]')
+
+        expect(DRCT.sell_item('999', 'sword')).to eq(false)
+        expect(DRCT).not_to have_received(:tag_to_id)
+        expect(failure_messages.map { |m| m[:message] }).to eq(['DRCT: Could not reach room 999, so not selling sword.'])
+      end
+
+      it 'walk_to and the message both follow map_tag?' do
+        allow(DRCT).to receive(:map_tag?).and_call_original
+        allow(DRCT).to receive(:map_tag?).with('100').and_return(true)
+        allow(Map).to receive(:rooms_by_tag).with('100').and_return([100])
+        allow(DRCT).to receive(:tag_to_id).with('100').and_return(nil)
+
+        expect(DRCT.sell_item('100', 'sword')).to eq(false)
+        expect(DRCT).to have_received(:tag_to_id).with('100')
+        expect(failure_messages.map { |m| m[:message] }).to eq(['DRCT: Could not reach a room tagged 100, so not selling sword.'])
+      end
+    end
+
+    it 'keeps walk_to_merchant and map_tag? off the public DRCT API' do
+      expect(DRCT).not_to respond_to(:walk_to_merchant)
+      expect(DRCT).not_to respond_to(:map_tag?)
+      expect(DRCT.private_methods).to include(:walk_to_merchant, :map_tag?)
+    end
+
+    it 'sell_item still checks the hands before walking' do
+      allow(DRCI).to receive(:in_hands?).with('sword').and_return(false)
+      allow(DRCT).to receive(:walk_to)
+      expect(DRCT.sell_item(100, 'sword')).to eq(false)
+      expect(DRCT).not_to have_received(:walk_to)
+      expect(failure_messages).to be_empty
+    end
+  end
+
   # --- dispose -------------------------------------------------------
 
   describe '.dispose' do
@@ -406,6 +594,13 @@ RSpec.describe DRCT do
 
       bold_msgs = Lich::Messaging.messages.select { |m| m[:type] == 'bold' }
       expect(bold_msgs.any? { |m| m[:message].include?('DRCT:') && m[:message].include?('Failed to navigate') }).to eq(true)
+    end
+
+    it 'keeps its unresolved-room helpers private' do
+      %i[walk_to_current_room walk_to_current_room_id walk_to_unresolved_failure walk_to_unresolved_message].each do |helper|
+        expect(DRCT.respond_to?(helper)).to eq(false), "DRCT.#{helper} is public"
+        expect(DRCT.respond_to?(helper, true)).to eq(true), "DRCT.#{helper} is missing"
+      end
     end
   end
 
@@ -806,6 +1001,718 @@ RSpec.describe DRCT do
       expect(result).to eq(true)
       expect(Lich::Messaging.messages.any? { |m| m[:message].include?('not with the right mana') }).to eq(true)
     end
+
+    context 'when walk_to gives up on a room' do
+      # Room.current stays wherever the last successful walk left the character;
+      # walk_to returns false without moving.
+      let(:current) { OpenStruct.new(id: 50) }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(DRCT).to receive(:walk_to) do |room|
+          next false if room == 100
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'moves on to the next search room' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(100).ordered
+        expect(DRCT).to have_received(:walk_to).with(200).ordered
+      end
+
+      it 'does not check the predicate for the room it never reached' do
+        checked = []
+        predicate = ->(_attempt) { checked << current.id }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1) }
+        expect(checked).to eq([200])
+      end
+
+      it 'returns false once max_search_attempts is spent when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100], nil, nil, 0, false, 1) }
+        expect(result).to eq(false)
+      end
+
+      it 'walks to the idle room and searches again when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 2) }
+        expect(result).to eq(false)
+        expect(DRCT).to have_received(:walk_to).with(100).twice
+        expect(DRCT).to have_received(:walk_to).with(300).once
+      end
+
+      it 'still counts the unreachable room when prioritizing buddies' do
+        # 100 is skipped, 200 has nobody: 200 is the last room of the buddy
+        # pass, so the search falls back to an empty-room pass and takes 200.
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(200).twice
+      end
+
+      it 'takes a reachable room with a buddy when prioritizing buddies' do
+        allow(DRRoom).to receive(:pcs).and_return(['Buddy'])
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return([])
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(DRCT).to have_received(:walk_to).with(200).once
+      end
+    end
+
+    context 'when the last room of the buddy pass is unreachable' do
+      # 200 is the last search room and walk_to always gives up on it; every
+      # other room is reachable. Nobody is in any room unless a test says so.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:unreachable) { [200] }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return(['Nemesis'])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          next false if unreachable.include?(room)
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'falls back to the empty-room search in the same attempt' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(Lich::Messaging.messages.map { |m| m[:message] })
+          .to include('DRCT: Could not reach last room in list, and found no buddies. Retrying for empty room.')
+      end
+
+      it 'does not idle before the empty-room search' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
+        expect(result).to eq(true)
+        expect(walks).not_to include(300)
+      end
+
+      it 'uses the predicate only for the empty-room search' do
+        checked = []
+        predicate = lambda do |attempt|
+          checked << [current.id, attempt]
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(checked).to eq([[100, 1]])
+      end
+
+      it 'still skips a room with a stranger in the empty-room search' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Stranger'] : [] }
+        unreachable << 300
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 400, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 400, 200, 100, 300, 400])
+      end
+
+      it 'returns false after one fallback pass when no room is reachable' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([200, 200])
+      end
+
+      it 'keeps max_search_attempts as the bound for the empty-room search' do
+        unreachable << 100
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
+        expect(result).to eq(false)
+        # buddy pass, empty-room attempt 1, idle room, empty-room attempt 2
+        expect(walks).to eq([100, 200, 100, 200, 300, 100, 200])
+      end
+
+      it 'does not start the fallback at an unreachable room before the last one' do
+        unreachable.replace([100])
+        allow(DRRoom).to receive(:pcs) { current.id == 400 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200, 400], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 400])
+      end
+
+      it 'takes a buddy room reached before the unreachable last room' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100])
+      end
+
+      it 'skips a buddy room with a nemesis and still falls back' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? %w[Buddy Nemesis] : [] }
+        unreachable << 400
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 400, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 400, 200, 100, 300])
+      end
+
+      it 'does not retry the buddy search on a later attempt' do
+        # The fallback search is a fresh call without buddies, so a later
+        # unreachable last room is skipped like any other room.
+        allow(DRRoom).to receive(:pcs).and_return(['Stranger'])
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 3, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200, 300, 100, 200, 300, 100, 200])
+      end
+
+      it 'checks mana with min_mana in the fallback' do
+        # 100 is empty but low on mana; 300 has enough. strict_mana keeps the
+        # search from relaxing the mana check.
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana) { current.id == 300 ? 40 : 10 }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 200, 100, 300])
+      end
+
+      it 'keeps strict_mana in the fallback' do
+        # No room has enough mana. Without strict_mana the fallback would
+        # relax the check and take 100.
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+      end
+    end
+
+    context 'when prioritizing buddies with a predicate' do
+      # Every room is reachable. 100 and 200 are the search rooms; the
+      # predicate records where it was asked and answers from `accepts`.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:asked) { [] }
+      let(:accepts) { [] }
+      let(:predicate) do
+        lambda do |_attempt|
+          asked << current.id
+          accepts.include?(current.id)
+        end
+      end
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return([])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          current.id = room
+          true
+        end
+      end
+
+      it 'skips a buddy room the predicate rejects and falls back to the empty-room search' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 200])
+        expect(current.id).to eq(200)
+      end
+
+      it 'does not ask the predicate again in a buddy room it just rejected' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        accepts << 200
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(asked).to eq([100, 200])
+      end
+
+      it 'judges a room listed twice per visit, keeping a mana-short visit for the relaxed pass' do
+        # 100 is listed twice; the predicate rejects 200 and the first visit
+        # to 100 only, so the second visit (mana-short) is the only room the
+        # relaxed-mana pass can take.
+        visits = 0
+        rejecting = lambda do |_attempt|
+          asked << current.id
+          next false unless current.id == 100
+
+          visits += 1
+          visits > 1
+        end
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200, 100], nil, rejecting, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(current.id).to eq(100)
+      end
+
+      it 'counts a skipped room as reached when deciding whether every room is unreachable' do
+        # The buddy pass reaches and rejects 100; afterwards 100 can't be
+        # reached, and 200 never can.
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        buddy_pass_done = false
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          reachable = room == 300 || (room == 100 && !buddy_pass_done)
+          buddy_pass_done = true if room == 200
+          current.id = room if reachable
+          reachable
+        end
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, Float::INFINITY, true) }
+        searches = Lich::Messaging.messages.map { |m| m[:message] }.grep(/Search attempt/).size
+        # The buddy pass, then attempt 1 (100 skipped counts as reached), then
+        # three unreachable attempts before giving up.
+        expect(searches).to eq(5)
+      end
+
+      it 'does not ask the predicate again in a rejected buddy room during the relaxed-mana pass' do
+        # 100 has a buddy the predicate rejects; 200 is accepted but short on
+        # mana, so the search relaxes mana and passes again without idling.
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(asked).to eq([100, 200, 200])
+        expect(current.id).to eq(200)
+      end
+
+      it 'keeps the public signature to the seven positional arguments' do
+        expect(DRCT.method(:find_empty_room).parameters.map(&:first)).to eq(%i[req req opt opt opt opt opt])
+        expect(DRCT.respond_to?(:find_empty_room_search)).to be false
+      end
+
+      it 'asks again in that room on a later search attempt' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, predicate, 0, false, 2, true) }
+        expect(result).to eq(false)
+        expect(asked).to eq([100, 200, 100, 200])
+      end
+
+      it 'asks the predicate only in rooms with a buddy during the buddy pass' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        accepts << 200
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(asked).to eq([200])
+        expect(walks).to eq([100, 200])
+      end
+
+      it 'still takes the first buddy room the predicate accepts' do
+        allow(DRRoom).to receive(:pcs) { ['Buddy'] }
+        accepts.push(100, 200)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100])
+      end
+
+      it 'says the last buddy room did not suit, not that it had no buddies' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, predicate, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but the room did not suit. Retrying for empty room.')
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+    end
+
+    context 'when the last room of the buddy pass has a nemesis' do
+      # Every room is reachable. 200 is the last search room; nobody is in any
+      # room unless a test says so.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return(['Nemesis'])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          current.id = room
+          true
+        end
+      end
+
+      it 'falls back in the same attempt when the last room has only a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(Lich::Messaging.messages.map { |m| m[:message] })
+          .to include('DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+      end
+
+      it 'falls back in the same attempt when the last room has a buddy and a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? %w[Buddy Nemesis] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'says the last room had buddies and a nemesis, not that it had no buddies' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? %w[Buddy Nemesis] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but also a nemesis. Retrying for empty room.')
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+
+      it 'checks the nemesis before mana in a last room with a buddy and a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? %w[Buddy Nemesis] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana).and_return(10)
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found buddies but also a nemesis. Retrying for empty room.')
+        expect(messages.grep(/not the right mana/)).to be_empty
+      end
+
+      it 'describes only the last room when an earlier room had a buddy and a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? %w[Buddy Nemesis] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages).to include('DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+        expect(messages.grep(/also a nemesis/)).to be_empty
+      end
+
+      it 'does not report a nemesis alone in the last room as buddies with a nemesis' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        messages = Lich::Messaging.messages.map { |m| m[:message] }
+        expect(messages.grep(/also a nemesis/)).to be_empty
+      end
+
+      it 'does not idle before the empty-room search' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, 2, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'never takes the nemesis room in the fallback' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : ['Stranger'] }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+      end
+
+      it 'checks mana with min_mana in the fallback' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Nemesis'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana) { current.id == 300 ? 40 : 10 }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300, 200, 100, 300])
+      end
+
+      it 'still takes a buddy room without a nemesis before the last room' do
+        allow(DRRoom).to receive(:pcs) do
+          { 100 => %w[Buddy Nemesis], 300 => ['Buddy'], 200 => ['Nemesis'] }.fetch(current.id, [])
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 300, 200], nil, nil, 0, false, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 300])
+      end
+    end
+
+    context 'when the last room of the buddy pass is short on mana' do
+      # Every room is reachable. 200 is the last search room and holds a buddy
+      # with too little mana; 100 is empty with enough mana unless a test says
+      # otherwise. min_mana is 30.
+      let(:current) { OpenStruct.new(id: 50) }
+      let(:walks) { [] }
+      let(:mana) { { 100 => 50, 200 => 10 } }
+      let(:messages) { Lich::Messaging.messages.map { |m| m[:message] } }
+      let(:new_message) { 'DRCT: Reached last room in list, and found buddies but not the right mana. Retrying for empty room.' }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(UserVars).to receive(:friends).and_return(['Buddy'])
+        allow(UserVars).to receive(:hunting_nemesis).and_return(['Nemesis'])
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        allow(DRStats).to receive(:moon_mage?).and_return(false)
+        allow(DRStats).to receive(:trader?).and_return(false)
+        allow(DRCA).to receive(:perc_mana) { mana.fetch(current.id) }
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          current.id = room
+          true
+        end
+      end
+
+      it 'falls back in the same attempt with strict_mana and takes the empty room with mana' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/found no buddies/)).to be_empty
+      end
+
+      it 'falls back with strict_mana and no idle room even with unlimited attempts' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, Float::INFINITY, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'does not idle before the empty-room search with strict_mana' do
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 30, true, 2, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100])
+      end
+
+      it 'keeps strict_mana in the fallback and never takes a room short on mana' do
+        mana[100] = 10
+        accept_all = ->(_attempt) { true }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, accept_all, 30, true, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages.grep(/not with the right mana/)).to be_empty
+      end
+
+      it 'takes the buddy room in the fallback when the predicate accepts it and its mana is enough' do
+        # The buddy pass reads 10 mana in 200; by the fallback it reads 40.
+        reads = Hash.new(0)
+        allow(DRCA).to receive(:perc_mana) do
+          reads[current.id] += 1
+          current.id == 200 && reads[200] > 1 ? 40 : 10
+        end
+        accept_all = ->(_attempt) { true }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, accept_all, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+      end
+
+      it 'falls back without strict_mana and takes the empty room with mana, not the first empty room' do
+        # 100 is empty but short on mana, 150 is empty with enough, 200 is the
+        # buddy room short on mana. Buddies off would take 150.
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 150 => 50, 200 => 10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(current.id).to eq(150)
+        expect(walks).to eq([100, 150, 200, 100, 150])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/Going to use those anyway/)).to be_empty
+      end
+
+      it 'takes the same room as buddies off without strict_mana' do
+        allow(DRRoom).to receive(:pcs) { current.id == 200 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 150 => 50, 200 => 10)
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, false) }
+        off_room = current.id
+        current.id = 50
+        Timeout.timeout(2) { DRCT.find_empty_room([100, 150, 200], nil, nil, 30, false, 1, true) }
+        expect(current.id).to eq(off_room)
+      end
+
+      it 'relaxes mana in the fallback without strict_mana only when no room has enough' do
+        mana[100] = 10
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(true)
+        expect(current.id).to eq(100)
+        expect(walks).to eq([100, 200, 100, 200, 100])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/not with the right mana\. Going to use those anyway/).size).to eq(1)
+      end
+
+      it 'does not claim empty rooms without strict_mana when only buddy rooms were short on mana' do
+        # The default predicate rejects a friend's room, so the fallback finds
+        # no empty room and no mana relaxation applies.
+        allow(DRRoom).to receive(:pcs).and_return(['Buddy'])
+        mana.replace(100 => 10, 200 => 10)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, false, 1, true) }
+        expect(result).to eq(false)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages).to include(new_message)
+        expect(messages.grep(/Going to use those anyway/)).to be_empty
+      end
+
+      it 'takes a last buddy room with enough mana' do
+        mana[200] = 30
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200])
+      end
+
+      it 'keeps the existing message when an earlier buddy room is short on mana and the last has no buddy' do
+        allow(DRRoom).to receive(:pcs) { current.id == 100 ? ['Buddy'] : [] }
+        mana.replace(100 => 10, 200 => 50)
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], nil, nil, 30, true, 1, true) }
+        expect(result).to eq(true)
+        expect(walks).to eq([100, 200, 100, 200])
+        expect(messages).to include('DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+        expect(messages).not_to include(new_message)
+      end
+    end
+
+    context 'when a search room is not an Integer room id' do
+      # walk_to accepts numeric strings and go2 tags; Room.current.id is an Integer.
+      let(:current) { OpenStruct.new(id: 50) }
+
+      before do
+        allow(Room).to receive(:current) { current }
+      end
+
+      it 'stops after walking to a room given as a numeric string' do
+        allow(DRCT).to receive(:walk_to) do |room|
+          current.id = room.to_i
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room(['100'], nil) }
+        expect(result).to eq(true)
+      end
+
+      it 'stops after walking to a room given as a go2 tag' do
+        allow(DRCT).to receive(:walk_to) do |_room|
+          current.id = 4321
+          true
+        end
+        result = Timeout.timeout(2) { DRCT.find_empty_room(['some_tag'], nil) }
+        expect(result).to eq(true)
+      end
+    end
+  end
+
+  describe '.find_empty_room bounds' do
+    # Searches with an idle room and the default max_search_attempts
+    # (Infinity), as every find_sorted_empty_room caller makes them. Nobody is
+    # in any room unless a test says so; walk_to gives up on the rooms in
+    # `unreachable` and moves everywhere else.
+    let(:current) { OpenStruct.new(id: 50) }
+    let(:walks) { [] }
+    let(:unreachable) { [] }
+    let(:messages) { Lich::Messaging.messages.map { |m| m[:message] } }
+
+    before do
+      allow(Room).to receive(:current) { current }
+      allow(DRRoom).to receive(:pcs).and_return([])
+      allow(DRRoom).to receive(:group_members).and_return([])
+      allow(DRCT).to receive(:walk_to) do |room|
+        walks << room
+        next false if unreachable.include?(room)
+
+        current.id = room
+        true
+      end
+    end
+
+    it 'returns false at once when there are no rooms to search' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room([], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+      expect(messages).to include('DRCT: No rooms to search, stopping the search.')
+    end
+
+    it 'returns false at once when the room list is nil' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room(nil, 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+    end
+
+    it 'returns false at once with no rooms even when prioritizing buddies' do
+      result = Timeout.timeout(2) { DRCT.find_empty_room([], 300, nil, 0, false, Float::INFINITY, true) }
+      expect(result).to eq(false)
+      expect(walks).to eq([])
+    end
+
+    it 'stops after three searches that reach no room' do
+      unreachable.replace([100, 200])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 200, 300, 100, 200, 300, 100, 200])
+      expect(messages).to include('DRCT: Could not reach any of the 2 search rooms in 3 searches, stopping the search.')
+      expect(messages).not_to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops after three searches that reach no room when the idle room is unreachable too' do
+      unreachable.replace([100, 300])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
+    end
+
+    it 'keeps waiting while a room can be reached but is occupied' do
+      searches = 0
+      allow(DRRoom).to receive(:pcs) { searches > 5 ? [] : ['Stranger'] }
+      allow(Lich::Messaging).to receive(:msg).and_call_original
+      allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) { searches += 1 }
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(true)
+      expect(walks.count(100)).to eq(6)
+      expect(walks.count(300)).to eq(5)
+    end
+
+    [[100], [200]].each do |gone|
+      it "keeps waiting while only some rooms can be reached (#{gone.first} unreachable)" do
+        unreachable.replace(gone)
+        searches = 0
+        allow(DRRoom).to receive(:pcs) { searches > 4 ? [] : ['Stranger'] }
+        allow(Lich::Messaging).to receive(:msg).and_call_original
+        allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) { searches += 1 }
+        result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300) }
+        expect(result).to eq(true)
+        expect(searches).to eq(5)
+      end
+    end
+
+    it 'counts only consecutive searches that reach no room' do
+      # Searches 1-2 reach nothing, 3 reaches an occupied 100, 4-5 reach
+      # nothing, 6 finds 100 empty: two unreachable runs of two never add up
+      # to the bound.
+      reachable_on = [3, 6]
+      searches = 0
+      allow(Lich::Messaging).to receive(:msg).and_call_original
+      allow(Lich::Messaging).to receive(:msg).with('plain', /\ADRCT: Search attempt/) do
+        searches += 1
+        unreachable.replace(reachable_on.include?(searches) ? [] : [100])
+      end
+      allow(DRRoom).to receive(:pcs) { searches == 3 ? ['Stranger'] : [] }
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300) }
+      expect(result).to eq(true)
+      expect(searches).to eq(6)
+    end
+
+    it 'stops at max_search_attempts first when it is smaller than the bound' do
+      unreachable.replace([100])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 2) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100])
+      expect(messages).to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops with the unreachable message when max_search_attempts equals the bound' do
+      unreachable.replace([100])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 0, false, 3) }
+      expect(result).to eq(false)
+      expect(walks).to eq([100, 300, 100, 300, 100])
+      expect(messages).to include('DRCT: Could not reach the search room in 3 searches, stopping the search.')
+      expect(messages).not_to include('DRCT: Failed to find an empty room, stopping the search.')
+    end
+
+    it 'stops after the buddy pass and three empty-room searches reach no room' do
+      unreachable.replace([100, 200])
+      allow(UserVars).to receive(:friends).and_return(['Buddy'])
+      allow(UserVars).to receive(:hunting_nemesis).and_return([])
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100, 200], 300, nil, 0, false, Float::INFINITY, true) }
+      expect(result).to eq(false)
+      # buddy pass, then three empty-room searches with two idle walks
+      expect(walks).to eq([100, 200, 100, 200, 300, 100, 200, 300, 100, 200])
+    end
+
+    it 'still takes a low-mana room on the relaxed retry, without idling' do
+      # 100 is reachable and empty but low on mana; the relaxed retry takes it.
+      allow(DRStats).to receive(:moon_mage?).and_return(false)
+      allow(DRStats).to receive(:trader?).and_return(false)
+      allow(DRCA).to receive(:perc_mana).and_return(10)
+      result = Timeout.timeout(2) { DRCT.find_empty_room([100], 300, nil, 30) }
+      expect(result).to eq(true)
+      expect(walks).to eq([100, 100])
+    end
   end
 
   # --- find_sorted_empty_room ----------------------------------------
@@ -821,6 +1728,50 @@ RSpec.describe DRCT do
       end
 
       DRCT.find_sorted_empty_room([100, 200], nil)
+    end
+
+    context 'through the real search' do
+      # sort_destinations keeps only rooms dijkstra can reach from here, then
+      # find_empty_room searches them with the crafting callers' idle room and
+      # no max_search_attempts.
+      let(:current) { OpenStruct.new(id: 1) }
+      let(:walks) { [] }
+      let(:unreachable) { [] }
+
+      before do
+        allow(Room).to receive(:current) { current }
+        allow(DRRoom).to receive(:pcs).and_return([])
+        allow(DRRoom).to receive(:group_members).and_return([])
+        allow(DRCT).to receive(:walk_to) do |room|
+          walks << room
+          next false if unreachable.include?(room)
+
+          current.id = room
+          true
+        end
+      end
+
+      it 'returns false at once when no search room has a path from here' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0 }])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room([100, 200], 300) }
+        expect(result).to eq(false)
+        expect(walks).to eq([])
+      end
+
+      it 'returns false when walk_to gives up on every sorted room' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0, 100 => 5, 200 => 2 }])
+        unreachable.replace([100, 200])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room(%w[100 200], 300) }
+        expect(result).to eq(false)
+        expect(walks).to eq([200, 100, 300, 200, 100, 300, 200, 100])
+      end
+
+      it 'still takes the nearest empty room' do
+        allow(Map).to receive(:dijkstra).and_return([{}, { 1 => 0, 100 => 5, 200 => 2 }])
+        result = Timeout.timeout(2) { DRCT.find_sorted_empty_room([100, 200], 300) }
+        expect(result).to eq(true)
+        expect(walks).to eq([200])
+      end
     end
   end
 end

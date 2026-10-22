@@ -69,7 +69,7 @@ module Lich
       # reason to try a different transport; EAccess correctly rejecting a
       # bad password is not -- falling back in that case would just resubmit
       # the same bad credentials to a second system for no benefit. See
-      # docs/web-login-protocol-analysis.md.
+      # docs/connection/web-login-protocol-analysis.md.
       #
       # Fallback only applies to a normal single-character login (character
       # AND game_code present, not legacy, not generator) -- WebLogin has no
@@ -179,7 +179,7 @@ module Lich
 
       # WebLogin only implements a normal single-character login -- no
       # equivalent yet for legacy multi-game enumeration or character
-      # generator entry (see docs/web-login-protocol-analysis.md).
+      # generator entry (see docs/connection/web-login-protocol-analysis.md).
       #
       # @param character [String, nil] character name
       # @param game_code [String, nil] game instance code
