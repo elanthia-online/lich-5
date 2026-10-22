@@ -1,65 +1,30 @@
-# An administrator may explicitly close a same-repository pre/beta PR to main.
-# PR activity never triggers writes. No PR code is checked out or executed.
+# Automatically close pre/beta-to-main PRs; fixes belong in the source PRs.
+# Only comment on and close the triggering PR. Never execute PR code or cancel runs.
 name: guard pre/beta PRs to main
 
 on:
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: Same-repository pre/beta pull request to close
-        required: true
-        type: string
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
 
 concurrency:
-  group: guard-prepr-${{ inputs.pr_number }}
+  group: guard-prepr-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 permissions:
-  contents: read
   pull-requests: write
 
 jobs:
   block:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event.pull_request.state == 'open' && startsWith(github.event.pull_request.head.ref, 'pre/beta') && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Verify administrator and PR before closing
+      - name: Close with policy comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          PR_NUMBER: ${{ inputs.pr_number }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         with:
           script: |
-            if (context.eventName !== 'workflow_dispatch' || context.ref !== 'refs/heads/main') {
-              return core.setFailed('Only an explicit dispatch from main may close a PR.');
-            }
-            if (process.env.TRIGGERING_ACTOR !== context.actor) {
-              return core.setFailed('A different actor may not rerun this dispatch.');
-            }
-            const input = process.env.PR_NUMBER || '';
-            if (!/^[1-9][0-9]*$/.test(input) || !Number.isSafeInteger(Number(input))) {
-              return core.setFailed('A positive integer PR number is required.');
-            }
-            const number = Number(input);
             const { owner, repo } = context.repo;
-            const permission = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner, repo, username: context.actor
-            });
-            if (permission.data.permission !== 'admin') {
-              return core.setFailed('Repository administrator permission is required.');
-            }
-            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
-            const repository = `${owner}/${repo}`.toLowerCase();
-            const repositoryId = context.payload.repository.id;
-            if (pr.number !== number || pr.state !== 'open' || pr.merged ||
-                pr.base?.repo?.id !== repositoryId || pr.head?.repo?.id !== repositoryId ||
-                pr.base?.repo?.full_name?.toLowerCase() !== repository ||
-                pr.head?.repo?.full_name?.toLowerCase() !== repository ||
-                pr.base.ref !== 'main' || !pr.head.ref.startsWith('pre/beta') ||
-                !/^[0-9a-f]{40}$/i.test(pr.head.sha)) {
-              return core.setFailed('PR must be open, unmerged, and from this repository pre/beta to main.');
-            }
+            const number = context.payload.pull_request.number;
             await github.rest.issues.createComment({
               owner, repo, issue_number: number,
-              body: "Direct merges from `pre/beta` to `main` are disallowed by policy. This PR will be closed unmerged."
+              body: "Direct merges from `pre/beta` to `main` are disallowed by policy. Make changes in the originating open PRs and prepare another beta if needed. This PR will be closed unmerged."
             });
             await github.rest.pulls.update({ owner, repo, pull_number: number, state: "closed" });
