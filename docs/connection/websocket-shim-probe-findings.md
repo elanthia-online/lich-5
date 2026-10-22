@@ -103,7 +103,7 @@ GAMEHOST=dr.simutronics.net GAMEPORT=11624   (as of 2026-09-20; do not treat as 
 ```
 
 Also worth recording: the current live GAMEHOST for DRT (`dr.simutronics.net`) differs from the
-value `docs/web-login-protocol-analysis.md` recorded during #1570's testing (`hydra.simutronics.com`,
+value `docs/connection/web-login-protocol-analysis.md` recorded during #1570's testing (`hydra.simutronics.com`,
 itself a DNS alias of `storm.dr.game.play.net`). Infrastructure has evidently moved since; treat
 either as a point-in-time observation, not a pinned constant -- which is exactly why
 `GameTransport` derives `ws_host` from whatever GAMEHOST auth actually returns rather than
@@ -364,7 +364,7 @@ shapes.
 ## Not yet confirmed
 
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
-  `docs/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
+  `docs/connection/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
   entitled account has been available to confirm their GAMEHOST values, so whether they follow the
   same two-pattern remap is assumed, not confirmed.
 - **Idle-connection survival against a live server** -- see "Automatic fallback"/self-review

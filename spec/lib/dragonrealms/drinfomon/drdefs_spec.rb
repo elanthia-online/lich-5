@@ -2,9 +2,6 @@
 
 require_relative '../../../spec_helper'
 
-# Mock $ORDINALS global
-$ORDINALS = %w[first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth].freeze unless defined?($ORDINALS)
-
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drdefs'
 
@@ -559,70 +556,6 @@ RSpec.describe Lich::DragonRealms do
     end
   end
 
-  describe '#add_ordinals_to_duplicates' do
-    context 'with unique NPCs' do
-      it 'returns single NPC without ordinal' do
-        expect(helper.add_ordinals_to_duplicates(['goblin'])).to eq(['goblin'])
-      end
-
-      it 'returns multiple unique NPCs without ordinals' do
-        result = helper.add_ordinals_to_duplicates(%w[goblin spider])
-        expect(result).to eq(%w[goblin spider])
-      end
-    end
-
-    context 'with duplicate NPCs' do
-      it 'adds ordinals to duplicates' do
-        result = helper.add_ordinals_to_duplicates(%w[goblin goblin])
-        expect(result).to eq(['goblin', 'second goblin'])
-      end
-
-      it 'handles three duplicates' do
-        result = helper.add_ordinals_to_duplicates(%w[goblin goblin goblin])
-        expect(result).to eq(['goblin', 'second goblin', 'third goblin'])
-      end
-
-      it 'handles many duplicates' do
-        result = helper.add_ordinals_to_duplicates(Array.new(10, 'goblin'))
-        expect(result[0]).to eq('goblin')
-        expect(result[1]).to eq('second goblin')
-        expect(result[9]).to eq('tenth goblin')
-      end
-    end
-
-    context 'with mixed NPCs' do
-      it 'handles mixed unique and duplicate' do
-        result = helper.add_ordinals_to_duplicates(%w[goblin spider goblin])
-        expect(result).to include('goblin', 'second goblin', 'spider')
-      end
-
-      it 'handles multiple different duplicates' do
-        result = helper.add_ordinals_to_duplicates(%w[goblin spider goblin spider])
-        expect(result).to include('goblin', 'second goblin', 'spider', 'second spider')
-      end
-    end
-
-    context 'with more than 20 duplicates' do
-      it 'generates ordinals beyond $ORDINALS array' do
-        npcs = Array.new(25, 'goblin')
-        result = helper.add_ordinals_to_duplicates(npcs)
-        expect(result.size).to eq(25)
-        expect(result[0]).to eq('goblin')
-        expect(result[1]).to eq('second goblin')
-        expect(result[19]).to eq('twentieth goblin')
-        expect(result[20]).to eq('21th goblin')
-        expect(result[21]).to eq('22th goblin')
-        expect(result[24]).to eq('25th goblin')
-      end
-    end
-
-    context 'with empty list' do
-      it 'returns empty array' do
-        expect(helper.add_ordinals_to_duplicates([])).to eq([])
-      end
-    end
-  end
-
   describe '#find_objects' do
     context 'with frozen strings' do
       it 'does not mutate frozen strings' do
@@ -724,10 +657,26 @@ RSpec.describe Lich::DragonRealms do
       end
     end
 
-    context 'with ordinals' do
-      it 'adds ordinals to duplicate NPCs' do
-        result = helper.find_npcs("You also see a <pushBold/>goblin<popBold/> and a <pushBold/>goblin<popBold/>.")
-        expect(result).to include('goblin', 'second goblin')
+    context 'with duplicate nouns' do
+      let(:room) { "You also see a <pushBold/>goblin<popBold/>, a <pushBold/>spider<popBold/> and a <pushBold/>goblin<popBold/>." }
+
+      it 'repeats the plain noun with no ordinal' do
+        expect(helper.find_npcs(room)).to eq(%w[goblin goblin spider])
+      end
+
+      it 'lets an ignore list remove every copy' do
+        expect(helper.find_npcs(room) - ['goblin']).to eq(['spider'])
+      end
+
+      it 'keeps 25 copies plain' do
+        room = "You also see #{Array.new(25, 'a <pushBold/>goblin<popBold/>').join(', ')}."
+        expect(helper.find_npcs(room)).to eq(Array.new(25, 'goblin'))
+      end
+
+      it 'counts live copies only when dead copies of the same noun are interleaved' do
+        room = "You also see a <pushBold/>goblin<popBold/> (dead), a <pushBold/>goblin<popBold/>, a <pushBold/>goblin<popBold/> which appears dead and a <pushBold/>goblin<popBold/>."
+        expect(helper.find_npcs(room)).to eq(%w[goblin goblin])
+        expect(helper.find_dead_npcs(room)).to eq(%w[goblin goblin])
       end
     end
   end
@@ -758,10 +707,10 @@ RSpec.describe Lich::DragonRealms do
       end
     end
 
-    context 'with ordinals' do
-      it 'adds ordinals to duplicate dead NPCs' do
+    context 'with duplicate nouns' do
+      it 'repeats the plain noun with no ordinal' do
         result = helper.find_dead_npcs("You also see a <pushBold/>goblin<popBold/> (dead) and a <pushBold/>goblin<popBold/> which appears dead.")
-        expect(result).to include('goblin', 'second goblin')
+        expect(result).to eq(%w[goblin goblin])
       end
     end
   end
@@ -933,10 +882,10 @@ RSpec.describe Lich::DragonRealms do
       expect(result).to eq(%w[goblin spider])
     end
 
-    it 'adds ordinals to duplicates' do
+    it 'keeps duplicates as plain nouns' do
       input = ['<pushBold/>goblin<popBold/>', '<pushBold/>goblin<popBold/>']
       result = helper.clean_npc_string(input)
-      expect(result).to eq(['goblin', 'second goblin'])
+      expect(result).to eq(%w[goblin goblin])
     end
 
     it 'handles empty array' do
@@ -1034,10 +983,10 @@ RSpec.describe Lich::DragonRealms do
         expect(result).to eq([])
       end
 
-      it 'adds ordinals to duplicate NPCs' do
+      it 'keeps duplicate NPCs as plain nouns' do
         room_objs = "You also see a <pushBold/>goblin<popBold/> and a <pushBold/>goblin<popBold/>."
         result = helper.extract_npcs(room_objs, select_dead: false)
-        expect(result).to contain_exactly('goblin', 'second goblin')
+        expect(result).to eq(%w[goblin goblin])
       end
     end
   end

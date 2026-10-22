@@ -1871,6 +1871,11 @@ class DRRoom
   class << self
     attr_accessor :npcs, :pcs, :group_members, :room_objs
 
+    # The production method with no Creature roster: the noun rule only.
+    def unignored_npcs(ignored)
+      (npcs || []) - Array(ignored).compact.map(&:to_s)
+    end
+
     # Clear through the accessors, not the mock's instance variables. When the
     # production DRRoom (lib/dragonrealms/drinfomon/drroom.rb) is loaded in the
     # same process it reopens DRRoom and redefines the accessors to read/write

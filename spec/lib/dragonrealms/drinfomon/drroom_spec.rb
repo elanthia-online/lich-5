@@ -3,6 +3,7 @@
 require_relative '../../../spec_helper'
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drroom'
+require 'dragonrealms/creature'
 
 RSpec.describe Lich::DragonRealms::DRRoom do
   before(:each) do
@@ -41,6 +42,35 @@ RSpec.describe Lich::DragonRealms::DRRoom do
       it 'can be set and retrieved' do
         described_class.dead_npcs = ['a dead goblin']
         expect(described_class.dead_npcs).to eq(['a dead goblin'])
+      end
+    end
+
+    # Every script reads the same array, so one script's << or delete used to
+    # change what every other script saw until the next room refresh.
+    %i[npcs dead_npcs].each do |field|
+      describe ".#{field} is read-only" do
+        it 'raises FrozenError when a script mutates it in place' do
+          described_class.public_send(:"#{field}=", %w[goblin goblin])
+          expect { described_class.public_send(field) << 'troll' }.to raise_error(FrozenError)
+          expect { described_class.public_send(field).delete('goblin') }.to raise_error(FrozenError)
+          expect(described_class.public_send(field)).to eq(%w[goblin goblin])
+        end
+
+        it "leaves the caller's array unfrozen and unshared" do
+          source = %w[goblin]
+          described_class.public_send(:"#{field}=", source)
+          source << 'troll'
+          expect(source).not_to be_frozen
+          expect(described_class.public_send(field)).to eq(%w[goblin])
+        end
+
+        it 'hands out a copy the script can edit' do
+          described_class.public_send(:"#{field}=", %w[goblin])
+          copy = described_class.public_send(field).dup
+          copy << 'troll'
+          expect(copy).to eq(%w[goblin troll])
+          expect(described_class.public_send(field)).to eq(%w[goblin])
+        end
       end
     end
   end
@@ -123,6 +153,84 @@ RSpec.describe Lich::DragonRealms::DRRoom do
       it 'returns XMLData.room_description' do
         expect(described_class.description).to eq('A test room description.')
       end
+    end
+  end
+
+  describe '.unignored_npcs' do
+    let(:creatures) { Lich::DragonRealms::Creature }
+
+    before { creatures.clear }
+    after { creatures.clear }
+
+    # Registers each [name, noun] as a creature in the room, then sets
+    # DRRoom.npcs the way drparser would for the same room.
+    def room(*named, npcs:)
+      named.each_with_index { |(name, noun), i| creatures.register(name, 1000 + i, noun) }
+      described_class.npcs = npcs
+    end
+
+    it 'drops every copy of an ignored noun' do
+      described_class.npcs = %w[kobold moradu moradu]
+      expect(described_class.unignored_npcs(['moradu'])).to eq(['kobold'])
+    end
+
+    it 'returns all NPCs for a nil or empty ignore list' do
+      described_class.npcs = %w[kobold moradu]
+      expect(described_class.unignored_npcs(nil)).to eq(%w[kobold moradu])
+      expect(described_class.unignored_npcs([])).to eq(%w[kobold moradu])
+    end
+
+    it 'returns a new array and leaves DRRoom.npcs alone' do
+      described_class.npcs = %w[kobold moradu]
+      result = described_class.unignored_npcs(['kobold'])
+      result << 'troll'
+      expect(described_class.npcs).to eq(%w[kobold moradu])
+    end
+
+    it 'skips a pet named in full but not a wild creature of the same noun' do
+      room(['a spectral white leopard with luminous blue eyes', 'leopard'], ['a sinewy leopard', 'leopard'],
+           npcs: %w[leopard leopard])
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq(['leopard'])
+      expect(described_class.unignored_npcs(['leopard'])).to eq([])
+    end
+
+    it "honours both the game's noun and the noun DRRoom.npcs lists" do
+      room(['a majestic dragon with fiery crimson eyes and void-black scales', 'dragon'], ['a jeol moradu', 'moradu'],
+           npcs: %w[moradu scales])
+      expect(described_class.unignored_npcs(['dragon'])).to eq(['moradu'])
+      expect(described_class.unignored_npcs(['scales'])).to eq(['moradu'])
+      expect(described_class.unignored_npcs(['eyes'])).to eq(%w[moradu scales])
+    end
+
+    it 'falls back to the noun rule while the roster and DRRoom.npcs disagree' do
+      room(['a spectral white leopard with luminous blue eyes', 'leopard'], npcs: %w[leopard leopard])
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq(%w[leopard leopard])
+    end
+
+    it 'falls back to the noun rule while a creature has no name' do
+      creatures.sync('2000', 'hostile' => '1')
+      room(['a spectral white leopard with luminous blue eyes', 'leopard'], npcs: %w[leopard leopard])
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq(%w[leopard leopard])
+    end
+
+    it 'falls back to the noun rule when a name reduces to no noun' do
+      room(['a training dummy 2', nil], ['a jeol moradu', 'moradu'], npcs: ['moradu'])
+      expect(described_class.unignored_npcs(['jeol moradu'])).to eq(['moradu'])
+    end
+
+    it "keeps a legacy creature's derived last-word noun from naming it" do
+      creatures.sync('3000', 'hostile' => '1')
+      creatures['3000'].apply_room_name('a spectral white leopard with luminous blue eyes')
+      described_class.npcs = ['leopard']
+      expect(described_class.unignored_npcs(['eyes'])).to eq(['leopard'])
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq([])
+    end
+
+    it 'leaves dead creatures out of the roster it pairs with DRRoom.npcs' do
+      room(['a spectral white leopard with luminous blue eyes', 'leopard'], ['a sinewy leopard', 'leopard'],
+           npcs: ['leopard'])
+      creatures.sync('1001', 'dead' => '1')
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq([])
     end
   end
 end
