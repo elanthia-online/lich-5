@@ -5,7 +5,7 @@
 #
 if File.exist?("#{DATA_DIR}/lich.sav")
   Lich.log "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
-  Lich.msgbox "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
+  Lich.msgbox(message: "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav", icon: :error)
   exit
 end
 

@@ -276,7 +276,7 @@ module Lich
                      "file. Close that Lich or choose a different port, then try again."
             end
             Lich.log msg
-            Lich.msgbox msg
+            Lich.msgbox(message: msg, icon: :error)
             exit
           end
           Lich.log "info: launch file: #{argv_options[:sal]}"
