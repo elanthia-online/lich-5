@@ -213,6 +213,19 @@ RSpec.describe Lich::DragonRealms::DRRoom do
       expect(described_class.unignored_npcs(['spectral white leopard'])).to eq(%w[leopard leopard])
     end
 
+    it 'falls back to the noun rule when a name reduces to no noun' do
+      room(['a training dummy 2', nil], ['a jeol moradu', 'moradu'], npcs: ['moradu'])
+      expect(described_class.unignored_npcs(['jeol moradu'])).to eq(['moradu'])
+    end
+
+    it "keeps a legacy creature's derived last-word noun from naming it" do
+      creatures.sync('3000', 'hostile' => '1')
+      creatures['3000'].apply_room_name('a spectral white leopard with luminous blue eyes')
+      described_class.npcs = ['leopard']
+      expect(described_class.unignored_npcs(['eyes'])).to eq(['leopard'])
+      expect(described_class.unignored_npcs(['spectral white leopard'])).to eq([])
+    end
+
     it 'leaves dead creatures out of the roster it pairs with DRRoom.npcs' do
       room(['a spectral white leopard with luminous blue eyes', 'leopard'], ['a sinewy leopard', 'leopard'],
            npcs: ['leopard'])

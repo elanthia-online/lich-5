@@ -39,8 +39,8 @@ module Lich
       # living creatures in {.npcs}, an entry also removes the creatures it
       # names by noun or by full name (CreatureInstance#matches?), so
       # "spectral white leopard" skips that pet but not a wild leopard. While
-      # the roster and {.npcs} disagree (a refresh in progress, or a creature
-      # with no name yet), only the noun rule applies.
+      # the roster and {.npcs} disagree (a refresh in progress, a creature
+      # with no name yet, or a name with no noun), only the noun rule applies.
       #
       # @param ignored [Array<String>, nil] configured entries
       # @return [Array<String>] a new array
@@ -68,7 +68,10 @@ module Lich
         Lich::DragonRealms::Creature.in_room(:not_dead).each do |creature|
           return nil if creature.name.nil?
 
-          pairs << [creature, npc_noun_parser.clean_npc_string([creature.name]).first]
+          noun = npc_noun_parser.clean_npc_string([creature.name]).first
+          return nil if noun.nil?
+
+          pairs << [creature, noun]
         end
         pairs.map(&:last).sort == npcs ? pairs : nil
       end

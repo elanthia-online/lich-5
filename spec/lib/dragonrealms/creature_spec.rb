@@ -102,6 +102,18 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class[99353095].noun).to eq('moradu')
     end
 
+    it 'lets a linked room name replace an assess-set name on a recycled id' do
+      described_class.feed_assess(
+        name: 'A spectral white leopard with luminous blue eyes', noun: 'leopard', id: '99353095', number: 1,
+        relation: 'behind you', range: :melee, self: false, pc: false
+      )
+      # The id comes back on a different creature; its link carries the new name.
+      described_class[99353095].apply_room_name('a sinewy leopard', 'leopard')
+
+      expect(described_class[99353095].name).to eq('a sinewy leopard')
+      expect(described_class[99353095].matches?('spectral white leopard')).to be(false)
+    end
+
     it 'a nil room name (count-gate skip) leaves an existing name intact' do
       creature = described_class.sync('99353095', 'hostile' => '1')
       creature.apply_room_name('a jeol moradu')
@@ -553,7 +565,8 @@ RSpec.describe Lich::DragonRealms::Creature do
 
     it 'matches the whole name without its article' do
       expect(pet.matches?('spectral white leopard with luminous blue eyes')).to be(true)
-      expect(pet.matches?('a spectral white leopard with luminous blue eyes')).to be(false)
+      expect(pet.matches?('a spectral white leopard with luminous blue eyes')).to be(true)
+      expect(pet.matches?('A spectral white leopard')).to be(true)
     end
 
     it 'matches a phrase of two or more whole words in the name' do
@@ -585,6 +598,20 @@ RSpec.describe Lich::DragonRealms::Creature do
     it 'matches nothing for a nil or blank entry' do
       expect(pet.matches?(nil)).to be(false)
       expect(pet.matches?('   ')).to be(false)
+    end
+
+    it "never matches a single word against a noun Lich derived from the name's last word" do
+      # Legacy stream: no link noun, so the noun is the last word of the name.
+      legacy = described_class.sync('99353096', 'hostile' => '1')
+      legacy.apply_room_name('a spectral white leopard with luminous blue eyes')
+      expect(legacy.noun).to eq('eyes')
+      expect(legacy.matches?('eyes')).to be(false)
+      expect(legacy.matches?('spectral white leopard')).to be(true)
+
+      assessed = described_class.sync('99353097', 'hostile' => '1')
+      assessed.feed_assess(name: 'A majestic dragon with fiery crimson eyes and void-black scales', noun: nil, number: 1)
+      expect(assessed.noun).to eq('scales')
+      expect(assessed.matches?('scales')).to be(false)
     end
 
     it 'matches nothing while a creature has no name or noun yet' do
