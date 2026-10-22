@@ -386,7 +386,7 @@ module Lich
       end
 
       def retreat(ignored_npcs = [])
-        return if (DRRoom.npcs - ignored_npcs).empty?
+        return if DRRoom.unignored_npcs(ignored_npcs).empty?
 
         DRC.retreat(ignored_npcs)
       end

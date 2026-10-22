@@ -95,6 +95,7 @@ module Lich
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
+        @noun_from_server = server_noun?(noun)
         @name = name
         @created_at = Time.now
         @assess_number = nil
@@ -137,6 +138,7 @@ module Lich
         if entry[:name]
           @name = entry[:name].to_s.downcase
           @noun = resolve_noun(entry[:noun], @name)
+          @noun_from_server = server_noun?(entry[:noun])
           # Authoritative from here on: subsequent room-objs backfills no-op.
           @name_from_assess = true
         end
@@ -162,20 +164,25 @@ module Lich
       # last word of the name ("a sleek golden panther with enigmatic violet
       # eyes" has noun "panther"). Without one (legacy) the noun is derived from
       # the name's last word. The
-      # `assess` stream is the authoritative id<->name tie, so once #feed_assess
-      # has named the creature this is a no-op. A nil name (e.g. an out-of-range
-      # positional lookup, the count-guard) is ignored, leaving any existing name
-      # intact.
+      # `assess` stream is the authoritative id<->name tie over the legacy
+      # positional pairing, so once #feed_assess has named the creature a name
+      # without a link noun is ignored. A linked name is tied to its id by the
+      # link itself, so it replaces an assess name: server ids are recycled,
+      # and an id reused for another creature must not keep the old creature's
+      # assessed name. A nil name (e.g. an out-of-range positional lookup, the
+      # count-guard) is ignored, leaving any existing name intact.
       #
       # @param name [String, nil] display name from the room-objs stream.
       # @param noun [String, nil] the server's noun (the link's `noun=`); nil or
       #   blank derives it from the name. Surrounding whitespace is trimmed.
       # @return [void]
       def apply_room_name(name, noun = nil)
-        return if name.nil? || @name_from_assess
+        return if name.nil?
+        return if @name_from_assess && !server_noun?(noun)
 
         @name = name
         @noun = resolve_noun(noun, name)
+        @noun_from_server = server_noun?(noun)
       end
 
       # Whether this creature should be considered attackable.
@@ -240,6 +247,36 @@ module Lich
         condition?('friendly')
       end
 
+      # Leading article dropped before comparing a configured entry with {#name}.
+      NAME_ARTICLE = /\A(?:an?|the|some)\s+/i.freeze
+
+      # Whether a configured entry, such as an `ignored_npcs` item, names this
+      # creature. Case-insensitive, and a leading article on the entry is
+      # ignored. An entry matches when it is:
+      # - the game's noun ("leopard"), from the stream's creature link;
+      # - the whole name ("spectral white leopard with luminous blue eyes");
+      # - a phrase of two or more words in the name ("spectral white leopard").
+      #
+      # A single word matches the game's noun only, never another word of the
+      # name, so "eyes" does not name every creature "with ... eyes". A noun
+      # Lich derived from the name (legacy stream, no link) is not used: it is
+      # the name's last word, which can be a word of a "with ..." clause.
+      # DRRoom.unignored_npcs still drops plain nouns by its own noun rule.
+      #
+      # @param entry [String, nil]
+      # @return [Boolean]
+      def matches?(entry)
+        wanted = entry.to_s.strip.downcase.squeeze(' ').sub(NAME_ARTICLE, '')
+        return false if wanted.empty?
+        return true if @noun_from_server && @noun.downcase == wanted
+
+        full = @name.to_s.strip.downcase.squeeze(' ').sub(NAME_ARTICLE, '')
+        return false if full.empty?
+        return true if full == wanted
+
+        wanted.include?(' ') && " #{full} ".include?(" #{wanted} ")
+      end
+
       # Matches a DR_BALANCE_VALUES descriptor followed by the balance word in an
       # assess parenthetical, e.g. "solidly balanced", "off balance", and the
       # worst levels' "imbalanced" phrasing ("extremely imbalanced"). Built lazily
@@ -286,8 +323,16 @@ module Lich
       # @param name [String, nil] the display name to derive from.
       # @return [String, nil]
       def resolve_noun(noun, name)
-        noun = noun&.strip
-        noun.nil? || noun.empty? ? derive_noun(name) : noun
+        server_noun?(noun) ? noun.strip : derive_noun(name)
+      end
+
+      # Whether the stream supplied a noun (a link's `noun=`), as opposed to
+      # Lich deriving one from the name.
+      #
+      # @param noun [String, nil]
+      # @return [Boolean]
+      def server_noun?(noun)
+        !noun.to_s.strip.empty?
       end
 
       # Extracts the attack noun (trailing word) from a display name, matching

@@ -905,11 +905,12 @@ module Lich
       # a caller that calls it again at once sends at most about one RETREAT
       # a second.
       #
-      # @param ignored_npcs [Array<String>] NPCs that don't need a retreat
+      # @param ignored_npcs [Array<String>] NPCs that don't need a retreat: nouns,
+      #   or full names / multi-word phrases (see DRRoom.unignored_npcs)
       # @return [Boolean, nil] nil when no other NPC is in the room, true once
       #   out of combat, false when retreating can't succeed now
       def retreat(ignored_npcs = [])
-        return if (DRRoom.npcs - ignored_npcs).empty?
+        return if DRRoom.unignored_npcs(ignored_npcs).empty?
 
         deadline = nil
         loop do
