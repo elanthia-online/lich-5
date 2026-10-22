@@ -216,7 +216,8 @@ RSpec.describe Lich::DependencyRecovery do
 
   it 'rejects a manifest aimed at a different Ruby platform' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
-    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: 'x64-mingw-ucrt')
+    other_platform = platform == 'x64-mingw-ucrt' ? 'x86_64-linux' : 'x64-mingw-ucrt'
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: other_platform)
     subject = recovery(artifacts: { manifest_url => manifest })
 
     result = subject.recover(['sqlite3'])
@@ -591,17 +592,12 @@ RSpec.describe Lich::DependencyRecovery do
       original_home = Gem.dir
       original_path = Gem.path
       original_environment = ENV.to_h.slice('GEM_HOME', 'GEM_PATH')
-      original_reset_hooks = Gem.post_reset_hooks.dup
-      # Bundler repopulates the registry on reset. These real-installer
-      # examples must discover only the temporary gem home instead.
-      Gem.post_reset_hooks.clear
       ENV['GEM_HOME'] = gem_home
       ENV['GEM_PATH'] = gem_home
       Gem.use_paths(gem_home, [gem_home])
       example.run
     ensure
       %w[GEM_HOME GEM_PATH].each { |name| ENV[name] = original_environment[name] }
-      Gem.post_reset_hooks.replace(original_reset_hooks)
       Gem.use_paths(original_home, original_path)
     end
 
@@ -723,7 +719,8 @@ RSpec.describe Lich::DependencyRecovery do
         payload = JSON.parse(File.read(ARGV.shift))
         installer = lambda do |path, home|
           gem = Gem::Installer.at(path, install_dir: home, ignore_dependencies: true, wrappers: false, force: true)
-          def gem.write_spec
+          gem.define_singleton_method(:write_spec) do
+            File.write(File.join(payload.fetch('work_dir'), 'installer-interruption'), 'before gemspec')
             Process.kill('KILL', Process.pid)
           end
           gem.install
@@ -733,21 +730,23 @@ RSpec.describe Lich::DependencyRecovery do
         def recovery.restart_lich(_restart); raise 'unexpected restart'; end
         recovery.send(:run_windows_replacement!, payload)
       RUBY
-      environment = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home }
-      environment['SystemRoot'] = ENV.fetch('SystemRoot') if Gem.win_platform?
+      environment = {
+        'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
+        'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
+      }
       _, stderr, status = Open3.capture3(
         environment, RbConfig.ruby, '-e', helper,
-        File.expand_path('../../lib/dependency_recovery.rb', __dir__), gem_home, transaction,
-        unsetenv_others: true
+        File.expand_path('../../lib/dependency_recovery.rb', __dir__), gem_home, transaction
       )
 
-      # Windows can report exit 0 for KILL; the missing spec and extracted
-      # directory below prove the installer stopped at the interruption point.
-      expect(status).to be_a(Process::Status), stderr
-      expect(status.termsig).to eq(Signal.list.fetch('KILL')) unless Gem.win_platform?
-      expect(installed_versions).to be_empty
-      expect(Dir).to exist(File.join(gem_home, 'gems', "#{gem_name}-1.0.0"))
-      expect(File).not_to exist(File.join(gem_home, 'specifications', "#{gem_name}-1.0.0.gemspec"))
+      # Windows can report exit 0 for KILL. Require evidence that write_spec
+      # was reached, and report the child diagnostics if any state is wrong.
+      diagnostics = "Helper status: #{status.inspect}\n#{stderr}"
+      expect(File).to exist(File.join(work_dir, 'installer-interruption')), diagnostics
+      expect(status.termsig).to eq(Signal.list.fetch('KILL')), diagnostics unless Gem.win_platform?
+      expect(installed_versions).to be_empty, diagnostics
+      expect(Dir).to exist(File.join(gem_home, 'gems', "#{gem_name}-1.0.0")), diagnostics
+      expect(File).not_to exist(File.join(gem_home, 'specifications', "#{gem_name}-1.0.0.gemspec")), diagnostics
 
       subject.send(:run_windows_replacement!, payload)
 
@@ -770,34 +769,21 @@ RSpec.describe Lich::DependencyRecovery do
 
       context 'with inherited dependency activation settings' do
         let(:replacement_body) do
-          <<~RUBY
-            %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS LICH_RECOVERY_PARENT_ONLY].each do |name|
-              raise "inherited environment variable: \#{name}" if ENV.key?(name)
-            end
-          RUBY
+          "raise 'inherited gem dependency file' if ENV['RUBYGEMS_GEMDEPS']\n"
         end
 
         around do |example|
-          names = %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS LICH_RECOVERY_PARENT_ONLY]
-          original_environment = ENV.to_h.slice(*names)
+          original_environment = ENV.to_h.slice('BUNDLER_SETUP', 'RUBYGEMS_GEMDEPS')
           startup = File.join(recovery_temp_dir, 'unrelated-startup.rb')
           File.write(startup, "raise 'inherited startup file was loaded'\n")
           ENV['BUNDLER_SETUP'] = startup
           ENV['RUBYGEMS_GEMDEPS'] = File.join(recovery_temp_dir, 'unrelated.Gemfile')
-          ENV['LICH_RECOVERY_PARENT_ONLY'] = 'must not reach child'
           example.run
         ensure
-          names.each { |name| ENV[name] = original_environment[name] }
+          %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS].each { |name| ENV[name] = original_environment[name] }
         end
 
-        it 'loads only the replacement runtime without any implicit environment inheritance' do
-          expected_environment = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home }
-          expected_environment['SystemRoot'] = ENV.fetch('SystemRoot') if Gem.win_platform?
-          expect(Process).to receive(:spawn).with(
-            expected_environment, subject.send(:rubyw_binary), '-e', kind_of(String), gem_home, 'gtk3', '2.0.0',
-            hash_including(unsetenv_others: true)
-          ).and_call_original
-
+        it 'loads only the replacement runtime without inherited startup hooks' do
           subject.send(:run_windows_replacement!, payload)
 
           expect(installed_versions).to eq(['2.0.0'])

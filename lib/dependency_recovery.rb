@@ -7,6 +7,7 @@ require 'open3'
 require 'rbconfig'
 require 'rubygems/installer'
 require 'tempfile'
+require 'timeout'
 require 'tmpdir'
 require 'uri'
 
@@ -573,13 +574,14 @@ module Lich
         require 'gtk3'
       RUBY
       versions = packages.flat_map { |package| [package.fetch('name'), package.fetch('version')] }
-      # Start with only the replacement gem home. Windows also needs its
-      # system directory for OS services; no other parent settings are passed.
-      environment = { 'GEM_HOME' => @gem_home, 'GEM_PATH' => @gem_home }
-      environment['SystemRoot'] = ENV.fetch('SystemRoot') if Gem.win_platform?
+      # RubyGems can activate a parent bundle before this script starts, even
+      # without RUBYOPT. Verify the manifest's gems in the replacement home.
+      environment = {
+        'GEM_HOME' => @gem_home, 'GEM_PATH' => @gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
+        'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
+      }
       Tempfile.create(['lich-gtk-load-', '.log'], @temp_dir) do |log|
-        pid = Process.spawn(environment, rubyw_binary, '-e', script, @gem_home, *versions,
-                            unsetenv_others: true, out: log, err: log)
+        pid = Process.spawn(environment, rubyw_binary, '-e', script, @gem_home, *versions, out: log, err: log)
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + NATIVE_LOAD_TIMEOUT_SECONDS
         loop do
           if (finished = Process.waitpid2(pid, Process::WNOHANG))
