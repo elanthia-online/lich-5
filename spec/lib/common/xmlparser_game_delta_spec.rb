@@ -73,26 +73,8 @@ RSpec.describe Lich::Common::XMLParserDelta do
         .to eq(room_title: '[Town Square, Central]')
     end
 
-    it 'keeps parsing after a failed automatic preference write and retries on the next subtitle' do
-      enabled = false
-      writes = 0
-      allow(Lich).to receive(:display_uid) { enabled }
-      allow(Lich).to receive(:display_uid=) do |value|
-        writes += 1
-        raise SQLite3::BusyException, 'database is locked' if writes == 1
-
-        enabled = value
-      end
-      expect(Lich).to receive(:log).with('warning: could not persist automatic display_uid: database is locked').once
-
-      expect(delta.main_subtitle(' - Town Square, Central - 228', nav_uid_pending: false))
-        .to eq(room_title: '[Town Square, Central]')
-      expect(enabled).to be(false)
-      expect(delta.main_subtitle(' - Next Room - 229', nav_uid_pending: false))
-        .to eq(room_title: '[Next Room]')
-      expect(enabled).to be(true)
-      expect(writes).to eq(2)
-    end
+    # Failure/cooldown and parser-state regressions use real Lich persistence
+    # in lich_display_settings_persistence_spec.rb, outside this suite's mocks.
   end
 
   describe 'DragonRealms::XMLDelta#main_subtitle' do
@@ -192,20 +174,6 @@ RSpec.describe Lich::Common::XMLParserDelta do
       allow(Lich).to receive(:display_uid).and_return(true)
       feed(%(<streamWindow id='main' title='Story' subtitle=" - Town Square, Central - 228" location='center' target='drop'/>))
       expect(parser.room_title).to eq('[Town Square, Central]')
-    end
-
-    it 'preserves parser state when the automatic display preference cannot be saved' do
-      allow(XMLData).to receive(:game).and_return('GSIV')
-      allow(Lich).to receive(:display_uid).and_return(false)
-      allow(Lich).to receive(:display_uid=).and_raise(SQLite3::SQLException, 'write failed')
-      expect(Lich).to receive(:log).with('warning: could not persist automatic display_uid: write failed')
-      expect(parser).not_to receive(:reset)
-      parser.instance_variable_set(:@room_id, 123)
-
-      feed(%(<streamWindow id='main' title='Story' subtitle=" - Town Square, Central - 228"/>))
-
-      expect(parser.room_title).to eq('[Town Square, Central]')
-      expect(parser.room_id).to eq(123)
     end
 
     it 'applies the Default delta before the game is known' do

@@ -993,8 +993,8 @@ RSpec.describe 'do_client command dispatch' do
         puts "PUBLIC \#{Lich.display_uid}"
         puts "STRICT_RESTORED \#{Thread.current[:lich_strict_display_reads].nil?}"
       RUBY
-      expect(out.scan('could not update display settings: database is locked').length).to eq(10)
-      expect(out.scan('could not read display settings: database is locked').length).to eq(1)
+      expect(out.scan('could not update display settings: database is locked').length).to eq(9)
+      expect(out.scan('could not read display settings: database is locked').length).to eq(2)
       expect(out.scan('ATTEMPTS 2').length).to eq(10)
       expect(out.scan('UNRESOLVED true').length).to eq(10)
       expect(out).to include('PUBLIC false', 'STRICT_RESTORED true')

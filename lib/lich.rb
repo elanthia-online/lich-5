@@ -119,6 +119,8 @@ module Lich
 
   # Display caches are reset on reload, like the former individual fields.
   @display_settings_cache = {}
+  @display_read_retry_at = nil
+  @display_uid_retry_at = nil
 
   # settings
   @@keep_fe_string       = nil # boolean
@@ -776,13 +778,32 @@ module Lich
     end
   end
 
-  # Display DB operations retain Lich.db's C busy_timeout, which holds the
-  # GVL and can stall all Ruby threads (5000 ms per attempt by default).
+  # Shared Lich.db uses a Ruby busy handler that releases the GVL while
+  # waiting (5000 ms per attempt by default). The calling thread still waits.
   # Two attempts plus one 100 ms pause bound each operation's default lock
   # waiting to about 10.1 seconds plus execution overhead. Failed writes raise;
   # hot-path reads use an uncached default unless a command requests strict reads.
   DISPLAY_SETTINGS_MAX_ATTEMPTS = 2
   DISPLAY_SETTINGS_RETRY_DELAY = 0.1
+  DISPLAY_SETTINGS_RETRY_COOLDOWN = 5.0
+
+  # Commands and one-shot startup actions must not act on a busy-read default.
+  # Nested callers retain the outer strict scope, even when a read raises.
+  # @yield reads display settings through their public accessors
+  # @return [Object] the block result
+  def self.with_strict_display_reads
+    previous = Thread.current[:lich_strict_display_reads]
+    Thread.current[:lich_strict_display_reads] = true
+    yield
+  ensure
+    Thread.current[:lich_strict_display_reads] = previous
+  end
+
+  def self.display_read_cooling_down?
+    retry_at = @display_read_retry_at
+    !Thread.current[:lich_strict_display_reads] && retry_at &&
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) < retry_at
+  end
 
   # Retries one display-setting read or write after transient contention.
   # @yield performs one DB operation
@@ -807,9 +828,15 @@ module Lich
   # @yieldparam value [String, nil] the stored value, or nil for no row
   # @return [Boolean, String, nil] cached value, or an uncached default while busy
   def self.read_display_setting(name)
+    # Warm rendering reads may use the last published value during a write.
+    cached = @display_settings_cache[name]
+    return cached unless cached.nil?
+    return yield(nil) if display_read_cooling_down?
+
     @display_settings_mutex.synchronize do
       cached = @display_settings_cache[name]
       return cached unless cached.nil?
+      return yield(nil) if display_read_cooling_down?
 
       stored = begin
         with_display_settings_retry do
@@ -819,7 +846,9 @@ module Lich
         raise if Thread.current[:lich_strict_display_reads]
 
         # A rendering/hook read must not remove the hook or abort the parser.
-        # Leave the cache unresolved so a later read can load the saved choice.
+        # Share the cooldown across cold settings in this render/session.
+        # Defaults remain uncached, so expiry can load the saved choice.
+        @display_read_retry_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) + DISPLAY_SETTINGS_RETRY_COOLDOWN
         return yield(nil)
       end
       @display_settings_cache[name] = yield(stored)
@@ -829,22 +858,45 @@ module Lich
   # Persists first, then publishes the cache while still holding the display
   # lock. Competing writes therefore leave the cache at the last saved value.
   # Defer thread interrupts through publication so a committed value cannot be
-  # left behind an old cache. Synchronous DB failures still raise immediately.
+  # left behind an old cache. Explicit writes propagate synchronous DB failures.
   # @param name [Symbol] the internal display setting name
   # @param value [Boolean, String] the normalized value to save
-  # @return [Boolean, String] the saved value; raises on a failed write
-  def self.write_display_setting(name, value)
+  # @param automatic [Boolean] cooldown and log optional subtitle UID writes
+  # @return [Boolean, String, nil] saved value, or nil for a skipped automatic write
+  def self.write_display_setting(name, value, automatic: false)
     @display_settings_mutex.synchronize do
+      if automatic
+        return if @display_settings_cache[name] == true
+        return if @display_uid_retry_at && Process.clock_gettime(Process::CLOCK_MONOTONIC) < @display_uid_retry_at
+      end
+
       Thread.handle_interrupt(Exception => :never) do
         with_display_settings_retry do
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('#{name}',?);",
                           [value.to_s.encode('UTF-8')])
         end
         @display_settings_cache[name] = value
+        @display_read_retry_at = nil
+        @display_uid_retry_at = nil if name == :display_uid
+        value
       end
+    rescue SQLite3::Exception => e
+      raise unless automatic
+
+      # Optional subtitle persistence must not abort parsing or retry every room.
+      # Retain the prior value; the next numbered subtitle after expiry retries.
+      @display_uid_retry_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) + DISPLAY_SETTINGS_RETRY_COOLDOWN
+      Lich.log "warning: could not persist automatic display_uid: #{e.message}"
+      nil
     end
   end
-  private_class_method :with_display_settings_retry, :read_display_setting, :write_display_setting
+  private_class_method :with_display_settings_retry, :read_display_setting, :write_display_setting,
+                       :display_read_cooling_down?
+
+  # Explicit setters bypass this cooldown and clear it after a successful save.
+  def self.enable_display_uid_automatically
+    write_display_setting(:display_uid, true, automatic: true)
+  end
 
   def Lich.display_lichid
     read_display_setting(:display_lichid) do |val|

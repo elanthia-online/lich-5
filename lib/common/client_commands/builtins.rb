@@ -17,18 +17,6 @@ require File.join(LIB_DIR, 'common', 'client_commands.rb')
 module Lich
   module Common
     module ClientCommands
-      # Commands must report a failed read rather than toggle an uncached
-      # fallback. Public getters otherwise protect game rendering and hooks.
-      # @yield reads a display setting using its existing public accessor
-      # @return [Object] the loaded value
-      def self.strict_display_read
-        previous = Thread.current[:lich_strict_display_reads]
-        Thread.current[:lich_strict_display_reads] = true
-        yield
-      ensure
-        Thread.current[:lich_strict_display_reads] = previous
-      end
-
       define do
         # ---- script control ---------------------------------------------
 
@@ -286,7 +274,7 @@ module Lich
         # Strict reads raise on cold-cache contention; failed writes also raise,
         # so assignment expressions need no return checks.
         command(/^display flaguid(?: (true|false))?/i, game: :dr) do |m|
-          current = ClientCommands.strict_display_read { Lich.hide_uid_flag }
+          current = Lich.with_strict_display_reads { Lich.hide_uid_flag }
           new_value = ClientCommands.toggle_value(current, m[1])
           Lich.hide_uid_flag = new_value
           respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
@@ -297,7 +285,7 @@ module Lich
         end
 
         command(/^display descflag(?: (true|false|on|off))?$/i, game: :dr) do |m|
-          current = ClientCommands.strict_display_read { Lich.follow_description_flag }
+          current = Lich.with_strict_display_reads { Lich.follow_description_flag }
           new_value = ClientCommands.toggle_value(current, m[1])
           Lich.follow_description_flag = new_value
           respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
@@ -309,7 +297,7 @@ module Lich
         # (DR) is registered between uid and exits to keep its original place.
         DISPLAY_TOGGLES.each_with_index do |(word, accessor, description), index|
           command(/^display #{word}(?: (true|false))?/i) do |m|
-            current = ClientCommands.strict_display_read { Lich.public_send(accessor) }
+            current = Lich.with_strict_display_reads { Lich.public_send(accessor) }
             new_value = ClientCommands.toggle_value(current, m[1])
             Lich.public_send("#{accessor}=", new_value)
             respond "Changing Lich to display #{description} to #{new_value}"
@@ -322,7 +310,7 @@ module Lich
           command(/^display roomid(?:\s+(title|line|both))?/i, game: :dr) do |m|
             requested = m[1]&.downcase
             if requested.nil?
-              current = ClientCommands.strict_display_read { Lich.display_roomid_location }
+              current = Lich.with_strict_display_reads { Lich.display_roomid_location }
               respond "DragonRealms room id / RealID display placement is currently: #{current}"
               respond 'Usage: ;display roomid <title|line|both>  (title = in the room name line, ' \
                       'line = a Room Number line below the room, both = both places)'
@@ -331,7 +319,8 @@ module Lich
               respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
             end
           rescue SQLite3::Exception => e
-            respond "--- Lich: could not update display settings: #{e.message}"
+            action = requested.nil? ? 'read' : 'update'
+            respond "--- Lich: could not #{action} display settings: #{e.message}"
           end
         end
 
@@ -340,7 +329,7 @@ module Lich
             respond 'Error: exp-monitor.lic script is currently running'
             respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
           else
-            current = ClientCommands.strict_display_read { Lich.display_expgains }
+            current = Lich.with_strict_display_reads { Lich.display_expgains }
             new_value = ClientCommands.toggle_value(current, m[:toggle])
             Lich.display_expgains = new_value
             if new_value
@@ -366,7 +355,7 @@ module Lich
         end
 
         command(/^display exp-status$/i, game: :dr) do
-          expgains = ClientCommands.strict_display_read { Lich.display_expgains }
+          expgains = Lich.with_strict_display_reads { Lich.display_expgains }
           respond
           respond 'DragonRealms Experience Monitor Status:'
           respond "  expgains:   #{expgains ? 'ON' : 'OFF'}  (real-time gain messages)"

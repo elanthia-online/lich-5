@@ -15,8 +15,9 @@ RSpec.describe 'persisted display settings' do
   # @param body [String] child Ruby ending in a JSON result
   # @param game [String] game used for unresolved defaults
   # @return [Object] the decoded child result
-  def real_settings(body, game: 'DR')
+  def real_settings(body, game: 'DR', preload: '', child_timeout: 30)
     source = <<~RUBY
+      #{preload}
       require 'sqlite3'
       require 'json'
       require './lib/lich'
@@ -28,11 +29,210 @@ RSpec.describe 'persisted display settings' do
       Lich.define_singleton_method(:db) { db }
       pauses = []
       Lich.define_singleton_method(:sleep) { |seconds| pauses << seconds }
+      def wait_for(queue, label)
+        queue.pop(timeout: 5) || raise("timed out waiting for \#{label}")
+      end
+      def thread_value(thread, label)
+        raise "timed out joining \#{label}" unless thread.join(5)
+        thread.value
+      end
       #{body}
     RUBY
-    out, err, status = Open3.capture3(RbConfig.ruby, '-e', source, chdir: File.expand_path('../..', __dir__))
-    expect(status.success?).to be(true), err
+    out = err = status = nil
+    Open3.popen3(RbConfig.ruby, '-e', source, chdir: File.expand_path('../..', __dir__)) do |stdin, stdout, stderr, child|
+      stdin.close
+      readers = [stdout, stderr].map { |stream| Thread.new { stream.read } }
+      timed_out = !child.join(child_timeout)
+      if timed_out
+        %w[TERM KILL].each do |signal|
+          begin
+            Process.kill(signal, child.pid)
+          rescue Errno::ESRCH
+            # The child exited between the deadline check and the signal.
+          end
+          break if child.join(1)
+        end
+      end
+      status = child.value # reap after termination, including on Windows
+      out, err = readers.map(&:value)
+      raise "display settings child timed out after #{child_timeout}s; stdout: #{out}; stderr: #{err}" if timed_out
+    end
+    expect(status.success?).to be(true), "child #{status.inspect}: #{err}"
     JSON.parse(out)
+  end
+
+  it 'restores nested strict scopes and the original flag after exceptions' do
+    result = real_settings(<<~'RUBY')
+      states = [Thread.current[:lich_strict_display_reads]]
+      begin
+        Lich.with_strict_display_reads do
+          states << Thread.current[:lich_strict_display_reads]
+          Lich.with_strict_display_reads { states << Thread.current[:lich_strict_display_reads] }
+          states << Thread.current[:lich_strict_display_reads]
+          raise 'read failed'
+        end
+      rescue RuntimeError
+        states << Thread.current[:lich_strict_display_reads]
+      end
+      Thread.current[:lich_strict_display_reads] = false
+      Lich.with_strict_display_reads { nil }
+      states << Thread.current[:lich_strict_display_reads]
+      puts JSON.generate(states)
+    RUBY
+    expect(result).to eq([nil, true, true, true, nil, false])
+  end
+
+  it 'shares the cold-read cooldown across settings, leaves defaults uncached and recovers at expiry' do
+    result = real_settings(<<~'RUBY')
+      clock = 100.0
+      Process.define_singleton_method(:clock_gettime) { |_| clock }
+      reads = 0
+      db.define_singleton_method(:get_first_value) do |*|
+        reads += 1
+        raise SQLite3::BusyException, 'locked'
+      end
+      during = [Lich.display_uid, Lich.display_expgains, Lich.display_roomid_location]
+      clock += 4.99
+      during << Lich.display_uid
+      uncached = Lich.instance_variable_get(:@display_settings_cache).empty?
+      before = reads
+      db.define_singleton_method(:get_first_value) { |*| reads += 1; 'true' }
+      clock += 0.01
+      recovered = Lich.display_uid
+      puts JSON.generate([during, uncached, before, reads, recovered])
+    RUBY
+    expect(result).to eq([[false, true, 'line', false], true, 2, 3, true])
+  end
+
+  it 'lets strict reads bypass the cooldown and successful writes clear it for other settings' do
+    result = real_settings(<<~'RUBY')
+      Process.define_singleton_method(:clock_gettime) { |_| 100.0 }
+      reads = 0
+      busy = true
+      db.define_singleton_method(:get_first_value) do |*|
+        reads += 1
+        raise SQLite3::BusyException if busy
+        'true'
+      end
+      Lich.display_uid
+      error = begin
+        Lich.with_strict_display_reads { Lich.display_uid }
+      rescue SQLite3::BusyException
+        'busy'
+      end
+      busy = false
+      strict = Lich.with_strict_display_reads { Lich.display_uid }
+      Lich.display_roomid_location = 'title'
+      loaded = Lich.display_lichid
+      puts JSON.generate([error, strict, loaded, reads])
+    RUBY
+    expect(result).to eq(['busy', true, true, 6])
+  end
+
+  it 'throttles automatic UID writes and logs, preserves parsing and retries at expiry' do
+    result = real_settings(<<~'RUBY', game: 'GSIV')
+      LIB_DIR = File.expand_path('lib')
+      require './lib/gemstone/xml_delta'
+      clock = 100.0
+      Process.define_singleton_method(:clock_gettime) { |_| clock }
+      messages = []
+      Lich.define_singleton_method(:log) { |message| messages << message }
+      Lich.display_uid = false
+      writes = 0
+      busy = true
+      db.define_singleton_method(:execute) do |*args|
+        writes += 1
+        raise SQLite3::BusyException, 'locked' if busy
+        super(*args)
+      end
+      delta = Lich::Gemstone::XMLDelta
+      titles = [delta.main_subtitle(' - First - 1', nav_uid_pending: false)]
+      clock += 4.99
+      titles << delta.main_subtitle(' - Second - 2', nav_uid_pending: false)
+      failed = [writes, messages.size, Lich.display_uid, db.get_first_value('SELECT value FROM lich_settings')]
+      busy = false
+      clock += 0.01
+      titles << delta.main_subtitle(' - Third - 3', nav_uid_pending: false)
+      puts JSON.generate([titles, failed, writes, messages, Lich.display_uid,
+                          db.get_first_value('SELECT value FROM lich_settings')])
+    RUBY
+    expect(result).to eq([[{ 'room_title' => '[First]' }, { 'room_title' => '[Second]' }, { 'room_title' => '[Third]' }],
+                          [2, 1, false, 'false'], 3, ['warning: could not persist automatic display_uid: locked'], true, 'true'])
+  end
+
+  it 'allows explicit UID writes during automatic cooldown and clears it on success' do
+    result = real_settings(<<~'RUBY')
+      Process.define_singleton_method(:clock_gettime) { |_| 100.0 }
+      Lich.define_singleton_method(:log) { |_| nil }
+      Lich.display_uid = false
+      failing = true
+      writes = 0
+      db.define_singleton_method(:execute) do |*args|
+        writes += 1
+        raise SQLite3::SQLException, 'write failed' if failing
+        super(*args)
+      end
+      Lich.enable_display_uid_automatically
+      Lich.enable_display_uid_automatically
+      suppressed = [writes, Lich.display_uid]
+      error = begin
+        Lich.display_uid = true
+      rescue SQLite3::SQLException => e
+        e.message
+      end
+      failing = false
+      Lich.display_uid = false
+      Lich.enable_display_uid_automatically
+      puts JSON.generate([suppressed, error, writes, Lich.display_uid])
+    RUBY
+    expect(result).to eq([[1, false], 'write failed', 4, true])
+  end
+
+  it 'keeps parser state after a non-busy automatic UID write failure' do
+    result = real_settings(<<~'RUBY', game: 'GSIV', preload: "require './spec/spec_helper'")
+      require 'ox'
+      require 'common/xmlparser'
+      require 'gemstone/xml_delta'
+      Lich.display_uid = false
+      messages = []
+      Lich.define_singleton_method(:log) { |message| messages << message }
+      db.define_singleton_method(:execute) { |*| raise SQLite3::SQLException, 'write failed' }
+      parser = Lich::Common::XMLParser.new
+      parser.instance_variable_set(:@room_id, 123)
+      parser.define_singleton_method(:reset) { raise 'unexpected parser reset' }
+      Ox.sax_parse(parser, %(<streamWindow id='main' title='Story' subtitle=" - Town Square - 228"/>),
+                   convert_special: false, symbolize: false, skip: :skip_none)
+      puts JSON.generate([parser.room_title, parser.room_id, Lich.display_uid, messages])
+    RUBY
+    expect(result).to eq(['[Town Square]', 123, false, ['warning: could not persist automatic display_uid: write failed']])
+  end
+
+  [false, true, :busy, :active].each do |saved|
+    it "honors saved expgains at DR startup (#{saved}) without starting from a busy fallback" do
+      result = real_settings(<<~RUBY, preload: "require './spec/spec_helper'")
+        require 'dragonrealms/drinfomon/drexpmonitor'
+        monitor = Lich::DragonRealms::DRExpMonitor
+        starts = 0
+        monitor.define_singleton_method(:start) { starts += 1 }
+        monitor.define_singleton_method(:active?) { #{saved == :active} }
+        db.execute("INSERT INTO lich_settings VALUES ('display_expgains', '#{saved == true || saved == :active}')")
+        messages = []
+        Lich.define_singleton_method(:log) { |message| messages << message }
+        if #{saved == :busy}
+          db.define_singleton_method(:get_first_value) { |*| raise SQLite3::BusyException, 'locked' }
+          Lich.display_expgains # establish public cooldown; startup must bypass it
+        end
+        require 'dragonrealms/drinfomon'
+        puts JSON.generate([starts, messages.size, Thread.current[:lich_strict_display_reads]])
+      RUBY
+      expect(result).to eq([saved == true ? 1 : 0, saved == :busy ? 1 : 0, nil])
+    end
+  end
+
+  it 'terminates a stuck child and retains its stderr in the timeout diagnostic' do
+    expect do
+      real_settings("STDERR.sync = true; warn 'child reached wait'; Kernel.sleep(60)", child_timeout: 5)
+    end.to raise_error(RuntimeError, /child timed out.*stderr: child reached wait/)
   end
 
   settings.each do |name|
@@ -96,9 +296,12 @@ RSpec.describe 'persisted display settings' do
           raise 'unbounded public read' if attempts > 2
           raise SQLite3::BusyException, 'database is locked'
         end
+        clock = 100.0
+        Process.define_singleton_method(:clock_gettime) { |_| clock }
         fallback = Lich.#{name}
         unresolved = Lich.instance_variable_get(:@display_settings_cache)[#{name.inspect}.to_sym]
         db.define_singleton_method(:get_first_value) { |*| #{saved.inspect} }
+        clock += 5.0
         puts JSON.generate([fallback, attempts, pauses, unresolved, Lich.#{name}])
       RUBY
       expect(result).to eq([fallback, 2, [0.1], nil, saved == 'title' ? 'title' : !fallback])
@@ -180,10 +383,13 @@ RSpec.describe 'persisted display settings' do
       end
       hooks = Lich::Common::DownstreamHook
       hooks.add('display-busy', ->(line) { "#{line}|#{Lich.display_uid}" }, persist: true)
+      clock = 100.0
+      Process.define_singleton_method(:clock_gettime) { |_| clock }
       during = hooks.run('room')
       retained = hooks.list.include?('display-busy')
       unresolved = Lich.instance_variable_get(:@display_settings_cache)[:display_uid]
       db.define_singleton_method(:get_first_value) { |*| 'true' }
+      clock += 5.0
       after = hooks.run('room')
       puts JSON.generate([during, retained, unresolved, after, messages, attempts])
     RUBY
@@ -219,7 +425,8 @@ RSpec.describe 'persisted display settings' do
         holder = SQLite3::Database.new(File.join(dir, 'settings.db3'))
         begin
           real.execute('CREATE TABLE lich_settings (name TEXT PRIMARY KEY, value TEXT)')
-          real.busy_timeout(25)
+          Lich.define_singleton_method(:sqlite_busy_timeout_ms) { 25 }
+        Lich.configure_sqlite_connection(real)
           Lich.define_singleton_method(:db) { real }
           Lich.display_uid = false
           holder.execute('BEGIN IMMEDIATE')
@@ -266,49 +473,44 @@ RSpec.describe 'persisted display settings' do
       cache.define_singleton_method(:[]=) do |name, value|
         if Thread.current[:actor] == :first
           publication << true
-          resume.pop
+          wait_for(resume, 'resume')
         end
         original.call(name, value)
       end
       first = Thread.new { Thread.current[:actor] = :first; Lich.display_uid = true }
-      publication.pop
+      wait_for(publication, 'publication')
       second = Thread.new { Thread.current[:actor] = :second; Lich.display_uid = false }
-      attempted.pop
+      wait_for(attempted, 'attempted')
       before = db.get_first_value('SELECT value FROM lich_settings')
       resume << true
-      [first, second].each(&:value)
+      thread_value(first, 'first writer')
+      thread_value(second, 'second writer')
       puts JSON.generate([before, Lich.display_uid, db.get_first_value('SELECT value FROM lich_settings')])
     RUBY
     expect(result).to eq(['true', false, 'false'])
   end
 
-  it 'serializes an ordinary cached getter with an in-flight write publication' do
+  it 'returns the old cached value during a write and the new value after publication' do
     result = real_settings(<<~'RUBY')
       Lich.display_uid = false
       publication = Queue.new
       resume = Queue.new
-      attempted = Queue.new
-      lock = Lich.instance_variable_get(:@display_settings_mutex)
-      lock.define_singleton_method(:synchronize) do |&block|
-        attempted << true if Thread.current[:reader]
-        super(&block)
-      end
       cache = Lich.instance_variable_get(:@display_settings_cache)
       original = cache.method(:[]=)
       cache.define_singleton_method(:[]=) do |name, value|
         publication << true
-        resume.pop
+        wait_for(resume, 'resume publication')
         original.call(name, value)
       end
       writer = Thread.new { Lich.display_uid = true }
-      publication.pop
-      reader = Thread.new { Thread.current[:reader] = true; Lich.display_uid }
-      attempted.pop
+      wait_for(publication, 'publication')
+      reader = Thread.new { Lich.display_uid }
+      during = thread_value(reader, 'warm reader before writer resumes')
       resume << true
-      writer.value
-      puts JSON.generate([reader.value, db.get_first_value('SELECT value FROM lich_settings')])
+      thread_value(writer, 'writer')
+      puts JSON.generate([during, Lich.display_uid, db.get_first_value('SELECT value FROM lich_settings')])
     RUBY
-    expect(result).to eq([true, 'true'])
+    expect(result).to eq([false, true, 'true'])
   end
 
   it 'prevents a cold read from overwriting a subsequent successful write' do
@@ -326,16 +528,17 @@ RSpec.describe 'persisted display settings' do
         value = super(*args)
         if Thread.current[:reader]
           fetched << true
-          resume.pop
+          wait_for(resume, 'resume')
         end
         value
       end
       reader = Thread.new { Thread.current[:reader] = true; Lich.display_uid }
-      fetched.pop
+      wait_for(fetched, 'fetched')
       writer = Thread.new { Thread.current[:writer] = true; Lich.display_uid = true }
-      attempted.pop
+      wait_for(attempted, 'attempted')
       resume << true
-      [reader, writer].each(&:value)
+      thread_value(reader, 'cold reader')
+      thread_value(writer, 'writer')
       puts JSON.generate([Lich.display_uid, db.get_first_value('SELECT value FROM lich_settings')])
     RUBY
     expect(result).to eq([true, 'true'])
@@ -350,18 +553,18 @@ RSpec.describe 'persisted display settings' do
       original = cache.method(:[]=)
       cache.define_singleton_method(:[]=) do |name, value|
         publication << true
-        resume.pop
+        wait_for(resume, 'resume')
         original.call(name, value)
       end
       writer = Thread.new do
         Thread.current.report_on_exception = false
         Lich.display_uid = true
       end
-      publication.pop
+      wait_for(publication, 'publication')
       writer.raise(RuntimeError, 'interrupted after commit')
       resume << true
       error = begin
-        writer.value
+        thread_value(writer, 'interrupted writer')
         nil
       rescue RuntimeError => e
         e.message
