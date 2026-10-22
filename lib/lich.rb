@@ -253,6 +253,7 @@ module Lich
   end
 
   def Lich.msgbox(args)
+    args = { message: args.to_s } unless args.is_a?(Hash)
     if defined?(Win32)
       if args[:buttons] == :ok_cancel
         buttons = Win32::MB_OKCANCEL

@@ -2,6 +2,7 @@
 
 require 'rspec'
 require 'tmpdir'
+require 'socket'
 
 # lib/main/argv_options.rb pulls a heavy require chain and auto-executes
 # ArgvOptions.process_argv at load time, so it cannot be required in isolation.
@@ -188,5 +189,26 @@ RSpec.describe 'Lich::Main::ArgvOptions --frontend-caps' do
     capabilities.launch_capabilities = nil
     harness.handle_frontend_caps({})
     expect(capabilities.launch_capabilities).to be_nil
+  end
+end
+
+RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.port_in_use?' do
+  source_path = File.expand_path('../../../lib/main/argv_options.rb', __dir__)
+
+  harness_class = Class.new do
+    method_body = File.read(source_path)[/^(?<ind>[ \t]*)def self\.port_in_use\?\(host, port\).*?^\k<ind>end$/m]
+    raise 'could not extract port_in_use? from argv_options.rb' unless method_body
+
+    module_eval(method_body.sub('def self.port_in_use?', 'def port_in_use?'))
+  end
+
+  let(:harness) { harness_class.new }
+
+  it 'reports a port held by a live listener as in use, and a freed one as free' do
+    server = TCPServer.new('127.0.0.1', 0)
+    port = server.addr[1]
+    expect(harness.port_in_use?('127.0.0.1', port)).to be true
+    server.close
+    expect(harness.port_in_use?('127.0.0.1', port)).to be false
   end
 end

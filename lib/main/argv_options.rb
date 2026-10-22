@@ -252,12 +252,31 @@ module Lich
           end
         end
 
+        # Plain bind probe (no SO_REUSEADDR on Windows), so a live listener fails it.
+        def self.port_in_use?(host, port)
+          TCPServer.new(host, port).close
+          false
+        rescue Errno::EADDRINUSE, Errno::EACCES
+          true
+        rescue StandardError
+          false
+        end
+
         def self.handle_sal_launch(argv_options)
           return unless argv_options[:sal]
 
           unless File.exist?(argv_options[:sal])
-            Lich.log "error: launch file does not exist: #{argv_options[:sal]}"
-            Lich.msgbox "error: launch file does not exist: #{argv_options[:sal]}"
+            msg = "error: launch file does not exist: #{argv_options[:sal]}"
+            # A launcher that deletes its .sal once it reaches the detachable port
+            # (e.g. Saga) does so early if something else already holds that port.
+            port = argv_options[:detachable_client_port]
+            if port && port_in_use?(argv_options[:detachable_client_host], port)
+              msg += "\n\nThe detachable client port #{port} is already in use, most likely by another Lich " \
+                     "that is still running. Your launcher may have connected to it and deleted the launch " \
+                     "file. Close that Lich or choose a different port, then try again."
+            end
+            Lich.log msg
+            Lich.msgbox msg
             exit
           end
           Lich.log "info: launch file: #{argv_options[:sal]}"
