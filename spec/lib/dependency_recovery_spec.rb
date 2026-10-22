@@ -436,6 +436,7 @@ RSpec.describe Lich::DependencyRecovery do
         .to raise_error(described_class::Error, /later backup denied/)
 
       expect(original_files.map { |file| File.read(file) }).to eq(['original'] * original_files.size)
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
     end
 
     it 'removes a partial installation before its gemspec exists and restores the original suite' do
@@ -455,6 +456,51 @@ RSpec.describe Lich::DependencyRecovery do
 
       expect(original_files.map { |file| File.read(file) }).to eq(['original'] * original_files.size)
       expect(File).not_to exist(File.join(runtime_specs.last.full_gem_path, 'partial.dll'))
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
+    end
+
+    it 'preserves leftover content while removing only empty rollback directories' do
+      allow(installer).to receive(:call).and_raise(IOError, 'install failed')
+      allow(subject).to receive(:restore_backup).and_wrap_original do |restore, moved|
+        restore.call(moved)
+        File.write(File.join(rollback_dir, 'retained'), 'recovery evidence')
+      end
+
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(IOError, /install failed/)
+
+      expect(Dir.children(rollback_dir)).to eq(['retained'])
+      expect(File.read(File.join(rollback_dir, 'retained'))).to eq('recovery evidence')
+    end
+
+    it 'does not follow or remove symlinks during empty rollback cleanup' do
+      backup_root = File.join(gem_home, 'empty-backup')
+      link = File.join(backup_root, 'retained-link')
+      FileUtils.mkdir_p(link)
+      # Model lstat's symlink result without requiring Windows symlink privileges.
+      allow(File).to receive(:lstat).and_call_original
+      allow(File).to receive(:lstat).with(link).and_return(instance_double(File::Stat, directory?: false))
+      allow(Dir).to receive(:children).and_call_original
+      allow(Dir).to receive(:rmdir).and_call_original
+
+      subject.send(:remove_empty_backup_directories, backup_root)
+
+      expect(Dir).not_to have_received(:children).with(link)
+      expect(Dir).not_to have_received(:rmdir).with(link)
+      expect(Dir.children(backup_root)).to eq(['retained-link'])
+    ensure
+      allow(File).to receive(:lstat).and_call_original
+    end
+
+    it 'preserves the original error when empty rollback cleanup is denied' do
+      allow(installer).to receive(:call).and_raise(IOError, 'install failed')
+      allow(Dir).to receive(:rmdir).and_raise(Errno::EACCES, 'cleanup denied')
+
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(IOError, /install failed/)
+
+      expect(original_files.map { |file| File.read(file) }).to all(eq('original'))
+      expect(Dir).to exist(rollback_dir)
+    ensure
+      allow(Dir).to receive(:rmdir).and_call_original
     end
 
     it 'retains a recoverable backup when replacement cleanup fails while restoring other originals' do
@@ -592,12 +638,16 @@ RSpec.describe Lich::DependencyRecovery do
       original_home = Gem.dir
       original_path = Gem.path
       original_environment = ENV.to_h.slice('GEM_HOME', 'GEM_PATH')
+      # Ambient reset hooks must not repopulate the isolated fixture registry.
+      original_reset_hooks = Gem.post_reset_hooks.dup
+      Gem.post_reset_hooks.clear
       ENV['GEM_HOME'] = gem_home
       ENV['GEM_PATH'] = gem_home
       Gem.use_paths(gem_home, [gem_home])
       example.run
     ensure
       %w[GEM_HOME GEM_PATH].each { |name| ENV[name] = original_environment[name] }
+      Gem.post_reset_hooks.replace(original_reset_hooks)
       Gem.use_paths(original_home, original_path)
     end
 
@@ -674,6 +724,7 @@ RSpec.describe Lich::DependencyRecovery do
       expect(paths).to all(satisfy { |path| !File.exist?(path) })
       expect_original_runtime
 
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
       allow(Gem::Installer).to receive(:at).and_call_original
       subject.send(:run_windows_replacement!, payload)
 
@@ -692,6 +743,7 @@ RSpec.describe Lich::DependencyRecovery do
       expect_original_runtime
       expect(File).not_to exist(File.join(gem_home, 'gems', "#{gem_name}-2.0.0"))
       expect(File).to exist(File.join(gem_home, 'cache', "#{gem_name}-2.0.0.gem"))
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
     end
 
     it 'restores an orphan byte for byte after a real install fails' do

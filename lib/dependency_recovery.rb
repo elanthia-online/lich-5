@@ -431,6 +431,7 @@ module Lich
           unless failures.empty?
             raise Error, "#{error.message}; rollback incomplete: #{failures.join('; ')}; backups retained in #{rollback_dir}"
           end
+          remove_empty_backup_directories(rollback_dir)
           raise
         end
         cleanup_workspace(rollback_dir)
@@ -531,6 +532,21 @@ module Lich
       end
       refresh_rubygems!
       raise Error, failures.join('; ') unless failures.empty?
+    end
+
+    # Remove empty rollback scaffolding without deleting retained content or
+    # following symlinks. Cleanup must not replace the original recovery error.
+    # @param path [String]
+    # @return [void]
+    def remove_empty_backup_directories(path)
+      return unless File.lstat(path).directory?
+
+      Dir.children(path).each do |entry|
+        remove_empty_backup_directories(File.join(path, entry))
+      end
+      Dir.rmdir(path)
+    rescue SystemCallError
+      nil
     end
 
     # Removes only paths claimed before attempted installs, not all registered
