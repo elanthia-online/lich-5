@@ -591,12 +591,17 @@ RSpec.describe Lich::DependencyRecovery do
       original_home = Gem.dir
       original_path = Gem.path
       original_environment = ENV.to_h.slice('GEM_HOME', 'GEM_PATH')
+      original_reset_hooks = Gem.post_reset_hooks.dup
+      # Bundler repopulates the registry on reset. These real-installer
+      # examples must discover only the temporary gem home instead.
+      Gem.post_reset_hooks.clear
       ENV['GEM_HOME'] = gem_home
       ENV['GEM_PATH'] = gem_home
       Gem.use_paths(gem_home, [gem_home])
       example.run
     ensure
       %w[GEM_HOME GEM_PATH].each { |name| ENV[name] = original_environment[name] }
+      Gem.post_reset_hooks.replace(original_reset_hooks)
       Gem.use_paths(original_home, original_path)
     end
 
@@ -728,13 +733,12 @@ RSpec.describe Lich::DependencyRecovery do
         def recovery.restart_lich(_restart); raise 'unexpected restart'; end
         recovery.send(:run_windows_replacement!, payload)
       RUBY
-      environment = {
-        'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
-        'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
-      }
+      environment = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home }
+      environment['SystemRoot'] = ENV.fetch('SystemRoot') if Gem.win_platform?
       _, stderr, status = Open3.capture3(
         environment, RbConfig.ruby, '-e', helper,
-        File.expand_path('../../lib/dependency_recovery.rb', __dir__), gem_home, transaction
+        File.expand_path('../../lib/dependency_recovery.rb', __dir__), gem_home, transaction,
+        unsetenv_others: true
       )
 
       # Windows can report exit 0 for KILL; the missing spec and extracted
@@ -766,21 +770,34 @@ RSpec.describe Lich::DependencyRecovery do
 
       context 'with inherited dependency activation settings' do
         let(:replacement_body) do
-          "raise 'inherited gem dependency file' if ENV['RUBYGEMS_GEMDEPS']\n"
+          <<~RUBY
+            %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS LICH_RECOVERY_PARENT_ONLY].each do |name|
+              raise "inherited environment variable: \#{name}" if ENV.key?(name)
+            end
+          RUBY
         end
 
         around do |example|
-          original_environment = ENV.to_h.slice('BUNDLER_SETUP', 'RUBYGEMS_GEMDEPS')
+          names = %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS LICH_RECOVERY_PARENT_ONLY]
+          original_environment = ENV.to_h.slice(*names)
           startup = File.join(recovery_temp_dir, 'unrelated-startup.rb')
           File.write(startup, "raise 'inherited startup file was loaded'\n")
           ENV['BUNDLER_SETUP'] = startup
           ENV['RUBYGEMS_GEMDEPS'] = File.join(recovery_temp_dir, 'unrelated.Gemfile')
+          ENV['LICH_RECOVERY_PARENT_ONLY'] = 'must not reach child'
           example.run
         ensure
-          %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS].each { |name| ENV[name] = original_environment[name] }
+          names.each { |name| ENV[name] = original_environment[name] }
         end
 
-        it 'loads only the replacement runtime without inherited startup hooks' do
+        it 'loads only the replacement runtime without any implicit environment inheritance' do
+          expected_environment = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home }
+          expected_environment['SystemRoot'] = ENV.fetch('SystemRoot') if Gem.win_platform?
+          expect(Process).to receive(:spawn).with(
+            expected_environment, subject.send(:rubyw_binary), '-e', kind_of(String), gem_home, 'gtk3', '2.0.0',
+            hash_including(unsetenv_others: true)
+          ).and_call_original
+
           subject.send(:run_windows_replacement!, payload)
 
           expect(installed_versions).to eq(['2.0.0'])
