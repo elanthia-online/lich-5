@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'drdefs' # clean_npc_string, for .unignored_npcs
+
 module Lich
   module DragonRealms
     class DRRoom
@@ -27,6 +29,57 @@ module Lich
       def self.npcs=(val)
         @@npcs = val.dup.freeze
       end
+
+      # {.npcs} without the creatures an ignore list names. Same shape as
+      # {.npcs} (sorted nouns, duplicates repeated), so it replaces the
+      # `DRRoom.npcs - ignored` idiom.
+      #
+      # An entry always removes every NPC whose noun equals it, as
+      # `npcs - ignored` does. When the Creature roster lists exactly the
+      # living creatures in {.npcs}, an entry also removes the creatures it
+      # names by noun or by full name (CreatureInstance#matches?), so
+      # "spectral white leopard" skips that pet but not a wild leopard. While
+      # the roster and {.npcs} disagree (a refresh in progress, or a creature
+      # with no name yet), only the noun rule applies.
+      #
+      # @param ignored [Array<String>, nil] configured entries
+      # @return [Array<String>] a new array
+      def self.unignored_npcs(ignored)
+        ignored = Array(ignored).compact.map(&:to_s)
+        by_noun = npcs - ignored
+        return by_noun if by_noun.empty?
+
+        pairs = room_creatures_with_nouns
+        return by_noun unless pairs
+
+        pairs.reject { |creature, noun| ignored.include?(noun) || ignored.any? { |entry| creature.matches?(entry) } }
+             .map(&:last)
+             .sort
+      end
+
+      # The living roster creatures, each paired with the noun {.npcs} lists it
+      # under, or nil unless those nouns are exactly {.npcs}.
+      #
+      # @return [Array<Array(Object, String)>, nil]
+      def self.room_creatures_with_nouns
+        return nil unless defined?(Lich::DragonRealms::Creature)
+
+        pairs = []
+        Lich::DragonRealms::Creature.in_room(:not_dead).each do |creature|
+          return nil if creature.name.nil?
+
+          pairs << [creature, npc_noun_parser.clean_npc_string([creature.name]).first]
+        end
+        pairs.map(&:last).sort == npcs ? pairs : nil
+      end
+      private_class_method :room_creatures_with_nouns
+
+      # The drdefs helpers, which build {.npcs} from room text.
+      # @return [Object]
+      def self.npc_noun_parser
+        @@npc_noun_parser ||= Object.new.extend(Lich::DragonRealms)
+      end
+      private_class_method :npc_noun_parser
 
       def self.pcs
         @@pcs

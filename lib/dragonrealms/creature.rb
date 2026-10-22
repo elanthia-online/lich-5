@@ -240,6 +240,33 @@ module Lich
         condition?('friendly')
       end
 
+      # Leading article dropped before comparing a configured entry with {#name}.
+      NAME_ARTICLE = /\A(?:an?|the|some)\s+/i.freeze
+
+      # Whether a configured entry, such as an `ignored_npcs` item, names this
+      # creature. Case-insensitive. An entry matches when it is:
+      # - the noun ("leopard");
+      # - the whole name without its article ("spectral white leopard with
+      #   luminous blue eyes");
+      # - a phrase of two or more words in the name ("spectral white leopard").
+      #
+      # A single word matches the noun only, never another word of the name, so
+      # "eyes" does not name every creature "with ... eyes".
+      #
+      # @param entry [String, nil]
+      # @return [Boolean]
+      def matches?(entry)
+        wanted = entry.to_s.strip.downcase.squeeze(' ')
+        return false if wanted.empty?
+        return true if @noun&.downcase == wanted
+
+        full = @name.to_s.strip.downcase.squeeze(' ').sub(NAME_ARTICLE, '')
+        return false if full.empty?
+        return true if full == wanted
+
+        wanted.include?(' ') && " #{full} ".include?(" #{wanted} ")
+      end
+
       # Matches a DR_BALANCE_VALUES descriptor followed by the balance word in an
       # assess parenthetical, e.g. "solidly balanced", "off balance", and the
       # worst levels' "imbalanced" phrasing ("extremely imbalanced"). Built lazily
