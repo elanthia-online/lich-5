@@ -104,8 +104,9 @@ module Lich
       # Triggers.Add (Globals.cs:1002-1045 R). An empty pattern is a valid key that
       # matches every line, as in Remix. The raw pattern is kept for display and save.
       # @param authored [Boolean] the body is the user's own text: true for a triggers.cfg
-      #   row ({#load}) and a `#trigger` from an authored context; its `,`/`;` rows may then be Lich
-      #   commands when it fires ({TriggerRunner#fire}). Not saved: a reloaded file is authored.
+      #   row that triggers.cfg.untrusted does not list ({#load}) and a `#trigger` from an
+      #   authored context; its `,`/`;` rows may then be Lich commands when it fires
+      #   ({TriggerRunner#fire}). Kept across a save and load by {DefinitionTrust}.
       # @return [Boolean] false (nothing added) when a non-eval pattern is not a regex
       def add(pattern, commands, klass: '', authored: false)
         norm = TriggerFile.normalize(pattern)
@@ -179,13 +180,17 @@ module Lich
 
       # Add every row of a `triggers.cfg` to the registry WITHOUT clearing it first
       # (TriggerList.Load, Globals.cs:1077-1110 R; `#trigger load` merges, Command.cs:
-      # 1380-1384 R, while `#load triggers` clears first, Command.cs:684-690 R).
+      # 1380-1384 R, while `#load triggers` clears first, Command.cs:684-690 R). A row is
+      # authored unless triggers.cfg.untrusted lists it; every row is not authored when that
+      # file cannot be read, and +notice+ is told once ({DefinitionTrust}).
       # @param path [String, nil]
+      # @param notice [#call, nil] callable(text): one engine line
       # @return [Boolean] Remix's Load result (false: absent, or a malformed row
       #   aborted the rest of the file)
-      def load(path)
-        rows, ok = TriggerFile.read(path)
-        rows.each { |row| add(row.pattern, row.commands, klass: row.klass, authored: true) } # the user's own file
+      def load(path, notice: nil)
+        (rows, ok), untrusted = DefinitionTrust.read_with(path, 3) { TriggerFile.read(path) }
+        notice&.call(DefinitionTrust.corrupt_notice(path)) if untrusted.corrupt && !rows.empty?
+        rows.each { |row| add(row.pattern, row.commands, klass: row.klass, authored: untrusted.authored?(row.to_a)) }
         ok
       end
 
@@ -196,15 +201,27 @@ module Lich
       # the reader lock across the write, so no Add can land between a save's snapshot
       # and its file and two saves write the same rows; here the later save takes its
       # snapshot after the earlier one has written, so an older snapshot never lands last.
+      # The triggers that are not authored are listed in triggers.cfg.untrusted, written before
+      # triggers.cfg ({DefinitionTrust.save}); when that write fails, +notice+ is told and
+      # triggers.cfg is not written.
       # @param path [String]
+      # @param notice [#call, nil] callable(text): one engine line for a side-file failure
       # @return [Boolean] false when the file could not be written (Save swallows it)
-      def save(path)
+      def save(path, notice: nil)
         return false if path.nil?
 
         @save_mutex.synchronize do
-          TriggerFile.save(path, list)
-          true
+          snapshot = @mutex.synchronize { @triggers.values.map { |t| [t.pattern, t.commands, t.klass, t.authored] } }
+          untrusted = snapshot.reject(&:last).flat_map { |pattern, commands, klass| TriggerFile.identities(pattern, commands, klass) }
+          on_disk = -> { TriggerFile.read(path).first.map(&:to_a) }
+          DefinitionTrust.save(path, untrusted, arity: 3, on_disk: on_disk, notice: notice) do
+            TriggerFile.save(path, snapshot.map { |pattern, commands, klass| { 'pattern' => pattern, 'commands' => commands, 'class' => klass } })
+            true
+          end
         end
+      rescue DefinitionTrust::Error => e
+        notice&.call(e.message)
+        false
       rescue StandardError # Save is catch (Exception) -> false (Globals.cs:1177-1181 R)
         false
       end

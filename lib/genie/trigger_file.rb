@@ -30,16 +30,34 @@ module Lich
         return [rows, false] if lines.nil?
 
         lines.each do |line|
-          args = Text.parse_args(line)
-          next unless args.length > 2
-
-          rows << Row.new(args[1], args[2], args.length > 3 ? args[3].strip : '')
+          row = parse_row(line)
+          rows << row if row
         end
         [rows, true]
       rescue StandardError
         # Load is catch (Exception) -> false (Globals.cs:1105-1109 R): a malformed row
         # or an unreadable file keeps the rows read so far and never raises.
         [rows, false]
+      end
+
+      # LoadRow (Globals.cs:1112-1125 R): ParseArgs the line; more than 2 args is a row.
+      # @param line [String]
+      # @return [Row, nil]
+      # @raise [Error] a line ParseArgs throws on (it aborts the rest of the file)
+      def parse_row(line)
+        args = Text.parse_args(line)
+        args.length > 2 ? Row.new(args[1], args[2], args.length > 3 ? args[3].strip : '') : nil
+      end
+
+      # A trigger's identity as {.read} reads it back from the row {.row} writes: [pattern, action,
+      # class] of each row the written line reads back as ({DefinitionTrust}).
+      # @return [Array<Array(String, String, String)>]
+      def identities(pattern, commands, klass)
+        DefinitionTrust.read_back(row(pattern, commands, klass)).filter_map do |line|
+          parse_row(line)&.to_a
+        rescue StandardError # a piece ParseArgs throws on ends the load there: nothing to list
+          nil
+        end
       end
 
       # Triggers.Add's pattern normalization (Globals.cs:1001-1023 R).

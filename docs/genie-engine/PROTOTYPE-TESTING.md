@@ -116,8 +116,8 @@ parentheses.
    ,eq echo Lich::Genie::VERSION
    ```
 
-   It should print `0.26.9 (2026-10-22)` or later. The engine also prints
-   `--- Genie engine v0.26.9 (2026-10-22) active` once per session.
+   It should print `0.26.10 (2026-10-22)` or later. The engine also prints
+   `--- Genie engine v0.26.10 (2026-10-22) active` once per session.
 4. The engine stays on for a character once you turned it on. If it is off
    (`,eq echo Lich::Genie.enabled?` shows `false`), turn it on: `,e Lich::Genie.enabled = true`.
 
@@ -243,12 +243,14 @@ Everything the script corpus uses:
 - **Highlights, macros, windows, sounds** appear only with a front end that supports `<genieHook>`,
   and only after `,e Lich::Genie.hooks_enabled = true` (off by default).
 - **Lich commands only from what you wrote yourself (decided divergence D10; user guide section 14).**
-  `put ,go2 x`, `put ,%cmd`, `send 2 ,go2 x`, and `,...` rows in the body of an `action` line of a
-  `.cmd`, of a `#trigger`/`#alias` from your `triggers.cfg`/`aliases.cfg` or from a `put #trigger
+  `put ,go2 x`, `put ,go2 %dest`, `send 2 ,go2 x`, and `,...` rows in the body of an `action` line of
+  a `.cmd`, of a `#trigger`/`#alias` from your `triggers.cfg`/`aliases.cfg` or from a `put #trigger
   ...` line with nothing filled in, run as Lich commands. A `,`/`;` that only appears once a variable
-  or a captured `$1`/`$2` is filled in, and anything in a trigger/alias/action that a script defined
-  from captured or filled-in text, goes to the GAME as text (the game says "Please rephrase that
-  command"). Code-running Lich commands (`,e`/`,eq`/`,exec`/`,execq`/`,execname`/`,en`, `,l5u`) run
+  or a captured `$1`/`$2` is filled in, a command whose name is a variable or capture (`put ,%cmd`,
+  `action put ,$1 when ...`), and anything in a trigger/alias/action that a script defined from
+  captured or filled-in text -- also after `#trigger save` and a load (`triggers.cfg.untrusted` /
+  `aliases.cfg.untrusted` remember which) -- goes to the GAME as text (the game says "Please
+  rephrase that command"). Code-running Lich commands (`,e`/`,eq`/`,exec`/`,execq`/`,execname`/`,en`, `,l5u`) run
   only from a `put` line of a `.cmd` with nothing filled in (`put ,e $T2.reload_settings` works):
   never from `send`, a trigger/alias/action body, or `#send`/`#put`. A Lich command inside
   `#send`/`#put`/`#queue`/`#event`, after `move`/`do`, as a `gosub` argument, after `send %d`, or from

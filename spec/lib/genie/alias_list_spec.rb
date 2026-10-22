@@ -50,7 +50,8 @@ RSpec.describe Lich::Genie::AliasList do
 
     it 'orders whole saves: an older snapshot never lands after a newer one' do
       extend GenieSpecSupport::SaveOrdering
-      expect_ordered_saves(first: -> { aliases.add('k', 'one') }, second: -> { aliases.add('k', 'two') },
+      # authored: the side file of an alias that is not is one more write (definition_trust_spec)
+      expect_ordered_saves(first: -> { aliases.add('k', 'one', authored: true) }, second: -> { aliases.add('k', 'two', authored: true) },
                            first_marker: '{k} {one}', second_marker: '{k} {two}',
                            save: -> { aliases.save(File.join(@dir, 'aliases.cfg')) })
     end

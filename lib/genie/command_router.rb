@@ -645,9 +645,9 @@ module Lich
       def save_list(kind)
         path = @lists.save_file(LIST_FILES[kind])
         case kind
-        when 'Triggers' then @lists.triggers.save(path)
+        when 'Triggers' then @lists.triggers.save(path, notice: @echo)
         when 'Classes' then @lists.classes.save(path)
-        when 'Aliases' then @lists.aliases.save(@lists.writable? ? @lists.aliases.file || path : nil)
+        when 'Aliases' then @lists.aliases.save(@lists.writable? ? @lists.aliases.file || path : nil, notice: @echo)
         when 'Gags' then @lists.filters.save_gags(path)
         when 'Substitutes' then @lists.filters.save_subs(path)
         end
@@ -656,11 +656,11 @@ module Lich
       def load_list(kind, clear_first, class_event)
         path = @lists.file(LIST_FILES[kind])
         case kind
-        when 'Triggers' then load_into(@lists.triggers, :clear, clear_first) { |list| list.load(path) }
+        when 'Triggers' then load_into(@lists.triggers, :clear, clear_first) { |list| list.load(path, notice: @echo) }
         when 'Classes'
           load_into(@lists.classes, :clear, clear_first) { |list| list.load(path) }
           class_changed if class_event
-        when 'Aliases' then load_into(@lists.aliases, :clear, clear_first) { |list| list.load(list.file || path) }
+        when 'Aliases' then load_into(@lists.aliases, :clear, clear_first) { |list| list.load(list.file || path, notice: @echo) }
         when 'Gags' then load_into(@lists.filters, :clear_gags, clear_first) { |list| list.load_gags(path) }
         when 'Substitutes' then load_into(@lists.filters, :clear_subs, clear_first) { |list| list.load_subs(path) }
         end

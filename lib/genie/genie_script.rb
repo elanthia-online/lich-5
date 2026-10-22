@@ -583,6 +583,7 @@ module Lich
           Lich::Genie.global_store
           Lich::Genie.trigger_disabled_listener = TRIGGER_DISABLED
           Lich::Genie.filter_disabled_listener = FILTER_DISABLED
+          Lich::Genie.definition_notice_listener = DEFINITION_NOTICE
           # The game state's variable changes ($health, $prompt, "lastcommand", the SpellTimer
           # port's `#var`s), its events and its printed texts go to the #triggers and the scripts
           # (a game row's from the trigger worker).
@@ -845,6 +846,13 @@ module Lich
         TRIGGER_DISABLED = lambda do |pattern|
           GenieScript.engine_respond "--- Lich: genie #trigger disabled: /#{pattern[0, 60]}/ timed out " \
                                      "#{Triggers::TIMEOUT_LIMIT} times in a row (add it again to re-enable it)"
+        end
+
+        # A list file's notice ({Lich::Genie.definition_notice}: a side file of triggers.cfg /
+        # aliases.cfg that cannot be read). It comes from the first build of a registry, on whatever
+        # thread asked for it, so it is printed from the trigger worker like {FILTER_DISABLED}.
+        DEFINITION_NOTICE = lambda do |text|
+          Lich::Genie.trigger_worker.post { GenieScript.engine_respond "--- Lich: genie #{text}" }
         end
 
         # A gag's / substitute's shut-off ({StreamFilters#on_disabled}): reported on Lich's parser

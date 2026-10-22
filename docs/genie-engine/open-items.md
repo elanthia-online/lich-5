@@ -175,17 +175,23 @@ differences are `pending`, so a change that makes one match also fails until its
   - *Provenance.* A send reaches Lich's command path only when its leading `,`/`;` was written by
     the author: in a `.cmd` `put`/`send` row before any variable or capture is expanded, or in the
     body of a `#trigger`, alias or action whose definition was itself authored. That is decided when
-    the definition is made: rows loaded from `triggers.cfg`/`aliases.cfg`, `#trigger`/`#alias` from a
-    literal `put` row or an authored trigger body no capture changed, and `action` rows of a `.cmd`
-    file count as authored; definitions built from captures, expanded rows, queued releases,
-    JavaScript or typed input do not.
+    the definition is made: rows loaded from `triggers.cfg`/`aliases.cfg` (unless their side file
+    lists them, below), `#trigger`/`#alias` from a literal `put` row or an authored trigger body no
+    capture changed, and `action` rows of a `.cmd` file count as authored; definitions built from
+    captures, expanded rows, queued releases, JavaScript or typed input do not.
   - *Code commands.* `,e`, `,eq`, `,exec`, `,execq`, `,execname`, `,en` (Ruby) and
     `,lich5-update`/`,l5u` (installs Lich code) run only from a literal `.cmd` `put` row with nothing
     to expand. From a `send` row, any trigger/alias/action body, `#send`/`#put`/`#if` or JavaScript
     they go to the game as text.
-  - *Residual.* Provenance is not saved (the cfg format is Remix's), so a definition built from a
-    capture that the user saves and loads back counts as authored again; the code-command layer
-    still holds for it. Documented in user-guide section 14.
+  - *Command name.* The name after an authored `,`/`;` (up to the first white space) must be
+    literal: a `$`, `%` or `@` in it (`put ,%cmd`, `action put ,$1 when ...`, `{,$1}`) sends the row
+    to the game as text, whether or not the variable exists (0 corpus rows; 18 with variables only
+    in the arguments, which stay Lich commands).
+  - *Saved provenance (closed).* Decided: `#trigger save`/`#alias save` list the definitions that are
+    not authored in `triggers.cfg.untrusted`/`aliases.cfg.untrusted` (written atomically before the
+    cfg, which stays Remix's bytes); a load reads listed rows as not authored, other rows (hand
+    edits too) as authored, and every row as not authored, with one notice, when the side file is
+    unreadable.
 - **K8 Engine off means everything off, at once.** `Lich::Genie.enabled = false` closes the
   game-state feed, passes every display and typed line through untouched, skips the script-output
   feed and trigger-on-input, runs no `#trigger` body, and drops queued commands. A `.cmd` still

@@ -123,6 +123,18 @@ RSpec.describe 'Genie: Lich commands only from author-written text' do
       expect(authored.leads?("#{mark},go2")).to be(false)
     end
 
+    # The command name must be literal (PR #1813 re-review): a sigil anywhere in it -- whether or not
+    # such a variable exists -- leaves the , or ; unmarked; the arguments may hold any.
+    it 'leaves the , or ; unmarked when the command name holds a $, % or @, and marks a literal name with any arguments' do
+      [',$1', ',%x', ', $1', ";\t%x args", ',$gname', ',pro%x', ',probe$1', ',@scriptdir@', '<c>,%x', ',go2;,%x'].each do |text|
+        expect(authored.mark(text, '|')).to eq(text), text.inspect
+      end
+      expect(authored.mark('1 ,%x', ';', delay: true)).to eq('1 ,%x')
+      expect(authored.mark(',go2 $home', ';')).to eq(",#{mark}go2 $home")
+      expect(authored.mark(',  go2 %x@y$z', ';')).to eq(",#{mark}  go2 %x@y$z")
+      expect(authored.mark(",probe\tx%y;,%x;,go2 1", ';')).to eq(",#{mark}probe\tx%y;,%x;,#{mark}go2 1")
+    end
+
     it 'marks the argument of a put or send row only' do
       expect(authored.mark_argument('  put ,go2 %d', :put, ';')).to eq("  put ,#{mark}go2 %d")
       expect(authored.mark_argument('send 2 ,go2', :send, ';')).to eq("send 2 ,#{mark}go2")
@@ -292,12 +304,10 @@ RSpec.describe 'Genie: Lich commands only from author-written text' do
       expect(run("echo go\n", game_lines: lines, triggers: triggers)[:sends]).to eq([[evil, false], [evil, false]])
     end
 
-    it 'keeps every author-written Lich command working: put ,go2 %dest, put ,%cmd, send N ,go2, action and #trigger bodies' do
+    it 'keeps every author-written Lich command working: put ,go2 %dest, send N ,go2, action and #trigger bodies' do
       src = <<~GENIE
         var dest 123
-        var cmd kill 1
         put ,go2 %dest
-        put ,%cmd
         put <c>,kill x
         send 1 ,go2 2
         if 1 = 1 then put ,go2 4
@@ -306,9 +316,49 @@ RSpec.describe 'Genie: Lich commands only from author-written text' do
         waitfor THE_END
       GENIE
       result = run(src, lines: ['Bob bows', 'Bob nods'], triggers: { '^Bob bows' => ',go2 7' }, game_lines: ['Bob bows'])
-      expect(result[:sends]).to contain_exactly([',go2 123', true], [',kill 1', true], ['<c>,kill x', true], [',go2 2', true],
+      expect(result[:sends]).to contain_exactly([',go2 123', true], ['<c>,kill x', true], [',go2 2', true],
                                                 [',go2 4', true], [',go2 5', true], [',go2 6', true], [',go2 7', true],
                                                 [',go2 8', true])
+    end
+
+    # Game text must not choose WHICH Lich script runs: an author-written , or ; whose command name
+    # comes (even partly) from a capture, a variable, a global or an alias argument is game text.
+    it 'sends a command whose name is expanded as game text: ,$1 in an action, a #trigger and an alias; ,%x; ,$g; ,pro%x' do
+      src = <<~'GENIE'
+        var x probe
+        var half be
+        put ,%x a
+        put , %x b
+        put ;%x c
+        put ,$gname d
+        put ,pro%half e
+        put ,fw probe f
+        action put ,$1 when ^Mallory bows (.*)$
+        action put , $1 when ^Mallory nods (.*)$
+        waitfor THE_END
+      GENIE
+      result = run(src, lines: ['Mallory bows probe bowarg', 'Mallory nods probe nodarg'], vars: { 'gname' => 'probe' },
+                        aliases: { ',fw' => ',$1' }, triggers: { '^Mallory waves (.*)$' => ',$1' }, game_lines: ['Mallory waves probe wavearg'])
+      expect(result[:sends]).to contain_exactly([',probe a', false], [', probe b', false], [';probe c', false], [',probe d', false],
+                                                [',probe e', false], [',probe', false], [',probe bowarg', false],
+                                                [', probe nodarg', false], [',probe wavearg', false])
+    end
+
+    it 'keeps a literal command name working with expanded arguments: put ,go2 $home, %x, an alias $1, a #trigger $1' do
+      src = <<~'GENIE'
+        var dest 7
+        put ,go2 $home
+        put ,go2 %dest
+        put ,probe x
+        send ,probe y
+        put ,gh 9
+        action put ,probe $1 when ^Mallory points (.*)$
+        waitfor THE_END
+      GENIE
+      result = run(src, lines: ['Mallory points ok'], vars: { 'home' => '123' }, aliases: { ',gh' => ',go2 $1' },
+                        triggers: { '^Mallory waves (.*)$' => ',probe $1' }, game_lines: ['Mallory waves hi'])
+      expect(result[:sends]).to contain_exactly([',go2 123', true], [',go2 7', true], [',probe x', true], [',probe y', true],
+                                                [',go2 9', true], [',probe ok', true], [',probe hi', true])
     end
 
     it "keeps the mark out of $lastcommand, the echo and the #queue listing" do
@@ -515,10 +565,9 @@ RSpec.describe 'Genie: Lich commands only from author-written text' do
       end
     end
 
-    # The documented residual: provenance is not saved, so a laundered #trigger that the user saves
-    # and loads back is authored again (provenance lost) -- the code layer still keeps it from
-    # running code.
-    it 'a laundered #trigger saved and loaded back: authored again (residual), but no code runs' do
+    # Provenance is saved beside triggers.cfg (DefinitionTrust): a #trigger made from a capture that
+    # the user saves and loads back is still not authored, and the code layer holds as before.
+    it 'a #trigger made from a capture, saved and loaded back: still game text, and no code runs' do
       Dir.mktmpdir('genie-d10') do |dir|
         src = <<~GENIE
           action put #trigger {^ping} {$1} when ^Mallory whispers, "learn (.*)"$
@@ -529,7 +578,8 @@ RSpec.describe 'Genie: Lich commands only from author-written text' do
         GENIE
         lines = [%(Mallory whispers, "learn #{evil}"), 'Mallory whispers, "teach ,go2 666"', 'GO']
         result = run(src, lines: lines, lists: Lich::Genie::Lists.new(config_dir: dir), game_lines: %w[ping pong])
-        expect(result[:sends]).to eq([[evil, false], [',go2 666', true]])
+        expect(result[:sends]).to eq([[evil, false], [',go2 666', false]])
+        expect(File.binread(File.join(dir, 'triggers.cfg'))).to eq("#trigger {^ping} {#{evil}}\r\n#trigger {^pong} {,go2 666}\r\n")
       end
     end
   end

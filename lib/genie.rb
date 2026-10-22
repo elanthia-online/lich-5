@@ -19,7 +19,7 @@ module Lich
     # path (`;lich5-update --branch=...`) overwrites files from a tarball WITHOUT moving
     # git HEAD, so `git log`/commit hashes are not a reliable "which version am I on"
     # signal -- this constant is. Format: MAJOR.MINOR.PATCH (YYYY-MM-DD).
-    VERSION = '0.26.9 (2026-10-22)'
+    VERSION = '0.26.10 (2026-10-22)'
 
     # Raised for any Genie-engine evaluation/parse error. Callers that mirror
     # Genie's "swallow and default" behavior (e.g. `evalmath`) rescue this.
@@ -56,6 +56,11 @@ module Lich
     # once (or a script and the trigger thread) must not each read the cfg into their own
     # instance -- with no disk write-through there is nothing to reconcile them later.
     @singleton_mutex = Mutex.new
+    # Engine notices about a list file read before the glue can print them (the side file of
+    # triggers.cfg / aliases.cfg at engine start, {DefinitionTrust}): held until
+    # {definition_notice_listener} is set. Kept across a reload, like the listener.
+    @pending_notices = [] unless instance_variable_defined?(:@pending_notices)
+    NOTICE_MUTEX = Mutex.new unless const_defined?(:NOTICE_MUTEX, false)
 
     class << self
       # Whether the Genie engine is active for `.cmd` scripts. Persisted
@@ -298,8 +303,10 @@ module Lich
       # start (FormMain.cs:2327 R). A script's `put` expands it ({ParseCommand}).
       # @return [AliasList]
       def alias_list
-        @alias_list || @singleton_mutex.synchronize do
-          @alias_list ||= AliasList.new.tap { |list| list.load(File.join(list_dir, 'aliases.cfg')) }
+        @alias_list || with_notices do |notices|
+          @singleton_mutex.synchronize do
+            @alias_list ||= AliasList.new.tap { |list| list.load(File.join(list_dir, 'aliases.cfg'), notice: notices.method(:<<)) }
+          end
         end
       end
 
@@ -331,7 +338,33 @@ module Lich
       # never re-read from disk except by `#trigger load` / `#load triggers|all`.
       # @return [Triggers]
       def triggers
-        @triggers || @singleton_mutex.synchronize { @triggers ||= build_triggers }
+        @triggers || with_notices { |notices| @singleton_mutex.synchronize { @triggers ||= build_triggers(notices) } }
+      end
+
+      # Where an engine notice about a list file goes ({definition_notice}): the glue sets it once
+      # the engine runs; the notices made before are handed to it then.
+      # @return [#call, nil] callable(text)
+      attr_reader :definition_notice_listener
+
+      # @param callable [#call, nil]
+      def definition_notice_listener=(callable)
+        held = NOTICE_MUTEX.synchronize do
+          @definition_notice_listener = callable
+          callable ? @pending_notices.slice!(0..) : []
+        end
+        held.each { |text| callable.call(text) }
+      end
+
+      # One engine notice about a list file (a side file of triggers.cfg / aliases.cfg that cannot
+      # be read, {DefinitionTrust}): to {definition_notice_listener}, or held until it is set.
+      # @param text [String]
+      # @return [void]
+      def definition_notice(text)
+        listener = NOTICE_MUTEX.synchronize do
+          @pending_notices << text unless @definition_notice_listener
+          @definition_notice_listener
+        end
+        listener&.call(text)
       end
 
       # Where a registry's #trigger shut-off goes ({Triggers#on_disabled}: a pattern whose match
@@ -378,12 +411,21 @@ module Lich
 
       private
 
-      # Called under @singleton_mutex: triggers.cfg's rows, with the shut-off report wired.
-      def build_triggers
+      # Called under @singleton_mutex: triggers.cfg's rows, with the shut-off report wired; a
+      # notice the load makes goes to +notices+.
+      def build_triggers(notices)
         Triggers.new.tap do |registry|
           registry.on_disabled = ->(pattern) { Lich::Genie.trigger_disabled_listener&.call(pattern) }
-          registry.load(triggers_file)
+          registry.load(triggers_file, notice: notices.method(:<<))
         end
+      end
+
+      # The block's value; the notices it collected go out after it, outside @singleton_mutex.
+      def with_notices
+        notices = []
+        yield(notices)
+      ensure
+        notices.each { |text| definition_notice(text) }
       end
 
       # Called under @singleton_mutex: the two list files, and the display-time ParseGlobalVars over
@@ -495,6 +537,7 @@ require_relative 'genie/write_clock'
 require_relative 'genie/assess_ids'
 require_relative 'genie/collation'
 require_relative 'genie/config_file'
+require_relative 'genie/definition_trust'
 require_relative 'genie/variable_file'
 require_relative 'genie/trigger_file'
 require_relative 'genie/class_list'

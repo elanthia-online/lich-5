@@ -386,7 +386,9 @@ after `#var load` / `#trigger load` or a restart.
 
 > **Where are they saved?** In `variables.cfg` and `triggers.cfg` inside a `GenieProfiles/Config`
 > folder next to your scripts — the engine's own folder, not native Genie's. The format is Genie's
-> own, so you can copy a Genie `variables.cfg`/`triggers.cfg` in (or out) as-is. Files written by
+> own, so you can copy a Genie `variables.cfg`/`triggers.cfg` in (or out) as-is (a
+> `triggers.cfg.untrusted` next to it lists the triggers a script made from game text; Genie
+> ignores it; see "Saving keeps this" in section 14). Files written by
 > engine versions before 0.12.0 (which saved on every `#var`) still load. An eval trigger
 > (`e/.../` or `eval ...`) fires on variable changes, like an eval `action` (see `action`). A trigger whose
 > pattern is not a valid regular expression is dropped (typing one echoes
@@ -1535,9 +1537,11 @@ your front-end uses.)
 > script's `action put $1 when ^Mallory whispers, "do (.*)"$` fed `,e <Ruby code>` -- would run as a
 > Lich command. This engine deliberately does not (a decided difference from Genie, "D10"). Two rules:
 >
-> 1. **A Lich command (`,go2`, `;kill`, ...) runs only when you wrote its `,`/`;` yourself**, before
->    any variable or captured `$1` is filled in:
->    - in a `put`/`send` line of a `.cmd` file -- `put ,go2 %dest`, `put ,%cmd`, `send 2 ,go2 2572`;
+> 1. **A Lich command (`,go2`, `;kill`, ...) runs only when you wrote its `,`/`;` and its name
+>    yourself**, before any variable or captured `$1` is filled in. The name (`go2`, `kill`, the
+>    word up to the first space) must be typed out: its arguments may be variables (`put ,go2
+>    %dest`), the name may not:
+>    - in a `put`/`send` line of a `.cmd` file -- `put ,go2 %dest`, `put ,go2 $home`, `send 2 ,go2 2572`;
 >    - in the body of an `action`, a `#trigger` or an alias that **you** defined: an `action` line of
 >      a `.cmd` file; a `#trigger`/`#alias` in your `triggers.cfg`/`aliases.cfg`, or defined by a
 >      `put #trigger ...`/`put #alias ...` line in which no variable is filled in, or by one of your
@@ -1547,8 +1551,11 @@ your front-end uses.)
 >    A definition made from anything else -- an action body, a `#trigger` body with a `$1` filled in,
 >    a line in which a variable was filled in (`put #trigger {^x} {%cmd}`), a queued `send`, JavaScript
 >    -- is not yours: its `,`/`;` lines go to the **game** as text. So does every `,`/`;` that only
->    appears once a variable or a `$1` is filled in (`put %x`, `send %x`, a `{$2}` trigger body); the
->    game just answers "Please rephrase that command".
+>    appears once a variable or a `$1` is filled in (`put %x`, `send %x`, a `{$2}` trigger body), and
+>    every command whose name holds a `%`, `$` or `@` (`put ,%cmd`, `put ;%x args`, `put ,pro%x`,
+>    `action put ,$1 when ...`, a `{,$1}` trigger or alias body), whether or not such a variable
+>    exists, so another player's words can never pick which Lich script runs; the game just answers
+>    "Please rephrase that command".
 > 2. **A Lich command that runs code -- `,e`/`,eq`/`,exec`/`,execq` and `,execname`/`,en` (Ruby), and
 >    `,lich5-update`/`,l5u` (installs Lich code) -- runs only from a `put` line of a `.cmd` file in
 >    which nothing at all is filled in**: `put ,e $T2.reload_settings` works while there is no
@@ -1559,13 +1566,22 @@ your front-end uses.)
 > `#queue`/`#event` (also when an `#if` runs one), after `move` or `do`, from JavaScript (`js
 > put(",go2 1")`), as a `gosub` argument (`gosub go ,go2 1` then `put $1 $2`), after a delay variable
 > (`send %d ,go2 1`), escaped (`put \,go2 1`), a repeated command (`put %lastcommand` /
-> `send 1 $lastcommand` after `put ,go2 1`), or as the value of an alias whose name does not start
-> with `,`/`;`. Write it as its own `put`/`send` line instead.
+> `send 1 $lastcommand` after `put ,go2 1`), a command whose name is a variable or a capture (`put
+> ,%cmd`, `put ;%x args`, `action put ,$1 when ...`, `#trigger {...} {,$1}`), or as the value of an
+> alias whose name does not start with `,`/`;`. Write it as its own `put`/`send` line, with the name
+> typed out, instead (`put ,go2 %dest`; for a choice of scripts, an `if` per script).
 >
-> One thing this cannot know: `#trigger save` / `#alias save` write the same file format Genie does,
-> with no record of who defined what, so after `#trigger load` / `#load triggers` (or the next
-> session) every saved trigger counts as yours under rule 1. Do not save triggers or aliases that a
-> script defined from what other players said. Rule 2 still holds for them.
+> **Saving keeps this.** `#trigger save` / `#alias save` (and `#save triggers|aliases|all`) write
+> `triggers.cfg` / `aliases.cfg` exactly as Genie does, plus a small file next to each,
+> `triggers.cfg.untrusted` / `aliases.cfg.untrusted`, that lists the triggers and aliases a script
+> made from game text. When the file is read back (`#trigger load`, `#load triggers`, `#alias load`,
+> the next session), those stay game text under rule 1; every other row counts as yours, and so does
+> a row you edit by hand. No such file means none was needed. If the file is damaged, nothing read
+> with it counts as yours, and the engine says so once (`triggers.cfg.untrusted is unreadable:
+> ...`); a save then lists every one of those rows. Once you have checked that every row of
+> `triggers.cfg` is your own, delete the damaged file and `#load triggers` (or `#load aliases`). If
+> the `.untrusted` file cannot be written, the save stops there with a line saying so, and
+> `triggers.cfg` / `aliases.cfg` stay as they were.
 
 > **Matching what Lich prints back.** Text that **Lich** echoes — go2's *"You're already there,"* a
 > *"--- Lich: &lt;script&gt; has exited"* notice (of a Lich script, or of a Genie script that ended

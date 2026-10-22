@@ -14,10 +14,11 @@ module Lich
     # aliases|all`. Thread-safe (one mutex).
     #
     # Each alias also carries whether its value is the user's own text ({AuthoredCommand}):
-    # decided when it is added -- true for a row of aliases.cfg ({#load}) and for `#alias` from an
-    # authored context ({AuthoredCommand.authored_definitions?}), false otherwise -- and read by
-    # {ParseCommand#parse_alias}. Not written by {#save} (Remix's file format): a reload re-reads
-    # every row as authored.
+    # decided when it is added -- true for a row of aliases.cfg that aliases.cfg.untrusted does
+    # not list ({#load}) and for `#alias` from an authored context
+    # ({AuthoredCommand.authored_definitions?}), false otherwise -- and read by
+    # {ParseCommand#parse_alias}. aliases.cfg keeps Remix's format; {#save} lists the aliases that
+    # are not authored in the side file ({DefinitionTrust}).
     class AliasList
       def initialize
         @entries = {}
@@ -84,17 +85,28 @@ module Lich
 
       # Aliases.Load (Aliases.cs:40-88 R): every row with exactly three ParseArgs tokens is
       # merged in (`#alias {key} {value}`); the path is remembered even when the file is absent.
-      # A malformed row (ParseArgs throws) ends the load there.
+      # A malformed row (ParseArgs throws) ends the load there. A row is authored unless
+      # aliases.cfg.untrusted lists it; every row is not authored when that file cannot be read,
+      # and +notice+ is told once ({DefinitionTrust}).
       # @param path [String, nil] nil = the remembered path
+      # @param notice [#call, nil] callable(text): one engine line
       # @return [Boolean] Remix's Load result
-      def load(path = nil)
+      def load(path = nil, notice: nil)
         @mutex.synchronize { @file = path if path }
-        lines = file && ConfigFile.read_lines(file)
+        source = file
+        lines, untrusted = DefinitionTrust.read_with(source, 2) { source && ConfigFile.read_lines(source) }
         return false if lines.nil?
 
+        noticed = false
         lines.each do |line|
-          args = Text.parse_args(line)
-          add(args[1], args[2], authored: true) if args.length == 3 # the user's own file
+          row = self.class.parse_row(line)
+          next unless row
+
+          if untrusted.corrupt && !noticed
+            noticed = true
+            notice&.call(DefinitionTrust.corrupt_notice(source))
+          end
+          add(*row, authored: untrusted.authored?(row))
         end
         true
       rescue StandardError # Load is catch (Exception) -> false
@@ -102,19 +114,71 @@ module Lich
       end
 
       # Aliases.Save (Aliases.cs:90-129 R): `#alias {key} {value}` per entry, in list order. The
-      # snapshot is taken inside @save_mutex, so an older snapshot never lands last.
+      # snapshot is taken inside @save_mutex, so an older snapshot never lands last. The aliases
+      # that are not authored are listed in aliases.cfg.untrusted, written before aliases.cfg
+      # ({DefinitionTrust.save}); when that write fails, +notice+ is told and aliases.cfg is not
+      # written.
       # @param path [String, nil] nil = the remembered path
+      # @param notice [#call, nil] callable(text): one engine line for a side-file failure
       # @return [Boolean] false when there is no path or the write failed
-      def save(path = nil)
+      def save(path = nil, notice: nil)
         target = path || file
         return false if target.nil?
 
         @save_mutex.synchronize do
-          ConfigFile.write_lines(target, entries.map { |key, value| "#alias {#{key}} {#{value}}" })
-          true
+          snapshot = @mutex.synchronize { [@entries.dup, @authored.dup] }
+          rows = Collation.sort(snapshot[0].keys).map { |key| [key, snapshot[0][key]] }
+          untrusted = rows.reject { |key, _| snapshot[1].key?(key) }.flat_map { |key, value| self.class.identities(key, value) }
+          DefinitionTrust.save(target, untrusted, arity: 2, on_disk: -> { identities_on_disk(target) }, notice: notice) do
+            ConfigFile.write_lines(target, rows.map { |key, value| self.class.row(key, value) })
+            true
+          end
         end
+      rescue DefinitionTrust::Error => e
+        notice&.call(e.message)
+        false
       rescue StandardError
         false
+      end
+
+      # The row Aliases.Save writes (Aliases.cs:110-111 R).
+      # @return [String]
+      def self.row(key, value)
+        "#alias {#{key}} {#{value}}"
+      end
+
+      # One aliases.cfg line as {#load} reads it: [key, value] when ParseArgs gives exactly three
+      # tokens, else nil.
+      # @param line [String]
+      # @return [Array(String, String), nil]
+      # @raise [Error] a line ParseArgs throws on (it ends the load)
+      def self.parse_row(line)
+        args = Text.parse_args(line)
+        args.length == 3 ? [args[1], args[2]] : nil
+      end
+
+      # An alias's identity as {#load} reads it back from the row {.row} writes ({DefinitionTrust}).
+      # @return [Array<Array(String, String)>]
+      def self.identities(key, value)
+        DefinitionTrust.read_back(row(key, value)).filter_map do |line|
+          parse_row(line)
+        rescue StandardError # a piece ParseArgs throws on ends the load there: nothing to list
+          nil
+        end
+      end
+
+      private
+
+      # Every row of the aliases.cfg now at +path+, as {#load} would read it (up to a malformed row).
+      def identities_on_disk(path)
+        rows = []
+        (ConfigFile.read_lines(path) || []).each do |line|
+          row = self.class.parse_row(line)
+          rows << row if row
+        end
+        rows
+      rescue StandardError
+        rows
       end
     end
   end

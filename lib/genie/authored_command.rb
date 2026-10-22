@@ -28,14 +28,18 @@ module Lich
     #   * a .cmd file's `put`/`send` row (its argument as the file has it);
     #   * the body of a #trigger, an alias or a script action whose DEFINITION was authored,
     #     decided when it is defined: read from the user's cfg file (triggers.cfg / aliases.cfg at
-    #     engine start, `#load`, `#trigger load`, `#alias load`); or defined by a .cmd `put` row
+    #     engine start, `#load`, `#trigger load`, `#alias load`) and not listed in its side file
+    #     ({DefinitionTrust}); or defined by a .cmd `put` row
     #     whose text needed no expansion at all (`put #trigger {x} {,go2 1}`), or by an authored
     #     #trigger body with no capture put in ({.authored_definitions?}); a script action is
     #     authored when its `action` row is a .cmd row, not an action body's row. A definition
     #     made from an action body, a #trigger body with captures, an expanded row, a queued
     #     send, JS or the typed input is not authored: its `,`/`;` rows are game text.
-    #   The flag lives in memory: `#trigger save`/`#alias save` writes no provenance, so a saved
-    #   definition is authored again when the file is read back (the code layer still holds for it).
+    #   A saved definition keeps its flag: `#trigger save`/`#alias save` list the ones that are not
+    #   authored in a side file the load reads ({DefinitionTrust}); the cfg keeps Remix's format.
+    #   The command NAME must be literal too: a `$`, `%` or `@` in it ({EXPANDABLE_NAME}: `,$1`,
+    #   `,%cmd`, `;pro%x args`) leaves the `,`/`;` unmarked, so game text never chooses which Lich
+    #   script runs; the arguments after it may be expanded (`put ,go2 %dest`).
     # Code layer. A Lich command that runs code ({.code_command?}: Ruby through `,e`/`,eq`/`,exec`/
     #   `,execq`/`,execname`/`,en`, Lich code installed by `,lich5-update`/`,l5u`) dispatches only
     #   from a .cmd file's `put` row whose text needed no expansion at all -- `put ,e
@@ -85,6 +89,12 @@ module Lich
       # `--branch=<fork>:<branch>` downloads and installs Lich code). Any case and any white space
       # after the word: wider than Lich's own patterns on purpose.
       CODE_COMMAND = /\A(?:(?:exec|e)q?|execname|en)(?:\s|\z)|\A(?:lich5-update|l5u)/i.freeze
+      # A command name (after the `,`/`;` and any white space, up to the next white space) that
+      # holds a sigil something may expand -- `%var`/`%1` and `$global`/`$1`/`$0` (Substitution, a
+      # capture, an alias argument), `@special@` (Specials): the name might not be the text the
+      # author wrote, so game text could choose which Lich script runs (`action put ,$1 when ...`).
+      # Checked on the raw text, whether or not such a variable exists, so the name is literal.
+      EXPANDABLE_NAME = /\A\s*[^\s$%@]*[$%@]/.freeze
       # Thread-local: whether a #trigger/alias/action defined by the text running now is authored
       # ({.defining}).
       DEFINITION_KEY = :lich_genie_authored_definition
@@ -205,12 +215,14 @@ module Lich
         Thread.current[DEFINITION_KEY] == true
       end
 
-      # The index of the `,`/`;` a piece opens with (after a delay, white space and `<c>`), or nil.
+      # The index of the `,`/`;` a piece opens with (after a delay, white space and `<c>`), or nil
+      # -- nil too when the command name after it is not all literal ({EXPANDABLE_NAME}).
       def command_char_at(text, range, delay:)
         piece = text[range]
         skip = delay ? piece[DELAY].length : 0
         at = skip + piece[skip..][LEADING].length
         return nil unless at < piece.length && [',', ';'].include?(piece[at])
+        return nil if EXPANDABLE_NAME.match?(piece[(at + 1)..])
 
         range.begin + at
       end
