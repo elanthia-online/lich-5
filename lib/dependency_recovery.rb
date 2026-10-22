@@ -6,6 +6,7 @@ require 'open-uri'
 require 'open3'
 require 'rbconfig'
 require 'rubygems/installer'
+require 'tempfile'
 require 'tmpdir'
 require 'uri'
 
@@ -25,6 +26,7 @@ module Lich
     LOCK_FILENAME = '.lich-dependency-recovery.lock'
     HTTP_OPEN_TIMEOUT_SECONDS = 10
     HTTP_READ_TIMEOUT_SECONDS = 60
+    NATIVE_LOAD_TIMEOUT_SECONDS = 60
     SHA256_PATTERN = /\Asha256:[0-9a-f]{64}\z/
     SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
@@ -399,7 +401,9 @@ module Lich
       validate_replacement_payload!(payload)
       wait_for_parent_exit(payload.fetch('parent_pid'))
       with_install_lock do
-        rollback_dir = File.join(payload.fetch('work_dir'), 'previous-runtime')
+        # Lich's temp directory can be on another drive. Keep runtime moves
+        # on the gem filesystem so they cannot become copy/delete operations.
+        rollback_dir = Dir.mktmpdir('.lich-previous-runtime-', @gem_home)
         moved = []
         replacements = []
         begin
@@ -410,7 +414,7 @@ module Lich
             paths = replacement_package_paths(package)
             paths.each do |path|
               raise Error, "replacement gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
-              raise Error, "replacement gem path already exists: #{path}" if File.exist?(path)
+              backup_path(path, rollback_dir, moved) if File.exist?(path)
             end
             replacements.concat(paths)
             @install_gem.call(package.fetch('path'), @gem_home)
@@ -478,17 +482,29 @@ module Lich
           next unless File.exist?(path)
           raise Error, "installed gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
 
-          destination = File.join(rollback_dir, path.delete_prefix(File.expand_path(@gem_home)).sub(%r{\A[\\/]}, ''))
-          FileUtils.mkdir_p(File.dirname(destination))
-          FileUtils.mv(path, destination)
-          moved << [path, destination]
+          backup_path(path, rollback_dir, moved)
         end
       end
       moved
     end
 
-    # Resolves the same paths RubyGems will replace, without installing. Record
-    # these before calling the installer, which may fail before writing a spec.
+    # @param path [String] existing registered or interrupted-install path
+    # @param rollback_dir [String]
+    # @param moved [Array<Array<String>>]
+    # @return [void]
+    def backup_path(path, rollback_dir, moved)
+      destination = File.join(rollback_dir, path.delete_prefix(File.expand_path(@gem_home)).sub(%r{\A[\\/]}, ''))
+      raise Error, "backup destination already exists: #{destination}" if File.exist?(destination) || File.symlink?(destination)
+
+      FileUtils.mkdir_p(File.dirname(destination))
+      FileUtils.mv(path, destination)
+      moved << [path, destination]
+    end
+
+    # Tracks gem directories, gemspecs and native extension directories before
+    # installation, which may fail before writing a spec. RubyGems cache files
+    # and executable/plugin artifacts are outside this rollback contract;
+    # a leftover cached .gem does not register an installed package.
     # @param package [Hash] verified local artifact
     # @return [Array<String>] replacement-owned runtime paths
     def replacement_package_paths(package)
@@ -540,6 +556,53 @@ module Lich
         requirement = Gem::Requirement.new("= #{package.fetch('version')}")
         installed = Gem::Specification.find_all_by_name(package.fetch('name'), requirement)
         raise Error, "#{package.fetch('name')} was not installed during native runtime replacement" if installed.empty?
+      end
+      verify_gtk_load!(packages) if packages.any? { |package| package.fetch('name') == 'gtk3' }
+    end
+
+    # Check the GTK entry point used by init.rb in a fresh process, before
+    # discarding the prior suite. Loading it here would lock its native DLLs
+    # and prevent rollback on Windows. A failed check never relaunches Lich.
+    # @param packages [Array<Hash>]
+    # @return [void]
+    def verify_gtk_load!(packages)
+      script = <<~RUBY
+        require 'rubygems'
+        Gem.use_paths(ARGV.shift)
+        ARGV.each_slice(2) { |name, version| gem(name, "= \#{version}") }
+        require 'gtk3'
+      RUBY
+      versions = packages.flat_map { |package| [package.fetch('name'), package.fetch('version')] }
+      # RubyGems can activate a parent bundle before this script starts, even
+      # without RUBYOPT. Verify the manifest's gems in the replacement home.
+      environment = {
+        'GEM_HOME' => @gem_home, 'GEM_PATH' => @gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
+        'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
+      }
+      Tempfile.create(['lich-gtk-load-', '.log'], @temp_dir) do |log|
+        pid = Process.spawn(environment, rubyw_binary, '-e', script, @gem_home, *versions, out: log, err: log)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + NATIVE_LOAD_TIMEOUT_SECONDS
+        loop do
+          if (finished = Process.waitpid2(pid, Process::WNOHANG))
+            pid = nil
+            break if finished.last.success?
+
+            log.rewind
+            raise Error, "GTK runtime could not load after replacement: #{log.read.strip}"
+          end
+          raise Error, 'timed out checking the replacement GTK runtime' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.05
+        end
+      ensure
+        if pid
+          begin
+            Process.kill('KILL', pid)
+          rescue Errno::ESRCH
+            nil
+          end
+          Process.waitpid(pid)
+        end
       end
     end
 

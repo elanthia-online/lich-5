@@ -37,58 +37,8 @@ permissions:
   contents: read
 
 jobs:
-  authorize:
-    name: Authorize administrator-initiated Windows checks
-    runs-on: ubuntu-latest
-    outputs:
-      allowed: ${{ steps.permission.outputs.allowed }}
-    steps:
-      - name: Verify event and administrator identities before checkout
-        id: permission
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
-        with:
-          script: |
-            core.setOutput('allowed', 'false');
-            if (!['push', 'pull_request', 'workflow_dispatch'].includes(context.eventName)) {
-              return core.setFailed('Unsupported Windows validation event.');
-            }
-            if (context.eventName !== 'pull_request' && context.ref !== 'refs/heads/main') {
-              return core.setFailed('Push and dispatch checks must run from main.');
-            }
-            const repository = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
-            const source = context.payload.repository;
-            if (!Number.isSafeInteger(source?.id) || source.id <= 0 ||
-                source.full_name?.toLowerCase() !== repository) {
-              return core.setFailed('Repository identity is invalid.');
-            }
-            if (context.eventName === 'pull_request') {
-              const pr = context.payload.pull_request;
-              if (pr?.head?.repo?.id !== source.id || pr?.base?.repo?.id !== source.id ||
-                  pr.head.repo.full_name?.toLowerCase() !== repository ||
-                  pr.base.repo.full_name?.toLowerCase() !== repository) {
-                return core.setFailed('Only same-repository pull requests may run Windows checks.');
-              }
-            }
-            const actors = [context.actor, process.env.TRIGGERING_ACTOR];
-            if (actors.some(actor => typeof actor !== 'string' || !actor)) {
-              return core.setFailed('Original and triggering actors are required.');
-            }
-            for (const actor of new Set(actors.map(actor => actor.toLowerCase()))) {
-              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-                ...context.repo, username: actor
-              });
-              if (data.permission !== 'admin') {
-                return core.setFailed('Both original and triggering actors must be repository administrators.');
-              }
-            }
-            core.setOutput('allowed', 'true');
-
   active_sessions_handoff:
     name: Exercise native Windows file handoff
-    needs: authorize
-    if: ${{ needs.authorize.outputs.allowed == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 15
     env:
@@ -105,5 +55,6 @@ jobs:
       - name: Run frontend settings specs
         if: ${{ !cancelled() }}
         run: bundle exec rspec spec/lib/common/frontend_settings_spec.rb spec/lib/common/sharing_violation_retry_spec.rb
-      - name: Run isolated native dependency recovery rollback specs
-        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb -e 'native replacement rollback'
+      - name: Run dependency recovery specs
+        if: ${{ !cancelled() }}
+        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb

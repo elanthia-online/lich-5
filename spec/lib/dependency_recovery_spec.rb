@@ -2,6 +2,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'rubygems/package'
 require 'stringio'
 require 'tmpdir'
 
@@ -358,7 +359,7 @@ RSpec.describe Lich::DependencyRecovery do
 
   describe 'native replacement rollback' do
     let(:work_dir) { File.join(recovery_temp_dir, 'replacement work') }
-    let(:rollback_dir) { File.join(work_dir, 'previous-runtime') }
+    let(:rollback_dir) { Dir.glob(File.join(gem_home, '.lich-previous-runtime-*')).fetch(0) }
     let(:runtime_specs) do
       %w[f63_first f63_second].map do |name|
         spec = Gem::Specification.new do |entry|
@@ -495,17 +496,63 @@ RSpec.describe Lich::DependencyRecovery do
       expect(File).not_to exist(blocked)
     end
 
-    it 'preserves an unregistered existing replacement destination rather than overwriting it' do
+    it 'replaces an unregistered existing destination after moving it aside' do
       orphan = File.join(runtime_specs.first.full_gem_path, 'unregistered.dll')
       allow(Gem::Specification).to receive(:find_all_by_name).with(runtime_specs.first.name).and_return([])
       File.write(orphan, 'untouched')
-      expect(installer).not_to receive(:call)
+
+      subject.send(:run_windows_replacement!, payload)
+
+      expect(File).not_to exist(orphan)
+      expect(original_files.map { |file| File.read(file) }).to all(eq('replacement'))
+      expect(subject).to have_received(:restart_lich).once
+    end
+
+    it 'restores an unregistered destination if replacement fails without restarting' do
+      orphan = File.join(runtime_specs.first.full_gem_path, 'unregistered.dll')
+      allow(Gem::Specification).to receive(:find_all_by_name).with(runtime_specs.first.name).and_return([])
+      File.write(orphan, 'untouched')
+      allow(installer).to receive(:call).and_wrap_original do |install, path, home|
+        install.call(path, home)
+        raise IOError, 'replacement failed'
+      end
+      expect(subject).not_to receive(:restart_lich)
 
       expect { subject.send(:run_windows_replacement!, payload) }
-        .to raise_error(described_class::Error, /replacement gem path already exists/)
+        .to raise_error(IOError, /replacement failed/)
 
       expect(File.read(orphan)).to eq('untouched')
       expect(original_files.map { |file| File.read(file) }).to all(eq('original'))
+    end
+
+    it 'keeps backup moves under the gem home independently of Lich temp storage' do
+      moves = []
+      allow(FileUtils).to receive(:mv).and_wrap_original do |move, from, to|
+        moves << [from, to]
+        move.call(from, to)
+      end
+
+      subject.send(:run_windows_replacement!, payload)
+
+      expect(moves).not_to be_empty
+      expect(moves.map(&:last)).to all(start_with(File.join(gem_home, '.lich-previous-runtime-')))
+      expect(moves.flatten).not_to include(start_with(recovery_temp_dir))
+    end
+
+    it 'refuses an occupied backup destination without moving or nesting the source' do
+      backup_root = File.join(gem_home, 'occupied-backup')
+      source = runtime_specs.first.full_gem_path
+      destination = File.join(backup_root, 'gems', runtime_specs.first.full_name)
+      FileUtils.mkdir_p(destination)
+      File.write(File.join(destination, 'retained'), 'earlier backup')
+      moved = []
+
+      expect { subject.send(:backup_path, source, backup_root, moved) }
+        .to raise_error(described_class::Error, /backup destination already exists/)
+
+      expect(moved).to be_empty
+      expect(File.read(File.join(source, 'original.rb'))).to eq('original')
+      expect(Dir.children(destination)).to eq(['retained'])
     end
 
     it 'keeps the verified replacement when old-backup cleanup is denied' do
@@ -520,6 +567,256 @@ RSpec.describe Lich::DependencyRecovery do
       expect(original_files.map { |file| File.read(file) }).to all(eq('replacement'))
       expect(subject).to have_received(:restart_lich).with(payload.fetch('restart'))
       expect(Dir).to exist(rollback_dir)
+    end
+  end
+
+  describe 'native replacement rollback with real RubyGems' do
+    let(:gem_home) { File.realpath(Dir.mktmpdir('lich-recovery-real-gems')) }
+    let(:gem_name) { 'lich_f63_fixture' }
+    let(:work_dir) { File.join(recovery_temp_dir, 'real replacement') }
+    let(:replacement_body) { "FIXTURE_VERSION = '2.0.0'\n" }
+    let(:package) do
+      path = build_recovery_gem('2.0.0', replacement_body)
+      { 'name' => gem_name, 'version' => '2.0.0', 'filename' => File.basename(path),
+        'path' => path, 'sha256' => sha256(File.binread(path)) }
+    end
+    let(:payload) do
+      { 'schema' => 1, 'parent_pid' => Process.pid, 'gem_home' => gem_home,
+        'temp_dir' => recovery_temp_dir, 'work_dir' => work_dir, 'packages' => [package],
+        'restart' => { 'program' => __FILE__, 'argv' => [], 'chdir' => work_dir } }
+    end
+    let(:subject) { described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir) }
+
+    around do |example|
+      original_home = Gem.dir
+      original_path = Gem.path
+      original_environment = ENV.to_h.slice('GEM_HOME', 'GEM_PATH')
+      ENV['GEM_HOME'] = gem_home
+      ENV['GEM_PATH'] = gem_home
+      Gem.use_paths(gem_home, [gem_home])
+      example.run
+    ensure
+      %w[GEM_HOME GEM_PATH].each { |name| ENV[name] = original_environment[name] }
+      Gem.use_paths(original_home, original_path)
+    end
+
+    before do
+      allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
+      allow(Gem::Specification).to receive(:reset).and_call_original
+      allow(Gem).to receive(:clear_paths).and_call_original
+      FileUtils.mkdir_p(work_dir)
+      seed = build_recovery_gem('1.0.0', "FIXTURE_VERSION = '1.0.0'\n")
+      subject.send(:install_gem_file, seed, gem_home)
+      Gem::Specification.reset
+      allow(subject).to receive(:wait_for_parent_exit)
+      allow(subject).to receive(:restart_lich)
+    end
+
+    def build_recovery_gem(version, body)
+      source = File.join(recovery_temp_dir, "source-#{version}")
+      FileUtils.mkdir_p(File.join(source, 'lib'))
+      File.write(File.join(source, 'lib', "#{gem_name}.rb"), body)
+      spec = Gem::Specification.new do |entry|
+        entry.name = gem_name
+        entry.version = version
+        entry.summary = 'Isolated dependency recovery regression fixture'
+        entry.authors = ['Lich contributors']
+        entry.files = ["lib/#{gem_name}.rb"]
+        entry.license = 'MIT'
+        entry.homepage = 'https://example.test/'
+      end
+      filename = Dir.chdir(source) do
+        Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec) }
+      end
+      destination = File.join(work_dir, filename)
+      FileUtils.mv(File.join(source, filename), destination)
+      destination
+    end
+
+    def installed_versions
+      Gem::Specification.reset
+      Gem::Specification.find_all_by_name(gem_name).map { |spec| spec.version.to_s }
+    end
+
+    def expect_original_runtime
+      expect(installed_versions).to eq(['1.0.0'])
+      file = File.join(gem_home, 'gems', "#{gem_name}-1.0.0", 'lib', "#{gem_name}.rb")
+      expect(File.read(file)).to eq("FIXTURE_VERSION = '1.0.0'\n")
+      expect(subject).not_to have_received(:restart_lich)
+    end
+
+    def fail_after_real_install
+      allow(Gem::Installer).to receive(:at).and_wrap_original do |at, *args, **options|
+        installer = at.call(*args, **options)
+        if options[:force]
+          allow(installer).to receive(:install).and_wrap_original do |install|
+            install.call
+            raise IOError, 'after real install'
+          end
+        end
+        installer
+      end
+    end
+
+    it 'uses real installer paths and recovers after failure before gemspec publication' do
+      paths = subject.send(:replacement_package_paths, package)
+      allow(Gem::Installer).to receive(:at).and_wrap_original do |at, *args, **options|
+        installer = at.call(*args, **options)
+        if options[:force]
+          allow(installer).to receive(:write_spec).and_raise(IOError, 'before gemspec')
+        end
+        installer
+      end
+
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(IOError, /before gemspec/)
+
+      expect(paths).to all(satisfy { |path| !File.exist?(path) })
+      expect_original_runtime
+
+      allow(Gem::Installer).to receive(:at).and_call_original
+      subject.send(:run_windows_replacement!, payload)
+
+      expect(installed_versions).to eq(['2.0.0'])
+      spec = Gem::Specification.find_by_name(gem_name, '= 2.0.0')
+      expect(paths).to contain_exactly(spec.full_gem_path, spec.loaded_from, spec.extension_dir)
+      expect(File.read(File.join(spec.full_gem_path, 'lib', "#{gem_name}.rb"))).to eq(replacement_body)
+      expect(subject).to have_received(:restart_lich).once
+    end
+
+    it 'unregisters a real late-failing install and restores the original without restarting' do
+      fail_after_real_install
+
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(IOError, /after real install/)
+
+      expect_original_runtime
+      expect(File).not_to exist(File.join(gem_home, 'gems', "#{gem_name}-2.0.0"))
+      expect(File).to exist(File.join(gem_home, 'cache', "#{gem_name}-2.0.0.gem"))
+    end
+
+    it 'restores an orphan byte for byte after a real install fails' do
+      orphan = File.join(gem_home, 'gems', "#{gem_name}-2.0.0", 'orphan.dll')
+      FileUtils.mkdir_p(File.dirname(orphan))
+      File.binwrite(orphan, "prior\x00content")
+      fail_after_real_install
+
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(IOError, /after real install/)
+
+      expect(File.binread(orphan)).to eq("prior\x00content")
+      expect(Dir.children(File.dirname(orphan))).to eq(['orphan.dll'])
+      expect_original_runtime
+    end
+
+    it 'recovers on a separately initiated launch after a helper is killed before writing its gemspec' do
+      same_version = build_recovery_gem('1.0.0', "FIXTURE_VERSION = 'reinstalled'\n")
+      payload['packages'] = [{ 'name' => gem_name, 'version' => '1.0.0', 'filename' => File.basename(same_version),
+                               'path' => same_version, 'sha256' => sha256(File.binread(same_version)) }]
+      transaction = File.join(work_dir, 'transaction.json')
+      File.write(transaction, JSON.generate(payload))
+      helper = <<~RUBY
+        require ARGV.shift
+        Gem.use_paths(ARGV.shift)
+        payload = JSON.parse(File.read(ARGV.shift))
+        installer = lambda do |path, home|
+          gem = Gem::Installer.at(path, install_dir: home, ignore_dependencies: true, wrappers: false, force: true)
+          def gem.write_spec
+            Process.kill('KILL', Process.pid)
+          end
+          gem.install
+        end
+        recovery = Lich::DependencyRecovery.new(gem_home: Gem.dir, temp_dir: payload.fetch('temp_dir'), install_gem: installer)
+        def recovery.wait_for_parent_exit(_pid); end
+        def recovery.restart_lich(_restart); raise 'unexpected restart'; end
+        recovery.send(:run_windows_replacement!, payload)
+      RUBY
+      environment = {
+        'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
+        'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
+      }
+      _, stderr, status = Open3.capture3(
+        environment, RbConfig.ruby, '-e', helper,
+        File.expand_path('../../lib/dependency_recovery.rb', __dir__), gem_home, transaction
+      )
+
+      # Windows can report exit 0 for KILL; the missing spec and extracted
+      # directory below prove the installer stopped at the interruption point.
+      expect(status).to be_a(Process::Status), stderr
+      expect(status.termsig).to eq(Signal.list.fetch('KILL')) unless Gem.win_platform?
+      expect(installed_versions).to be_empty
+      expect(Dir).to exist(File.join(gem_home, 'gems', "#{gem_name}-1.0.0"))
+      expect(File).not_to exist(File.join(gem_home, 'specifications', "#{gem_name}-1.0.0.gemspec"))
+
+      subject.send(:run_windows_replacement!, payload)
+
+      expect(installed_versions).to eq(['1.0.0'])
+      expect(File.read(File.join(gem_home, 'gems', "#{gem_name}-1.0.0", 'lib', "#{gem_name}.rb")))
+        .to eq("FIXTURE_VERSION = 'reinstalled'\n")
+      expect(subject).to have_received(:restart_lich).once
+    end
+
+    context 'when the bundle contains GTK' do
+      let(:gem_name) { 'gtk3' }
+
+      it 'checks the replacement in a fresh process before restarting Lich' do
+        subject.send(:run_windows_replacement!, payload)
+
+        expect(installed_versions).to eq(['2.0.0'])
+        expect(subject).to have_received(:restart_lich).once
+        expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
+      end
+
+      context 'with inherited dependency activation settings' do
+        let(:replacement_body) do
+          "raise 'inherited gem dependency file' if ENV['RUBYGEMS_GEMDEPS']\n"
+        end
+
+        around do |example|
+          original_environment = ENV.to_h.slice('BUNDLER_SETUP', 'RUBYGEMS_GEMDEPS')
+          startup = File.join(recovery_temp_dir, 'unrelated-startup.rb')
+          File.write(startup, "raise 'inherited startup file was loaded'\n")
+          ENV['BUNDLER_SETUP'] = startup
+          ENV['RUBYGEMS_GEMDEPS'] = File.join(recovery_temp_dir, 'unrelated.Gemfile')
+          example.run
+        ensure
+          %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS].each { |name| ENV[name] = original_environment[name] }
+        end
+
+        it 'loads only the replacement runtime without inherited startup hooks' do
+          subject.send(:run_windows_replacement!, payload)
+
+          expect(installed_versions).to eq(['2.0.0'])
+          expect(subject).to have_received(:restart_lich).once
+        end
+      end
+
+      context 'when GTK cannot load' do
+        let(:replacement_body) { "raise LoadError, 'fixture native DLL unavailable'\n" }
+
+        it 'restores the prior bundle and aborts without restarting' do
+          expect { subject.send(:run_windows_replacement!, payload) }
+            .to raise_error(described_class::Error, /GTK runtime could not load.*fixture native DLL unavailable/m)
+
+          expect_original_runtime
+          expect(File).not_to exist(File.join(gem_home, 'gems', 'gtk3-2.0.0'))
+        end
+      end
+
+      context 'when GTK load hangs' do
+        let(:replacement_body) { "sleep 120\n" }
+
+        it 'reaps the probe and restores the prior bundle without restarting' do
+          stub_const('Lich::DependencyRecovery::NATIVE_LOAD_TIMEOUT_SECONDS', 0.1)
+          probe_pid = nil
+          allow(Process).to receive(:spawn).and_wrap_original do |spawn, *args, **options|
+            probe_pid = spawn.call(*args, **options)
+          end
+
+          expect { subject.send(:run_windows_replacement!, payload) }
+            .to raise_error(described_class::Error, /timed out checking/)
+
+          expect_original_runtime
+          expect { Process.waitpid(probe_pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
+        end
+      end
     end
   end
 
