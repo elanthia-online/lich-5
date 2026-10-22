@@ -92,7 +92,7 @@ RSpec.describe 'persisted display settings' do
         raise SQLite3::BusyException, 'locked'
       end
       during = [Lich.display_uid, Lich.display_expgains, Lich.display_roomid_location]
-      clock += 4.99
+      clock += 29.99
       during << Lich.display_uid
       uncached = Lich.instance_variable_get(:@display_settings_cache).empty?
       before = reads
@@ -147,7 +147,7 @@ RSpec.describe 'persisted display settings' do
       end
       delta = Lich::Gemstone::XMLDelta
       titles = [delta.main_subtitle(' - First - 1', nav_uid_pending: false)]
-      clock += 4.99
+      clock += 29.99
       titles << delta.main_subtitle(' - Second - 2', nav_uid_pending: false)
       failed = [writes, messages.size, Lich.display_uid, db.get_first_value('SELECT value FROM lich_settings')]
       busy = false
@@ -174,7 +174,7 @@ RSpec.describe 'persisted display settings' do
       end
       Lich.enable_display_uid_automatically
       Lich.enable_display_uid_automatically
-      suppressed = [writes, Lich.display_uid]
+      suppressed = [writes, Lich.instance_variable_get(:@display_settings_cache).key?(:display_uid), Lich.display_uid]
       error = begin
         Lich.display_uid = true
       rescue SQLite3::SQLException => e
@@ -185,7 +185,18 @@ RSpec.describe 'persisted display settings' do
       Lich.enable_display_uid_automatically
       puts JSON.generate([suppressed, error, writes, Lich.display_uid])
     RUBY
-    expect(result).to eq([[1, false], 'write failed', 4, true])
+    expect(result).to eq([[1, true, false], 'write failed', 4, true])
+  end
+
+  it 'keeps the cached value when automatic UID persistence is already satisfied' do
+    result = real_settings(<<~'RUBY')
+      Lich.display_uid = true
+      db.define_singleton_method(:execute) { |*| raise 'unexpected write' }
+      db.define_singleton_method(:get_first_value) { |*| raise 'unexpected cache reload' }
+      Lich.enable_display_uid_automatically
+      puts JSON.generate(Lich.display_uid)
+    RUBY
+    expect(result).to be(true)
   end
 
   it 'keeps parser state after a non-busy automatic UID write failure' do
@@ -301,7 +312,7 @@ RSpec.describe 'persisted display settings' do
         fallback = Lich.#{name}
         unresolved = Lich.instance_variable_get(:@display_settings_cache)[#{name.inspect}.to_sym]
         db.define_singleton_method(:get_first_value) { |*| #{saved.inspect} }
-        clock += 5.0
+        clock += 30.0
         puts JSON.generate([fallback, attempts, pauses, unresolved, Lich.#{name}])
       RUBY
       expect(result).to eq([fallback, 2, [0.1], nil, saved == 'title' ? 'title' : !fallback])
@@ -361,10 +372,11 @@ RSpec.describe 'persisted display settings' do
       rescue SQLite3::SQLException => e
         e.message
       end
-      puts JSON.generate([error, attempts, pauses, Lich.display_uid,
+      retained = Lich.instance_variable_get(:@display_settings_cache).key?(:display_uid)
+      puts JSON.generate([error, attempts, pauses, retained, Lich.display_uid,
                           db.get_first_value('SELECT value FROM lich_settings')])
     RUBY
-    expect(result).to eq(['write failed', 1, [], true, 'true'])
+    expect(result).to eq(['write failed', 1, [], true, true, 'true'])
   end
 
   it 'keeps a real downstream hook registered when its cold display read stays busy' do
@@ -389,7 +401,7 @@ RSpec.describe 'persisted display settings' do
       retained = hooks.list.include?('display-busy')
       unresolved = Lich.instance_variable_get(:@display_settings_cache)[:display_uid]
       db.define_singleton_method(:get_first_value) { |*| 'true' }
-      clock += 5.0
+      clock += 30.0
       after = hooks.run('room')
       puts JSON.generate([during, retained, unresolved, after, messages, attempts])
     RUBY
@@ -544,7 +556,37 @@ RSpec.describe 'persisted display settings' do
     expect(result).to eq([true, 'true'])
   end
 
-  it 'publishes a committed value before delivering a thread interrupt' do
+  it 'invalidates only the interrupted setting and reloads its committed value after a thread kill' do
+    result = real_settings(<<~'RUBY')
+      Lich.configure_sqlite_connection(db)
+      Lich.display_uid = false
+      Lich.display_exits = true
+      original_read = db.method(:get_first_value)
+      db.define_singleton_method(:get_first_value) { |*| raise SQLite3::BusyException, 'locked' }
+      Lich.display_room_mono # establish a cooldown that must not hide the committed value
+      db.define_singleton_method(:get_first_value, original_read)
+      committed = Queue.new
+      resume = Queue.new
+      original_write = db.method(:execute)
+      db.define_singleton_method(:execute) do |*args|
+        result = original_write.call(*args)
+        committed << true
+        wait_for(resume, 'resume after commit')
+        result
+      end
+      writer = Thread.new { Lich.display_uid = true }
+      wait_for(committed, 'committed write')
+      writer.kill
+      thread_value(writer, 'killed writer')
+      cache = Lich.instance_variable_get(:@display_settings_cache)
+      before_read = [cache.key?(:display_uid), cache[:display_exits]]
+      puts JSON.generate([before_read, Lich.display_uid,
+                          db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid'")])
+    RUBY
+    expect(result).to eq([[false, true], true, 'true'])
+  end
+
+  it 'publishes a committed value before delivering a raised thread exception' do
     result = real_settings(<<~'RUBY')
       Lich.display_uid = false
       publication = Queue.new

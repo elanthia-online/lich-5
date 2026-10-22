@@ -785,7 +785,7 @@ module Lich
   # hot-path reads use an uncached default unless a command requests strict reads.
   DISPLAY_SETTINGS_MAX_ATTEMPTS = 2
   DISPLAY_SETTINGS_RETRY_DELAY = 0.1
-  DISPLAY_SETTINGS_RETRY_COOLDOWN = 5.0
+  DISPLAY_SETTINGS_RETRY_COOLDOWN = 30.0
 
   # Commands and one-shot startup actions must not act on a busy-read default.
   # Nested callers retain the outer strict scope, even when a read raises.
@@ -857,30 +857,35 @@ module Lich
 
   # Persists first, then publishes the cache while still holding the display
   # lock. Competing writes therefore leave the cache at the last saved value.
-  # Defer thread interrupts through publication so a committed value cannot be
-  # left behind an old cache. Explicit writes propagate synchronous DB failures.
+  # Defer raised exceptions through publication. A thread kill invalidates an
+  # unfinished publication so the next read reloads the saved value. Explicit
+  # writes propagate synchronous DB failures and retain the previous cache.
   # @param name [Symbol] the internal display setting name
   # @param value [Boolean, String] the normalized value to save
   # @param automatic [Boolean] cooldown and log optional subtitle UID writes
   # @return [Boolean, String, nil] saved value, or nil for a skipped automatic write
   def self.write_display_setting(name, value, automatic: false)
     @display_settings_mutex.synchronize do
+      publication_pending = false
       if automatic
         return if @display_settings_cache[name] == true
         return if @display_uid_retry_at && Process.clock_gettime(Process::CLOCK_MONOTONIC) < @display_uid_retry_at
       end
 
       Thread.handle_interrupt(Exception => :never) do
+        publication_pending = true
         with_display_settings_retry do
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('#{name}',?);",
                           [value.to_s.encode('UTF-8')])
         end
         @display_settings_cache[name] = value
+        publication_pending = false
         @display_read_retry_at = nil
         @display_uid_retry_at = nil if name == :display_uid
         value
       end
     rescue SQLite3::Exception => e
+      publication_pending = false
       raise unless automatic
 
       # Optional subtitle persistence must not abort parsing or retry every room.
@@ -888,6 +893,11 @@ module Lich
       @display_uid_retry_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) + DISPLAY_SETTINGS_RETRY_COOLDOWN
       Lich.log "warning: could not persist automatic display_uid: #{e.message}"
       nil
+    ensure
+      if publication_pending
+        @display_settings_cache.delete(name)
+        @display_read_retry_at = nil
+      end
     end
   end
   private_class_method :with_display_settings_retry, :read_display_setting, :write_display_setting,
