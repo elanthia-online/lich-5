@@ -49,7 +49,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
   end
 
   describe 'script body-read failures' do
-    let(:source) { "# quiet\nSCRIPT_READ_EVENTS << :body\nDone:\nnil\n" }
+    let(:source) { "SCRIPT_READ_EVENTS << :body\nDone:\nnil\n" }
 
     around do |example|
       Dir.mktmpdir('script-read-failure') do |root|
@@ -62,6 +62,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     before do
       stub_const('SCRIPT_DIR', @read_root)
       stub_const('SCRIPT_READ_EVENTS', Queue.new)
+      allow(script_class).to receive(:respond)
       # This isolated spec omits lich.rbw's global include of Lich::Common.
       # Supply a real binding for the trusted, empty failed-script body.
       stub_const('Lich::Common::TRUSTED_SCRIPT_BINDING', proc { Lich::Common::Scripting.new.script })
@@ -71,6 +72,22 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.list).to be_empty
       %i[@@startup_reservations @@completed_named_starts @@loading_libraries @@loaded_library_owners].each do |registry|
         expect(script_class.class_variable_get(registry)).to be_empty
+      end
+    end
+
+    shared_examples 'healthy startup announcements' do |name, display_name|
+      [false, true].each do |quiet|
+        it "#{quiet ? 'suppresses' : 'prints'} the active announcement with quiet=#{quiet}" do
+          started = script_class.start(name, '', :quiet => quiet)
+
+          expect(started.join(2)).to equal(started)
+          expect(started).to be_completed_successfully
+          if quiet
+            expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
+          else
+            expect(script_class).to have_received(:respond).with("--- Lich: #{display_name} active.").once
+          end
+        end
       end
     end
 
@@ -85,6 +102,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
             File.write(path, source)
           end
         end
+
+        include_examples 'healthy startup announcements', 'libreadfailure', 'custom/libreadfailure'
 
         %i[open readlines].each do |failure_point|
           context "when #{failure_point} fails" do
@@ -116,6 +135,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
               expect(started.join(2)).to equal(started)
               expect(started.exit_error).to equal(read_error)
               expect(started).not_to be_completed_successfully
+              expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
               expect(SCRIPT_READ_EVENTS).to be_empty
               expect_read_failure_cleanup
 
@@ -123,6 +143,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
               recovered = script_class.start('libreadfailure')
               expect(recovered.join(2)).to equal(recovered)
               expect(recovered).to be_completed_successfully
+              expect(script_class).to have_received(:respond).with('--- Lich: custom/libreadfailure active.').once
               expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
               expect(@read_attempts).to eq(2)
               expect_read_failure_cleanup
@@ -149,7 +170,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
 
     describe 'WizardScript bodies' do
-      let(:source) { "# quiet\nLICH { SCRIPT_READ_EVENTS << :body } LICH\n" }
+      let(:source) { "LICH { SCRIPT_READ_EVENTS << :body } LICH\n" }
 
       before do
         @wizard_scripts = []
@@ -172,6 +193,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
               File.write(path, source)
             end
           end
+
+          include_examples 'healthy startup announcements', 'libwizard', 'libwizard'
 
           it 'successfully reads, executes and cleans up without retaining a fallback error' do
             expect(script_class.loadlib('wizard')).to be(true)
@@ -217,6 +240,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
                 expect(started.join(2)).to equal(started)
                 expect(started.exit_error).to equal(read_error)
                 expect(started).not_to be_completed_successfully
+                expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
                 expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:cleanup)
                 expect(SCRIPT_READ_EVENTS).to be_empty
                 expect_read_failure_cleanup

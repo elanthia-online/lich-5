@@ -197,7 +197,7 @@ module Lich
                 if Script.current
                   eval('script = Script.current', script_binding, script.name)
                   Thread.current.priority = 1
-                  respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
+                  respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet || script.exit_error
                   begin
                     Script.__send__(
                       :__execute,
@@ -1882,22 +1882,13 @@ module Lich
         @completed_successfully = false
         @ignore_pause = false
         data = []
-        if @file_name =~ /\.gz$/i
-          begin
-            Zlib::GzipReader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue StandardError => error
-            data = []
-            __record_exit_error(error)
-            respond "--- Lich: error reading script file (#{@file_name}): #{error}"
-          end
-        else
-          begin
-            File.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue StandardError => error
-            data = []
-            __record_exit_error(error)
-            respond "--- Lich: error reading script file (#{@file_name}): #{error}"
-          end
+        reader = @file_name =~ /\.gz$/i ? Zlib::GzipReader : File
+        begin
+          reader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
+        rescue StandardError => error
+          data = []
+          __record_exit_error(error)
+          respond "--- Lich: error reading script file (#{@file_name}): #{error}"
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
         @current_label = '~start'
