@@ -877,6 +877,16 @@ module Lich
       puts "[Lich.log] #{msg}" if ENV['DEBUG']
     end unless respond_to?(:log)
 
+    # Display consumers use mock accessors here; real persistence and strict
+    # scope behavior are exercised in isolated children with lib/lich.rb.
+    def with_strict_display_reads
+      yield
+    end unless respond_to?(:with_strict_display_reads)
+
+    def enable_display_uid_automatically
+      self.display_uid = true
+    end unless respond_to?(:enable_display_uid_automatically)
+
     def reset_display_expgains!
       @display_expgains = nil
     end unless respond_to?(:reset_display_expgains!)

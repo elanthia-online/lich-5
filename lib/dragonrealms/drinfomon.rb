@@ -25,7 +25,14 @@ module Lich
       # Use ";display inlineexp" to toggle inline gains in EXP window (off by default)
       # - `;hmr drinfomon` re-runs this file; a reporter that is already running
       #   keeps running rather than printing "already active"
-      DRExpMonitor.start if Lich.display_expgains && !DRExpMonitor.active?
+      begin
+        enabled = Lich.with_strict_display_reads { Lich.display_expgains }
+        DRExpMonitor.start if enabled && !DRExpMonitor.active?
+      rescue SQLite3::BusyException => e
+        # A fallback ON value must not override a persisted OFF preference.
+        # Manual ";display expgains on" can recover after contention clears.
+        Lich.log "warning: could not read display_expgains; skipping automatic exp monitor start: #{e.message}"
+      end
     end
   end
 end

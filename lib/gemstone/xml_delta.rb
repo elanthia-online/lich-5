@@ -16,7 +16,7 @@ module Lich
       # Lich.display_uid (a global, not parser state).
       def self.main_subtitle(subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
         if Lich.display_uid == false && subtitle[3..-1] =~ / - \d+$/
-          Lich.display_uid = true
+          Lich.enable_display_uid_automatically
         end
         { room_title: '[' + subtitle[3..-1].gsub(/ - \d+$/, '') + ']' }
       end
