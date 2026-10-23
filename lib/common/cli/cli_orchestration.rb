@@ -97,11 +97,13 @@ module Lich
           end
 
           # Validated before the legacy conversion below, so a malformed command
-          # exits without writing entry.yaml.
+          # exits without writing entry.yaml. ACCOUNT and PASSWORD are left out of
+          # the search so a password of literally '--frontend' isn't read as the flag.
           frontend = CliOptionValidator.extract_flag_value(
             '--frontend',
             usage: usage,
-            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS,
+            argv: ARGV[0..idx] + ARGV.drop(idx + 3)
           )
 
           # Check if YAML file exists; if not, check for DAT and auto-convert to plaintext
