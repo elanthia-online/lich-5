@@ -34,10 +34,10 @@ assert_equals() {
   ((++TESTS_RUN))
 
   if [[ "$expected" == "$actual" ]]; then
-    echo "✓ $test_name"
+    echo "[PASS] $test_name"
     ((++TESTS_PASSED))
   else
-    echo "✗ $test_name"
+    echo "[FAIL] $test_name"
     echo "  Expected: $expected"
     echo "  Got: $actual"
     ((++TESTS_FAILED))
