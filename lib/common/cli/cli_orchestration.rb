@@ -83,13 +83,26 @@ module Lich
           account = ARGV[idx + 1]
           password = ARGV[idx + 2]
 
-          if account.nil? || password.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --add-account ACCOUNT PASSWORD [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -aa ACCOUNT PASSWORD [--frontend FRONTEND]"
+
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+          # PASSWORD is only checked for presence: rejecting option-shaped values
+          # would also refuse any password that starts with '-'.
+          if password.nil?
             $stdout.puts 'error: Missing required arguments'
-            $stdout.puts "Usage: ruby #{lich_script} --add-account ACCOUNT PASSWORD [--frontend FRONTEND]"
-            $stdout.puts "   or: ruby #{lich_script} -aa ACCOUNT PASSWORD [--frontend FRONTEND]"
+            $stdout.puts usage
             exit 1
           end
+
+          # Validated before the legacy conversion below, so a malformed command
+          # exits without writing entry.yaml.
+          frontend = CliOptionValidator.extract_flag_value(
+            '--frontend',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+          )
 
           # Check if YAML file exists; if not, check for DAT and auto-convert to plaintext
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(DATA_DIR)
@@ -121,7 +134,6 @@ module Lich
             # No DAT file either - CLIPassword.add_account will create new YAML
           end
 
-          frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
           exit Lich::Common::Authentication::CLIPassword.add_account(account, password, frontend)
         end
 

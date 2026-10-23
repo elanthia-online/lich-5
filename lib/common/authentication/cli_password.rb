@@ -177,8 +177,8 @@ module Lich
               puts "success: Account '#{account}' added with #{character_list.length} character(s)"
               Lich.log "info: Account '#{account}' added successfully with #{character_list.length} character(s)"
               if selected_frontend.nil? || selected_frontend.empty?
-                puts "note: Frontend not set - use GUI to configure or rerun with --frontend"
-                Lich.log "warning: No frontend set for account '#{account}'"
+                puts "note: No frontend selected - characters stored with frontend stormfront"
+                Lich.log "warning: No frontend selected for account '#{account}' - characters stored with frontend defaulted to stormfront"
               end
               0
             else
