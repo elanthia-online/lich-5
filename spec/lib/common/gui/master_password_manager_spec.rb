@@ -232,6 +232,98 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
     end
   end
 
+  describe '.retrieve_master_password with strict snapshots' do
+    before do
+      allow(described_class).to receive(:keychain_available?).and_return(true)
+      allow(OS).to receive(:mac?).and_return(false)
+      allow(OS).to receive(:linux?).and_return(false)
+      allow(OS).to receive(:windows?).and_return(false)
+      # No strict-read example may launch a real credential-store command.
+      allow(Open3).to receive(:capture3).and_raise('unexpected credential command')
+    end
+
+    it 'raises when the credential store is unavailable' do
+      allow(described_class).to receive(:keychain_available?).and_return(false)
+      expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+    end
+
+    context 'on macOS' do
+      before { allow(OS).to receive(:mac?).and_return(true) }
+
+      [0, 44, 36].each do |code|
+        it "distinguishes success, absence and read failure for exit status #{code}" do
+          status = instance_double(Process::Status, success?: code.zero?, exitstatus: code)
+          output = code.zero? ? "#{test_password}\n" : ''
+          expect(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-w').and_return([output, 'synthetic command diagnostic', status])
+
+          if code == 36
+            expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+          else
+            expect(described_class.retrieve_master_password(strict: true)).to eq(code.zero? ? test_password : nil)
+          end
+        end
+      end
+
+      it 'does not include command exceptions in the raised diagnostic' do
+        allow(Open3).to receive(:capture3).and_raise(IOError, test_password)
+        expect { described_class.retrieve_master_password(strict: true) }
+          .to raise_error(IOError, 'Keychain read failed; previous master password state is unknown')
+      end
+    end
+
+    context 'on Linux' do
+      let(:attributes) { ['service', keychain_service, 'user', 'lich5'] }
+      let(:success) { instance_double(Process::Status, success?: true, exitstatus: 0) }
+      let(:failure) { instance_double(Process::Status, success?: false, exitstatus: 1) }
+
+      before { allow(OS).to receive(:linux?).and_return(true) }
+
+      it 'returns a successfully retrieved password' do
+        expect(Open3).to receive(:capture3).with('secret-tool', 'lookup', *attributes).and_return([test_password, '', success])
+        expect(described_class.retrieve_master_password(strict: true)).to eq(test_password)
+      end
+
+      it 'confirms absence with a successful empty search' do
+        expect(Open3).to receive(:capture3).with('secret-tool', 'lookup', *attributes).and_return(['', '', failure])
+        expect(Open3).to receive(:capture3).with('secret-tool', 'search', '--all', *attributes).and_return(['', '', success])
+        expect(described_class.retrieve_master_password(strict: true)).to be_nil
+      end
+
+      it 'refuses to treat a locked or otherwise unreadable item as absence' do
+        expect(Open3).to receive(:capture3).with('secret-tool', 'lookup', *attributes).and_return(['', '', failure])
+        expect(Open3).to receive(:capture3).with('secret-tool', 'search', '--all', *attributes).and_return(["[/item/1]\n", '', success])
+        expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+      end
+
+      it 'raises on a lookup error without treating it as a missing password' do
+        expect(Open3).to receive(:capture3).with('secret-tool', 'lookup', *attributes).and_return(['', 'service unavailable', failure])
+        expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+      end
+
+      it 'raises when the confirming search fails' do
+        expect(Open3).to receive(:capture3).with('secret-tool', 'lookup', *attributes).and_return(['', '', failure])
+        expect(Open3).to receive(:capture3).with('secret-tool', 'search', '--all', *attributes).and_return(['', 'service unavailable', failure])
+        expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+      end
+    end
+
+    context 'on Windows' do
+      let(:windows) { Lich::Common::GUI::WindowsCredentialManager }
+
+      before { allow(OS).to receive(:windows?).and_return(true) }
+
+      it 'requires strict native retrieval for snapshots' do
+        expect(windows).to receive(:retrieve_credential).with(keychain_service, strict: true).and_return(nil)
+        expect(described_class.retrieve_master_password(strict: true)).to be_nil
+      end
+
+      it 'propagates native read failure as unknown state' do
+        expect(windows).to receive(:retrieve_credential).with(keychain_service, strict: true).and_raise(IOError)
+        expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+      end
+    end
+  end
+
   describe '.delete_master_password' do
     context 'when keychain is available' do
       before do
