@@ -38,6 +38,14 @@ RSpec.describe Lich::Common::CLI::CliOptionValidator do
       expect(value).to eq('DR')
     end
 
+    it 'searches the given argv instead of ARGV' do
+      stub_const('ARGV', ['--add-account', 'DOUG', '--frontend'])
+
+      value = described_class.extract_flag_value('--frontend', usage: 'usage', argv: ['--add-account', '--frontend', 'wizard'])
+
+      expect(value).to eq('wizard')
+    end
+
     it 'exits 1 when the flag is the last argument' do
       stub_const('ARGV', ['--frontend'])
 

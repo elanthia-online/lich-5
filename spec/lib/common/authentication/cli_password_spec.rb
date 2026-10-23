@@ -463,6 +463,31 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
       expect(exit_code).to eq(1)
     end
+
+    it 'reports the stormfront default it stored when no frontend is selected' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_for_frontend).and_return(nil)
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      expect {
+        Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password')
+      }.to output(/note: No frontend selected - characters stored with frontend stormfront/).to_stdout
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account)
+        .with(anything, 'DOUG', 'password', [hash_including(frontend: 'stormfront')])
+    end
+
+    it 'prints no frontend note when a frontend is provided' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+
+      expect {
+        Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
+      }.not_to output(/note:/).to_stdout
+    end
   end
 
   describe '.refresh_characters' do
