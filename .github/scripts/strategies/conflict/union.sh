@@ -182,7 +182,7 @@ resolve_conflicts_union() {
   require_env CONFLICT_LOG_FILE
   {
     echo ""
-    echo "## 🔀 Union Merge: $context"
+    echo "## Union Merge: $context"
     echo ""
     echo "### Files resolved:"
   } >> "$CONFLICT_LOG_FILE"
@@ -316,7 +316,7 @@ log_conflict_summary() {
 
   {
     echo ""
-    echo "<details><summary>📋 Conflict summary: $num_conflicts region(s)</summary>"
+    echo "<details><summary>Conflict summary: $num_conflicts region(s)</summary>"
     echo ""
 
     if [[ $total_lines -le 50 ]]; then
@@ -348,7 +348,7 @@ log_conflict_summary() {
 
       echo '```'
       echo ""
-      echo "**💡 Tip:** Review the full diff with:"
+      echo "**Tip:** Review the full diff with:"
       echo "\`\`\`bash"
       echo "git show HEAD:$file > before.tmp && diff -u before.tmp $file"
       echo "\`\`\`"
