@@ -72,7 +72,7 @@ module Lich
           # Normalize character data if provided
           normalized_characters = characters.map do |char|
             {
-              'char_name'         => char[:char_name].to_s.strip.split.map(&:capitalize).join(' '),
+              'char_name'         => Lich::Common::Authentication::EntryStore.normalize_character_name(char[:char_name]),
               'game_code'         => char[:game_code],
               'game_name'         => char[:game_name],
               'frontend'          => char[:frontend],
@@ -93,12 +93,13 @@ module Lich
 
               # Add new characters that don't already exist
               characters.each do |new_char|
-                normalized_new_char_name = new_char[:char_name].to_s.capitalize
+                normalized_new_char_name = Lich::Common::Authentication::EntryStore.normalize_character_name(new_char[:char_name])
 
                 # Check if character already exists (by char_name, game_code, frontend, custom_launch)
                 # Including custom_launch allows multiple entries for same character with different launch configurations
+                # Stored names are normalized too: older writes used a different form
                 existing_char = existing_characters.find do |existing|
-                  existing['char_name'] == normalized_new_char_name &&
+                  Lich::Common::Authentication::EntryStore.normalize_character_name(existing['char_name']) == normalized_new_char_name &&
                     existing['game_code'] == new_char[:game_code] &&
                     existing['frontend'] == new_char[:frontend] &&
                     existing['custom_launch'] == new_char[:custom_launch]
@@ -200,7 +201,11 @@ module Lich
 
             # Normalize username to UPCASE for consistent lookup
             normalized_username = username.to_s.upcase
-            normalized_char_name = character_data[:char_name].to_s.capitalize
+            normalized_char_name = Lich::Common::Authentication::EntryStore.normalize_character_name(character_data[:char_name])
+
+            if normalized_char_name.empty?
+              return { success: false, message: "Character name cannot be empty." }
+            end
 
             # Check if account exists
             unless yaml_data['accounts'] && yaml_data['accounts'][normalized_username]
@@ -210,10 +215,10 @@ module Lich
             # Initialize characters array if not present
             yaml_data['accounts'][normalized_username]['characters'] ||= []
 
-            # Check for duplicate character using normalized comparison
+            # Check for duplicate character using normalized comparison (both sides: older writes used a different form)
             # Including custom_launch allows multiple entries for same character with different launch configurations
             existing_character = yaml_data['accounts'][normalized_username]['characters'].find do |char|
-              char['char_name'] == normalized_char_name &&
+              Lich::Common::Authentication::EntryStore.normalize_character_name(char['char_name']) == normalized_char_name &&
                 char['game_code'] == character_data[:game_code] &&
                 char['frontend'] == character_data[:frontend] &&
                 char['custom_launch'] == character_data[:custom_launch]
@@ -270,7 +275,7 @@ module Lich
 
             # Normalize username and character name for consistent lookup
             normalized_username = username.to_s.upcase
-            normalized_char_name = char_name.to_s.capitalize
+            normalized_char_name = Lich::Common::Authentication::EntryStore.normalize_character_name(char_name)
 
             # Check if account exists
             return false unless yaml_data['accounts'] &&
@@ -282,7 +287,8 @@ module Lich
             initial_count = characters.size
 
             characters.reject! do |char|
-              matches_basic = char['char_name'] == normalized_char_name && char['game_code'] == game_code
+              # Normalize the stored side too, so records written in an older form stay removable
+              matches_basic = Lich::Common::Authentication::EntryStore.normalize_character_name(char['char_name']) == normalized_char_name && char['game_code'] == game_code
               matches_custom_launch = custom_launch == :__unset ||
                                       char['custom_launch'].to_s.strip == custom_launch.to_s.strip
 

@@ -1030,15 +1030,19 @@ module Lich
           name.to_s.strip.upcase
         end
 
-        # @api private
-        # Normalizes character names to Title case (first letter capitalized)
-        # Ensures consistent character name formatting across the application
+        # Normalizes character names to Title case per word, stripping and collapsing
+        # whitespace. The single normalization used for every char_name write and
+        # comparison (EntryStore, AccountManager, CLIPassword, manual login), so a
+        # name always compares equal to the form it was stored in. Comparisons must
+        # normalize both sides: entry.yaml can hold names written in older forms.
         #
-        # @param name [String] Raw character name
-        # @return [String] Normalized character name in Title case
+        # Per word rather than String#capitalize, which downcases everything after
+        # the first character and so turns "Alpha Beta" into "Alpha beta".
+        #
+        # @param name [String, nil] Raw character name
+        # @return [String] Normalized character name, '' for nil or blank input
         def self.normalize_character_name(name)
-          return '' if name.nil?
-          name.to_s.strip.capitalize
+          name.to_s.strip.split.map(&:capitalize).join(' ')
         end
 
         # @api private

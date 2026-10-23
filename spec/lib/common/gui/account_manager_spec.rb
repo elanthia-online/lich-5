@@ -507,4 +507,100 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       end
     end
   end
+
+  # Issue #1521: every write and lookup must agree on one normalized char_name,
+  # and lookups must also normalize the stored side, since entry.yaml can hold
+  # names written by older code in a different form.
+  describe "character name normalization" do
+    let(:yaml_file) { Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir) }
+    let(:character) { { char_name: 'Alpha Beta', game_code: 'DR', game_name: 'DragonRealms', frontend: 'wizard' } }
+
+    def stored_names
+      YAML.load_file(yaml_file)['accounts'][username.upcase]['characters'].map { |char| char['char_name'] }
+    end
+
+    def store_raw(*names)
+      yaml_data = YAML.load_file(yaml_file)
+      yaml_data['accounts'][username.upcase]['characters'] = names.map do |name|
+        { 'char_name' => name, 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+      end
+      File.write(yaml_file, YAML.dump(yaml_data))
+    end
+
+    it "does not duplicate a multi-word character re-added through add_or_update_account" do
+      described_class.add_or_update_account(data_dir, username, password, [character])
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(stored_names).to eq(['Alpha Beta'])
+    end
+
+    it "writes the same form from add_character as from a new account" do
+      described_class.add_or_update_account(data_dir, username, password)
+
+      result = described_class.add_character(data_dir, username, character.merge(char_name: 'alpha beta'))
+
+      expect(result[:success]).to be true
+      expect(stored_names).to eq(['Alpha Beta'])
+    end
+
+    it "removes the multi-word character add_or_update_account wrote" do
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(described_class.remove_character(data_dir, username, 'Alpha Beta', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "removes a record stored in the old String#capitalize form" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      expect(described_class.remove_character(data_dir, username, 'Alpha beta', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "removes a hand-edited record whose casing no write path produces" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('TestChar')
+
+      expect(described_class.remove_character(data_dir, username, 'TestChar', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "treats an old-form record as the same character when merging" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(stored_names).to eq(['Alpha beta'])
+    end
+
+    it "rejects an old-form record as a duplicate in add_character" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      result = described_class.add_character(data_dir, username, character)
+
+      expect(result[:success]).to be false
+      expect(stored_names).to eq(['Alpha beta'])
+    end
+
+    it "strips padding so a typed trailing space does not create a second record" do
+      described_class.add_or_update_account(data_dir, username, password, [character.merge(char_name: 'Mahtra')])
+
+      expect(described_class.add_character(data_dir, username, character.merge(char_name: 'Mahtra '))[:success]).to be false
+      described_class.add_or_update_account(data_dir, username, password, [character.merge(char_name: ' mahtra')])
+
+      expect(stored_names).to eq(['Mahtra'])
+    end
+
+    it "rejects a blank name in add_character" do
+      described_class.add_or_update_account(data_dir, username, password)
+
+      result = described_class.add_character(data_dir, username, character.merge(char_name: '   '))
+
+      expect(result).to eq(success: false, message: "Character name cannot be empty.")
+      expect(stored_names).to eq([])
+    end
+  end
 end

@@ -528,19 +528,13 @@ module Lich
         # @param stored [Array<Hash>, nil] the account's entry.yaml characters (string keys)
         # @return [Array<Hash>] the subset of fetched not already present in stored
         def self.reject_stored_characters(fetched, stored)
-          known = (stored || []).map { |char| [normalize_char_name(char['char_name']), char['game_code']] }
+          known = (stored || []).map do |char|
+            [Lich::Common::Authentication::EntryStore.normalize_character_name(char['char_name']), char['game_code']]
+          end
 
-          fetched.reject { |char| known.include?([normalize_char_name(char[:char_name]), char[:game_code]]) }
-        end
-
-        # @api private
-        # Normalizes a character name to the form add_or_update_account persists, so
-        # names compare equal regardless of the casing the server or entry.yaml used.
-        #
-        # @param name [String, nil] Character name
-        # @return [String] Normalized name
-        def self.normalize_char_name(name)
-          name.to_s.strip.split.map(&:capitalize).join(' ')
+          fetched.reject do |char|
+            known.include?([Lich::Common::Authentication::EntryStore.normalize_character_name(char[:char_name]), char[:game_code]])
+          end
         end
 
         # @api private

@@ -1237,4 +1237,39 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       expect(launches).to contain_exactly('/path/one', '/path/two')
     end
   end
+
+  describe '.normalize_character_name' do
+    it 'capitalizes each word rather than only the first' do
+      expect(described_class.normalize_character_name('alpha beta')).to eq('Alpha Beta')
+      expect(described_class.normalize_character_name('ALPHA BETA')).to eq('Alpha Beta')
+    end
+
+    it 'strips and collapses whitespace' do
+      expect(described_class.normalize_character_name("  Mahtra \t")).to eq('Mahtra')
+      expect(described_class.normalize_character_name('alpha   beta')).to eq('Alpha Beta')
+    end
+
+    it 'matches String#capitalize for unpadded single-word names (stored names stay byte-identical)' do
+      %w[Mahtra mahtra MAHTRA TestChar x].each do |name|
+        expect(described_class.normalize_character_name(name)).to eq(name.capitalize)
+      end
+    end
+
+    it 'returns an empty string for nil and blank input' do
+      expect(described_class.normalize_character_name(nil)).to eq('')
+      expect(described_class.normalize_character_name('   ')).to eq('')
+    end
+
+    it 'keeps a multi-word name intact through save_entries (no rewrite to "Alpha beta")' do
+      entry = {
+        user_id: 'TESTUSER', password: 'pw', char_name: 'Alpha Beta', game_code: 'DR',
+        game_name: 'DragonRealms', frontend: 'wizard', custom_launch: nil, custom_launch_dir: nil,
+        is_favorite: false, favorite_order: nil, encryption_mode: :plaintext
+      }
+
+      expect(described_class.save_entries(data_dir, [entry])).to be true
+
+      expect(described_class.load_saved_entries(data_dir, false).map { |e| e[:char_name] }).to eq(['Alpha Beta'])
+    end
+  end
 end
