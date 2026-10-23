@@ -19,6 +19,7 @@
 # - It classifies paths against a small ignore set:
 #     .github/workflows/**
 #     .github/actions/**
+#     .github/tests/test-guard-pre-branch-pr.sh (covered by workflow_guard)
 #     .gitattributes
 #     .gitignore
 #     .rubocop.yml
@@ -73,6 +74,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow_guard:
+    # Independent of Ruby preflight so workflow-only changes exercise the guard.
+    name: Test pre-beta PR guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run inert workflow guard tests
+        run: bash .github/tests/test-guard-pre-branch-pr.sh
+
   test:
     runs-on: ubuntu-latest
     # The suite normally finishes in under a minute; cap the job so a hung
@@ -95,6 +110,7 @@ jobs:
             const IGNORES = [
               '.github/workflows/**',
               '.github/actions/**',
+              '.github/tests/test-guard-pre-branch-pr.sh',
               '.gitattributes',
               '.gitignore',
               '.rubocop.yml',

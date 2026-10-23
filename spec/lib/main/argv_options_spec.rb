@@ -2,6 +2,7 @@
 
 require 'rspec'
 require 'tmpdir'
+require 'socket'
 
 # lib/main/argv_options.rb pulls a heavy require chain and auto-executes
 # ArgvOptions.process_argv at load time, so it cannot be required in isolation.
@@ -188,5 +189,79 @@ RSpec.describe 'Lich::Main::ArgvOptions --frontend-caps' do
     capabilities.launch_capabilities = nil
     harness.handle_frontend_caps({})
     expect(capabilities.launch_capabilities).to be_nil
+  end
+end
+
+RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.port_in_use?' do
+  source_path = File.expand_path('../../../lib/main/argv_options.rb', __dir__)
+
+  harness_class = Class.new do
+    method_body = File.read(source_path)[/^(?<ind>[ \t]*)def self\.port_in_use\?\(host, port\).*?^\k<ind>end$/m]
+    raise 'could not extract port_in_use? from argv_options.rb' unless method_body
+
+    module_eval(method_body.sub('def self.port_in_use?', 'def port_in_use?'))
+  end
+
+  let(:harness) { harness_class.new }
+
+  it 'reports a port held by a live listener as in use, and a freed one as free' do
+    server = TCPServer.new('127.0.0.1', 0)
+    port = server.addr[1]
+    expect(harness.port_in_use?('127.0.0.1', port)).to be true
+    server.close
+    expect(harness.port_in_use?('127.0.0.1', port)).to be false
+  end
+end
+
+RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.handle_sal_launch' do
+  source_path = File.expand_path('../../../lib/main/argv_options.rb', __dir__)
+
+  # Constants in the extracted bodies resolve against this class first, so the
+  # recording Lich below shadows the real one without touching global state.
+  harness_class = Class.new do
+    const_set(:Lich, Module.new do
+      class << self
+        attr_accessor :dialogs
+
+        def log(*); end
+
+        def msgbox(args)
+          dialogs << args
+        end
+      end
+    end)
+
+    source = File.read(source_path)
+    %w[port_in_use\?\(host,\ port\) handle_sal_launch\(argv_options\)].each do |sig|
+      body = source[/^(?<ind>[ \t]*)def self\.#{sig}.*?^\k<ind>end$/m]
+      raise "could not extract #{sig} from argv_options.rb" unless body
+
+      module_eval(body.sub('def self.', 'def '))
+    end
+  end
+
+  let(:harness) { harness_class.new }
+  let(:dialogs) { harness_class::Lich.dialogs = [] }
+  let(:missing_sal) { File.join(Dir.tmpdir, "missing-#{Process.pid}.sal") }
+
+  def launch(options)
+    dialogs
+    expect { harness.handle_sal_launch({ sal: missing_sal, detachable_client_host: '127.0.0.1' }.merge(options)) }
+      .to raise_error(SystemExit)
+    dialogs.first
+  end
+
+  it 'adds the port hint as an error dialog when the detachable port is held' do
+    server = TCPServer.new('127.0.0.1', 0)
+    dialog = launch(detachable_client_port: server.addr[1])
+    expect(dialog[:icon]).to eq(:error)
+    expect(dialog[:message]).to include(missing_sal, "port #{server.addr[1]} is already in use")
+  ensure
+    server&.close
+  end
+
+  it 'omits the hint when no detachable port was given' do
+    dialog = launch(detachable_client_port: nil)
+    expect(dialog).to eq(message: "error: launch file does not exist: #{missing_sal}", icon: :error)
   end
 end

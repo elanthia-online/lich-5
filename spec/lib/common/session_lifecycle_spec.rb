@@ -244,6 +244,99 @@ RSpec.describe Lich::Common::SessionLifecycle do
     end
   end
 
+  describe 'heartbeat recovery' do
+    let(:heartbeat_thread) { instance_double(Thread, join: nil, alive?: false, kill: nil) }
+    let(:heartbeat_blocks) { [] }
+
+    before(:each) do
+      allow(Lich).to receive(:log)
+      allow(Thread).to receive(:new) do |&block|
+        heartbeat_blocks << block
+        heartbeat_thread
+      end
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('GS3')
+    end
+
+    it 'retries a failed heartbeat write on the next paced iteration and recovers' do
+      events = []
+      writes = 0
+      allow(described_class).to receive(:sleep) do |seconds|
+        events << [:sleep, seconds]
+        described_class.instance_variable_set(:@running, false) if writes == 2
+      end
+      allow(Lich::Common::SessionsSettings).to receive(:heartbeat_admitted) do
+        writes += 1
+        if writes == 1
+          events << :failed_write
+          raise IOError, 'summary store temporarily unavailable',
+                %w[summary_store.rb:10 sessions_settings.rb:20 session_lifecycle.rb:30 thread.rb:40]
+        end
+
+        events << :successful_write
+      end
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(true)
+      heartbeat_blocks.last.call
+
+      expect(events).to eq([[:sleep, 0], [:sleep, 2], :failed_write, [:sleep, 2], :successful_write, [:sleep, 2]])
+      expect(Lich::Common::SessionsSettings).to have_received(:heartbeat_admitted).twice
+      expect(Lich::Common::SessionsSettings).to have_received(:register_session_admitted).once
+      expect(Lich).to have_received(:log).with(
+        'warning: SessionLifecycle heartbeat tick failed (continuing): IOError: summary store temporarily unavailable' \
+        "\n\tsummary_store.rb:10\n\tsessions_settings.rb:20\n\tsession_lifecycle.rb:30"
+      ).once
+      expect(Lich).not_to have_received(:log).with(a_string_matching(/heartbeat thread stopped/))
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(false)
+      expect(described_class.stop).to be(true)
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid).once
+      expect(heartbeat_thread).not_to have_received(:kill)
+    end
+
+    it 'logs a stopped heartbeat thread when its wait raises outside the tick rescue' do
+      allow(described_class).to receive(:sleep).with(0)
+      allow(described_class).to receive(:sleep).with(2).and_raise(IOError, 'heartbeat wait interrupted')
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(true)
+      heartbeat_blocks.last.call
+
+      expect(Lich).to have_received(:log).with('warning: SessionLifecycle heartbeat thread stopped: IOError: heartbeat wait interrupted').once
+      expect(Lich).not_to have_received(:log).with(a_string_matching(/heartbeat tick failed \(continuing\)/))
+      expect(Lich::Common::SessionsSettings).not_to have_received(:heartbeat_admitted)
+      expect(described_class.stop).to be(true)
+    end
+
+    it 'stops before retrying a failed write and allows a fresh start' do
+      sleep_calls = 0
+      writes = 0
+      allow(described_class).to receive(:sleep) do |_seconds|
+        sleep_calls += 1
+        expect(described_class.stop).to be(true) if [3, 6].include?(sleep_calls)
+      end
+      allow(Lich::Common::SessionsSettings).to receive(:heartbeat_admitted) do
+        writes += 1
+        raise IOError, 'summary store temporarily unavailable' if writes == 1
+      end
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(true)
+      heartbeat_blocks.last.call
+
+      expect(sleep_calls).to eq(3)
+      expect(writes).to eq(1)
+      expect(described_class.stop).to be(false)
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 2, registration_delay: 0)).to be(true)
+      heartbeat_blocks.last.call
+
+      expect(sleep_calls).to eq(6)
+      expect(writes).to eq(2)
+      expect(heartbeat_blocks.size).to eq(2)
+      expect(Lich::Common::SessionsSettings).to have_received(:register_session_admitted).twice
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid).twice
+      expect(described_class.stop).to be(false)
+      expect(heartbeat_thread).not_to have_received(:kill)
+    end
+  end
+
   describe 'feature-flag latching' do
     let(:heartbeat_thread) do
       t = instance_double(Thread)

@@ -144,7 +144,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Rebuild Release Assets — Run Summary"
+            echo "## Rebuild Release Assets -- Run Summary"
             echo ""
             echo "- Target tag: \`$TAG\`"
             echo "- Archive rebuild/upload: **$ARCHIVE_RESULT**"

@@ -284,7 +284,7 @@ module Lich
       # === ACTIVE STATE ===
       # Whether enhancives are currently active (toggled on)
       def self.active?
-        Infomon.get("enhancive.active") == true
+        Infomon.get_bool("enhancive.active")
       end
 
       # Returns Time when active state was last updated, or nil if never

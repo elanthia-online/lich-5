@@ -525,7 +525,7 @@ module Lich
 
               # Normalize account name to UPCASE and character name to Title case
               normalized_account = user_id_entry.text.upcase
-              normalized_character = selected_iter[3].capitalize
+              normalized_character = Authentication::EntryStore.normalize_character_name(selected_iter[3])
 
               launch_data_hash = Authentication.authenticate(
                 account: normalized_account,
@@ -560,7 +560,7 @@ module Lich
                 # Uniqueness key includes custom_launch to allow multiple custom frontend entries
                 # for the same character (e.g., Wrayth + Custom, or multiple Custom variants).
                 existing_entry = @entry_data.find do |entry|
-                  entry[:char_name].to_s.capitalize == entry_data[:char_name] &&
+                  Authentication::EntryStore.normalize_character_name(entry[:char_name]) == entry_data[:char_name] &&
                     entry[:game_code] == entry_data[:game_code] &&
                     entry[:user_id].to_s.upcase == entry_data[:user_id] &&
                     entry[:frontend] == entry_data[:frontend] &&

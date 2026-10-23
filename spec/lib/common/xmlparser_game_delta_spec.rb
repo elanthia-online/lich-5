@@ -2,6 +2,7 @@
 
 require_relative '../../spec_helper'
 require 'ox'
+require 'sqlite3'
 require 'common/gameobj'
 require 'common/xmlparser'
 require 'gemstone/xml_delta'
@@ -71,6 +72,9 @@ RSpec.describe Lich::Common::XMLParserDelta do
       expect(delta.main_subtitle(' - Town Square, Central', nav_uid_pending: false))
         .to eq(room_title: '[Town Square, Central]')
     end
+
+    # Failure/cooldown and parser-state regressions use real Lich persistence
+    # in lich_display_settings_persistence_spec.rb, outside this suite's mocks.
   end
 
   describe 'DragonRealms::XMLDelta#main_subtitle' do

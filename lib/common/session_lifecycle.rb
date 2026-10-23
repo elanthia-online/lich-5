@@ -52,6 +52,7 @@ module Lich
 
       # Starts lifecycle tracking and heartbeat emission for the current process.
       # Registration is intentionally deferred to allow XMLData game context to initialize.
+      # Failed heartbeat updates are logged and retried after the next heartbeat interval.
       #
       # @param session_name [String] resolved session identifier
       # @param role [String] runtime role (`session`, `detachable`, `headless`)
@@ -109,28 +110,32 @@ module Lich
                 sleep heartbeat_interval
                 break unless @running
 
-                game_code = resolve_game_code
-                if !registration_complete && !game_code.nil?
-                  registration_complete = attempt_register(
-                    session_name: session_name,
-                    role: role,
-                    frontend: frontend,
-                    started_epoch: started_epoch,
-                    started_iso: started_iso,
-                    registration_delay: registration_delay
-                  )
-                end
+                begin
+                  game_code = resolve_game_code
+                  if !registration_complete && !game_code.nil?
+                    registration_complete = attempt_register(
+                      session_name: session_name,
+                      role: role,
+                      frontend: frontend,
+                      started_epoch: started_epoch,
+                      started_iso: started_iso,
+                      registration_delay: registration_delay
+                    )
+                  end
 
-                SessionsSettings.send(:heartbeat_admitted,
-                                      pid: Process.pid,
-                                      state: 'running',
-                                      session_name: session_name,
-                                      role: role,
-                                      frontend: frontend,
-                                      game_code: game_code)
+                  SessionsSettings.send(:heartbeat_admitted,
+                                        pid: Process.pid,
+                                        state: 'running',
+                                        session_name: session_name,
+                                        role: role,
+                                        frontend: frontend,
+                                        game_code: game_code)
+                rescue StandardError => e
+                  Lich.log("warning: SessionLifecycle heartbeat tick failed (continuing): #{e.class}: #{e.message}\n\t#{e.backtrace&.first(3)&.join("\n\t")}") if Lich.respond_to?(:log)
+                end
               end
             rescue StandardError => e
-              Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+              Lich.log("warning: SessionLifecycle heartbeat thread stopped: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
             end
           rescue StandardError
             @running = false
