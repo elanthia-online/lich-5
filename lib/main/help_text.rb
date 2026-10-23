@@ -143,7 +143,7 @@ module Lich
             lich [account command] [options]
 
           Commands:
-            --add-account ACCOUNT PASSWORD
+            --add-account ACCOUNT PASSWORD [--frontend FRONTEND]
             --refresh-characters ACCOUNT [--frontend FRONTEND]
             --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD

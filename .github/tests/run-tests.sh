@@ -28,11 +28,11 @@ run_test_suite() {
   echo "=========================================="
 
   if bash "$test_file"; then
-    echo "✓ $test_name PASSED"
+    echo "[PASS] $test_name"
     echo
     ((++TOTAL_PASSED))
   else
-    echo "✗ $test_name FAILED"
+    echo "[FAIL] $test_name"
     echo
     ((++TOTAL_FAILED))
   fi

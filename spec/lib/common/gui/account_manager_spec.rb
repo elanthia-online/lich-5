@@ -70,21 +70,103 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
         File.write(yaml_file, "invalid: yaml: content: - ]")
 
-        # Should handle error and create new structure
-        expect(described_class.add_or_update_account(data_dir, username, password)).to be true
-
-        # Verify new structure was created
-        yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts']).to have_key(username.upcase)
+        expect(described_class.add_or_update_account(data_dir, username, password)).to be false
+        expect(File.read(yaml_file)).to eq("invalid: yaml: content: - ]")
       end
 
       it "handles file write errors" do
-        # Mock file write error - updated to use verified_file_operation
-        allow(Lich::Common::GUI::Utilities).to receive(:verified_file_operation).and_return(false)
+        allow(Lich::Common::Authentication::EntryStore).to receive(:write_yaml_file).and_raise(IOError, "write failed")
 
         # Should return false on write error
         expect(described_class.add_or_update_account(data_dir, username, password)).to be false
       end
+    end
+  end
+
+  describe 'protected account publication' do
+    let(:yaml_file) { Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir) }
+    let(:original) { File.binread(yaml_file) }
+
+    before do
+      described_class.add_or_update_account(data_dir, username, password)
+      original
+    end
+
+    it 'creates owner-only credentials and tightens an existing permissive file' do
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      File.chmod(0o644, yaml_file)
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(true)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(YAML.safe_load_file(yaml_file)['accounts'][username.upcase]['password']).to eq('SyntheticChanged123!')
+    end
+
+    it 'retains the exact previous account bytes in an owner-only backup on every save' do
+      File.binwrite("#{yaml_file}.bak", 'older backup')
+      File.chmod(0o644, "#{yaml_file}.bak")
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(true)
+
+      expect(File.binread("#{yaml_file}.bak")).to eq(original)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      previous = File.binread(yaml_file)
+      expect(described_class.remove_account(data_dir, username)).to be(true)
+      expect(File.binread("#{yaml_file}.bak")).to eq(previous)
+    end
+
+    it 'keeps the backup when entry publication fails and logs safe OS diagnostics' do
+      allow(Lich).to receive(:log)
+      allow(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+        raise Errno::EACCES, 'SyntheticSecretMustNotAppear' if destination == yaml_file
+        rename.call(source, destination)
+      end
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(File.binread("#{yaml_file}.bak")).to eq(original)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      expect(Lich).to have_received(:log).with("error: Could not save account data to #{yaml_file.inspect}: Errno::EACCES (errno=#{Errno::EACCES::Errno})")
+      expect(Lich).not_to have_received(:log).with(/SyntheticSecretMustNotAppear/)
+    end
+
+    it 'does not include serialization exception contents in diagnostics or overwrite the backup' do
+      File.binwrite("#{yaml_file}.bak", 'older backup')
+      allow(Lich).to receive(:log)
+      allow(YAML).to receive(:dump).and_raise(TypeError, 'SyntheticSecretMustNotAppear')
+
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(File.binread("#{yaml_file}.bak")).to eq('older backup')
+      expect(Lich).to have_received(:log).with("error: Could not save account data to #{yaml_file.inspect}: TypeError")
+      expect(Lich).not_to have_received(:log).with(/SyntheticSecretMustNotAppear/)
+    end
+
+    it 'preserves original bytes and removes temporary files after a partial write' do
+      allow(Tempfile).to receive(:create).and_wrap_original do |create, *args, &block|
+        create.call(*args) do |file|
+          allow(file).to receive(:write).and_wrap_original do |write, content|
+            write.call(content.byteslice(0, 8))
+            raise IOError, 'synthetic partial write'
+          end
+          block.call(file)
+        end
+      end
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'does not remove an account when publication fails' do
+      allow(File).to receive(:rename).and_raise(IOError, 'synthetic publication failure')
+      expect(described_class.remove_account(data_dir, username)).to be(false)
+      expect(File.binread(yaml_file)).to eq(original)
+    end
+
+    it 'does not publish a failed password encryption result' do
+      allow(Lich::Common::Authentication::EntryStore).to receive(:encrypt_password).and_return(nil)
+      expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
+      expect(File.binread(yaml_file)).to eq(original)
     end
   end
 
@@ -423,6 +505,102 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         # Test that empty array is returned when file doesn't exist
         expect(described_class.get_characters(data_dir, username)).to eq([])
       end
+    end
+  end
+
+  # Issue #1521: every write and lookup must agree on one normalized char_name,
+  # and lookups must also normalize the stored side, since entry.yaml can hold
+  # names written by older code in a different form.
+  describe "character name normalization" do
+    let(:yaml_file) { Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir) }
+    let(:character) { { char_name: 'Alpha Beta', game_code: 'DR', game_name: 'DragonRealms', frontend: 'wizard' } }
+
+    def stored_names
+      YAML.load_file(yaml_file)['accounts'][username.upcase]['characters'].map { |char| char['char_name'] }
+    end
+
+    def store_raw(*names)
+      yaml_data = YAML.load_file(yaml_file)
+      yaml_data['accounts'][username.upcase]['characters'] = names.map do |name|
+        { 'char_name' => name, 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+      end
+      File.write(yaml_file, YAML.dump(yaml_data))
+    end
+
+    it "does not duplicate a multi-word character re-added through add_or_update_account" do
+      described_class.add_or_update_account(data_dir, username, password, [character])
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(stored_names).to eq(['Alpha Beta'])
+    end
+
+    it "writes the same form from add_character as from a new account" do
+      described_class.add_or_update_account(data_dir, username, password)
+
+      result = described_class.add_character(data_dir, username, character.merge(char_name: 'alpha beta'))
+
+      expect(result[:success]).to be true
+      expect(stored_names).to eq(['Alpha Beta'])
+    end
+
+    it "removes the multi-word character add_or_update_account wrote" do
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(described_class.remove_character(data_dir, username, 'Alpha Beta', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "removes a record stored in the old String#capitalize form" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      expect(described_class.remove_character(data_dir, username, 'Alpha beta', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "removes a hand-edited record whose casing no write path produces" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('TestChar')
+
+      expect(described_class.remove_character(data_dir, username, 'TestChar', 'DR', 'wizard')).to be true
+      expect(stored_names).to eq([])
+    end
+
+    it "treats an old-form record as the same character when merging" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      described_class.add_or_update_account(data_dir, username, password, [character])
+
+      expect(stored_names).to eq(['Alpha beta'])
+    end
+
+    it "rejects an old-form record as a duplicate in add_character" do
+      described_class.add_or_update_account(data_dir, username, password)
+      store_raw('Alpha beta')
+
+      result = described_class.add_character(data_dir, username, character)
+
+      expect(result[:success]).to be false
+      expect(stored_names).to eq(['Alpha beta'])
+    end
+
+    it "strips padding so a typed trailing space does not create a second record" do
+      described_class.add_or_update_account(data_dir, username, password, [character.merge(char_name: 'Mahtra')])
+
+      expect(described_class.add_character(data_dir, username, character.merge(char_name: 'Mahtra '))[:success]).to be false
+      described_class.add_or_update_account(data_dir, username, password, [character.merge(char_name: ' mahtra')])
+
+      expect(stored_names).to eq(['Mahtra'])
+    end
+
+    it "rejects a blank name in add_character" do
+      described_class.add_or_update_account(data_dir, username, password)
+
+      result = described_class.add_character(data_dir, username, character.merge(char_name: '   '))
+
+      expect(result).to eq(success: false, message: "Character name cannot be empty.")
+      expect(stored_names).to eq([])
     end
   end
 end

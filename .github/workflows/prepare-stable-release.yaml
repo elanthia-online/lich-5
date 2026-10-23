@@ -251,7 +251,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Prepare Stable — Run Summary"
+            echo "## Prepare Stable -- Run Summary"
             echo ""
             echo "- Event: **$EVENT**"
             echo "- Target branch: **${TARGET:-unknown}**"

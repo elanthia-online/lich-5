@@ -94,6 +94,58 @@ RSpec.describe Lich::Common::ClientCommands do
       expect(out).to include('R:EDITED HANDLER')
     end
 
+    it 'uses an edited set retry limit after reload without constant warnings' do
+      out = probe(<<~'RUBY')
+        require 'sqlite3'
+        require 'tempfile'
+        require 'stringio'
+
+        db = Object.new
+        attempts = 0
+        db.define_singleton_method(:execute) do |*|
+          attempts += 1
+          raise 'set retry limit exceeded' if attempts > 2
+
+          raise SQLite3::BusyException, 'database is locked'
+        end
+        Lich.define_singleton_method(:db) { db }
+        Object.send(:define_method, :sleep) { |_| nil }
+        do_client(';set foo on')
+        puts "BEFORE=#{attempts}"
+
+        original = File.read(BUILTINS)
+        # Match the former guarded constant too: that implementation ignores
+        # the edit on reload, so this regression fails on its behavior.
+        edited = original.sub(/(SET_MAX_ATTEMPTS|max_attempts) = 2/, '\1 = 1')
+        raise 'fixture edit did not apply' if edited == original
+
+        warnings = StringIO.new
+        previous_stderr, previous_verbose = $stderr, $VERBOSE
+        begin
+          $stderr = warnings
+          $VERBOSE = true
+          Tempfile.create(['builtins', '.rb']) do |file|
+            file.write(edited)
+            file.flush
+            load file.path
+            attempts = 0
+            do_client(';set foo on')
+            puts "AFTER=#{attempts}"
+          end
+          load BUILTINS
+          attempts = 0
+          do_client(';set foo on')
+          puts "RESTORED=#{attempts}"
+        ensure
+          $stderr, $VERBOSE = previous_stderr, previous_verbose
+        end
+        puts "CONSTANT_WARNINGS=#{warnings.string.lines.grep(/already initialized constant/).inspect}"
+      RUBY
+      expect(out).to include('BEFORE=2', 'AFTER=1', 'RESTORED=2', 'CONSTANT_WARNINGS=[]')
+      expect(out.scan('could not set toggle foo').length).to eq(3)
+      expect(out).not_to include('toggle foo set on')
+    end
+
     it 'leaves the previous table in place when registration raises' do
       out = probe(<<~RUBY)
         before = REGISTRY.commands.length

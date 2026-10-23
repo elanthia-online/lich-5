@@ -27,6 +27,420 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
   after { FileUtils.remove_entry(temp_dir) if Dir.exist?(temp_dir) }
 
+  # No example in this spec may access the host credential store.
+  before do
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password).and_return(nil)
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(false)
+    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:delete_master_password).and_return(false)
+  end
+
+  describe 'atomic credential publication' do
+    let(:yaml_data) { { 'encryption_mode' => 'plaintext', 'accounts' => { 'SYNTHETIC' => { 'password' => 'SyntheticPassword123!' } } } }
+    let(:original_bytes) { "# original synthetic data\n" + YAML.dump(yaml_data) }
+
+    before do
+      File.binwrite(yaml_file, original_bytes)
+      File.chmod(0o600, yaml_file)
+    end
+
+    it 'publishes a closed owner-only temporary file in the destination directory' do
+      prepared_file = nil
+      allow(Tempfile).to receive(:create).and_wrap_original do |create, *args, &block|
+        create.call(*args) do |file|
+          prepared_file = file
+          allow(file).to receive(:write).and_wrap_original do |write, content|
+            expect(file).to be_binmode
+            write.call(content)
+          end
+          block.call(file)
+        end
+      end
+      expect(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+        expect(File.dirname(source)).to eq(File.dirname(yaml_file))
+        expect(File.stat(source).mode & 0o777).to eq(0o600)
+        expect(prepared_file).to be_closed
+        expect(File.binread(yaml_file)).to eq(original_bytes)
+        rename.call(source, destination)
+      end
+
+      described_class.write_yaml_file(yaml_file, yaml_data)
+
+      expect(YAML.safe_load_file(yaml_file)['accounts']).to eq(yaml_data['accounts'])
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'creates a new entry file with owner-only access' do
+      File.unlink(yaml_file)
+
+      described_class.write_yaml_file(yaml_file, yaml_data)
+
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+    end
+
+    it 'refuses to replace an owner read-only file and preserves its bytes' do
+      File.chmod(0o400, yaml_file)
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o400)
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'refuses replacement when the OS denies write access despite writable mode bits' do
+      allow(File).to receive(:writable?).with(yaml_file).and_return(false)
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+    end
+
+    context 'with symlinks', unless: OS.windows? do
+      let(:target) { File.join(data_dir, 'linked', 'credentials.yaml') }
+
+      before do
+        FileUtils.mkdir_p(File.dirname(target))
+        File.rename(yaml_file, target)
+        File.symlink('linked/credentials.yaml', yaml_file)
+      end
+
+      it 'preserves the link and atomically replaces the target in its own directory' do
+        expect(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+          expect(File.dirname(source)).to eq(File.realpath(File.dirname(target)))
+          expect(destination).to eq(File.realpath(target))
+          rename.call(source, destination)
+        end
+
+        described_class.write_yaml_file(yaml_file, yaml_data)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(YAML.safe_load_file(target)['accounts']).to eq(yaml_data['accounts'])
+        expect(Dir.children(File.dirname(target))).to eq(['credentials.yaml'])
+      end
+
+      it 'refuses a dangling link without replacing it or creating a target' do
+        File.unlink(target)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::ENOENT)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.exist?(target)).to be(false)
+      end
+
+      it 'preserves a read-only target and its link on refusal' do
+        File.chmod(0o400, target)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.binread(target)).to eq(original_bytes)
+      end
+
+      it 'preserves the target and link when replacement fails' do
+        allow(File).to receive(:rename).and_raise(Errno::EACCES)
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
+
+        expect(File.readlink(yaml_file)).to eq('linked/credentials.yaml')
+        expect(File.binread(target)).to eq(original_bytes)
+        expect(Dir.children(File.dirname(target))).to eq(['credentials.yaml'])
+      end
+    end
+
+    it 'removes group and other access when replacing a permissive entry file' do
+      File.chmod(0o644, yaml_file)
+
+      described_class.write_yaml_file(yaml_file, yaml_data)
+
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+    end
+
+    it 'retains the original bytes when serialization fails' do
+      allow(YAML).to receive(:dump).and_raise(IOError, 'synthetic serialization failure')
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(IOError)
+
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'retains the original after a partial temporary-file write' do
+      allow(Tempfile).to receive(:create).and_wrap_original do |create, *args, &block|
+        create.call(*args) do |file|
+          allow(file).to receive(:write).and_wrap_original do |write, content|
+            write.call(content.byteslice(0, 8))
+            raise IOError, 'synthetic partial write'
+          end
+          block.call(file)
+        end
+      end
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(IOError)
+
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    [:fsync, :chmod].each do |operation|
+      it "retains the original and removes the temporary file when #{operation} fails" do
+        allow(Tempfile).to receive(:create).and_wrap_original do |create, *args, &block|
+          create.call(*args) do |file|
+            allow(file).to receive(operation).and_raise(IOError, "synthetic #{operation} failure")
+            block.call(file)
+          end
+        end
+
+        expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(IOError)
+
+        expect(File.binread(yaml_file)).to eq(original_bytes)
+        expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+      end
+    end
+
+    it 'retains the original and removes the temporary file when replacement fails' do
+      allow(File).to receive(:rename).and_raise(IOError, 'synthetic rename failure')
+
+      expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(IOError)
+
+      expect(File.binread(yaml_file)).to eq(original_bytes)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+  end
+
+  describe 'encryption-mode publication and keychain rollback' do
+    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:keychain) { { password: 'PreviousSyntheticMaster123!' } }
+    let(:new_master_password) { 'NewSyntheticMaster456!' }
+    let(:passwords) { { 'SYNTHETIC_ALPHA' => 'SyntheticAlphaPassword123!', 'SYNTHETIC_BETA' => 'SyntheticBetaPassword456!' } }
+
+    before do
+      allow(manager).to receive(:retrieve_master_password) { keychain[:password] }
+      allow(manager).to receive(:store_master_password) do |password|
+        keychain[:password] = password
+        true
+      end
+      allow(manager).to receive(:delete_master_password) do
+        keychain[:password] = nil
+        true
+      end
+      allow(Lich).to receive(:log)
+    end
+
+    # Creates isolated synthetic accounts using the real existing cipher formats.
+    # @param mode [Symbol] original file encryption mode
+    # @return [String] original serialized bytes for preservation assertions
+    def write_synthetic_accounts(mode)
+      accounts = passwords.to_h do |account, password|
+        [account, {
+          'password'   => described_class.encrypt_password(password, mode: mode, account_name: account, master_password: keychain[:password]),
+          'characters' => [{ 'char_name' => account, 'game_code' => 'GS3', 'frontend' => 'stormfront' }]
+        }]
+      end
+      data = { 'encryption_mode' => mode.to_s, 'accounts' => accounts }
+      data['master_password_validation_test'] = manager.create_validation_test(keychain[:password]) if mode == :enhanced
+      bytes = YAML.dump(data)
+      File.binwrite(yaml_file, bytes)
+      File.chmod(0o600, yaml_file)
+      bytes
+    end
+
+    # Fails only publication of entry.yaml, allowing the protected backup to finish.
+    # @return [void]
+    def fail_entry_publication
+      allow(File).to receive(:rename).and_wrap_original do |rename, source, destination|
+        raise IOError, 'synthetic entry publication failure' if destination == yaml_file
+
+        rename.call(source, destination)
+      end
+    end
+
+    # Checks exact bytes and both account passwords after loading through EntryStore.
+    # @param bytes [String] original entry bytes
+    # @return [void]
+    def expect_original_accounts(bytes)
+      expect(File.binread(yaml_file)).to eq(bytes)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      loaded = described_class.load_saved_entries(data_dir, false)
+      expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+    end
+
+    [[:plaintext, :standard], [:plaintext, :enhanced], [:standard, :plaintext], [:standard, :enhanced], [:enhanced, :plaintext], [:enhanced, :standard]].each do |old_mode, new_mode|
+      it "publishes decryptable accounts when changing #{old_mode} to #{new_mode}" do
+        write_synthetic_accounts(old_mode)
+
+        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password)).to be(true)
+
+        data = YAML.safe_load_file(yaml_file)
+        expect(data['encryption_mode']).to eq(new_mode.to_s)
+        loaded = described_class.load_saved_entries(data_dir, false)
+        expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+        expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+        expect(File.exist?("#{yaml_file}.bak")).to be(false)
+        if new_mode == :enhanced
+          expect(keychain[:password]).to eq(new_master_password)
+          expect(manager.validate_master_password(new_master_password, data['master_password_validation_test'])).to be(true)
+        elsif old_mode == :enhanced
+          expect(keychain[:password]).to be_nil
+        end
+      end
+    end
+
+    [[:plaintext, :enhanced], [:standard, :enhanced], [:enhanced, :plaintext], [:enhanced, :standard]].each do |old_mode, new_mode|
+      it "restores previous keychain state and decryptability after failed #{old_mode}-to-#{new_mode} publication" do
+        original = write_synthetic_accounts(old_mode)
+        previous = keychain[:password]
+        fail_entry_publication
+
+        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password)).to be(false)
+
+        expect(keychain[:password]).to eq(previous)
+        expect_original_accounts(original)
+        expect(File.binread("#{yaml_file}.bak")).to eq(original)
+        expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+        expect(Dir.children(data_dir).sort).to eq(['entry.yaml', 'entry.yaml.bak'])
+      end
+    end
+
+    it 'restores keychain absence after a failed publication entering Enhanced' do
+      keychain[:password] = nil
+      original = write_synthetic_accounts(:standard)
+      fail_entry_publication
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect(keychain[:password]).to be_nil
+      expect_original_accounts(original)
+    end
+
+    it 'refuses a mode change before mutation when the keychain snapshot fails' do
+      original = write_synthetic_accounts(:standard)
+      allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect(manager).not_to have_received(:store_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
+      expect(File.binread(yaml_file)).to eq(original)
+      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+    end
+
+    it 'reports unknown rollback state instead of treating a failed read as absence' do
+      allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
+
+      expect(described_class.send(:restore_master_password, nil)).to be(false)
+
+      expect(manager).not_to have_received(:delete_master_password)
+      expect(Lich).to have_received(:log).with(/manual keychain recovery is required/)
+    end
+
+    [:return_false, :raise].each do |failure|
+      it "restores an overwritten prior keychain value when storage reports #{failure}" do
+        original = write_synthetic_accounts(:standard)
+        previous = keychain[:password]
+        allow(manager).to receive(:store_master_password) do |password|
+          keychain[:password] = password
+          if password == new_master_password
+            raise IOError, 'synthetic keychain write failure' if failure == :raise
+
+            false
+          else
+            true
+          end
+        end
+
+        expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+        expect(keychain[:password]).to eq(previous)
+        expect_original_accounts(original)
+      end
+
+      it "restores a deleted keychain value when deletion reports #{failure}" do
+        original = write_synthetic_accounts(:enhanced)
+        previous = keychain[:password]
+        allow(manager).to receive(:delete_master_password) do
+          keychain[:password] = nil
+          raise IOError, 'synthetic keychain delete failure' if failure == :raise
+
+          false
+        end
+
+        expect(described_class.change_encryption_mode(data_dir, :standard)).to be(false)
+
+        expect(keychain[:password]).to eq(previous)
+        expect_original_accounts(original)
+      end
+    end
+
+    it 'does not change keychain state when encryption fails before publication' do
+      original = write_synthetic_accounts(:standard)
+      previous = keychain[:password]
+      allow(described_class).to receive(:encrypt_password).and_return(nil)
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect(keychain[:password]).to eq(previous)
+      expect(manager).not_to have_received(:store_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
+      expect_original_accounts(original)
+    end
+
+    it 'does not change keychain state when validation metadata cannot be created' do
+      original = write_synthetic_accounts(:standard)
+      allow(manager).to receive(:create_validation_test).and_return(nil)
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect(manager).not_to have_received(:store_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
+      expect_original_accounts(original)
+    end
+
+    it 'reports failed keychain rollback explicitly without replacing the entry file' do
+      original = write_synthetic_accounts(:standard)
+      fail_entry_publication
+      allow(manager).to receive(:store_master_password) do |password|
+        if password == new_master_password
+          keychain[:password] = password
+          true
+        else
+          false
+        end
+      end
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+
+      expect_original_accounts(original)
+      expect(Lich).to have_received(:log).with(/manual keychain recovery is required/)
+    end
+
+    it 'keeps the published mode and matching keychain when backup cleanup fails' do
+      write_synthetic_accounts(:standard)
+      allow(FileUtils).to receive(:rm).with("#{yaml_file}.bak").and_raise(IOError, 'synthetic cleanup failure')
+
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(true)
+
+      expect(keychain[:password]).to eq(new_master_password)
+      expect(YAML.safe_load_file(yaml_file)['encryption_mode']).to eq('enhanced')
+      loaded = described_class.load_saved_entries(data_dir, false)
+      expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+    end
+
+    it 'keeps the original encrypted accounts and a secure backup when save publication fails' do
+      original = write_synthetic_accounts(:standard)
+      entries = described_class.load_saved_entries(data_dir, false)
+      File.binwrite("#{yaml_file}.bak", 'old synthetic backup')
+      File.chmod(0o644, "#{yaml_file}.bak")
+      fail_entry_publication
+
+      expect(described_class.save_entries(data_dir, entries)).to be(false)
+
+      expect_original_accounts(original)
+      expect(File.binread("#{yaml_file}.bak")).to eq(original)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+    end
+  end
+
   describe '.migrate_from_legacy with enhanced mode' do
     before do
       # Create a dummy entry.dat file for each test
@@ -554,7 +968,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       it 'handles unicode characters in password' do
         # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixture exercises encryption round-trip behavior.
-        unicode_password = 'pässwörd123日本語'
+        unicode_password = "p\u00e4ssw\u00f6rd123\u65e5\u672c\u8a9e"
         # rubocop:enable Custom/AsciiOnlySource
 
         encrypted = described_class.encrypt_password(
@@ -821,6 +1235,41 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       expect(roundtrip_entries.length).to eq(2)
       launches = roundtrip_entries.map { |e| e[:custom_launch] }
       expect(launches).to contain_exactly('/path/one', '/path/two')
+    end
+  end
+
+  describe '.normalize_character_name' do
+    it 'capitalizes each word rather than only the first' do
+      expect(described_class.normalize_character_name('alpha beta')).to eq('Alpha Beta')
+      expect(described_class.normalize_character_name('ALPHA BETA')).to eq('Alpha Beta')
+    end
+
+    it 'strips and collapses whitespace' do
+      expect(described_class.normalize_character_name("  Mahtra \t")).to eq('Mahtra')
+      expect(described_class.normalize_character_name('alpha   beta')).to eq('Alpha Beta')
+    end
+
+    it 'matches String#capitalize for unpadded single-word names (stored names stay byte-identical)' do
+      %w[Mahtra mahtra MAHTRA TestChar x].each do |name|
+        expect(described_class.normalize_character_name(name)).to eq(name.capitalize)
+      end
+    end
+
+    it 'returns an empty string for nil and blank input' do
+      expect(described_class.normalize_character_name(nil)).to eq('')
+      expect(described_class.normalize_character_name('   ')).to eq('')
+    end
+
+    it 'keeps a multi-word name intact through save_entries (no rewrite to "Alpha beta")' do
+      entry = {
+        user_id: 'TESTUSER', password: 'pw', char_name: 'Alpha Beta', game_code: 'DR',
+        game_name: 'DragonRealms', frontend: 'wizard', custom_launch: nil, custom_launch_dir: nil,
+        is_favorite: false, favorite_order: nil, encryption_mode: :plaintext
+      }
+
+      expect(described_class.save_entries(data_dir, [entry])).to be true
+
+      expect(described_class.load_saved_entries(data_dir, false).map { |e| e[:char_name] }).to eq(['Alpha Beta'])
     end
   end
 end

@@ -211,17 +211,28 @@ module Lich
 
         # ---- settings ---------------------------------------------------
 
+        # Retry once after contention, then fail visibly and release dispatch.
+        # Each attempt uses Lich.db's configured busy timeout (5000 ms by
+        # default), with a 100 ms pause before the second attempt. The default
+        # SQLite wait budget is about 10.1 seconds; lock queueing and execution
+        # time are additional. A final busy result intentionally fails visibly.
         command(/^set\s(.+)\s(on|off)/) do |m|
+          max_attempts = 2
           toggle_var = m[1]
           set_state = m[2]
           did_something = false
+          attempts = 0
           begin
+            attempts += 1
             Lich.db.execute('INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);',
                             [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
             did_something = true
           rescue SQLite3::BusyException
-            sleep 0.1
-            retry
+            if attempts < max_attempts
+              sleep 0.1
+              retry
+            end
+            respond("--- Lich: could not set toggle #{toggle_var}: database is busy; try again.")
           end
           respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
         end
@@ -270,27 +281,39 @@ module Lich
 
         # ---- display ----------------------------------------------------
 
+        # Persist before announcing changes or starting/stopping the monitor.
+        # Strict reads raise on cold-cache contention; failed writes also raise,
+        # so assignment expressions need no return checks.
         command(/^display flaguid(?: (true|false))?/i, game: :dr) do |m|
-          new_value = ClientCommands.toggle_value(Lich.hide_uid_flag, m[1])
-          respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
+          current = Lich.with_strict_display_reads { Lich.hide_uid_flag }
+          new_value = ClientCommands.toggle_value(current, m[1])
           Lich.hide_uid_flag = new_value
+          respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
           respond 'Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. ' \
                   "To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         command(/^display descflag(?: (true|false|on|off))?$/i, game: :dr) do |m|
-          new_value = ClientCommands.toggle_value(Lich.follow_description_flag, m[1])
-          respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
+          current = Lich.with_strict_display_reads { Lich.follow_description_flag }
+          new_value = ClientCommands.toggle_value(current, m[1])
           Lich.follow_description_flag = new_value
+          respond "Changing Lich to hide the room description while FLAG DESCRIPTION is OFF to #{new_value}"
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         # The uniform six, in the positions the chain had them. ;display roomid
         # (DR) is registered between uid and exits to keep its original place.
         DISPLAY_TOGGLES.each_with_index do |(word, accessor, description), index|
           command(/^display #{word}(?: (true|false))?/i) do |m|
-            new_value = ClientCommands.toggle_value(Lich.public_send(accessor), m[1])
-            respond "Changing Lich to display #{description} to #{new_value}"
+            current = Lich.with_strict_display_reads { Lich.public_send(accessor) }
+            new_value = ClientCommands.toggle_value(current, m[1])
             Lich.public_send("#{accessor}=", new_value)
+            respond "Changing Lich to display #{description} to #{new_value}"
+          rescue SQLite3::Exception => e
+            respond "--- Lich: could not update display settings: #{e.message}"
           end
 
           next unless index == 1 # after uid, before exits
@@ -298,13 +321,17 @@ module Lich
           command(/^display roomid(?:\s+(title|line|both))?/i, game: :dr) do |m|
             requested = m[1]&.downcase
             if requested.nil?
-              respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
+              current = Lich.with_strict_display_reads { Lich.display_roomid_location }
+              respond "DragonRealms room id / RealID display placement is currently: #{current}"
               respond 'Usage: ;display roomid <title|line|both>  (title = in the room name line, ' \
                       'line = a Room Number line below the room, both = both places)'
             else
               Lich.display_roomid_location = requested
               respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
             end
+          rescue SQLite3::Exception => e
+            action = requested.nil? ? 'read' : 'update'
+            respond "--- Lich: could not #{action} display settings: #{e.message}"
           end
         end
 
@@ -313,7 +340,8 @@ module Lich
             respond 'Error: exp-monitor.lic script is currently running'
             respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
           else
-            new_value = ClientCommands.toggle_value(Lich.display_expgains, m[:toggle])
+            current = Lich.with_strict_display_reads { Lich.display_expgains }
+            new_value = ClientCommands.toggle_value(current, m[:toggle])
             Lich.display_expgains = new_value
             if new_value
               respond 'Enabling real-time experience gain reporting'
@@ -323,6 +351,8 @@ module Lich
               DRExpMonitor.stop
             end
           end
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not update display settings: #{e.message}"
         end
 
         command(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i, game: :dr) do |m|
@@ -336,9 +366,10 @@ module Lich
         end
 
         command(/^display exp-status$/i, game: :dr) do
+          expgains = Lich.with_strict_display_reads { Lich.display_expgains }
           respond
           respond 'DragonRealms Experience Monitor Status:'
-          respond "  expgains:   #{Lich.display_expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
+          respond "  expgains:   #{expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
           respond "  inlineexp:  #{DRExpMonitor.inline_display? ? 'ON' : 'OFF'}  (cumulative gains in EXP window)"
           respond "  reporter:   #{DRExpMonitor.active? ? 'RUNNING' : 'STOPPED'}"
           respond
@@ -346,6 +377,8 @@ module Lich
           respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
           respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
           respond
+        rescue SQLite3::Exception => e
+          respond "--- Lich: could not read display settings: #{e.message}"
         end
 
         # ---- debug logs -------------------------------------------------

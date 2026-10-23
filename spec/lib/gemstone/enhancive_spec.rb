@@ -184,6 +184,20 @@ RSpec.describe Lich::Gemstone::Enhancive do
     it "returns false when not set" do
       expect(Lich::Gemstone::Enhancive.active?).to be(false)
     end
+
+    { true => 1, false => 0 }.each do |active, stored_value|
+      it "returns #{active} when loading the persisted state into a cold cache" do
+        infomon = Lich::Gemstone::Infomon
+        # Persist synchronously so this exercises SQLite's boolean representation
+        # without depending on the asynchronous writer's scheduling.
+        infomon.mutex.synchronize do
+          infomon.upsert(key: "enhancive.active", value: active)
+        end
+
+        expect(Lich::Gemstone::Enhancive.active?).to be(active)
+        expect(infomon.get("enhancive.active")).to eq(stored_value)
+      end
+    end
   end
 
   describe "pauses" do

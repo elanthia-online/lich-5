@@ -5,6 +5,7 @@ require 'securerandom' # default gem
 require 'base64' # bundled gem Ruby >= 3.4, default gem Ruby < 3.4
 Lich::Util.install_gem_requirements({ 'os' => true })
 require 'shellwords' # default gem
+require 'open3' # default gem
 require_relative 'windows_credential_manager'
 
 module Lich
@@ -49,7 +50,12 @@ module Lich
           false
         end
 
-        def self.retrieve_master_password
+        # Strict reads are required for transaction snapshots and rollback checks:
+        # nil means confirmed absence, while unavailable or failed reads raise.
+        # Legacy callers retain the nil-on-error contract.
+        def self.retrieve_master_password(strict: false)
+          return retrieve_master_password_strict if strict
+
           return nil unless keychain_available?
 
           if OS.mac?
@@ -62,8 +68,42 @@ module Lich
             nil
           end
         rescue StandardError => e
+          raise if strict
+
           Lich.log "error: Failed to retrieve master password: #{e.message}"
           nil
+        end
+
+        # @return [String, nil] password or confirmed absence
+        # @raise [IOError] if the previous keychain state cannot be established
+        private_class_method def self.retrieve_master_password_strict
+          raise IOError, "Keychain unavailable; previous master password state is unknown" unless keychain_available?
+
+          if OS.windows?
+            return WindowsCredentialManager.retrieve_credential(KEYCHAIN_SERVICE, strict: true)
+          elsif OS.mac?
+            output, _error, status = Open3.capture3('/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-w')
+            # errSecItemNotFound (-25300), represented as an 8-bit process status.
+            return nil if status.exitstatus == 44
+          elsif OS.linux?
+            attributes = ['service', KEYCHAIN_SERVICE, 'user', 'lich5']
+            output, error, status = Open3.capture3('secret-tool', 'lookup', *attributes)
+            if status.exitstatus == 1 && output.empty? && error.empty?
+              # Lookup can also return no value for a locked item. Only a successful
+              # empty search (including locked items) establishes actual absence.
+              items, error, search_status = Open3.capture3('secret-tool', 'search', '--all', *attributes)
+              return nil if search_status.success? && items.empty? && error.empty?
+            end
+          else
+            raise IOError, "Unsupported keychain; previous master password state is unknown"
+          end
+
+          raise IOError, "Keychain read failed; previous master password state is unknown" unless status.success? && !output.strip.empty?
+
+          output.strip
+        rescue StandardError
+          # Never propagate command output or credential values into diagnostics.
+          raise IOError, "Keychain read failed; previous master password state is unknown"
         end
 
         def self.create_validation_test(master_password)

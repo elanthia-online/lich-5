@@ -48,6 +48,249 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@stopping, [])
   end
 
+  describe 'script body-read failures' do
+    let(:source) { "SCRIPT_READ_EVENTS << :body\nDone:\nnil\n" }
+
+    around do |example|
+      Dir.mktmpdir('script-read-failure') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        @read_root = root
+        example.run
+      end
+    end
+
+    before do
+      stub_const('SCRIPT_DIR', @read_root)
+      stub_const('SCRIPT_READ_EVENTS', Queue.new)
+      allow(script_class).to receive(:respond)
+      # This isolated spec omits lich.rbw's global include of Lich::Common.
+      # Supply a real binding for the trusted, empty failed-script body.
+      stub_const('Lich::Common::TRUSTED_SCRIPT_BINDING', proc { Lich::Common::Scripting.new.script })
+    end
+
+    def expect_read_failure_cleanup
+      expect(script_class.list).to be_empty
+      %i[@@startup_reservations @@completed_named_starts @@loading_libraries @@loaded_library_owners].each do |registry|
+        expect(script_class.class_variable_get(registry)).to be_empty
+      end
+    end
+
+    shared_examples 'healthy startup announcements' do |name, display_name|
+      [false, true].each do |quiet|
+        it "#{quiet ? 'suppresses' : 'prints'} the active announcement with quiet=#{quiet}" do
+          started = script_class.start(name, '', :quiet => quiet)
+
+          expect(started.join(2)).to equal(started)
+          expect(started).to be_completed_successfully
+          if quiet
+            expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
+          else
+            expect(script_class).to have_received(:respond).with("--- Lich: #{display_name} active.").once
+          end
+        end
+      end
+    end
+
+    { 'plain' => [File, '.lic'], 'gzip' => [Zlib::GzipReader, '.lic.gz'] }.each do |format, (reader_class, extension)|
+      context "with a #{format} script" do
+        let(:path) { File.join(SCRIPT_DIR, 'custom', "libreadfailure#{extension}") }
+
+        before do
+          if format == 'gzip'
+            Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+          else
+            File.write(path, source)
+          end
+        end
+
+        include_examples 'healthy startup announcements', 'libreadfailure', 'custom/libreadfailure'
+
+        %i[open readlines].each do |failure_point|
+          context "when #{failure_point} fails" do
+            let(:read_error) { Errno::EACCES.new(path) }
+
+            before do
+              @read_attempts = 0
+              @readable = false
+              allow(reader_class).to receive(:open).and_call_original
+              allow(reader_class).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                @read_attempts += 1
+                if @readable
+                  method.call(*args, &block)
+                elsif failure_point == :open
+                  raise read_error
+                else
+                  method.call(*args) do |reader|
+                    allow(reader).to receive(:readlines).and_raise(read_error)
+                    block.call(reader)
+                  end
+                end
+              end
+            end
+
+            it 'records failed start completion, tears down, and can start after recovery' do
+              started = script_class.start('libreadfailure')
+
+              expect(started).not_to be_nil
+              expect(started.join(2)).to equal(started)
+              expect(started.exit_error).to equal(read_error)
+              expect(started).not_to be_completed_successfully
+              expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
+              expect(SCRIPT_READ_EVENTS).to be_empty
+              expect_read_failure_cleanup
+
+              @readable = true
+              recovered = script_class.start('libreadfailure')
+              expect(recovered.join(2)).to equal(recovered)
+              expect(recovered).to be_completed_successfully
+              expect(script_class).to have_received(:respond).with('--- Lich: custom/libreadfailure active.').once
+              expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+              expect(@read_attempts).to eq(2)
+              expect_read_failure_cleanup
+            end
+
+            it 'rejects loadlib without caching and rereads successfully after recovery' do
+              expect { script_class.loadlib('readfailure') }.to raise_error(LoadError, /script library failed: libreadfailure:.*Permission denied/)
+
+              expect(script_class.libs).not_to include('libreadfailure')
+              expect(SCRIPT_READ_EVENTS).to be_empty
+              expect_read_failure_cleanup
+
+              @readable = true
+              expect(script_class.loadlib('readfailure')).to be(true)
+              expect(script_class.libs).to include('libreadfailure')
+              expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+              expect(script_class.loadlib('readfailure')).to be(true)
+              expect(@read_attempts).to eq(2)
+              expect(SCRIPT_READ_EVENTS).to be_empty
+            end
+          end
+        end
+      end
+    end
+
+    describe 'WizardScript bodies' do
+      let(:source) { "LICH { SCRIPT_READ_EVENTS << :body } LICH\n" }
+
+      before do
+        @wizard_scripts = []
+        allow(Lich::Common::WizardScript).to receive(:new).and_wrap_original do |method, *args|
+          method.call(*args).tap do |script|
+            @wizard_scripts << script
+            script.at_exit_procs << proc { SCRIPT_READ_EVENTS << :cleanup }
+          end
+        end
+      end
+
+      %w[.cmd .wiz .cmd.gz .wiz.gz].each do |extension|
+        context "with #{extension}" do
+          let(:path) { File.join(SCRIPT_DIR, 'custom', "libwizard#{extension}") }
+
+          before do
+            if extension.end_with?('.gz')
+              Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+            else
+              File.write(path, source)
+            end
+          end
+
+          include_examples 'healthy startup announcements', 'libwizard', 'libwizard'
+
+          it 'successfully reads, executes and cleans up without retaining a fallback error' do
+            expect(script_class.loadlib('wizard')).to be(true)
+            expect(@wizard_scripts.last).to be_completed_successfully
+            expect(@wizard_scripts.last.exit_error).to be_nil
+            expect(script_class.libs).to include('libwizard')
+            expect([SCRIPT_READ_EVENTS.pop(true), SCRIPT_READ_EVENTS.pop(true)]).to eq([:body, :cleanup])
+            expect(SCRIPT_READ_EVENTS).to be_empty
+          end
+
+          %i[open readlines].each do |failure_point|
+            context "when the final plain #{failure_point} fails" do
+              let(:read_error) { Errno::EACCES.new(path) }
+
+              before do
+                @readable = false
+                allow(Zlib::GzipReader).to receive(:open).and_call_original
+                allow(Zlib::GzipReader).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                  raise Zlib::GzipFile::Error, 'gzip read failed' unless @readable
+
+                  method.call(*args, &block)
+                end
+                allow(File).to receive(:open).and_call_original
+                allow(File).to receive(:open).with(path).and_wrap_original do |method, *args, &block|
+                  if @readable
+                    method.call(*args, &block)
+                  elsif failure_point == :open
+                    raise read_error
+                  else
+                    method.call(*args) do |reader|
+                      allow(reader).to receive(:readlines).and_raise(read_error)
+                      block.call(reader)
+                    end
+                  end
+                end
+              end
+
+              it 'retains the final error, fails start completion and runs cleanup' do
+                # Explicit arguments avoid the production NilClass extension.
+                started = script_class.start('libwizard', '')
+
+                expect(started).not_to be_nil
+                expect(started.join(2)).to equal(started)
+                expect(started.exit_error).to equal(read_error)
+                expect(started).not_to be_completed_successfully
+                expect(script_class).not_to have_received(:respond).with(/ active\.\z/)
+                expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:cleanup)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+                expect_read_failure_cleanup
+              end
+
+              it 'does not cache a failed library and executes after read recovery' do
+                expect { script_class.loadlib('wizard') }.to raise_error(LoadError, /script library failed: libwizard:.*Permission denied/)
+                expect(@wizard_scripts.last.exit_error).to equal(read_error)
+                expect(@wizard_scripts.last).not_to be_completed_successfully
+                expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:cleanup)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+                expect(script_class.libs).not_to include('libwizard')
+                expect_read_failure_cleanup
+
+                @readable = true
+                expect(script_class.loadlib('wizard')).to be(true)
+                expect(@wizard_scripts.last).to be_completed_successfully
+                expect(@wizard_scripts.last.exit_error).to be_nil
+                expect(script_class.libs).to include('libwizard')
+                expect([SCRIPT_READ_EVENTS.pop(true), SCRIPT_READ_EVENTS.pop(true)]).to eq([:body, :cleanup])
+                expect(script_class.loadlib('wizard')).to be(true)
+                expect(@wizard_scripts.size).to eq(2)
+                expect(SCRIPT_READ_EVENTS).to be_empty
+              end
+            end
+          end
+        end
+      end
+    end
+
+    it 'rejects a corrupt gzip library and loads its replacement after recovery' do
+      path = File.join(SCRIPT_DIR, 'custom', 'libcorrupt.lic.gz')
+      File.write(path, 'invalid gzip data')
+
+      started = script_class.start('libcorrupt')
+      expect(started.join(2)).to equal(started)
+      expect(started.exit_error).to be_a(Zlib::GzipFile::Error)
+      expect(started).not_to be_completed_successfully
+      expect { script_class.loadlib('corrupt') }.to raise_error(LoadError, /script library failed: libcorrupt/)
+      expect(script_class.libs).not_to include('libcorrupt')
+      expect(SCRIPT_READ_EVENTS).to be_empty
+      expect_read_failure_cleanup
+
+      Zlib::GzipWriter.open(path) { |writer| writer.write(source) }
+      expect(script_class.loadlib('corrupt')).to be(true)
+      expect(script_class.libs).to include('libcorrupt')
+      expect(SCRIPT_READ_EVENTS.pop(true)).to eq(:body)
+    end
+  end
+
   describe 'named-script lifetime execution guards' do
     def guarded_fixture(source)
       Dir.mktmpdir('script-lifetime-guard') do |root|

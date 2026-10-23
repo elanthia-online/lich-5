@@ -18,6 +18,73 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     stub_const('LICH_DIR', '/tmp/lich')
   end
 
+  describe '.handle_add_account' do
+    before do
+      allow(Lich::Common::Authentication::EntryStore).to receive(:yaml_file_path).and_return('/nonexistent/entry.yaml')
+      allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(false)
+      allow(Lich::Common::CLI::CLIConversion).to receive(:convert).and_return(true)
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:add_account).and_return(0)
+    end
+
+    it 'passes an explicit valid --frontend through' do
+      stub_const('ARGV', ['--add-account', 'DOUG', 'secret', '--frontend', 'wizard'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', 'wizard')
+    end
+
+    it 'passes nil when --frontend is omitted' do
+      stub_const('ARGV', ['-aa', 'DOUG', 'secret'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', nil)
+    end
+
+    it 'exits 1 without converting legacy entries or adding the account when --frontend is invalid' do
+      allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(true)
+      stub_const('ARGV', ['--add-account', 'DOUG', 'secret', '--frontend', 'bogus'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_account)
+    end
+
+    it 'exits 1 without adding the account when ACCOUNT is missing and a flag takes its place' do
+      stub_const('ARGV', ['--add-account', '--frontend', 'wizard'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_account)
+    end
+
+    it 'accepts a PASSWORD that starts with a dash' do
+      stub_const('ARGV', ['--add-account', 'DOUG', '-secret'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '-secret', nil)
+    end
+
+    it 'accepts a PASSWORD that is literally --frontend' do
+      stub_const('ARGV', ['--add-account', 'DOUG', '--frontend'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '--frontend', nil)
+    end
+
+    it 'reads --frontend after a PASSWORD that is literally --frontend' do
+      stub_const('ARGV', ['--add-account', 'DOUG', '--frontend', '--frontend', 'wizard'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '--frontend', 'wizard')
+    end
+
+    it 'reads --frontend given before the command' do
+      stub_const('ARGV', ['--frontend', 'wizard', '--add-account', 'DOUG', 'secret'])
+
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', 'wizard')
+    end
+  end
+
   describe '.handle_refresh_characters' do
     before do
       allow(Lich::Common::Authentication::CLIPassword).to receive(:refresh_characters).and_return(0)
