@@ -89,7 +89,7 @@ jobs:
       # PR MATCH STRATEGY:
       # 1) REST (closed PRs on base) to avoid search indexing lag
       # 2) Fallback to Search API (top few candidates)
-      # Title regex: /\b(?:release|Lich)\s+v?{version}\b/i  — boundaries reduce false positives
+      # Title regex: /\b(?:release|Lich)\s+v?{version}\b/i  -- boundaries reduce false positives
       # NOTE: Base is github.ref_name (pre/beta or subpaths). If you change base naming, update here.
       - name: Find merged Release Please PR for this tag
         if: ${{ steps.rp.outputs.release_created == 'true' }}
@@ -181,7 +181,7 @@ jobs:
             if (i >= lines.length) lines.push(headerLine); else lines[i] = headerLine;
             let body = lines.join('\n');
             body = body.replace(/\n?(?:---|\* \* \*)\nThis PR was generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
-            body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1'); // PR link → plain #N
+            body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1'); // PR link -> plain #N
             // Keep fast-path body concise. Custom install footer and formatter
             // sentinel are owned by format-release-notes.yaml to avoid duplicates.
             body = body.replace(/\s+$/,'') + '\n';
