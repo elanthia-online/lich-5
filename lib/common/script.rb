@@ -197,7 +197,7 @@ module Lich
                 if Script.current
                   eval('script = Script.current', script_binding, script.name)
                   Thread.current.priority = 1
-                  respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
+                  respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet || script.exit_error
                   begin
                     Script.__send__(
                       :__execute,
@@ -1825,6 +1825,11 @@ module Lich
         end
       end
 
+      # Builds a script body and its lifecycle state. Body-read failures retain
+      # their original exception so execution cannot succeed or cache a library;
+      # the empty body still follows normal startup and teardown.
+      #
+      # @param args [Hash] script file, arguments, quiet and publication options
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
@@ -1876,21 +1881,14 @@ module Lich
         @cleanup_started = false
         @completed_successfully = false
         @ignore_pause = false
-        data = nil
-        if @file_name =~ /\.gz$/i
-          begin
-            Zlib::GzipReader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            # return nil
-          end
-        else
-          begin
-            File.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            # return nil
-          end
+        data = []
+        reader = @file_name =~ /\.gz$/i ? Zlib::GzipReader : File
+        begin
+          reader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
+        rescue StandardError => error
+          data = []
+          __record_exit_error(error)
+          respond "--- Lich: error reading script file (#{@file_name}): #{error}"
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
         @current_label = '~start'
@@ -3482,6 +3480,12 @@ module Lich
 
     class WizardScript < Script
       # FIXME: when modernized, ensure proper use of variables and init of parent class
+      # Reads gzip first, then plain text. Only a failed plain fallback records
+      # an exit error; the empty body still uses normal lifecycle cleanup.
+      #
+      # @param file_name [String] Wizard script path
+      # @param cli_vars [Array, String] script arguments
+      # @param publish [Boolean] whether to publish immediately
       # rubocop:disable Lint/MissingSuper
       # rubocop:disable Lint/UselessAssignment
       # rubocop:disable Lint/InterpolationCheck
@@ -3525,15 +3529,16 @@ module Lich
         @match_stack_strings = Array.new
         @label_order = Array.new
         @labels = Hash.new
-        data = nil
+        data = []
         begin
           Zlib::GzipReader.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-        rescue
+        rescue StandardError
           begin
             File.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
-          rescue
-            respond "--- Lich: error reading script file (#{file_name}): #{$!}"
-            # return nil
+          rescue StandardError => error
+            data = []
+            __record_exit_error(error)
+            respond "--- Lich: error reading script file (#{file_name}): #{error}"
           end
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
