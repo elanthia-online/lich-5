@@ -34,7 +34,8 @@ RSpec.describe 'Lich.msgbox GTK responses' do
       LICH_VERSION = 'test'
       require ARGV[0]
       begin
-        puts Lich.msgbox(message: 'Unavailable frontend').inspect
+        args = ARGV[2] == 'string' ? 'Unavailable frontend' : { message: 'Unavailable frontend' }
+        puts Lich.msgbox(args).inspect
       rescue RuntimeError
         puts 'raised'
       end
@@ -50,5 +51,13 @@ RSpec.describe 'Lich.msgbox GTK responses' do
       expected = response == 'raise' ? 'raised' : ":#{response}"
       expect(stdout.lines.map(&:strip)).to eq(['destroyed', expected])
     end
+  end
+
+  it 'accepts a bare string as the message' do
+    stdout, stderr, status = Open3.capture3(
+      RbConfig.ruby, '-e', harness, File.expand_path('../../lib/lich.rb', __dir__), 'ok', 'string'
+    )
+    expect(status.success?).to be(true), stderr
+    expect(stdout.lines.map(&:strip)).to eq(['destroyed', ':ok'])
   end
 end
