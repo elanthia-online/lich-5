@@ -602,6 +602,74 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('R:--- Lich: toggle foo set on')
     end
 
+    it 'retries a busy ;set write once and reports success when contention clears' do
+      out = probe(<<~RUBY)
+        require 'sqlite3'
+        db = Object.new
+        attempts = 0
+        db.define_singleton_method(:execute) do |sql, args|
+          attempts += 1
+          raise SQLite3::BusyException, 'database is locked' if attempts == 1
+
+          puts "DB \#{args.inspect}"
+        end
+        Object.send(:define_method, :sleep) { |seconds| puts "SLEEP \#{seconds}" }
+        Lich.define_singleton_method(:db) { db }
+        do_client(';set foo off')
+        puts "ATTEMPTS \#{attempts}"
+      RUBY
+      expect(out).to include('ATTEMPTS 2', 'SLEEP 0.1', 'DB ["foo", "off"]')
+      expect(out.scan('R:--- Lich: toggle foo set off').length).to eq(1)
+      expect(out).not_to include('could not set toggle')
+    end
+
+    it 'bounds a persistently locked ;set write and lets later dispatch succeed' do
+      out = probe(<<~RUBY)
+        require 'sqlite3'
+        require 'tmpdir'
+        require 'common/client_input_dispatcher'
+        Dir.mktmpdir('lich-set-busy') do |dir|
+          path = File.join(dir, 'settings.db3')
+          db = SQLite3::Database.new(path)
+          holder = SQLite3::Database.new(path)
+          begin
+            db.execute('CREATE TABLE lich_settings (name TEXT PRIMARY KEY, value TEXT)')
+            db.execute("INSERT INTO lich_settings VALUES ('foo', 'off')")
+            # Keep the real per-attempt SQLite wait, shortened for this spec.
+            db.busy_timeout(25)
+            attempts = 0
+            db.define_singleton_method(:execute) do |*args|
+              attempts += 1
+              raise 'set exceeded two attempts' if attempts > 2
+
+              super(*args)
+            end
+            holder.execute('BEGIN IMMEDIATE')
+            Lich.define_singleton_method(:db) { db }
+            Object.send(:define_method, :sleep) { |seconds| puts "SLEEP \#{seconds}" }
+            dispatcher = Lich::Common::ClientInputDispatcher
+            dispatcher.dispatch(';set foo on') { |line| do_client(line) }
+            puts "ATTEMPTS \#{attempts}"
+            holder.execute('ROLLBACK')
+            puts "UNCHANGED \#{db.get_first_value("SELECT value FROM lich_settings WHERE name = 'foo'")}"
+            attempts = 0
+            dispatcher.dispatch(';set foo on') { |line| do_client(line) }
+            puts "RECOVERED \#{db.get_first_value("SELECT value FROM lich_settings WHERE name = 'foo'")}"
+          ensure
+            holder.close
+            db.close
+          end
+        end
+      RUBY
+      expect(out).to include('ATTEMPTS 2', 'UNCHANGED off', 'RECOVERED on')
+      expect(out.scan('SLEEP 0.1').length).to eq(1)
+      failure = 'R:--- Lich: could not set toggle foo: database is busy; try again.'
+      success = 'R:--- Lich: toggle foo set on'
+      expect(out.scan(failure).length).to eq(1)
+      expect(out.scan(success).length).to eq(1)
+      expect(out.index(failure)).to be < out.index(success)
+    end
+
     it 'passes a ;hmr pattern to HMR.reload as a regex' do
       out = probe(<<~RUBY)
         Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)

@@ -211,17 +211,28 @@ module Lich
 
         # ---- settings ---------------------------------------------------
 
+        # Retry once after contention, then fail visibly and release dispatch.
+        # Each attempt uses Lich.db's configured busy timeout (5000 ms by
+        # default), with a 100 ms pause before the second attempt. The default
+        # SQLite wait budget is about 10.1 seconds; lock queueing and execution
+        # time are additional. A final busy result intentionally fails visibly.
         command(/^set\s(.+)\s(on|off)/) do |m|
+          max_attempts = 2
           toggle_var = m[1]
           set_state = m[2]
           did_something = false
+          attempts = 0
           begin
+            attempts += 1
             Lich.db.execute('INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);',
                             [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
             did_something = true
           rescue SQLite3::BusyException
-            sleep 0.1
-            retry
+            if attempts < max_attempts
+              sleep 0.1
+              retry
+            end
+            respond("--- Lich: could not set toggle #{toggle_var}: database is busy; try again.")
           end
           respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
         end
