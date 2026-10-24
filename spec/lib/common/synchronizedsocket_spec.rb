@@ -245,10 +245,11 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       sock_a, sock_b = Socket.pair(:UNIX, :STREAM)
       wrapped = described_class.new(sock_a)
 
+      reader_result = nil # rubocop:disable Lint/UselessAssignment
       reader_thread = Thread.new do
-        wrapped.gets
+        reader_result = wrapped.gets # rubocop:disable Lint/UselessAssignment
       rescue IOError => e
-        e
+        reader_result = e # rubocop:disable Lint/UselessAssignment
       end
 
       sleep 0.05

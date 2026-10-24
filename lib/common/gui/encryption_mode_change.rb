@@ -165,6 +165,7 @@ module Lich
           content_area.add(warning_label)
 
           # Track mode change result
+          mode_changed = false # rubocop:disable Lint/UselessAssignment
 
           # Set up response handler
           dialog.signal_connect('response') do |dlg, response|
@@ -245,6 +246,7 @@ module Lich
                     Lich.log "debug: change_encryption_mode returned #{success}"
 
                     if success
+                      mode_changed = true # rubocop:disable Lint/UselessAssignment
                       success_dialog = Gtk::MessageDialog.new(
                         parent: parent,
                         flags: :modal,
