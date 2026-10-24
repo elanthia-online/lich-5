@@ -55,7 +55,7 @@ missing-gem warning and exit.
           "id": "sqlite3",
           "members": ["sqlite3"],
           "artifact": {
-            "url": "https://github.com/Lich5/Ruby4Lich5/releases/download/R4L5-sqlite3-2.9.5-x64-mingw-ucrt/R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
+            "url": "https://github.com/elanthia-online/Ruby4Lich5/releases/download/R4L5-sqlite3-2.9.5-x64-mingw-ucrt/R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
             "filename": "R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
             "sha256": "sha256:<64-lowercase-hex-characters>",
             "archive": "gem"
@@ -74,7 +74,7 @@ missing-gem warning and exit.
           "id": "gtk3-runtime",
           "members": ["glib2", "gobject-introspection", "gio2", "cairo", "cairo-gobject", "pango", "gdk_pixbuf2", "atk", "gdk3", "gtk3"],
           "artifact": {
-            "url": "https://github.com/Lich5/Ruby4Lich5/releases/download/R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-bundle-x64-mingw-ucrt.zip",
+            "url": "https://github.com/elanthia-online/Ruby4Lich5/releases/download/R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-bundle-x64-mingw-ucrt.zip",
             "filename": "R4L5-gem-bundle-x64-mingw-ucrt.zip",
             "sha256": "sha256:<64-lowercase-hex-characters>",
             "archive": "zip"
