@@ -22,7 +22,7 @@ module Lich
   # corruption and mismatched assets; they are not a substitute for signing,
   # because the manifest and assets currently share a publisher.
   class DependencyRecovery
-    DEFAULT_MANIFEST_URL = 'https://github.com/Lich5/Ruby4Lich5/releases/download/' \
+    DEFAULT_MANIFEST_URL = 'https://github.com/elanthia-online/Ruby4Lich5/releases/download/' \
                            'R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-manifest.json'
     LOCK_FILENAME = '.lich-dependency-recovery.lock'
     HTTP_OPEN_TIMEOUT_SECONDS = 10
