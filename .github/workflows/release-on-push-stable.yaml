@@ -409,7 +409,7 @@ jobs:
           set -euo pipefail
           curl --fail --location --retry 3 --retry-all-errors \
             --output Ruby4Lich5.exe \
-            https://github.com/Lich5/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
+            https://github.com/elanthia-online/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
           test -s Ruby4Lich5.exe
 
       - name: Upload installer to release

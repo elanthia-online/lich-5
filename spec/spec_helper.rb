@@ -1301,10 +1301,16 @@ SPEC_HELPER_GLOBALS = {
 # This file is committed to the repo to avoid network dependencies.
 # See spec/fixtures/README.md for update procedures.
 
+# Loads the shared spell fixture once per spec process.
+# Repeated spec-file initialization must not reload an already-loaded list:
+# Spell.load calls active?/timeleft on each existing spell, which can fail in specs.
+# @return [Boolean, nil] true when loaded, or nil when the fixture is absent
 def load_spell_data
   require 'rexml/document'
   require 'rexml/streamlistener'
   require "common/spell"
+
+  return true if Lich::Common::Spell.class_variable_get(:@@loaded)
 
   effect_list_path = File.join(FIXTURE_DIR, 'effect-list.xml')
 

@@ -6,6 +6,7 @@ require 'fileutils'
 require 'json'
 require 'timeout'
 require 'tmpdir'
+require 'rbconfig'
 
 module StreamReplay
   # Replays a captured server stream through a real `lich.rbw --pipe` process
@@ -126,12 +127,12 @@ module StreamReplay
     end
 
     def child_env(snapshot_path)
-      { 'BUNDLE_WITHOUT' => 'gtk:vscode:profanity', 'LICH_REPLAY_SNAPSHOTS' => snapshot_path }
+      { 'LICH_REPLAY_SNAPSHOTS' => snapshot_path }
     end
 
     def child_args(tmp, port)
       args = [
-        'bundle', 'exec', 'ruby', '-r', OFFLINE_PRELOAD, 'lich.rbw',
+        RbConfig.ruby, '-r', OFFLINE_PRELOAD, 'lich.rbw',
         "--data=#{tmp}/data", "--temp=#{tmp}/temp", "--logs=#{tmp}/logs",
         "--scripts=#{tmp}/scripts", "--maps=#{tmp}/maps", "--backup=#{tmp}/backup",
         '-g', "127.0.0.1:#{port}", '--pipe', '--no-gtk',
