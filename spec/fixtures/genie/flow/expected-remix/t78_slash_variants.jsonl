@@ -1,0 +1,25 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t78_slash_variants"}
+{"t":0,"ev":"script-start","script":"t78_slash_variants","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t78_slash_variants.cmd]","script":"t78_slash_variants"}
+{"t":0,"ev":"send","text":"look","origin":"t78_slash_variants","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"an orc is here"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"one [orc]","script":"t78_slash_variants"}
+{"t":20,"ev":"in","text":"the troll is here"}
+{"t":20,"ev":"in","text":"THE TROLL is here"}
+{"t":20,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":20,"ev":"prompt-event"}
+{"t":30,"ev":"echo","text":"two [TROLL]","script":"t78_slash_variants"}
+{"t":30,"ev":"in","text":"An orc dies"}
+{"t":30,"ev":"echo","text":"three orc","script":"t78_slash_variants"}
+{"t":30,"ev":"in","text":"the orc falls"}
+{"t":30,"ev":"in","text":"done"}
+{"t":30,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":30,"ev":"prompt-event"}
+{"t":40,"ev":"echo","text":"end","script":"t78_slash_variants"}
+{"t":40,"ev":"print","text":"[Script finished (In 0.04 seconds): t78_slash_variants.cmd]","script":"t78_slash_variants"}
+{"t":40,"ev":"script-finish","script":"t78_slash_variants"}
+{"t":40,"ev":"end","live":0}

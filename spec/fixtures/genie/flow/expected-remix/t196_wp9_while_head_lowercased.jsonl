@@ -1,0 +1,8 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t196_wp9_while_head_lowercased"}
+{"t":0,"ev":"script-start","script":"t196_wp9_while_head_lowercased","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t196_wp9_while_head_lowercased.cmd]","script":"t196_wp9_while_head_lowercased"}
+{"t":0,"ev":"echo","text":"end","script":"t196_wp9_while_head_lowercased"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t196_wp9_while_head_lowercased.cmd]","script":"t196_wp9_while_head_lowercased"}
+{"t":0,"ev":"script-finish","script":"t196_wp9_while_head_lowercased"}
+{"t":10,"ev":"end","live":0}

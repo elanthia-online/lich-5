@@ -1,0 +1,92 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t247_js_numeric_literals"}
+{"t":0,"ev":"script-start","script":"t247_js_numeric_literals","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t247_js_numeric_literals.cmd]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(3): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"1 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(5): Numeric separator can not be used after leading 0 (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"2 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(7): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"3 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(9): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"4 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(11): Invalid or unexpected token (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"5 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(13): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"6 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(15): Invalid or unexpected token (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"7 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(17): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"8 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(19): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:4)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"9 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(21): Only one underscore is allowed as numeric separator (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"10 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"11 [1000000]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"12 [1.55]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(27): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:4)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"13 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(29): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"14 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(31): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:4)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"15 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(33): Only one underscore is allowed as numeric separator (<anonymous>:1:5)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"16 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"17 [2]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(37): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:4)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"18 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"19 [10000000000]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(41): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"20 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(43): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"21 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(45): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"22 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(47): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"23 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(49): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"24 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(51): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"25 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(53): Numeric separator can not be used after leading 0 (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"26 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(55): Invalid or unexpected token (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"27 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(57): Invalid or unexpected token (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"28 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"29 [0.01]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(61): Unexpected token '.' (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"30 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(63): Unexpected token '.' (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"31 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(65): Unexpected token '...' (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"32 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(67): Unexpected token '.' (<anonymous>:1:8)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"33 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(69): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:9)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"34 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(71): Only one underscore is allowed as numeric separator (<anonymous>:1:15)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"35 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(73): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:3)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"36 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(75): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:6)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"37 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(77): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"38 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(79): Invalid or unexpected token (<anonymous>:1:1)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"39 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(81): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"40 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(83): Only one underscore is allowed as numeric separator (<anonymous>:1:5)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"41 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(85): Only one underscore is allowed as numeric separator (<anonymous>:1:5)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"42 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(87): Numeric separator can not be used after leading 0 (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"43 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"44 [0]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"error","text":"[Script error in t247_js_numeric_literals.cmd(91): Numeric separators are not allowed at the end of numeric literals (<anonymous>:1:2)]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"46 [undefined]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"echo","text":"end","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t247_js_numeric_literals.cmd]","script":"t247_js_numeric_literals"}
+{"t":0,"ev":"script-finish","script":"t247_js_numeric_literals"}
+{"t":10,"ev":"end","live":0}

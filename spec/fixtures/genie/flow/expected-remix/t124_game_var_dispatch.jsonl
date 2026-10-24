@@ -1,0 +1,36 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t124_game_var_dispatch"}
+{"t":0,"ev":"script-start","script":"t124_game_var_dispatch","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t124_game_var_dispatch.cmd]","script":"t124_game_var_dispatch"}
+{"t":10,"ev":"input","text":"#trigger {e/$north = 1/} {#echo NORTH}"}
+{"t":20,"ev":"input","text":"#trigger {e/$health < 60/} {#echo TRIG-HEALTH $health}"}
+{"t":30,"ev":"input","text":"#trigger {e/$standing/} {#echo TRIG-STANDING $standing}"}
+{"t":40,"ev":"input","text":"#trigger {e/contains(\"$roomname\", \"Hall\")/} {#echo TRIG-ROOM $roomname}"}
+{"t":100,"ev":"echo","text":"ready","script":"t124_game_var_dispatch"}
+{"t":250,"ev":"in","text":"<compass><dir value=\"n\"/><dir value=\"s\"/></compass>"}
+{"t":250,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>"}
+{"t":250,"ev":"trigger-fire","pattern":"$health < 60","var":"$health"}
+{"t":250,"ev":"cmdecho","text":"TRIG-HEALTH 50","window":""}
+{"t":250,"ev":"echo","text":"ACT-HEALTH 50","script":"t124_game_var_dispatch"}
+{"t":250,"ev":"in","text":"Ouch, that hurt."}
+{"t":250,"ev":"echo","text":"ACT-TEXT","script":"t124_game_var_dispatch"}
+{"t":250,"ev":"in","text":"<indicator id=\"IconSTANDING\" visible=\"n\"/>"}
+{"t":250,"ev":"trigger-fire","pattern":"$standing","var":"$standing"}
+{"t":250,"ev":"cmdecho","text":"TRIG-STANDING 0","window":""}
+{"t":250,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":250,"ev":"echo","text":"ACT-PROMPT >","script":"t124_game_var_dispatch"}
+{"t":250,"ev":"prompt-event"}
+{"t":460,"ev":"in","text":"<streamWindow id='room' title='Room' subtitle=\" - [Great Hall]\"/>"}
+{"t":460,"ev":"trigger-fire","pattern":"contains(\"$roomname\", \"Hall\")","var":"$roomname"}
+{"t":460,"ev":"cmdecho","text":"TRIG-ROOM Great Hall","window":""}
+{"t":460,"ev":"in","text":"<component id='room objs'>You also see <pushBold/>a goblin<popBold/>.</component>"}
+{"t":460,"ev":"echo","text":"ACT-ML a goblin","script":"t124_game_var_dispatch"}
+{"t":460,"ev":"in","text":"<right exist=\"123\" noun=\"sword\">steel sword</right>"}
+{"t":460,"ev":"echo","text":"ACT-HAND steel sword","script":"t124_game_var_dispatch"}
+{"t":460,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":460,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":460,"ev":"roundtime-event","seconds":3}
+{"t":460,"ev":"echo","text":"ACT-RT 3","script":"t124_game_var_dispatch"}
+{"t":460,"ev":"echo","text":"ACT-PROMPT R>","script":"t124_game_var_dispatch"}
+{"t":460,"ev":"prompt-event"}
+{"t":2670,"ev":"end","live":1}

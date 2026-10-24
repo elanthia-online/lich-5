@@ -1,0 +1,6 @@
+EXPECT look
+IN You see nothing.
+FLUSH
+WAIT 5000
+IN Something else.
+FLUSH

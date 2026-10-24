@@ -1,0 +1,24 @@
+IN <app char="Tester" game="DR: Prime" title="[DR: Prime] Tester"/>
+IN <left exist="41807070" noun="sword">steel sword</left><right>Empty</right>
+IN <spell exist='spell'>Dragon's Breath</spell><castTime value='1700000006'/>
+IN <indicator id='IconHIDDEN' visible='y'/><indicator id='IconSTANDING' visible='y'/><indicator id='IconINVISIBLE' visible='n'/>
+IN <dialogData id='minivitals'><progressBar id='health' value='87' text='health 87%' left='0%' customText='t' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/><progressBar id='encumlevel' value='3' text='light burden' left='60%'/></dialogData>
+PROMPT 3
+WAIT 3500
+IN STEP1
+WAIT 200
+PROMPT
+IN <left>Empty</left><spell>None</spell>
+IN STEP2
+WAIT 200
+IN <indicator id='IconHIDDEN' visible='n'/><indicator id='IconDEAD' visible='y'/>
+PROMPT
+IN STEP3
+WAIT 200
+IN <indicator id='IconJOINED' visible='y'/><indicator id='IconBLEEDING' visible='y'/>
+IN <prompt time="1700000004">J&gt;</prompt>
+IN STEP4
+WAIT 200
+PROMPT 2
+WAIT 2500
+IN STEP5

@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t158_list_first_run_immune"}
+{"t":0,"ev":"script-start","script":"t158_list_first_run_immune","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t158_list_first_run_immune.cmd]","script":"t158_list_first_run_immune"}
+{"t":0,"ev":"echo","text":"first none","script":"t158_list_first_run_immune"}
+{"t":0,"ev":"echo","text":"still-running","script":"t158_list_first_run_immune"}
+{"t":100,"ev":"echo","text":"listed t158_list_first_run_immune","script":"t158_list_first_run_immune"}
+{"t":100,"ev":"print","text":"[Script aborted! (Run time: 0.10 seconds): t158_list_first_run_immune.cmd]","script":"t158_list_first_run_immune"}
+{"t":100,"ev":"script-finish","script":"t158_list_first_run_immune"}
+{"t":510,"ev":"end","live":0}

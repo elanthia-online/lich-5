@@ -1,0 +1,5 @@
+WAIT 300
+IN ZZEND
+IN <dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+PROMPT
+WAIT 500

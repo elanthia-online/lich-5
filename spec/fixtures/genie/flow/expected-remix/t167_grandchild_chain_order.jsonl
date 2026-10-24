@@ -1,0 +1,30 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t167_grandchild_chain_order"}
+{"t":0,"ev":"script-start","script":"t167_grandchild_chain_order","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t167_grandchild_chain_order.cmd]","script":"t167_grandchild_chain_order"}
+{"t":0,"ev":"echo","text":"a-start none","script":"t167_grandchild_chain_order"}
+{"t":0,"ev":"script-start","script":"_t167_b","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t167_b.cmd]","script":"_t167_b"}
+{"t":0,"ev":"echo","text":"b-start none","script":"_t167_b"}
+{"t":0,"ev":"script-start","script":"_t167_c","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t167_c.cmd]","script":"_t167_c"}
+{"t":0,"ev":"echo","text":"c-start none","script":"_t167_c"}
+{"t":0,"ev":"script-start","script":"_t167_d","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t167_d.cmd]","script":"_t167_d"}
+{"t":0,"ev":"echo","text":"d-start-and-end none","script":"_t167_d"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t167_d.cmd]","script":"_t167_d"}
+{"t":0,"ev":"script-finish","script":"_t167_d"}
+{"t":0,"ev":"echo","text":"b-after-c none","script":"_t167_b"}
+{"t":0,"ev":"echo","text":"a-after-b none","script":"t167_grandchild_chain_order"}
+{"t":100,"ev":"echo","text":"a-list1 t167_grandchild_chain_order|_t167_b|_t167_c","script":"t167_grandchild_chain_order"}
+{"t":100,"ev":"echo","text":"b-saw-ping","script":"_t167_b"}
+{"t":100,"ev":"echo","text":"c-saw-ping","script":"_t167_c"}
+{"t":200,"ev":"echo","text":"a-list2 t167_grandchild_chain_order|_t167_b|_t167_c","script":"t167_grandchild_chain_order"}
+{"t":200,"ev":"print","text":"[Script aborted! (Run time: 0.20 seconds): _t167_b.cmd]","script":"_t167_b"}
+{"t":200,"ev":"script-finish","script":"_t167_b"}
+{"t":200,"ev":"print","text":"[Script aborted! (Run time: 0.20 seconds): _t167_c.cmd]","script":"_t167_c"}
+{"t":200,"ev":"script-finish","script":"_t167_c"}
+{"t":300,"ev":"echo","text":"a-list3 t167_grandchild_chain_order","script":"t167_grandchild_chain_order"}
+{"t":300,"ev":"print","text":"[Script finished (In 0.30 seconds): t167_grandchild_chain_order.cmd]","script":"t167_grandchild_chain_order"}
+{"t":300,"ev":"script-finish","script":"t167_grandchild_chain_order"}
+{"t":610,"ev":"end","live":0}

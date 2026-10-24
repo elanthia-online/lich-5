@@ -118,6 +118,11 @@ require File.join(LIB_DIR, 'sessionvars.rb')
 require File.join(LIB_DIR, 'common', 'script.rb')
 require File.join(LIB_DIR, 'common', 'watchfor.rb')
 
+# Genie scripting engine (headless engine + Lich glue). Must load after script.rb
+# so Lich::Genie::GenieScript can subclass Lich::Common::Script.
+require File.join(LIB_DIR, 'genie.rb')
+require File.join(LIB_DIR, 'genie', 'genie_script.rb')
+
 ## adding util to the list of defs
 
 require File.join(LIB_DIR, 'util', 'util.rb')

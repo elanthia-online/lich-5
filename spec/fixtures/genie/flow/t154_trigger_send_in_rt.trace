@@ -1,0 +1,6 @@
+EXPECT swing
+IN You swing.
+PROMPT 3
+WAIT 500
+IN Fire send
+WAIT 3000

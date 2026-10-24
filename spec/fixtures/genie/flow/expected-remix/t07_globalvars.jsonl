@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t07_globalvars"}
+{"t":0,"ev":"script-start","script":"t07_globalvars","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t07_globalvars.cmd]","script":"t07_globalvars"}
+{"t":0,"ev":"var","name":"$foo","value":"bar","src":"cmd"}
+{"t":0,"ev":"echo","text":"foo=bar","script":"t07_globalvars"}
+{"t":0,"ev":"send","text":"ring bell","origin":"t07_globalvars","user":false}
+{"t":10,"ev":"expect-ok","want":"ring bell","got":"ring bell"}
+{"t":10,"ev":"in","text":"The bell rings loudly."}
+{"t":10,"ev":"trigger-fire","pattern":"^The bell rings","text":"The bell rings loudly."}
+{"t":10,"ev":"var","name":"$rung","value":"yes","src":"cmd"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":520,"ev":"echo","text":"rung=yes","script":"t07_globalvars"}
+{"t":520,"ev":"var","name":"$tmp","value":"42","src":"cmd"}
+{"t":520,"ev":"echo","text":"tmp=42","script":"t07_globalvars"}
+{"t":520,"ev":"print","text":"[Script finished (In 0.52 seconds): t07_globalvars.cmd]","script":"t07_globalvars"}
+{"t":520,"ev":"script-finish","script":"t07_globalvars"}
+{"t":1020,"ev":"end","live":0}

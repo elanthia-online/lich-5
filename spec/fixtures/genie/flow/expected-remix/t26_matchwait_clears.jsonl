@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t26_matchwait_clears"}
+{"t":0,"ev":"script-start","script":"t26_matchwait_clears","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t26_matchwait_clears.cmd]","script":"t26_matchwait_clears"}
+{"t":0,"ev":"send","text":"look","origin":"t26_matchwait_clears","user":false}
+{"t":1000,"ev":"echo","text":"timeout1","script":"t26_matchwait_clears"}
+{"t":1000,"ev":"send","text":"look2","origin":"t26_matchwait_clears","user":false}
+{"t":1000,"ev":"expect-ok","want":"look2","got":"look2"}
+{"t":1000,"ev":"in","text":"beta"}
+{"t":1000,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1000,"ev":"prompt-event"}
+{"t":2000,"ev":"echo","text":"timeout2","script":"t26_matchwait_clears"}
+{"t":2000,"ev":"print","text":"[Script finished (In 2 seconds): t26_matchwait_clears.cmd(9)]","script":"t26_matchwait_clears"}
+{"t":2000,"ev":"script-finish","script":"t26_matchwait_clears"}
+{"t":2000,"ev":"end","live":0}

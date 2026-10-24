@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t176_you_also_see"}
+{"t":0,"ev":"script-start","script":"t176_you_also_see","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t176_you_also_see.cmd]","script":"t176_you_also_see"}
+{"t":60,"ev":"in","text":"<style id=\"\"/><preset id='roomDesc'>D one.</preset>  You also see <pushBold/>X<popBold/>."}
+{"t":60,"ev":"echo","text":"L:[D one.]","script":"t176_you_also_see"}
+{"t":60,"ev":"echo","text":"L:[You also see X.]","script":"t176_you_also_see"}
+{"t":120,"ev":"in","text":"<preset id='roomDesc'>D two.</preset>  You also see Y."}
+{"t":120,"ev":"echo","text":"L:[D two.]","script":"t176_you_also_see"}
+{"t":120,"ev":"echo","text":"L:[You also see Y.]","script":"t176_you_also_see"}
+{"t":180,"ev":"in","text":"  You also see Z on its own row."}
+{"t":180,"ev":"echo","text":"L:[You also see Z on its own row.]","script":"t176_you_also_see"}
+{"t":240,"ev":"in","text":"   You also see three spaces."}
+{"t":240,"ev":"echo","text":"L:[   You also see three spaces.]","script":"t176_you_also_see"}
+{"t":300,"ev":"in","text":"  lead <pushBold/>W<popBold/>."}
+{"t":300,"ev":"echo","text":"L:[  lead W.]","script":"t176_you_also_see"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t176_you_also_see.cmd]","script":"t176_you_also_see"}
+{"t":1000,"ev":"script-finish","script":"t176_you_also_see"}
+{"t":1000,"ev":"end","live":0}

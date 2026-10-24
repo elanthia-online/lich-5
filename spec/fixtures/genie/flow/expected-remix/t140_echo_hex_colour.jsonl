@@ -1,0 +1,18 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t140_echo_hex_colour"}
+{"t":0,"ev":"script-start","script":"t140_echo_hex_colour","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t140_echo_hex_colour.cmd]","script":"t140_echo_hex_colour"}
+{"t":0,"ev":"cmdecho","text":"** Error! setup","window":"Log","color":"ffcf2319"}
+{"t":0,"ev":"cmdecho","text":"Hello there","window":"","color":"ff00ff00"}
+{"t":0,"ev":"cmdecho","text":"x","window":"","color":"ff000000"}
+{"t":0,"ev":"cmdecho","text":"x","window":"Conversation","color":"ff000000"}
+{"t":0,"ev":"cmdecho","text":"colour first","window":"Log","color":"ffabcdef"}
+{"t":0,"ev":"cmdecho","text":"fg and bg","window":"","color":"ffff0000"}
+{"t":0,"ev":"cmdecho","text":"","window":"","color":"ff00ff00"}
+{"t":0,"ev":"var","name":"$hx","value":"#ff0000","src":"cmd"}
+{"t":0,"ev":"echo","text":"hx=#ff0000","script":"t140_echo_hex_colour"}
+{"t":0,"ev":"cmdecho","text":"mono << Welcome to automapper Setup! (version %autoversion) >>","window":"","color":"ff33cc99"}
+{"t":0,"ev":"echo","text":"done","script":"t140_echo_hex_colour"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t140_echo_hex_colour.cmd]","script":"t140_echo_hex_colour"}
+{"t":0,"ev":"script-finish","script":"t140_echo_hex_colour"}
+{"t":210,"ev":"end","live":0}

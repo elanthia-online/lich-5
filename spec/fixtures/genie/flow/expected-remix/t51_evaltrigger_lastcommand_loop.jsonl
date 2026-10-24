@@ -1,0 +1,409 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t51_evaltrigger_lastcommand_loop"}
+{"t":0,"ev":"script-start","script":"t51_evaltrigger_lastcommand_loop","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t51_evaltrigger_lastcommand_loop.cmd]","script":"t51_evaltrigger_lastcommand_loop"}
+{"t":10,"ev":"input","text":"#trigger {e/contains(\"$lastcommand\", \"ping\")/} {ping}"}
+{"t":100,"ev":"send","text":"ping","origin":"t51_evaltrigger_lastcommand_loop","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"trigger-fire","pattern":"contains(\"$lastcommand\", \"ping\")","var":"lastcommand"}
+{"t":100,"ev":"send","text":"ping","origin":"Trigger","user":false}
+{"t":100,"ev":"genie-crash","where":"TriggerVariableChanged (FormMain.cs:4725 R)","reason":"unbounded recursion: Remix has no re-entrancy/depth guard here; the real client overflows the stack and the process dies","depth":200}
+{"t":520,"ev":"halted","why":"genie-crash"}
+{"t":520,"ev":"end","live":0}

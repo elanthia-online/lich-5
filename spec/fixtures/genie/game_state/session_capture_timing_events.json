@@ -1,0 +1,477 @@
+{
+  "provenance": "genieflow --verbose (Remix v4.2.4 Game.cs: move-event = EventTriggerMove, roundtime-event = EventRoundTime seconds, prompt-event = EventTriggerPrompt with the game-print text printed with parse right before its $prompt, nil when none -- incl. when the last row printed to the main window was a prompt, Game.cs:2397 R, FormMain.cs:5100-5122 R) over session_capture_rows.txt (the same run; 2026-10-22). The rows are SYNTHETIC (generated, no player data) in the row shapes of a real DragonRealms Genie capture.",
+  "events": [
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "move"
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "roundtime",
+      4
+    ],
+    [
+      "prompt",
+      "R> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ],
+    [
+      "prompt",
+      "> "
+    ],
+    [
+      "prompt",
+      null
+    ]
+  ]
+}

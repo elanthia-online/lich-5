@@ -161,7 +161,13 @@ module Lich
           end
 
           begin
-            if file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
+            if file_name =~ /\.wiz(?:\.gz)?$/i && defined?(Lich::Genie) && Lich::Genie.enabled?
+              respond '--- Lich: .wiz scripts are disabled while the Genie engine is enabled (Lich::Genie.enabled).'
+              next nil
+            elsif file_name =~ /\.cmd(?:\.gz)?$/i && defined?(Lich::Genie) && Lich::Genie.enabled?
+              trusted = false
+              script_obj = Lich::Genie::GenieScript.new(File.join(SCRIPT_DIR, file_name), script_args, false)
+            elsif file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
               trusted = false
               script_obj = WizardScript.new(File.join(SCRIPT_DIR, file_name), script_args, false)
             else
@@ -205,7 +211,9 @@ module Lich
                       :on_error       => proc { |error| Script.__send__(:__report_script_error, script, error, :untrusted => !trusted) },
                       :propagate_jump => true
                     ) do
-                      if trusted
+                      if defined?(Lich::Genie::GenieScript) && script.is_a?(Lich::Genie::GenieScript)
+                        script.run_genie
+                      elsif trusted
                         eval(script.labels[script.current_label].to_s, script_binding, script.name)
                       else
                         while (script = Script.current) and script.current_label

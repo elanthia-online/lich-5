@@ -1,0 +1,12 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t139_trigger_action_args"}
+{"t":0,"ev":"script-start","script":"t139_trigger_action_args","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t139_trigger_action_args.cmd]","script":"t139_trigger_action_args"}
+{"t":0,"ev":"var","name":"$probe","value":"late","src":"cmd"}
+{"t":110,"ev":"in","text":"Hit \"quoted\" word"}
+{"t":110,"ev":"trigger-fire","pattern":"^Hit (\\S+) (\\w+)(x)?","text":"Hit \"quoted\" word"}
+{"t":110,"ev":"cmdecho","text":"[quoted] [quoted] [word] [] [] [late]","window":""}
+{"t":110,"ev":"send","text":"say quoted and late","origin":"Trigger","user":false}
+{"t":320,"ev":"input","text":"#echo probe=$probe"}
+{"t":320,"ev":"cmdecho","text":"probe=late","window":""}
+{"t":2430,"ev":"end","live":1}

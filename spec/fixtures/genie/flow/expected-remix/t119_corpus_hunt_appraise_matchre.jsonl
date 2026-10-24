@@ -1,0 +1,14 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"script-start","script":"t119_corpus_hunt_appraise_matchre","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t119_corpus_hunt_appraise_matchre.cmd]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"APPR goblin [goblin]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"NONE an arisen big zombie","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"APPR zombie mauler [zombie mauler]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"APPR armored warklin mauler [armored warklin mauler]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"APPR zombie [zombie]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"APPR zombie [zombie]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"echo","text":"end","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"print","text":"[Script finished (In 0 seconds): t119_corpus_hunt_appraise_matchre.cmd(53)]","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":0,"ev":"script-finish","script":"t119_corpus_hunt_appraise_matchre"}
+{"t":10,"ev":"end","live":0}

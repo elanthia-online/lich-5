@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t186_wp9_gosub_depth"}
+{"t":0,"ev":"script-start","script":"t186_wp9_gosub_depth","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t186_wp9_gosub_depth.cmd]","script":"t186_wp9_gosub_depth"}
+{"t":0,"ev":"error","text":"[Script error in t186_wp9_gosub_depth.cmd(5): Maximum GOSUB depth (50) on: rec]","script":"t186_wp9_gosub_depth"}
+{"t":0,"ev":"print","text":"Trace follows:","script":"t186_wp9_gosub_depth"}
+{"t":0,"ev":"print","text":"\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)\n\tgosub rec (5)","script":"t186_wp9_gosub_depth"}
+{"t":0,"ev":"print","text":"[Script aborted! (Run time: 0.00 seconds): t186_wp9_gosub_depth.cmd]","script":"t186_wp9_gosub_depth"}
+{"t":0,"ev":"script-finish","script":"t186_wp9_gosub_depth"}
+{"t":10,"ev":"end","live":0}

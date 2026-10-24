@@ -1,0 +1,2 @@
+# Genie config fixtures are byte-exact Remix output (CRLF, UTF-8): never convert line endings.
+*.cfg -text

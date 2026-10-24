@@ -1,0 +1,47 @@
+WAIT 100
+IN <stream id='thoughts'>[General] Bob thinks, "A."</stream>
+WAIT 50
+IN <preset id='speech'>You say</preset>, "Hello <a exist='1' noun='x'>there</a>."
+WAIT 50
+IN <preset id='roomDesc'>A path <a exist='2' noun='y'>runs</a> north.</preset>  Obvious.
+WAIT 50
+IN <component id='room exits'>Obvious paths: <d>north</d>.</component>
+WAIT 50
+IN You see <b>a bold thing</b> here.
+WAIT 50
+IN Link <d cmd='look rock'>rock</d> here.
+WAIT 50
+IN <pushBold/>< You swing at a goblin.<pushBold/>goblin<popBold/> ducks.
+WAIT 50
+IN <pushStream id='familiar'/>Your familiar purrs.<popStream/>
+WAIT 50
+IN <pushStream id='combat'/>* A goblin attacks!<popStream/>
+WAIT 50
+IN <pushStream id='logons'/>* Bob joins the adventure.<popStream/>
+WAIT 50
+IN <pushStream id='death'/>* Bob was slain.<popStream/>
+WAIT 50
+IN <pushStream id='moonWindow'/>Katamba sets.
+WAIT 50
+IN still in moon
+WAIT 50
+IN <popStream/>back in main
+WAIT 50
+IN <pushStream id='inv'/>a sack<popStream/>
+WAIT 50
+IN <pushStream id='room'/>room text<popStream/>
+WAIT 50
+IN    Last login: leading spaces kept
+WAIT 50
+IN tab	inside and trailing   
+WAIT 50
+IN <output class="mono"/>
+WAIT 50
+IN <spell>Fire</spell>You prepare.
+WAIT 50
+IN <streamWindow id='room' title='Room' subtitle=" - [Here]"/>
+WAIT 50
+IN <component id='room desc'>The room desc.</component>
+WAIT 50
+PROMPT
+WAIT 200

@@ -1,0 +1,11 @@
+EXPECT look
+IN goblin attacks you!
+IN bang one
+IN You hit 3 times
+PROMPT
+WAIT 1000
+IN bang two
+PROMPT
+WAIT 1000
+IN bang three
+PROMPT

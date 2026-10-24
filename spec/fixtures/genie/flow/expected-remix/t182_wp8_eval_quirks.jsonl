@@ -1,0 +1,24 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t182_wp8_eval_quirks"}
+{"t":0,"ev":"script-start","script":"t182_wp8_eval_quirks","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t182_wp8_eval_quirks.cmd]","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"r1=1","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"r2=3","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"var","name":"$k","value":"2","src":"cmd"}
+{"t":0,"ev":"var","name":"$j","value":"1","src":"cmd"}
+{"t":0,"ev":"echo","text":"k=2 j=1","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"m=2","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"m2=6","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"z=0","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"BRACE","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"s=[]","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"u=defined","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"echo","text":"v=1","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"Invalid expression: (1 +"}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"startIndex cannot be larger than length of string. (Parameter 'startIndex')"}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"startIndex cannot be larger than length of string. (Parameter 'startIndex')"}
+{"t":0,"ev":"var","name":"$k4","value":"2","src":"cmd"}
+{"t":0,"ev":"echo","text":"k=2 k2=22 k3=23 k4=2 end","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t182_wp8_eval_quirks.cmd]","script":"t182_wp8_eval_quirks"}
+{"t":0,"ev":"script-finish","script":"t182_wp8_eval_quirks"}
+{"t":10,"ev":"end","live":0}

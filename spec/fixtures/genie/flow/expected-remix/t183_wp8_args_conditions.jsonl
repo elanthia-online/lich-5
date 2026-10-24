@@ -1,0 +1,24 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t183_wp8_args_conditions"}
+{"t":0,"ev":"script-start","script":"t183_wp8_args_conditions","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t183_wp8_args_conditions.cmd]","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"S0 [x] [y]","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"S1 [x] [y]","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"B1 [] []","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"S [p] [q]","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"var","name":"$c","value":"1","src":"cmd"}
+{"t":0,"ev":"var","name":"$d","value":"1","src":"cmd"}
+{"t":0,"ev":"echo","text":"C [a] [b] 1 1","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"CUT","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"YES","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"done","script":"t183_wp8_args_conditions"}
+{"t":0,"ev":"echo","text":"X [a]","script":"t183_wp8_args_conditions"}
+{"t":10,"ev":"in","text":"foo here"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"M1 [foo]","script":"t183_wp8_args_conditions"}
+{"t":20,"ev":"echo","text":"M2 []","script":"t183_wp8_args_conditions"}
+{"t":20,"ev":"echo","text":"M3 []","script":"t183_wp8_args_conditions"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t183_wp8_args_conditions.cmd(27)]","script":"t183_wp8_args_conditions"}
+{"t":20,"ev":"script-finish","script":"t183_wp8_args_conditions"}
+{"t":20,"ev":"end","live":0}

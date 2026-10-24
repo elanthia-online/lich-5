@@ -1,0 +1,8 @@
+EXPECT swing
+IN You swing.
+PROMPT 3
+WAIT 1000
+IN Early line
+WAIT 3000
+IN Late line
+WAIT 1000

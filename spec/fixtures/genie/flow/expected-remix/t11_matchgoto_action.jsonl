@@ -1,0 +1,14 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t11_matchgoto_action"}
+{"t":0,"ev":"script-start","script":"t11_matchgoto_action","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t11_matchgoto_action.cmd]","script":"t11_matchgoto_action"}
+{"t":0,"ev":"send","text":"flee","origin":"t11_matchgoto_action","user":false}
+{"t":10,"ev":"expect-ok","want":"flee","got":"flee"}
+{"t":10,"ev":"in","text":"You escape the trap!"}
+{"t":10,"ev":"in","text":"You are stuck in the mud."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"escaped-label escaped","script":"t11_matchgoto_action"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t11_matchgoto_action.cmd(10)]","script":"t11_matchgoto_action"}
+{"t":20,"ev":"script-finish","script":"t11_matchgoto_action"}
+{"t":20,"ev":"end","live":0}

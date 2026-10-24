@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t159_child_first_run"}
+{"t":0,"ev":"script-start","script":"t159_child_first_run","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t159_child_first_run.cmd]","script":"t159_child_first_run"}
+{"t":0,"ev":"script-start","script":"_t159_child","args":"one two"}
+{"t":0,"ev":"print","text":"[Script loaded: _t159_child.cmd]","script":"_t159_child"}
+{"t":0,"ev":"echo","text":"child-start one one two _t159_child","script":"_t159_child"}
+{"t":0,"ev":"var","name":"$t159","value":"set-by-child","src":"cmd"}
+{"t":0,"ev":"echo","text":"child-survived","script":"_t159_child"}
+{"t":0,"ev":"echo","text":"parent-after-launch set-by-child","script":"t159_child_first_run"}
+{"t":0,"ev":"echo","text":"parent-still","script":"t159_child_first_run"}
+{"t":100,"ev":"echo","text":"parent-later t159_child_first_run|_t159_child","script":"t159_child_first_run"}
+{"t":200,"ev":"echo","text":"child-later t159_child_first_run|_t159_child","script":"_t159_child"}
+{"t":200,"ev":"print","text":"[Script finished (In 0.20 seconds): _t159_child.cmd]","script":"_t159_child"}
+{"t":200,"ev":"script-finish","script":"_t159_child"}
+{"t":600,"ev":"echo","text":"parent-end t159_child_first_run","script":"t159_child_first_run"}
+{"t":600,"ev":"print","text":"[Script finished (In 0.60 seconds): t159_child_first_run.cmd]","script":"t159_child_first_run"}
+{"t":600,"ev":"script-finish","script":"t159_child_first_run"}
+{"t":1010,"ev":"end","live":0}

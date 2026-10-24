@@ -1,0 +1,4 @@
+EXPECT ring bell
+IN The bell rings loudly.
+PROMPT
+WAIT 1000

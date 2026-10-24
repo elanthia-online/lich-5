@@ -1,0 +1,36 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t05_wait_move"}
+{"t":0,"ev":"script-start","script":"t05_wait_move","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t05_wait_move.cmd]","script":"t05_wait_move"}
+{"t":0,"ev":"send","text":"stand","origin":"t05_wait_move","user":false}
+{"t":10,"ev":"expect-ok","want":"stand","got":"stand"}
+{"t":10,"ev":"in","text":"You stand up."}
+{"t":10,"ev":"in","text":"Another line before prompt."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"echo","text":"after-wait","script":"t05_wait_move"}
+{"t":1000,"ev":"send","text":"north","origin":"t05_wait_move","user":false}
+{"t":1000,"ev":"expect-ok","want":"north","got":"north"}
+{"t":1000,"ev":"in","text":"Obvious paths: north."}
+{"t":1000,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1000,"ev":"prompt-event"}
+{"t":1010,"ev":"in","text":"<streamWindow id='main' title='Story' subtitle=\" - [North Room]\" location='center' target='drop'/>"}
+{"t":1010,"ev":"in","text":"<component id='room desc'>You are in North Room.</component>"}
+{"t":1010,"ev":"move-event"}
+{"t":1010,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1010,"ev":"prompt-event"}
+{"t":1020,"ev":"echo","text":"after-move","script":"t05_wait_move"}
+{"t":1020,"ev":"echo","text":"after-nextroom","script":"t05_wait_move"}
+{"t":1020,"ev":"send","text":"look","origin":"t05_wait_move","user":false}
+{"t":1520,"ev":"in","text":"<streamWindow id='main' title='Story' subtitle=\" - [Next Room]\" location='center' target='drop'/>"}
+{"t":1520,"ev":"in","text":"<component id='room desc'>You are in Next Room.</component>"}
+{"t":1520,"ev":"move-event"}
+{"t":1520,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1520,"ev":"prompt-event"}
+{"t":1530,"ev":"expect-ok","want":"look","got":"look"}
+{"t":1530,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1530,"ev":"prompt-event"}
+{"t":3020,"ev":"echo","text":"after-wait2","script":"t05_wait_move"}
+{"t":3020,"ev":"print","text":"[Script finished (In 3.02 seconds): t05_wait_move.cmd]","script":"t05_wait_move"}
+{"t":3020,"ev":"script-finish","script":"t05_wait_move"}
+{"t":4540,"ev":"end","live":0}
