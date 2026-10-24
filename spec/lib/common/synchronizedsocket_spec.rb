@@ -245,11 +245,10 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       sock_a, sock_b = Socket.pair(:UNIX, :STREAM)
       wrapped = described_class.new(sock_a)
 
-      reader_result = nil
       reader_thread = Thread.new do
-        reader_result = wrapped.gets
+        wrapped.gets
       rescue IOError => e
-        reader_result = e
+        e
       end
 
       sleep 0.05

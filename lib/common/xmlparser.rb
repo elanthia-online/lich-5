@@ -455,7 +455,7 @@ module Lich
         end
         is_pc = subject_id.to_s.start_with?('-')
         noun = subject_id && link_nouns[subject_id]&.strip
-        noun = nil if noun&.empty?
+        noun = nil if noun && noun.empty?
 
         {
           name: name, id: subject_id, noun: noun, number: number, status: status,

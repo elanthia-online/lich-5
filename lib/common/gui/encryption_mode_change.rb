@@ -165,7 +165,6 @@ module Lich
           content_area.add(warning_label)
 
           # Track mode change result
-          mode_changed = false
 
           # Set up response handler
           dialog.signal_connect('response') do |dlg, response|
@@ -246,7 +245,6 @@ module Lich
                     Lich.log "debug: change_encryption_mode returned #{success}"
 
                     if success
-                      mode_changed = true
                       success_dialog = Gtk::MessageDialog.new(
                         parent: parent,
                         flags: :modal,

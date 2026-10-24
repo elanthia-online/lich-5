@@ -310,7 +310,7 @@ module Lich
       ranked = known_items_ranked.select { |obj, _loc| name_matches?(obj, name) }
       ranked = inventory_matches(name).map { |obj| [obj, 4] } if ranked.empty?
       ranked.sort_by.with_index { |(obj, loc), i| [match_specificity(obj, name), loc, i] }
-                    .map(&:first)
+            .map(&:first)
             .uniq(&:id)
             .uniq(&:name)
     end
@@ -555,9 +555,9 @@ module Lich
       snapshot = inventory
       return [] if snapshot.nil?
       snapshot.all.select { |item| name_matches?(item, param) }
-                  .reject { |item| item.in_room? || item.at_feet? }
-                  .map { |item| GameObj[item.id] }
-                  .compact
+              .reject { |item| item.in_room? || item.at_feet? }
+              .map { |item| GameObj[item.id] }
+              .compact
     end
 
     # @return [GameObj, nil] the item in a ready-list slot, checking the list once if needed
