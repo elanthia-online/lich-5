@@ -598,7 +598,7 @@ module Lich
       end
       if hosts_path
         windir = (ENV['windir'] || ENV['SYSTEMROOT'] || 'c:\windows')
-        hosts_path.gsub('%SystemRoot%', windir)
+        hosts_path = hosts_path.gsub(/%SystemRoot%/i, windir)
         hosts_file = "#{hosts_path}\\hosts"
         if File.exist?(hosts_file)
           return (@@hosts_file = hosts_file)

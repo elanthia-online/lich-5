@@ -6,6 +6,15 @@ require_relative '../../spec_helper'
 load_spell_data
 
 RSpec.describe Lich::Common::Spell do
+  describe '#load_spell_data' do
+    it 'does not reload the fixture once loaded' do
+      expect(load_spell_data).to be true
+      expect(described_class).not_to receive(:load)
+
+      expect(load_spell_data).to be true
+    end
+  end
+
   describe '.load' do
     it 'loads spells from the fixture file' do
       expect(Lich::Common::Spell.list).not_to be_empty
