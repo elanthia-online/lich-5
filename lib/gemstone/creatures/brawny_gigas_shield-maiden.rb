@@ -191,7 +191,6 @@
       "Rot consumes a brawny gigas shield-maiden's body, leaving little behind."
     ],
 
-
     stand: [
       "A brawny gigas shield-maiden rises fluidly, dusting a bit of dirt from one knee with a faint smirk."
     ],

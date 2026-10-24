@@ -182,7 +182,6 @@
       "A tattooed gigas berserker looks around blissfully, a tranquil smile on {pronoun} face."
     ],
 
-
     stand: [
       "A tattooed gigas berserker rolls to {pronoun} feet, with an eerily silent roar!"
     ],

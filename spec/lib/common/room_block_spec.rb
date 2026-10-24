@@ -328,7 +328,7 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
       lines = File.readlines(file, chomp: true)
       # The crtrStatus batch leads the exits line when no one else is here.
       lines.each_index.select { |i| lines[i].match?(/\A(?:<crtrStatus[^>]*>)*Obvious (?:paths|exits):/) }
-                      .map { |i| [lines[i].sub(/\A(?:<crtrStatus[^>]*>)*/, ''), lines[i + 1][%r{\A<compass>.*?</compass>}]] }
+           .map { |i| [lines[i].sub(/\A(?:<crtrStatus[^>]*>)*/, ''), lines[i + 1][%r{\A<compass>.*?</compass>}]] }
     end
     expect(pairs.size).to be >= 43
     expect(pairs.map(&:last)).to include('<compass></compass>', '<compass><dir value="n"/><dir value="s"/></compass>')

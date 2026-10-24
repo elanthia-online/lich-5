@@ -927,28 +927,28 @@ module Lich
       end
 
       # for backwards compatiblity
-      def duration;      self.time_per_formula;            end
-      def cost;          self.mana_cost_formula    || '0'; end
-      def manaCost;      self.mana_cost_formula    || '0'; end
-      def spiritCost;    self.spirit_cost_formula  || '0'; end
-      def staminaCost;   self.stamina_cost_formula || '0'; end
-      def boltAS;        self.bolt_as_formula;             end
-      def physicalAS;    self.physical_as_formula;         end
-      def boltDS;        self.bolt_ds_formula;             end
-      def physicalDS;    self.physical_ds_formula;         end
-      def elementalCS;   self.elemental_cs_formula;        end
-      def mentalCS;      self.mental_cs_formula;           end
-      def spiritCS;      self.spirit_cs_formula;           end
-      def sorcererCS;    self.sorcerer_cs_formula;         end
-      def elementalTD;   self.elemental_td_formula;        end
-      def mentalTD;      self.mental_td_formula;           end
-      def spiritTD;      self.spirit_td_formula;           end
-      def sorcererTD;    self.sorcerer_td_formula;         end
-      def castProc;      @cast_proc;                       end
-      def stacks;        self.stackable?                   end
-      def command;       nil;                              end
-      def circlename;    self.circle_name;                 end
-      def selfonly;      @availability != 'all';           end
+      def duration; self.time_per_formula; end
+      def cost; self.mana_cost_formula || '0'; end
+      def manaCost; self.mana_cost_formula || '0'; end
+      def spiritCost; self.spirit_cost_formula || '0'; end
+      def staminaCost; self.stamina_cost_formula || '0'; end
+      def boltAS; self.bolt_as_formula; end
+      def physicalAS; self.physical_as_formula; end
+      def boltDS; self.bolt_ds_formula; end
+      def physicalDS; self.physical_ds_formula; end
+      def elementalCS; self.elemental_cs_formula; end
+      def mentalCS; self.mental_cs_formula; end
+      def spiritCS; self.spirit_cs_formula; end
+      def sorcererCS; self.sorcerer_cs_formula; end
+      def elementalTD; self.elemental_td_formula; end
+      def mentalTD; self.mental_td_formula; end
+      def spiritTD; self.spirit_td_formula; end
+      def sorcererTD; self.sorcerer_td_formula; end
+      def castProc; @cast_proc; end
+      def stacks; self.stackable? end
+      def command; nil; end
+      def circlename; self.circle_name; end
+      def selfonly; @availability != 'all'; end
     end # class
   end # mod
 end # mod

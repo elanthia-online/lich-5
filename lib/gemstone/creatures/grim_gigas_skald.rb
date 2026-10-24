@@ -197,7 +197,6 @@
       "A grim gigas skald's corpse succumbs to rot, collapsing in upon {reflexive} until naught but dust remains."
     ],
 
-
     stand: [
       "A grim gigas skald flails on the ground, making the ground shudder, before managing to fight {pronoun} way into a standing position."
     ],
