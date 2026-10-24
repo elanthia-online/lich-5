@@ -1302,8 +1302,8 @@ SPEC_HELPER_GLOBALS = {
 # See spec/fixtures/README.md for update procedures.
 
 # Loads the shared spell fixture once per spec process.
-# Repeated spec-file initialization must not reload active spell instances:
-# production Spell.load can fail while preserving their duration state.
+# Repeated spec-file initialization must not reload an already-loaded list:
+# Spell.load calls active?/timeleft on each existing spell, which can fail in specs.
 # @return [Boolean, nil] true when loaded, or nil when the fixture is absent
 def load_spell_data
   require 'rexml/document'
