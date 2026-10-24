@@ -442,10 +442,10 @@ unless File.exist?(LICH_DIR)
     message = "An error occured while attempting to create directory #{LICH_DIR}\n\n"
     if not File.exist?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
-    elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (LICH_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)/)
+    elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (LICH_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)(?:[\\\/]|$)/i)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
     else
-      message.concat $!
+      message.concat $!.to_s
     end
     Lich.msgbox(:message => message, :icon => :error)
     exit
@@ -461,10 +461,10 @@ unless File.exist?(TEMP_DIR)
     message = "An error occured while attempting to create directory #{TEMP_DIR}\n\n"
     if not File.exist?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
-    elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (TEMP_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)/)
+    elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (TEMP_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)(?:[\\\/]|$)/i)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
     else
-      message.concat $!
+      message.concat $!.to_s
     end
     Lich.msgbox(:message => message, :icon => :error)
     exit
@@ -476,10 +476,10 @@ begin
   $stderr = File.open(debug_filename, 'w')
 rescue
   message = "An error occured while attempting to create file #{debug_filename}\n\n"
-  if defined?(Win32) and (TEMP_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)/) and not Win32.isXP?
+  if defined?(Win32) and (TEMP_DIR !~ /^[A-Za-z]:[\\\/](Users|Documents and Settings)(?:[\\\/]|$)/i) and not Win32.isXP?
     message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
   else
-    message.concat $!
+    message.concat $!.to_s
   end
   Lich.msgbox(:message => message, :icon => :error)
   exit
