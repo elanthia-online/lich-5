@@ -2,7 +2,7 @@
 
 LICH_VERSION = '5.22.0' # x-release-please-version
 
-REQUIRED_RUBY = '4.0.9'
+REQUIRED_RUBY = '4.0'
 RECOMMENDED_RUBY = '4.0.9'
 
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
