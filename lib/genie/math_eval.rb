@@ -64,13 +64,16 @@ module Lich
       # Evaluate (MathEval.cs:141-155 R).
       # @param expression [String]
       # @return [Float]
-      # @raise [Error] "Invalid expression: <expression>" (InvalidCastException in Remix)
+      # @raise [Error] "Invalid expression: <expression>" (InvalidCastException in Remix). An
+      #   expression nested deeper than the thread's stack (SystemStackError, not a
+      #   StandardError) is one too: Remix overflows its stack and dies there (decided
+      #   divergence, like the nested-dispatch cap).
       def evaluate(expression)
         text = Text.net_string(expression)
         return VbConversions.to_double(text) if VbConversions.numeric?(text)
 
         Parser.new(calc_scan(text)).level0
-      rescue StandardError
+      rescue StandardError, SystemStackError
         raise Error, "Invalid expression: #{text || expression}"
       end
 

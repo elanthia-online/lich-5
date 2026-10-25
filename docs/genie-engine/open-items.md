@@ -151,7 +151,7 @@ differences are `pending`, so a change that makes one match also fails until its
   action `goto` to a missing label, alias self-recursion, `count(x, "")`, `exit` inside an eval
   action, an action `exit` after a script error, a `#log` write failure, an action list changed or
   a script aborted mid-pass, an error in the command queue's next-time calculation, and very
-  deeply nested `math` parentheses end cleanly here (a script
+  deeply nested parentheses in any expression (`math`, `evalmath`, `eval`, `if`) end cleanly here (a script
   error, or one echoed error line) where Remix overflows its stack, loops forever or dies.
 - **K4 Approximations.** `$prompt` rewriting; some merged Game.cs conditions; `#unvar` of a
   reserved name; a parse exception inside an XML buffer does not freeze the parser; the start-up

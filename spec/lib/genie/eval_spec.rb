@@ -16,6 +16,27 @@ RSpec.describe Lich::Genie::Eval do
     evaluator.eval_string(expr)
   end
 
+  # A script thread's stack overflows on deep nesting; SystemStackError is no StandardError,
+  # so it once escaped the interpreter's Fault handling and Lich's wrapper ended the script.
+  describe 'nesting deeper than the stack' do
+    def outcome(expr, method)
+      Thread.new do
+        evaluator.public_send(method, expr)
+      rescue Exception => e # rubocop:disable Lint/RescueException -- the escape under test
+        e
+      end.value
+    end
+
+    it 'is a Fault for DoEval and EvalString' do
+      deep = "#{'(' * 50_000}1=1#{')' * 50_000}"
+      %i[do_eval eval_string].each do |method|
+        expect([method, outcome(deep, method)]).to match([method, an_instance_of(described_class::Fault)])
+        expect(outcome(deep, method).message).to eq(described_class::STACK_FAULT)
+      end
+      expect(truthy('((1=1))')).to be(true) # the evaluator is still usable
+    end
+  end
+
   describe 'numeric comparisons' do
     it 'compares numbers' do
       expect(truthy('100 > 50')).to be(true)

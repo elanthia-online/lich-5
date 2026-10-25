@@ -9,6 +9,19 @@ RSpec.describe Lich::Genie::MathEval do
   end
 
   describe '.evaluate' do
+    # A script thread's stack (Lich runs each script on its own Thread) overflows on deep
+    # nesting; SystemStackError is no StandardError, so it once escaped to Lich's wrapper.
+    it 'raises Invalid expression, not SystemStackError, for nesting deeper than the stack' do
+      deep = "#{'(' * 20_000}1#{')' * 20_000}"
+      outcome = Thread.new do
+        evl(deep)
+      rescue Exception => e # rubocop:disable Lint/RescueException -- the escape under test
+        e
+      end.value
+      expect(outcome).to be_a(Lich::Genie::Error)
+      expect(outcome.message).to start_with('Invalid expression: ((((')
+    end
+
     it 'handles the numeric fast path' do
       expect(evl('42')).to eq(42.0)
       expect(evl(' 3.5 ')).to eq(3.5)

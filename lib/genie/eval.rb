@@ -54,6 +54,11 @@ module Lich
       # is the .NET one, except "Invalid pattern '<p>': <reason>", whose reason is Onigmo's.
       class Fault < Error; end
 
+      # An expression nested deeper than the thread's stack (SystemStackError, not a
+      # StandardError) is a {Fault}: Remix overflows its stack and dies there (decided
+      # divergence, like the nested-dispatch cap).
+      STACK_FAULT = 'Expression nested too deeply'
+
       # Sections (Eval.cs:30-41 R): sBlock, BlockType, bParsed.
       Section = Struct.new(:block, :type, :parsed)
 
@@ -77,7 +82,7 @@ module Lich
       # @raise [Fault]
       def do_eval(text)
         @result_list.clear
-        boolean_result(Pass.new(self, replace_keywords(net_string(text))).run)
+        boolean_result(run_pass(text))
       end
 
       # EvalString (Eval.cs:45-52 R): `eval`, `waiteval`, eval actions, `#eval`.
@@ -86,7 +91,14 @@ module Lich
       # @raise [Fault]
       def eval_string(text)
         @result_list.clear
-        string_result(Pass.new(self, replace_keywords(net_string(text))).run)
+        string_result(run_pass(text))
+      end
+
+      # @!visibility private
+      def run_pass(text)
+        Pass.new(self, replace_keywords(net_string(text))).run
+      rescue SystemStackError
+        raise Fault, STACK_FAULT
       end
 
       # @!visibility private
