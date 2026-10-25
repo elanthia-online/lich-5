@@ -264,20 +264,19 @@ module Lich
       # Diagnostic: every trigger whose regex matches +line+, with its class and
       # active state -- so a trace can tell "the pattern did not match" apart from
       # "it matched but its class is off" (the usual reason a trigger looks dead).
-      # Does NOT run any actions.
+      # Does NOT run any actions. Like {#apply} it matches outside the lock (a slow pattern
+      # would otherwise hold every registry caller up to MATCH_TIMEOUT_SECONDS per line).
       # @param line [String]
       # @return [Array<Hash>]
       def diagnose(line)
         return [] unless line.is_a?(String)
 
-        @mutex.synchronize do
-          @triggers.values.filter_map do |t|
-            next if t.disabled || !t.regex&.match?(line)
+        @mutex.synchronize { @triggers.values }.filter_map do |t|
+          next if t.disabled || !t.regex&.match?(line)
 
-            { 'pattern' => t.pattern, 'class' => t.klass, 'active' => t.active }
-          rescue Regexp::TimeoutError
-            nil
-          end
+          { 'pattern' => t.pattern, 'class' => t.klass, 'active' => t.active }
+        rescue Regexp::TimeoutError
+          nil
         end
       end
 

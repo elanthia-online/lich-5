@@ -228,6 +228,28 @@ RSpec.describe Lich::Genie::Triggers do
       triggers.add('^You gesture', 'put x')
       expect(triggers.diagnose('nothing here')).to eq([])
     end
+
+    it 'matches outside the registry lock, so a slow pattern does not hold other callers' do
+      triggers.add('^slow', 'put x')
+      entered = Queue.new
+      release = Queue.new
+      blocking = Object.new
+      blocking.define_singleton_method(:match?) do |_line|
+        entered << true
+        release.pop
+        true
+      end
+      triggers.instance_variable_get(:@triggers).each_value { |t| t.regex = blocking }
+      worker = Thread.new { triggers.diagnose('slow line') }
+      begin
+        entered.pop
+        other = Thread.new { triggers.count } # takes the lock
+        expect(other.join(2)&.value).to eq(1)
+      ensure
+        release << true
+      end
+      expect(worker.value.map { |m| m['pattern'] }).to eq(['^slow'])
+    end
   end
 
   # triggers.cfg (Globals.cs:1077-1182 R).
