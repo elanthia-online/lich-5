@@ -591,6 +591,68 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
     end
 
+    describe 'player speech and ESP' do
+      # Line shapes from real logs: ESP is `[Channel][Name] "text"`, speech is
+      # `Name says, "text"` (one case adds leading tags). Anyone in the room or
+      # on the channel controls the quoted text, so it must never write the
+      # listener's state.
+      {
+        'an ESP stat'          => ['[General][Mallory] "Strength : 999"', :strength=],
+        'a spoken TDPs stat'   => ['Mallory says, "TDPs : 0"', :tdps=],
+        'a spoken favors stat' => ['<preset id="speech">Mallory says</preset>, "Favors : 0"', :favors=],
+        'an ESP TDP sentence'  => ['[General][Mallory] "You have 0 TDPs."', :tdps=]
+      }.each do |name, (line, setter)|
+        it "ignores #{name}" do
+          expect(drstats_class).not_to receive(setter)
+          described_class.parse(line.dup)
+        end
+      end
+
+      it 'ignores an ESP exp column' do
+        expect(drskill_class).not_to receive(:update)
+        described_class.parse('[General][Mallory] "Evasion: 1 0% mind lock"'.dup)
+      end
+
+      it 'ignores a whispered account status' do
+        allow(Lich::Common::Account).to receive(:subscription).and_return(nil)
+        expect(Lich::Common::Account).not_to receive(:subscription=)
+        expect(UserVars).not_to receive(:account_type=)
+        described_class.parse('Mallory whispers, "Current Account Status: F2P"'.dup)
+      end
+
+      # The anchors must still accept the real lines, which start with only
+      # whitespace and/or tags.
+      it 'still reads a buffed INFO stat line wrapped in speech presets' do
+        expect(drstats_class).to receive(:agility=).with(100)
+        expect(drstats_class).to receive(:charisma=).with(100)
+        described_class.parse('<preset id="speech">      Agility : 100 +20</preset>   <preset id="speech">     Charisma : 100 +20</preset>'.dup)
+      end
+
+      it 'still reads both columns of an EXP line' do
+        expect(drskill_class).to receive(:update).with('Light Armor', '0', 0, '77')
+        expect(drskill_class).to receive(:update).with('Defending', '0', 0, '62')
+        described_class.parse('     Light Armor:      0 77% clear          (0/34)       Defending:      0 62% clear          (0/34)'.dup)
+      end
+
+      it 'still reads an indented account status from PLAYED' do
+        allow(Lich::Common::Account).to receive(:subscription).and_return(nil)
+        expect(Lich::Common::Account).to receive(:subscription=).with('FREE')
+        described_class.parse('  Current Account Status: F2P'.dup)
+      end
+
+      # All four anchors share one prefix, so either kind of lead-in works.
+      it 'still reads an indented TDP sentence' do
+        expect(drstats_class).to receive(:tdps=).with(12)
+        described_class.parse('   You have 12 TDPs.'.dup)
+      end
+
+      it 'still reads an account status behind a tag' do
+        allow(Lich::Common::Account).to receive(:subscription).and_return(nil)
+        expect(Lich::Common::Account).to receive(:subscription=).with('PREMIUM')
+        described_class.parse('<output class="mono"/>Current Account Status: Premium'.dup)
+      end
+    end
+
     describe 'nil guards' do
       it 'handles nil players capture group gracefully' do
         # Simulates a malformed room players line where capture fails
