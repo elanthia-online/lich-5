@@ -7,6 +7,8 @@ require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lic
 require_relative '../../../../lib/dragonrealms/drinfomon/drdefs'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# check_events writes through the real Flags (record_match checks its matchers).
+require_relative '../../../../lib/dragonrealms/drinfomon/events'
 # The inline exp examples run the real DRExpMonitor formatters.
 require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 # The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
@@ -715,15 +717,91 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
   end
 
+  # The 'DRParser stubs' context stubs Flags.flags and Flags.matchers to empty
+  # hashes. Specs that need check_events to set a flag use the real ones.
+  shared_context 'real Flags' do
+    before do
+      allow(Flags).to receive(:flags).and_call_original
+      allow(Flags).to receive(:matchers).and_call_original
+      Flags.class_variable_set(:@@flags, {})
+      Flags.class_variable_set(:@@matchers, {}.freeze)
+    end
+  end
+
   describe '.check_events' do
+    include_context 'real Flags'
+
     it 'matches flags and sets values' do
-      flags = {}
-      matchers = { test_flag: [/test pattern/] }
-      allow(Flags).to receive(:flags).and_return(flags)
-      allow(Flags).to receive(:matchers).and_return(matchers)
+      Flags.add('test_flag', /test pattern/)
 
       described_class.check_events('this is a test pattern here')
-      expect(flags[:test_flag]).to be_truthy
+      expect(Flags['test_flag']).to be_a(MatchData)
+    end
+
+    it 'leaves other flags alone' do
+      Flags.add('test_flag', /test pattern/)
+      Flags.add('other_flag', /something else/)
+
+      described_class.check_events('this is a test pattern here')
+      expect(Flags['other_flag']).to be false
+    end
+
+    # check_events walks a snapshot of Flags.matchers. Park it on the first
+    # flag, change the flags from another thread, then let it reach the
+    # pouch-full matcher with a line that matches it.
+    def check_events_with_write_mid_iteration(line, &write)
+      parked = Queue.new
+      resume = Queue.new
+      calls = 0
+      server_string = +line
+      server_string.define_singleton_method(:match) do |regex|
+        calls += 1
+        if calls == 1
+          parked << true
+          resume.pop
+        end
+        # &nil: a bare super would pass this method's block on to String#match.
+        super(regex, &nil)
+      end
+      reader = Thread.new { described_class.check_events(server_string) }
+      parked.pop(timeout: 5) || raise('check_events never started iterating')
+      begin
+        write.call
+      ensure
+        resume << true
+      end
+      reader.join
+    end
+
+    it 'does not bring back a flag deleted while it was iterating' do
+      Flags.add('flag1', /never matches/)
+      Flags.add('pouch-full', /is too full/)
+
+      check_events_with_write_mid_iteration('Your gem pouch is too full.') { Flags.delete('pouch-full') }
+
+      expect(Flags.flags).not_to have_key('pouch-full')
+      expect(Flags['pouch-full']).to be_nil
+    end
+
+    it 'does not set a flag re-added while it was iterating from the matchers it replaced' do
+      Flags.add('flag1', /never matches/)
+      Flags.add('pouch-full', /is too full/)
+
+      check_events_with_write_mid_iteration('Your gem pouch is too full.') do
+        Flags.delete('pouch-full')
+        Flags.add('pouch-full', /is too full/)
+      end
+
+      expect(Flags['pouch-full']).to be false
+    end
+
+    it 'still sets a flag whose matchers did not change while it was iterating' do
+      Flags.add('flag1', /never matches/)
+      Flags.add('pouch-full', /is too full/)
+
+      check_events_with_write_mid_iteration('Your gem pouch is too full.') { Flags.add('unrelated', /x/) }
+
+      expect(Flags['pouch-full']).to be_a(MatchData)
     end
   end
 
@@ -822,22 +900,20 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
 
     describe 'Flags on linked lines' do
+      include_context 'real Flags'
+
       it 'fires a name-anchored Flag when the name is an object link' do
-        flags = {}
-        allow(Flags).to receive(:flags).and_return(flags)
-        allow(Flags).to receive(:matchers).and_return({ drums: [/^Brenna drums (?:his|her) fingers/] })
+        Flags.add('drums', /^Brenna drums (?:his|her) fingers/)
 
         described_class.parse(+'<a exist="-10700003" noun="Brenna">Brenna</a> drums his fingers on his bucket rhythmically.')
-        expect(flags[:drums]).to be_truthy
+        expect(Flags['drums']).to be_truthy
       end
 
       it 'fires a speech Flag when the speaker is linked inside the speech preset' do
-        flags = {}
-        allow(Flags).to receive(:flags).and_return(flags)
-        allow(Flags).to receive(:matchers).and_return({ hello: [/<preset id='speech'>Delphine politely says<\/preset>, "Hello\."/] })
+        Flags.add('hello', /<preset id='speech'>Delphine politely says<\/preset>, "Hello\."/)
 
         described_class.parse(+%(<preset id='speech'><a exist="-10700005" noun="Delphine">Delphine</a> politely says</preset>, "Hello."))
-        expect(flags[:hello]).to be_truthy
+        expect(Flags['hello']).to be_truthy
       end
     end
 

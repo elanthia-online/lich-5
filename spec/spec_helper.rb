@@ -1482,6 +1482,10 @@ class Flags
       @@flags[name] = nil
     end
 
+    def record_match(name, patterns, match)
+      @@flags[name] = match if @@matchers[name].equal?(patterns)
+    end
+
     def reset!
       @@flags = {}
       @@matchers = {}
