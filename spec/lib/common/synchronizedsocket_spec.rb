@@ -245,11 +245,11 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       sock_a, sock_b = Socket.pair(:UNIX, :STREAM)
       wrapped = described_class.new(sock_a)
 
-      reader_result = nil # rubocop:disable Lint/UselessAssignment
+      reader_result = nil
       reader_thread = Thread.new do
-        reader_result = wrapped.gets # rubocop:disable Lint/UselessAssignment
+        reader_result = wrapped.gets
       rescue IOError => e
-        reader_result = e # rubocop:disable Lint/UselessAssignment
+        reader_result = e
       end
 
       sleep 0.05
@@ -266,6 +266,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       reader_thread.join(2)
       expect(reader_thread.alive?).to be false
+      expect(reader_result).to be_nil.or be_a(IOError)
     ensure
       [sock_a, sock_b].each { |s| s&.close rescue nil }
     end
