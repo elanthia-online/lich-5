@@ -14,8 +14,9 @@ module Lich
         # and/or tags (buffed INFO stats arrive wrapped in <preset id="speech">),
         # so all four allow that same (?:<[^>]*>|\s)* prefix and nothing else.
         # StatLine/ExpColumnsLine gate the line; StatValue/ExpColumns then scan
-        # every column on it.
-        ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%\s+[a-zA-Z\s]+\b/.freeze
+        # every column on it. A gated line the ExpColumns scan reads nothing
+        # from falls through to the later branches.
+        ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%/.freeze
         ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
         BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
         BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}.freeze
@@ -667,8 +668,8 @@ module Lich
           elsif (match = line.match(Pattern::ExpClearMindstate))
             skill = match[:skill]
             DRSkill.clear_mind(skill)
-          elsif Pattern::ExpColumnsLine.match?(line)
-            line.scan(Pattern::ExpColumns) do |skill_value, rank_value, percent_value, rate_as_word|
+          elsif Pattern::ExpColumnsLine.match?(line) && !(columns = line.scan(Pattern::ExpColumns)).empty?
+            columns.each do |skill_value, rank_value, percent_value, rate_as_word|
               rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number
               DRSkill.update(skill_value, rank_value, rate_as_number, percent_value)
             end
