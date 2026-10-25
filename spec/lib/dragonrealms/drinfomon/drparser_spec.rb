@@ -639,6 +639,18 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(Lich::Common::Account).to receive(:subscription=).with('FREE')
         described_class.parse('  Current Account Status: F2P'.dup)
       end
+
+      # All four anchors share one prefix, so either kind of lead-in works.
+      it 'still reads an indented TDP sentence' do
+        expect(drstats_class).to receive(:tdps=).with(12)
+        described_class.parse('   You have 12 TDPs.'.dup)
+      end
+
+      it 'still reads an account status behind a tag' do
+        allow(Lich::Common::Account).to receive(:subscription).and_return(nil)
+        expect(Lich::Common::Account).to receive(:subscription=).with('PREMIUM')
+        described_class.parse('<output class="mono"/>Current Account Status: Premium'.dup)
+      end
     end
 
     describe 'nil guards' do

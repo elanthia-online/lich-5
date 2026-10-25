@@ -11,7 +11,8 @@ module Lich
         # (cf. GameShutdown): another player's speech or ESP, e.g.
         # [General][Name] "Evasion: 1 0% mind lock", must not rewrite the
         # listener's state. Logs show the real lines start with only whitespace
-        # and/or tags (buffed INFO stats arrive wrapped in <preset id="speech">).
+        # and/or tags (buffed INFO stats arrive wrapped in <preset id="speech">),
+        # so all four allow that same (?:<[^>]*>|\s)* prefix and nothing else.
         # StatLine/ExpColumnsLine gate the line; StatValue/ExpColumns then scan
         # every column on it.
         ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%/.freeze
@@ -22,7 +23,7 @@ module Lich
         GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/.freeze
         StatLine = /^(?:<[^>]*>|\s)*(?:Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+\d+/.freeze
         StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/.freeze
-        TDPValue = /^(?:<[^>]*>)*You have (?<tdp>\d+) TDPs\./.freeze
+        TDPValue = /^(?:<[^>]*>|\s)*You have (?<tdp>\d+) TDPs\./.freeze
         EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/.freeze
         LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/.freeze
         BalanceValue = /^(?:You are|\[You're)(?:.*,)? (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?\b/.freeze
@@ -41,7 +42,7 @@ module Lich
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
-        PlayedSubscription = /^\s*Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
+        PlayedSubscription = /^(?:<[^>]*>|\s)*Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
         Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
         Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
