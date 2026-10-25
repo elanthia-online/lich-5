@@ -145,7 +145,7 @@ module Lich
         Flags.matchers.each do |key, regexes|
           regexes.each do |regex|
             if (matches = server_string.match(regex))
-              Flags.flags[key] = matches
+              Flags.record_match(key, regexes, matches)
               break
             end
           end

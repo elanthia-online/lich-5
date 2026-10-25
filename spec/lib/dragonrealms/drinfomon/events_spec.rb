@@ -232,6 +232,59 @@ RSpec.describe Lich::DragonRealms::Flags do
     it 'hands out a frozen matchers hash so callers cannot mutate it in place' do
       expect { described_class.matchers['rogue'] = [/x/] }.to raise_error(FrozenError)
     end
+
+    it 'freezes each flag\'s matcher array so callers cannot append to one in place' do
+      expect { described_class.matchers['flag1'] << /x/ }.to raise_error(FrozenError)
+    end
+  end
+
+  describe '.add return value' do
+    it 'returns the regexes it registered, not the matchers hash' do
+      result = described_class.add('test_flag', 'one', /two/)
+
+      expect(result).to equal(described_class.matchers['test_flag'])
+      expect(result.map(&:source)).to eq(%w[one two])
+    end
+  end
+
+  describe '.record_match' do
+    let(:match) { 'is too full'.match(/too full/) }
+
+    before { described_class.add('pouch-full', 'is too full') }
+
+    it 'sets the flag when the matchers it was given are still registered' do
+      described_class.record_match('pouch-full', described_class.matchers['pouch-full'], match)
+
+      expect(described_class['pouch-full']).to equal(match)
+    end
+
+    it 'leaves a deleted flag deleted' do
+      stale = described_class.matchers['pouch-full']
+      described_class.delete('pouch-full')
+
+      described_class.record_match('pouch-full', stale, match)
+
+      expect(described_class.flags).not_to have_key('pouch-full')
+    end
+
+    it 'does not set a re-added flag from the matchers it replaced' do
+      stale = described_class.matchers['pouch-full']
+      described_class.delete('pouch-full')
+      described_class.add('pouch-full', 'is too full')
+
+      described_class.record_match('pouch-full', stale, match)
+
+      expect(described_class['pouch-full']).to be false
+    end
+
+    it 'does not set a flag that was added again without a delete in between' do
+      stale = described_class.matchers['pouch-full']
+      described_class.add('pouch-full', 'is too full')
+
+      described_class.record_match('pouch-full', stale, match)
+
+      expect(described_class['pouch-full']).to be false
+    end
   end
 
   describe 'real-world examples' do
