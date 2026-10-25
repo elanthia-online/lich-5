@@ -397,6 +397,19 @@ RSpec.describe GenieSpecSupport::Flow do
       expect(texts(events, 'echo').map(&:last)).to eq(['seen=s|>|>'])
     end
 
+    # A script's own send is trigger-on-input on its own thread, where it owns the dispatch
+    # (Interpreter#run): an action re-sending the text that fires it climbs one level per hop
+    # and stops at the cap, whether the script or a game line starts the chain (Remix: t39).
+    [["action put A when ^A$\nput A\nwaitfor ZZZ\n", 'its own send'],
+     ["action put A when ^A$\nwaitfor ZZZ\n", 'a game line']].each do |src, start|
+      it "caps an action that re-sends its own trigger text, started by #{start}" do
+        events = run_script(src, ['IN A', 'WAIT 500'])
+        cap = "[Script error: maximum nested dispatch depth (#{Lich::Genie::DispatchDepth::LIMIT}) exceeded on: input A]"
+        expect(texts(events, 'echo').map(&:last)).to eq([cap])
+        expect(events.count { |e| e['ev'] == 'send' }).to be <= Lich::Genie::DispatchDepth::LIMIT + 2
+      end
+    end
+
     it 'treats WAIT as milliseconds (a regression would push later lines minutes out)' do
       events = run_script("waitfor go\necho got", ['WAIT 1000', 'IN go now'])
       expect(texts(events, 'echo')).to eq([[1020, 'got']]) # the IN at 1010, its chunk ends with the 1020 tick
