@@ -17,12 +17,14 @@ module Lich
     # Undefined variables are left literally in place (matching Genie), which is how
     # the evaluators detect "unresolved" text.
     class Substitution
-      # ASCII sentinels (the AsciiOnlySource cop forbids Genie's original non-ASCII
-      # sentinel) used to shield escaped sigils during a pass.
-      SENTINEL_PCT = "\x01"
-      SENTINEL_DOLLAR = "\x02"
-      # Shields every `%` from the %/$ scan so {#expand_globals} expands `$` only.
-      SENTINEL_SHIELD = "\x03"
+      # Remix's escape sentinels, byte for byte (Script.cs:2286-2343, Globals.cs:155-195 R):
+      # `\` + U+00A4 and `/` + U+00A4. A script row never holds U+00A4 (the loader splits rows
+      # on it, Script.cs:3832 R), but a variable value, an argument or a capture can, and
+      # Remix's closing Replace turns it into `%`/`$` too; any other character (a C0 control
+      # included) passes through untouched.
+      CURRENCY = [0xA4].pack('U').freeze
+      ESCAPED = "\\#{CURRENCY}".freeze
+      SLASHED = "/#{CURRENCY}".freeze
 
       # @param variables [Variables] the local/global store
       # @param specials [Specials, nil] the @...@ resolver (default: one reading the spell
@@ -62,7 +64,7 @@ module Lich
       # @return [String]
       def expand_globals(text)
         out = text.to_s
-        out = expand_vars(out.gsub('%', SENTINEL_SHIELD)).gsub(SENTINEL_SHIELD, '%') if out.include?('$')
+        out = expand_global_vars(out) if out.include?('$')
         if out.include?('@')
           @specials.substitutions.each { |token, value| out = out.gsub(token) { value } unless token == '@timer@' }
         end
@@ -72,26 +74,40 @@ module Lich
       private
 
       def expand_dollar_args(text, args)
-        text = text.gsub('\\$', SENTINEL_DOLLAR)
+        text = text.gsub('\\$', ESCAPED)
         (0..@arg_limit).each do |i|
           value = i < args.length ? args[i].to_s : ''
           text = text.gsub("$#{i}") { value } # String.Replace: a `\0` in the value stays literal
         end
         text = text.gsub('$argcount', (args.length - 1).to_s)
-        text.gsub(SENTINEL_DOLLAR, '$')
+        text.gsub(ESCAPED, '$')
       end
 
+      # ParseVariables' `%` branch (Script.cs:2303-2344 R); a text without `%` takes its
+      # ParseGlobalVars branch ({#expand_global_vars}).
       def expand_vars(text)
-        text = text.gsub('\\%', SENTINEL_PCT).gsub('\\$', SENTINEL_DOLLAR)
+        return expand_global_vars(text) unless text.include?('%')
+
+        text = scan_vars(text.gsub('\\%', ESCAPED).gsub('\\$', SLASHED), locals: true)
+        text.gsub(ESCAPED, '%').gsub(SLASHED, '$')
+      end
+
+      # ParseGlobalVars' `$` pass (Globals.cs:153-196 R): `%` is never expanded nor unescaped.
+      def expand_global_vars(text)
+        scan_vars(text.gsub('\\$', ESCAPED), locals: false).gsub(ESCAPED, '$')
+      end
+
+      # The right-to-left sigil scan: a value put in is never scanned again.
+      def scan_vars(text, locals:)
         pos = text.length - 1
         while pos >= 0
           case text[pos]
-          when '%' then text = text[0...pos] + parse_variable(text[pos..], :local)
+          when '%' then text = text[0...pos] + parse_variable(text[pos..], :local) if locals
           when '$' then text = text[0...pos] + parse_variable(text[pos..], :global)
           end
           pos -= 1
         end
-        text.gsub(SENTINEL_PCT, '%').gsub(SENTINEL_DOLLAR, '$')
+        text
       end
 
       def expand_at_specials(text)

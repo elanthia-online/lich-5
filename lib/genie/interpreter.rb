@@ -71,9 +71,9 @@ module Lich
       ACTION_FORBIDDEN = { gosub_func: 'GOSUB', blockstart: 'BLOCK START', blockend: 'BLOCK END',
                            return_func: 'RETURN' }.freeze
 
-      # Shields an escaped `\$` from ParseAction's $n pass (Remix uses `\` + U+00A4; an ASCII
-      # control keeps the source ASCII-only and never meets a non-UTF-8 game line).
-      ESCAPED_DOLLAR = "\\\x02"
+      # Shields an escaped `\$` from ParseAction's $n pass: Remix's `\` + U+00A4, byte for byte
+      # (Script.cs:2158, 2172 R), so a capture holding it becomes `\$` as in Remix.
+      ESCAPED_DOLLAR = "\\#{[0xA4].pack('U')}".freeze
 
       # Lich has no packet boundary (it reads the game socket line by line, games.rb:963-967), so
       # the end of a DR packet is its prompt row ({GameEvents::Prompt}) or, for a burst with no
@@ -1683,6 +1683,8 @@ module Lich
 
       # ParseAction's $n pass (Script.cs:2155-2171 R).
       def action_arguments(text, args, line)
+        return text unless text.include?('$')
+
         out = text.gsub('\\$', ESCAPED_DOLLAR)
         ACTION_ARGUMENT_COUNT.times do |i|
           value = i < args.length ? args[i].gsub('"', '') : ''
