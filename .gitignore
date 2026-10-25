@@ -18,6 +18,7 @@ jinxp
 .pre-commit-config.yaml
 .rubocop.yml
 .rubocop/
+/.bundle/
 
 # --- Editors / IDEs ---
 *.code-workspace
