@@ -642,6 +642,20 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.parse('  Current Account Status: F2P'.dup)
       end
 
+      # The exp branch must take every column the ExpColumns scan can read,
+      # even when the first column is garbled, and must not claim a line the
+      # scan reads nothing from. Shapes from a real log line whose rate word
+      # was cut off.
+      it 'reads the intact column of an EXP line whose first column is cut off' do
+        expect(drskill_class).to receive(:update).with('Evasion', '1610', 34, '24').once
+        described_class.parse('   Parry Ability: 1610 24% mi550     Evasion: 1610 24% mind lock'.dup)
+      end
+
+      it 'updates nothing from an EXP line with no readable column' do
+        expect(drskill_class).not_to receive(:update)
+        described_class.parse('   Parry Ability: 1610 24% mi550 07% mind lock     0.14'.dup)
+      end
+
       # All four anchors share one prefix, so either kind of lead-in works.
       it 'still reads an indented TDP sentence' do
         expect(drstats_class).to receive(:tdps=).with(12)
