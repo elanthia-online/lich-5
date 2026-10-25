@@ -510,6 +510,22 @@ RSpec.describe 'Genie glue: launches and the script list' do
         until_gone(runner)
       end
 
+      # A walk script killed before run_walk took its runner (from its registry) leaves the
+      # runner behind; the next spawn drops it, and keeps one whose script still runs.
+      it 'drops the runner of a walk script that died before taking it, on the next spawn' do
+        klass = Lich::Genie::GenieScript
+        dead = klass::WalkRunner.new(-> {})
+        dead.script = instance_double(Lich::Common::Script, running?: false)
+        live = klass::WalkRunner.new(-> {})
+        live.script = instance_double(Lich::Common::Script, running?: true)
+        klass.instance_variable_set(:@walk_runners, { 901 => dead, 902 => live })
+        allow(Lich::Common::ExecScript).to receive(:start).and_return(nil) # Lich started nothing
+        expect(klass.send(:spawn_walk) {}).to be_nil
+        expect(klass.instance_variable_get(:@walk_runners)).to eq({ 902 => live })
+      ensure
+        klass.instance_variable_set(:@walk_runners, {})
+      end
+
       # The tracking slot is the walk's only while DRCT.walk_to runs.
       it 'clears the walk-tracking slot after DRCT.walk_to returns and after it raises' do
         key = Lich::Genie::GenieScript::WALK_TRACK_KEY

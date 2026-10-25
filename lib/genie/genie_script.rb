@@ -1277,8 +1277,11 @@ module Lich
           install_walk_start_tracker!
           runner = WalkRunner.new(body)
           token = WALK_RUNNERS_MUTEX.synchronize do
+            @walk_runners ||= {}
+            # a walk script killed before {.run_walk} took its runner leaves it here
+            @walk_runners.delete_if { |_, waiting| waiting.script && !waiting.script.running? }
             @walk_token = (@walk_token || 0) + 1
-            (@walk_runners ||= {})[@walk_token] = runner
+            @walk_runners[@walk_token] = runner
             @walk_token
           end
           script = Lich::Common::ExecScript.start("Lich::Genie::GenieScript.run_walk(#{token})", { quiet: true, name: WALK_SCRIPT_PREFIX })
