@@ -15,7 +15,7 @@ module Lich
         # so all four allow that same (?:<[^>]*>|\s)* prefix and nothing else.
         # StatLine/ExpColumnsLine gate the line; StatValue/ExpColumns then scan
         # every column on it.
-        ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%/.freeze
+        ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%\s+[a-zA-Z\s]+\b/.freeze
         ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
         BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
         BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}.freeze

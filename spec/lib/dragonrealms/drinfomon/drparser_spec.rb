@@ -640,6 +640,15 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.parse('  Current Account Status: F2P'.dup)
       end
 
+      # The gate must not accept a line the ExpColumns scan cannot read, or the
+      # line stops at the exp branch with no update. Shape from a real log
+      # line whose rate word was cut off.
+      it 'does not gate an exp column whose rate word is cut off' do
+        line = "   Parry Ability: 1610 24% mi550 07% mind lock     0.14"
+        expect(line).not_to match(described_class::Pattern::ExpColumnsLine)
+        expect(line.scan(described_class::Pattern::ExpColumns)).to be_empty
+      end
+
       # All four anchors share one prefix, so either kind of lead-in works.
       it 'still reads an indented TDP sentence' do
         expect(drstats_class).to receive(:tdps=).with(12)
