@@ -6,13 +6,24 @@ module Lich
   module DragonRealms
     module DRParser
       module Pattern
+        # StatLine, ExpColumnsLine, TDPValue and PlayedSubscription write
+        # DRStats/DRSkill/UserVars, so they are anchored to the start of the line
+        # (cf. GameShutdown): another player's speech or ESP, e.g.
+        # [General][Name] "Evasion: 1 0% mind lock", must not rewrite the
+        # listener's state. Logs show the real lines start with only whitespace
+        # and/or tags (buffed INFO stats arrive wrapped in <preset id="speech">),
+        # so all four allow that same (?:<[^>]*>|\s)* prefix and nothing else.
+        # StatLine/ExpColumnsLine gate the line; StatValue/ExpColumns then scan
+        # every column on it.
+        ExpColumnsLine = /^(?:<[^>]*>|\s)*[a-zA-Z][a-zA-Z\s]*\b:\s*\d+\s+\d+%/.freeze
         ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
         BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
         BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}.freeze
         NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/.freeze
         GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/.freeze
+        StatLine = /^(?:<[^>]*>|\s)*(?:Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+\d+/.freeze
         StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/.freeze
-        TDPValue = /You have (?<tdp>\d+) TDPs\./.freeze
+        TDPValue = /^(?:<[^>]*>|\s)*You have (?<tdp>\d+) TDPs\./.freeze
         EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/.freeze
         LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/.freeze
         BalanceValue = /^(?:You are|\[You're)(?:.*,)? (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?\b/.freeze
@@ -31,7 +42,7 @@ module Lich
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
-        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
+        PlayedSubscription = /^(?:<[^>]*>|\s)*Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
         Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
         Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
@@ -598,7 +609,7 @@ module Lich
             DRStats.encumbrance = match[:encumbrance]
           elsif (match = line.match(Pattern::LuckValue))
             DRStats.luck = match[:luck].to_i
-          elsif Pattern::StatValue.match?(line)
+          elsif Pattern::StatLine.match?(line)
             line.scan(Pattern::StatValue) do |stat, value|
               DRStats.send("#{stat.downcase}=", value.to_i)
             end
@@ -656,7 +667,7 @@ module Lich
           elsif (match = line.match(Pattern::ExpClearMindstate))
             skill = match[:skill]
             DRSkill.clear_mind(skill)
-          elsif Pattern::ExpColumns.match?(line)
+          elsif Pattern::ExpColumnsLine.match?(line)
             line.scan(Pattern::ExpColumns) do |skill_value, rank_value, percent_value, rate_as_word|
               rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number
               DRSkill.update(skill_value, rank_value, rate_as_number, percent_value)
