@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI GTK separator control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page" data-density="compact" data-theme="light">
+  <div class="webui-grid" style="display:grid;grid-template-rows:max-content max-content">
+    <div id="native" class="webui-divider" aria-label="Native Builder separator"></div>
+    <div id="shim" class="webui-divider" aria-label="Shim Gtk::Separator"></div>
+  </div>
+</section>
+<section class="webui-page"><div id="ordinary" class="webui-divider"></div></section>
+<pre id="measured"></pre>
+<script>
+  const outerHeight = id => {
+    const element = document.getElementById(id);
+    const style = getComputedStyle(element);
+    return element.getBoundingClientRect().height + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+  };
+  const values = ['native', 'shim', 'ordinary'].map(outerHeight);
+  document.getElementById('measured').textContent =
+    `${values[0] === 1 && values[1] === 1 && values[2] === 17 ? 'PASS' : 'FAIL'} ${JSON.stringify(values)}`;
+</script>

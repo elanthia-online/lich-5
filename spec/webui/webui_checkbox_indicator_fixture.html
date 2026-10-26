@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI GTK check indicator control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page bare" data-density="compact" data-theme="light">
+  <label class="field inline" id="native"><input type="checkbox"><span>Buy missing herbs</span></label>
+  <label class="field inline" id="shim"><input type="checkbox" disabled><span>Use spell</span></label>
+</section>
+<section class="webui-page bare" data-density="compact" data-theme="dark">
+  <label class="field inline" id="dark"><input type="checkbox"><span>CreatureBar option</span></label>
+</section>
+<pre id="measured"></pre>
+<script>
+  const offset = id => {
+    const field = document.getElementById(id);
+    const input = field.querySelector('input');
+    const caption = field.querySelector('span');
+    return { indicator: input.getBoundingClientRect().left - field.getBoundingClientRect().left,
+      label: caption.getBoundingClientRect().left - field.getBoundingClientRect().left };
+  };
+  const native = offset('native'), shim = offset('shim'), dark = offset('dark');
+  const pass = native.indicator === 6 && shim.indicator === 6 && dark.indicator === 6 &&
+    native.label === 24 && shim.label === 24;
+  document.getElementById('measured').textContent = [pass ? 'PASS' : 'FAIL',
+    `native: ${JSON.stringify(native)}`, `shim: ${JSON.stringify(shim)}`,
+    `dark: ${JSON.stringify(dark)}`].join('\n');
+</script>

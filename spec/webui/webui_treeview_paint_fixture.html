@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI TreeView paint control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page" data-density="compact" data-theme="light">
+  <table class="webui-table" data-grid-lines="none" id="plain">
+    <thead><tr><th>Sound</th><th>Trigger</th></tr></thead>
+    <tbody><tr aria-selected="true"><td>A</td><td>warning</td></tr><tr><td>z</td><td>other</td></tr></tbody>
+  </table>
+  <table class="webui-table" data-grid-lines="none" id="editors">
+    <thead><tr><th>Sound</th><th>Trigger</th></tr></thead>
+    <tbody><tr><td><select><option>A</option><option>z</option></select></td><td><input value="warning"></td></tr></tbody>
+  </table>
+  <table class="webui-table" data-grid-lines="vertical" id="grid">
+    <thead><tr><th>File</th><th>Comments</th></tr></thead>
+    <tbody><tr><td>alpha.lic</td><td>literal text</td></tr></tbody>
+  </table>
+  <button class="default" id="default-button">Add Trigger</button>
+  <button class="default" id="disabled-button" disabled>Unavailable</button>
+  <button class="primary" id="primary-button">Primary</button>
+</section>
+<section class="webui-page"><table class="webui-table" id="ordinary"><thead><tr><th>Launcher</th></tr></thead></table></section>
+<pre id="result"></pre>
+<script src="webui_treeview_paint_fixture.js"></script>
