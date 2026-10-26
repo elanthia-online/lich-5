@@ -155,7 +155,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         expect(keychain[:password]).to eq(previous)
         expect(File.binread(yaml_file)).to eq(original_bytes)
         expect_cli_passwords(old_master)
-        expect(Dir.children(temp_dir)).to eq(['entry.yaml'])
+        expect(Dir.children(temp_dir)).to contain_exactly('entry.yaml', 'entry.yaml.lock')
       end
     end
 

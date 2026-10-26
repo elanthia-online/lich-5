@@ -112,9 +112,11 @@ or override build is unpromotable, even if its versions happen to match.
 
 The accepted manifest is Windows startup version policy. The static shared
 reader reads selected Gemfile declarations without evaluating plugins or needing
-a shipped lockfile. Default roots always apply; GTK also applies unless the user
-passes `--no-gtk` or `--no-gui`. The build-time non-GTK contract still includes
-the profanity group independently of these launch-time groups.
+a shipped lockfile. Current WebUI startup checks only default runtime roots;
+it does not request GTK recovery. `--no-gui` and its legacy alias `--no-gtk`
+suppress the WebUI launcher, not dependency validation. The build-time non-GTK
+contract still includes the profanity group independently of these launch-time
+groups.
 
 Lich validates every unit in the applicable ABI/platform target before selecting
 required roots and their complete recovery closures. Every selected package's
@@ -142,10 +144,12 @@ Timeout stops before runtime writes or helper launch, removes partial staging,
 and reports network retry guidance without an installer link. The next launch
 starts a new workspace, so a persistently slow connection may hit the cap again;
 use a faster connection or request a reviewed budget/package-sizing adjustment.
-Per-connection/read limits also apply. Unavailable service, an unsupported target,
-invalid declarations or invalid policy stops Windows startup with an explicit error. There is no cached
-policy or offline success fallback. A healthy local gem set still requires the
-accepted policy lookup.
+Per-connection/read limits also apply. An absent ABI/platform target falls back
+to checking locally installed requirements; it does not select another target or
+download recovery artifacts. Unavailable service, invalid declarations or invalid
+policy stops Windows startup with an explicit error. There is no cached-policy
+or offline-success fallback for a failed lookup. A healthy local gem set still
+requires the accepted policy lookup.
 
 A missing transitive dependency in an otherwise accepted installed gem is a
 local installation failure: repair or reinstall Ruby4Lich5, then retry. It is
@@ -291,10 +295,16 @@ recorded Ruby4Lich5 reinstall guidance. The producer's vendored static reader
 must match the selected Lich candidate when building a new contract.
 
 Other platforms retain their existing recovery paths: macOS may consent to
-private non-GTK Bundler recovery, while Linux uses its existing missing-gem
-notice. Neither fetches Windows policy at startup. GTK/headless selection is
-explicit; terminal, `DISPLAY` and cron state do not implicitly select headless
-operation.
+private non-GTK [Bundler recovery](macos-bundler-recovery.md), while Linux uses
+its existing missing-gem notice. Neither fetches Windows policy at startup.
+Neither graphical startup nor the script-local compatibility shim requires
+native GTK. Terminal, `DISPLAY` and cron state do not implicitly select a
+headless launch.
+
+The schema example below retains a historical GTK ZIP unit to illustrate ordered
+native-suite replacement. That recovery mechanism still exists, but the unit is
+not requested by current startup. Example digests are placeholders, not usable
+release checksums or a statement that the listed assets are current.
 
 ```json
 {
@@ -354,8 +364,8 @@ operation.
 }
 ```
 
-The GTK example is abbreviated only for readability. Production must list its
-complete tested closure in dependency order. ZIP package filenames must be at
+The historical GTK example is abbreviated only for readability. An actual native
+suite must list its complete tested closure in dependency order. ZIP package filenames must be at
 the archive root, and `install_order` must name every package exactly once.
 
 The generator should derive package names, versions, filenames, and SHA-256

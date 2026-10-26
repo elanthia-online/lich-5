@@ -1,21 +1,21 @@
 # Changing a saved character's frontend
 
-Open **Account Management > Accounts** and expand the account. Edit a character's
-**Frontend** cell using its dropdown. The choice saves when the cell edit is
-committed; pressing Escape before committing leaves the entry unchanged.
-Account headers cannot be edited.
+In the WebUI launcher, open **Account Management > Accounts**, select a
+character row, and choose **Edit Character**. Change the **Frontend** dropdown
+and choose **Save Character**. **Back to Accounts** leaves the saved entry
+unchanged. The Accounts table displays saved values; it is not an inline editor.
 Use the **Frontends** tab to configure an executable, extra arguments, or a custom
 frontend before assigning it to a character. Missing desktop clients remain
 visible and annotated rather than silently replacing a saved association.
 
-**Manual Login** shows detected frontends as radio buttons, plus an always-present
-**Custom** option. Unavailable clients stay in the configuration surfaces, not
-in the Manual Login choices. Selecting Custom automatically checks **Custom
-launch command** and reveals its command and working-directory fields. Custom
-requires a nonblank command before Play can authenticate or save an entry.
-It uses the historical Wrayth (`stormfront`) protocol identity; this does not
-require or execute Wrayth. Detected clients can still use the command checkbox
-unless their native adapter disallows it (for example, Saga).
+**Manual Entry** uses a **Front end** dropdown backed by the same catalog,
+including configured, detected, and unavailable choices. The **Custom launch
+command** checkbox reveals command and working-directory fields for the selected
+frontend; it is not a separate radio choice. Enabling it requires a nonblank
+command. Native-only adapters such as Saga disable that checkbox. Manual Entry
+checks frontend availability before Play, including when that checkbox is used;
+an unavailable choice produces a notice rather than silently selecting another
+frontend. A configured custom frontend has its own catalog availability rules.
 
 Headless operation remains an explicit CLI choice (`--headless PORT` or
 `--detachable-client=PORT`). There is no GUI headless mode or saved listener-port
@@ -25,10 +25,13 @@ or launch it through the CLI.
 
 Changing the association preserves account credentials, favorite status, and any
 per-entry custom launch command and directory. It does not log in or change other
-characters. Duplicate destination entries and stale selections are rejected;
-refresh the account list if another window changed the entry.
-Manual Login refreshes its saved-entry cache after account changes and again
-before saving a quick entry, preserving frontend settings edited in another tab.
+characters. A missing selected entry is rejected; refresh the account list if
+another window removed or changed it. Adding a character checks for an existing
+matching destination. Editing an existing character does not run that duplicate
+check, so it can create equivalent saved entries; do not rely on automatic
+deduplication in the editor.
+The launcher refreshes its catalog after account changes and preserves existing
+entry data when saving Manual Entry choices.
 
 Additional arguments preserve literal spaces and empty values. For example,
 `--title "" "  keep me  "` supplies three arguments, including an empty title.
@@ -85,25 +88,20 @@ Windows parsing follows [Microsoft's CRT rules](https://learn.microsoft.com/en-u
 The argument-list handoff uses [Ruby's process API](https://docs.ruby-lang.org/en/master/Process.html).
 
 An unavailable Wrayth entry is not evidence of bad credentials. Its saved frontend
-may simply not be installed on this computer. The launcher error now points to
-the configuration controls, and OK dismisses the dialog.
+may simply not be installed on this computer. The launcher notice points to
+the Frontends configuration controls.
 
-The GTK message-box repair uses the return value of `Gtk::Dialog#run`. Current
-Ruby-GNOME GTK3 does not yield to a supplied block, so putting `destroy` inside
-that block left the dialog visible even after OK. Response and cleanup regression
-tests cover OK, Cancel, Yes, No, and an exception from `run`.
+## Regression checks
 
-## Native GTK regression check
-
-With the project's Ruby/GTK dependencies installed, run:
+The former GTK inline editor, message boxes and native smoke test have been
+removed. Current behavior is exercised through the WebUI launcher and catalog:
 
 ```sh
-xvfb-run -a ruby spec/native/frontend_inline_smoke.rb
+rspec spec/lib/common/webui_launcher_redux_spec.rb spec/lib/common/webui_launcher_workflows_spec.rb spec/lib/common/webui_launcher spec/lib/common/frontend_choices_spec.rb
 ```
 
-This standalone test uses a virtual display and temporary synthetic accounts.
-It checks selection/commit/cancellation, account expansion, credential preservation,
-detected-client radio buttons, and Custom's fallback and field visibility. It neither
-authenticates to the game nor accesses saved player accounts. Ordinary RSpec
-coverage also exercises a frontend edit followed by another character's Manual
-Login save through the production notification and persistence paths.
+These tests isolate authentication, accounts and process launches. They cover
+character editing, supported-but-unavailable choices, cancellation, catalog
+updates and launch gating without authenticating to a live game or reading
+player accounts. Browser and OS-window acceptance remain separate; see the
+[WebUI validation guidance](../webui-integration.md#validation).
