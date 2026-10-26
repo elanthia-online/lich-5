@@ -1,0 +1,52 @@
+{
+  "repository": "lich_repo_mirror",
+  "revision": "2fa28f1e540e97c468af88bbc8c432d3cebf8755",
+  "path": "lib/manatimer.lic",
+  "version": "0.1",
+  "source_sha256": "ac33cc5b04bb6d4185063b552c1dcc8290b5cdfe752ba9ea36402f65a4f9bf2f",
+  "scope": "Unchanged source blocks. Complete setup includes monitor restoration lines 76-79 with fixture-supplied saved position; partial controls remain useful for focused tests. No game loop or pulse catcher is executed.",
+  "blocks": {
+    "defaults": {
+      "line": 25,
+      "end_line": 28,
+      "sha256": "6a6e554d7308c6c8beb0bdc0ec05cfe1cf7c5070d6615a4a479d4039afee55a5",
+      "source": "window_width = CharSettings['window_width'] || 120\r\nwindow_height = CharSettings['window_height'] || 25\r\nwindow_position = CharSettings['window_position']\r\nwindow_decorated = CharSettings['window_decorated']\r\n"
+    },
+    "locals": {
+      "line": 39,
+      "end_line": 47,
+      "sha256": "b076986aa1735a22698008ff4f14ead5e6032338e73a653a6de55ead36420c6f",
+      "source": "bar = label = overlay = normal_bar_style = bar_style = window = done = window_close = nil\r\n\r\n# GC anchor: ruby-gnome2's signal_connect stores the handler Proc only in a\r\n# C-side GLib::Closure that Ruby's GC cannot see. Without a Ruby-side reference,\r\n# the block becomes collectable and, after a GC pass (often during a long idle\r\n# period), GTK invokes a freed object -> \"method 'call' called on terminated\r\n# object\", killing Gtk.main and freezing Lich. Anchoring every handler here for\r\n# the script's lifetime prevents that. (Same fix map.lic already uses.)\r\n_prevent_gc = []\r\n"
+    },
+    "setup": {
+      "line": 49,
+      "end_line": 97,
+      "sha256": "68857010d950465ca331d6c970eecf4d1c049632193f17293e2ffa4a1d6bc5e3",
+      "source": "Gtk.queue {\r\n\twindow = Gtk::Window.new\r\n\twindow.title = \"#{Char.name} Mana Timer\"\r\n\tdelete_handler = proc { window_close = true }\r\n\t_prevent_gc << delete_handler\r\n\twindow.signal_connect('delete_event', &delete_handler)\r\n\tbar = Gtk::ProgressBar.new\r\n\t# This GTK3 build stacks a ProgressBar's own text *above* the trough, so we\r\n\t# hide it and overlay a label on top of the bar instead.\r\n\tbar.show_text = false\r\n\tbar.height_request = 18\r\n\tbar.width_request = 20\r\n\tlabel = Gtk::Label.new\r\n\tlabel.halign = Gtk::Align::CENTER\r\n\tlabel.valign = Gtk::Align::CENTER\r\n\toverlay = Gtk::Overlay.new\r\n\toverlay.add(bar)\r\n\toverlay.add_overlay(label)\r\n\toverlay.set_overlay_pass_through(label, true)\r\n\tbar.add_events(Gdk::Event::BUTTON_PRESS_MASK)\r\n\tpress_handler = proc { |owner, ev| Gtk.queue { window.decorated = !window.decorated? if ev.button == 3 } }\r\n\t_prevent_gc << press_handler\r\n\tbar.signal_connect('button_press_event', &press_handler)\r\n\twindow.add(overlay)\r\n\twindow.show_all\r\n\twindow.decorated = window_decorated unless window_decorated.nil?\r\n\twindow.resize(window_width.to_i, window_height.to_i)\r\n\t_geometry = Gdk::Display.default.default_screen.get_monitor_geometry(Gdk::Display.default.default_screen.get_monitor_at_point(window_position[0].to_i, window_position[1].to_i))\r\n\twindow_position[0] = [[0, window_position[0].to_i].max, (_geometry.width-window_width.to_i)].min\r\n\twindow_position[1] = [[0, window_position[1].to_i].max, (_geometry.height-window_height.to_i)].min\r\n\twindow.move(window_position[0].to_i, window_position[1].to_i)\r\n\twindow.set_keep_above(true)\r\n  \t\r\n  \t# GTK3: style via a CSS provider on the bar's style context.\r\n  \tcss_provider = Gtk::CssProvider.new\r\n  \tbar.style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n  \t# min-height + padding:0 keep the trough/fill from being squashed by GTK3 theme defaults.\r\n  \t_bar_base = \"progressbar { padding: 0; min-height: 18px; } progressbar trough { min-height: 18px; padding: 0; border-width: 0; } progressbar progress { background-image: none; min-height: 18px; \"\r\n  \tnormal_bar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #06b025; }\") }\r\n  \tbar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #b02506; }\") }\r\n  \tbar_style.call\r\n\r\n  \t# Keep the overlaid label legible on top of the colored fill.\r\n  \tlabel_css = Gtk::CssProvider.new\r\n  \tlabel_css.load_from_data(\"label { color: #000000; font-weight: bold; padding: 0; margin: 0; min-height: 0; }\")\r\n  \tlabel.style_context.add_provider(label_css, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n\r\n\tdone = true\r\n}\r\n"
+    },
+    "controls": {
+      "line": 50,
+      "end_line": 75,
+      "sha256": "51ffbadc95ef7385b835fab0e3229fd999d9e00d73bd85b2eff7750a54720de3",
+      "source": "\twindow = Gtk::Window.new\r\n\twindow.title = \"#{Char.name} Mana Timer\"\r\n\tdelete_handler = proc { window_close = true }\r\n\t_prevent_gc << delete_handler\r\n\twindow.signal_connect('delete_event', &delete_handler)\r\n\tbar = Gtk::ProgressBar.new\r\n\t# This GTK3 build stacks a ProgressBar's own text *above* the trough, so we\r\n\t# hide it and overlay a label on top of the bar instead.\r\n\tbar.show_text = false\r\n\tbar.height_request = 18\r\n\tbar.width_request = 20\r\n\tlabel = Gtk::Label.new\r\n\tlabel.halign = Gtk::Align::CENTER\r\n\tlabel.valign = Gtk::Align::CENTER\r\n\toverlay = Gtk::Overlay.new\r\n\toverlay.add(bar)\r\n\toverlay.add_overlay(label)\r\n\toverlay.set_overlay_pass_through(label, true)\r\n\tbar.add_events(Gdk::Event::BUTTON_PRESS_MASK)\r\n\tpress_handler = proc { |owner, ev| Gtk.queue { window.decorated = !window.decorated? if ev.button == 3 } }\r\n\t_prevent_gc << press_handler\r\n\tbar.signal_connect('button_press_event', &press_handler)\r\n\twindow.add(overlay)\r\n\twindow.show_all\r\n\twindow.decorated = window_decorated unless window_decorated.nil?\r\n\twindow.resize(window_width.to_i, window_height.to_i)\r\n"
+    },
+    "providers": {
+      "line": 80,
+      "end_line": 96,
+      "sha256": "6d6813aa2a937f5590b884022deca8acd32cb6c2c69df7ad11c276f182003a8d",
+      "source": "\twindow.set_keep_above(true)\r\n  \t\r\n  \t# GTK3: style via a CSS provider on the bar's style context.\r\n  \tcss_provider = Gtk::CssProvider.new\r\n  \tbar.style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n  \t# min-height + padding:0 keep the trough/fill from being squashed by GTK3 theme defaults.\r\n  \t_bar_base = \"progressbar { padding: 0; min-height: 18px; } progressbar trough { min-height: 18px; padding: 0; border-width: 0; } progressbar progress { background-image: none; min-height: 18px; \"\r\n  \tnormal_bar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #06b025; }\") }\r\n  \tbar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #b02506; }\") }\r\n  \tbar_style.call\r\n\r\n  \t# Keep the overlaid label legible on top of the colored fill.\r\n  \tlabel_css = Gtk::CssProvider.new\r\n  \tlabel_css.load_from_data(\"label { color: #000000; font-weight: bold; padding: 0; margin: 0; min-height: 0; }\")\r\n  \tlabel.style_context.add_provider(label_css, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n\r\n\tdone = true\r\n"
+    },
+    "cleanup": {
+      "line": 101,
+      "end_line": 116,
+      "sha256": "67c6d3dbd2f1211f765818b9c721ad4bc56ccb57f6b7cc7008d7813f636a0e2a",
+      "source": "before_dying {\r\n\tdone = false\r\n\tGtk.queue {\r\n\t\twindow_width = window.allocation.width\r\n\t\twindow_height = window.allocation.height\r\n\t\twindow_decorated = window.decorated?\r\n\t\twindow_position = window.position\r\n\t\twindow.destroy\r\n\t\tdone = true\r\n\t}\r\n\twait_until { done }\r\n\tCharSettings['window_width'] = window_width\r\n\tCharSettings['window_height'] = window_height\r\n\tCharSettings['window_decorated'] = window_decorated\r\n\tCharSettings['window_position'] = window_position if (window_position.class == Array) and (window_position[0].to_i > -5) and (window_position[1].to_i > -5)\r\n}\r\n"
+    },
+    "tick": {
+      "line": 176,
+      "end_line": 182,
+      "sha256": "28e07c08f5f60dcf08dddbff46a794182fc6f7b8080097fa8a5e860b81d271ae",
+      "source": "\tGtk.queue {\r\n\t\tbar.fraction = ticks / 120.0 % 1\r\n\t\tlabel.text =  \"#{ \"%02d\" %(ticks/60)}:#{ \"%02d\" % (ticks%60)}\"\r\n\t\tif ticks == 76 || ticks == 16\r\n\t\t\tbar_style.call\r\n\t\tend\r\n\t}\r\n"
+    }
+  }
+}
