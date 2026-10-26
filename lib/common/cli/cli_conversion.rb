@@ -22,7 +22,7 @@ module Lich
 
         # Performs conversion from entry.dat to entry.yaml
         # Delegates to EntryStore.migrate_from_legacy for actual conversion
-        # For enhanced mode, user will be prompted to create a master password interactively
+        # Enhanced mode uses the master password established by CLI orchestration.
         #
         # @param data_dir [String] Directory containing entry data
         # @param encryption_mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
@@ -46,7 +46,7 @@ module Lich
           end
 
           # Delegate to EntryStore for the actual conversion
-          # For enhanced mode, migrate_from_legacy will prompt user to create master password
+          # Enhanced mode resolves the password previously stored by CLI orchestration.
           result = Lich::Common::Authentication::EntryStore.migrate_from_legacy(data_dir, encryption_mode: mode)
 
           unless result

@@ -154,7 +154,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       end
       expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(false)
       expect(File.binread(yaml_file)).to eq(original)
-      expect(Dir.children(data_dir)).to eq(['entry.yaml'])
+      expect(Dir.children(data_dir)).to contain_exactly('entry.yaml', 'entry.yaml.lock', 'entry.yaml.bak.lock')
     end
 
     it 'does not remove an account when publication fails' do

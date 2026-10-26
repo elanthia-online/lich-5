@@ -22,7 +22,6 @@ module Lich
         end
 
         Lich.track_dark_mode = theme_state if explicit
-        Gtk::Settings.default.gtk_application_prefer_dark_theme = theme_state if defined?(Gtk)
         theme_state
       end
     end

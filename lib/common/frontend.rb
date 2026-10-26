@@ -425,7 +425,7 @@ module Lich
       # in FrontendSettings rather than becoming executable Ruby.
       #
       # The manifest is explicit because registry order is user-visible in the
-      # GTK selector and retained by the legacy capability constants below.
+      # frontend selection catalog and retained by the legacy capability constants below.
       # @return [void]
       # @api private
       def self.load_built_in_catalog!
@@ -885,16 +885,10 @@ module Lich
         end
       end
 
-      # Create a callback for GTK windows to refocus on click
+      # Create a callback for UI surfaces to refocus the frontend on click.
       # @return [Proc] A proc that can be called to refocus the frontend
       def self.refocus_callback
-        proc {
-          if defined?(GLib) && GLib.respond_to?(:Idle)
-            GLib::Idle.add(50) { self.refocus; false }
-          else
-            self.refocus
-          end
-        }
+        proc { refocus }
       end
 
       # Detect the current platform

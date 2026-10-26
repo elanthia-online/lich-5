@@ -248,6 +248,11 @@ module Lich
     end
   end
 
+  # Uses the native Windows message box; other hosts emit a diagnostic without a GUI prompt.
+  # When stderr is the debug log, a terminal notice points to it. Non-Windows output
+  # does not supply consent or emulate Yes/No responses.
+  # @param args [Hash] message, optional title, buttons, and icon
+  # @return [Symbol, nil] Windows response, or nil for diagnostic-only/failure paths
   def Lich.msgbox(args)
     args = { message: args.to_s } unless args.is_a?(Hash)
     if defined?(Win32)
@@ -280,45 +285,19 @@ module Lich
       else
         return nil
       end
-    elsif defined?(Gtk)
-      if args[:buttons] == :ok_cancel
-        buttons = :ok_cancel
-      elsif args[:buttons] == :yes_no
-        buttons = :yes_no
-      else
-        buttons = :ok
+    else
+      $stderr.puts(args[:message])
+      if !$stderr.equal?(STDERR) && $stderr.respond_to?(:path)
+        # init.rb redirects stderr to the debug log; main.rb can redirect
+        # $stdout to the game client. STDOUT retains the terminal stream.
+        begin
+          STDOUT.puts "Lich encountered an error. See the debug log: #{$stderr.path}"
+          STDOUT.flush
+        rescue IOError, SystemCallError
+          # A closed terminal or broken output pipe must not mask the logged error.
+          nil
+        end
       end
-      if args[:icon] == :error
-        type = :error
-      elsif args[:icon] == :question
-        type = :question
-      elsif args[:icon] == :warning
-        type = :warning
-      else
-        type = :info
-      end
-      dialog = Gtk::MessageDialog.new(parent: nil, flags: :modal, type: type, buttons: buttons, message: args[:message])
-      args[:title] ||= "Lich v#{LICH_VERSION}"
-      dialog.title = args[:title]
-      begin
-        # GTK3 returns the response; it does not yield to a block passed to run.
-        response = dialog.run
-      ensure
-        dialog.destroy
-      end
-      if response == Gtk::ResponseType::OK
-        return :ok
-      elsif response == Gtk::ResponseType::CANCEL
-        return :cancel
-      elsif response == Gtk::ResponseType::YES
-        return :yes
-      elsif response == Gtk::ResponseType::NO
-        return :no
-      else
-        return nil
-      end
-    elsif $stdout.isatty
-      $stdout.puts(args[:message])
       return nil
     end
   end
