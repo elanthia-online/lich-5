@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rbconfig'
+require 'fileutils'
 
 # Test-only transition isolation: the script shim installs a process-wide loader
 # guard, while legacy GTK specs load the old GTK hardening file and GUI stubs.
@@ -41,13 +42,35 @@ module WebUITransitionSuites
       raise 'transition partition omitted or duplicated a spec'
     end
 
+    runtime_log = 'tmp/parallel_runtime_rspec.log'
+    history = read_runtime_log(runtime_log)
     results = groups.map do |name, files|
       puts "RSpec #{name}: #{files.length} files; seed #{seed}"
-      system(RbConfig.ruby, '-S', 'parallel_rspec', '-n', '4',
-             '--serialize-stdout', '--verbose-rerun-command',
-             '-o', "--seed #{seed}", *files)
+      begin
+        system(RbConfig.ruby, '-S', 'parallel_rspec', '-n', '4',
+               '--serialize-stdout', '--verbose-rerun-command',
+               '-o', "--seed #{seed}", *files)
+      ensure
+        # RuntimeLogger replaces the log for each process family. Retain the
+        # other families so the next invocation can use all recorded timings.
+        history.merge!(read_runtime_log(runtime_log))
+        FileUtils.mkdir_p(File.dirname(runtime_log))
+        File.write(runtime_log, history.sort.map { |path, time| "#{path}:#{time}\n" }.join)
+      end
     end
     results.all?
+  end
+
+  # Preserve runtime rows by spec path, updating only measurements just written.
+  # @param path [String] parallel_tests runtime log path
+  # @return [Hash{String => String}] recorded per-file runtimes
+  def self.read_runtime_log(path)
+    return {} unless File.file?(path)
+
+    File.readlines(path, chomp: true).each_with_object({}) do |line, rows|
+      file, separator, time = line.rpartition(':')
+      rows[file] = time unless separator.empty?
+    end
   end
 end
 
