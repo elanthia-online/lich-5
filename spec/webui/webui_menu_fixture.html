@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI compact cascading menu regression</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<div id="status"></div><div id="notifications"></div><div id="announcer"></div><main id="pages"></main>
+<pre id="measured"></pre>
+<script>
+  window.WebSocket = class {
+    static OPEN = 1;
+    readyState = 1;
+    addEventListener() {}
+    send() {}
+  };
+</script>
+<script src="../../lib/webui/assets/renderers_menus.js"></script>
+<script src="../../lib/webui/assets/renderers_layout.js"></script>
+<script src="../../lib/webui/assets/renderers_display.js"></script>
+<script src="../../lib/webui/assets/renderers_inputs.js"></script>
+<script src="../../lib/webui/assets/renderers_table.js"></script>
+<script src="../../lib/webui/assets/app.js"></script>
+<script>
+  // Use the production renderer and stylesheet. Run in a real browser: DOM
+  // doubles cannot detect cascade specificity, scrolling or painted overlap.
+  const page = { controls: new Map(), bindings: {}, submissions: {} };
+  const button = (cid, label) => ({ type: 'button', cid, props: { label } });
+  const root = LichWebUI.render(page, { type: 'page', cid: 'root',
+    props: { bare: true, density: 'compact', viewport: true }, children: [
+      button('ordinary', 'Ordinary native / shim button'),
+      { type: 'group', cid: 'menu', props: { menu: 'context', key: 'test' }, children: [
+        ...Array.from({ length: 5 }, (_, i) => button(`option-${i}`, `Option ${i}`)),
+        { type: 'group', cid: 'submenu', props: { menu: 'submenu', label: 'Choices' },
+          children: Array.from({ length: 10 }, (_, i) => button(`choice-${i}`, `${(i + 1) * 10}%`)) },
+        ...Array.from({ length: 9 }, (_, i) => button(`last-${i}`, `Later option ${i}`))
+      ] }
+    ] });
+  document.querySelector('#pages').append(root);
+  const menu = root.querySelector('.webui-context-menu');
+  const panel = root.querySelector('.submenu-items');
+  const trigger = root.querySelector('.submenu-trigger');
+  const results = [];
+  function check(name, pass) { results.push({ name, pass }); }
+  for (const theme of ['light', 'dark']) {
+    root.dataset.theme = theme;
+    menu.style.display = 'block';
+    menu.style.left = `${Math.max(0, innerWidth - menu.getBoundingClientRect().width)}px`;
+    menu.style.top = '0px';
+    trigger.click();
+    const row = root.querySelector('[data-cid="option-0"]');
+    check(`${theme}: menu row uses flat compact paint`, row.offsetHeight === 23 &&
+      getComputedStyle(row).borderTopWidth === '0px' && getComputedStyle(row).backgroundImage === 'none');
+    check(`${theme}: ordinary button retains requisition`, root.querySelector('[data-cid="ordinary"]').offsetHeight >= 34);
+    const bounds = panel.getBoundingClientRect();
+    check(`${theme}: submenu bounded by viewport`, bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight);
+    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + 15);
+    check(`${theme}: submenu can receive pointer`, panel.contains(hit));
+    panel.scrollTop = panel.scrollHeight;
+    const last = panel.lastElementChild.getBoundingClientRect();
+    check(`${theme}: last submenu item reachable`, last.bottom <= innerHeight && last.top >= 0);
+    trigger.click();
+    menu.scrollTop = menu.scrollHeight;
+    const bottom = menu.lastElementChild.getBoundingClientRect();
+    check(`${theme}: last root item reachable`, bottom.bottom <= innerHeight && bottom.top >= 0);
+    menu.scrollTop = 0;
+  }
+  document.querySelector('#measured').textContent = `${results.every(r => r.pass) ? 'PASS' : 'FAIL'} ${innerWidth}x${innerHeight} ${JSON.stringify(results)}`;
+</script>
