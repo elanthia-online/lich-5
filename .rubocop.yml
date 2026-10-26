@@ -2,3 +2,14 @@
 # copy of the master in elanthia-online/.github. Do not change rules here; this
 # file may only list files to exclude.
 inherit_from: .rubocop/base.yml
+
+# Exact upstream Setup excerpts: retain source formatting and the unused local
+# for digest-checked compatibility tests. Safety/ASCII and other lint cops run.
+Layout:
+  Exclude:
+    - 'spec/fixtures/webui/bigshot_setup.lic'
+    - 'spec/fixtures/webui/huntplan_setup.lic'
+
+Lint/UselessAssignment:
+  Exclude:
+    - 'spec/fixtures/webui/huntplan_setup.lic'
