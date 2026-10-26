@@ -581,33 +581,33 @@ def multimove(*dirs)
   dirs.flatten.each { |dir| move(dir) }
 end
 
-def n;    'north';     end
+def n; 'north'; end
 
-def ne;   'northeast'; end
+def ne; 'northeast'; end
 
-def e;    'east';      end
+def e; 'east'; end
 
-def se;   'southeast'; end
+def se; 'southeast'; end
 
-def s;    'south';     end
+def s; 'south'; end
 
-def sw;   'southwest'; end
+def sw; 'southwest'; end
 
-def w;    'west';      end
+def w; 'west'; end
 
-def nw;   'northwest'; end
+def nw; 'northwest'; end
 
-def u;    'up';        end
+def u; 'up'; end
 
-def up;   'up'; end
+def up; 'up'; end
 
-def down; 'down';      end
+def down; 'down'; end
 
-def d;    'down';      end
+def d; 'down'; end
 
-def o;    'out';       end
+def o; 'out'; end
 
-def out;  'out';       end
+def out; 'out'; end
 
 # Moves one exit. Implementation lives in Lich::Common::Move (lib/common/move.rb);
 # this shim keeps the top-level name every script calls.

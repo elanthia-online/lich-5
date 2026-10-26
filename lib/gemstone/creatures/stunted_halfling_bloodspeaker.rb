@@ -192,7 +192,6 @@
       "A stunted halfling bloodspeaker lets out a soft grunt as {pronoun} twists {pronoun} body to look around, the heavy scars of {pronoun} face tugging painfully."
     ],
 
-
     stun_break: [
       "Rivulets of swirling incarnadine energy envelop a stunted halfling bloodspeaker's scarred flesh, allowing {pronoun} to move freely once more."
     ],

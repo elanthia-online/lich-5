@@ -226,9 +226,9 @@ module Lich
 
   def Lich.class_variable_get(*_a); nil; end
 
-  def Lich.class_eval(*_a);         nil; end
+  def Lich.class_eval(*_a); nil; end
 
-  def Lich.module_eval(*_a);        nil; end
+  def Lich.module_eval(*_a); nil; end
 
   def Lich.log(msg)
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"

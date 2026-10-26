@@ -198,7 +198,6 @@
       "Corruscating light flares where a behemothic gorefrost golem's eyes ought to be as it searches the shadows."
     ],
 
-
     attacks: {
       attack: [
         "A behemothic gorefrost golem rears back slowly and swings {weapon} at you!",

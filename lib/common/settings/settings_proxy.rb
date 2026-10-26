@@ -501,10 +501,8 @@ module Lich
         @settings_module.with_proxy_lock(self) do
           change_and_replay(:[]=, [key, actual_value], nil)
         end
-        # rubocop:disable Lint/Void
         # This is Ruby expected behavior to return the value.
         value
-        # rubocop:enable Lint/Void
       end
 
       def method_missing(method, *args, &block)

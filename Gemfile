@@ -28,6 +28,9 @@ This ensures that the lock file can be used by all platforms that are able to su
 
 source "https://rubygems.org"
 
+# Installs the system libraries the GTK gems need (e.g. libgtk-3-dev via apt) during bundle install
+plugin "rubygems-requirements-system"
+
 git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 
 group :development do
