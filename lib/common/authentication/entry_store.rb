@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
+require 'os'
 require 'tempfile'
 
 require_relative '../gui/state'
 require_relative '../gui/password_cipher'
 require_relative '../gui/master_password_manager'
-require_relative '../gui/master_password_prompt'
 
 module Lich
   module Common
@@ -251,60 +251,23 @@ module Lich
           raise
         end
 
-        # Decrypts password with recovery mechanism for missing master password
-        # If master password is missing from Keychain but validation test exists,
-        # prompts user to re-enter master password, validates it, and saves to Keychain
+        # Decrypts a password and reports when an enhanced credential must be
+        # unlocked through the native WebUI or CLI workflow.
         #
         # @param encrypted_password [String] Encrypted password to decrypt
         # @param mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
         # @param account_name [String] Account name for :standard mode
         # @param master_password [String, nil] Master password if already known
         # @param validation_test [Hash, nil] Validation test hash from YAML (optional)
-        # @return [String, nil] Decrypted password, or nil if the user cancels
-        #   master password recovery and Lich begins shutting down
-        # @raise [StandardError] If decryption fails and cannot be recovered
+        # @return [String] Decrypted password
+        # @raise [StandardError] If decryption requires an unavailable master password
         def self.decrypt_password_with_recovery(encrypted_password, mode:, account_name: nil, master_password: nil, validation_test: nil)
-          # Try normal decryption first
           return decrypt_password(encrypted_password, mode: mode, account_name: account_name, master_password: master_password)
         rescue StandardError => e
-          # Only attempt recovery for enhanced mode with missing master password
           if mode.to_sym == :enhanced && e.message.include?("Master password not found") && validation_test && !validation_test.empty?
-            Lich.log "info: Master password missing from Keychain, attempting recovery via user prompt"
-
-            # Show appropriate dialog based on context - use data access for conversion, recovery for actual recovery
-            recovery_result = Lich::Common::GUI::MasterPasswordPromptUI.show_password_for_data_access(validation_test)
-
-            if recovery_result.nil? || recovery_result[:password].nil?
-              Lich.log "info: User cancelled master password recovery"
-              Lich::Common.quit_gtk_main_loop
-              return nil
-            end
-
-            recovered_password = recovery_result[:password]
-            continue_session = recovery_result[:continue_session]
-
-            # Password was validated by the UI layer, proceed with recovery
-            Lich.log "info: Master password recovered and validated, storing to Keychain"
-
-            # Save recovered password to Keychain for future use
-            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(recovered_password)
-              Lich.log "warning: Failed to store recovered master password to Keychain"
-              # Continue anyway - decryption will still work with in-memory password
-            end
-
-            # Handle session continuation decision
-            if !continue_session
-              Lich.log "info: User chose to close application after password recovery"
-              # Exit the application gracefully
-              Lich::Common.quit_gtk_main_loop
-            end
-
-            # Retry decryption with recovered password
-            return decrypt_password(encrypted_password, mode: mode, account_name: account_name, master_password: recovered_password)
-          else
-            # Re-raise if not recoverable
-            raise
+            Lich.log 'info: Master password must be unlocked through the WebUI or CLI workflow'
           end
+          raise
         end
 
         # Encrypts all passwords in yaml_data structure
@@ -462,9 +425,9 @@ module Lich
         # Reports unsuccessful rollback without including password values.
         #
         # @param previous_password [String, nil] previous value, or nil for absence
+        # @param manager [Object] credential provider used by the publishing caller
         # @return [Boolean] whether the previous observable state was restored
-        def self.restore_master_password(previous_password)
-          manager = Lich::Common::GUI::MasterPasswordManager
+        def self.restore_master_password(previous_password, manager: Lich::Common::GUI::MasterPasswordManager)
           return true if manager.retrieve_master_password(strict: true) == previous_password
 
           restored = if previous_password.nil?
@@ -1061,13 +1024,13 @@ module Lich
           return content
         end
 
-        # @api private
-        # Writes YAML data to file with standard headers and secure permissions
-        # Handles preparation and formatting of YAML data for all save operations
-        # Serializes before publication so serialization errors cannot truncate data.
-        #
-        # @param yaml_file [String] Path to YAML file to write
-        # @param yaml_data [Hash] YAML data structure to save
+        # Atomically publishes a complete catalog with owner-only permissions.
+        # Writers share a stable sidecar lock; readers see the old or new document.
+        # This protects publication, not a caller's entire read/modify/write transaction.
+        # Non-Windows hosts also sync the directory after rename. A directory-sync
+        # failure logs uncertain durability without rolling back the published state.
+        # @param yaml_file [String] destination catalog path
+        # @param yaml_data [Hash] account data to serialize
         # @param backup [Boolean] preserve the previous bytes in an owner-only .bak
         # @return [void]
         def self.write_yaml_file(yaml_file, yaml_data, backup: false)
@@ -1083,11 +1046,11 @@ module Lich
         # @param yaml_file [String] credential destination
         # @param yaml_data [Hash] already re-encrypted credentials and validation data
         # @param password [String] new master password
+        # @param manager [Object] credential provider used by CLI or WebUI
         # @return [void]
         # @raise [StandardError] on publication failure or incomplete rollback
-        def self.write_yaml_with_master_password(yaml_file, yaml_data, password)
+        def self.write_yaml_with_master_password(yaml_file, yaml_data, password, manager: Lich::Common::GUI::MasterPasswordManager)
           content = generate_yaml_content(yaml_data)
-          manager = Lich::Common::GUI::MasterPasswordManager
           previous_password = manager.retrieve_master_password(strict: true)
           begin
             unless manager.store_master_password(password)
@@ -1095,7 +1058,7 @@ module Lich
             end
             write_file_atomically(yaml_file, content)
           rescue StandardError
-            unless restore_master_password(previous_password)
+            unless restore_master_password(previous_password, manager: manager)
               raise StandardError, "Credential update failed; manual keychain recovery is required"
             end
             raise
@@ -1107,6 +1070,8 @@ module Lich
         # are retained while group, other, and executable access is removed.
         # Existing symlinks are followed to their target; dangling links are refused.
         # The temporary file lives beside the resolved target for atomic replacement.
+        # Writers serialize publication through a stable sidecar lock. Non-Windows
+        # directory-sync failures after rename report uncertain durability without rollback.
         # Failures before rename leave the destination untouched and remove the temp.
         #
         # @param path [String] destination path, including backup paths
@@ -1118,59 +1083,43 @@ module Lich
           path = File.realpath(path) if File.symlink?(path)
           raise Errno::EACCES, path if File.exist?(path) && !File.writable?(path)
 
-          mode = File.exist?(path) ? File.stat(path).mode & 0o600 : 0o600
-          Tempfile.create(['.entry-', '.tmp'], File.dirname(path)) do |file|
-            file.binmode
-            written = file.write(content)
-            raise IOError, "Incomplete entry file write" unless written == content.bytesize
+          File.open("#{path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
+            lock.flock(File::LOCK_EX)
+            mode = File.exist?(path) ? File.stat(path).mode & 0o600 : 0o600
+            Tempfile.create(['.entry-', '.tmp'], File.dirname(path)) do |file|
+              file.binmode
+              written = file.write(content)
+              raise IOError, "Incomplete entry file write" unless written == content.bytesize
 
-            file.flush
-            file.fsync
-            file.chmod(mode)
-            file.close
-            File.rename(file.path, path)
+              file.flush
+              file.fsync
+              file.chmod(mode)
+              file.close
+              File.rename(file.path, path)
+            end
+            unless OS.windows?
+              begin
+                File.open(File.dirname(path), File::RDONLY) { |directory| directory.fsync }
+              rescue SystemCallError, IOError => error
+                # Publication succeeded; do not roll back credentials after a durability warning.
+                Lich.log "warning: Catalog was published, but directory sync failed; power-loss durability is uncertain (#{error.class})."
+              end
+            end
           end
         end
         private_class_method :write_file_atomically
 
         # @api private
-        # Ensures master password exists for master_password mode conversions
-        # Shows UI prompt to user if not found in Keychain
-        # Creates validation test and stores in Keychain
+        # Resolves an existing master password for conversion. Interactive
+        # creation belongs to the native WebUI or CLI workflow.
         #
-        # @return [Hash, String, nil] Hash with {password, validation_test} if new, password string if existing, nil if cancelled
+        # @return [String, nil] existing password, or nil when the caller must obtain one
         def self.ensure_master_password_exists
-          # Check if master password already in Keychain
           existing = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
           return existing if !existing.nil? && !existing.empty?
 
-          # Show UI prompt to CREATE master password
-          master_password = Lich::Common::GUI::MasterPasswordPrompt.show_create_master_password_dialog
-
-          if master_password.nil?
-            Lich.log "info: User declined to create master password"
-            return nil
-          end
-
-          # Create validation test (expensive 100k iterations, one-time)
-          validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(master_password)
-
-          if validation_test.nil?
-            Lich.log "error: Failed to create validation test"
-            return nil
-          end
-
-          # Store in Keychain
-          stored = Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
-
-          unless stored
-            Lich.log "error: Failed to store master password in Keychain"
-            return nil
-          end
-
-          Lich.log "info: Master password created and stored in Keychain"
-          # Return both password and validation test for YAML storage
-          { password: master_password, validation_test: validation_test }
+          Lich.log 'info: Master password must be created through the WebUI or CLI workflow'
+          nil
         end
 
         # @api private

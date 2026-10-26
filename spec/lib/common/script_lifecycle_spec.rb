@@ -48,6 +48,288 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@stopping, [])
   end
 
+  describe 'GTK-free script loading' do
+    %i[save cancel shutdown].each do |action|
+      it "preserves legacy box form values and owner cleanup on #{action}" do
+        Dir.mktmpdir('script-legacy-boxes') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          stub_const('LEGACY_BOX_RESULTS', Queue.new)
+          Lich::Common::ScriptScope.activate!
+          host = Lich::WebUI.service
+          allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+            Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+          end
+          File.write(File.join(root, 'custom', 'legacy-boxes.lic'), <<~RUBY)
+            # quiet
+            finished = Queue.new
+            Gtk.queue do
+              window = Gtk::Window.new
+              column = Gtk::VBox.new(false, 5)
+              row = Gtk::HBox.new(false, 5)
+              entry = Gtk::Entry.new
+              entry.text = 'original'
+              check = Gtk::CheckButton.new('Enabled')
+              save = Gtk::Button.new('Save')
+              row.pack_start(Gtk::Label.new('Name'), false, false, 0)
+              row.pack_start(entry, true, true, 0)
+              column.pack_start(row, false, false, 0)
+              column.add(check)
+              column.pack_start(save, false, false, 0)
+              window.add(column)
+              save.signal_connect('clicked') do
+                Gtk.queue do
+                  LEGACY_BOX_RESULTS << [:save, entry.text, check.active?, Script.current]
+                  finished << true
+                end
+              end
+              window.signal_connect('delete_event') do
+                LEGACY_BOX_RESULTS << [:cancel, Script.current]
+                finished << true
+                false
+              end
+              window.signal_connect('destroy') { LEGACY_BOX_RESULTS << :destroyed }
+              Script.current.at_exit { Gtk.queue { window.destroy } }
+              window.show_all
+            end
+            finished.pop
+          RUBY
+          child = script_class.start('legacy-boxes')
+          expect(child).to be_a(script_class)
+          page = nil
+          Timeout.timeout(2) { sleep 0.001 until (page = host.registry.pages_for(child).first)&.last_render }
+          connection = double('connection', viewer_id: 'legacy-boxes', alive?: true, send_text: true)
+          address = host.registry.address_for(page)
+          host.runtime.handle(connection, type: 'attach', page: address)
+          page.last_render.tree.each do |component|
+            next unless %i[text_input checkbox].include?(component.type)
+
+            host.runtime.handle(connection, type: 'event', page: address, generation: page.generation,
+                                            cid: component.cid, event: 'change',
+                                            payload: { value: component.type == :checkbox ? true : 'edited' })
+          end
+          case action
+          when :save
+            button = page.last_render.tree.each.find { |node| node.type == :button }
+            result = host.runtime.handle(connection, type: 'event', page: address, generation: page.generation,
+                                                     cid: button.cid, event: 'activate', payload: {}, submission: ['edited', true])
+            expect(result).to eq(:queued)
+            expect(LEGACY_BOX_RESULTS.pop(timeout: 2)).to eq([:save, 'edited', true, child])
+          when :cancel
+            host.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
+            expect(LEGACY_BOX_RESULTS.pop(timeout: 2)).to eq([:cancel, child])
+          when :shutdown
+            child.kill(context: :shutdown)
+          end
+          expect(child.join(3)).to equal(child)
+          expect(child).to be_completed_successfully unless action == :shutdown
+          expect(LEGACY_BOX_RESULTS.pop(timeout: 2)).to eq(:destroyed)
+          expect(LEGACY_BOX_RESULTS).to be_empty
+          expect(host.registry.pages_for(child)).to be_empty
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+    end
+
+    it 'commits scalar and collapsed multiline values through a real Script owner' do
+      Dir.mktmpdir('script-control-conventions') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        stub_const('SCRIPT_DIR', root)
+        stub_const('LEGACY_CONTROL_RESULTS', Queue.new)
+        Lich::Common::ScriptScope.activate!
+        host = Lich::WebUI.service
+        allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+          Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+        end
+        File.write(File.join(root, 'custom', 'control-conventions.lic'), <<~RUBY)
+          # quiet
+          finished = Queue.new
+          Gtk.queue do
+            window = Gtk::Window.new('Controls')
+            column = Gtk::VBox.new(false, 4)
+            first = Gtk::RadioButton.new('First')
+            second = Gtk::RadioButton.new(member: first, label: 'Second')
+            toggle = Gtk::ToggleButton.new(label: 'Enabled')
+            spin = Gtk::SpinButton.new(Gtk::Adjustment.new(0.5, 0.5, 10, 0.1, 1, 0), 0.1, 1)
+            search = Gtk::SearchEntry.new
+            # Independent-buffer construction used by loresang's verse editor.
+            buffer = Gtk::TextBuffer.new
+            buffer.text = 'Initial verse'
+            view = Gtk::TextView.new(buffer)
+            view.wrap_mode = :word
+            details = Gtk::Expander.new('Verse')
+            details.add(view)
+            save = Gtk::Button.new('Save')
+            [first, second, toggle, spin, search, details, save].each { |widget| column.add(widget) }
+            window.add(column)
+            save.signal_connect('clicked') do
+              window.destroy
+              LEGACY_CONTROL_RESULTS << [first.active?, second.active?, toggle.active?, spin.value, spin.text, search.text, buffer.text, details.expanded?, Script.current]
+              finished << true
+            end
+            window.show_all
+          end
+          finished.pop
+        RUBY
+        child = script_class.start('control-conventions')
+        page = nil
+        Timeout.timeout(2) { sleep 0.001 until (page = host.registry.pages_for(child).first)&.last_render }
+        connection = double('connection', viewer_id: 'control-conventions', alive?: true, send_text: true)
+        address = host.registry.address_for(page)
+        host.runtime.handle(connection, type: 'attach', page: address)
+        save = page.last_render.tree.each.find { |node| node.type == :button }
+        result = host.runtime.handle(connection, type: 'event', page: address, generation: page.generation,
+                                                 cid: save.cid, event: 'activate', payload: {}, submission: [false, true, true, 2.75, 'query', 'Saved verse'])
+        expect(result).to eq(:queued)
+        expect(LEGACY_CONTROL_RESULTS.pop(timeout: 2)).to eq([false, true, true, 2.75, '2.8', 'query', 'Saved verse', false, child])
+        expect(child.join(3)).to equal(child)
+        expect(child).to be_completed_successfully
+        expect(host.registry.pages_for(child)).to be_empty
+      ensure
+        child&.kill(context: :shutdown) if child&.running?
+        Lich::WebUI.reset!
+      end
+    end
+
+    %i[finish window_close runtime shutdown].each do |stop_mode|
+      it "finishes queued exit cleanup without stopping the host on #{stop_mode}" do
+        Dir.mktmpdir('script-queue-cleanup') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          stub_const('SCRIPT_QUEUE_EVENTS', Queue.new)
+          stub_const('SCRIPT_QUEUE_RELEASE', Queue.new)
+          host = Lich::WebUI.service
+          allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+            Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+          end
+          File.write(File.join(root, 'custom', 'cleanup.lic'), <<~RUBY)
+            # quiet
+            window = Gtk::Window.new(:toplevel)
+            window.resize(240, 25)
+            window.signal_connect('delete_event') { SCRIPT_QUEUE_RELEASE << true; true }
+            retained = Gtk.session
+            Script.current.at_exit do
+              cleanup_thread = Thread.current
+              finished = Queue.new
+              Gtk.queue do
+                dimensions = window.allocation
+                window.destroy
+                Gtk.queue { finished << [dimensions.width, dimensions.height, Thread.current == cleanup_thread] }
+              end
+              result = finished.pop(timeout: 0.5)
+              raise 'exit queue was discarded' unless result
+              SCRIPT_QUEUE_EVENTS << [:saved, result, window.destroyed?]
+            end
+            window.show_all
+            SCRIPT_QUEUE_EVENTS << retained
+            SCRIPT_QUEUE_RELEASE.pop
+          RUBY
+          child = script_class.start('cleanup')
+          retained = SCRIPT_QUEUE_EVENTS.pop(timeout: 2)
+          if stop_mode == :finish
+            SCRIPT_QUEUE_RELEASE << true
+          elsif stop_mode == :window_close
+            Timeout.timeout(2) { sleep 0.001 until host.registry.pages_for(child).first&.last_render }
+            page = host.registry.pages_for(child).first
+            host.runtime.browser_closed(page)
+          else
+            child.kill(context: stop_mode)
+          end
+          expect(child.join(3)).to equal(child)
+          expect(SCRIPT_QUEUE_EVENTS.pop(timeout: 1)).to eq([:saved, [240, 25, true], true])
+          expect(host.registry.pages_for(child)).to be_empty
+          expect(host).not_to be_stopped
+          expect(retained.queue { raise 'closed session ran work' }).to be_nil
+          delivered = Queue.new
+          host.runtime.dispatch(owner: Object.new) { delivered << :other_owner_alive }
+          expect(delivered.pop(timeout: 1)).to eq(:other_owner_alive)
+        ensure
+          SCRIPT_QUEUE_RELEASE << true if defined?(SCRIPT_QUEUE_RELEASE)
+          Lich::WebUI.reset!
+        end
+      end
+    end
+
+    it 'executes deferred Gtk.queue work with the real calling Script as owner' do
+      Dir.mktmpdir('script-queue-owner') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        stub_const('SCRIPT_DIR', root)
+        stub_const('SCRIPT_QUEUE_EVENTS', Queue.new)
+        File.write(File.join(root, 'custom', 'queued.lic'), <<~RUBY)
+          # quiet
+          release, done = Queue.new, Queue.new
+          Gtk.queue do
+            release.pop
+            SCRIPT_QUEUE_EVENTS << Script.current
+            done << true
+          end
+          SCRIPT_QUEUE_EVENTS << :caller_continued
+          release << true
+          raise 'callback did not finish' unless done.pop(timeout: 2)
+        RUBY
+        child = script_class.start('queued')
+        expect(child.join(3)).to equal(child)
+        expect(child).to be_completed_successfully
+        expect(SCRIPT_QUEUE_EVENTS.pop(timeout: 1)).to eq(:caller_continued)
+        expect(SCRIPT_QUEUE_EVENTS.pop(timeout: 1)).to equal(child)
+      ensure
+        Lich::WebUI.reset!
+      end
+    end
+
+    [false, true].each do |label_based|
+      it "resolves GTK requires through the shim for #{label_based ? 'label-based' : 'trusted'} scripts" do
+        Dir.mktmpdir('script-gtk-boundary') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          stub_const('GTK_BOUNDARY_EVENTS', Queue.new)
+          File.write(File.join(root, 'gtk3.rb'), 'GTK_BOUNDARY_EVENTS << :native_loaded')
+          File.write(File.join(root, 'gtk2.rb'), 'GTK_BOUNDARY_EVENTS << :native_loaded')
+          File.write(File.join(root, 'custom', 'boundary.lic'), <<~RUBY)
+            # quiet
+            GTK_BOUNDARY_EVENTS << require('gtk3')
+            GTK_BOUNDARY_EVENTS << Kernel.require('gtk2')
+            GTK_BOUNDARY_EVENTS << Gtk::Version::MAJOR
+            #{"Done:\nnil" if label_based}
+          RUBY
+          $LOAD_PATH.unshift(root)
+          child = script_class.start('boundary')
+          expect(child.join(2)).to equal(child)
+          expect(child).to be_completed_successfully
+          expect(GTK_BOUNDARY_EVENTS.size).to eq(3)
+          expect(3.times.map { GTK_BOUNDARY_EVENTS.pop }).to eq([false, false, 3])
+          expect($LOADED_FEATURES).not_to include(File.join(root, 'gtk3.rb'))
+        ensure
+          $LOAD_PATH.delete(root)
+        end
+      end
+    end
+
+    it 'refuses a native subload from a required helper with script and source attribution' do
+      Dir.mktmpdir('script-gtk-boundary') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        stub_const('SCRIPT_DIR', root)
+        FileUtils.mkdir_p(File.join(root, 'gtk3'))
+        # The fixture represents an actual dependency feature root, not an
+        # arbitrary installation ancestor whose name happens to match GTK.
+        $LOAD_PATH.unshift(root)
+        native_file = File.join(root, 'gtk3', 'loader.rb')
+        File.write(native_file, 'raise "native sentinel executed"')
+        File.write(File.join(root, 'native_helper.rb'), "Kernel.require #{native_file.dump}\n")
+        File.write(File.join(root, 'custom', 'boundary.lic'), "# quiet\nrequire #{File.join(root, 'native_helper.rb').dump}\n")
+        child = script_class.start('boundary')
+        expect(child.join(2)).to equal(child)
+        expect(child).not_to be_completed_successfully
+        expect(child.exit_error).to be_a(Lich::Common::ScriptScope::Gtk::UnsupportedOperation)
+        expect(child.exit_error.message).to match(/script=boundary.*require.*gtk3\/loader.*native_helper\.rb:1/)
+      ensure
+        $LOAD_PATH.delete(root)
+      end
+    end
+  end
+
   describe 'script body-read failures' do
     let(:source) { "SCRIPT_READ_EVENTS << :body\nDone:\nnil\n" }
 

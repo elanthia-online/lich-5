@@ -29,7 +29,7 @@ skip the RSpec run in CI.
 | [Windows: R4L5 gem manifest](dependency-recovery/windows-r4l5-gem-manifest.md) | Manifest-driven missing-gem repair and the shared lich-5/Ruby4Lich5 version contract |
 | [macOS: Bundler recovery](dependency-recovery/macos-bundler-recovery.md) | Transactional Bundler repair of default gems |
 | **Engine** | |
-| [GTK hardening](engine/gtk-hardening.md) | Shared GTK main loop protection and callback retention (until WebUI replaces GTK) |
+| [GTK compatibility lifecycle](engine/gtk-hardening.md) | Script-only migration bridge, dispatch and cleanup |
 | **GemStone** | |
 | [Combat defs onboarding](gemstone/combat/defs-onboarding.md) | Extending the combat def grammar from log evidence, and the backlog |
 
