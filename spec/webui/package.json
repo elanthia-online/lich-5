@@ -1,0 +1,15 @@
+{
+  "name": "lich-webui-renderer-tests",
+  "private": true,
+  "description": "Local and CI tests for the shipped WebUI renderer",
+  "scripts": {
+    "test": "node --test webui_*_test.cjs"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "jsdom": "30.1.2"
+  }
+}
