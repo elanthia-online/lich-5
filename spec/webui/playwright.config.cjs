@@ -1,18 +1,31 @@
 const { defineConfig } = require('@playwright/test');
 
-// Separate native and node:test/jsdom runners share the ordinary npm test entrypoint.
+// RSpec owns each fixture service and passes its one-use launch-file URL.
+// Run one browser scenario at a time; retries would hide first-attempt failures.
+// Headless Chrome verifies real DOM/cookies/navigation, not OS app-window behavior.
 module.exports = defineConfig({
   testDir: __dirname,
-  testMatch: '**/*.spec.cjs',
+  testMatch: 'browser.spec.cjs',
+  // Parallel RSpec workers run Playwright concurrently, each writing its own
+  // test-results/<scenario>. Skip that tree while discovering tests (via
+  // spec/webui/.gitignore), or one run can scan a folder another just replaced.
   respectGitIgnore: true,
-  // Native popup focus belongs to the desktop; concurrent browsers can dismiss it.
   workers: 1,
-  use: { headless: true },
-  projects: [
-    { name: 'chromium', use: { browserName: 'chromium', channel: 'chrome' } },
-    // Pinned WebKit checks page logic; the real WKWebView helper needs its own receipt.
-    { name: 'webkit', use: { browserName: 'webkit' },
-      // The no-popup boundary is calibrated in headless Chrome; WebKit opens a popup.
-      grepInvert: /@chromium-no-popup/ }
-  ]
+  retries: 0,
+  timeout: 30_000,
+  globalTimeout: 60_000,
+  expect: { timeout: 10_000 },
+  reporter: 'line',
+  use: {
+    browserName: 'chromium',
+    channel: 'chrome',
+    headless: true,
+    viewport: { width: 640, height: 480 },
+    actionTimeout: 10_000,
+    navigationTimeout: 10_000,
+    screenshot: 'only-on-failure',
+    // Ruby checks saved state after Playwright exits. Keep these fixture-only
+    // traces even when browser assertions pass; CI uploads them if Ruby fails.
+    trace: 'on',
+  },
 });
