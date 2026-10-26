@@ -3,8 +3,7 @@
 module Lich
   module Common
     module GUI
-      # Handles state management for the Lich GUI login system
-      # Provides methods for loading and saving entry data and applying theme settings
+      # Loads and saves legacy entry.dat data for CLI and WebUI migration.
       module State
         # Loads saved entry data from file
         # Reads and deserializes entry data from the entry.dat file
@@ -50,15 +49,6 @@ module Lich
           true
         rescue
           false
-        end
-
-        # Applies theme settings to GTK
-        # Sets the GTK dark theme preference based on the provided state
-        #
-        # @param theme_state [Boolean] Whether dark theme is enabled
-        # @return [void]
-        def self.apply_theme_settings(theme_state)
-          Gtk::Settings.default.gtk_application_prefer_dark_theme = true if theme_state == true
         end
       end
     end

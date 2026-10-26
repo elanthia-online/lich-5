@@ -17,23 +17,23 @@ require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
   describe '.startup_groups' do
-    it 'checks default and GTK dependencies for a Windows graphical launch' do
+    it 'checks only default dependencies for a Windows graphical launch' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
-      expect(described_class.startup_groups([])).to eq(%i[default gtk])
+      expect(described_class.startup_groups([])).to eq([:default])
     end
 
-    it 'omits GTK for an explicit no-GUI switch on Windows' do
+    it 'checks only default dependencies for explicit no-GUI switches' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
       expect(described_class.startup_groups(['--no-gui'])).to eq([:default])
       expect(described_class.startup_groups(['--no-gtk'])).to eq([:default])
     end
 
-    it 'does not treat unrelated arguments as a headless request on Windows' do
+    it 'checks only default dependencies with unrelated arguments' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
-      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq(%i[default gtk])
+      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq([:default])
     end
 
-    it 'leaves GTK to init.rb on non-Windows platforms' do
+    it 'does not add GTK on non-Windows platforms' do
       allow(described_class).to receive(:self_healing_supported?).and_return(false)
       expect(described_class.startup_groups([])).to eq([:default])
       expect(described_class.startup_groups(['--gtk'])).to eq([:default])

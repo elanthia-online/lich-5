@@ -231,13 +231,15 @@ module Lich
         TEXT
       end
 
+      # Returns advanced launch-option help text, including WebUI suppression and its legacy --no-gtk alias.
+      # @return [String] help text; this method does not print it
       def self.advanced_help
         <<~TEXT
           Lich Help: advanced
 
           Compatibility / advanced options:
-            --gui
-            --no-gui, --no-gtk  Run without the GTK GUI (aliases)
+            --gui                  Open the native WebUI launcher
+            --no-gui, --no-gtk  Do not open the WebUI launcher (--no-gtk is a legacy alias)
             --without-frontend
             --detachable-client=PORT|auto|HOST:PORT
             --pipe
@@ -251,7 +253,8 @@ module Lich
             --bind-address=HOST
 
           Notes:
-            The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
+            The native WebUI launcher starts by default when no arguments are given.
+            To suppress it, pass --no-gui (or the legacy --no-gtk alias),
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
             --fe-version=VALUE reports the frontend version (e.g. 1.0.1.28) in the

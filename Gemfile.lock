@@ -3,18 +3,9 @@ GEM
   specs:
     ascii_charts (0.9.1)
     ast (2.4.3)
-    atk (4.3.9)
-      glib2 (= 4.3.9)
-      rake
     base64 (0.3.0)
     benchmark (0.5.0)
     bigdecimal (4.1.3)
-    cairo (1.18.5)
-      pkg-config (>= 1.2.2)
-      red-colors
-    cairo-gobject (4.3.9)
-      cairo (>= 1.16.2)
-      glib2 (= 4.3.9)
     concurrent-ruby (1.3.8)
     connection_pool (3.0.2)
     curses (1.7.0)
@@ -36,34 +27,13 @@ GEM
     ffi (1.17.4-x86_64-linux-musl)
     fiddle (1.1.8)
     fileutils (1.8.1)
-    gdk3 (4.3.9)
-      cairo-gobject (= 4.3.9)
-      gdk_pixbuf2 (= 4.3.9)
-      pango (= 4.3.9)
-      rake
-    gdk_pixbuf2 (4.3.9)
-      gio2 (= 4.3.9)
-      rake
-    gio2 (4.3.9)
-      fiddle
-      gobject-introspection (= 4.3.9)
-    glib2 (4.3.9)
-      native-package-installer (>= 1.0.3)
-      pkg-config (>= 1.3.5)
-    gobject-introspection (4.3.9)
-      glib2 (= 4.3.9)
-    gtk3 (4.3.9)
-      atk (= 4.3.9)
-      gdk3 (= 4.3.9)
     json (3.1.0)
     kramdown (2.5.2)
       rexml (>= 3.4.4)
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
     logger (1.7.0)
-    matrix (0.4.3)
     mini_portile2 (2.8.9)
-    native-package-installer (1.1.9)
     open-uri (0.5.0)
       stringio
       time
@@ -73,16 +43,12 @@ GEM
     ostruct (0.6.3)
     ox (2.14.29)
       bigdecimal (>= 3.0)
-    pango (4.3.9)
-      cairo-gobject (= 4.3.9)
-      gobject-introspection (= 4.3.9)
     parallel (2.3.0)
     parallel_tests (5.8.0)
       parallel
     parser (3.3.13.0)
       ast (~> 2.4.1)
       racc
-    pkg-config (1.6.6)
     prism (1.9.0)
     racc (1.8.1)
     rainbow (3.1.1)
@@ -91,9 +57,6 @@ GEM
       logger
       prism (>= 1.6.0)
       tsort
-    red-colors (0.5.0)
-      json
-      matrix
     redis (6.0.0)
       redis-client (= 0.30.1)
     redis-client (0.30.1)
@@ -204,7 +167,6 @@ DEPENDENCIES
   ffi
   fiddle
   fileutils
-  gtk3
   json
   kramdown
   logger
@@ -240,12 +202,9 @@ DEPENDENCIES
 CHECKSUMS
   ascii_charts (0.9.1) sha256=30441622538f01b1846665fd9e63471a2ce14bec3e0f5db3cd8073d70d74cbbe
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
-  atk (4.3.9) sha256=f6d43be5dc1546a3a096124c0ec7518c266c225c88a91fd8ac857463beea3469
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
   bigdecimal (4.1.3) sha256=61ebe1e5e559bdc3cc6f2c0ee7f427321fc838f59611c294356eb04d6e21cf66
-  cairo (1.18.5) sha256=e57356141c91748061b10260e185735bd6e2288ab81ab300a6de3adfa270a623
-  cairo-gobject (4.3.9) sha256=f093931812898edd87416691b8e3315c61a0c8a6d531519fbc6c64e97b6d85c8
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
   connection_pool (3.0.2) sha256=33fff5ba71a12d2aa26cb72b1db8bba2a1a01823559fb01d29eb74c286e62e0a
   curses (1.7.0) sha256=c524ff30704bbd136d68d2731263b31edaf4f236b0cbb9b8dd6c802de3317057
@@ -267,36 +226,25 @@ CHECKSUMS
   ffi (1.17.4-x86_64-linux-musl) sha256=3fdf9888483de005f8ef8d1cf2d3b20d86626af206cbf780f6a6a12439a9c49e
   fiddle (1.1.8) sha256=7fa8ee3627271497f3add5503acdbc3f40b32f610fc1cf49634f083ef3f32eee
   fileutils (1.8.1) sha256=2d541a1ee34a9ed5c4f054be8fb819a26b5d654488a31dc8806917cf448b9cc3
-  gdk3 (4.3.9) sha256=3f43e2c530bf0c39d16616942f0b734ca9f98d31924915a197208a32d704f555
-  gdk_pixbuf2 (4.3.9) sha256=1b78f2b21de7d4dcef6b351895d1bc22099a53d987f005d4b09f62b6816b3cbc
-  gio2 (4.3.9) sha256=6ddcbaec05beb20332fcfd1ca598dcf46392541aeb0b5d4b8df2306adffc0acc
-  glib2 (4.3.9) sha256=32c1db447e812e5e34f9e62f1f2103e2cb4a5d0d03217a886b2a2877639549cd
-  gobject-introspection (4.3.9) sha256=509c0e69b99fb171683f28ea3172f82a46950b032f4628986330418771bdd56b
-  gtk3 (4.3.9) sha256=899b6bb459d83b9428dba26dc96f90b5cfb8d8a8abc78849795fd8767f47c77f
   json (3.1.0) sha256=3ce7ccf8fde58960177a3a756c31f292a4c1e1dedee884547096a5b0604e3bd8
   kramdown (2.5.2) sha256=1ba542204c66b6f9111ff00dcc26075b95b220b07f2905d8261740c82f7f02fa
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
-  matrix (0.4.3) sha256=a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b
   mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
-  native-package-installer (1.1.9) sha256=fbb41b6b22750791a4304f0a0aeea3dd837668892117f49c4caf2e8e0f4e792f
   open-uri (0.5.0) sha256=7b4f06fdac39e6946aed15a8da82531580882fbbec80438adcb7c30d388887ca
   openssl (4.0.2) sha256=1037ad2868ae58df9ad917891c0c0f9815a1172f6846d4bcdd508e4c2ee747c2
   os (1.1.4) sha256=57816d6a334e7bd6aed048f4b0308226c5fb027433b67d90a9ab435f35108d3f
   ostruct (0.6.3) sha256=95a2ed4a4bd1d190784e666b47b2d3f078e4a9efda2fccf18f84ddc6538ed912
   ox (2.14.29) sha256=206736d5a8dade9dca10cf72022bc157ad6ca3eecaba3853918426ed88e12dc2
-  pango (4.3.9) sha256=1f7b023adec7f3d692d7f6a6c87994231dd597802761a9a42debebe69f677a98
   parallel (2.3.0) sha256=f75a3e904101ce6a1ccb6b8dc800cbafd42166d83330192438dcf29395167a6f
   parallel_tests (5.8.0) sha256=181898cbee2ffb1c796274ce31d27f792a421324609bfc7e9b5531d929d91eda
   parser (3.3.13.0) sha256=e02f9b63c2fe05b0c68f692ba4df89b3cb113b663964f75d988fbebfd6c3deca
-  pkg-config (1.6.6) sha256=fe84528c7695ee2042d98891dae1d85beb9d2e5f4695395aac52663937fa2e1d
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
   rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
   rbs (4.2.0) sha256=51f7b886dcc05bc09e10b901daa6a81829f6adc03101d6ca9ea4aac6103e0674
-  red-colors (0.5.0) sha256=0a33f603d1843035fe467485ba4461022e3b5a2de9a0f0371e7cc0939b99ad19
   redis (6.0.0) sha256=de71c10edd106986b759ec7ecdd08b63b9c0ee7414a0d0c1da73d31ba2bccda6
   redis-client (0.30.1) sha256=5151bc5c7bbfe48623732cdae3b900d8a22dc691cc7cdfacfb351ac55116522d
   regexp_parser (2.13.1) sha256=5aedb6b7c35688f51e86eef17a15374dfd287c83f4ca644b2c5f3ec50a33b44b

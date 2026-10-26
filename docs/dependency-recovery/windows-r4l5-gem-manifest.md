@@ -15,8 +15,9 @@ showing one native consent dialog listing every affected recovery unit. It does
 not download a gem artifact or write to the runtime until the combined request
 is approved. A declined prompt, or the absence of a native confirmation UI,
 fails closed: Lich records the reason (including `user consent not available`)
-in `temp/lich5-missing-gems.log` and exits. GTK is verified and recovered on
-Windows unless the user explicitly passes `--no-gtk` or `--no-gui`.
+in `temp/lich5-missing-gems.log` and exits. Current WebUI startup checks only
+default runtime gems; it does not request GTK recovery. `--no-gui` and its legacy
+alias `--no-gtk` suppress the WebUI launcher, not dependency validation.
 
 On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
@@ -36,12 +37,16 @@ the original Lich command with its original arguments. It never uses a user
 packages and records the error in the same early-startup log.
 
 
-This recovery path is currently Windows-only. On macOS and Linux, Lich does
-not fetch this manifest or attempt self-healing. GTK remains required unless
-the user explicitly passes `--no-gtk` or `--no-gui`; `DISPLAY`, terminal, and
-cron environment state never implicitly select a headless launch. Required
-default dependencies such as `sqlite3` continue to show the ordinary
-missing-gem warning and exit.
+This manifest recovery path is Windows-only. macOS uses the separate,
+consent-based [Bundler recovery](macos-bundler-recovery.md) for missing default
+runtime gems. Linux reports missing gems and exits. Neither graphical startup
+nor the script-local compatibility shim requires native GTK. `DISPLAY`, terminal,
+and cron environment state do not implicitly select a headless launch.
+
+The schema example below retains a historical GTK ZIP unit to illustrate ordered
+native-suite replacement. That recovery mechanism still exists, but the unit is
+not requested by current startup. Example digests are placeholders, not usable
+release checksums or a statement that the listed assets are current.
 
 ```json
 {
@@ -101,8 +106,8 @@ missing-gem warning and exit.
 }
 ```
 
-The GTK example is abbreviated only for readability. Production must list its
-complete tested closure in dependency order. ZIP package filenames must be at
+The historical GTK example is abbreviated only for readability. An actual native
+suite must list its complete tested closure in dependency order. ZIP package filenames must be at
 the archive root, and `install_order` must name every package exactly once.
 
 The generator should derive package names, versions, filenames, and SHA-256
