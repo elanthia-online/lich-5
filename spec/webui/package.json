@@ -5,7 +5,7 @@
   "scripts": {
     "test": "npm run test:logic && npm run test:engine",
     "test:logic": "node --test webui_*_test.cjs",
-    "test:engine": "playwright test --config playwright.config.cjs"
+    "test:engine": "playwright test --config playwright.engine.config.cjs"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
