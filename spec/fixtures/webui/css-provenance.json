@@ -1,0 +1,439 @@
+{
+  "whole_corpus_provider_references": [
+    {
+      "name": "Combatical",
+      "source": "mirror",
+      "sha256": "153c4286870d5fc6aaab336302ab8f6e4dccbaa057b4e2626a421d978acb0e93",
+      "provider_reference_lines": [
+        2342
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "UberBarWiz",
+      "source": "mirror",
+      "sha256": "64bdbb6c5f02ee1941695150ee5116a602f9a9542c8db5d07a4a654bfad607d8",
+      "provider_reference_lines": [
+        552,
+        561,
+        570,
+        579,
+        588,
+        597,
+        606,
+        615,
+        624,
+        633,
+        642
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "as_audit",
+      "source": "mirror",
+      "sha256": "78516cdd47c3b49b0b36cf6a5e89379825121b495dc2fb9b7973aebd66945bc7",
+      "provider_reference_lines": [
+        2245
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "bug-catcher",
+      "source": "mirror",
+      "sha256": "cdbc764706ea86d4f7bd62b24ae11751a5e32a162605a21bd72f14c6c80103c0",
+      "provider_reference_lines": [
+        266
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "calibrate_creaturebar",
+      "source": "eo HEAD 7fd0b971",
+      "sha256": "e0744dc854f4cfbd154096f4646c01e14cc9491774bb02f5c2c252324418d1d0",
+      "provider_reference_lines": [
+        439
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": true
+    },
+    {
+      "name": "creaturebar",
+      "source": "eo HEAD 7fd0b971",
+      "sha256": "df970e56a146eb51e56873dd4510fd09694e56dbd424c8ad1a1d12c359a080d6",
+      "provider_reference_lines": [
+        793
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": true
+    },
+    {
+      "name": "creaturewindow",
+      "source": "mirror",
+      "sha256": "2bd6d6e7dcfbf15be65dd2159c5dce9d5ba25902a1ba9b38c0cb04af8d997d72",
+      "provider_reference_lines": [
+        1169
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "exitwindow",
+      "source": "mirror",
+      "sha256": "90b31de4f12214e5d4399ab4d978a4923815139568d44e213ab7bf041fc943a1",
+      "provider_reference_lines": [
+        692
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "gemstone-tracker",
+      "source": "mirror",
+      "sha256": "e48fe872f646155668424e737efb6b91e361b7575d83d54b6a8e09f07aa23d53",
+      "provider_reference_lines": [
+        1175
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "gemstonev",
+      "source": "mirror",
+      "sha256": "a2b81ac7aa596305e7e90161aea380eeead4e91daf51647fbc3268dc8cb40483",
+      "provider_reference_lines": [
+        86,
+        87,
+        88
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "generate-gemstone",
+      "source": "mirror",
+      "sha256": "32dc963055fb91a10222a875d1e44375accfc3b31da82227682a2f353b6da178",
+      "provider_reference_lines": [
+        414
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "grids",
+      "source": "mirror",
+      "sha256": "c509c2a4d17684d1a6f30bc51d786183c17ef1f16f542d670885849b8af58d5b",
+      "provider_reference_lines": [
+        1718,
+        1731,
+        1865,
+        1931,
+        1955,
+        1981,
+        2338,
+        2379
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "grinsawl",
+      "source": "mirror",
+      "sha256": "ecc0f23c82bdd13183a274a961ac2eee3c1bed10ea9e44e8ea357523eb6e99a8",
+      "provider_reference_lines": [
+        2497
+      ],
+      "enclosing_rescue_candidates": [
+        [
+          2497,
+          [
+            2490
+          ]
+        ]
+      ],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "gshunting4all",
+      "source": "mirror",
+      "sha256": "9a2883dfbfe515f380d30fac5e5efc3bf87986a696ef0d0899a8fcf2400d4814",
+      "provider_reference_lines": [
+        2304
+      ],
+      "enclosing_rescue_candidates": [
+        [
+          2304,
+          [
+            2303
+          ]
+        ]
+      ],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "hazardwindow",
+      "source": "mirror",
+      "sha256": "7d56a639f242dda8896496d221d71c7a948be57e01e68dd6dfa3788462067954",
+      "provider_reference_lines": [
+        300
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "jastev",
+      "source": "mirror",
+      "sha256": "c9f597205780e460312fcc9572634cccd7a7085a9cc20d2f406e667392cfbfd7",
+      "provider_reference_lines": [
+        71
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "manatimer",
+      "source": "mirror",
+      "sha256": "ac33cc5b04bb6d4185063b552c1dcc8290b5cdfe752ba9ea36402f65a4f9bf2f",
+      "provider_reference_lines": [
+        83,
+        92
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "manatimer-gtk3",
+      "source": "mirror",
+      "sha256": "bcbe9b2dd5f4c9856d2c4c3b1ac557162aa5f8651d48e5c987e283b67fac16eb",
+      "provider_reference_lines": [
+        57
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "merchantical",
+      "source": "mirror",
+      "sha256": "5386c226b54a260658cba7b1f9b934fb82ba5085cf615eae2f27f800e77ba887",
+      "provider_reference_lines": [
+        2390
+      ],
+      "enclosing_rescue_candidates": [
+        [
+          2390,
+          [
+            2386
+          ]
+        ]
+      ],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "mission-gemstone",
+      "source": "mirror",
+      "sha256": "8c79884ba70772c80e29867b7e36f3b2e19ba622ee7de38c6ba4badacb2cdf59",
+      "provider_reference_lines": [
+        630
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "nautical-charts",
+      "source": "mirror",
+      "sha256": "13009a95df85849a8dc802c6ca43dc482482c4b8927a3251f82719f5a5116818",
+      "provider_reference_lines": [
+        381
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "panelcontrol",
+      "source": "mirror",
+      "sha256": "2493c6211ff8024e148c42d7504ef75d7db9ffc6e8bd04811ac5adaf350eacaf",
+      "provider_reference_lines": [
+        705
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "playerwindow",
+      "source": "mirror",
+      "sha256": "2dd398c69a57a5ea8318a53f5d9b57066c4b987db4e002dd8050230af4568302",
+      "provider_reference_lines": [
+        718
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "rafflewindow",
+      "source": "mirror",
+      "sha256": "969014c0db5c5bf3355de34a3cd28a2444e739a1831baef043b8f9fc3939534e",
+      "provider_reference_lines": [
+        752
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "spellson",
+      "source": "eo HEAD 7fd0b971",
+      "sha256": "29b23b098e8d65e409f8f3366cd76a06e01073dca53df36e0a5405969e92e121",
+      "provider_reference_lines": [
+        116
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "staminabar2",
+      "source": "mirror",
+      "sha256": "c6d2d696ac57ea13d8359dc4650a4a7a209706ecf6c8af06e6be252e3058d377",
+      "provider_reference_lines": [
+        32
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "stormsync",
+      "source": "mirror",
+      "sha256": "06b23dd95dde10c354c447033379a3c218757e23646ef2572a4b454f22660cb9",
+      "provider_reference_lines": [
+        3571,
+        3572,
+        3574,
+        3577,
+        4676
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "test-tpick",
+      "source": "mirror",
+      "sha256": "1dec7d525ee17b8c1e92da5e3ef29c431c7bce71e212f3fc287e1fff665e39ae",
+      "provider_reference_lines": [
+        563,
+        951
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "thunder",
+      "source": "mirror",
+      "sha256": "5047a5049b2b3a7ef8f56e9d37d12bd183d0fdf919abfa037e660642b944927c",
+      "provider_reference_lines": [
+        991
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "timers",
+      "source": "mirror",
+      "sha256": "79144e3b24e7b5fcb45e7cae65b0355354e0aff6334ddd30969ee68b593a3466",
+      "provider_reference_lines": [
+        378,
+        394,
+        431,
+        443
+      ],
+      "enclosing_rescue_candidates": [
+        [
+          394,
+          [
+            391
+          ]
+        ],
+        [
+          443,
+          [
+            440
+          ]
+        ]
+      ],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "tpick",
+      "source": "mirror",
+      "sha256": "72e60fe9f4ceab3744fcfe7a5102c375e58489684946edd8315fb47db0f91080",
+      "provider_reference_lines": [
+        94,
+        2557
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "tpick2",
+      "source": "mirror",
+      "sha256": "1889d510da47d7ee116c399ec19faaf2db527c7f4a4728b6742eb8b960c39849",
+      "provider_reference_lines": [
+        861,
+        1252
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    },
+    {
+      "name": "treasurewindow",
+      "source": "mirror",
+      "sha256": "fb76de05d2d630a09434d07edb03eddeffccb831afda97856ec1c89c25cbe991",
+      "provider_reference_lines": [
+        358
+      ],
+      "enclosing_rescue_candidates": [],
+      "parse_errors": [],
+      "converted": false
+    }
+  ],
+  "focused_audit": {
+    "baselines": {
+      "lich-6": "d3e41e71eb335acb80cdd599a3038026d5df5134",
+      "eo-originals": "7fd0b971387492cfd81b4bc7ef94428413965071",
+      "mirror": "549e33506e121453e3c01cfe5df46a902f44fc5f",
+      "converted": "EO local working-tree candidates; individual hashes below"
+    }
+  }
+}
