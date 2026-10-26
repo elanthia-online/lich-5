@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI GTK text-area requisition</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page bare" data-density="compact" data-theme="light">
+  <label class="field"><textarea id="bigshot" rows="6"></textarea></label>
+  <label class="field"><textarea id="eloot" rows="3"></textarea></label>
+</section>
+<pre id="result"></pre>
+<script>
+  const sizes = ['bigshot', 'eloot'].map(id => {
+    const input = document.getElementById(id);
+    const style = getComputedStyle(input);
+    return { id, height: input.getBoundingClientRect().height, padding: style.padding, lineHeight: style.lineHeight };
+  });
+  const matches = Math.abs(sizes[0].height - 108) < 1 && Math.abs(sizes[1].height - 63) < 1;
+  document.getElementById('result').textContent = `${matches ? 'PASS' : 'FAIL'} ${JSON.stringify(sizes)}`;
+</script>
