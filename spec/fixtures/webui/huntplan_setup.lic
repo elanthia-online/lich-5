@@ -1,0 +1,123 @@
+module HuntPlan
+class Setup < Gtk::Builder
+	@@categories = {
+		general: {
+			default_profile: { default: 'default' },
+			bounty_profile: { default: 'bounty' },
+			ebounty_slot: { default: 'a' }
+		}
+	}
+
+	def self.get_category(key)
+		@@categories.each { |category, data| return category unless data[key].nil? }
+		return nil
+	end
+
+	def self.get_setting(key)
+		cat = Setup.get_category(key)
+		return nil if cat.nil?
+		@@categories[cat].each { |setting, data| return data if setting == key }
+		return nil
+	end
+
+	def self.load_defaults(settings)
+		@@categories.each do |_, data|
+			data.each { |key, value| settings[key] = value[:default] if settings[key].nil? }
+		end
+	end
+
+	def initialize(settings)
+		super()
+		@settings = settings
+
+		# set default values if they don't exist
+		Setup.load_defaults(@settings)
+
+		# remove settings that don't exist
+		@settings.delete_if { |key, _| next Setup.get_category(key).nil? }
+
+		# use a GTK Builder to setup all the basics of the window then expand on that base
+		return unless defined?(Gtk) && Gtk::Version::MAJOR == 3
+
+		Gtk.queue do
+			add_from_string(Setup.ui)
+			load_settings
+			#set_tooltips
+
+			self['main'].keep_above = true
+			self['main'].set_title "HuntPlan v1.0"
+
+			# connect signals after settings are loaded to a bunch of handlers don't trigger
+			connect_signals { |handler| method(handler) }
+		end
+	end
+
+	def start
+		@running = true
+		Gtk.queue { self['main'].show_all }
+		wait_while { @running }
+	end
+
+	def self.ui
+		'<?xml version="1.0" encoding="UTF-8"?> <!-- Generated with glade 3.40.0 --> <interface> <requires lib="gtk+" version="3.20"/> <object class="GtkWindow" id="main"> <property name="can-focus">False</property> <property name="title" translatable="yes">HuntPlan Setup</property> <property name="default-width">450</property> <property name="default-height">280</property> <signal name="destroy" handler="on_destroy" swapped="no"/> <child> <object class="GtkBox"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="margin-start">4</property> <property name="margin-end">4</property> <property name="margin-top">4</property> <property name="margin-bottom">4</property> <property name="orientation">vertical</property> <child> <object class="GtkNotebook"> <property name="visible">True</property> <property name="can-focus">True</property> <property name="hexpand">True</property> <property name="vexpand">True</property> <property name="show-tabs">False</property> <child> <object class="GtkScrolledWindow"> <property name="visible">True</property> <property name="can-focus">True</property> <property name="shadow-type">in</property> <child> <object class="GtkViewport"> <property name="visible">True</property> <property name="can-focus">False</property> <child> <object class="GtkBox"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="orientation">vertical</property> <child> <object class="GtkFrame"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="margin-start">4</property> <property name="margin-end">4</property> <property name="margin-top">4</property> <property name="margin-bottom">4</property> <property name="border-width">10</property> <property name="label-xalign">0</property> <child> <!-- n-columns=1 n-rows=6 --> <object class="GtkGrid"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="margin-start">4</property> <property name="margin-end">4</property> <property name="margin-top">4</property> <property name="margin-bottom">4</property> <property name="row-spacing">4</property> <property name="column-spacing">4</property> <child> <object class="GtkEntry" id="bounty_profile"> <property name="width-request">400</property> <property name="visible">True</property> <property name="can-focus">True</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">3</property> </packing> </child> <child> <object class="GtkLabel" id="bounty_profile_label"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="halign">start</property> <property name="label" translatable="yes">[bigshot] Bounty Profile Name</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">2</property> </packing> </child> <child> <object class="GtkEntry" id="default_profile"> <property name="width-request">400</property> <property name="visible">True</property> <property name="can-focus">True</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">1</property> </packing> </child> <child> <object class="GtkLabel" id="default_profile_label"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="halign">start</property> <property name="label" translatable="yes">[bigshot] Default Profile Name	</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">0</property> </packing> </child> <child> <object class="GtkLabel" id="ebounty_slot_label"> <property name="name">ebounty_slot_label</property> <property name="visible">True</property> <property name="can-focus">False</property> <property name="halign">start</property> <property name="label" translatable="yes">[ebounty] Profile Slot (a-j)</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">4</property> </packing> </child> <child> <object class="GtkEntry" id="ebounty_slot"> <property name="name">ebounty_slot_label</property> <property name="visible">True</property> <property name="can-focus">True</property> <property name="max-length">1</property> <property name="width-chars">1</property> </object> <packing> <property name="left-attach">0</property> <property name="top-attach">5</property> </packing> </child> </object> </child> <child type="label"> <object class="GtkLabel"> <property name="visible">True</property> <property name="can-focus">False</property> </object> </child> </object> <packing> <property name="expand">False</property> <property name="fill">True</property> <property name="position">0</property> </packing> </child> </object> </child> </object> </child> </object> </child> <child type="tab"> <object class="GtkLabel"> <property name="visible">True</property> <property name="can-focus">False</property> <property name="label" translatable="yes">Profiles</property> </object> <packing> <property name="tab-fill">False</property> </packing> </child> <child> <placeholder/> </child> <child> <placeholder/> </child> <child> <placeholder/> </child> <child> <placeholder/> </child> <child> <placeholder/> </child> <child> <placeholder/> </child> </object> <packing> <property name="expand">False</property> <property name="fill">True</property> <property name="position">0</property> </packing> </child> <child> <object class="GtkBox"> <property name="visible">True</property> <property name="can-focus">False</property> <child> <object class="GtkLabel" id="status_label"> <property name="visible">True</property> <property name="can-focus">False</property> </object> <packing> <property name="expand">False</property> <property name="fill">True</property> <property name="position">0</property> </packing> </child> <child> <object class="GtkButton"> <property name="label" translatable="yes">Save &amp; Exit</property> <property name="width-request">80</property> <property name="visible">True</property> <property name="can-focus">True</property> <property name="receives-default">True</property> <property name="halign">end</property> <property name="margin-end">4</property> <property name="margin-top">4</property> <property name="margin-bottom">4</property> <property name="hexpand">True</property> <signal name="clicked" handler="on_close_clicked" swapped="no"/> </object> <packing> <property name="expand">False</property> <property name="fill">True</property> <property name="position">1</property> </packing> </child> </object> <packing> <property name="expand">False</property> <property name="fill">True</property> <property name="pack-type">end</property> <property name="position">1</property> </packing> </child> </object> </child> </object> </interface>'
+	end
+
+	def load_settings
+		Gtk.queue do
+			objects.each do |obj|
+				next unless obj.methods.include?(:builder_name)
+		
+				key = obj.builder_name.to_sym
+
+				if obj.class == Gtk::Entry
+					if obj.builder_name.to_s == "default_profile"
+						obj.text = @settings[:default_profile]
+					elsif obj.builder_name.to_s == "bounty_profile"
+						obj.text = @settings[:bounty_profile]
+					elsif obj.builder_name.to_s == "ebounty_slot"
+						obj.text = @settings[:ebounty_slot]
+					end
+
+					obj.signal_connect('changed') { on_update(obj) }
+				end
+			end
+		end
+	end
+
+	def on_update(obj)
+		Gtk.queue do
+			key = obj.builder_name.to_sym
+			setting = Setup.get_setting(key)
+			return if setting.nil?
+
+			if obj.class == Gtk::CheckButton
+				@settings[key] = obj.active?
+			elsif obj.class == Gtk::Entry
+				@settings[key] = obj.text.strip
+			elsif obj.class == Gtk::SpinButton
+				obj.update # update from text entry
+				@settings[key] = obj.adjustment.value.to_i # force int, we don't use floats anywhere
+			elsif obj.class == Gtk::ComboBoxText
+				@settings[key] = obj.active_text
+			end
+		end
+	end
+
+	def on_close_clicked
+		if !['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].include?(@settings[:ebounty_slot])
+			Gtk.queue do
+				status_label = get_object('status_label')
+				status_label.text = "invalid ebounty profile slot: #{@settings[:ebounty_slot]}"
+			end
+			return
+		end
+		HuntPlan.save_profile(@settings)
+		self['main'].destroy
+	end
+
+	def on_destroy
+		Gtk.queue { @running = false }
+	end
+
+end
+end
