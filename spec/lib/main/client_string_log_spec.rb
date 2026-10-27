@@ -218,10 +218,10 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
                            ])
     end
 
-    it "logs Saga's own handshake as both sides" do
+    it "logs Saga's own handshake and Lich's replacement" do
       client('saga', "#{key_line}/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n")
       harness.run_forward
-      expect(logged.last).to eq("info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)")
+      expect(logged.last).to eq("info: client string sent to game: #{lich_string} (Lich's, in place of the front end's)")
     end
 
     it 'sends the key to the game but never logs it' do

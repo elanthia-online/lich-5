@@ -75,19 +75,19 @@ RSpec.describe 'proxied front-end handshake (main.rb)' do
 
   it "sends Genie's key, then Lich's client string in place of Genie's" do
     forward(genie)
-    expect(Game.sent).to eq(["0123abcd\n", "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\n"])
-    expect($_CLIENTBUFFER_).to eq(["/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\n"])
+    expect(Game.sent).to eq(["0123abcd\n", "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\n"])
+    expect($_CLIENTBUFFER_).to eq(["/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\n"])
     expect($frontend).to eq('genie')
   end
 
   it 'covers Frostbite launched without --frostbite (frontend unknown)' do
     forward(frostbite, frontend: 'unknown')
-    expect(Game.sent).to eq(["<c>0123abcd\r\n", "<c>/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"])
+    expect(Game.sent).to eq(["<c>0123abcd\r\n", "<c>/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n"])
   end
 
   it 'covers Warlock3 (frontend unknown)' do
     forward(warlock, frontend: nil)
-    expect(Game.sent.last).to eq("/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\n")
+    expect(Game.sent.last).to eq("/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\n")
   end
 
   it 'puts --fe-version into the replacement' do
@@ -95,9 +95,9 @@ RSpec.describe 'proxied front-end handshake (main.rb)' do
     expect(Game.sent.last).to eq("/FE:WRAYTH /VERSION:genie-4.5 /P:SAGA /XML\n")
   end
 
-  it "forwards Saga's own handshake as sent" do
+  it "replaces Saga's own handshake with Lich's, keeping its key" do
     forward(saga, frontend: 'saga')
-    expect(Game.sent).to eq(saga.lines)
+    expect(Game.sent).to eq(["0123abcd\r\n", "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n"])
   end
 
   it 'forwards the front end handshake with --keep-fe-string' do

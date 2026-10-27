@@ -512,7 +512,7 @@ module Lich
 
       # --- Client String -----------------------------------------
       # Default client string (Saga identity) sent during handshake
-      CLIENT_STRING = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML"
+      CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML"
 
       # --- Backward-Compatible Constants -------------------------
       # These frozen arrays preserve the built-in capability membership exposed
@@ -637,7 +637,8 @@ module Lich
 
       # The handshake to forward for the line a proxied front end sent (the line
       # after the login key). A front end's own handshake is replaced with
-      # client_string(version, frontend:), so every proxied session asks the game
+      # client_string(version, frontend:), Saga's own /P:SAGA line included
+      # (DragonRealms needs Lich's /VERSION:), so every proxied session asks the game
       # for the stream Lich sends Wizard, Frostbite and --without-frontend, and
       # Lich's adapters (RoomBlock, Markup) reshape it for the front end. $frontend
       # is not touched: it comes from the launch arguments, so capability
@@ -645,8 +646,6 @@ module Lich
       #
       # Forwarded unchanged:
       # - a line that is not an /XML handshake (a key, a command, a plain-text client);
-      # - a handshake that already names the same /P: platform as the replacement,
-      #   so Saga keeps its own /VERSION:;
       # - any handshake when keep is true (--keep-fe-string or Lich.keep_fe_string).
       #
       # Logs the line received and the line forwarded, with the reason
@@ -671,21 +670,9 @@ module Lich
         return [line, 'forwarded unchanged: not a client string'] unless match
         return [line, "the front end's own: --keep-fe-string or Lich.keep_fe_string"] if keep
 
-        replacement = client_string(version, frontend: frontend)
-        platform = handshake_platform(line)
-        return [line, "the front end's own: it already asks for /P:#{platform}"] if platform&.casecmp?(handshake_platform(replacement).to_s)
-
-        ["#{match[:prefix]}#{replacement}#{match[:eol]}", CLIENT_STRING_REPLACED_NOTE]
+        ["#{match[:prefix]}#{client_string(version, frontend: frontend)}#{match[:eol]}", CLIENT_STRING_REPLACED_NOTE]
       end
       private_class_method :proxy_handshake_decision
-
-      # The /P: value of a handshake line, or nil.
-      # @param line [String]
-      # @return [String, nil]
-      def self.handshake_platform(line)
-        line[%r{[ \t]/P:(\S+)}i, 1]
-      end
-      private_class_method :handshake_platform
 
       # --- Client String Logging ---------------------------------
       # Longest client string log_client_string echoes; the rest is elided.
