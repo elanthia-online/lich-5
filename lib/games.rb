@@ -181,15 +181,13 @@ module Lich
         # A roundtime refusal, cut into a line when something precedes it.
         SPLIT_REFUSAL = /\.\.\.wait \d+ seconds?\.\r\n\z/.freeze
 
-        # A room component, held when cut until the line with </component>.
-        CUT_ROOM_COMPONENT = /\A(?:<\/?(?:pushStream|popStream)[^>]*>\s*)*<component id='room (?:objs|players)'>/.freeze
-
         def initialize
           @atmospherics = false
           @combat_count = 0
           @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
+          # The part of a line before a refusal cut, held for one line until
+          # the rest arrives (#buffer_split_line); nil when nothing is held.
           @split_held = nil
-          @split_close_tag = nil
         end
 
         def clean_serverstring(server_string)
@@ -281,14 +279,13 @@ module Lich
         #
         # The refusal is returned at once as a line of its own, where
         # WAIT_RESPONSE_PATTERN finds it, and the part before it is held and
-        # joined to the next line. A cut room element (<component id='room
-        # objs|players'>, <room>) is held until the line carrying its closing
-        # tag.
+        # joined to the next line, which is released whatever it holds. The
+        # game keeps each element, a <room> block included, on one line, so
+        # the rest of a cut element arrives in that one line too.
         #
         # @param server_string [String]
-        # @return [String, nil] the line to process now, or nil while holding
+        # @return [String] the line to process now
         def buffer_split_line(server_string)
-          return continue_split_element(server_string) if @split_close_tag
           return hold_split_line(server_string) unless @split_held
 
           line = @split_held + server_string
@@ -303,38 +300,8 @@ module Lich
           match = SPLIT_REFUSAL.match(server_string)
           return server_string if match.nil? || match.pre_match.empty?
 
-          Lich.log "Line cut by a roundtime refusal, holding: #{server_string.inspect}"
           @split_held = match.pre_match
-          @split_close_tag = split_close_tag(@split_held)
           match[0]
-        end
-
-        def split_close_tag(cut)
-          if left_open?(cut, '<room>', '</room>')
-            '</room>'
-          elsif cut.match?(CUT_ROOM_COMPONENT) && left_open?(cut, /<component id='room (?:objs|players)'>/, '</component>')
-            '</component>'
-          end
-        end
-
-        # Whether the last opening tag in cut comes after the last closing
-        # one, so an earlier closed element does not hide a later open one.
-        def left_open?(cut, opening, closing)
-          (cut.rindex(opening) || -1) > (cut.rindex(closing) || -1)
-        end
-
-        def continue_split_element(server_string)
-          unless server_string.include?(@split_close_tag)
-            # Still inside the element; a further cut passes its refusal on too.
-            match = SPLIT_REFUSAL.match(server_string)
-            @split_held += match ? match.pre_match : server_string.chomp
-            return match && match[0]
-          end
-
-          line = @split_held + server_string
-          @split_held = @split_close_tag = nil
-          Lich.log "Rejoined a cut room element: #{line.inspect}"
-          hold_split_line(line)
         end
 
         def increment_combat_count(server_string)
@@ -427,7 +394,7 @@ module Lich
     # an open tag, attribute list, or quoted value. (In practice genuine
     # truncation is an edge case: reads are newline-delimited via @socket.gets,
     # Simu keeps each tag on one line, multi-line content is reassembled upstream
-    # by buffer_room_objs, and #4's tag_end guard keeps @active_tags balanced
+    # by buffer_split_line, and #4's tag_end guard keeps @active_tags balanced
     # regardless. This is a backstop for a partial read at disconnect.)
     #
     # Ox also fires the callback for Simu's routine almost-XML -- bare text and
@@ -1035,7 +1002,7 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
-            return if server_string.nil? # Holding a cut line until the rest of it arrives
+            return if server_string.nil? # A game's cleanup can drop a line
           end
 
           # Debug output if needed
@@ -1635,7 +1602,6 @@ module Lich
       def clean_serverstring(server_string)
         # Rejoin lines cut by a "...wait N seconds." roundtime refusal
         server_string = buffer_split_line(server_string)
-        return nil if server_string.nil?
 
         # Clear out superfluous tags
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")

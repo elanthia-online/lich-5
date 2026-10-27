@@ -486,13 +486,16 @@ RSpec.describe Lich::DragonRealms::GameInstance do
       expect(game_instance.buffer_split_line(+room_head_rest)).to eq(%(<resource picture="0"/><room>) + room_head_rest)
     end
 
-    it 'holds a cut <room> block across lines until its closing tag' do
+    # Constructed: the game keeps a <room> block on one line, so no capture
+    # has a cut one whose rest lacks </room>. If one ever did, the hold must
+    # still end after one line, or every later line would be swallowed.
+    it 'releases a cut <room> block after one line even without its closing tag' do
       game_instance.buffer_split_line(+room_head_cut)
-      expect(game_instance.buffer_split_line(+"<name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name>\r\n")).to be_nil
-      expect(game_instance.buffer_split_line(+"<description>Shifting beams...wait 1 seconds.\r\n")).to eq("...wait 1 seconds.\r\n")
-      expect(game_instance.buffer_split_line(+" of light.</description><extra></extra></room>\r\n")).to eq(
-        %(<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name><description>Shifting beams of light.</description><extra></extra></room>\r\n)
+      expect(game_instance.buffer_split_line(+"<name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name>\r\n")).to eq(
+        %(<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name>\r\n)
       )
+      expect(game_instance.buffer_split_line(+"<prompt time=\"1793039258\">R&gt;</prompt>\r\n")).to eq("<prompt time=\"1793039258\">R&gt;</prompt>\r\n")
+      expect(game_instance.buffer_split_line(+"You stroll north.\r\n")).to eq("You stroll north.\r\n")
     end
 
     it 'rejoins a cut room objs component, keeping the refusal and the line end' do
@@ -504,21 +507,6 @@ RSpec.describe Lich::DragonRealms::GameInstance do
       line = +"<component id='room objs'>You also see a jeol moradu.</component>...wait 1 seconds.\r\n"
       expect(game_instance.buffer_split_line(line)).to eq("...wait 1 seconds.\r\n")
       expect(game_instance.buffer_split_line(+"\r\n")).to eq("<component id='room objs'>You also see a jeol moradu.</component>\r\n")
-    end
-
-    # Constructed: no captured line holds two room elements, but an earlier
-    # closed one must not hide a later one that is still open.
-    {
-      'room component' => ["<component id='room objs'>You also see a jeol moradu.</component><component id='room players'>Also here: Musician Kvofe",
-                           '</component>'],
-      '<room> block'   => [%(<room><name>[Ice Grottos] (4217404)</name><extra></extra></room><room><name>[Ice Grottos] (4217406)</name>),
-                           '<extra></extra></room>']
-    }.each do |label, (open_cut, closing)|
-      it "waits for the closing tag of a #{label} opened after a closed one" do
-        expect(game_instance.buffer_split_line(+"#{open_cut}...wait 1 seconds.\r\n")).to eq("...wait 1 seconds.\r\n")
-        expect(game_instance.buffer_split_line(+" and Traveler Nelis.\r\n")).to be_nil
-        expect(game_instance.buffer_split_line(+"#{closing}\r\n")).to eq("#{open_cut} and Traveler Nelis.#{closing}\r\n")
-      end
     end
 
     it 'passes the rejoined lines through clean_serverstring' do
