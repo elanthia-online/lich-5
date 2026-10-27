@@ -24,6 +24,11 @@ on:
         required: false
         type: string
 
+# Edits release titles and bodies (contents: write) using PR data (pull-requests: read).
+permissions:
+  contents: write
+  pull-requests: read
+
 jobs:
   format:
     runs-on: ubuntu-latest

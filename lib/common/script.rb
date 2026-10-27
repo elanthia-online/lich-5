@@ -2871,7 +2871,7 @@ module Lich
 
       def instance_variable_get(*_a); nil; end
 
-      def instance_eval(*_a);         nil; end
+      def instance_eval(*_a); nil; end
 
       def labels
         @labels

@@ -58,8 +58,15 @@
 # - To adjust what is considered "meta-only", edit the IGNORES array in the
 #   preflight script. Be conservative: do not add app code paths here.
 # ------------------------------------------------------------------------------
-name: RSpec Tests
-on: 
+#
+# The RSpec jobs below moved here unchanged from rspec_tests.yaml so ci-gate can
+# require them. Lint (RuboCop + ruby -c) comes from the shared Elanthia Online
+# workflow; the PR title check stays in lint_pr.yaml because it must also run
+# when a PR's title is edited.
+# ------------------------------------------------------------------------------
+name: CI
+
+on:
   push:
     branches:
       - main
@@ -74,6 +81,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Shared lint from elanthia-online/.github, pinned by full SHA. Tests run in
+  # the repo-specific jobs below.
+  ruby:
+    uses: elanthia-online/.github/.github/workflows/ruby-ci.yml@277eba54e8b75c7e235e459ea53076f6151a4db0
+    with:
+      lint-scope: repo
+      run-tests: false
+
   workflow_guard:
     # Independent of Ruby preflight so workflow-only changes exercise the guard.
     name: Test pre-beta PR guard
@@ -168,7 +183,7 @@ jobs:
         if: steps.preflight.outputs.should_test == 'true'
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           bundler-cache: true
@@ -228,7 +243,7 @@ jobs:
         if: steps.list.outputs.specs != ''
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
         if: steps.list.outputs.specs != ''
         with:
           bundler-cache: true
@@ -253,3 +268,16 @@ jobs:
       - name: No changed spec files
         if: steps.list.outputs.specs == ''
         run: echo "No *_spec.rb files changed; nothing to run alone."
+
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [ruby, workflow_guard, test, changed_specs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
