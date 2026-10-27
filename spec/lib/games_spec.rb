@@ -506,6 +506,21 @@ RSpec.describe Lich::DragonRealms::GameInstance do
       expect(game_instance.buffer_split_line(+"\r\n")).to eq("<component id='room objs'>You also see a jeol moradu.</component>\r\n")
     end
 
+    # Constructed: no captured line holds two room elements, but an earlier
+    # closed one must not hide a later one that is still open.
+    {
+      'room component' => ["<component id='room objs'>You also see a jeol moradu.</component><component id='room players'>Also here: Musician Kvofe",
+                           '</component>'],
+      '<room> block'   => [%(<room><name>[Ice Grottos] (4217404)</name><extra></extra></room><room><name>[Ice Grottos] (4217406)</name>),
+                           '<extra></extra></room>']
+    }.each do |label, (open_cut, closing)|
+      it "waits for the closing tag of a #{label} opened after a closed one" do
+        expect(game_instance.buffer_split_line(+"#{open_cut}...wait 1 seconds.\r\n")).to eq("...wait 1 seconds.\r\n")
+        expect(game_instance.buffer_split_line(+" and Traveler Nelis.\r\n")).to be_nil
+        expect(game_instance.buffer_split_line(+"#{closing}\r\n")).to eq("#{open_cut} and Traveler Nelis.#{closing}\r\n")
+      end
+    end
+
     it 'passes the rejoined lines through clean_serverstring' do
       expect(game_instance.clean_serverstring(+combat_cut)).to eq("...wait 1 seconds.\r\n")
       expect(game_instance.clean_serverstring(+combat_rest)).to include('greatsword</a> lashing out at everything within reach!')

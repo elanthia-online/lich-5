@@ -310,11 +310,17 @@ module Lich
         end
 
         def split_close_tag(cut)
-          if cut.include?('<room>') && !cut.include?('</room>')
+          if left_open?(cut, '<room>', '</room>')
             '</room>'
-          elsif cut.match?(CUT_ROOM_COMPONENT) && !cut.include?('</component>')
+          elsif cut.match?(CUT_ROOM_COMPONENT) && left_open?(cut, /<component id='room (?:objs|players)'>/, '</component>')
             '</component>'
           end
+        end
+
+        # Whether the last opening tag in cut comes after the last closing
+        # one, so an earlier closed element does not hide a later open one.
+        def left_open?(cut, opening, closing)
+          (cut.rindex(opening) || -1) > (cut.rindex(closing) || -1)
         end
 
         def continue_split_element(server_string)
