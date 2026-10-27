@@ -106,4 +106,22 @@ RSpec.describe 'bounded compatibility contract additions' do
     expect(Lich::WebUI::Contract::TYPES.length).to eq(30)
     expect(Lich::WebUI::Contract.schema(:password_input)[:events].keys).to eq([:submit])
   end
+
+  %i[text_input textarea].each do |type|
+    %i[change blur].each do |event|
+      it "refuses a #{event} binding on a sensitive #{type}" do
+        builder = Lich::WebUI::TreeBuilder.new(owner: :fixture, page_id: 'secret', title: 'Secret')
+        expect do
+          builder.public_send(type, key: 'token', value: '', sensitive: true, on: { event => proc {} })
+        end.to raise_error(Lich::WebUI::UnknownEventError, /value-bearing nonterminal/)
+      end
+    end
+  end
+
+  it 'keeps non-value sensitive bindings and ordinary value-bearing bindings' do
+    builder = Lich::WebUI::TreeBuilder.new(owner: :fixture, page_id: 'secret', title: 'Secret')
+    builder.text_input(key: 'token', value: '', sensitive: true, on: { focus: proc {}, submit: proc {} })
+    builder.text_input(key: 'name', value: '', on: { change: proc {}, blur: proc {} })
+    expect(builder.bindings.keys.map(&:last)).to eq(%i[focus submit change blur])
+  end
 end
