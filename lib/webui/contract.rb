@@ -12,6 +12,8 @@ module Lich
 
       # Serialized UTF-8 JSON budgets. A maximum-length field can require six
       # bytes per character when escaped; the envelope has separate headroom.
+      # Measuring a payload serializes it once more; a sensitive value in it is covered
+      # by the best-effort policy on SensitiveValue, not by a zero-copy guarantee.
       WIRE_LIMITS = { message_bytes: 2_097_152, event_payload_bytes: 524_288, submission_bytes: 1_048_576 }.freeze
 
       TYPES = %i[

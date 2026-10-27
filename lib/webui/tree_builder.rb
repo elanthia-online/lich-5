@@ -7,7 +7,24 @@ module Lich
   module WebUI
     # Declarative render builder. Variable collections are explicit so keyed identity is enforceable.
     class TreeBuilder
-      Draft = Struct.new(:type, :cid, :props, :children, :slot, :placement, keyword_init: true)
+      Draft = Struct.new(:type, :cid, :props, :children, :slot, :placement, keyword_init: true) do
+        # Describes this draft without a sensitive input's value. Struct#to_s and
+        # pp bypass #inspect, so both are routed through it.
+        # @return [String] inspection text with sensitive values redacted
+        def inspect
+          fields = members.map do |name|
+            "#{name}=#{(name == :props ? ValueHelpers.redacted_props(self) : self[name]).inspect}"
+          end
+          "#<struct #{self.class.name} #{fields.join(', ')}>"
+        end
+        alias_method :to_s, :inspect
+
+        # @param printer [PP] pretty-printer receiving the redacted text
+        # @return [void]
+        def pretty_print(printer)
+          printer.text(inspect)
+        end
+      end
       FOCUSABLE_TYPES = %i[
         button toggle checkbox radio radio_option text_input password_input textarea number_input slider select
         table dialog composite
@@ -56,6 +73,7 @@ module Lich
         @stack = [@root]
         @cids = { @root.cid => @root }
         @variable_parents = {}.compare_by_identity
+        @unkeyed_counts = {}.compare_by_identity
         @bindings = {}
         @submissions = {}
         @facilities = {}
@@ -63,6 +81,7 @@ module Lich
 
       # Adds a validated control under the current parent and evaluates its children.
       # Stable keys are mandatory inside variable collections; positional IDs serve fixed layouts.
+      # A position counts only the unkeyed siblings before it, so keyed members never shift it.
       # @param type [Symbol, String] contract component type
       # @param key [String, nil] stable author identity within the parent
       # @param slot [Symbol, String, nil] parent-defined child slot
@@ -79,8 +98,7 @@ module Lich
         parent = @stack.last
         require_collection_key!(parent, normalized_type, key)
         props = props.merge(key: key) unless key.nil?
-        position = parent.children.length
-        segment = key || position
+        segment = key || @unkeyed_counts.fetch(parent, 0)
         cid = "#{parent.cid}/#{normalized_type}:#{segment}"
         if @cids.key?(cid)
           raise IdentityError.new(
@@ -97,6 +115,7 @@ module Lich
           slot: normalize_slot(slot), placement: normalize_placement(placement)
         )
         parent.children << draft
+        @unkeyed_counts[parent] = segment + 1 if key.nil?
         @cids[cid] = draft
         register_bindings!(draft, on)
         register_submission!(draft, submit) if submit
