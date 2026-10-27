@@ -34,6 +34,7 @@ module Lich
       def validate_editor_scalar(value, context, path)
         valid = value.is_a?(String) || value.is_a?(Numeric) || value == true || value == false
         violation!('must be a string, finite number, or boolean', context, path) unless valid
+        validate_encoding!(value, context, path) if value.is_a?(String)
         violation!('must be finite', context, path) if value.is_a?(Numeric) && !value.finite?
         value.is_a?(String) ? value.dup.freeze : value
       end
@@ -43,6 +44,7 @@ module Lich
         rows = props[:rows]
         column_keys = columns.map { |column| column[:key] }
         row_keys = rows.map { |row| row[:key] }
+        row_key_set = row_keys.to_set
         violation!('column keys must be unique', context, :columns) unless column_keys.uniq.length == column_keys.length
         if props[:search_column] && !column_keys.include?(props[:search_column])
           violation!('search column must name a displayed column', context, :search_column)
@@ -53,7 +55,7 @@ module Lich
           validate_editor(column[:editor], context, "columns[#{index}].editor")
         end
         rows.each_with_index do |row, index|
-          if row[:parent] && !row_keys.include?(row[:parent])
+          if row[:parent] && !row_key_set.include?(row[:parent])
             violation!('parent must name a row in the same table', context, "rows[#{index}].parent")
           end
           unknown_cells = row[:cells].keys - column_keys

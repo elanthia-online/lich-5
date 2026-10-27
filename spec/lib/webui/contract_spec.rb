@@ -34,6 +34,10 @@ RSpec.describe Lich::WebUI::Contract do
     expect(schema[:properties][:sensitive]).to include(default: true, forced: true)
   end
 
+  it 'keeps the authored password reveal permission in the shared property scope' do
+    expect(described_class.schema(:password_input)[:properties][:revealable]).to include(scope: :shared, default: false)
+  end
+
   it 'keeps composite dimensions required after generic attributes are merged' do
     properties = described_class.schema(:composite).fetch(:properties)
 
