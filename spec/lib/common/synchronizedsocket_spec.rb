@@ -266,6 +266,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       reader_thread.join(2)
       expect(reader_thread.alive?).to be false
+      expect(reader_result).to be_nil.or be_a(IOError)
     ensure
       [sock_a, sock_b].each { |s| s&.close rescue nil }
     end

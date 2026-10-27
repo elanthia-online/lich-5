@@ -43,19 +43,19 @@ module Lich
           arg = argv[i]
 
           # Try each schema key to find a match
-          matched = false
+          matched = false # rubocop:disable Lint/UselessAssignment
           schema.each do |key, config|
             option_name = "--#{key.to_s.gsub(/_/, '-')}"
             short_option = config[:short] ? "-#{config[:short]}" : nil
 
             if arg == option_name || (short_option && arg == short_option)
-              matched = true
+              matched = true # rubocop:disable Lint/UselessAssignment
               options[key] = parse_value(argv, i, config)
               # Skip next arg if this option consumed it (not boolean or custom parser with = form)
               i += 1 if config[:type] != :boolean && !config[:parser]
               break
             elsif arg =~ /^#{option_name}=(.+)$/
-              matched = true
+              matched = true # rubocop:disable Lint/UselessAssignment
               value = Regexp.last_match(1)
               options[key] = parse_value_with_content(value, config)
               break
