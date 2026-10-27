@@ -205,7 +205,11 @@ module Lich
         text.gsub(', ', '|').sub(and_pattern, '|').gsub(/(?<![A-Za-z0-9_])an? /, '')
       end
 
+      # Too deep for Onigmo is valid for Jint (genieflow: 1,500 and 5,000 levels), so it is not
+      # compiled (NetRegex::MAX_GROUP_DEPTH).
       def check_pattern(source)
+        return if NetRegex.too_deep?(source)
+
         Regexp.new(source)
       rescue RegexpError
         raise JsRuntime::JsError, "Invalid regular expression: /#{source}/i"

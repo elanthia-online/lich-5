@@ -400,7 +400,8 @@ after `#var load` / `#trigger load` or a restart.
 > (`(armored )?warklin|...|(?<!arisen \S+ )zombie` matches like Genie). A variable-length lookbehind
 > inside a repeated group, or after a variable-length part of its own alternative (`\w+(?<=a+)b`),
 > cannot be matched here, and neither can a few rare .NET constructs (balancing groups,
-> conditionals on an expression or on a group defined later in the pattern): the trigger, action
+> conditionals on an expression or on a group defined later in the pattern, groups nested more than
+> 256 deep): the trigger, action
 > or match is still added, but never fires, and the engine prints one
 > `[Genie: ... it will never fire: ...]` line naming the construct (`matchre()` / `replacere()` in
 > an `if` or `eval` print it once too, then answer false / leave the text unchanged). A few rare

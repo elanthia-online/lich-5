@@ -116,8 +116,8 @@ parentheses.
    ,eq echo Lich::Genie::VERSION
    ```
 
-   It should print `0.26.11 (2026-10-26)` or later. The engine also prints
-   `--- Genie engine v0.26.11 (2026-10-26) active` once per session.
+   It should print `0.26.12 (2026-10-27)` or later. The engine also prints
+   `--- Genie engine v0.26.12 (2026-10-27) active` once per session.
 4. The engine stays on for a character once you turned it on. If it is off
    (`,eq echo Lich::Genie.enabled?` shows `false`), turn it on: `,e Lich::Genie.enabled = true`.
 
@@ -236,7 +236,8 @@ Everything the script corpus uses:
   keeps its variables.
 - **`#goto <name>`** (Genie map notes such as `#goto bank`) is never found, and `#path` does
   nothing: both need Genie's own map files.
-- **A few rare .NET regex constructs** cannot be matched here (balancing groups, some lookbehinds).
+- **A few rare .NET regex constructs** cannot be matched here (balancing groups, some lookbehinds,
+  groups nested more than 256 deep).
   The engine prints one `[Genie: ... it will never fire: ...]` line naming the construct.
 - **Same-named Lich scripts.** `,kill train` stops whichever of `train.cmd` / `train.lic` Lich finds
   first; use `put #script abort train` for the Genie one.

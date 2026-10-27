@@ -476,6 +476,47 @@ RSpec.describe Lich::Genie::NetRegex do
     end
   end
 
+  # .NET 10 compiles and matches 200,000 nested groups, even on a 1 MB thread. Onigmo recurses
+  # once per level on the C stack: on a script thread about 1,500 levels raise SystemStackError,
+  # and a second overflow on the same thread kills the process (SIGILL), so no rescue will do.
+  # One thread per depth: before the cap each one overflowed (and two in one thread crashed).
+  describe 'groups nested deeper than MAX_GROUP_DEPTH (.NET-valid, Onigmo never sees them)' do
+    def nested(depth, open = '(') = "#{open * depth}a#{')' * depth}"
+    def on_thread(&) = Thread.new(&).value
+
+    let(:reason) { "groups nested more than #{described_class::MAX_GROUP_DEPTH} deep" }
+
+    it 'is Unsupported on a script thread at any depth past the cap, never a stack error' do
+      [1_500, 1_501, 5_000, 200_000].each do |depth|
+        compiled = on_thread { described_class.compile(nested(depth)) }
+        expect([depth, compiled.class, compiled.reason]).to eq([depth, described_class::Unsupported, reason])
+        expect(on_thread { compiles?(nested(depth)) }).to be(true) # never an "Invalid RegExp" abort
+      end
+    end
+
+    it 'survives several deep patterns on one thread (each one once overflowed Onigmo)' do
+      results = on_thread { (1_500..1_504).map { |depth| described_class.compile(nested(depth)).class } }
+      expect(results.uniq).to eq([described_class::Unsupported])
+    end
+
+    it 'compiles at the cap and counts every group kind, but not escaped, class or comment parens' do
+      cap = described_class::MAX_GROUP_DEPTH
+      expect(described_class.compile(nested(cap)).match('a')[0]).to eq('a')
+      ['(', '(?:', '(?=', '(?<n>', '(?i:'].each do |open|
+        compiled = described_class.compile("(#{nested(cap, open)})")
+        expect([open, compiled.class]).to eq([open, described_class::Unsupported])
+      end
+      ["#{'\\(' * 300}a", "#{'[(]' * 300}a", "#{'(?#x)' * 300}a", "#{'(a)' * 300}"].each do |flat|
+        expect([flat[0, 6], described_class.compile(flat)]).to match([flat[0, 6], an_instance_of(Regexp)])
+      end
+    end
+
+    it 'names the depth in its warning' do
+      expect(described_class.compile(nested(300)).warning('matchre'))
+        .to start_with("[Genie: matchre pattern uses #{reason}, which the in-Lich engine cannot match; it will never fire: ((((")
+    end
+  end
+
   # Expectations: the rx oracle (.NET 8 Regex with Remix's options), 2026-10-19.
   describe 'emulated check form, cache bound, parse-aware scans' do
     def groups(pattern, text, ignore_case: false)

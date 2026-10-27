@@ -356,6 +356,15 @@ RSpec.describe Lich::Genie::JsArrays do
       fault('buildArrayStr("b", "a foo", "(")', 'Invalid regular expression: /(/i')
       expect { js('i') }.to raise_error(js_error, 'i is not defined')
     end
+
+    # genieflow (Remix, Jint 4): 1,500 and 5,000 nested groups pass `new RegExp` and reach the
+    # length fault. Onigmo overflowed a script thread's stack at 1,500 and refused 5,000.
+    it 'accepts a pattern nested deeper than Onigmo can hold, as Jint does (one thread each)' do
+      [1_500, 5_000].each do |depth|
+        locals['p'] = "#{'(' * depth}foo#{')' * depth}"
+        Thread.new { fault('buildArrayStr("b", "a foo", "%p")') }.join
+      end
+    end
   end
 
   describe 'SOURCES (whole `<% %>` blocks of the corpus)' do

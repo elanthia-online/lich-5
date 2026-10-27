@@ -6,7 +6,7 @@ script touches a Genie *front-end* feature (highlights, windows, macros, sounds,
 ...), Lich emits a `<genieHook>` event carrying Genie's parameters -- for a character that turned
 the tags on (below). Lich contains no front-end-specific code.
 
-> **Status (engine v0.26.11):** every op below is produced by `lib/genie/command_router.rb` (the port
+> **Status (engine v0.26.12):** every op below is produced by `lib/genie/command_router.rb` (the port
 > of Remix `Core/Command.cs`, cited `R`) and asserted in `spec/lib/genie/command_router_spec.rb`.
 > The payloads listed are what the engine sends today. Lists the engine owns itself (variables,
 > #triggers, classes, gags, substitutes, aliases) emit no hook, except the two noted below.

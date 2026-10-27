@@ -216,6 +216,9 @@ differences are `pending`, so a change that makes one match also fails until its
   comments, class subtraction, duplicate group names, `(?n)`). Group numbering, empty-loop captures,
   lookbehind captures in `replacere`, `\G` in emulated patterns and UTF-16 surrogate splits can
   differ. Eval's `matchre()` treats `^`/`$` as multiline (moot: a Genie value cannot hold a newline).
+  Groups nested more than 256 deep never fire (one warning line) where Genie takes any depth: Onigmo
+  would overflow a script thread's stack. js_arrays `buildArrayStr` skips its regex check for them,
+  as Jint accepts them. The corpus nests 6 deep at most.
 - **Q4 Load path details.** Dates parse only the listed .NET formats; an include name over 255
   bytes is "File not found".
 - **Q5 Script lifecycle.** `#script reload` restarts with the launch arguments (Remix reloads at

@@ -94,6 +94,14 @@ module Lich
       # -> RegexParseException; Onigmo accepts all of them.
       NET_CATEGORIES = %w[C Cc Cf Cn Co Cs L Ll Lm Lo Lt Lu M Mc Me Mn N Nd Nl No
                           P Pc Pd Pe Pf Pi Po Ps S Sc Sk Sm So Z Zl Zp Zs].freeze
+      # The deepest group nesting handed to Onigmo. Onigmo parses and compiles each level with
+      # one more C-stack frame: on a script thread about 1,500 levels raise SystemStackError,
+      # and a second overflow on the same thread kills the whole process (SIGILL), so it cannot
+      # be rescued the way Eval's Ruby recursion is. .NET takes any depth (200,000 levels
+      # compile and match), so a deeper pattern is {Unsupported} (a decided divergence). The
+      # corpus nests 6 deep at most (uber.cmd).
+      MAX_GROUP_DEPTH = 256
+      TOO_DEEP = "groups nested more than #{MAX_GROUP_DEPTH} deep".freeze
 
       module_function
 
@@ -113,7 +121,10 @@ module Lich
 
       # {#compile} without the cache.
       def compile_uncached(pattern, ignore_case)
-        notes = Notes.new([], [], [], group_inventory(pattern))
+        groups = group_inventory(pattern)
+        return Unsupported.new(pattern, TOO_DEEP) if groups.depth > MAX_GROUP_DEPTH
+
+        notes = Notes.new([], [], [], groups)
         text = scan(pattern, notes)
         options = ignore_case ? Regexp::IGNORECASE : nil
         compiled = begin
@@ -204,8 +215,8 @@ module Lich
       # Group names and the number of capturing groups of the whole pattern: .NET resolves
       # a balancing group's or a conditional's name against all of them, later ones too.
       # +opened+ = the names {#open_named} has translated so far (a conditional on a name
-      # opened later has no Onigmo form).
-      Groups = Struct.new(:names, :captures, :opened)
+      # opened later has no Onigmo form); +depth+ = the deepest group nesting ({MAX_GROUP_DEPTH}).
+      Groups = Struct.new(:names, :captures, :opened, :depth)
       Lookbehind = Struct.new(:start, :span, :negative, :body, :icase)
 
       # The translator (see {#translate}); +notes+ collects what {#compile} needs.
@@ -414,12 +425,15 @@ module Lich
       def group_inventory(pattern)
         names = []
         count = 0
+        depth = deepest = 0
         j = 0
         while j < pattern.length
           case pattern[j]
           when '\\' then j += 1
           when '[' then j = class_end(pattern, j) - 1
+          when ')' then depth -= 1 if depth.positive?
           when '('
+            deepest = [deepest, depth += 1].max unless pattern[j, 3] == '(?#'
             if pattern[j + 1] != '?'
               count += 1
             elsif pattern[j, 3] == '(?#'
@@ -432,7 +446,13 @@ module Lich
           end
           j += 1
         end
-        Groups.new(names, count, [])
+        Groups.new(names, count, [], deepest)
+      end
+
+      # @param pattern [String]
+      # @return [Boolean] true when the pattern nests groups deeper than {MAX_GROUP_DEPTH}
+      def too_deep?(pattern)
+        group_inventory(pattern.to_s).depth > MAX_GROUP_DEPTH
       end
 
       # `(?imnsx-imnsx)`. .NET applies it from here to the end of the ENCLOSING group, every
