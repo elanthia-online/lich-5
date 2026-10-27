@@ -469,7 +469,7 @@ module Lich
       def list_events(pattern)
         listing('Active event queue: ', pattern) do
           queue.events.select { |item| pattern.empty? || item.action.include?(pattern) }
-                      .map { |item| "(#{LogFile.date_time(item.due)}) #{item.action}" }
+               .map { |item| "(#{LogFile.date_time(item.due)}) #{item.action}" }
         end
       end
 
@@ -914,7 +914,7 @@ module Lich
       def list_classes(pattern)
         listing('Active classes: ', pattern) do
           @lists.classes.entries.select { |key, _| pattern.empty? || key.include?(pattern) }
-                                .map { |key, state| "#{key}=#{state ? 'True' : 'False'}" }
+                .map { |key, state| "#{key}=#{state ? 'True' : 'False'}" }
         end
       end
 
@@ -970,7 +970,7 @@ module Lich
       def list_triggers(pattern)
         listing('Active triggers: ', pattern) do
           @lists.triggers.entries.select { |key, *| pattern.empty? || key.include?(pattern) }
-                                 .map { |key, _pattern, commands| "#{key}=#{commands}" }
+                .map { |key, _pattern, commands| "#{key}=#{commands}" }
         end
       end
 
