@@ -259,7 +259,7 @@ module Lich
             the handshake that replaces a proxied frontend's own (below). Wizard, Avalon
             and Frostbite always send the default. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
             With --saga, the handshake also identifies as /P:SAGA, and reports
-            /VERSION:saga-unknown when --fe-version is not given.
+            /VERSION:1.0.1.28 when --fe-version is not given.
             A frontend that connects through Lich and sends its own /FE: ... /XML
             handshake (Genie, Warlock, Wrayth, Frostbite without --frostbite) has it
             replaced with Lich's, so every session gets the same game stream; Lich

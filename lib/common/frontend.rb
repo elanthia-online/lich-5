@@ -512,7 +512,7 @@ module Lich
 
       # --- Client String -----------------------------------------
       # Default client string (Saga identity) sent during handshake
-      CLIENT_STRING = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML"
+      CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML"
 
       # --- Backward-Compatible Constants -------------------------
       # These frozen arrays preserve the built-in capability membership exposed

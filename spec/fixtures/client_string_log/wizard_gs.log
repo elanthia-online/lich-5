@@ -16,5 +16,5 @@
 2026-10-17 09:47:08: info: connected via direct TCP transport (storm.gs4.game.play.net:10024)
 2026-10-17 09:47:08: info: connected
 2026-10-17 09:47:08: info: client string from front end: /FE:WIZARD /VERSION:2.04 /P:WIN32
-2026-10-17 09:47:08: info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML
+2026-10-17 09:47:08: info: client string sent to game: /FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML
 2026-10-17 09:47:12: info: logged in as GSIV:Testchar
