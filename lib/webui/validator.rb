@@ -199,13 +199,24 @@ module Lich
 
       def validate_string(shape, value, context, path)
         violation!('must be a String', context, path) unless value.is_a?(String)
+        validate_encoding!(value, context, path)
 
         max = Contract::BOUNDS[shape[:bound]]
         violation!("exceeds #{max} characters", context, path) if max && value.length > max
         if shape[:pattern] && !value.match?(shape[:pattern])
           violation!('has invalid identifier syntax', context, path)
         end
+        # Sensitive strings are copied like any other; see SensitiveValue for the
+        # best-effort handling policy that applies to every copy.
         value.dup.freeze
+      end
+
+      # Admits only text the JSON wire can encode: ASCII, or valid UTF-8. Other byte
+      # strings are refused rather than transcoded, because their source encoding is unknown.
+      def validate_encoding!(value, context, path)
+        return if value.ascii_only? || (value.encoding == Encoding::UTF_8 && value.valid_encoding?)
+
+        violation!('must be valid UTF-8 text', context, path)
       end
 
       def validate_integer(shape, value, context, path)
@@ -300,10 +311,12 @@ module Lich
 
       def validate_text!(props, context)
         fragments = props[:fragments]
-        return unless fragments&.any? { |part| part.is_a?(Hash) }
+        return unless fragments
 
         length = fragments.sum { |part| part.is_a?(Hash) ? part[:content].length : part.length }
-        violation!('styled text exceeds display text bound', context, :fragments) if length > Contract::BOUNDS[:display_text]
+        violation!('text fragments exceed display text bound', context, :fragments) if length > Contract::BOUNDS[:display_text]
+        return unless fragments.any? { |part| part.is_a?(Hash) }
+
         violation!('middle ellipsis requires plain text', context, :ellipsize) if props[:ellipsize] == 'middle'
       end
 
@@ -311,6 +324,10 @@ module Lich
         if type == :password_input && props[:sensitive] != true
           violation!('password_input sensitive must be true', context, :sensitive)
         end
+        return unless props[:sensitive] == true
+        return if Contract.schema(type).dig(:value, :kind) == :string
+
+        violation!('sensitive requires a String-valued input', context, :sensitive)
       end
 
       def validate_columns!(props, context)
@@ -497,13 +514,15 @@ module Lich
         case type
         when :radio, :select
           return if type == :select && normalized_props[:editable]
-          # A select without an initial value may remain unselected on submit.
+          # A select or radio without an initial selection may remain unselected on
+          # submit; its one unselected wire value is the empty String.
           # This does not grant arbitrary choices or change-event values.
-          return if type == :select && !normalized_props.key?(:value) && value.empty?
+          selection_key = type == :radio ? :selected : :value
+          return if !normalized_props.key?(selection_key) && value.empty?
 
           options = normalized_props[:options].map { |option| (option[:value] || option['value']).to_s }
           violation!('value is not present in options', context, :value) unless options.include?(value)
-        when :text_input
+        when :text_input, :password_input
           max = input_text_limit(type, normalized_props)
           violation!("value exceeds #{max} characters", context, :value) if value.length > max
         when :textarea
@@ -517,11 +536,11 @@ module Lich
       end
 
       # Reads the shared text bound; callers retain event/submission admission and errors.
-      # @param type [Symbol] text_input or textarea
+      # @param type [Symbol] text_input, password_input or textarea
       # @param props [Hash] properties with normalized names
       # @return [Integer] explicit limit or the component family's contract bound
       def input_text_limit(type, props)
-        props[:max_length] || Contract::BOUNDS[type == :text_input ? :input_text : :multiline_text]
+        props[:max_length] || Contract::BOUNDS[type == :textarea ? :multiline_text : :input_text]
       end
 
       def validate_region_event!(payload, props, context, event_name)

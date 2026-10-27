@@ -50,7 +50,7 @@ module Lich
         @values.filter_map { |cid, value| cid if value.is_a?(SensitiveValue) }.freeze
       end
 
-      # Disposes any unused sensitive carriers; safe after normal consumption as well.
+      # Disposes any unused sensitive carriers (best-effort clearing); safe after normal consumption as well.
       # @return [nil]
       def discard_sensitive!
         @values.each_value { |value| value.discard! if value.is_a?(SensitiveValue) }

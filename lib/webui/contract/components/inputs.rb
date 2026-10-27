@@ -65,7 +65,9 @@ module Lich
               properties: {
                 label: property(SHORT), placeholder: property(SHORT),
                 max_length: property(integer(min: 1, max: 8192)),
-                revealable: property(BOOL, default: false, scope: :ephemeral_client),
+                # An authored capability the renderer reads to offer Show; the revealed
+                # state and the plaintext stay client-ephemeral and are not properties.
+                revealable: property(BOOL, default: false),
               }, children: :none, events: { submit: event(nil, terminal: true) },
               value: string(:input_text), value_scope: :sensitive_write_only, sensitive: true,
             },

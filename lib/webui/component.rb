@@ -39,6 +39,17 @@ module Lich
         result
       end
 
+      # Describes this node, and its children through their own inspection, without
+      # a sensitive input's value. Ruby's pp prints through inspect for this class.
+      # @return [String] inspection text with sensitive values redacted
+      def inspect
+        fields = {
+          type: type, cid: cid, props: ValueHelpers.redacted_props(self),
+          children: children, slot: slot, placement: placement
+        }
+        "#<#{self.class.name} #{fields.map { |name, value| "#{name}=#{value.inspect}" }.join(', ')}>"
+      end
+
       # Visits this node before its children, preserving child order.
       # @yield [component] each node in depth-first order
       # @yieldparam component [Component] visited node

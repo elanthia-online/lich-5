@@ -8,7 +8,15 @@ module Lich
     # One-shot carrier for viewer- and server-originated sensitive values.
     #
     # Ordinary conversion and serialization always produce REDACTION. The plaintext is available
-    # only inside #consume's block and is cleared when that block exits.
+    # only inside #consume's block, and the owned String is cleared on a best-effort basis when
+    # that block exits.
+    #
+    # Sensitive-value policy (one policy for every WebUI layer): ordinary interfaces are redacted,
+    # the owned carrier is consumed once, and its String is cleared best-effort. This is not
+    # zero-copy handling and does not guarantee erasure of process memory. The incoming frame, the
+    # parsed JSON, the validator's copy, the byte-budget measurement and any String the caller
+    # retains are Ruby-managed copies that disposal neither tracks nor erases. Input byte limits
+    # still apply to sensitive values as to any other input.
     class SensitiveValue
       REDACTION = '[REDACTED]'
       ORIGINS = %i[viewer server].freeze
@@ -50,10 +58,10 @@ module Lich
         @consumed
       end
 
-      # Yields plaintext once, overwriting and clearing the owned buffer even on failure.
+      # Yields plaintext once, then clears the owned buffer best-effort, even on failure.
       # Callers must not retain plaintext copies; disposal cannot erase those copies.
       # @yield [value] operation needing the secret
-      # @yieldparam value [String] owned plaintext buffer, cleared on block exit
+      # @yieldparam value [String] owned plaintext buffer, cleared best-effort on block exit
       # @return [Object] block result
       # @raise [ArgumentError] when no block is supplied
       # @raise [ConsumedSensitiveValueError] after consumption or disposal
@@ -69,7 +77,7 @@ module Lich
         end
       end
 
-      # Disposes an unused carrier without exposing its plaintext.
+      # Disposes an unused carrier without exposing its plaintext; clearing is best-effort.
       # @return [Boolean] false if already consumed or discarded
       def discard!
         return false if @consumed
@@ -118,7 +126,8 @@ module Lich
 
       private
 
-      # Overwrites and clears this carrier's Ruby string, not arbitrary plaintext copies.
+      # Best-effort clearing of this carrier's own Ruby String: it is overwritten and emptied, but
+      # that does not prove an earlier heap allocation was erased, and other copies are untouched.
       # @return [void]
       def clear_value!
         return unless @value
