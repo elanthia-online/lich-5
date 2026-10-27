@@ -36,7 +36,7 @@ git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 group :development do
   gem "parallel_tests"
   gem "rspec"
-  gem "rubocop"
+  gem "rubocop", "1.92.1"
 end
 
 group :vscode do
