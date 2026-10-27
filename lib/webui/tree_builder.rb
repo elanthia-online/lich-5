@@ -234,9 +234,9 @@ module Lich
               owner: owner_label, page_id: @page_id, cid: draft.cid, field: event_name
             )
           end
-          if draft.props[:sensitive] == true && event_key == :change
+          if draft.props[:sensitive] == true && value_bearing_nonterminal?(allowed.fetch(event_key))
             raise UnknownEventError.new(
-              'sensitive components cannot bind value-bearing change events',
+              'sensitive components cannot bind value-bearing nonterminal events',
               owner: owner_label, page_id: @page_id, cid: draft.cid, field: event_name
             )
           end
@@ -244,6 +244,12 @@ module Lich
 
           @bindings[[draft.cid, event_key]] = callable
         end
+      end
+
+      # Sensitive values travel only on terminal (submit-scoped) events.
+      def value_bearing_nonterminal?(event_schema)
+        fields = event_schema[:payload]&.dig(:fields)
+        !event_schema[:terminal] && !fields.nil? && fields.key?(:value)
       end
 
       def register_submission!(draft, submit)
