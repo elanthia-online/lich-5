@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'sensitive_value'
+
 module Lich
   module WebUI
     # Pure value operations shared by components, forms and the runtime.
@@ -24,6 +26,16 @@ module Lich
       # @return [Boolean] password input or an explicitly sensitive component
       def sensitive_value?(component)
         component.type == :password_input || component.props[:sensitive] == true
+      end
+
+      # Copies a component's properties with a sensitive input's value redacted, for
+      # inspection output only. Wire serialization omits the value instead.
+      # @param component [#type, #props] component or builder draft
+      # @return [Hash] properties, with :value replaced by the redaction marker when sensitive
+      def redacted_props(component)
+        return component.props unless sensitive_value?(component) && component.props.key?(:value)
+
+        component.props.merge(value: SensitiveValue::REDACTION)
       end
 
       # Unwraps an explicit viewer or callback context without coercion/defaulting.

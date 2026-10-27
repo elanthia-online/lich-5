@@ -415,6 +415,89 @@ RSpec.describe Lich::WebUI::Validator do
     end
   end
 
+  it 'totals plain and styled text fragments against the display bound, keeping plain middle ellipsis' do
+    at_bound = Array.new(8) { 'x' * 8192 }
+    props = validator.validate_component!(:text, { content: '', fragments: at_bound, ellipsize: :middle }, **context)
+    expect(props[:fragments].sum(&:length)).to eq(65_536)
+    [at_bound + ['x'], at_bound + [{ content: 'x' }]].each do |fragments|
+      expect { validator.validate_component!(:text, { content: '', fragments: fragments }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError, /fragments exceed display text bound.*field=fragments/)
+    end
+  end
+
+  it 'applies the authored password limit to submitted values' do
+    props = validator.validate_component!(:password_input, { max_length: 4 }, **context)
+    expect(validator.validate_input_value!(:password_input, 'four', props: props, **context)).to eq('four')
+    expect { validator.validate_input_value!(:password_input, 'x' * 20, props: props, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /value exceeds 4 characters.*field=value/)
+
+    unlimited = validator.validate_component!(:password_input, {}, **context)
+    expect(validator.validate_input_value!(:password_input, 'x' * 8192, props: unlimited, **context).length).to eq(8192)
+    expect { validator.validate_input_value!(:password_input, 'x' * 8193, props: unlimited, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /8192/)
+  end
+
+  it 'accepts the empty unselected value only for a radio with no authored selection' do
+    options = [{ value: 'a', label: 'A' }]
+    unselected = validator.validate_component!(:radio, { label: 'Pick', group: 'g', options: options }, **context)
+    selected = validator.validate_component!(:radio, { label: 'Pick', group: 'g', options: options, selected: 'a' }, **context)
+
+    expect(validator.validate_input_value!(:radio, '', props: unselected, **context)).to eq('')
+    expect(validator.validate_input_value!(:radio, 'a', props: unselected, **context)).to eq('a')
+    expect { validator.validate_input_value!(:radio, 'b', props: unselected, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /not present in options/)
+    expect { validator.validate_input_value!(:radio, '', props: selected, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /not present in options/)
+    expect { validator.validate_event!(:radio, :change, { value: '' }, props: unselected, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /event value is not present in options/)
+  end
+
+  it 'admits ASCII and valid UTF-8 text but refuses other byte strings without transcoding' do
+    broken_utf8 = [0x61, 0xFF, 0x63].pack('C*').force_encoding(Encoding::UTF_8)
+    binary_utf8 = [0x63, 0xC3, 0xA9].pack('C*')
+    accepted = ['plain', 0xE9.chr(Encoding::UTF_8), 'binary ascii'.b]
+    refused = [broken_utf8, 0xFF.chr, binary_utf8, 'wide'.encode(Encoding::UTF_16LE)]
+
+    accepted.each do |text|
+      expect(validator.validate_component!(:text, { content: text }, **context)[:content]).to eq(text)
+    end
+    refused.each do |text|
+      expect { validator.validate_component!(:text, { content: text }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError, /must be valid UTF-8 text.*field=content/)
+    end
+    expect { validator.validate_component!(:button, { label: 'Go', key: broken_utf8 }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /valid UTF-8/)
+
+    table = { columns: [{ key: 'name', label: 'Name' }], rows: [{ key: 'one', cells: { name: broken_utf8 } }] }
+    expect { validator.validate_component!(:table, table, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /valid UTF-8 text.*rows\[0\]\.cells\.name/)
+  end
+
+  it 'restricts the sensitive attribute to String-valued inputs' do
+    numeric = { value: 1, min: 0, max: 2 }
+    expect { validator.validate_component!(:number_input, numeric.merge(sensitive: true), **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /sensitive requires a String-valued input/)
+    expect(validator.validate_component!(:number_input, numeric.merge(sensitive: false), **context)).to include(sensitive: false)
+    {
+      text_input: { value: 'x' }, textarea: { value: 'x' },
+      select: { options: [{ value: 'a', label: 'A' }], value: 'a' }
+    }.each do |type, props|
+      expect(validator.validate_component!(type, props.merge(sensitive: true), **context)).to include(sensitive: true)
+    end
+  end
+
+  it 'validates parent references in a table at the declared row bound' do
+    columns = [{ key: 'name', label: 'Name' }]
+    rows = Array.new(Lich::WebUI::Contract::BOUNDS[:table_rows]) do |index|
+      { key: "row#{index}", cells: { name: 'n' } }.tap { |row| row[:parent] = 'row0' unless index.zero? }
+    end
+    expect(validator.validate_component!(:table, { columns: columns, rows: rows }, **context)[:rows].length).to eq(10_000)
+
+    rows.last[:parent] = 'missing'
+    expect { validator.validate_component!(:table, { columns: columns, rows: rows }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /parent must name a row.*rows\[9999\]\.parent/)
+  end
+
   it 'retains read-only event refusal while allowing a bounded terminal value' do
     %i[text_input textarea].each do |type|
       props = validator.validate_component!(type, { value: 'kept', read_only: true, max_length: 4 }, **context)
