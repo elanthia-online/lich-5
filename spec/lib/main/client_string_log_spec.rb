@@ -219,9 +219,9 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
     end
 
     it "logs Saga's own handshake as both sides" do
-      client('saga', "#{key_line}/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n")
+      client('saga', "#{key_line}/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n")
       harness.run_forward
-      expect(logged.last).to eq("info: client string sent to game: /FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)")
+      expect(logged.last).to eq("info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)")
     end
 
     it 'sends the key to the game but never logs it' do
@@ -249,7 +249,7 @@ RSpec.describe 'client string logging on every login path (main.rb)' do
   # on its own: every captured front end got Lich's string.
   context 'replaying live session logs' do
     fixture_dir = File.expand_path('../../fixtures/client_string_log', __dir__)
-    captured_lich_string = '/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML' # CLIENT_STRING when captured
+    captured_lich_string = '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML' # CLIENT_STRING when captured
     sent_line = /\Ainfo: client string sent to game: (?<string>.*?)(?: \((?<note>[^()]*)\))?\z/
 
     # fixture => [$frontend, login path, what the front end sends after its version line]

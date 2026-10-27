@@ -37,7 +37,7 @@ RSpec.describe 'proxied front-end handshake (main.rb)' do
   let(:genie)     { "0123abcd\nFE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n" } # Genie4 Core/Game.cs
   let(:frostbite) { "<c>0123abcd\r\n<c>/FE:STORMFRONT /VERSION:1.0.1.26 /P:WIN_UNKNOWN /XML\r\n" } # Frostbite gui/tcpclient.cpp
   let(:warlock)   { "0123abcd\n/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n" } # Warlock3 WraythClient.kt
-  let(:saga)      { "0123abcd\r\n/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n" } # saga-archive src/main/index.js
+  let(:saga)      { "0123abcd\r\n/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n" } # saga-archive src/main/index.js
   let(:keep_setting) { false }
 
   around do |example|

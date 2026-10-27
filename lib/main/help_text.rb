@@ -254,12 +254,11 @@ module Lich
             The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
-            --fe-version=VALUE reports the frontend version (e.g. saga-0.10.2) in the
+            --fe-version=VALUE reports the frontend version (e.g. 1.0.1.28) in the
             /VERSION: field of the game handshake Lich builds: --without-frontend, and
             the handshake that replaces a proxied frontend's own (below). Wizard, Avalon
             and Frostbite always send the default. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
-            With --saga, the handshake also identifies as /P:SAGA, and reports
-            /VERSION:1.0.1.28 when --fe-version is not given.
+            With --saga, the handshake also identifies as /P:SAGA.
             A frontend that connects through Lich and sends its own /FE: ... /XML
             handshake (Genie, Warlock, Wrayth, Frostbite without --frostbite) has it
             replaced with Lich's, so every session gets the same game stream; Lich

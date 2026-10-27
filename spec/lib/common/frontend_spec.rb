@@ -759,7 +759,7 @@ RSpec.describe Lich::Common::Frontend do
     # Saga in Lich mode sends its own key and handshake (saga-archive
     # src/main/index.js: `/FE:${name} /VERSION:saga-${version} /P:SAGA /XML\r\n`).
     it "forwards Saga's own handshake so its real /VERSION: reaches the game" do
-      saga = "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n"
+      saga = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"
       expect(frontend.proxy_handshake(saga, frontend: 'saga')).to equal(saga)
       expect(frontend.proxy_handshake(saga, version: 'saga-9', frontend: 'saga')).to equal(saga)
       expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("/FE:WRAYTH /VERSION:x /p:saga /XML\n")
@@ -779,10 +779,10 @@ RSpec.describe Lich::Common::Frontend do
       end
 
       it "logs both client strings when it keeps Saga's own /P:SAGA handshake" do
-        frontend.proxy_handshake("/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n", frontend: 'saga')
+        frontend.proxy_handshake("/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n", frontend: 'saga')
         expect(logged).to eq([
-                               'info: client string from front end: /FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML',
-                               "info: client string sent to game: /FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)"
+                               'info: client string from front end: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML',
+                               "info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)"
                              ])
       end
 
