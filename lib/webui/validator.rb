@@ -467,7 +467,7 @@ module Lich
 
       def validate_input_event!(type, event_name, payload, props, context)
         return unless event_name == :change || (%i[text_input textarea].include?(type) && event_name == :blur)
-        violation!('sensitive components cannot emit change', context, event_name) if props[:sensitive] == true
+        violation!('sensitive components cannot emit value-bearing events', context, event_name) if props[:sensitive] == true
 
         value = payload[:value]
         case type
