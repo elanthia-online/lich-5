@@ -263,8 +263,8 @@ module Lich
             A frontend that connects through Lich and sends its own /FE: ... /XML
             handshake (Genie, Warlock, Wrayth, Frostbite without --frostbite) has it
             replaced with Lich's, so every session gets the same game stream; Lich
-            reshapes that stream for the frontend. A handshake that already says
-            /P:SAGA is forwarded as sent.
+            reshapes that stream for the frontend. Saga's own /P:SAGA handshake is
+            replaced too.
             --keep-fe-string forwards the frontend's own handshake instead, for that
             launch. To keep it for every launch: ;e Lich.keep_fe_string = true
             (;e Lich.keep_fe_string = false undoes it).

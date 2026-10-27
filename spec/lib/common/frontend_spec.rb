@@ -758,11 +758,17 @@ RSpec.describe Lich::Common::Frontend do
 
     # Saga in Lich mode sends its own key and handshake (saga-archive
     # src/main/index.js: `/FE:${name} /VERSION:saga-${version} /P:SAGA /XML\r\n`).
-    it "forwards Saga's own handshake so its real /VERSION: reaches the game" do
+    # DragonRealms needs Lich's /VERSION:, so Saga's line is replaced too.
+    it "replaces Saga's own /P:SAGA handshake with Lich's" do
       saga = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"
-      expect(frontend.proxy_handshake(saga, frontend: 'saga')).to equal(saga)
-      expect(frontend.proxy_handshake(saga, version: 'saga-9', frontend: 'saga')).to equal(saga)
-      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("/FE:WRAYTH /VERSION:x /p:saga /XML\n")
+      expect(frontend.proxy_handshake(saga, frontend: 'saga')).to eq("#{lich_string}\r\n")
+      expect(frontend.proxy_handshake(saga, version: 'saga-9', frontend: 'saga')).to eq("/FE:WRAYTH /VERSION:saga-9 /P:SAGA /XML\r\n")
+      expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:x /p:saga /XML\n", frontend: 'genie')).to eq("#{lich_string}\n")
+    end
+
+    it "forwards Saga's own handshake with keep (--keep-fe-string)" do
+      saga = "/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n"
+      expect(frontend.proxy_handshake(saga, keep: true, frontend: 'saga')).to equal(saga)
     end
 
     describe 'logging' do
@@ -778,11 +784,11 @@ RSpec.describe Lich::Common::Frontend do
                              ])
       end
 
-      it "logs both client strings when it keeps Saga's own /P:SAGA handshake" do
+      it "logs both client strings when it replaces Saga's own /P:SAGA handshake" do
         frontend.proxy_handshake("/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML\r\n", frontend: 'saga')
         expect(logged).to eq([
                                'info: client string from front end: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML',
-                               "info: client string sent to game: /FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML (the front end's own: it already asks for /P:SAGA)"
+                               "info: client string sent to game: #{lich_string} (Lich's, in place of the front end's)"
                              ])
       end
 

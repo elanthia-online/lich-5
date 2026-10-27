@@ -95,9 +95,9 @@ RSpec.describe 'proxied front-end handshake (main.rb)' do
     expect(Game.sent.last).to eq("/FE:WRAYTH /VERSION:genie-4.5 /P:SAGA /XML\n")
   end
 
-  it "forwards Saga's own handshake as sent" do
+  it "replaces Saga's own handshake with Lich's, keeping its key" do
     forward(saga, frontend: 'saga')
-    expect(Game.sent).to eq(saga.lines)
+    expect(Game.sent).to eq(["0123abcd\r\n", "/FE:WRAYTH /VERSION:1.0.1.28 /P:SAGA /XML\r\n"])
   end
 
   it 'forwards the front end handshake with --keep-fe-string' do
