@@ -221,7 +221,7 @@ DEPENDENCIES
   resolv
   rexml
   rspec
-  rubocop
+  rubocop (= 1.92.1)
   ruby-lsp
   sequel
   sorbet-runtime

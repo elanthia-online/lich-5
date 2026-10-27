@@ -153,11 +153,11 @@ function expectClosed(result, number = 6) {
   console.log(`PASS: automatic PR guard; ${cases} inert cases, YAML formatting and invalid-policy checks`);
 
   // Exercise the actual CI preflight for both supported event types.
-  const ci = parseWorkflow(fs.readFileSync('.github/workflows/rspec_tests.yaml', 'utf8'));
+  const ci = parseWorkflow(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
   const preflight = ci.jobs.test.steps.find(step => step.id === 'preflight').with.script;
   const classify = new vm.Script(`(async () => { ${preflight}\n})()`);
   const guardFiles = ['.github/workflows/guard-pre-branch-pr.yaml',
-    '.github/workflows/rspec_tests.yaml', '.github/tests/test-guard-pre-branch-pr.sh'];
+    '.github/workflows/ci.yml', '.github/tests/test-guard-pre-branch-pr.sh'];
   let preflightCases = 0;
   for (const eventName of ['pull_request', 'push']) {
     for (const [paths, expected] of [
