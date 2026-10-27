@@ -399,6 +399,122 @@ RSpec.describe Lich::DragonRealms::GameInstance do
     end
   end
 
+  # Raw server lines cut by a roundtime refusal, from 2026-10 XML logs unless
+  # noted (long object lists and descriptions shortened).
+  describe '#buffer_split_line' do
+    require 'common/wait_response'
+    require 'common/room_block'
+
+    combat_cut = %(<a exist="-10609868" noun="Jazriel">Jazriel</a> steps back, then quickly steps forward spinning like a dervish, <a exist="-10609868" noun="Jazriel">his</a> <a exist="35307396" noun="greatsword">greatsword</a>...wait 1 seconds.\r\n)
+    combat_rest = %( lashing out at everything within reach!\r\n)
+    after_space_cut = %(<pushStream id="combat" />* A jeol moradu sidesteps and bashes at you.  ...wait 1 seconds.\r\n)
+    after_space_rest = "You counter most of the sword with a pugilist's armguard of layered black steel plates.  \r\n"
+    line_end_cut = %(<pushStream id="combat" />Catheroine gouges her fingers at a jeol moradu.  The fingers lands a good strike to its chest!  ...wait 4 seconds.\r\n)
+    tag_cut = %(<pushStream id="combat" />...wait 1 seconds.\r\n)
+    tag_rest = "* A jeol moradu feints high at you.  You evade.  \r\n"
+    bold_cut = %(<pushStream id="combat" />&lt; You punch your armor-clad fist at a jeol moradu.  A jeol moradu attempts to dodge.  <pushBold/>The fist lands a solid hit that knocks it down and out with a blow to the nether regions (Total loss of bowel control accompanies a twitching death!)....wait 2 seconds.\r\n)
+    room_cut = %(<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217406)</name><description>The expansive pale blue passage of glittering ice seems to stretch on forever.</description><exists>You also see <pushBold/><pushBold/>a <a exist="33519917" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="33516509" noun="bar">small pewter bar</a>...wait 2 seconds.\r\n)
+    room_rest = %(, an <a exist="33493149" noun="card">Immortal Murrula card</a>, <pushBold/><pushBold/>a <a exist="33524296" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</exists><crtrStatus exist="33519917" hostile="1" disengaged="1"/><crtrStatus exist="33524296" hostile="1" disengaged="1"/><players></players><exits>Obvious exits: <d>northeast</d>, <d>east</d>, <d>southeast</d>.</exits><extra></extra></room>\r\n)
+    room_head_cut = %(<resource picture="0"/><room>...wait 4 seconds.\r\n)
+    room_head_rest = %(<name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name><description>Shifting beams of light filter through a partially obstructed opening.</description><exists>You also see <pushBold/><pushBold/>a <a exist="32145136" noun="moradu">jeol moradu</a><popBold/><popBold/>.</exists><players>Also here: Musician <a exist="-10618410" noun="Kvofe">Kvofe</a>.</players><exits>Obvious exits: <d>north</d>, <d>west</d>.</exits><extra></extra></room>\r\n)
+    # From #1149 (2026-01-21).
+    component_cut = "<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, <pushBold/>a jeol moradu<popBold/> which appears dead, ...wait 1 seconds.\r\n"
+    component_rest = "<pushBold/>a jeol moradu<popBold/> that is caught in a cage of swirling darkness and some junk.</component>\r\n"
+
+    def refusal_of(cut)
+      cut[/\.\.\.wait \d+ seconds?\.\r\n\z/]
+    end
+
+    def held_of(cut)
+      cut.sub(/\.\.\.wait \d+ seconds?\.\r\n\z/, '')
+    end
+
+    before { allow(Lich).to receive(:log) }
+
+    {
+      'cut mid-word, rest after a space'                    => [combat_cut, combat_rest],
+      'cut after a space, rest without one'                 => [after_space_cut, after_space_rest],
+      'cut after its opening tag'                           => [tag_cut, tag_rest],
+      'cut before its closing bold tag'                     => [bold_cut, "<popBold/>\r\n"],
+      'cut at its line end, which follows as an empty line' => [line_end_cut, "\r\n"]
+    }.each do |label, (cut, rest)|
+      it "passes the refusal on at once and rejoins a line #{label}" do
+        refusal = game_instance.buffer_split_line(+cut)
+        expect(refusal).to eq(refusal_of(cut))
+        expect(refusal).to match(Lich::Common::WAIT_RESPONSE_PATTERN)
+        expect(game_instance.buffer_split_line(+rest)).to eq(held_of(cut) + rest)
+        expect(game_instance.buffer_split_line(+"<prompt time=\"1793039258\">R&gt;</prompt>\r\n")).to eq("<prompt time=\"1793039258\">R&gt;</prompt>\r\n")
+      end
+    end
+
+    it 'holds again when the joined line is itself cut' do
+      game_instance.buffer_split_line(+"Gorkus swings his greatsword with wild abandon...wait 3 seconds.\r\n")
+      expect(game_instance.buffer_split_line(+" weaving it through the air...wait 2 seconds.\r\n")).to eq("...wait 2 seconds.\r\n")
+      expect(game_instance.buffer_split_line(+" in a flurry of blows.\r\n")).to eq(
+        "Gorkus swings his greatsword with wild abandon weaving it through the air in a flurry of blows.\r\n"
+      )
+    end
+
+    ["...wait 1 seconds.\r\n", "...wait 1 second.\r\n"].each do |standalone|
+      it "passes the standalone refusal #{standalone.inspect} through and holds nothing" do
+        expect(game_instance.buffer_split_line(+standalone)).to eq(standalone)
+        expect(game_instance.buffer_split_line(+tag_rest)).to eq(tag_rest)
+      end
+    end
+
+    [
+      +"Kythkani says, \"Wait 3 seconds.\"\r\n",
+      +"...wait 1 seconds. You feel ready.\r\n",
+      +"Gorkus swings his greatsword...wait 3 seconds."
+    ].each do |line|
+      it "leaves #{line.inspect} alone" do
+        expect(game_instance.buffer_split_line(line)).to eq(line)
+      end
+    end
+
+    it 'rejoins a cut <room> block, so RoomBlock can rewrite it' do
+      expect(game_instance.buffer_split_line(+room_cut)).to eq("...wait 2 seconds.\r\n")
+      joined = game_instance.buffer_split_line(+room_rest)
+      expect(joined).to eq(held_of(room_cut) + room_rest)
+      expect(Lich::Common::Markup.strip_xml(Lich::Common::RoomBlock.legacy_shape(joined))).to include(
+        'You also see a jeol moradu, a small pewter bar, an Immortal Murrula card, a jeol moradu and some junk.'
+      )
+    end
+
+    it 'holds a <room> block cut straight after its opening tag' do
+      expect(game_instance.buffer_split_line(+room_head_cut)).to eq("...wait 4 seconds.\r\n")
+      expect(game_instance.buffer_split_line(+room_head_rest)).to eq(%(<resource picture="0"/><room>) + room_head_rest)
+    end
+
+    # Constructed: the game keeps a <room> block on one line, so no capture
+    # has a cut one whose rest lacks </room>. If one ever did, the hold must
+    # still end after one line, or every later line would be swallowed.
+    it 'releases a cut <room> block after one line even without its closing tag' do
+      game_instance.buffer_split_line(+room_head_cut)
+      expect(game_instance.buffer_split_line(+"<name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name>\r\n")).to eq(
+        %(<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217404)</name>\r\n)
+      )
+      expect(game_instance.buffer_split_line(+"<prompt time=\"1793039258\">R&gt;</prompt>\r\n")).to eq("<prompt time=\"1793039258\">R&gt;</prompt>\r\n")
+      expect(game_instance.buffer_split_line(+"You stroll north.\r\n")).to eq("You stroll north.\r\n")
+    end
+
+    it 'rejoins a cut room objs component, keeping the refusal and the line end' do
+      expect(game_instance.buffer_split_line(+component_cut)).to eq("...wait 1 seconds.\r\n")
+      expect(game_instance.buffer_split_line(+component_rest)).to eq(held_of(component_cut) + component_rest)
+    end
+
+    it 'joins a complete room objs component cut at its line end to that line end only' do
+      line = +"<component id='room objs'>You also see a jeol moradu.</component>...wait 1 seconds.\r\n"
+      expect(game_instance.buffer_split_line(line)).to eq("...wait 1 seconds.\r\n")
+      expect(game_instance.buffer_split_line(+"\r\n")).to eq("<component id='room objs'>You also see a jeol moradu.</component>\r\n")
+    end
+
+    it 'passes the rejoined lines through clean_serverstring' do
+      expect(game_instance.clean_serverstring(+combat_cut)).to eq("...wait 1 seconds.\r\n")
+      expect(game_instance.clean_serverstring(+combat_rest)).to include('greatsword</a> lashing out at everything within reach!')
+    end
+  end
+
   describe '#get_documentation_url' do
     it 'returns the correct documentation URL for DragonRealms' do
       expect(game_instance.get_documentation_url).to eq("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
@@ -2825,5 +2941,41 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with room descri
       eventually { expect(written.size).to eq(2) }
       expect(written[1]).not_to include(shacks_desc)
     end
+  end
+end
+
+RSpec.describe Lich::GameBase::Game, '.process_server_string with a line cut by a roundtime refusal' do
+  before do
+    @saved = [$_SERVERBUFFER_, XMLData.game]
+    $_SERVERBUFFER_ = []
+    XMLData.game = ''
+    described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
+    @parsed = []
+    @hooked = []
+    allow(Lich).to receive(:log)
+    allow(described_class).to receive(:process_xml_data) { |line| @parsed << line }
+    allow(described_class).to receive(:process_downstream_hooks) { |line| @hooked << line }
+    allow(Lich::Common::Inventory).to receive(:observe) if defined?(Lich::Common::Inventory)
+  end
+
+  after do
+    described_class.instance_variable_set(:@game_instance, nil)
+    $_SERVERBUFFER_, XMLData.game = @saved
+  end
+
+  it 'delivers the refusal first and then the rejoined line, to the parser, hooks and server buffer alike' do
+    described_class.process_server_string(+"Jazriel steps back, then quickly steps forward spinning like a dervish, his greatsword...wait 1 seconds.\r\n")
+    described_class.process_server_string(+" lashing out at everything within reach!\r\n")
+    expected = ["...wait 1 seconds.\r\n", "Jazriel steps back, then quickly steps forward spinning like a dervish, his greatsword lashing out at everything within reach!\r\n"]
+    expect(@hooked).to eq(expected)
+    expect(@parsed).to eq(expected)
+    expect($_SERVERBUFFER_).to eq(expected)
+  end
+
+  it 'delivers nothing for the empty line that ends a line cut at its end' do
+    described_class.process_server_string(+"The fingers lands a good strike to its chest!  ...wait 4 seconds.\r\n")
+    described_class.process_server_string(+"\r\n")
+    described_class.process_server_string(+"<prompt time=\"1793017427\">&gt;</prompt>\r\n")
+    expect(@hooked).to eq(["...wait 4 seconds.\r\n", "The fingers lands a good strike to its chest!  \r\n", "<prompt time=\"1793017427\">&gt;</prompt>\r\n"])
   end
 end
