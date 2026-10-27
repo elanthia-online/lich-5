@@ -258,7 +258,8 @@ module Lich
             /VERSION: field of the game handshake Lich builds: --without-frontend, and
             the handshake that replaces a proxied frontend's own (below). Wizard, Avalon
             and Frostbite always send the default. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
-            With --saga, the handshake also identifies as /P:SAGA.
+            DragonRealms currently needs the default /VERSION:1.0.1.28 for its full XML
+            stream; another value may lose it.
             A frontend that connects through Lich and sends its own /FE: ... /XML
             handshake (Genie, Warlock, Wrayth, Frostbite without --frostbite) has it
             replaced with Lich's, so every session gets the same game stream; Lich
