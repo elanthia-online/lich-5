@@ -37,8 +37,16 @@ module Lich
       # Outstanding launch tokens; issuing past the cap retires the oldest.
       MAX_LAUNCH_TOKENS = 64
       # Malformed-request refusals log at most once per interval; the next
-      # report carries the count suppressed since the previous one.
+      # report carries the count suppressed since the previous one. Authenticated
+      # message and WebSocket refusals are throttled the same way, each kind
+      # on its own interval.
       REFUSAL_LOG_INTERVAL = 60
+      # Every HTTP response (head, body and a streamed image) must be written
+      # within this many seconds, as each WebSocket message is, so a peer that
+      # stops reading releases its worker and client slot.
+      RESPONSE_WRITE_TIMEOUT = Connection::WRITE_TIMEOUT
+      # Streamed image bytes are read and written in chunks of at most this size.
+      RESPONSE_CHUNK_BYTES = 65_536
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
             "form-action 'self'; frame-ancestors 'none'"
@@ -93,6 +101,8 @@ module Lich
         @launch_tokens = {}
         @refusal_logged_at = nil
         @refusals_suppressed = 0
+        # Authenticated refusal kind => [logged_at, suppressed since then].
+        @refusal_windows = {}
         @server = nil
         @accept_thread = nil
         @client_threads = []
@@ -304,7 +314,7 @@ module Lich
           respond_error(socket, 404, 'Not Found')
         end
       rescue IOError, SystemCallError
-        nil # Disconnect or shutdown can interrupt any read or write.
+        nil # Disconnect, shutdown or a missed write deadline can interrupt any read or write.
       rescue StandardError => error
         log_request_refusal(error)
         begin
@@ -433,10 +443,28 @@ module Lich
         path, content_type, = resolved
         File.open(path, 'rb') do |file|
           size = file.size
+          deadline = monotonic_time + RESPONSE_WRITE_TIMEOUT
           respond(socket, 200, 'OK', '', content_type: content_type, cache_control: 'private, max-age=60',
-                                         content_length: size)
-          # Streamed in bounded chunks; the image is never read whole into memory.
-          IO.copy_stream(file, socket, size)
+                                         content_length: size, deadline: deadline)
+          # Streamed in bounded chunks under the same deadline as its head; the
+          # image is never read whole into memory.
+          stream_body(socket, file, size, deadline)
+        end
+      end
+
+      # Copies up to size bytes from file to socket in RESPONSE_CHUNK_BYTES chunks.
+      # @param deadline [Float] monotonic time by which the whole response is written
+      # @return [void]
+      # @raise [Errno::ETIMEDOUT] when the peer stops reading past the deadline
+      def stream_body(socket, file, size, deadline)
+        remaining = size
+        buffer = String.new(capacity: RESPONSE_CHUNK_BYTES)
+        while remaining.positive?
+          chunk = file.read([remaining, RESPONSE_CHUNK_BYTES].min, buffer)
+          break unless chunk
+
+          write_before(socket, chunk, deadline)
+          remaining -= chunk.bytesize
         end
       end
 
@@ -454,11 +482,13 @@ module Lich
           return respond_error(socket, 400, 'Bad Request')
         end
 
-        socket.write(
+        write_before(
+          socket,
           "HTTP/1.1 101 Switching Protocols\r\n" \
           "Upgrade: websocket\r\n" \
           "Connection: Upgrade\r\n" \
-          "Sec-WebSocket-Accept: #{WebSocket.accept_key(headers['sec-websocket-key'])}\r\n\r\n"
+          "Sec-WebSocket-Accept: #{WebSocket.accept_key(headers['sec-websocket-key'])}\r\n\r\n",
+          monotonic_time + RESPONSE_WRITE_TIMEOUT
         )
         connection = Connection.new(socket)
         # Hello is queued and the connection published under the broadcast
@@ -516,7 +546,7 @@ module Lich
           dispatch_message(connection, frame.payload) if frame.text?
         end
       rescue WebSocket::ProtocolError => error
-        log(:warning, "WebUI websocket refusal=#{error.class}")
+        log_throttled_refusal(:websocket, "WebUI websocket refusal=#{error.class}")
       end
 
       # Validates wire input and returns generic refusals without echoing raw payloads/errors.
@@ -525,7 +555,7 @@ module Lich
         message = Protocol.parse_client_message(raw)
         @message_handler.call(connection, message)
       rescue Protocol::Refusal => error
-        log(:warning, "WebUI message refusal=#{error.reason}")
+        log_throttled_refusal(:message, "WebUI message refusal=#{error.reason}")
         connection.send_text(Protocol.refusal(reason: error.reason, message: 'Message refused'))
       rescue StandardError => error
         log(:warning, "WebUI handler refusal=#{error.class} at=#{error_location(error)}")
@@ -551,19 +581,46 @@ module Lich
       # @return [void]
       def log_request_refusal(error)
         suppressed = @mutex.synchronize do
-          now = monotonic_time
-          if @refusal_logged_at && now - @refusal_logged_at < REFUSAL_LOG_INTERVAL
-            @refusals_suppressed += 1
-            next nil
-          end
-          @refusal_logged_at = now
-          count = @refusals_suppressed
-          @refusals_suppressed = 0
-          count
+          @refusal_logged_at, @refusals_suppressed, report = refusal_window(@refusal_logged_at, @refusals_suppressed)
+          report
         end
+        log_refusal("WebUI request refused=#{error.class}", suppressed)
+      end
+
+      # Applies the REFUSAL_LOG_INTERVAL throttle to one authenticated refusal
+      # kind, so a connected client cannot flood diagnostics with refusals.
+      # The message names only a class or refusal reason, never the payload.
+      # @param kind [Symbol] refusal kind with its own interval
+      # @param message [String] sanitized diagnostic for this refusal
+      # @return [void]
+      def log_throttled_refusal(kind, message)
+        suppressed = @mutex.synchronize do
+          logged_at, count, report = refusal_window(*@refusal_windows.fetch(kind, [nil, 0]))
+          @refusal_windows[kind] = [logged_at, count]
+          report
+        end
+        log_refusal(message, suppressed)
+      end
+
+      # Advances one refusal kind's interval; the caller holds @mutex.
+      # @param logged_at [Float, nil] monotonic time of the kind's last report
+      # @param suppressed [Integer] refusals counted since that report
+      # @return [Array] new logged_at, new suppressed count, and the suppressed
+      #   count to report now, or nil when this refusal is suppressed
+      def refusal_window(logged_at, suppressed)
+        now = monotonic_time
+        return [logged_at, suppressed + 1, nil] if logged_at && now - logged_at < REFUSAL_LOG_INTERVAL
+
+        [now, 0, suppressed]
+      end
+
+      # Logs an admitted refusal with the count suppressed before it.
+      # @param message [String] sanitized diagnostic
+      # @param suppressed [Integer, nil] count to append, or nil to log nothing
+      # @return [void]
+      def log_refusal(message, suppressed)
         return unless suppressed
 
-        message = "WebUI request refused=#{error.class}"
         message += " suppressed=#{suppressed}" if suppressed.positive?
         log(:warning, message)
       end
@@ -638,9 +695,12 @@ module Lich
       # Writes a bounded-handler response with common CSP, no-referrer, and nosniff headers.
       # Responses default to no-store and close the HTTP connection.
       # @param content_length [Integer, nil] length of a body the caller streams after the head
-      # @return [Object] socket write result
+      # @param deadline [Float, nil] monotonic write deadline shared with a streamed body;
+      #   nil allows RESPONSE_WRITE_TIMEOUT from now
+      # @return [void]
+      # @raise [Errno::ETIMEDOUT] when the peer stops reading past the deadline
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',
-                  cache_control: 'no-store', extra_headers: [], content_length: nil)
+                  cache_control: 'no-store', extra_headers: [], content_length: nil, deadline: nil)
         headers = [
           "HTTP/1.1 #{status} #{reason}", "Content-Length: #{content_length || body.bytesize}",
           'Connection: close', "Cache-Control: #{cache_control}", 'Referrer-Policy: no-referrer',
@@ -648,7 +708,27 @@ module Lich
         ]
         headers << "Content-Type: #{content_type}" unless body.empty? && !content_length
         headers.concat(extra_headers)
-        socket.write(headers.join("\r\n") + "\r\n\r\n" + body)
+        write_before(socket, headers.join("\r\n") + "\r\n\r\n" + body, deadline || (monotonic_time + RESPONSE_WRITE_TIMEOUT))
+      end
+
+      # Writes all bytes with nonblocking writes before a monotonic deadline.
+      # @param bytes [String] response bytes
+      # @param deadline [Float] monotonic time by which every byte is written
+      # @return [void]
+      # @raise [Errno::ETIMEDOUT] when the peer stops reading past the deadline
+      def write_before(socket, bytes, deadline)
+        offset = 0
+        while offset < bytes.bytesize
+          remaining = deadline - monotonic_time
+          raise Errno::ETIMEDOUT, 'WebUI response write deadline' unless remaining.positive?
+
+          written = socket.write_nonblock(bytes.byteslice(offset..), exception: false)
+          if written == :wait_writable
+            raise Errno::ETIMEDOUT, 'WebUI response write deadline' unless IO.select(nil, [socket], nil, remaining)
+          else
+            offset += written
+          end
+        end
       end
 
       def respond_error(socket, status, reason)
