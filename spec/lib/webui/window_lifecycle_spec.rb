@@ -28,6 +28,7 @@ RSpec.describe 'WebUI script window lifecycle' do
   it 'owns the page selector, reuses it, and includes it in shutdown' do
     expect(Lich::WebUI::BrowserLauncher).not_to receive(:open)
     Lich::WebUI.service = service
+    Lich::WebUI.configure_presentation(enabled: true)
     service.start
     2.times { expect(Lich::WebUI.open).to be(true) }
     expect(opened.size).to eq(1)
@@ -36,6 +37,7 @@ RSpec.describe 'WebUI script window lifecycle' do
     expect(terminated).to eq([[OS.windows? ? 'KILL' : 'TERM', 1]])
     expect(service).not_to be_pending_windows
   ensure
+    Lich::WebUI.configure_presentation(enabled: nil)
     Lich::WebUI.reset!
   end
 
@@ -211,11 +213,12 @@ RSpec.describe 'WebUI script window lifecycle' do
     expect(opened.length).to eq(6)
   end
 
-  it 'saves final close geometry even when a refresh overtakes the viewer' do
+  it 'saves final detach geometry even when a refresh overtakes the viewer, without closing the page' do
     events = Queue.new
     target = service.registry.register(Lich::WebUI::Page.new(
       owner: Object.new, id: 'final', title: 'Final',
-      on: { configure: proc { |event| events << event.event }, close: proc { |event| events << event.event } }
+      on: { configure: proc { |event| events << event.event }, detach: proc { |event| events << event.event },
+            close: proc { |event| events << event.event } }
     ) {})
     service.refresh(target)
     sent = []
@@ -229,11 +232,12 @@ RSpec.describe 'WebUI script window lifecycle' do
     service.refresh(target)
     measurement = { width: 501, height: 302, position: [-700, 40] }
     service.runtime.handle(connection, type: 'detach', page: address, generation: previous_generation, geometry: measurement)
-    expect(Timeout.timeout(2) { [events.pop, events.pop] }).to eq(%i[configure close])
+    expect(Timeout.timeout(2) { [events.pop, events.pop] }).to eq(%i[configure detach])
     expect(target.window_geometry).to eq(measurement)
+    expect(service.registry.address_for(target)).to eq(address)
   end
 
-  it 'cancels a modal on stale detach even when another viewer keeps its owner connected' do
+  it 'keeps a modal open on a stale detach while another viewer keeps its owner connected' do
     target = page
     connections = %w[first second].map do |id|
       connection = Struct.new(:viewer_id, :sent) do
@@ -262,8 +266,8 @@ RSpec.describe 'WebUI script window lifecycle' do
     result = service.runtime.handle(connections.first, type: 'detach', page: address, generation: previous_generation)
 
     expect(result).to eq(:detached)
-    expect(future.await(timeout: 2).reason).to eq(:cancelled)
-    expect(service.modals.pending_count).to eq(0)
+    expect(future).not_to be_resolved
+    expect(service.modals.pending_count).to eq(1)
     expect(service.runtime.viewers_present?(target.owner)).to be(true)
   end
 
