@@ -34,6 +34,11 @@ module Lich
       WS_PING_INTERVAL = 20
       WS_IDLE_TIMEOUT = 60
       LAUNCH_TOKEN_LIFETIME = 60
+      # Outstanding launch tokens; issuing past the cap retires the oldest.
+      MAX_LAUNCH_TOKENS = 64
+      # Malformed-request refusals log at most once per interval; the next
+      # report carries the count suppressed since the previous one.
+      REFUSAL_LOG_INTERVAL = 60
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
             "form-action 'self'; frame-ancestors 'none'"
@@ -86,6 +91,8 @@ module Lich
         @thread_factory = thread_factory || HostThread.method(:start)
         @session_token = SecureRandom.hex(32)
         @launch_tokens = {}
+        @refusal_logged_at = nil
+        @refusals_suppressed = 0
         @server = nil
         @accept_thread = nil
         @client_threads = []
@@ -134,6 +141,7 @@ module Lich
 
       # Issues a single-use expiring credential for a validated local redirect target.
       # Treat the returned URL as a secret; it establishes the browser session cookie.
+      # At most MAX_LAUNCH_TOKENS stay outstanding; the oldest is retired first.
       # @param to [String] local target path; invalid targets fall back to /
       # @return [String] authentication URL
       # @raise [Error] if the server is not running
@@ -143,6 +151,7 @@ module Lich
         token = SecureRandom.hex(32)
         @mutex.synchronize do
           expire_launch_tokens!
+          @launch_tokens.shift while @launch_tokens.size >= MAX_LAUNCH_TOKENS
           @launch_tokens[token] = monotonic_time + LAUNCH_TOKEN_LIFETIME
         end
         "http://#{url_host}:#{port}/auth?token=#{token}&to=#{URI.encode_www_form_component(target)}"
@@ -297,7 +306,7 @@ module Lich
       rescue IOError, SystemCallError
         nil # Disconnect or shutdown can interrupt any read or write.
       rescue StandardError => error
-        log(:warning, "WebUI request refused=#{error.class}")
+        log_request_refusal(error)
         begin
           respond_error(socket, 400, 'Bad Request') unless websocket
         rescue IOError, SystemCallError
@@ -331,7 +340,8 @@ module Lich
         parse_request(buffer)
       end
 
-      # Parses HTTP/1.1 origin-form requests, rejecting duplicate headers and request bodies.
+      # Parses HTTP/1.1 origin-form requests, rejecting duplicate headers, request
+      # bodies and Transfer-Encoding framing.
       # @return [Hash] method, path, query, and normalized headers
       # @raise [Error] for malformed or unsupported request framing
       def parse_request(raw)
@@ -349,6 +359,8 @@ module Lich
           raise Error, "duplicate HTTP header #{key}" if headers.key?(key)
           headers[key] = value.strip
         end
+        raise Error, 'Transfer-Encoding is not accepted' if headers.key?('transfer-encoding')
+
         content_length = Integer(headers.fetch('content-length', '0'), exception: false)
         raise Error, 'invalid Content-Length' unless content_length&.between?(0, Protocol::MAX_MESSAGE_BYTES)
         raise Error, 'request bodies are not accepted' unless content_length.zero?
@@ -516,8 +528,44 @@ module Lich
         log(:warning, "WebUI message refusal=#{error.reason}")
         connection.send_text(Protocol.refusal(reason: error.reason, message: 'Message refused'))
       rescue StandardError => error
-        log(:warning, "WebUI handler refusal=#{error.class}")
+        log(:warning, "WebUI handler refusal=#{error.class} at=#{error_location(error)}")
         connection.send_text(Protocol.refusal(reason: :handler, message: 'Message refused'))
+      end
+
+      # Names where an error was raised (file basename, line and method) so
+      # unrelated failures are distinguishable without logging its message,
+      # which may carry payloads or credentials.
+      # @param error [Exception] handler failure
+      # @return [String] sanitized raise location, or "unknown"
+      def error_location(error)
+        location = error.backtrace_locations&.first
+        return 'unknown' unless location
+
+        "#{File.basename(location.path.to_s)}:#{location.lineno}:#{location.label}"
+      end
+
+      # Logs the first malformed-request refusal of each REFUSAL_LOG_INTERVAL
+      # and counts the rest, so a local client cannot flood diagnostics.
+      # Only the error class is logged, never request contents.
+      # @param error [StandardError] refusal cause
+      # @return [void]
+      def log_request_refusal(error)
+        suppressed = @mutex.synchronize do
+          now = monotonic_time
+          if @refusal_logged_at && now - @refusal_logged_at < REFUSAL_LOG_INTERVAL
+            @refusals_suppressed += 1
+            next nil
+          end
+          @refusal_logged_at = now
+          count = @refusals_suppressed
+          @refusals_suppressed = 0
+          count
+        end
+        return unless suppressed
+
+        message = "WebUI request refused=#{error.class}"
+        message += " suppressed=#{suppressed}" if suppressed.positive?
+        log(:warning, message)
       end
 
       # Compares the request cookie with this service's session credential.
@@ -640,9 +688,11 @@ module Lich
       end
 
       # Gives a host worker a bounded join before terminating a still-running thread.
+      # A handler that calls stop runs on its own client worker; that thread is
+      # skipped so the remaining workers are still joined and stop returns.
       # @return [void]
       def join_or_kill(thread)
-        return unless thread
+        return if thread.nil? || thread == Thread.current
 
         thread.join(0.5)
         thread.kill if thread.alive?
