@@ -22,17 +22,21 @@ module Lich
         @user_allowlist = resolve_roots(user_allowlist)
         @logger = logger || proc { |_level, _message| }
         @routes = {}
+        # Owners already revoked, by identity; weak so ended scripts are not retained.
+        @revoked_owners = ObjectSpace::WeakMap.new
         @mutex = Mutex.new
       end
 
       # Registers an allowed image root without replacing another owner's route.
       # The same owner may update its alias; revocation releases it for reuse.
+      # A revoked owner is terminal: the check and insertion share the route
+      # lock with #revoke_owner, so a late callback cannot re-register.
       # @param alias_name [String, Symbol] URL path segment unique within this service
       # @param directory [String] existing image directory
       # @param owner [Object] lifetime identity responsible for the route
       # @param script_root [String, nil] additional permitted script directory
       # @return [String] relative URL prefix for this alias
-      # @raise [Error] when the root is disallowed or another owner holds the alias
+      # @raise [Error] when the root is disallowed, the owner was revoked, or another owner holds the alias
       # @raise [ArgumentError] when the alias, owner or directory is invalid
       def register(alias_name, directory, owner:, script_root: nil)
         alias_string = alias_name.to_s
@@ -47,6 +51,10 @@ module Lich
         end
 
         @mutex.synchronize do
+          if @revoked_owners.key?(owner)
+            raise Error.new('file routes cannot be registered after the owner terminated', owner: owner_label(owner))
+          end
+
           existing = @routes[alias_string]
           if existing && !existing[:owner].equal?(owner)
             raise Error.new('file alias is already registered to another owner', owner: owner_label(owner))
@@ -68,10 +76,14 @@ module Lich
         end
       end
 
-      # Revokes all file aliases belonging to the terminating owner.
+      # Revokes all file aliases belonging to the terminating owner and refuses
+      # its later registrations.
       # @return [void]
       def revoke_owner(owner)
-        @mutex.synchronize { @routes.delete_if { |_name, route| route[:owner].equal?(owner) } }
+        @mutex.synchronize do
+          @revoked_owners[owner] = true
+          @routes.delete_if { |_name, route| route[:owner].equal?(owner) }
+        end
       end
 
       # Resolves an image route after one URL decode and realpath containment checks.

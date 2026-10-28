@@ -268,6 +268,60 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigatio
     }
 }
 
+/// Ends the helper when the Ruby process that spawned it exits, even after SIGKILL,
+/// where Ruby's own process monitor can no longer terminate it.
+final class ParentWatch {
+    let parent: pid_t
+    let currentParent: () -> pid_t
+    let onExit: () -> Void
+    var source: DispatchSourceProcess?
+    var timer: DispatchSourceTimer?
+    var fired = false
+
+    /// - Parameters:
+    ///   - parent: Process identity observed at startup.
+    ///   - currentParent: Reads the live parent; a change means the original exited.
+    ///   - onExit: Runs once, on the main queue, after the parent is gone.
+    init(parent: pid_t, currentParent: @escaping () -> pid_t = { getppid() },
+         onExit: @escaping () -> Void) {
+        self.parent = parent
+        self.currentParent = currentParent
+        self.onExit = onExit
+    }
+
+    /// Watches the exit event, then rechecks the parent identity immediately and
+    /// every interval: the event cannot be installed for a parent that already
+    /// exited, so the bounded poll covers that race and a reparented helper.
+    func start(interval: DispatchTimeInterval = .seconds(2)) {
+        // A launchd parent at startup means the spawning process is already gone.
+        guard parent > 1 else {
+            DispatchQueue.main.async { [self] in finish() }
+            return
+        }
+        let exitSource = DispatchSource.makeProcessSource(identifier: parent, eventMask: .exit, queue: .main)
+        exitSource.setEventHandler { [weak self] in self?.finish() }
+        exitSource.resume()
+        source = exitSource
+        let poll = DispatchSource.makeTimerSource(queue: .main)
+        poll.schedule(deadline: .now(), repeating: interval)
+        poll.setEventHandler { [weak self] in
+            guard let self else { return }
+            if self.currentParent() != self.parent { self.finish() }
+        }
+        poll.resume()
+        timer = poll
+    }
+
+    /// Cancels both observers and reports parent exit exactly once.
+    func finish() {
+        guard !fired else { return }
+        fired = true
+        source?.cancel()
+        timer?.cancel()
+        onExit()
+    }
+}
+
 #if !WEBUI_HOST_TEST
 @main
 struct WebUIHostMain {
@@ -290,11 +344,14 @@ struct WebUIHostMain {
         }
         let app = NSApplication.shared
         let host = Host(url: url, geometry: geometry)
+        let parentWatch = ParentWatch(parent: getppid()) { host.fail("Lich process ended") }
+        parentWatch.start()
         app.delegate = host
         // Script windows are accessory panels, not separate Dock applications. The
         // menu still supplies keyboard equivalents even though no menu bar is shown.
         app.setActivationPolicy(.accessory)
-        app.run()
+        // The run loop never returns; keep the watch alive for the helper's lifetime.
+        withExtendedLifetime(parentWatch) { app.run() }
     }
 }
 #endif
