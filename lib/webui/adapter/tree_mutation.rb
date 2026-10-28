@@ -43,7 +43,7 @@ module Lich
           raise attributed_error('component accepts no children', parent) if Contract.schema(parent_node.type)[:children] == :none
           raise attributed_error('component hierarchy cannot contain a cycle', child) if root_for(parent_node).equal?(child_node)
 
-          position = index.nil? ? parent_node.children.length : Integer(index)
+          position = index.nil? ? parent_node.children.length : child_position(parent, index)
           unless position.between?(0, parent_node.children.length)
             raise attributed_error('child index is out of range', parent, :index)
           end
@@ -76,8 +76,6 @@ module Lich
           end
         end
         nil
-      rescue ArgumentError, TypeError
-        raise attributed_error('child index is out of range', parent, :index)
       end
 
       # Replaces one ordinary container child without publishing an intermediate tree.
@@ -152,6 +150,18 @@ module Lich
       end
 
       private
+
+      # Converts only the caller's index, so other validation keeps its own error.
+      # @param parent [Handle] container used for attribution
+      # @param index [Object] requested insertion position
+      # @return [Integer]
+      # @raise [Error] when the index is not an integer
+      # @api private
+      def child_position(parent, index)
+        Integer(index)
+      rescue ArgumentError, TypeError
+        raise attributed_error('child index is out of range', parent, :index)
+      end
 
       # Child layout belongs to its parent schema. Validate before attaching so
       # an invalid span cannot corrupt the tree or fail later in a render job.

@@ -36,6 +36,11 @@ module Lich
             # The browser may still display an older server value. Validate
             # against its delivery, but retain the latest server-owned value.
             value = @viewers.read_only_submission(attachment, component, value)
+          elsif interaction_disabled?(attachment.render.tree, component.cid)
+            # A disabled (or hidden) input, or one under such an ancestor, cannot
+            # change its value: retain the server-held value. Sensitive values are
+            # never held server-side, so a non-empty one is refused instead.
+            value = disabled_submission(attachment, component, value)
           end
           [component, value]
         end
@@ -62,17 +67,40 @@ module Lich
                     end
           component if changed
         end
-        values = validated.to_h do |component, value|
-          if sensitive?(component)
-            [component.cid, SensitiveValue.viewer(value)]
-          else
-            @viewers.set_input(attachment, component, value) unless %i[text_input textarea].include?(component.type) && component.props[:read_only]
-            [component.cid, value]
+        # Finish every validation and secret wrapping before committing any viewer
+        # value, so a late failure leaves no partially applied submission.
+        values = {}
+        begin
+          validated.each do |component, value|
+            values[component.cid] = sensitive?(component) ? SensitiveValue.viewer(value) : value
           end
+        rescue StandardError
+          values.each_value { |carrier| carrier.discard! if carrier.is_a?(SensitiveValue) }
+          raise
+        end
+        validated.each do |component, value|
+          next if sensitive?(component)
+          next if %i[text_input textarea].include?(component.type) && component.props[:read_only]
+
+          @viewers.set_input(attachment, component, value)
         end
         Submission.new(viewer_id: attachment.viewer_id, values: values, input_changes: input_changes)
       ensure
         scrub_sensitive_raw!(components, raw_values) if defined?(components) && components
+      end
+
+      # Retains the server-held value of an input that cannot be edited.
+      # @param attachment [ViewerStore::Attachment] exact admitted viewer/page association
+      # @param component [Component] disabled or hidden delivered input
+      # @param value [Object] already validated submitted value
+      # @return [Object] server-held value, or the empty sensitive submission
+      # @raise [Protocol::Refusal] when a disabled sensitive input carries a value
+      # @api private
+      def disabled_submission(attachment, component, value)
+        return @viewers.input_value(attachment, component) unless sensitive?(component)
+        return value if value.respond_to?(:empty?) && value.empty?
+
+        raise Protocol::Refusal.new(:submission_scope, 'disabled input cannot submit a value')
       end
 
       # Overwrites mutable raw strings at known sensitive positions after snapshot construction.

@@ -120,11 +120,13 @@ module Lich
       end
 
       # Retrieves the opaque wire address for an exact registered page instance.
+      # A plain lookup keeps a missing Page key from being inspected under the lock.
       # @return [String] address
       # @raise [Error] if the page is no longer registered
       def address_for(page)
-        @mutex.synchronize { @page_addresses.fetch(page) }
-      rescue KeyError
+        address = @mutex.synchronize { @page_addresses[page] }
+        return address if address
+
         raise Error.new('page is not registered', owner: owner_label(page.owner), page_id: page.id)
       end
 

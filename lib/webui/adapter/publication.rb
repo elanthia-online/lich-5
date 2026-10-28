@@ -40,59 +40,82 @@ module Lich
 
       private
 
-      # Snapshots dirty roots by identity, then refreshes outside the adapter monitor.
+      # Snapshots dirty roots by identity, then publishes each one outside the adapter monitor.
       # Avoids lock inversion with Page rendering; explicit presentation follows publication.
+      # A root that fails is marked dirty again for the next flush while later roots
+      # still publish; the first failure is re-raised after every root was tried.
       # @return [nil]
       # @api private
       def flush!
-        pages = @mutex.synchronize do
+        roots = @mutex.synchronize do
           selected = @dirty_roots.keys.filter_map do |candidate|
             root_for(candidate) if handle_for(candidate)
           end.uniq(&:object_id)
           @dirty_roots.clear
-          selected.filter_map do |root|
-            next unless handle_for(root)
-
-            ensure_page!(root)
-            root.page.refresh_definition(
-              title: root.props.fetch(:title), props: root.props.except(:title), on: callbacks_for(root)
-            )
-            root
-          end
+          selected
         end
+        failure = nil
+        roots.each do |root|
+          publish_root(root)
+        rescue StandardError => error
+          @mutex.synchronize { @dirty_roots[root] = true if handle_for(root) }
+          failure ||= error
+        end
+        raise failure if failure
+
+        nil
+      end
+
+      # Registers, refreshes and, when due, presents one root.
+      # First presentation is recorded only after the host accepted the request
+      # (on_publish returned). A false result means the host already closed the
+      # window and dispatched the page's close lifecycle; it is not retried on
+      # every later change. A raised request leaves the root unpresented.
+      # @param root [Node] live page root
+      # @return [void]
+      # @api private
+      def publish_root(root)
+        page = @mutex.synchronize do
+          next unless handle_for(root)
+
+          ensure_page!(root)
+          root.page.refresh_definition(
+            title: root.props.fetch(:title), props: root.props.except(:title), on: callbacks_for(root)
+          )
+          root.page
+        end
+        return unless page
+
         # Page rendering calls back into the adapter to snapshot its tree. Never
         # hold the adapter monitor while waiting for a page's render mutex.
-        pages.each do |root|
-          @service.refresh(root.page)
-          delivered = root.page.last_render.tree.each.to_h { |component| [component.cid, true] }
-          @mutex.synchronize do
-            changes = []
-            @nodes.each_value do |child|
-              next unless root_for(child).equal?(root) && delivered.key?(child.cid)
+        @service.refresh(page)
+        delivered = page.last_render.tree.each.to_h { |component| [component.cid, true] }
+        @mutex.synchronize do
+          changes = []
+          @nodes.each_value do |child|
+            next unless root_for(child).equal?(root) && delivered.key?(child.cid)
 
-              child.viewer_values.delete_if do |(viewer, name), value|
-                changes << [viewer, child.cid, name, value]
-                true
-              end
+            child.viewer_values.delete_if do |(viewer, name), value|
+              changes << [viewer, child.cid, name, value]
+              true
             end
-            # Seed before allowing live writes through Page#set. Otherwise a
-            # newer write can be overwritten by this older unpublished value.
-            # Seeding only locks viewer state and schedules work; it never renders.
-            @service.runtime.seed_viewer_properties(root.page, changes) unless changes.empty?
-            @nodes.each_value { |child| child.published = true if !child.equal?(root) && root_for(child).equal?(root) && delivered.key?(child.cid) }
           end
-          publish = @mutex.synchronize do
-            next false unless handle_for(root)
-
-            first = !root.published
-            requested = root.present_requested
-            root.published = true
-            root.present_requested = false
-            first || (requested && !root.props.dig(:presentation, :hidden))
-          end
-          @on_publish&.call(root.page) if publish
+          # Seed before allowing live writes through Page#set. Otherwise a
+          # newer write can be overwritten by this older unpublished value.
+          # Seeding only locks viewer state and schedules work; it never renders.
+          @service.runtime.seed_viewer_properties(page, changes) unless changes.empty?
+          @nodes.each_value { |child| child.published = true if !child.equal?(root) && root_for(child).equal?(root) && delivered.key?(child.cid) }
         end
-        nil
+        publish = @mutex.synchronize do
+          next false unless handle_for(root)
+
+          !root.published || (root.present_requested && !root.props.dig(:presentation, :hidden))
+        end
+        @on_publish&.call(page) if publish
+        @mutex.synchronize do
+          root.published = true
+          root.present_requested = false
+        end
       end
 
       # Registers and binds one page for a root while preserving its handle-derived identity.

@@ -14,6 +14,33 @@ module Lich
     # Composes the contract registry, runtime, file boundary, and loopback server.
     class Service
       ASSETS_DIR = File.expand_path('assets', __dir__).freeze
+      EXIT_CLEANUP_MUTEX = Mutex.new
+      private_constant :EXIT_CLEANUP_MUTEX
+
+      # Registers one process-exit hook (per process) that closes the windows of
+      # every service owning one. It covers ordinary exit and the default
+      # SIGINT/SIGTERM handling, including exits before any viewer connects; it
+      # runs no signal handler and cannot cover SIGKILL. Services are held weakly.
+      # @param service [Service] service that now owns a window
+      # @return [void]
+      # @api private
+      def self.register_exit_cleanup(service)
+        EXIT_CLEANUP_MUTEX.synchronize do
+          (@exit_services ||= ObjectSpace::WeakMap.new)[service] = true
+          next if @exit_hook_pid == Process.pid
+
+          pid = @exit_hook_pid = Process.pid
+          at_exit { close_owned_windows_at_exit if Process.pid == pid }
+        end
+      end
+
+      # Closes every registered service's owned windows once at process exit.
+      # @return [void]
+      # @api private
+      def self.close_owned_windows_at_exit
+        services = EXIT_CLEANUP_MUTEX.synchronize { @exit_services ? @exit_services.keys : [] }
+        services.each(&:close_owned_windows)
+      end
 
       attr_reader :registry, :runtime, :file_service, :server, :modals
 
@@ -52,10 +79,11 @@ module Lich
         @file_service = FileService.new(
           application_roots: application_roots, user_allowlist: user_allowlist, logger: @logger
         )
+        owner_exit = method(:request_owner_stop)
         @runtime = Runtime.new(
           registry: registry, file_service: file_service, logger: @logger,
           on_page_closed: method(:close_window), window_host: method(:window_host),
-          viewers_changed: ->(owner) { @modals.viewers_changed(owner) }
+          viewers_changed: ->(owner) { @modals.viewers_changed(owner) }, owner_exit: owner_exit
         )
         @server = Server.new(
           assets_dir: ASSETS_DIR, pages_provider: -> { registry.descriptors },
@@ -65,7 +93,8 @@ module Lich
         )
         @modals = ModalCoordinator.new(
           registry: registry, runtime: runtime, viewers_present: ->(owner) { runtime.viewers_present?(owner) },
-          pages_changed: -> { server.broadcast(type: 'pages', pages: registry.descriptors) }, logger: @logger
+          pages_changed: -> { server.broadcast(type: 'pages', pages: registry.descriptors) }, logger: @logger,
+          owner_exit: owner_exit
         )
       end
 
@@ -150,14 +179,29 @@ module Lich
             on_close: -> { browser_closed(page) }
           )
         end
+        self.class.register_exit_cleanup(self)
         window.present(page.last_render) if page&.last_render
         # Spawn and monitor setup must survive the requesting script's exit.
         result = HostThread.start { window.open(url, geometry: geometry) }.value
+        # A failed start has already closed the window and dispatched the page's
+        # close lifecycle to its owner; report it without the launch URL.
+        log_failed_open(page, nil) unless result
         close_window(page) if !result || window.closed?
         result
-      rescue StandardError
-        close_window(page) if window
+      rescue StandardError => error
+        if window
+          log_failed_open(page, error)
+          close_window(page)
+        end
         raise
+      end
+
+      # Terminates owned window processes without stopping the listener or
+      # joining workers, so it stays bounded at process exit. Idempotent.
+      # @return [void]
+      def close_owned_windows
+        pages = @windows_mutex.synchronize { @windows.keys.dup }
+        pages.each { |page| close_window(page) }
       end
 
       # Saves geometry and releases ownership only after termination succeeds.
@@ -233,8 +277,13 @@ module Lich
       end
 
       # Registers an owner-bound image alias within approved filesystem roots.
+      # Owner termination closes registry admission before revoking routes, and
+      # FileService refuses a revoked owner under its route lock, so a late
+      # callback can register neither before nor after revocation.
+      # @raise [Error] after the owner terminated or the host stopped
       # @see FileService#register
       def register_files(alias_name, directory, owner:, script_root: nil)
+        registry.ensure_active!(owner)
         file_service.register(alias_name, directory, owner: owner, script_root: script_root)
       end
 
@@ -250,6 +299,29 @@ module Lich
         @geometry_store&.save(page)
       rescue StandardError => error
         @logger.call(:warning, "WebUI geometry save failed: #{error.class}")
+      end
+
+      private
+
+      # Retires an owner whose callback or render requested exit (B3), on a host
+      # thread so the request never runs termination inside the exiting callback.
+      # @param owner [Object] owner to retire
+      # @return [Thread] termination worker
+      def request_owner_stop(owner)
+        HostThread.start do
+          terminate_owner(owner)
+        rescue StandardError => error
+          Diagnostics.log(@logger, :error, "WebUI owner stop failed: #{error.class}")
+        end
+      end
+
+      # Safe diagnostic for a window that could not be opened; never logs the URL.
+      # @param page [Page, nil] page, or nil for the page selector
+      # @param error [StandardError, nil] opener failure, if one was raised
+      # @return [void]
+      def log_failed_open(page, error)
+        detail = error ? " error=#{error.class}" : ''
+        Diagnostics.log(@logger, :warning, "WebUI window could not be opened page=#{page ? page.id : 'selector'}#{detail}")
       end
     end
   end
