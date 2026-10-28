@@ -106,6 +106,9 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
               { 'ok' => true, 'members' => members }
             elsif token == 'stale-token'
               { 'ok' => false, 'error' => 'invalid_auth' }
+            elsif (code = token.to_s[/\Aerror-(\w*)-token\z/, 1])
+              # ok: false with the code named in the token ("error--token": no code)
+              { 'ok' => false, 'error' => (code unless code.empty?) }.compact
             else
               { 'ok' => true }
             end
@@ -401,6 +404,64 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       expect(bot.authed?('html-token')).to be false
       expect(logs).to include(a_string_starting_with('SlackBot: Could not check a Slack token: Failed to parse Slack API response'))
       expect(logs).not_to include(a_string_including('Slack token not accepted'))
+    end
+
+    # Slack documents these auth.test codes as Slack's own state, not a
+    # verdict on the token, so they must not replace a stored token.
+    Lich::DragonRealms::SlackBot::UnavailableError::CODES.each do |code|
+      it "treats a token check answered ok: false with #{code} as Slack unavailable, not as a rejected token" do
+        install_lnet(token: 'valid-token')
+        UserVars.slack_token = "error-#{code}-token"
+
+        bot = described_class.new
+
+        expect(bot.initialized?).to be false
+        expect(lnet_chats).to be_empty
+        expect(bot.error_message).to eq("Slack unavailable: Slack API Error: #{code}")
+        expect(UserVars.slack_token).to eq("error-#{code}-token")
+        expect(bot.direct_message('alice', 'help')).to be_nil
+        expect(lnet_chats).to be_empty
+        expect(bot.authed?("error-#{code}-token")).to be false
+        expect(logs).not_to include(a_string_including('Slack token not accepted'))
+      end
+    end
+
+    it 'treats a token check answered ok: false with no error code as Slack unavailable, not as a rejected token' do
+      install_lnet(token: 'valid-token')
+      UserVars.slack_token = 'error--token'
+
+      bot = described_class.new
+
+      expect(bot.initialized?).to be false
+      expect(lnet_chats).to be_empty
+      expect(bot.error_message).to eq('Slack unavailable: Slack API Error: ')
+      expect(UserVars.slack_token).to eq('error--token')
+    end
+
+    it 'delivers with the stored token once Slack answers the token check again' do
+      install_lnet(token: 'other-token')
+      UserVars.slack_token = 'error-internal_error-token'
+      bot = described_class.new
+      expect(bot.initialized?).to be false
+
+      UserVars.slack_token = 'valid-token'
+      expect(bot.direct_message('alice', 'help')).to include('ok' => true)
+      expect(lnet_chats).to be_empty
+      expect(UserVars.slack_token).to eq('valid-token')
+    end
+
+    %w[token_revoked some_code_slack_adds_later].each do |code|
+      it "still asks LNet for a token when the stored one is refused with #{code}" do
+        install_lnet(token: 'valid-token')
+        UserVars.slack_token = "error-#{code}-token"
+
+        bot = described_class.new
+
+        expect(bot.initialized?).to be true
+        expect(lnet_chats).to eq(['chat to Quilsilgas RequestSlackToken'])
+        expect(UserVars.slack_token).to eq('valid-token')
+        expect(logs).to include("SlackBot: Slack token not accepted: Slack API Error: #{code}")
+      end
     end
   end
 
