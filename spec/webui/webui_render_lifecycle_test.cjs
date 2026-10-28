@@ -132,7 +132,7 @@ for (const ending of ['close', 'disconnect', 'detach']) {
       assert.equal(f.element('root'), null);
     } else if (ending === 'disconnect') {
       f.disconnect();
-      assert.deepEqual(order, ['disconnect']);
+      assert.deepEqual(order, ['input', 'disconnect']);
       assert.equal(root.isConnected, true);
       assert.equal(f.element('name').querySelector('input').value, 'Base');
       f.receive({ type: 'hello', pages: [{ address: 'lifecycle' }] });
@@ -141,10 +141,8 @@ for (const ending of ['close', 'disconnect', 'detach']) {
       f.dom.window.dispatchEvent(new f.dom.window.Event('pagehide'));
       assert.deepEqual(order, ['geometry']);
       assert.equal(root.isConnected, true);
-      const detached = f.sent.filter(message => message.type === 'detach');
-      assert.equal(detached.length, 1);
-      assert.equal(detached[0].generation, 1);
-      assert.equal(detached[0].page, 'lifecycle');
+      // Pagehide also fires on reload; the page stays resumable, so no detach is sent.
+      assert.equal(f.sent.filter(message => message.type === 'detach').length, 0);
     }
   });
 }
