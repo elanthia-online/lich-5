@@ -73,6 +73,20 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
+  # declared_pid -- the client's SET_FRONTEND_PID process ID
+  # ===========================================================================
+  describe '#declared_pid' do
+    it 'starts undeclared' do
+      expect(socket.declared_pid).to be_nil
+    end
+
+    it 'keeps the declared process ID' do
+      socket.declared_pid = 4242
+      expect(socket.declared_pid).to eq(4242)
+    end
+  end
+
+  # ===========================================================================
   # alive? -- liveness semantics and edge cases
   # ===========================================================================
   describe '#alive?' do
