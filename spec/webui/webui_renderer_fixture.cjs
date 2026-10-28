@@ -25,6 +25,7 @@ function fixture(target) {
     replaceChildren(...children) { this.children.forEach(child => { child.isConnected = false; }); this.children = []; this.append(...children); }
     focus() { document.activeElement = this; }
     closest() { return null; }
+    contains(other) { for (let node = other; node; node = node.parent) if (node === this) return true; return false; }
     click() { this.listeners.click?.({}); }
     getClientRects() { return this.hidden ? [] : [this.getBoundingClientRect()]; }
     querySelector(selector) {
@@ -41,6 +42,7 @@ function fixture(target) {
     querySelectorAll(selector) {
       return this.children.flatMap(child => [
         ...(selector === '[data-width-groups]' && child.dataset.widthGroups ? [child] : []),
+        ...(selector === 'dialog[open]' && child.tagName === 'dialog' && child.open ? [child] : []),
         ...(child.querySelectorAll?.(selector) || [])
       ]);
     }
@@ -54,8 +56,9 @@ function fixture(target) {
   }
   const elements = Object.fromEntries(['pages', 'status', 'notifications', 'announcer'].map(id => [id, new Element('div')]));
   const documentEvents = {};
-  const document = { title: '', activeElement: null, createElement: tag => new Element(tag),
-    getElementById: id => elements[id], addEventListener(name, callback) { documentEvents[name] = callback; } };
+  const document = { title: '', activeElement: null, body: new Element('body'), createElement: tag => new Element(tag),
+    getElementById: id => elements[id], addEventListener(name, callback) { documentEvents[name] = callback; },
+    querySelectorAll: selector => elements.pages.querySelectorAll(selector) };
   const sent = [], resized = [], listeners = {}, windowEvents = {};
   let timer = 0;
   const frames = [];
@@ -70,6 +73,7 @@ function fixture(target) {
     requestAnimationFrame: work => frames.push(work), resizeTo: (...size) => resized.push(size), setTimeout: () => ++timer, clearTimeout() {},
     setInterval: () => ++timer, clearInterval() {},
     addEventListener: (name, callback) => { windowEvents[name] = callback; },
+    getComputedStyle: element => ({ visibility: element.style.visibility || 'visible' }),
     removeEventListener: name => { delete windowEvents[name]; } };
   const context = vm.createContext({ window, document, WebSocket, URL, URLSearchParams,
     CSS: { escape: value => value }, queueMicrotask: work => work() });
