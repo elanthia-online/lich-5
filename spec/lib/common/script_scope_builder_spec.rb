@@ -663,6 +663,10 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
       drain_gtk
       if close_path == :detach
         service.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
+        drain_gtk
+        # A viewer detach alone never closes the window; the managed window's exit does.
+        expect(form['main']).not_to be_destroyed
+        service.runtime.browser_closed(page)
       else
         service.runtime.disconnect(connection)
         service.runtime.browser_closed(page)
