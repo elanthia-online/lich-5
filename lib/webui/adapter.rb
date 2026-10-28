@@ -139,15 +139,19 @@ module Lich
       end
 
       # Flushes pending roots, then opens an owner-scoped asynchronous modal.
+      # The adapter's owner is reserved: an owner prop is refused, never forwarded.
       # @param props [Hash] modal options; ID is generated when absent
       # @return [Future] completion
+      # @raise [Error] when props name an owner
       def modal(props)
         raise ArgumentError, 'props must be a Hash' unless props.is_a?(Hash)
 
-        flush!
         options = symbolize(props)
+        raise attributed_error('modal owner is set by the adapter', nil, :owner) if options.key?(:owner)
+
+        flush!
         id = options.delete(:id) || "adapter-modal-#{SecureRandom.hex(8)}"
-        @service.modal(owner: @owner, id: id, **options)
+        @service.modal(**options, owner: @owner, id: id)
       rescue StandardError => error
         raise attributed(error, nil, :modal)
       end

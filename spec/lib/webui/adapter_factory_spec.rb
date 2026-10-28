@@ -6,7 +6,13 @@ require 'api/webui'
 require 'timeout'
 
 RSpec.describe 'core-owned adapter hosting' do
-  after { Lich::WebUI.reset! }
+  # Core startup owns the presentation policy; these fixtures set it explicitly.
+  before { Lich::WebUI.configure_presentation(enabled: true) }
+
+  after do
+    Lich::WebUI.reset!
+    Lich::WebUI.configure_presentation(enabled: nil)
+  end
 
   it 'approves configured and legacy data assets through the production factory without approving unrelated roots' do
     Dir.mktmpdir('webui-host-roots-') do |directory|
