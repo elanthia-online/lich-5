@@ -464,6 +464,9 @@ RSpec.describe 'remaining Builder setup families' do
     expect(form['profile_current'].text).to eq('new-profile')
     original_file = File.read(path)
     event(form['resting_room_id'], 'change', { value: '5678' })
+    # Saving hid the name entry; on_update shows it again, and a viewer can type
+    # into it only once that render arrives (hidden controls admit no input).
+    service.runtime.refresh(@page)
     event(form['save_profile_name'], 'change', { value: 'new-profile' })
     event(form['profile_save'], 'activate', {}, submission: :current)
     expect(form['profile_overwrite'].visible?).to be(true)
