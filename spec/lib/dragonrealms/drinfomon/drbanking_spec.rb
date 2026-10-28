@@ -120,12 +120,31 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
     end
 
-    describe 'DEPOSIT_ALL_JAR' do
-      let(:pattern) { described_module::Pattern::DEPOSIT_ALL_JAR }
+    describe 'DEPOSIT_JAR' do
+      let(:pattern) { described_module::Pattern::DEPOSIT_JAR }
 
-      it 'matches jar bank deposit' do
+      it 'matches a jar deposit and captures the new balance in copper' do
+        line = 'Searching methodically through the shelves, you finally manage to locate the jar labeled "Smith, Aldric", and drop your coins inside.  ' \
+               'You cross through the old balance on the label and update it to reflect your new balance: 2728329 Dokoras.'
+        match = pattern.match(line)
+        expect(match[:copper]).to eq('2728329')
+        expect(match[:currency]).to eq('Dokoras')
+      end
+
+      it 'matches the line with the name link still in the label' do
+        line = 'Searching methodically through the shelves, you finally manage to locate the jar labeled "Smith, <a exist="-10453048" noun="Aldric">Aldric</a>", ' \
+               'and drop your coins inside.  You cross through the old balance on the label and update it to reflect your new balance: 2728329 Dokoras.'
+        expect(pattern.match(line)[:copper]).to eq('2728329')
+      end
+
+      it 'matches a jar deposit line without a balance' do
         line = 'You cross through the old balance on the label and update it to reflect your new balance'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:copper]).to be_nil
+      end
+
+      it 'does not match the words inside speech' do
+        expect(pattern.match('Bob says, "You cross through the old balance on the label and update it to reflect your new balance: 9999999 Dokoras."')).to be_nil
       end
     end
 
@@ -142,7 +161,8 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
 
       it 'matches jar withdraw' do
-        line = 'You count out 10 silver Dokoras and quickly pocket them, updating the notation on your jar'
+        line = 'You find your jar with little effort, thankfully, and thrust your hand inside.  ' \
+               'You count out 10 silver Dokoras and quickly pocket them, updating the notation on your jar.'
         match = pattern.match(line)
         expect(match).not_to be_nil
         expect(match[:amount]).to eq('10')
@@ -171,7 +191,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       let(:pattern) { described_module::Pattern::BALANCE_CHECK }
 
       it 'matches "it looks like" balance check' do
-        line = 'it looks like your current balance is 5 platinum Kronars'
+        line = 'The clerk pages through her ledger.  "Aldric, it looks like your current balance is 5 platinum Kronars."'
         match = pattern.match(line)
         expect(match).not_to be_nil
         expect(match[:balance]).to eq('5 platinum')
@@ -179,18 +199,36 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
 
       it 'matches "Here we are" balance check' do
-        line = '"Here we are. Your current balance is 10 gold, 5 silver Lirums'
+        line = 'The clerk pages through her ledger.  "Smith, Aldric," she says to herself.  "Here we are.  Your current balance is 10 gold, 5 silver Lirums."'
         match = pattern.match(line)
         expect(match).not_to be_nil
+        expect(match[:balance]).to eq('10 gold, 5 silver')
         expect(match[:currency]).to eq('Lirums')
       end
 
+      it 'matches the Saga line with the name link still in it' do
+        # spec/fixtures/streams/dr_saga_containers_speech.xml
+        line = 'The clerk pages through her ledger.  "<a exist="-10700001" noun="Aldric">Aldric</a>, it looks like your current balance is 9133 platinum, 6 gold, 8 silver, and 8 bronze Kronars."'
+        expect(pattern.match(line)[:balance]).to eq('9133 platinum, 6 gold, 8 silver, and 8 bronze')
+      end
+
+      it 'matches a clerk line that starts with markup' do
+        line = '<pushBold/>The clerk pages through her ledger.  "Aldric, it looks like your current balance is 5 platinum Kronars."'
+        expect(pattern.match(line)[:balance]).to eq('5 platinum')
+      end
+
       it 'matches "As expected" balance check' do
-        line = 'As expected, there are 100 copper Dokoras'
+        line = 'Searching methodically through the shelves, you finally manage to locate the jar labeled "Smith, Aldric", and carefully count out the contents of it.  ' \
+               'As expected, there are 272 platinum, 8 gold, 3 silver, 2 bronze, and 9 copper Dokoras.'
         match = pattern.match(line)
         expect(match).not_to be_nil
-        expect(match[:balance]).to eq('100 copper')
+        expect(match[:balance]).to eq('272 platinum, 8 gold, 3 silver, 2 bronze, and 9 copper')
         expect(match[:currency]).to eq('Dokoras')
+      end
+
+      it 'does not match the words inside speech' do
+        expect(pattern.match('Bob says, "Aldric, it looks like your current balance is 5 platinum Kronars."')).to be_nil
+        expect(pattern.match('Bob says, "As expected, there are 100 copper Dokoras."')).to be_nil
       end
     end
 
@@ -198,13 +236,19 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       let(:pattern) { described_module::Pattern::NO_ACCOUNT }
 
       it 'matches no account at teller bank' do
-        line = 'you do not seem to have an account with us'
+        line = 'The clerk flips through her ledger then says, "Aldric, you do not seem to have an account with us.  ' \
+               'If you would like to open one, you need only deposit a few Kronars."'
         expect(pattern.match(line)).not_to be_nil
       end
 
       it 'matches no account at jar bank' do
-        line = 'you should find a new deposit jar for your financial needs'
+        line = 'Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name'
         expect(pattern.match(line)).not_to be_nil
+      end
+
+      it 'does not match the words inside speech' do
+        expect(pattern.match('Bob says, "Aldric, you do not seem to have an account with us."')).to be_nil
+        expect(pattern.match('Bob says, "Perhaps you should find a new deposit jar for your financial needs."')).to be_nil
       end
     end
   end
@@ -1274,32 +1318,98 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
       describe 'balance check' do
         it 'updates balance from "it looks like" message' do
-          described_module.parse('it looks like your current balance is 5 platinum, 3 gold Kronars')
+          described_module.parse('The clerk pages through her ledger.  "Aldric, it looks like your current balance is 5 platinum, 3 gold Kronars."')
           expect(described_module.my_accounts['Crossings']).to eq(53_000)
         end
 
+        it 'updates balance from "Here we are" message' do
+          described_module.parse('The clerk pages through her ledger.  "Smith, Aldric," she says to herself.  "Here we are.  Your current balance is 2 platinum, 4 silver, and 1 copper Kronars."')
+          expect(described_module.my_accounts['Crossings']).to eq(20_401)
+        end
+
         it 'updates balance from "As expected" message' do
-          described_module.parse('As expected, there are 100 copper Kronars')
+          described_module.parse('As expected, there are 100 copper Kronars.')
           expect(described_module.my_accounts['Crossings']).to eq(100)
         end
       end
 
       describe 'no account' do
+        let(:no_account_line) do
+          'The clerk flips through her ledger then says, "Aldric, you do not seem to have an account with us.  ' \
+            'If you would like to open one, you need only deposit a few Kronars."'
+        end
+
         it 'clears balance for teller bank message' do
           described_module.update_balance('Crossings', 10_000)
-          described_module.parse('you do not seem to have an account with us')
+          described_module.parse(no_account_line)
           expect(described_module.my_accounts['Crossings']).to eq(0)
         end
 
         it 'clears balance for jar bank message' do
           described_module.update_balance('Crossings', 10_000)
-          described_module.parse('you should find a new deposit jar for your financial needs')
+          described_module.parse('Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name')
           expect(described_module.my_accounts['Crossings']).to eq(0)
         end
 
         it 'logs no account message' do
-          described_module.parse('you do not seem to have an account with us')
+          described_module.parse(no_account_line)
           expect(message_strings.last).to include('No account')
+        end
+      end
+
+      describe 'at a jar bank' do
+        before do
+          XMLData.room_title = '[[First Council Banking, Vault]]' # Fang Cove
+          described_module.update_balance('Fang Cove', 2_718_329)
+        end
+
+        it 'records the new balance a deposit reports' do
+          described_module.parse('Searching methodically through the shelves, you finally manage to locate the jar labeled "Smith, Aldric", and drop your coins inside.  ' \
+                                 'You cross through the old balance on the label and update it to reflect your new balance: 2728329 Dokoras.')
+          expect(described_module.my_accounts['Fang Cove']).to eq(2_728_329)
+        end
+
+        it 'records the balance from a balance check' do
+          described_module.parse('Searching methodically through the shelves, you finally manage to locate the jar labeled "Smith, Aldric", and carefully count out the contents of it.  ' \
+                                 'As expected, there are 272 platinum, 8 gold, 3 silver, 2 bronze, and 9 copper Dokoras.')
+          expect(described_module.my_accounts['Fang Cove']).to eq(2_728_329)
+        end
+
+        it 'subtracts a withdrawal' do
+          described_module.parse('You find your jar with little effort, thankfully, and thrust your hand inside.  ' \
+                                 'You count out 1 platinum Dokoras and quickly pocket them, updating the notation on your jar.')
+          expect(described_module.my_accounts['Fang Cove']).to eq(2_708_329)
+        end
+
+        it 'leaves the balance alone for speech quoting a deposit' do
+          described_module.parse('Bob says, "You cross through the old balance on the label and update it to reflect your new balance: 9999999 Dokoras."')
+          expect(described_module.my_accounts['Fang Cove']).to eq(2_718_329)
+        end
+      end
+
+      describe 'text that only quotes a bank message' do
+        before { described_module.update_balance('Crossings', 50_000) }
+
+        {
+          'speech quoting a balance'          => 'Bob says, "Aldric, it looks like your current balance is 999 platinum Kronars."',
+          'speech quoting a clerk balance'    => 'Bob says, "The clerk pages through her ledger.  Aldric, it looks like your current balance is 999 platinum Kronars."',
+          'speech quoting "Here we are"'      => 'Bob says, "Here we are.  Your current balance is 999 platinum Kronars."',
+          'speech quoting a jar balance'      => 'Bob asks, "As expected, there are 999 platinum Kronars?"',
+          'speech quoting a deposit'          => 'Bob says, "The clerk slides a small metal box across the counter into which you drop 900 platinum Kronars"',
+          'speech quoting a withdrawal'       => 'Bob says, "The clerk counts out 4 platinum Kronars and hands them over, making a notation in her ledger."',
+          'speech quoting a jar withdrawal'   => 'Bob says, "You count out 4 platinum Kronars and quickly pocket them, updating the notation on your jar"',
+          'a whisper quoting a withdraw-all'  => 'Bob whispers to you, "The clerk counts out all your Kronars and hands them over, making a notation in her ledger."',
+          'speech quoting a jar withdraw-all' => 'Bob says, "You count out all of your Kronars and quickly pocket them"',
+          'speech quoting no account'         => 'Bob says, "The clerk says, Aldric, you do not seem to have an account with us."',
+          'speech quoting no jar'             => 'Bob says, "Perhaps you should find a new deposit jar for your financial needs."',
+          'your own speech'                   => 'You say, "Aldric, it looks like your current balance is 999 platinum Kronars."',
+          'bolded speech'                     => '<pushBold/>Bob<popBold/> says, "The clerk counts out all your Kronars and hands them over"',
+          'a jar money-changer exchange'      => 'You count out all of your Kronars and drop them in the proper jar.  After figuring a 5% fee in the ledger beside the jar, you reach into the one filled with Dokoras and withdraw 95 platinum Dokoras.'
+        }.each do |what, line|
+          it "leaves the balance alone for #{what}" do
+            described_module.parse(line)
+            expect(described_module.my_accounts['Crossings']).to eq(50_000)
+          end
         end
       end
     end
