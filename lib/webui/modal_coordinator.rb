@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'future'
+require_relative 'host_thread'
 require_relative 'page'
 
 module Lich
@@ -9,14 +10,50 @@ module Lich
     class ModalCoordinator
       Pending = Data.define(:owner, :page, :future, :timer, :props)
 
+      # Modal completion whose callbacks belong to one owner. Each callback stays
+      # contained exactly as in Future; a callback's SystemExit additionally
+      # requests that owner's stop, never Lich's (B3).
+      # @api private
+      class OwnerFuture < Future
+        # @param on_exit [#call] owner-stop request, called after a callback exits
+        # @param options [Hash] Future options
+        def initialize(on_exit:, **options)
+          super(**options)
+          @on_exit = on_exit
+        end
+
+        private
+
+        # Runs one callback through Future's containment, then honors its exit.
+        # @param callback [#call] completion observer
+        # @param result [Result] winning completion
+        # @return [void]
+        # @api private
+        def invoke(callback, result)
+          exited = false
+          observed = proc do |value|
+            callback.call(value)
+          rescue SystemExit
+            exited = true
+            raise
+          end
+          super(observed, result)
+          @on_exit.call if exited
+        end
+      end
+      private_constant :OwnerFuture
+
       # Connects modal completion to registry ownership and viewer availability.
       # @param registry [Registry] page registration/admission service
       # @param runtime [Runtime] render and callback runtime
       # @param viewers_present [#call] owner-scoped viewer availability query
       # @param pages_changed [#call] notification after modal registration changes
       # @param logger [#call, nil] isolated diagnostic sink
-      def initialize(registry:, runtime:, viewers_present:, pages_changed:, logger: nil)
+      # @param owner_exit [#call, nil] owner-stop request for a completion callback's
+      #   SystemExit; nil terminates the owner on the runtime
+      def initialize(registry:, runtime:, viewers_present:, pages_changed:, logger: nil, owner_exit: nil)
         @registry = registry
+        @owner_exit = owner_exit || ->(owner) { HostThread.start { runtime.terminate_owner(owner) } }
         @runtime = runtime
         @viewers_present = viewers_present
         @pages_changed = pages_changed
@@ -59,7 +96,7 @@ module Lich
         page_props = Validator.new.validate_component!(
           :page, page_props.merge(title: title), owner: owner_label(owner), page_id: id, cid: "page:#{id}"
         )
-        future = Future.new(logger: @logger)
+        future = OwnerFuture.new(logger: @logger, on_exit: -> { request_owner_exit(owner) })
         unless @viewers_present.call(owner)
           return resolve_absent_viewer(future, props) unless props[:no_viewer] == 'wait'
         end
@@ -73,7 +110,9 @@ module Lich
           else
             future.resolve(button: event.payload[:button])
           end
-        rescue StandardError
+        rescue SystemExit, *Dispatcher::CONTAINED_EXCEPTIONS
+          # The dispatcher reports the failure (and stops the owner on exit);
+          # the modal must not stay pending behind it.
           future.cancel(reason: :error)
           raise
         end
@@ -96,7 +135,8 @@ module Lich
           @registry.register(page, modal: true)
           registered = true
           page.bind_runtime(@runtime)
-          timer = timeout && Thread.new do
+          # A host timer: its lifetime never follows the thread that opened the modal.
+          timer = timeout && HostThread.start do
             sleep(timeout)
             future.resolve(reason: :timeout)
           end
@@ -164,6 +204,16 @@ module Lich
       end
 
       private
+
+      # Requests an owner stop without letting the request disturb completion.
+      # @param owner [Object] owner whose completion callback exited
+      # @return [void]
+      def request_owner_exit(owner)
+        Diagnostics.log(@logger, :warning, "WebUI completion callback exited owner=#{owner_label(owner)}; owner stopped")
+        @owner_exit.call(owner)
+      rescue StandardError => error
+        Diagnostics.log(@logger, :error, "WebUI owner stop request failed: #{error.class}")
+      end
 
       # Completes an unavailable modal using its declared default or cancellation policy.
       # @return [Future] supplied completion

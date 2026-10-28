@@ -8,6 +8,10 @@ module Lich
     # logic. go2, ecleanse and ewaggle supply their own fields and normalization.
     # No draft is persisted here; the owning script receives one accepted copy.
     class SettingsForm
+      # Host diagnostic sink; values and exception messages are never logged.
+      LOGGER = proc { |level, message| Lich.log("#{level}: #{message}") if Lich.respond_to?(:log) }
+      private_constant :LOGGER
+
       attr_reader :page
 
       # Formats already prepared choices without changing their values or order.
@@ -211,6 +215,8 @@ module Lich
 
       # Normalizes a copied submission and completes once; validation errors retain the draft.
       # Only successful normalization closes the page and resolves its completion.
+      # ArgumentError shows its validation message. Any other StandardError shows a
+      # generic message, keeps the draft and logs only the error class and location.
       # @return [void]
       def save(submission, refs)
         return if @completion.resolved?
@@ -225,6 +231,12 @@ module Lich
       rescue ArgumentError => error
         @values = draft if draft
         @error = error.message[0, Contract::BOUNDS[:body_text]]
+        WebUI.refresh(@page)
+      rescue StandardError => error
+        @values = draft if draft
+        @error = 'Settings could not be saved. Check the values and try again, or Cancel.'
+        Diagnostics.log(LOGGER, :error, "WebUI settings form save failed owner=#{Diagnostics.owner_label(@owner)} " \
+                                        "page=#{@id} error=#{error.class} at=#{error.backtrace&.first}")
         WebUI.refresh(@page)
       end
 

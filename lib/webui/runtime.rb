@@ -45,10 +45,14 @@ module Lich
       # @param on_page_closed [#call, nil] callback releasing a page's owned window
       # @param window_host [#call, nil] lookup from a Page to its BrowserWindow
       # @param viewers_changed [#call, nil] notification after an owner's viewer loss
+      # @param owner_exit [#call, nil] owner-stop request for a render's SystemExit;
+      #   nil terminates the owner on this runtime
       # @return [Runtime]
       def initialize(registry:, dispatcher: nil, viewers: ViewerStore.new,
-                     validator: Validator.new, file_service: nil, logger: nil, on_page_closed: nil, window_host: nil, viewers_changed: nil)
+                     validator: Validator.new, file_service: nil, logger: nil, on_page_closed: nil, window_host: nil, viewers_changed: nil,
+                     owner_exit: nil)
         @registry = registry
+        @owner_exit = owner_exit || ->(owner) { HostThread.start { terminate_owner(owner) } }
         @on_page_closed = on_page_closed
         @window_host = window_host
         @viewers_changed = viewers_changed
@@ -63,10 +67,22 @@ module Lich
         @connections = {}
         @connections_mutex = Mutex.new
         @render_coordinator = RenderCoordinator.new(on_error: lambda do |owner, error|
+          if error.is_a?(RenderCoordinator::StopTimeout)
+            next log(:warning, "WebUI render worker did not stop owner=#{owner_label(owner)}; its late result is not delivered")
+          end
+
           log(:error, "WebUI refresh failed owner=#{owner_label(owner)} error=#{error.class}")
+          # A render block's exit stops its owner, never Lich (B3).
+          @owner_exit.call(owner) if error.is_a?(SystemExit)
         end)
         @degradation_mutex = Mutex.new
         @degradations = {}.compare_by_identity
+        @resumable_mutex = Mutex.new
+        @resumable = {}.compare_by_identity
+        @expiry_queue = []
+        @expiry_condition = ConditionVariable.new
+        @expiry_thread = nil
+        @expiry_stopped = false
       end
 
       # Submits non-page work to the same ordered worker as this owner's UI events.
@@ -149,16 +165,28 @@ module Lich
           @viewers.destroy_page(page)
         end
         @degradation_mutex.synchronize { pages.each { |page| @degradations.delete(page) } }
+        @resumable_mutex.synchronize { pages.each { |page| @resumable.delete(page) } }
         pages
       end
 
       # Refuses registration before draining the host's dispatcher and render workers.
+      # Every stage runs even when an earlier one raises; the first failure re-raises.
       # @return [void]
       def shutdown
         @registry.stop
-        @scheduler.shutdown
-        @dispatcher.shutdown
-        cancel_renders
+        begin
+          @scheduler.shutdown
+        ensure
+          begin
+            @dispatcher.shutdown
+          ensure
+            begin
+              cancel_renders
+            ensure
+              stop_viewer_expiry
+            end
+          end
+        end
       end
 
       # Internal core render scheduling, shared by native page updates and the
