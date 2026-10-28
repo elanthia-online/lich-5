@@ -246,34 +246,35 @@ RSpec.describe Lich::WebUI::Server do
     second&.stop
   end
 
-  it 'bounds a WebSocket write when the peer stops reading' do
+  it 'queues a write at once and retires the connection when the peer stops reading' do
     stub_const('Lich::WebUI::Server::Connection::WRITE_TIMEOUT', 0.05)
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
     connection = described_class::Connection.new(sender)
-    worker = Thread.new { connection.send_text('x' * (1024 * 1024)) }
 
-    expect(Timeout.timeout(1) { worker.value }).to be(false)
-    expect(connection).not_to be_alive
+    expect(Timeout.timeout(1) { connection.send_text('x' * (1024 * 1024)) }).to be(true)
+    Timeout.timeout(2) { sleep 0.005 while connection.alive? }
+    expect(connection.send_text('late')).to be(false)
   ensure
+    connection&.close
     sender&.close
     receiver&.close
-    worker&.kill&.join
   end
 
   it 'retires a stream if its writer is killed partway through a frame' do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
     connection = described_class::Connection.new(sender)
-    worker = Thread.new { connection.send_text('x' * (1024 * 1024)) }
+    writer = connection.instance_variable_get(:@writer)
+    expect(connection.send_text('x' * (1024 * 1024))).to be(true)
     expect(Timeout.timeout(2) { receiver.read(2) }.bytesize).to eq(2)
-    worker.kill.join(2)
+    writer.kill.join(2)
 
     expect(connection).not_to be_alive
     expect(connection.send_text('must not append to an incomplete frame')).to be(false)
     expect(Timeout.timeout(2) { receiver.read }).to be_a(String)
   ensure
-    worker&.kill&.join
+    connection&.close
     sender&.close
     receiver&.close
   end
@@ -302,15 +303,15 @@ RSpec.describe Lich::WebUI::Server do
     connection = described_class::Connection.new(sender)
     lock = connection.instance_variable_get(:@write_mutex)
     lock.lock
-    worker = Thread.new { connection.send_text('queued') }
 
-    expect(Timeout.timeout(1) { worker.value }).to be(false)
-    expect(connection).not_to be_alive
+    expect(connection.send_text('queued')).to be(true)
+    Timeout.timeout(1) { sleep 0.005 while connection.alive? }
+    expect(connection.send_text('late')).to be(false)
   ensure
     lock&.unlock if lock&.owned?
+    connection&.close
     sender&.close
     receiver&.close
-    worker&.kill&.join
   end
 
   it 'authenticates WebSocket upgrade, emits hello, and delivers strict messages' do
