@@ -303,6 +303,9 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .notification { margin: 8px; padding: 10px; border: 1px solid var(--border); background: var(--surface-raised); }
 .tone-danger { color: var(--danger); }
+.tone-positive { color: #176b37; background-color: #f0fff4; }
+.tone-caution { color: #754b00; background-color: #fff8e1; }
+.connection-status { display: block; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; padding: 12px; color: #754b00; background: #fff8e1; border: 1px solid currentColor; }
 .emphasis-strong { font-weight: 700; }
 .emphasis-subtle { opacity: .72; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
