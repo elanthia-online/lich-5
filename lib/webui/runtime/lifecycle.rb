@@ -48,6 +48,7 @@ module Lich
         end
         @viewers.destroy_page(page)
         @degradation_mutex.synchronize { @degradations.delete(page) }
+        @resumable_mutex.synchronize { @resumable.delete(page) }
         @viewers_changed&.call(page.owner)
         page
       rescue Error
@@ -56,8 +57,8 @@ module Lich
 
       private
 
-      # pagehide and the process monitor can both observe one user close.
-      # Unmanaged browser viewers retain their existing per-viewer semantics.
+      # One owned-window close is dispatched once, however many exit notices arrive.
+      # Viewer detach and pagehide never claim it; only the owned process path does.
       # @param page [Page] exact owner-scoped page
       # @return [Boolean]
       # @api private

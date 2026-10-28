@@ -4,6 +4,9 @@ module Lich
   module WebUI
     class Runtime
       # Renders and delivers a registered page only while its owner accepts work.
+      # Admission is checked again after author rendering, under render
+      # publication admission, so a render that outlives owner termination, host
+      # stop or page closure is never delivered.
       # @param page [Page] page to refresh
       # @return [Integer] evaluated render generation
       # @raise [Error] if the page closed, its owner terminated or the host stopped
@@ -12,12 +15,16 @@ module Lich
         @registry.address_for(page)
         page.bind_runtime(self)
         render = validated_render(page)
-        @viewers.attachments_for(page).each do |attachment|
-          connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
-          next unless connection&.alive?
+        @render_coordinator.publish(page.owner) do
+          @registry.ensure_active!(page.owner)
+          @registry.address_for(page)
+          @viewers.attachments_for(page).each do |attachment|
+            connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
+            next unless connection&.alive?
 
-          @viewers.deliver(attachment, render)
-          send_render(connection, attachment)
+            @viewers.deliver(attachment, render)
+            send_render(connection, attachment)
+          end
         end
         render.generation
       end

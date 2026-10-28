@@ -62,12 +62,17 @@ module Lich
         end
 
         event_schema = Contract.schema(component.type)[:events].fetch(message[:event].to_sym)
+        unavailable = interaction_disabled?(attachment.render.tree, component.cid)
         unless event_schema[:lifecycle]
           presentation = (attachment.render.tree.props[:presentation] || {}).merge(attachment.render.facilities[:presentation] || {})
-          if presentation[:hidden] || interaction_disabled?(attachment.render.tree, component.cid)
+          if presentation[:hidden] || unavailable
             raise Protocol::Refusal.new(:payload, 'component interaction is disabled or its window is hidden')
           end
         end
+        # Lifecycle cleanup (for example blur) from a disabled or hidden control
+        # still runs, but carries the server-held value and changes no viewer state.
+        retain_change = !(unavailable && event_schema[:lifecycle] && payload.key?(:value))
+        payload = payload.merge(value: @viewers.input_value(attachment, component)).freeze unless retain_change
         # A select notification represents a transition, including when a client
         # resubmits its already selected tab before the next render arrives.
         if component.type == :tabs && message[:event].to_sym == :select &&
@@ -84,7 +89,7 @@ module Lich
         if component.type == :page && message[:event].to_sym == :configure && payload[:monitors]
           attachment.page.observe_monitors(attachment.viewer_id, payload[:monitors])
         end
-        @viewers.update(attachment, component, message[:event].to_sym, payload, message[:request])
+        @viewers.update(attachment, component, message[:event].to_sym, payload, message[:request]) if retain_change
         context = EventContext.new(
           attachment.viewer_id, attachment.page, component, message[:event].to_sym, payload, snapshot, admission.render
         )
@@ -206,14 +211,17 @@ module Lich
         :queued
       end
 
-      # Resolves ancestor disabled state in the delivered tree without changing local properties.
+      # Resolves disabled or hidden state, including any disabled or hidden ancestor,
+      # in the delivered tree without changing local properties. Hidden controls are
+      # not displayed, so they admit no interaction (the same visibility policy as
+      # widget transfers).
       # @param component [Component] current subtree
       # @param cid [String] target identity
-      # @param inherited [Boolean] disabled state of ancestors
+      # @param inherited [Boolean] disabled or hidden state of ancestors
       # @return [Boolean, nil] effective state, or nil when absent from this subtree
       # @api private
       def interaction_disabled?(component, cid, inherited = false)
-        disabled = inherited || component.props[:disabled] == true
+        disabled = inherited || component.props[:disabled] == true || component.props[:hidden] == true
         return disabled if component.cid == cid
 
         component.children.each do |child|
