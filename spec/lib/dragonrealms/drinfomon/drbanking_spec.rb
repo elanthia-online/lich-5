@@ -7,6 +7,7 @@ require_relative '../../../support/settings_db'
 require_relative '../../../../lib/common/settings/database_adapter'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
+require_relative '../../../../lib/dragonrealms/drinfomon/drparser'
 
 # Note: XMLData and Lich::Messaging are provided by spec_helper.rb
 # We use Lich::Messaging.messages/clear_messages! for test assertions
@@ -138,7 +139,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
 
       it 'matches a jar deposit line without a balance' do
-        line = 'You cross through the old balance on the label and update it to reflect your new balance'
+        line = 'You find your jar with little effort, thankfully, and drop your coins inside.  You cross through the old balance on the label and update it to reflect your new balance'
         expect(pattern.match(line)).not_to be_nil
         expect(pattern.match(line)[:copper]).to be_nil
       end
@@ -181,7 +182,8 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
 
       it 'matches jar withdraw all' do
-        line = 'You count out all of your Dokoras and quickly pocket them'
+        line = 'You find your jar with little effort, thankfully, and thrust your hand inside.  ' \
+               'You count out all of your Dokoras and quickly pocket them, updating the notation on your jar.'
         expect(pattern.match(line)).not_to be_nil
         expect(pattern.match(line)[:currency]).to eq('Dokoras')
       end
@@ -243,6 +245,21 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
       it 'matches no account at jar bank' do
         line = 'Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name'
+        expect(pattern.match(line)).not_to be_nil
+      end
+
+      # Openings from the Genie Bank Balance Tracker triggers (Elanthipedia,
+      # "Bank Balance Tracker (script)") and the Balance command page. The
+      # words between "I don't recognize you," and "Perhaps" aren't recorded
+      # there, so this one is filled in.
+      it 'matches the jar voice that does not recognize you' do
+        line = 'A voice behind you calls out, "I don\'t recognize you, Aldric.  Perhaps you should find a new deposit jar for your financial needs."'
+        expect(pattern.match(line)).not_to be_nil
+      end
+
+      it 'matches not finding your jar' do
+        line = 'You sift through shelf after shelf of the jars -- "Gorund," "Wickett," "Turialo," "Tekemi," "Tokomi" and countless others, ' \
+               "but can't for the life of you find one with your name!"
         expect(pattern.match(line)).not_to be_nil
       end
 
@@ -1272,7 +1289,8 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         end
 
         it 'logs deposit all for jar bank' do
-          described_module.parse('You cross through the old balance on the label and update it to reflect your new balance')
+          described_module.parse('You find your jar with little effort, thankfully, and drop your coins inside.  ' \
+                                 'You cross through the old balance on the label and update it to reflect your new balance')
           expect(message_strings.last).to include('Deposited all money')
         end
       end
@@ -1328,7 +1346,8 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         end
 
         it 'updates balance from "As expected" message' do
-          described_module.parse('As expected, there are 100 copper Kronars.')
+          described_module.parse('You find your jar with little effort, thankfully, and carefully count out the contents of it.  ' \
+                                 'As expected, there are 100 copper Kronars.')
           expect(described_module.my_accounts['Crossings']).to eq(100)
         end
       end
@@ -1348,6 +1367,19 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         it 'clears balance for jar bank message' do
           described_module.update_balance('Crossings', 10_000)
           described_module.parse('Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
+
+        it 'clears balance when the jar voice does not recognize you' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('A voice behind you calls out, "I don\'t recognize you, Aldric.  Perhaps you should find a new deposit jar for your financial needs."')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
+
+        it 'clears balance when you cannot find your jar' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('You sift through shelf after shelf of the jars -- "Gorund," "Wickett," "Turialo," "Tekemi," "Tokomi" and countless others, ' \
+                                 "but can't for the life of you find one with your name!")
           expect(described_module.my_accounts['Crossings']).to eq(0)
         end
 
@@ -1387,6 +1419,42 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         end
       end
 
+      describe 'raw server lines from captured sessions' do
+        # The stream replay fixtures are real captures, Saga and legacy
+        # (spec/fixtures/streams/MANIFEST.md). DRParser.parse hands DRBanking
+        # each server line after DRParser.match_line, so replay every line of
+        # the capture through those same two steps.
+        def replay(fixture)
+          File.foreach(File.expand_path("../../../fixtures/streams/#{fixture}", __dir__), chomp: true) do |line|
+            described_module.parse(Lich::DragonRealms::DRParser.match_line(line))
+          end
+        end
+
+        it 'records a legacy-stream deposit-all, withdrawal and balance (Shard)' do
+          XMLData.room_title = "[[First Bank of Ilithi, Teller's Windows]]"
+          described_module.update_balance('Shard', 10_000_000)
+          replay('dr_legacy_bank.xml')
+          expect(message_strings).to include(a_string_including('Deposited all money at Shard'))
+          expect(message_strings).to include('DRBanking: Updated Shard balance to 999 platinum') # withdrew 1 platinum
+          expect(described_module.my_accounts['Shard']).to eq(852_300_281)
+        end
+
+        it 'records a Saga-stream withdrawal, deposit and linked-name balance (Leth Deriel)' do
+          XMLData.room_title = '[[Imperial Depository, Domestic Branch]]'
+          described_module.update_balance('Leth Deriel', 1_000_000)
+          replay('dr_saga_containers_speech.xml')
+          expect(message_strings).to include('DRBanking: Updated Leth Deriel balance to 90 platinum') # withdrew 10 platinum
+          expect(message_strings).to include('DRBanking: Updated Leth Deriel balance to 91 platinum') # deposited 1 platinum
+          expect(described_module.my_accounts['Leth Deriel']).to eq(91_336_880)
+        end
+
+        it 'records a Saga-stream linked-name balance (Leth Deriel)' do
+          XMLData.room_title = '[[Imperial Depository, Domestic Branch]]'
+          replay('dr_saga_group_bank.xml')
+          expect(described_module.my_accounts['Leth Deriel']).to eq(91_426_880)
+        end
+      end
+
       describe 'text that only quotes a bank message' do
         before { described_module.update_balance('Crossings', 50_000) }
 
@@ -1404,7 +1472,13 @@ RSpec.describe Lich::DragonRealms::DRBanking do
           'speech quoting no jar'             => 'Bob says, "Perhaps you should find a new deposit jar for your financial needs."',
           'your own speech'                   => 'You say, "Aldric, it looks like your current balance is 999 platinum Kronars."',
           'bolded speech'                     => '<pushBold/>Bob<popBold/> says, "The clerk counts out all your Kronars and hands them over"',
-          'a jar money-changer exchange'      => 'You count out all of your Kronars and drop them in the proper jar.  After figuring a 5% fee in the ledger beside the jar, you reach into the one filled with Dokoras and withdraw 95 platinum Dokoras.'
+          'a jar money-changer exchange'      => 'You count out all of your Kronars and drop them in the proper jar.  After figuring a 5% fee in the ledger beside the jar, you reach into the one filled with Dokoras and withdraw 95 platinum Dokoras.',
+          'a recited jar withdraw-all'        => 'Bob recites:  You count out all of your Kronars and quickly pocket them.',
+          'a note quoting a jar deposit'      => 'You read the note.  It says: You cross through the old balance on the label and update it to reflect your new balance: 99999999 Kronars.',
+          'a jar balance with no lead-in'     => 'As expected, there are 999 platinum Kronars.',
+          'a jar withdrawal with no lead-in'  => 'You count out 4 platinum Kronars and quickly pocket them, updating the notation on your jar.',
+          'speech quoting the jar voice'      => 'Bob says, "A voice behind you calls out, I don\'t recognize you.  Perhaps you should find a new deposit jar for your financial needs."',
+          'speech quoting a lost jar'         => 'Bob says, "You sift through shelf after shelf of the jars"'
         }.each do |what, line|
           it "leaves the balance alone for #{what}" do
             described_module.parse(line)

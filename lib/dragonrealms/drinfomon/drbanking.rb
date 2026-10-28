@@ -40,12 +40,13 @@ module Lich
         # "The clerk", after any markup tags.
         CLERK = /\A(?:<[^>]*>)*The clerk /i.freeze
 
-        # Start of a jar-bank line. The game opens with one of two lead-ins,
-        # and one quotes the jar's label, so after those anything may come
-        # before the message; otherwise nothing quoted may.
+        # Start of a jar-bank deposit, withdrawal or balance line: the game
+        # opens each with one of two lead-ins, after any markup tags. One
+        # quotes the jar's label, so anything may come between the lead-in
+        # and the message.
         # "Searching methodically through the shelves, you finally manage to locate the jar labeled "Surname, Name", and ..."
         # "You find your jar with little effort, thankfully, and thrust your hand inside.  ..."
-        JAR = /\A(?:(?:<[^>]*>)*(?:Searching methodically through the shelves|You find your jar with little effort).*?|[^"]*?)/i.freeze
+        JAR = /\A(?:<[^>]*>)*(?:Searching methodically through the shelves|You find your jar with little effort).*?/i.freeze
 
         # Deposit a portion of money
         # "The clerk slides a small metal box across the counter into which you drop 1 platinum Kronars.  She counts them carefully and records the deposit in her ledger."
@@ -69,7 +70,7 @@ module Lich
         # a jar money-changer's "You count out all of your Kronars and drop
         # them in the proper jar" is an exchange, not a withdrawal.
         # "The clerk counts out all your Kronars and hands them over, making a notation in her ledger."
-        # "You count out all of your Dokoras and quickly pocket them"
+        # "... and thrust your hand inside.  You count out all of your Dokoras and quickly pocket them, updating the notation on your jar."
         WITHDRAW_ALL = /#{CLERK}counts out all your (?<currency>Kronars|Lirums|Dokoras) and hands them over|#{JAR}You count out all of your (?<currency>Kronars|Lirums|Dokoras) and quickly pocket them/i.freeze
 
         # Balance check
@@ -78,10 +79,14 @@ module Lich
         # "... and carefully count out the contents of it.  As expected, there are 272 platinum, 8 gold, 3 silver, 2 bronze, and 9 copper Dokoras."
         BALANCE_CHECK = /#{CLERK}.*?(?:it looks like|"Here we are\.)\s*[Yy]our current balance is (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)|#{JAR}As expected, there are (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)/i.freeze
 
-        # No account at this bank
+        # No account at this bank. A jar bank says so without the jar
+        # lead-ins: a voice calls out (the words are in its quotes), or you
+        # can't find your jar.
         # "The clerk flips through her ledger then says, "Name, you do not seem to have an account with us.  If you would like to open one, you need only deposit a few Kronars.""
+        # "A voice behind you calls out, "I don't recognize you, ... Perhaps you should find a new deposit jar for your financial needs. ...""
+        # "You sift through shelf after shelf of the jars -- "Gorund," "Wickett," ... but can't for the life of you find one with your name!"
         # "Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name"
-        NO_ACCOUNT = /#{CLERK}.*?you do not seem to have an account with us|#{JAR}you should find a new deposit jar for your financial needs/i.freeze
+        NO_ACCOUNT = /#{CLERK}.*?you do not seem to have an account with us|\A(?:<[^>]*>)*(?:A voice behind you calls out, "I don't recognize you,.*?)?Perhaps you should find a new deposit jar for your financial needs|\A(?:<[^>]*>)*You sift through shelf after shelf of the jars/i.freeze
       end
 
       # Denomination multipliers for converting to copper
