@@ -3,6 +3,7 @@
 require_relative 'host_thread'
 
 require 'digest/sha1'
+require 'monitor'
 require 'securerandom'
 require 'socket'
 require 'uri'
@@ -19,8 +20,19 @@ module Lich
       COOKIE_NAME = 'lich_webui'
       MAX_HEADER_BYTES = 8192
       MAX_CLIENTS = 64
+      # Sockets still sending request headers. When full, the oldest is
+      # dropped for a newcomer, so stalled headers cannot hold the slots a
+      # prompt token redemption or page request needs.
+      MAX_PENDING_CLIENTS = 16
       READ_TIMEOUT = 5
       WS_POLL_INTERVAL = 0.25
+      # A started WebSocket message (header, extended length, mask and every
+      # payload fragment) must finish within this many seconds.
+      WS_MESSAGE_TIMEOUT = 10
+      # Idle WebSockets are pinged; browsers answer pings even for hidden tabs.
+      # Silence past WS_IDLE_TIMEOUT retires the socket and its client slot.
+      WS_PING_INTERVAL = 20
+      WS_IDLE_TIMEOUT = 60
       LAUNCH_TOKEN_LIFETIME = 60
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
@@ -78,8 +90,11 @@ module Lich
         @accept_thread = nil
         @client_threads = []
         @client_sockets = []
+        @pending_sockets = []
         @connections = []
         @mutex = Mutex.new
+        # Orders hello against broadcasts; reentrant in case pages_provider publishes.
+        @publish_monitor = Monitor.new
         @stopping = false
       end
 
@@ -133,13 +148,18 @@ module Lich
         "http://#{url_host}:#{port}/auth?token=#{token}&to=#{URI.encode_www_form_component(target)}"
       end
 
-      # Sends a JSON message to a snapshot of authenticated connections.
+      # Queues a JSON message on a snapshot of authenticated connections.
+      # Each connection writes on its own worker, so a slow viewer delays only itself.
+      # Serialized with connection bootstrap so a new viewer receives hello first.
       # @param payload [String, Object] already encoded JSON or a JSON-serializable value
       # @return [void]
+      # @raise [Protocol::Refusal] when the message exceeds Protocol::MAX_RENDER_BYTES
       def broadcast(payload)
         json = payload.is_a?(String) ? payload : JSON.generate(payload)
-        connections = @mutex.synchronize { @connections.dup }
-        connections.each { |connection| connection.send_text(json) }
+        @publish_monitor.synchronize do
+          connections = @mutex.synchronize { @connections.dup }
+          connections.each { |connection| connection.send_text(json) }
+        end
       end
 
       # Closes admitted HTTP and WebSocket sockets before joining their workers.
@@ -162,6 +182,7 @@ module Lich
           @client_threads.clear
           @connections.clear
           @client_sockets.clear
+          @pending_sockets.clear
           @launch_tokens.clear
         end
         connections.each(&:close)
@@ -182,6 +203,7 @@ module Lich
 
       # Reserves a bounded socket slot before starting each request worker.
       # Excess clients are closed immediately without allocating another thread.
+      # A full header-phase pool evicts its oldest socket for the newcomer.
       # @return [void]
       def accept_loop
         loop do
@@ -190,9 +212,20 @@ module Lich
 
           socket = nil
           socket = listener.accept
+          evicted = nil
           admitted = @mutex.synchronize do
-            @client_sockets << socket if !@stopping && @client_sockets.size < MAX_CLIENTS
+            next false if @stopping
+
+            if @pending_sockets.size >= MAX_PENDING_CLIENTS
+              evicted = @pending_sockets.shift
+              @client_sockets.delete(evicted)
+            end
+            next false unless @client_sockets.size < MAX_CLIENTS
+
+            @client_sockets << socket
+            @pending_sockets << socket
           end
+          release_pending(evicted) if evicted
           unless admitted
             socket.close
             next
@@ -222,8 +255,18 @@ module Lich
       ensure
         @mutex.synchronize do
           @client_sockets.delete(socket)
+          @pending_sockets.delete(socket)
           @client_threads.delete(Thread.current)
         end
+      end
+
+      # Ends an evicted header-phase socket; its worker sees EOF and releases it.
+      # Shutdown, not close, so the worker's own select and read return at once.
+      # @return [void]
+      def release_pending(socket)
+        socket.shutdown(Socket::SHUT_RDWR)
+      rescue IOError, SystemCallError
+        nil
       end
 
       # Dispatches one HTTP request; upgraded sockets remain with their worker.
@@ -231,7 +274,11 @@ module Lich
       # @return [void]
       def handle_client(socket)
         websocket = false
-        request = read_request(socket)
+        request = begin
+          read_request(socket)
+        ensure
+          @mutex.synchronize { @pending_sockets.delete(socket) }
+        end
         return unless request
         return respond_error(socket, 403, 'Forbidden') unless host_allowed?(request)
         return respond_error(socket, 403, 'Forbidden') unless fetch_metadata_allowed?(request)
@@ -251,7 +298,11 @@ module Lich
         nil # Disconnect or shutdown can interrupt any read or write.
       rescue StandardError => error
         log(:warning, "WebUI request refused=#{error.class}")
-        respond_error(socket, 400, 'Bad Request') unless websocket
+        begin
+          respond_error(socket, 400, 'Bad Request') unless websocket
+        rescue IOError, SystemCallError
+          nil # The peer may already have gone; the refusal above is the diagnostic.
+        end
       ensure
         begin
           socket.close unless websocket
@@ -368,7 +419,13 @@ module Lich
         return respond_error(socket, 404, 'Not Found') unless resolved
 
         path, content_type, = resolved
-        respond(socket, 200, 'OK', File.binread(path), content_type: content_type, cache_control: 'private, max-age=60')
+        File.open(path, 'rb') do |file|
+          size = file.size
+          respond(socket, 200, 'OK', '', content_type: content_type, cache_control: 'private, max-age=60',
+                                         content_length: size)
+          # Streamed in bounded chunks; the image is never read whole into memory.
+          IO.copy_stream(file, socket, size)
+        end
       end
 
       # Requires cookie authentication and an allowed Origin before creating a connection.
@@ -392,8 +449,13 @@ module Lich
           "Sec-WebSocket-Accept: #{WebSocket.accept_key(headers['sec-websocket-key'])}\r\n\r\n"
         )
         connection = Connection.new(socket)
-        @mutex.synchronize { @connections << connection }
-        connection.send_text(Protocol.hello(viewer_id: connection.viewer_id, pages: @pages_provider.call))
+        # Hello is queued and the connection published under the broadcast
+        # lock: a broadcast either precedes this snapshot of pages or reaches
+        # the connection after hello, so no update is lost or reordered.
+        @publish_monitor.synchronize do
+          connection.send_text(Protocol.hello(viewer_id: connection.viewer_id, pages: @pages_provider.call))
+          @mutex.synchronize { @connections << connection }
+        end
         websocket_loop(connection)
       ensure
         if connection
@@ -412,14 +474,32 @@ module Lich
         end
       end
 
-      # Processes bounded text messages and interleaved pings until close, EOF or refusal.
+      # Processes bounded text messages and interleaved pings until close, EOF,
+      # refusal or silence. Each message read has one deadline, and an idle peer
+      # is pinged, then retired if it stays silent past WS_IDLE_TIMEOUT.
       # @return [void]
       def websocket_loop(connection)
+        last_seen = monotonic_time
+        pinged = false
         while connection.alive?
-          next unless IO.select([connection.socket], nil, nil, WS_POLL_INTERVAL)
+          unless IO.select([connection.socket], nil, nil, WS_POLL_INTERVAL)
+            idle = monotonic_time - last_seen
+            if idle >= WS_IDLE_TIMEOUT
+              log(:info, 'WebUI websocket retired after idle timeout')
+              break
+            end
+            pinged = connection.send_ping if idle >= WS_PING_INTERVAL && !pinged
+            next
+          end
 
-          frame = WebSocket.read_message(connection.socket) { |control| connection.send_pong(control.payload) if control.ping? }
+          deadline = monotonic_time + WS_MESSAGE_TIMEOUT
+          frame = WebSocket.read_message(connection.socket, deadline: deadline) do |control|
+            connection.send_pong(control.payload) if control.ping?
+          end
           break unless frame
+
+          last_seen = monotonic_time
+          pinged = false
           break if frame.close?
           dispatch_message(connection, frame.payload) if frame.text?
         end
@@ -509,15 +589,16 @@ module Lich
 
       # Writes a bounded-handler response with common CSP, no-referrer, and nosniff headers.
       # Responses default to no-store and close the HTTP connection.
+      # @param content_length [Integer, nil] length of a body the caller streams after the head
       # @return [Object] socket write result
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',
-                  cache_control: 'no-store', extra_headers: [])
+                  cache_control: 'no-store', extra_headers: [], content_length: nil)
         headers = [
-          "HTTP/1.1 #{status} #{reason}", "Content-Length: #{body.bytesize}",
+          "HTTP/1.1 #{status} #{reason}", "Content-Length: #{content_length || body.bytesize}",
           'Connection: close', "Cache-Control: #{cache_control}", 'Referrer-Policy: no-referrer',
           'X-Content-Type-Options: nosniff', "Content-Security-Policy: #{CSP}",
         ]
-        headers << "Content-Type: #{content_type}" unless body.empty?
+        headers << "Content-Type: #{content_type}" unless body.empty? && !content_length
         headers.concat(extra_headers)
         socket.write(headers.join("\r\n") + "\r\n\r\n" + body)
       end

@@ -115,10 +115,11 @@ module Lich
       # @param require_mask [Boolean] require client masking; false for test-client reads
       # @param allow_fragments [Boolean] defer message assembly and UTF-8 validation to read_message
       # @param remaining [Integer] remaining aggregate message byte budget
+      # @param deadline [Float, nil] CLOCK_MONOTONIC limit for every byte of the frame
       # @return [Frame, nil] decoded frame, or nil at clean EOF
-      # @raise [ProtocolError] for invalid or unsupported frames
-      def read_frame(io, require_mask: true, allow_fragments: false, remaining: MAX_CLIENT_PAYLOAD_BYTES)
-        head = read_exact(io, 2)
+      # @raise [ProtocolError] for invalid or unsupported frames, or an expired deadline
+      def read_frame(io, require_mask: true, allow_fragments: false, remaining: MAX_CLIENT_PAYLOAD_BYTES, deadline: nil)
+        head = read_exact(io, 2, deadline)
         return nil unless head
 
         byte1, byte2 = head.unpack('CC')
@@ -135,15 +136,15 @@ module Lich
         raise ProtocolError, 'control frames cannot be fragmented' if opcode >= OPCODE_CLOSE && !fin
         raise ProtocolError, 'client frames must be masked' if require_mask && !masked
 
-        length = read_exact!(io, 2).unpack1('n') if length == 126
-        length = read_exact!(io, 8).unpack1('Q>') if length == 127
+        length = read_exact!(io, 2, deadline).unpack1('n') if length == 126
+        length = read_exact!(io, 8, deadline).unpack1('Q>') if length == 127
         limit = require_mask ? MAX_CLIENT_PAYLOAD_BYTES : MAX_PAYLOAD_BYTES
         raise ProtocolError, "frame exceeds #{limit} bytes" if length > limit
         raise ProtocolError, 'message exceeds aggregate byte limit' if opcode < OPCODE_CLOSE && length > remaining
         raise ProtocolError, 'control frame exceeds 125 bytes' if opcode >= OPCODE_CLOSE && length > 125
 
-        mask_key = read_exact!(io, 4) if masked
-        payload = length.zero? ? +'' : read_exact!(io, length)
+        mask_key = read_exact!(io, 4, deadline) if masked
+        payload = length.zero? ? +'' : read_exact!(io, length, deadline)
         payload = unmask(payload, mask_key) if masked
         if opcode == OPCODE_TEXT && !allow_fragments
           payload.force_encoding(Encoding::UTF_8)
@@ -154,20 +155,27 @@ module Lich
 
       # Reassembles bounded client text messages, permitting interleaved controls.
       # UTF-8 is checked after assembly because fragments may split a codepoint.
+      # With a deadline, a control frame received outside a fragmented message
+      # is returned after yielding, so an idle peer's ping or pong cannot hold
+      # the read open until the deadline expires.
       # @param io [#read] client stream
+      # @param deadline [Float, nil] CLOCK_MONOTONIC limit for the whole message
       # @yield [frame] interleaved control for immediate transport handling
       # @yieldparam frame [Frame] ping or pong received between data fragments
-      # @return [Frame, nil] complete text, close control, or clean EOF
-      # @raise [ProtocolError] for invalid sequencing, encoding, truncation or size
-      def read_message(io)
+      # @return [Frame, nil] complete text, close control, standalone control (deadline only), or clean EOF
+      # @raise [ProtocolError] for invalid sequencing, encoding, truncation, size or an expired deadline
+      def read_message(io, deadline: nil)
         data = nil
         loop do
-          frame = read_frame(io, allow_fragments: true, remaining: MAX_CLIENT_PAYLOAD_BYTES - (data&.bytesize || 0))
+          frame = read_frame(io, allow_fragments: true, remaining: MAX_CLIENT_PAYLOAD_BYTES - (data&.bytesize || 0),
+                                 deadline: deadline)
           raise ProtocolError, 'stream ended mid-message' if !frame && data
           return frame unless frame
           return frame if frame.close?
           if frame.opcode >= OPCODE_CLOSE
             yield frame if block_given?
+            return frame if deadline && !data
+
             next
           end
           if frame.opcode == OPCODE_TEXT
@@ -186,16 +194,30 @@ module Lich
       end
 
       # Applies the repeating four-byte XOR mask (also usable to mask fixture payloads).
+      # Whole eight-byte words are transformed together, so a 2 MiB message
+      # allocates one word per eight bytes instead of two Integers per byte.
       # @return [String] transformed binary payload
       def unmask(payload, mask_key)
-        mask = mask_key.bytes
-        payload.bytes.each_with_index.map { |byte, index| byte ^ mask[index % 4] }.pack('C*')
+        data = payload.to_s.b
+        mask = mask_key.b * 2
+        whole = data.bytesize - (data.bytesize % 8)
+        word = mask.unpack1('Q>')
+        result = data.byteslice(0, whole).unpack('Q>*').map! { |value| value ^ word }.pack('Q>*')
+        data.byteslice(whole, data.bytesize - whole).each_byte.with_index do |byte, index|
+          result << (byte ^ mask.getbyte(index))
+        end
+        result
       end
 
-      def read_exact(io, count)
+      # Reads exactly count bytes. With a deadline, every read (length, mask and
+      # payload bytes alike) waits only until that one monotonic instant.
+      # @param deadline [Float, nil] CLOCK_MONOTONIC limit, or nil to block
+      # @return [String, nil] bytes, or nil at clean EOF before any byte
+      # @raise [ProtocolError] on EOF mid-read or an expired deadline
+      def read_exact(io, count, deadline = nil)
         buffer = +''
         while buffer.bytesize < count
-          chunk = io.read(count - buffer.bytesize)
+          chunk = deadline ? read_before(io, count - buffer.bytesize, deadline) : io.read(count - buffer.bytesize)
           return buffer.empty? ? nil : raise(ProtocolError, 'stream ended mid-frame') if chunk.nil? || chunk.empty?
 
           buffer << chunk
@@ -204,10 +226,24 @@ module Lich
       end
       private_class_method :read_exact
 
-      def read_exact!(io, count)
-        read_exact(io, count) || raise(ProtocolError, 'stream ended mid-frame')
+      def read_exact!(io, count, deadline = nil)
+        read_exact(io, count, deadline) || raise(ProtocolError, 'stream ended mid-frame')
       end
       private_class_method :read_exact!
+
+      # Waits for readable bytes without passing the deadline.
+      # @return [String, nil] available bytes, or nil at EOF
+      # @raise [ProtocolError] when the deadline expires first
+      def read_before(io, count, deadline)
+        loop do
+          chunk = io.read_nonblock(count, exception: false)
+          return chunk unless chunk == :wait_readable
+
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          raise ProtocolError, 'frame read deadline expired' unless remaining.positive? && IO.select([io], nil, nil, remaining)
+        end
+      end
+      private_class_method :read_before
     end
   end
 end
