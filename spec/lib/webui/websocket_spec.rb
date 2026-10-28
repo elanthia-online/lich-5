@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'socket'
 require 'stringio'
 require 'webui/websocket'
 
@@ -84,5 +85,85 @@ RSpec.describe Lich::WebUI::WebSocket do
     invalid_utf8 = described_class.encode_client_frame([255].pack('C'))
     expect { described_class.read_frame(StringIO.new(invalid_utf8)) }
       .to raise_error(Lich::WebUI::WebSocket::ProtocolError, /valid UTF-8/)
+  end
+
+  it 'unmasks every length, tail and binary byte exactly like a per-byte reference' do
+    reference = lambda do |payload, mask_key|
+      mask = mask_key.bytes
+      payload.bytes.each_with_index.map { |byte, index| byte ^ mask[index % 4] }.pack('C*')
+    end
+    random = Random.new(1834)
+    lengths = (0..33).to_a + [125, 126, 65_535, 65_536, 65_537]
+    keys = [[0, 0, 0, 0], [255, 255, 255, 255], [1, 128, 127, 254]].map { |bytes| bytes.pack('C*') }
+    lengths.each do |length|
+      payload = random.bytes(length)
+      (keys + [random.bytes(4)]).each do |key|
+        result = described_class.unmask(payload, key)
+        expect(result).to eq(reference.call(payload, key)), "length #{length}"
+        expect(result.encoding).to eq(Encoding::BINARY)
+        expect(described_class.unmask(result, key)).to eq(payload.b)
+      end
+    end
+  end
+
+  it 'bounds a stalled partial header, extended length, mask and payload by one message deadline' do
+    frame = described_class.encode_client_frame('x' * 200)
+    # Cut points: inside the 2-byte head, the 16-bit length, the mask and the payload.
+    [1, 3, 6, 20].each do |cut|
+      client, server = Socket.pair(:UNIX, :STREAM, 0)
+      client.write(frame.byteslice(0, cut))
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      deadline = started + 0.2
+      expect { described_class.read_message(server, deadline: deadline) }
+        .to raise_error(described_class::ProtocolError, /deadline expired/)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      expect(elapsed).to be_between(0.15, 1.5), "cut #{cut}"
+    ensure
+      client&.close
+      server&.close
+    end
+  end
+
+  it 'bounds a fragmented message by its first deadline and ends promptly when the peer is shut down' do
+    client, server = Socket.pair(:UNIX, :STREAM, 0)
+    client.write(described_class.encode_client_frame('part', final: false))
+    expect { described_class.read_message(server, deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.2) }
+      .to raise_error(described_class::ProtocolError, /deadline expired/)
+
+    stalled = described_class.encode_client_frame('y' * 50).byteslice(0, 10)
+    client.write(stalled)
+    reader = Thread.new do
+      described_class.read_message(server, deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + 30)
+    rescue described_class::ProtocolError => error
+      error
+    end
+    sleep 0.05
+    server.shutdown(Socket::SHUT_RDWR)
+    expect(reader.join(2)).not_to be_nil
+    expect(reader.value).to be_a(described_class::ProtocolError)
+  ensure
+    reader&.kill&.join
+    client&.close
+    server&.close
+  end
+
+  it 'returns a standalone control frame under a deadline but keeps controls inside a fragmented message' do
+    client, server = Socket.pair(:UNIX, :STREAM, 0)
+    client.write(described_class.encode_client_frame('', opcode: described_class::OPCODE_PONG))
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 1
+    controls = []
+    frame = described_class.read_message(server, deadline: deadline) { |control| controls << control.opcode }
+    expect(frame.opcode).to eq(described_class::OPCODE_PONG)
+    expect(controls).to eq([described_class::OPCODE_PONG])
+
+    client.write(described_class.encode_client_frame('a', final: false))
+    client.write(described_class.encode_client_frame('p', opcode: described_class::OPCODE_PING))
+    client.write(described_class.encode_client_frame('b', opcode: described_class::OPCODE_CONTINUATION))
+    message = described_class.read_message(server, deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + 1)
+    expect(message).to be_text
+    expect(message.payload).to eq('ab')
+  ensure
+    client&.close
+    server&.close
   end
 end

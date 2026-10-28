@@ -3,6 +3,7 @@
 require 'json'
 require 'digest'
 require 'fileutils'
+require 'tempfile'
 
 module Lich
   module WebUI
@@ -32,6 +33,8 @@ module Lich
       end
 
       # Replaces changed, valid geometry through a same-directory temporary file.
+      # Each save creates its own uniquely named temporary file, so stores that
+      # share a directory never write or rename one another's file.
       # Unnamed owners are not persisted. This is atomic replacement, not fsync durability.
       # @return [void]
       def save(page)
@@ -43,9 +46,16 @@ module Lich
           return if read(page) == value
 
           FileUtils.mkdir_p(@directory)
-          temporary = "#{path}.#{Process.pid}.tmp"
-          File.write(temporary, JSON.generate(value))
-          File.rename(temporary, path)
+          temporary = Tempfile.create([File.basename(path, '.json'), '.tmp'], @directory)
+          begin
+            temporary.write(JSON.generate(value))
+            temporary.close
+            File.rename(temporary.path, path)
+            renamed = true
+          ensure
+            temporary.close unless temporary.closed?
+            File.unlink(temporary.path) if !renamed && File.exist?(temporary.path)
+          end
         end
       end
 
