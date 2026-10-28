@@ -37,8 +37,8 @@ module LichCiDefaultWebUIAcceptance
       next unless trace.self.equal?(Lich::WebUI::BrowserLauncher)
 
       client = Module.new do
-        define_method(:open) do |url, **_options|
-          LichCiDefaultWebUIAcceptance.start_client(url)
+        define_method(:open) do |url, **options|
+          LichCiDefaultWebUIAcceptance.start_client(url, on_exit: options[:on_exit])
           true
         end
       end
@@ -50,10 +50,13 @@ module LichCiDefaultWebUIAcceptance
 
   # Starts the probe client and writes a structured success/failure report to the parent pipe.
   # @return [Thread] client worker
-  def start_client(url)
+  def start_client(url, on_exit: nil)
     @client = Thread.new do
       result = exercise(url)
       report(result)
+      # An owned browser window closes the launcher by exiting; a viewer detach
+      # alone leaves the page open (1836:RC8), so report the substitute's exit.
+      on_exit&.call
     rescue StandardError => error
       report(
         'verdict'   => 'fail',
