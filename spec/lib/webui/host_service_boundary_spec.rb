@@ -103,6 +103,9 @@ RSpec.describe 'WebUI host service boundaries' do
 
     it 'reads false until core configures it, without starting a host or loading compatibility code' do
       Lich::WebUI.reset!
+      # Other specs in the same process may already have loaded compatibility code;
+      # these calls must not load any more.
+      compatibility = $LOADED_FEATURES.grep(%r{script_scope/gtk})
       Lich::WebUI.configure_presentation(enabled: nil)
       expect(Lich::WebUI.presentation_enabled?).to be(false)
       Lich::WebUI.configure_presentation(enabled: true)
@@ -110,7 +113,7 @@ RSpec.describe 'WebUI host service boundaries' do
       Lich::WebUI.configure_presentation(enabled: false)
       expect(Lich::WebUI.presentation_enabled?).to be(false)
       expect(Lich::WebUI.instance_variable_get(:@service)).to be_nil
-      expect($LOADED_FEATURES.grep(%r{script_scope/gtk})).to be_empty
+      expect($LOADED_FEATURES.grep(%r{script_scope/gtk})).to eq(compatibility)
       expect { Lich::WebUI.configure_presentation(enabled: 'yes') }.to raise_error(ArgumentError)
     end
 
