@@ -64,7 +64,7 @@ module Lich
       # @return [Symbol] :queued or :coalesced
       # @raise [Error] when the owner is stopped or its queue is full
       def enqueue(owner:, page_id:, viewer_id:, cid:, event:, coalescable:, cleanup: nil, &callable)
-        work = WorkItem.new(cleanup: cleanup, &callable)
+        work = WorkItem.new(cleanup: cleanup, logger: @logger, &callable)
         discarded = []
         accepted = false
         raise ArgumentError, 'owner is required' unless owner
@@ -229,7 +229,7 @@ module Lich
         true
       end
 
-      # Evicts replaceable events before refusing an overflowing terminal event.
+      # Plans evictions only from full buckets and commits them after admission succeeds.
       # @api private
       # @param events [Array<Event>] pending queue
       # @param queued [Event] incoming event
@@ -237,18 +237,27 @@ module Lich
       # @return [void]
       # @raise [OverflowError] when terminal events occupy the available capacity
       def enforce_bounds!(events, queued, discarded)
-        while viewer_count(events, queued.viewer_id) >= VIEWER_LIMIT || page_count(events, queued.page_id) >= PAGE_LIMIT
-          index = events.index(&:coalescable)
-          break unless index
+        remaining = events.dup
+        evictions = []
+        loop do
+          viewer_full = viewer_count(remaining, queued.viewer_id) >= VIEWER_LIMIT
+          page_full = page_count(remaining, queued.page_id) >= PAGE_LIMIT
+          break unless viewer_full || page_full
 
-          discarded << events.delete_at(index)
+          index = remaining.index do |event|
+            event.coalescable && ((viewer_full && event.viewer_id == queued.viewer_id) ||
+                                 (page_full && event.page_id == queued.page_id))
+          end
+          unless index
+            raise OverflowError.new(
+              'WebUI event queue overflow', owner: owner_label(queued.owner),
+              page_id: queued.page_id, cid: queued.cid, field: queued.event
+            )
+          end
+          evictions << remaining.delete_at(index)
         end
-        return if viewer_count(events, queued.viewer_id) < VIEWER_LIMIT && page_count(events, queued.page_id) < PAGE_LIMIT
-
-        raise OverflowError.new(
-          'WebUI event queue overflow', owner: owner_label(queued.owner),
-          page_id: queued.page_id, cid: queued.cid, field: queued.event
-        )
+        events.replace(remaining)
+        discarded.concat(evictions)
       end
 
       # Disposes removed callbacks without holding queue locks or skipping later ones.
