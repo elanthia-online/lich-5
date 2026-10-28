@@ -29,4 +29,18 @@ RSpec.describe Lich::WebUI::Submission do
     expect { submission.commit { nil } }.to raise_error(Lich::WebUI::Error, /already been committed/)
     expect { described_class.new(viewer_id: 'v', values: {}).commit }.to raise_error(ArgumentError, /requires a block/)
   end
+  it 'G3 RC18 copies caller containers and viewer identity before freezing' do
+    viewer_id = +'viewer'
+    values = { 'name' => 'Ada', 'secret' => secret }
+    snapshot = described_class.new(viewer_id: viewer_id, values: values)
+    expect(viewer_id).not_to be_frozen
+    expect(values).not_to be_frozen
+    viewer_id.replace('other')
+    values['name'] = 'Grace'
+    expect(snapshot.viewer_id).to eq('viewer')
+    expect(snapshot['name']).to eq('Ada')
+    expect(snapshot['secret']).to equal(secret)
+    snapshot.discard_sensitive!
+    expect(secret).to be_consumed
+  end
 end

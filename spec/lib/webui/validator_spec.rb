@@ -506,4 +506,74 @@ RSpec.describe Lich::WebUI::Validator do
       expect(validator.validate_input_value!(type, 'kept', props: props, **context)).to eq('kept')
     end
   end
+  it 'G3 RC12 accepts integer rotations while retaining string rotations' do
+    [0, 90, 180, 270, '0', '90', '180', '270'].each do |rotation|
+      expect(validator.validate_component!(:text, { content: '', rotation: rotation }, **context)[:rotation]).to eq(rotation)
+    end
+    [1, 45, 90.0, '45'].each do |rotation|
+      expect { validator.validate_component!(:text, { content: '', rotation: rotation }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError)
+    end
+  end
+
+  it 'G3 RC17 copies enum strings before freezing the normalized result' do
+    theme = +'dark'
+    props = validator.validate_component!(:page, { title: 'Title', theme: theme }, **context)
+    expect(props[:theme]).to eq('dark')
+    expect(props[:theme]).to be_frozen
+    expect(theme).not_to be_frozen
+    theme.replace('light')
+    expect(props[:theme]).to eq('dark')
+  end
+
+  it 'G3 RC20 reports invalid identifier syntax equally for string and symbol field names' do
+    ['bad name', :'bad name', '', :''].each do |name|
+      expect { validator.validate_component!(:stack, { name => true }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError, /field name has invalid identifier syntax/)
+    end
+    expect { validator.validate_component!(:stack, { 42 => true }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /field names must be String or Symbol/)
+    expect(validator.validate_component!(:stack, { 'disabled' => true }, **context)[:disabled]).to be true
+  end
+
+  it 'G3 RC22 accepts and strips unknown record fields with allow_extra enabled' do
+    contract = Lich::WebUI::Contract
+    shape = contract.record({ title: contract.property(contract::SHORT, required: true) }, allow_extra: true)
+    value = { 'title' => 'Title', 'extra' => 'discarded' }
+    result = validator.validate_placement!(:metadata, shape, value, **context)
+    expect(result).to eq(title: 'Title')
+    expect(result).to be_frozen
+    expect(value).to eq('title' => 'Title', 'extra' => 'discarded')
+    strict = contract.record(title: contract.property(contract::SHORT, required: true))
+    expect { validator.validate_placement!(:metadata, strict, value, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /unknown field extra/)
+  end
+
+  %i[slider number_input].each do |type|
+    it "G3 RC15 enforces authored, event and submitted step alignment for #{type}" do
+      authored = { min: 0.1, max: 2.1, step: 0.2, value: 0.1 }
+      props = validator.validate_component!(type, authored, **context)
+      [0.1, 0.3, 0.1 + 3 * 0.2, 2.1].each do |value|
+        expect(validator.validate_component!(type, authored.merge(value: value), **context)[:value]).to eq(value)
+        expect(validator.validate_event!(type, :change, { value: value }, props: props, **context)).to eq(value: value)
+        expect(validator.validate_input_value!(type, value, props: props, **context)).to eq(value)
+      end
+      [0.2, 0.300001].each do |value|
+        expect { validator.validate_component!(type, authored.merge(value: value), **context) }
+          .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
+        expect { validator.validate_event!(type, :change, { value: value }, props: props, **context) }
+          .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
+        expect { validator.validate_input_value!(type, value, props: props, **context) }
+          .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
+      end
+    end
+  end
+
+  it 'G3 RC15 permits free numeric stepping in authored, event and submitted values' do
+    authored = { min: 1, max: 10, step: 2, value: 2, snap_to_step: false, stepper_buttons: true }
+    props = validator.validate_component!(:number_input, authored, **context)
+    expect(props[:value]).to eq(2)
+    expect(validator.validate_event!(:number_input, :change, { value: 4 }, props: props, **context)).to eq(value: 4)
+    expect(validator.validate_input_value!(:number_input, 6, props: props, **context)).to eq(6)
+  end
 end

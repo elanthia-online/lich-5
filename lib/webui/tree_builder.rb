@@ -82,12 +82,14 @@ module Lich
       # Adds a validated control under the current parent and evaluates its children.
       # Stable keys are mandatory inside variable collections; positional IDs serve fixed layouts.
       # A position counts only the unkeyed siblings before it, so keyed members never shift it.
+      # Numeric keys and keys starting with key: gain a key: prefix in their CID segment.
+      # Other keyed IDs retain their spelling; these reserved keys require the prefixed CID.
       # @param type [Symbol, String] contract component type
       # @param key [String, nil] stable author identity within the parent
       # @param slot [Symbol, String, nil] parent-defined child slot
       # @param placement [Hash] parent-specific layout hints
       # @param on [Hash] supported event names mapped to callbacks
-      # @param submit [Array<Draft>, nil] inputs captured by a terminal action
+      # @param submit [Draft, Array<Draft>, nil] inputs captured by a terminal action
       # @param props [Hash] component properties
       # @yield [draft] child composition evaluated in this builder
       # @return [Draft] reference usable in submissions
@@ -98,7 +100,9 @@ module Lich
         parent = @stack.last
         require_collection_key!(parent, normalized_type, key)
         props = props.merge(key: key) unless key.nil?
-        segment = key || @unkeyed_counts.fetch(parent, 0)
+        position = @unkeyed_counts.fetch(parent, 0)
+        segment = key || position
+        segment = "key:#{key}" if key && (key.to_s.match?(/\A[0-9]+\z/) || key.to_s.start_with?('key:'))
         cid = "#{parent.cid}/#{normalized_type}:#{segment}"
         if @cids.key?(cid)
           raise IdentityError.new(
@@ -115,7 +119,7 @@ module Lich
           slot: normalize_slot(slot), placement: normalize_placement(placement)
         )
         parent.children << draft
-        @unkeyed_counts[parent] = segment + 1 if key.nil?
+        @unkeyed_counts[parent] = position + 1 if key.nil?
         @cids[cid] = draft
         register_bindings!(draft, on)
         register_submission!(draft, submit) if submit
@@ -279,7 +283,7 @@ module Lich
             owner: owner_label, page_id: @page_id, cid: draft.cid, field: :submit
           )
         end
-        values = Array(submit)
+        values = submit.is_a?(Draft) ? [submit] : Array(submit)
         @submissions[draft.cid] = values.map { |value| value.respond_to?(:cid) ? value.cid : value.to_s }.freeze
       end
 
@@ -394,6 +398,8 @@ module Lich
           case Contract.child_placement_condition(draft.type, draft.props, child.placement)
           when :grid_row_overflow
             child_violation!(draft, 'child placement exceeds grid rows')
+          when :grid_column_overflow
+            child_violation!(draft, 'child placement exceeds grid columns')
           when :unpositioned_coordinates
             child_violation!(draft, 'coordinates require a positioned overlay')
           end

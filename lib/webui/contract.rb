@@ -25,7 +25,7 @@ module Lich
 
       STRUCTURE_TYPES = TYPES.first(11).freeze
       DISPLAY_TYPES = TYPES.slice(11, 5).freeze
-      INPUT_TYPES = TYPES.slice(16, 10).freeze
+      INPUT_TYPES = TYPES.slice(16, 11).freeze
 
       TONES = %w[neutral positive caution danger].freeze
       EMPHASES = %w[normal strong subtle].freeze
@@ -136,10 +136,13 @@ module Lich
       # @param type [Symbol] normalized parent component type
       # @param props [Hash] validated parent properties
       # @param placement [Hash] shape-validated child placement
-      # @return [Symbol, nil] :grid_row_overflow, :unpositioned_coordinates, or nil
+      # @return [Symbol, nil] :grid_row_overflow, :grid_column_overflow, :unpositioned_coordinates, or nil
       def child_placement_condition(type, props, placement)
         if type == :grid && placement.fetch(:row, 1) + placement.fetch(:row_span, 1) - 1 > BOUNDS[:children]
           return :grid_row_overflow
+        end
+        if type == :grid && placement.fetch(:column, 1) + placement.fetch(:span, 1) - 1 > props.fetch(:cols)
+          return :grid_column_overflow
         end
         if type == :overlay && !props[:positioned] && (placement.keys & %i[x y]).any?
           return :unpositioned_coordinates
@@ -179,7 +182,8 @@ module Lich
       # @raise [VersionError] for malformed or incompatible major versions
       def negotiate!(client_version)
         version = client_version.to_s
-        major = Integer(version.split('.').first, exception: false)
+        spelling = version.split('.').first
+        major = Integer(spelling, 10) if spelling&.match?(/\A[0-9]+\z/)
         raise VersionError, "invalid contract version #{client_version.inspect}" unless major
         raise VersionError, "unsupported contract major #{major}; server requires #{MAJOR_VERSION}" unless major == MAJOR_VERSION
 
