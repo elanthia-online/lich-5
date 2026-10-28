@@ -8,6 +8,10 @@ module Lich
     # Strict, server-routed WebUI wire envelopes.
     module Protocol
       MAX_MESSAGE_BYTES = Contract::WIRE_LIMITS[:message_bytes]
+      # Server render budget, above the 2 MiB client message limit so the corrected legacy
+      # bigshot Builder setup page (2.23 MiB) renders. Temporary: when the GTK3 script
+      # compatibility layer is removed, delete this and bound renders by MAX_MESSAGE_BYTES.
+      MAX_RENDER_BYTES = 4 * 1024 * 1024
       TYPES = %w[attach detach event].freeze
       FIELDS = {
         'attach' => %i[type page version resume],
@@ -56,7 +60,7 @@ module Lich
       # @param window_presentation [Hash] properties handled by the owned OS window
       # @param input_requests [Hash] latest accepted text-input request per viewer-local CID
       # @return [String] JSON render message
-      # @raise [Refusal] when the complete serialized render exceeds the wire budget
+      # @raise [Refusal] when the complete serialized render exceeds MAX_RENDER_BYTES
       def render(address:, generation:, tree:, facilities: {}, bindings: {}, submissions: {}, resume: nil, window_presentation: {}, input_requests: {})
         payload = {
           type: 'render', page: address, generation: generation,
@@ -66,8 +70,8 @@ module Lich
         payload[:resume] = resume if resume
         payload[:window_presentation] = window_presentation unless window_presentation.empty?
         message = JSON.generate(payload)
-        if message.bytesize > MAX_MESSAGE_BYTES
-          raise Refusal.new(:frame_size, "render exceeds #{MAX_MESSAGE_BYTES} bytes; reduce page content", page_id: address)
+        if message.bytesize > MAX_RENDER_BYTES
+          raise Refusal.new(:frame_size, "render exceeds #{MAX_RENDER_BYTES} bytes; reduce page content", page_id: address)
         end
         message
       end
