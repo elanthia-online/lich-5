@@ -56,6 +56,7 @@ module Lich
       # @param window_presentation [Hash] properties handled by the owned OS window
       # @param input_requests [Hash] latest accepted text-input request per viewer-local CID
       # @return [String] JSON render message
+      # @raise [Refusal] when the complete serialized render exceeds the wire budget
       def render(address:, generation:, tree:, facilities: {}, bindings: {}, submissions: {}, resume: nil, window_presentation: {}, input_requests: {})
         payload = {
           type: 'render', page: address, generation: generation,
@@ -64,7 +65,11 @@ module Lich
         }
         payload[:resume] = resume if resume
         payload[:window_presentation] = window_presentation unless window_presentation.empty?
-        JSON.generate(payload)
+        message = JSON.generate(payload)
+        if message.bytesize > MAX_MESSAGE_BYTES
+          raise Refusal.new(:frame_size, "render exceeds #{MAX_MESSAGE_BYTES} bytes; reduce page content", page_id: address)
+        end
+        message
       end
 
       # Serializes a refusal, retaining supplied request/component correlation.

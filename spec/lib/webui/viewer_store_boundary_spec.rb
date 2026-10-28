@@ -119,4 +119,73 @@ RSpec.describe 'ViewerStore boundaries' do
     expect(errors).to be_empty
     expect(output).to eq("ready\n")
   end
+  it 'serializes authored password reveal permission without plaintext or revealed state' do
+    target = Lich::WebUI::Page.new(owner: owner, id: 'passwords', title: 'Passwords') do
+      password_input(key: 'allowed', revealable: true)
+      password_input(key: 'denied', revealable: false)
+    end
+    viewer = store.attach(connection_id: 'one', address: 'passwords', page: target)
+    render = target.render
+    store.deliver(viewer, render)
+    render.tree.children.each do |component|
+      viewer.values[[component.cid, :value]] = 'synthetic plaintext'
+      viewer.values[[component.cid, :revealed]] = true
+    end
+    controls = store.serialize(viewer)[:children]
+    expect(controls.map { |control| control[:props][:revealable] }).to eq([true, false])
+    controls.each { |control| expect(control[:props].keys).not_to include(:value, :revealed) }
+    expect(JSON.generate(controls)).not_to include('synthetic plaintext')
+  end
+
+  describe 'attachment budgets' do
+    before do
+      stub_const('Lich::WebUI::ViewerStore::LIVE_ATTACHMENT_LIMIT', 2)
+      stub_const('Lich::WebUI::ViewerStore::RETAINED_ATTACHMENT_LIMIT', 3)
+    end
+
+    it 'bounds pages on one live connection without evicting another viewer draft' do
+      first = store.attach(connection_id: 'one', address: 'first', page: page)
+      first.values[:draft] = 'preserved'
+      store.attach(connection_id: 'one', address: 'second', page: page)
+      expect { store.attach(connection_id: 'one', address: 'third', page: page) }
+        .to raise_error(Lich::WebUI::Protocol::Refusal, /live viewer attachment limit/)
+      expect(store.attachments_for(page).size).to eq(2)
+      expect(first.values[:draft]).to eq('preserved')
+      store.close(connection_id: 'one', address: 'second')
+      expect(store.attach(connection_id: 'one', address: 'third', page: page).values).to be_empty
+    end
+
+    it 'bounds churn while preserving all admitted resume windows and allowing resume at capacity' do
+      viewers = 3.times.map do |index|
+        viewer = store.attach(connection_id: index.to_s, address: 'seed', page: page)
+        viewer.values[:draft] = index
+        store.transient_disconnect(index.to_s)
+        viewer
+      end
+      expect { store.attach(connection_id: 'new', address: 'seed', page: page) }
+        .to raise_error(Lich::WebUI::Protocol::Refusal, /retained viewer attachment limit/)
+      expect(viewers.map { |viewer| viewer.values[:draft] }).to eq([0, 1, 2])
+      resumed = store.attach(connection_id: 'resumed', address: 'seed', page: page, resume_token: viewers.first.resume_token)
+      expect(resumed).to equal(viewers.first)
+      expect(resumed.values[:draft]).to eq(0)
+    end
+
+    it 'leaves a refused resume intact and frees retained capacity only on expiry' do
+      now = 100.0
+      clocked = Lich::WebUI::ViewerStore.new(clock: -> { now })
+      first = clocked.attach(connection_id: 'old', address: 'seed', page: page)
+      first.values[:draft] = 'preserved'
+      clocked.transient_disconnect('old')
+      %w[one two].each { |id| clocked.attach(connection_id: id, address: 'seed', page: page) }
+      expect { clocked.attach(connection_id: 'resumed', address: 'seed', page: page, resume_token: first.resume_token) }
+        .to raise_error(Lich::WebUI::Protocol::Refusal, /live viewer attachment limit/)
+      expect(first.values[:draft]).to eq('preserved')
+      clocked.transient_disconnect('one')
+      now += Lich::WebUI::ViewerStore::RECONNECT_WINDOW
+      fresh = clocked.attach(connection_id: 'fresh', address: 'seed', page: page, resume_token: first.resume_token)
+      expect(fresh.resume_state).to eq(:expired)
+      expect(fresh.values).to be_empty
+      expect(first.values).to be_empty
+    end
+  end
 end
