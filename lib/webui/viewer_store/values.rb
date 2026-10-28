@@ -17,11 +17,11 @@ module Lich
       # @param component [Component] validated delivered component
       # @param name [Symbol] normalized contract property
       # @param value [Object] already-validated property or input value
-      # @return [Object] stored value
+      # @return [Object, nil] stored value, or nil when a sensitive value is not retained
       def set_property(attachment, component, name, value)
         @mutex.synchronize do
           select_radio_option!(attachment, component) if component.type == :radio_option && name == :checked && value
-          attachment.values[[component.cid, name]] = value
+          attachment.values[[component.cid, name]] = value if retain_value?(component, name)
         end
       end
 
@@ -32,6 +32,7 @@ module Lich
       # @param cid [String] page-local delivered component identity
       # @param name [Symbol] normalized contract property
       # @return [Object, nil] stored value, or nil for a departed/undelivered target
+      #   or a sensitive value, which is validated but never retained
       # @yield [component] validate the current target while its identity is protected
       # @yieldparam component [Component] current delivered component
       # @yieldreturn [Object] validated property value to seed
@@ -43,7 +44,7 @@ module Lich
 
           value = yield component
           select_radio_option!(attachment, component) if component.type == :radio_option && name == :checked && value
-          attachment.values[[cid, name]] = value
+          attachment.values[[cid, name]] = value if retain_value?(component, name)
         end
       end
 
@@ -68,7 +69,8 @@ module Lich
       end
 
       # Applies a validated interaction to the corresponding viewer-local control state.
-      # Password values are intentionally excluded from this persistent state map.
+      # Sensitive values (password inputs and components marked sensitive) are
+      # intentionally excluded from this persistent state map.
       # Request IDs acknowledge accepted live text input, never grant routing authority.
       # They are captured with values so an older delivery cannot erase newer typing.
       # @param attachment [Attachment] exact viewer/page association
@@ -97,7 +99,7 @@ module Lich
           when [:toggle, :change], [:checkbox, :change] then attachment.values[[component.cid, :checked]] = payload[:value]
           when [:radio, :change] then attachment.values[[component.cid, :selected]] = payload[:value]
           when [:text_input, :change], [:text_input, :blur], [:textarea, :change], [:textarea, :blur], [:number_input, :change], [:slider, :change], [:select, :change]
-            attachment.values[[component.cid, :value]] = payload[:value]
+            attachment.values[[component.cid, :value]] = payload[:value] if retain_value?(component, :value)
           when [:tabs, :select] then attachment.values[[component.cid, :selected]] = payload[:index]
           when [:group, :dismiss] then attachment.values[[component.cid, :open]] = false
           when [:expander, :toggle] then attachment.values[[component.cid, :open]] = payload[:open]
@@ -153,6 +155,16 @@ module Lich
       end
 
       private
+
+      # Sensitive input values travel only on terminal submission carriers, so no
+      # viewer, seed, setter or snapshot path may keep them in the state map.
+      # @param component [Component] validated delivered component
+      # @param name [Symbol] normalized contract property
+      # @return [Boolean] whether the property may be retained as viewer-local state
+      # @api private
+      def retain_value?(component, name)
+        !(name == :value && ValueHelpers.sensitive_value?(component))
+      end
 
       # Single-line HTML inputs strip line breaks; textareas normalize them.
       # Compare browser representations without modifying authoritative text.

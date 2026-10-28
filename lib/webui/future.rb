@@ -97,13 +97,15 @@ module Lich
       private
 
       # Prevents a script callback or diagnostic sink from interrupting other cleanup.
+      # Script failures and SystemExit are contained per callback, as in the dispatcher;
+      # fatal VM exceptions outside that set keep propagating.
       # @param callback [#call] completion observer
       # @param result [Result] winning completion
       # @return [void]
       # @api private
       def invoke(callback, result)
         callback.call(result)
-      rescue StandardError => error
+      rescue SystemExit, *Dispatcher::CONTAINED_EXCEPTIONS => error
         begin
           @logger.call(:error, "WebUI completion callback failed: #{error.class}")
         rescue StandardError
