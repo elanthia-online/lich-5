@@ -11,7 +11,7 @@ RSpec.describe 'WebUI contract foundation' do
   let(:contract) { Lich::WebUI::Contract }
 
   it 'publishes exactly the supported component vocabulary' do
-    expect(contract::VERSION).to eq('2.51.0')
+    expect(contract::VERSION).to eq('2.52.0')
     expect(contract::TYPES).to contain_exactly(
       :page, :group, :stack, :columns, :grid, :tabs, :expander, :split, :overlay, :scroll, :divider,
       :text, :markdown, :log, :progress, :image, :button, :toggle, :checkbox, :radio, :radio_option, :text_input,
