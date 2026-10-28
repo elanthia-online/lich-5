@@ -124,6 +124,138 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
     end
   end
 
+  describe 'revival refresh' do
+    # Drives the REAL watch_for_revival loop: dead? answers come from `states`
+    # (one per poll, last value repeats), and the poll sleep raises
+    # StopIteration after `polls` ticks, which ends Kernel#loop.
+    def run_watcher(states:, guild: 'Warrior Mage', polls: states.size)
+      described_class.class_variable_set(:@@startup_complete, true)
+      allow(Lich::DragonRealms::DRStats).to receive(:guild).and_return(guild)
+      answers = states.dup
+      allow(described_class).to receive(:dead?) { answers.size > 1 ? answers.shift : answers.first }
+      ticks = 0
+      allow(described_class).to receive(:sleep) do |seconds|
+        next unless seconds == described_class::REVIVAL_POLL_INTERVAL
+
+        ticks += 1
+        raise StopIteration if ticks >= polls
+      end
+      described_class.watch_for_revival
+    end
+
+    before { allow(described_class).to receive(:refresh_stats) }
+
+    it 'never refreshes a character who stays alive with a known guild' do
+      # initial pending check + 5 polls
+      run_watcher(states: [false] * 6)
+      expect(described_class).not_to have_received(:refresh_stats)
+    end
+
+    it 'never refreshes while the character stays dead' do
+      run_watcher(states: [true] * 6)
+      expect(described_class).not_to have_received(:refresh_stats)
+    end
+
+    it 'refreshes exactly once when a character who logged in dead is revived' do
+      # pending check: dead; polls: dead, dead, alive, alive, alive
+      run_watcher(states: [true, true, true, false, false, false], guild: nil, polls: 5)
+      expect(described_class).to have_received(:refresh_stats).once
+    end
+
+    it 'refreshes once right away when startup left the guild nil but the character is alive' do
+      run_watcher(states: [false] * 6, guild: nil, polls: 5)
+      expect(described_class).to have_received(:refresh_stats).once
+    end
+
+    it 'does not keep re-sending info when the refresh still leaves the guild nil' do
+      # guild stays nil forever; the nil-guild pending is only taken once
+      run_watcher(states: [false] * 20, guild: nil, polls: 19)
+      expect(described_class).to have_received(:refresh_stats).once
+    end
+
+    it 'refreshes after each mid-session death, once per revival' do
+      # alive, die, revive, alive, die, die, revive, alive
+      run_watcher(states: [false, false, true, false, false, true, true, false, false], polls: 8)
+      expect(described_class).to have_received(:refresh_stats).twice
+    end
+
+    it 'waits for startup to complete before checking dead?' do
+      described_class.class_variable_set(:@@startup_complete, false)
+      allow(described_class).to receive(:dead?).and_return(false)
+      waits = 0
+      allow(described_class).to receive(:sleep) do |seconds|
+        raise StopIteration if seconds == described_class::REVIVAL_POLL_INTERVAL
+
+        waits += 1
+        described_class.class_variable_set(:@@startup_complete, true) if waits == 3
+      end
+      described_class.watch_for_revival
+      expect(waits).to eq(3)
+    end
+  end
+
+  describe '.revival_tick' do
+    before { allow(described_class).to receive(:dead?).and_return(false) }
+
+    it 'marks a refresh pending while dead without refreshing' do
+      allow(described_class).to receive(:dead?).and_return(true)
+      expect(described_class).not_to receive(:refresh_stats)
+      expect(described_class.revival_tick(false)).to be true
+    end
+
+    it 'logs and drops the pending refresh when the refresh raises' do
+      allow(described_class).to receive(:refresh_stats).and_raise(StandardError, 'boom')
+      expect(described_class).to receive(:safe_message).with('error', /revival refresh failed: boom/)
+      allow(described_class).to receive(:safe_log)
+      expect(described_class.revival_tick(true)).to be false
+    end
+  end
+
+  describe '.refresh_stats' do
+    it 'runs refresh_script as its own quiet ExecScript' do
+      expect(ExecScript).to receive(:start).with(
+        described_class.refresh_script,
+        hash_including(quiet: true, name: 'drinfomon_refresh')
+      )
+      described_class.refresh_stats
+    end
+  end
+
+  describe '.refresh_script' do
+    let(:script) { described_class.refresh_script }
+
+    it 're-sends info (still skipped while dead) and exp all 0' do
+      expect(script).to include('Lich::Util.issue_command("info"')
+      expect(script).to include('quiet: true, timeout: 1) unless dead?')
+      expect(script).to include('Lich::Util.issue_command("exp all 0", /^Circle: \\d+/')
+    end
+
+    it 'does not re-run login-only work or re-fire the PostLoad lifecycle' do
+      expect(script).not_to include('played')
+      expect(script).not_to include('ability')
+      expect(script).not_to include('flag')
+      expect(script).not_to include('startup_completed!')
+    end
+
+    it 'is valid Ruby' do
+      expect { RubyVM::InstructionSequence.compile(script) }.not_to raise_error
+    end
+  end
+
+  describe 'watch! thread body' do
+    it 'starts the revival watcher after issuing startup' do
+      allow(described_class).to receive(:ready_for_startup?).and_return(true)
+      # The body runs inline on the spec thread: fail instead of hanging if it ever waits.
+      allow(described_class).to receive(:sleep).and_raise('watch! body waited for readiness')
+      allow(Thread).to receive(:new) { |&body| body.call }
+      calls = []
+      allow(described_class).to receive(:startup) { calls << :startup }
+      allow(described_class).to receive(:watch_for_revival) { calls << :watch_for_revival }
+      described_class.watch!
+      expect(calls).to eq(%i[startup watch_for_revival])
+    end
+  end
+
   describe '.post_startup_checks' do
     before do
       allow(described_class).to receive(:warn_obsolete_scripts)
