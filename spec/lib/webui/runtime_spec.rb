@@ -437,15 +437,22 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(Timeout.timeout(2) { calls.pop }).to eq(source: trees.fetch('available'), row: '101')
   end
 
-  it 'counts connected viewers only for the requested owner' do
-    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'map', title: 'Map') {})
-    other_owner = Object.new
-    expect(runtime.viewers_present?(owner)).to be false
-    attach(first_connection, page)
-    expect(runtime.viewers_present?(owner)).to be true
-    expect(runtime.viewers_present?(other_owner)).to be false
-    runtime.disconnect(first_connection)
-    expect(runtime.viewers_present?(owner)).to be false
+  context 'with a controlled resume clock' do
+    let(:now) { [0.0] }
+    let(:viewers) { Lich::WebUI::ViewerStore.new(clock: -> { now.first }) }
+
+    it 'counts viewers only for the requested owner, keeping a disconnected viewer until its resume expires' do
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'map', title: 'Map') {})
+      other_owner = Object.new
+      expect(runtime.viewers_present?(owner)).to be false
+      attach(first_connection, page)
+      expect(runtime.viewers_present?(owner)).to be true
+      expect(runtime.viewers_present?(other_owner)).to be false
+      runtime.disconnect(first_connection)
+      expect(runtime.viewers_present?(owner)).to be true
+      now[0] += Lich::WebUI::ViewerStore::RECONNECT_WINDOW
+      expect(runtime.viewers_present?(owner)).to be false
+    end
   end
 
   [true, false].each do |process_first|
@@ -555,7 +562,7 @@ RSpec.describe Lich::WebUI::Runtime do
     host&.shutdown
   end
 
-  it 'delivers detach even when the close callback immediately unregisters the page' do
+  it 'delivers only detach on a viewer detach; the page stays open and close needs the managed window' do
     callbacks = []
     # Execute on enqueue to deterministically expose the real worker race.
     allow(dispatcher).to receive(:enqueue) { |**_, &callback| callback.call }
@@ -567,11 +574,14 @@ RSpec.describe Lich::WebUI::Runtime do
     address, render = attach(first_connection, page)
 
     expect(runtime.handle(first_connection, type: 'detach', page: address, generation: render['generation'])).to eq(:detached)
-    expect(callbacks).to eq(%i[close detach])
+    expect(callbacks).to eq(%i[detach])
+    expect(registry.size).to eq(1)
+    runtime.browser_closed(page)
+    expect(callbacks).to eq(%i[detach close])
     expect(registry.size).to eq(0)
   end
 
-  it 'keeps close callback reads available after detaching and disposes them afterwards' do
+  it 'keeps close callback reads available after the managed window closes and disposes them afterwards' do
     queued = []
     allow(dispatcher).to receive(:enqueue) do |**options, &callback|
       queued << Lich::WebUI::WorkItem.new(cleanup: options[:cleanup], &callback)
@@ -584,7 +594,7 @@ RSpec.describe Lich::WebUI::Runtime do
     address, render = attach(first_connection, page)
     runtime.handle(first_connection, type: 'event', page: address, generation: render['generation'],
                                      cid: 'page:save-close/text_input:name', event: 'change', payload: { value: 'edited' })
-    runtime.handle(first_connection, type: 'detach', page: address, generation: render['generation'])
+    runtime.browser_closed(page)
     expect(runtime.viewers_present?(owner)).to be false
     queued.each(&:call)
     expect(observed).to eq(['edited'])
@@ -595,7 +605,7 @@ RSpec.describe Lich::WebUI::Runtime do
     entered = Queue.new
     release = Queue.new
     snapshots = []
-    allow(viewers).to receive(:snapshot).and_wrap_original do |original, *args, **options|
+    allow(viewers).to receive(:closing_snapshot).and_wrap_original do |original, *args, **options|
       original.call(*args, **options).tap { |snapshot| snapshots << snapshot }
     end
     callback = double('close callback')
@@ -603,13 +613,13 @@ RSpec.describe Lich::WebUI::Runtime do
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'cancel-close', title: 'Cancel', on: { close: callback }) do
       text_input(key: 'name', value: 'draft')
     end)
-    address, render = attach(first_connection, page)
+    attach(first_connection, page)
     dispatcher.enqueue(owner: owner, page_id: page.id, viewer_id: 'busy', cid: 'busy', event: :activate, coalescable: false) do
       entered << true
       release.pop
     end
     Timeout.timeout(2) { entered.pop }
-    runtime.handle(first_connection, type: 'detach', page: address, generation: render['generation'])
+    runtime.browser_closed(page)
     closing = snapshots.last
     expect(closing.values).not_to be_empty
     shutdown = Thread.new { dispatcher.shutdown_owner(owner) }
@@ -1106,7 +1116,7 @@ RSpec.describe Lich::WebUI::Runtime do
     expect { page.set(cid, :value, 'secret') }.to raise_error(Lich::WebUI::SensitiveReadError, /bulk state/)
   end
 
-  it 'delivers attach, user close, and detach lifecycle callbacks in order' do
+  it 'delivers attach, detach, and a managed-window user close lifecycle callbacks in order' do
     lifecycle = Queue.new
     callbacks = %i[attach close detach].to_h do |event|
       [event, ->(context) { lifecycle << [context.event, context.payload] }]
@@ -1118,9 +1128,10 @@ RSpec.describe Lich::WebUI::Runtime do
     runtime.handle(first_connection, {
       type: 'detach', page: address, generation: render['generation'],
     })
+    expect(2.times.map { lifecycle.pop(timeout: 2) }).to eq([[:attach, {}], [:detach, {}]])
+    runtime.browser_closed(page)
 
-    expected = [[:attach, {}], [:close, { reason: :user }], [:detach, {}]]
-    expect(3.times.map { lifecycle.pop }).to eq(expected)
+    expect(lifecycle.pop(timeout: 2)).to eq([:close, { reason: :user }])
   end
 
   it 'refuses events after disconnect and after page removal with distinct reasons' do
