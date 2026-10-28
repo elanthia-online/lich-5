@@ -29,6 +29,29 @@ module Lich
     class << self
       attr_writer :registry, :service
 
+      # Records the process presentation policy. Core startup calls this once it
+      # has resolved its launch options (--no-gui and the legacy --no-gtk alias
+      # resolve false), before script bindings or any window opens. Compatibility
+      # layers only read the policy; they never write it.
+      # @param enabled [Boolean, nil] resolved policy; nil restores the
+      #   unconfigured state (test fixtures)
+      # @return [Boolean, nil] recorded policy
+      # @raise [ArgumentError] for any other value
+      def configure_presentation(enabled:)
+        raise ArgumentError, 'presentation policy must be true, false or nil' unless [true, false, nil].include?(enabled)
+
+        INITIALIZATION_MUTEX.synchronize { @presentation_enabled = enabled }
+      end
+
+      # Reads the core presentation policy without side effects: it never starts
+      # the service, discovers or opens a browser, or loads compatibility code.
+      # The unconfigured state reads false, so nothing presents before startup
+      # resolves the policy. An enabled policy does not prove a host exists.
+      # @return [Boolean]
+      def presentation_enabled?
+        INITIALIZATION_MUTEX.synchronize { @presentation_enabled == true }
+      end
+
       # Returns the current page registry without starting a listener.
       # @return [Registry] lazily initialized registry
       def registry
@@ -112,9 +135,16 @@ module Lich
       def adapter(owner:, viewer: nil)
         host = service
         Adapter.new(owner: owner, service: host, viewer: viewer, on_publish: proc do |page|
-          host.start
-          host.server.broadcast(type: 'pages', pages: host.registry.descriptors)
-          host.open(page)
+          if presentation_enabled?
+            host.start
+            host.server.broadcast(type: 'pages', pages: host.registry.descriptors)
+            host.open(page)
+          else
+            # Refused without spawning. Like a failed open, deliver the page's
+            # close lifecycle so its owner is not left waiting on a window.
+            host.runtime.browser_closed(page)
+            false
+          end
         end)
       end
 
@@ -158,8 +188,11 @@ module Lich
       # @param page [Page, nil] registered page, or the page selector
       # @param geometry [Hash, nil] width, height and optional position; when nil,
       #   page windows use persisted geometry or their declared size
-      # @return [Boolean] whether opening succeeded or the page was already open
+      # @return [Boolean] whether opening succeeded or the page was already open;
+      #   false without spawning when the core presentation policy is not enabled
       def open(page: nil, geometry: nil)
+        return false unless presentation_enabled?
+
         service.open(page, geometry: geometry)
       end
 
