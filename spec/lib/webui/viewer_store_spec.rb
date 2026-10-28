@@ -300,6 +300,56 @@ RSpec.describe Lich::WebUI::ViewerStore do
       unknown = store.attach(connection_id: 'four', address: 'form', page: page, resume_token: 'resume-unknown')
       expect(unknown.resume_state).to eq(:expired)
     end
+
+    it 're-suspends a resumed viewer with its values, token and original expiry so it can resume again' do
+      now = 100.0
+      store = described_class.new(clock: -> { now })
+      viewer = store.attach(connection_id: 'one', address: 'form', page: page)
+      render = page.render
+      store.deliver(viewer, render)
+      store.update(viewer, render.tree.children.first, :change, value: 'retained')
+      store.transient_disconnect('one')
+      deadline = viewer.expires_at
+      now += 10
+
+      resumed = store.attach(connection_id: 'two', address: 'form', page: page, resume_token: viewer.resume_token)
+      expect(store.resuspend(resumed)).to be true
+
+      expect(viewer).to have_attributes(connection_id: 'one', expires_at: deadline, resume_state: :fresh)
+      expect { store.fetch(connection_id: 'two', address: 'form') }.to raise_error(Lich::WebUI::Error)
+      expect(store.attachments_for(page)).to be_empty
+      expect(store.resuspend(viewer)).to be false
+
+      again = store.attach(connection_id: 'three', address: 'form', page: page, resume_token: viewer.resume_token)
+      expect(again).to equal(viewer)
+      expect(again.resume_state).to eq(:resumed)
+      expect(again.values.values).to eq(['retained'])
+
+      expect(store.resuspend(again)).to be true
+      now = deadline
+      expired = store.attach(connection_id: 'four', address: 'form', page: page, resume_token: viewer.resume_token)
+      expect(expired.resume_state).to eq(:expired)
+      expect(viewer.values).to be_empty
+    end
+
+    it 'leaves fresh, already-disconnected and closed viewers alone' do
+      store = described_class.new
+      fresh = store.attach(connection_id: 'one', address: 'form', page: page)
+      expect(store.resuspend(fresh)).to be false
+      expect(store.fetch(connection_id: 'one', address: 'form')).to equal(fresh)
+
+      store.transient_disconnect('one')
+      resumed = store.attach(connection_id: 'two', address: 'form', page: page, resume_token: fresh.resume_token)
+      store.transient_disconnect('two')
+      expect(store.resuspend(resumed)).to be false
+      expect(resumed.connection_id).to eq('two')
+
+      closed = store.attach(connection_id: 'three', address: 'form', page: page, resume_token: fresh.resume_token)
+      store.close(connection_id: 'three', address: 'form')
+      expect(store.resuspend(closed)).to be false
+      expect(store.attach(connection_id: 'four', address: 'form', page: page,
+                          resume_token: fresh.resume_token).resume_state).to eq(:expired)
+    end
   end
 
   describe 'sensitive values' do

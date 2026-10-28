@@ -216,6 +216,14 @@ module Lich
         bound_runtime.degradations(self)
       end
 
+      # Names this page by owner label, id and title only. The default inspect would
+      # walk the bound runtime, viewer graph, shared values and last render, so
+      # diagnostics never reach them through a page. Ruby's pp prints through it too.
+      # @return [String] bounded inspection text
+      def inspect
+        "#<#{self.class.name} owner=#{owner_label.to_s.inspect} id=#{id.inspect} title=#{title.inspect}>"
+      end
+
       # Reads a server-owned override, falling back to the rendered property.
       # @return [Object] override or fallback
       # @api private
