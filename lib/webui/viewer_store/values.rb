@@ -9,7 +9,7 @@ module Lich
       # @param name [Symbol] normalized contract property
       # @return [Object] current value
       def property(attachment, component, name)
-        @mutex.synchronize { attachment.values.fetch([component.cid, name], component.props[name]) }
+        @mutex.synchronize { attachment_values(attachment).fetch([component.cid, name], component.props[name]) }
       end
 
       # Stores an already-validated viewer-local override under the store lock.
@@ -21,7 +21,7 @@ module Lich
       def set_property(attachment, component, name, value)
         @mutex.synchronize do
           select_radio_option!(attachment, component) if component.type == :radio_option && name == :checked && value
-          attachment.values[[component.cid, name]] = value if retain_value?(component, name)
+          attachment_values(attachment)[[component.cid, name]] = value if retain_value?(component, name)
         end
       end
 
@@ -44,7 +44,7 @@ module Lich
 
           value = yield component
           select_radio_option!(attachment, component) if component.type == :radio_option && name == :checked && value
-          attachment.values[[cid, name]] = value if retain_value?(component, name)
+          attachment_values(attachment)[[cid, name]] = value if retain_value?(component, name)
         end
       end
 
@@ -60,11 +60,11 @@ module Lich
       # @raise [Protocol::Refusal] if the client changed the delivered text
       def read_only_submission(attachment, component, value)
         @mutex.synchronize do
-          unless attachment.delivered_read_only.key?(component.cid) &&
-                 read_only_browser_value(component.type, attachment.delivered_read_only[component.cid]) == read_only_browser_value(component.type, value)
+          unless attachment_read_only(attachment).key?(component.cid) &&
+                 read_only_browser_value(component.type, attachment_read_only(attachment)[component.cid]) == read_only_browser_value(component.type, value)
             raise Protocol::Refusal.new(:payload, 'read-only text cannot be changed by submission')
           end
-          attachment.values.fetch([component.cid, :value], component.props[:value])
+          attachment_values(attachment).fetch([component.cid, :value], component.props[:value])
         end
       end
 
@@ -87,7 +87,7 @@ module Lich
           case [component.type, event]
           when [:overlay, :pointer_press], [:overlay, :pointer_motion], [:overlay, :pointer_release]
             if component.props[:pointer_tracking]
-              attachment.values[[component.cid, :pointer_position]] = payload.slice(:x, :y, :state).freeze
+              attachment_values(attachment)[[component.cid, :pointer_position]] = payload.slice(:x, :y, :state).freeze
               # Start the bounded drag lifetime at press, not at an earlier paint.
               if event == :pointer_press && payload[:button] == 1 && (epoch = attachment.release_epochs[component.cid])
                 epoch.started_at = @clock.call
@@ -95,23 +95,23 @@ module Lich
             end
           when [:radio_option, :change]
             select_radio_option!(attachment, component) if payload[:value]
-            attachment.values[[component.cid, :checked]] = payload[:value]
-          when [:toggle, :change], [:checkbox, :change] then attachment.values[[component.cid, :checked]] = payload[:value]
-          when [:radio, :change] then attachment.values[[component.cid, :selected]] = payload[:value]
+            attachment_values(attachment)[[component.cid, :checked]] = payload[:value]
+          when [:toggle, :change], [:checkbox, :change] then attachment_values(attachment)[[component.cid, :checked]] = payload[:value]
+          when [:radio, :change] then attachment_values(attachment)[[component.cid, :selected]] = payload[:value]
           when [:text_input, :change], [:text_input, :blur], [:textarea, :change], [:textarea, :blur], [:number_input, :change], [:slider, :change], [:select, :change]
-            attachment.values[[component.cid, :value]] = payload[:value] if retain_value?(component, :value)
-          when [:tabs, :select] then attachment.values[[component.cid, :selected]] = payload[:index]
-          when [:group, :dismiss] then attachment.values[[component.cid, :open]] = false
-          when [:expander, :toggle] then attachment.values[[component.cid, :open]] = payload[:open]
-          when [:split, :move] then attachment.values[[component.cid, :position]] = payload[:position]
-          when [:table, :selection_change] then attachment.values[[component.cid, :selected]] = payload[:rows]
+            attachment_values(attachment)[[component.cid, :value]] = payload[:value] if retain_value?(component, :value)
+          when [:tabs, :select] then attachment_values(attachment)[[component.cid, :selected]] = payload[:index]
+          when [:group, :dismiss] then attachment_values(attachment)[[component.cid, :open]] = false
+          when [:expander, :toggle] then attachment_values(attachment)[[component.cid, :open]] = payload[:open]
+          when [:split, :move] then attachment_values(attachment)[[component.cid, :position]] = payload[:position]
+          when [:table, :selection_change] then attachment_values(attachment)[[component.cid, :selected]] = payload[:rows]
           when [:table, :cursor_change]
-            attachment.values[[component.cid, :cursor]] = payload.dup.freeze
+            attachment_values(attachment)[[component.cid, :cursor]] = payload.dup.freeze
           when [:table, :sort_change]
-            attachment.values[[component.cid, :sort]] = { column: payload[:column], direction: payload[:direction] }.freeze
+            attachment_values(attachment)[[component.cid, :sort]] = { column: payload[:column], direction: payload[:direction] }.freeze
           when [:table, :row_toggle]
-            expanded = attachment.values.fetch([component.cid, :expanded]) { component.props[:rows].select { |row| row[:expanded] }.map { |row| row[:key] } }
-            attachment.values[[component.cid, :expanded]] = payload[:expanded] ? expanded | [payload[:row]] : expanded - [payload[:row]]
+            expanded = attachment_values(attachment).fetch([component.cid, :expanded]) { component.props[:rows].select { |row| row[:expanded] }.map { |row| row[:key] } }
+            attachment_values(attachment)[[component.cid, :expanded]] = payload[:expanded] ? expanded | [payload[:row]] : expanded - [payload[:row]]
           end
         end
       end
@@ -147,7 +147,7 @@ module Lich
             next unless peer.type == :radio_option && peer.props[:group] == component.props[:group]
 
             checked = peer.cid == component.cid
-            [peer, checked] if attachment.values.fetch([peer.cid, :checked], peer.props[:checked]) != checked
+            [peer, checked] if attachment_values(attachment).fetch([peer.cid, :checked], peer.props[:checked]) != checked
           end
           select_radio_option!(attachment, component)
           changed.sort_by { |_peer, checked| checked ? 1 : 0 }
@@ -194,7 +194,7 @@ module Lich
         attachment.render.tree.each do |peer|
           next unless peer.type == :radio_option && peer.props[:group] == component.props[:group]
 
-          attachment.values[[peer.cid, :checked]] = peer.cid == component.cid
+          attachment_values(attachment)[[peer.cid, :checked]] = peer.cid == component.cid
         end
       end
 

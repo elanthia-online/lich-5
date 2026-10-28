@@ -56,7 +56,9 @@ RSpec.describe Lich::WebUI::ViewerStore do
     now = 100.0
     store = described_class.new(clock: -> { now })
     first = store.attach(connection_id: 'one', address: 'page-one', page: page)
-    first.values[:draft] = 'retained'
+    render = page.render
+    store.deliver(first, render)
+    store.update(first, render.tree.children.first, :change, value: 'retained')
     3.times do
       expect { store.attach(connection_id: 'one', address: 'page-one', page: page) }
         .to raise_error(Lich::WebUI::Error, /already attached/)
