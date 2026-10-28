@@ -29,10 +29,10 @@ module Lich
         scalar(:number, finite: true, **({ min: min, max: max }.compact))
       end
 
-      # Describes a closed set of string values, accepting nested value lists.
+      # Describes string choices and integer choices with compatible string spellings.
       # @return [Hash] shape definition
       def enum(*values)
-        scalar(:enum, values: values.flatten.map(&:to_s))
+        scalar(:enum, values: values.flatten.flat_map { |value| value.is_a?(Integer) ? [value, value.to_s] : [value.to_s] })
       end
 
       # Describes an ordered collection with cardinality and item constraints.
@@ -42,6 +42,7 @@ module Lich
       end
 
       # Describes named fields; unknown fields are refused unless explicitly allowed.
+      # With allow_extra: true, unknown fields are accepted and stripped from the result.
       # Supply fields as either a positional hash or keywords, never both.
       # @return [Hash] shape definition
       # @raise [ArgumentError] if fields are supplied twice

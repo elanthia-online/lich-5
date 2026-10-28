@@ -111,4 +111,33 @@ RSpec.describe Lich::WebUI::TreeBuilder do
       expect(group.children.first.props[:value]).to eq(canary)
     end
   end
+  it 'G3 RC13 normalizes a single Draft in keyword and post-render submission scopes' do
+    input = builder.text_input(key: 'name', value: '')
+    action = builder.button(label: 'Go', submit: input)
+    later = builder.button(label: 'Later')
+    builder.submit(later, input)
+    expect(builder.submissions).to eq(action.cid => [input.cid], later.cid => [input.cid])
+    expect(builder.build).to be_a(Lich::WebUI::Component)
+  end
+
+  it 'G3 RC14 refuses column span overflow and admits a span ending at the last column' do
+    builder.grid(cols: 3) { text(content: 'Fits', placement: { column: 2, span: 2 }) }
+    expect(builder.build).to be_a(Lich::WebUI::Component)
+    overflow = described_class.new(owner: :fixture, page_id: 'overflow', title: 'Overflow')
+    overflow.grid(cols: 3) { overflow.text(content: 'Too wide', placement: { column: 3, span: 2 }) }
+    expect { overflow.build }.to raise_error(Lich::WebUI::SchemaViolationError, /exceeds grid columns/)
+  end
+
+  it 'G3 RC30 separates numeric keys and reserved prefixes from fixed positional IDs' do
+    numeric = builder.text_input(key: '0', value: '')
+    fixed = builder.text_input(value: '')
+    reserved = builder.text_input(key: 'key:0', value: '')
+    nested = builder.text_input(key: 'key:key:0', value: '')
+    ordinary = builder.text_input(key: 'name', value: '')
+    expect([numeric.cid, fixed.cid, reserved.cid, nested.cid, ordinary.cid]).to eq(%w[
+                                                                                     page:spec-page/text_input:key:0 page:spec-page/text_input:0 page:spec-page/text_input:key:key:0
+                                                                                     page:spec-page/text_input:key:key:key:0 page:spec-page/text_input:name
+                                                                                   ])
+    expect(builder.build.children.map(&:cid).uniq.length).to eq(5)
+  end
 end

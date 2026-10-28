@@ -52,6 +52,19 @@ module Lich
         @consumed = false
       end
 
+      # A one-shot carrier cannot share its disposal state through dup or clone.
+      # @raise [TypeError] always
+      def initialize_copy(_other)
+        raise TypeError, 'sensitive values cannot be copied'
+      end
+      private :initialize_copy
+
+      # Disposal requires mutable lifecycle state for the lifetime of the carrier.
+      # @raise [TypeError] always
+      def freeze
+        raise TypeError, 'sensitive values cannot be frozen'
+      end
+
       # Reports whether the value has been consumed or explicitly discarded.
       # @return [Boolean]
       def consumed?
