@@ -14,14 +14,14 @@ module Lich
           raise Error, 'viewer has no delivered render' unless attachment.render
 
           if for_delivery
-            attachment.delivered_read_only.clear
+            attachment_read_only(attachment).clear
             attachment.render.tree.each do |component|
               next unless %i[text_input textarea].include?(component.type) && component.props[:read_only] && !component.props[:sensitive]
 
-              attachment.delivered_read_only[component.cid] = attachment.values.fetch([component.cid, :value], component.props[:value])
+              attachment_read_only(attachment)[component.cid] = attachment_values(attachment).fetch([component.cid, :value], component.props[:value])
             end
           end
-          Snapshot.new(attachment.page, attachment.viewer_id, attachment.render, attachment.values.dup, attachment.input_requests.dup)
+          Snapshot.new(attachment.page, attachment.viewer_id, attachment.render, attachment_values(attachment).dup, attachment.input_requests.dup)
         end
       end
 
@@ -36,7 +36,7 @@ module Lich
           candidates = @by_resume.values.select { |attachment| attachment.page.equal?(page) && attachment.render }
           if candidates.one?
             attachment = candidates.first
-            snapshot = Snapshot.new(page, attachment.viewer_id, attachment.render, attachment.values.dup, attachment.input_requests.dup)
+            snapshot = Snapshot.new(page, attachment.viewer_id, attachment.render, attachment_values(attachment).dup, attachment.input_requests.dup)
             destroy_locked!(attachment) if retire
             snapshot
           end
@@ -52,7 +52,7 @@ module Lich
           render = attachment.render
           raise Error, 'viewer has no delivered render' unless render
 
-          serialize_component(render.tree, attachment.values)
+          serialize_component(render.tree, attachment_values(attachment))
         end
       end
 

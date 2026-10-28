@@ -26,7 +26,7 @@ module Lich
       class Attachment
         attr_accessor :connection_id, :render, :delivered_generation, :expires_at, :resume_state
         attr_accessor :widget_signature, :widget_generation, :widget_started_at, :widget_revision, :widget_request
-        attr_reader :viewer_id, :resume_token, :address, :page, :values, :delivered_read_only, :input_requests
+        attr_reader :viewer_id, :resume_token, :address, :page, :input_requests
         attr_reader :release_epochs
         attr_accessor :release_request
 
@@ -35,8 +35,10 @@ module Lich
         # @param connection_id [String] authenticated transport identity
         # @param address [String] opaque registered page address
         # @param page [Page] exact page receiving the viewer
+        # @param mutex [Monitor] owning store monitor for coherent public state copies
         # @return [Attachment] independent viewer capability and state
-        def initialize(connection_id:, address:, page:)
+        def initialize(connection_id:, address:, page:, mutex: Monitor.new)
+          @mutex = mutex
           @connection_id = connection_id
           @viewer_id = "attachment-#{SecureRandom.hex(16)}".freeze
           @resume_token = "resume-#{SecureRandom.hex(16)}".freeze
@@ -53,6 +55,31 @@ module Lich
           @widget_revision = 0
           @release_epochs = {}
           @release_request = nil
+        end
+
+        # @return [Hash] detached viewer values, including copied mutable keys and leaves
+        def values = state_snapshot(@values)
+
+        # @return [Hash] detached evidence of the read-only text delivered to this viewer
+        def delivered_read_only = state_snapshot(@delivered_read_only)
+
+        private
+
+        # Store-only access; callers must hold the owning store monitor.
+        # @return [Hash] live viewer overrides
+        def mutable_values = @values
+
+        # Store-only access; callers must hold the owning store monitor.
+        # @return [Hash] live read-only delivery evidence
+        def mutable_delivered_read_only = @delivered_read_only
+
+        # Copies under the same monitor as store updates; callers own their returned copy.
+        # @param state [Hash] live attachment state
+        # @return [Hash] recursively detached keys, containers and strings
+        def state_snapshot(state)
+          @mutex.synchronize do
+            state.to_h { |key, value| [ValueHelpers.deep_copy(key), ValueHelpers.deep_copy(value)] }
+          end
         end
       end
 
@@ -100,7 +127,7 @@ module Lich
             if @by_resume.size >= RETAINED_ATTACHMENT_LIMIT
               raise Protocol::Refusal.new(:attachment_limit, 'retained viewer attachment limit reached; close a viewer or wait for expiry')
             end
-            attachment = Attachment.new(connection_id: connection_id, address: address, page: page)
+            attachment = Attachment.new(connection_id: connection_id, address: address, page: page, mutex: @mutex)
             attachment.resume_state = :expired if resume_token
             @by_resume[attachment.resume_token] = attachment
           end
@@ -187,6 +214,20 @@ module Lich
 
       private
 
+      # Resolves store-owned state without exposing it through public attachment readers.
+      # Must be called under the store monitor; detached snapshots keep their local map.
+      # @param attachment [Attachment, Snapshot] live viewer or captured state
+      # @return [Hash] writable viewer values
+      def attachment_values(attachment)
+        attachment.is_a?(Attachment) ? attachment.__send__(:mutable_values) : attachment.values
+      end
+
+      # @param attachment [Attachment] live viewer, accessed under the store monitor
+      # @return [Hash] writable delivery evidence
+      def attachment_read_only(attachment)
+        attachment.__send__(:mutable_delivered_read_only)
+      end
+
       # Destroys expired disconnected attachments while the store mutex is held.
       # @return [void]
       # @api private
@@ -206,9 +247,9 @@ module Lich
 
         remove_connection_mapping!(attachment)
         @by_resume.delete(attachment.resume_token)
-        attachment.values.clear
+        attachment_values(attachment).clear
         attachment.input_requests.clear
-        attachment.delivered_read_only.clear
+        attachment_read_only(attachment).clear
         attachment.render = nil
         attachment.delivered_generation = nil
         retire_widget_admission!(attachment)
