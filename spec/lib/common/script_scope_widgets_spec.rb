@@ -183,41 +183,50 @@ RSpec.describe 'bounded script compatibility pilot' do
     window.destroy
   end
 
-  %i[detach process_exit].each do |close_path|
-    it "saves entry and checkbox drafts through delete_event on #{close_path}" do
-      window = compatibility.const_get(:Window).new('Close/save')
-      box = compatibility.const_get(:Box).new(:vertical)
-      entry = compatibility.const_get(:Entry).new
-      check = compatibility.const_get(:CheckButton).new('Enabled')
-      entry.text = 'old'
-      box.add(entry)
-      box.add(check)
-      window.add(box)
-      saved = Queue.new
-      window.signal_connect('delete_event') { saved << [entry.text, check.active?]; false }
-      window.show_all
-      page = nil
-      Timeout.timeout(2) { sleep 0.001 until (page = service.registry.pages_for(owner).first)&.last_render }
-      connection = double('connection', viewer_id: 'close-save', alive?: true, send_text: true)
-      address = service.registry.address_for(page)
-      service.runtime.handle(connection, type: 'attach', page: address)
-      page.last_render.tree.each do |component|
-        next unless %i[text_input checkbox].include?(component.type)
+  # Builds a shim window with an entry and a checkbox whose delete_event records them,
+  # attaches a viewer and edits both controls.
+  # @return [Array] window, entry, check, saved queue, page, connection and address
+  def edited_close_window
+    window = compatibility.const_get(:Window).new('Close/save')
+    box = compatibility.const_get(:Box).new(:vertical)
+    entry = compatibility.const_get(:Entry).new
+    check = compatibility.const_get(:CheckButton).new('Enabled')
+    entry.text = 'old'
+    box.add(entry)
+    box.add(check)
+    window.add(box)
+    saved = Queue.new
+    window.signal_connect('delete_event') { saved << [entry.text, check.active?]; false }
+    window.show_all
+    page = nil
+    Timeout.timeout(2) { sleep 0.001 until (page = service.registry.pages_for(owner).first)&.last_render }
+    connection = double('connection', viewer_id: 'close-save', alive?: true, send_text: true)
+    address = service.registry.address_for(page)
+    service.runtime.handle(connection, type: 'attach', page: address)
+    page.last_render.tree.each do |component|
+      next unless %i[text_input checkbox].include?(component.type)
 
-        service.runtime.handle(connection, type: 'event', page: address, generation: page.generation,
-                                           cid: component.cid, event: 'change',
-                                           payload: { value: component.type == :checkbox ? true : 'edited' })
-      end
-      if close_path == :detach
-        service.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
-      else
-        service.runtime.disconnect(connection)
-        service.runtime.browser_closed(page)
-      end
-      expect(Timeout.timeout(2) { saved.pop }).to eq(['edited', true])
-      Timeout.timeout(2) { sleep 0.001 until window.destroyed? }
-      expect([entry.text, check.active?]).to eq(['edited', true])
+      service.runtime.handle(connection, type: 'event', page: address, generation: page.generation,
+                                         cid: component.cid, event: 'change',
+                                         payload: { value: component.type == :checkbox ? true : 'edited' })
     end
+    [window, entry, check, saved, page, connection, address]
+  end
+
+  it 'saves entry and checkbox drafts through delete_event when the managed window exits' do
+    window, entry, check, saved, page, connection, = edited_close_window
+    service.runtime.disconnect(connection)
+    service.runtime.browser_closed(page)
+    expect(Timeout.timeout(2) { saved.pop }).to eq(['edited', true])
+    Timeout.timeout(2) { sleep 0.001 until window.destroyed? }
+    expect([entry.text, check.active?]).to eq(['edited', true])
+  end
+
+  it 'never fires delete_event or closes the window on a viewer detach alone' do
+    window, _entry, _check, saved, page, connection, address = edited_close_window
+    service.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
+    expect(saved.pop(timeout: 0.3)).to be_nil
+    expect(window).not_to be_destroyed
   end
 
   it 'reports the persisted GTK theme preference and uses it for shim windows' do
@@ -510,7 +519,11 @@ RSpec.describe 'bounded script compatibility pilot' do
     before do
       allow(Lich::WebUI).to receive(:service).and_return(service)
       allow(Lich::WebUI).to receive(:adapter).and_call_original
+      # The real adapter presents only once core enables presentation (1853:RC2).
+      Lich::WebUI.configure_presentation(enabled: true)
     end
+
+    after { Lich::WebUI.configure_presentation(enabled: nil) }
 
     it 'reopens the same page after native close and hide while retaining script input and leaving siblings open' do
       sibling = compatibility::Window.new('Main')
