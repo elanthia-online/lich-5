@@ -20,7 +20,7 @@ module Lich
 
       # One viewer capability and its retained delivery/admission bookkeeping.
       class Attachment
-        attr_accessor :connection_id, :render, :delivered_generation, :expires_at
+        attr_accessor :connection_id, :render, :delivered_generation, :expires_at, :resume_state
         attr_accessor :widget_signature, :widget_generation, :widget_started_at, :widget_revision, :widget_request
         attr_reader :viewer_id, :resume_token, :address, :page, :values, :delivered_read_only, :input_requests
         attr_reader :release_epochs
@@ -44,6 +44,7 @@ module Lich
           @render = nil
           @delivered_generation = nil
           @expires_at = nil
+          @resume_state = :fresh
           @widget_signature = @widget_generation = @widget_started_at = @widget_request = nil
           @widget_revision = 0
           @release_epochs = {}
@@ -62,12 +63,17 @@ module Lich
       end
 
       # Attaches one viewer per connection/page pair, or resumes a disconnected one.
+      # A token that is no longer resumable (expired, closed or unknown) is not an error:
+      # the viewer is attached fresh with no retained state, and its +resume_state+ is
+      # +:expired+ so the caller can show the reset. Otherwise +resume_state+ is +:resumed+
+      # for a matched token and +:fresh+ when no token was offered.
       # @param connection_id [String] authenticated connection identifier
       # @param address [String] registered page address
       # @param page [Page] page receiving the viewer
       # @param resume_token [String, nil] previous attachment's reconnect token
-      # @return [Attachment] the new or resumed viewer
-      # @raise [Error] if this connection already views the page or resume is invalid
+      # @return [Attachment] the new or resumed viewer, with its +resume_state+ set
+      # @raise [Error] if this connection already views the page, the token belongs to
+      #   another page, or the token's viewer is still attached
       def attach(connection_id:, address:, page:, resume_token: nil)
         @mutex.synchronize do
           expire_locked!
@@ -81,8 +87,10 @@ module Lich
             remove_connection_mapping!(attachment)
             attachment.connection_id = connection_id
             attachment.expires_at = nil
+            attachment.resume_state = :resumed
           else
             attachment = Attachment.new(connection_id: connection_id, address: address, page: page)
+            attachment.resume_state = :expired if resume_token
             @by_resume[attachment.resume_token] = attachment
           end
           @by_connection[[connection_id, address]] = attachment

@@ -274,4 +274,92 @@ RSpec.describe Lich::WebUI::ViewerStore do
     store.deliver(fresh, target.render)
     expect(store.serialize(fresh)[:children].map { |node| node[:props][:checked] }).to eq([false, false, true])
   end
+
+  describe 'resume lifecycle' do
+    it 'reports fresh, resumed and expired attachments instead of hiding a silent reset' do
+      now = 100.0
+      store = described_class.new(clock: -> { now })
+      first = store.attach(connection_id: 'one', address: 'form', page: page)
+      expect(first.resume_state).to eq(:fresh)
+
+      store.transient_disconnect('one')
+      now += described_class::RECONNECT_WINDOW - 1
+      resumed = store.attach(connection_id: 'two', address: 'form', page: page, resume_token: first.resume_token)
+      expect(resumed).to equal(first)
+      expect(resumed.resume_state).to eq(:resumed)
+
+      store.transient_disconnect('two')
+      now += described_class::RECONNECT_WINDOW
+      replacement = store.attach(connection_id: 'three', address: 'form', page: page, resume_token: first.resume_token)
+      expect(replacement).not_to equal(first)
+      expect(replacement.resume_state).to eq(:expired)
+      expect(replacement.viewer_id).not_to eq(first.viewer_id)
+
+      unknown = store.attach(connection_id: 'four', address: 'form', page: page, resume_token: 'resume-unknown')
+      expect(unknown.resume_state).to eq(:expired)
+    end
+  end
+
+  describe 'sensitive values' do
+    let(:secret_page) do
+      Lich::WebUI::Page.new(owner: owner, id: 'secret', title: 'Secret') do
+        text_input(key: 'token', value: 'authored-text', sensitive: true)
+        textarea(key: 'notes', value: 'authored-area', sensitive: true)
+        text_input(key: 'name', value: 'Public')
+      end
+    end
+
+    def retained_secrets(*stores)
+      stores.flat_map { |values| values.values.grep(String).select { |value| value.match?(/secret|authored/) } }
+    end
+
+    it 'never retains sensitive text or textarea values across update, setters, seeding, snapshots and resume' do
+      store = described_class.new
+      viewer = store.attach(connection_id: 'one', address: 'secret', page: secret_page)
+      render = secret_page.render
+      store.deliver(viewer, render)
+      token, notes, name = render.tree.children
+      expect(viewer.values.keys.map(&:first)).not_to include(token.cid, notes.cid)
+
+      result = store.admit_event(viewer, event: 'change', generation: render.generation, cid: token.cid) do
+        store.update(viewer, token, :change, { value: 'secret-change' }, 3)
+        store.update(viewer, token, :blur, value: 'secret-blur')
+        store.update(viewer, notes, :change, value: 'secret-area')
+        store.update(viewer, notes, :blur, value: 'secret-area-blur')
+        :queued
+      end
+      expect(result).to eq(:queued)
+      store.set_property(viewer, token, :value, 'secret-set')
+      store.set_input(viewer, notes, 'secret-input')
+      store.seed_property(viewer, token.cid, :value) { 'secret-seed' }
+      store.update(viewer, name, :change, value: 'Visible')
+
+      snapshot = store.snapshot(viewer)
+      expect(retained_secrets(viewer.values, snapshot.values)).to be_empty
+      expect(snapshot.values.keys).to eq([[name.cid, :value]])
+      expect(snapshot.input_requests).to be_empty
+
+      store.transient_disconnect('one')
+      closing = store.closing_snapshot(secret_page)
+      expect(retained_secrets(closing.values)).to be_empty
+      resumed = store.attach(connection_id: 'two', address: 'secret', page: secret_page, resume_token: viewer.resume_token)
+      expect(resumed).to equal(viewer)
+      store.deliver(resumed, secret_page.render)
+      expect(retained_secrets(resumed.values)).to be_empty
+      serialized = store.serialize(resumed).to_s
+      expect(serialized).not_to match(/secret-|authored-/)
+      expect(resumed.values[[name.cid, :value]]).to eq('Visible')
+    end
+
+    it 'still validates a sensitive seed without retaining it' do
+      store = described_class.new
+      viewer = store.attach(connection_id: 'one', address: 'secret', page: secret_page)
+      render = secret_page.render
+      store.deliver(viewer, render)
+      token = render.tree.children.first
+      expect { store.seed_property(viewer, token.cid, :value) { raise ArgumentError, 'invalid' } }.to raise_error(ArgumentError)
+      expect(store.seed_property(viewer, token.cid, :value) { 'secret' }).to be_nil
+      expect(viewer.values).not_to have_key([token.cid, :value])
+    end
+  end
 end
