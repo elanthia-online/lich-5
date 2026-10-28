@@ -96,12 +96,11 @@ module Lich
 
       # Bounds helper lifetime/output and always reaps the owned discovery process.
       def run(argv)
-        Open3.popen2e(*argv) do |input, output, process|
+        Open3.popen3(*argv) do |input, output, errors, process|
           input.close
           begin
             Timeout.timeout(3) do
-              result = output.read(65_537)
-              raise Error, 'monitor discovery output exceeds limit' if result.bytesize > 65_536
+              result = read_output(output, errors)
               raise Error, 'monitor discovery failed' unless process.value.success?
 
               result
@@ -113,6 +112,33 @@ module Lich
             end
           end
         end
+      end
+
+      # Drains both pipes concurrently, retaining only bounded structured stdout.
+      # Stderr has its own byte budget and never enters the data channel.
+      # @return [String] helper stdout
+      def read_output(output, errors)
+        streams = [output, errors]
+        result = +''
+        error_bytes = 0
+        until streams.empty?
+          IO.select(streams).first.each do |stream|
+            chunk = stream.read_nonblock(4096, exception: false)
+            if chunk.nil?
+              streams.delete(stream)
+            elsif chunk != :wait_readable
+              if stream.equal?(output)
+                result << chunk
+              else
+                error_bytes += chunk.bytesize
+              end
+              if result.bytesize > 65_536 || error_bytes > 65_536
+                raise Error, 'monitor discovery output exceeds limit'
+              end
+            end
+          end
+        end
+        result
       end
 
       # XRandR is optional; Wayland/restricted hosts use browser measurements or unavailable.

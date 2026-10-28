@@ -11,6 +11,10 @@ module Lich
     # Per-page viewer attachments and viewer-local state.
     class ViewerStore
       RECONNECT_WINDOW = 60
+      LIVE_ATTACHMENT_LIMIT = 1024
+      # Reserve retention capacity at admission so every disconnect keeps its 60s window.
+      # This bounds live plus resumable attachments, including reconnect churn.
+      RETAINED_ATTACHMENT_LIMIT = 4096
       WIDGET_ADMISSION_WINDOW = 30
       RELEASE_ADMISSION_WINDOW = 30
       Admission = Data.define(:render, :widget_revision, :accepted_at)
@@ -74,11 +78,15 @@ module Lich
       # @return [Attachment] the new or resumed viewer, with its +resume_state+ set
       # @raise [Error] if this connection already views the page, the token belongs to
       #   another page, or the token's viewer is still attached
+      # @raise [Protocol::Refusal] when live or retained attachment capacity is full
       def attach(connection_id:, address:, page:, resume_token: nil)
         @mutex.synchronize do
           expire_locked!
           raise Error, 'viewer is already attached' if @by_connection.key?([connection_id, address])
 
+          if @by_connection.size >= LIVE_ATTACHMENT_LIMIT
+            raise Protocol::Refusal.new(:attachment_limit, 'live viewer attachment limit reached; close an unused viewer')
+          end
           attachment = resume_token && @by_resume[resume_token]
           if attachment
             raise Error, 'resume token belongs to another page' unless attachment.address == address
@@ -89,6 +97,9 @@ module Lich
             attachment.expires_at = nil
             attachment.resume_state = :resumed
           else
+            if @by_resume.size >= RETAINED_ATTACHMENT_LIMIT
+              raise Protocol::Refusal.new(:attachment_limit, 'retained viewer attachment limit reached; close a viewer or wait for expiry')
+            end
             attachment = Attachment.new(connection_id: connection_id, address: address, page: page)
             attachment.resume_state = :expired if resume_token
             @by_resume[attachment.resume_token] = attachment

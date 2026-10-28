@@ -319,4 +319,79 @@ RSpec.describe Lich::WebUI::Dispatcher do
     end.to raise_error(Lich::WebUI::Error, /stopped/)
     expect(isolated.shutdown_owner(other)).to be(false)
   end
+  describe 'bounded queue admission' do
+    let(:worker) { double('held worker', join: nil, alive?: false) }
+    let(:messages) { [] }
+    let(:dispatcher) do
+      described_class.new(thread_factory: ->(&block) { @run_worker = block; worker },
+                          logger: ->(*entry) { messages << entry })
+    end
+
+    before do
+      stub_const('Lich::WebUI::Dispatcher::VIEWER_LIMIT', 2)
+      stub_const('Lich::WebUI::Dispatcher::PAGE_LIMIT', 3)
+    end
+
+    def enqueue_draft(cid, viewer: 'viewer', page: 'page', draft: true, cleanup: nil)
+      dispatcher.enqueue(owner: owner, page_id: page, viewer_id: viewer, cid: cid,
+                         event: :change, coalescable: draft, cleanup: cleanup) { delivered << cid }
+    end
+
+    let(:delivered) { [] }
+
+    def drain_queue
+      dispatcher.enqueue(owner: owner, page_id: 'finish', viewer_id: 'finish', cid: 'finish',
+                         event: :activate, coalescable: false) { dispatcher.shutdown_owner(owner) }
+      @run_worker.call
+    end
+
+    it 'keeps planned evictions and their cleanup untouched when another bucket still refuses admission' do
+      removed = []
+      enqueue_draft('draft', viewer: 'other', cleanup: -> { removed << :draft })
+      enqueue_draft('terminal-one', draft: false)
+      enqueue_draft('terminal-two', draft: false)
+      expect { enqueue_draft('refused', draft: false, cleanup: -> { removed << :refused }) }
+        .to raise_error(described_class::OverflowError)
+      expect(removed).to eq([:refused])
+      drain_queue
+      expect(delivered).to eq(%w[draft terminal-one terminal-two])
+      expect(removed).to eq([:refused, :draft])
+    end
+
+    it 'preserves other viewers when only the incoming viewer bucket is full' do
+      stub_const('Lich::WebUI::Dispatcher::PAGE_LIMIT', 10)
+      enqueue_draft('unrelated', viewer: 'other')
+      enqueue_draft('evicted')
+      enqueue_draft('terminal', draft: false)
+      enqueue_draft('incoming', draft: false)
+      drain_queue
+      expect(delivered).to eq(%w[unrelated terminal incoming])
+    end
+
+    it 'preserves other pages when only the incoming page bucket is full' do
+      stub_const('Lich::WebUI::Dispatcher::VIEWER_LIMIT', 10)
+      enqueue_draft('unrelated', page: 'other')
+      enqueue_draft('evicted')
+      enqueue_draft('terminal-one', draft: false)
+      enqueue_draft('terminal-two', draft: false)
+      enqueue_draft('incoming', draft: false)
+      drain_queue
+      expect(delivered).to eq(%w[unrelated terminal-one terminal-two incoming])
+    end
+
+    it 'preserves refusal diagnostics and continues disposal after cleanup raises' do
+      removed = []
+      dispatcher.shutdown_owner(owner)
+      expect { enqueue_draft('refused', cleanup: -> { raise IOError, 'private cleanup' }) }
+        .to raise_error(Lich::WebUI::Error, /terminated/)
+      expect(messages).to include([:error, 'WebUI callback cleanup failed error=IOError'])
+      other = Object.new
+      dispatcher.enqueue(owner: other, page_id: 'page', viewer_id: 'viewer', cid: 'one', event: :change,
+                         coalescable: false, cleanup: -> { raise IOError }) {}
+      dispatcher.enqueue(owner: other, page_id: 'page', viewer_id: 'viewer', cid: 'two', event: :change,
+                         coalescable: false, cleanup: -> { removed << :two }) {}
+      dispatcher.shutdown_owner(other)
+      expect(removed).to eq([:two])
+    end
+  end
 end

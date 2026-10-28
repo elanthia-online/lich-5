@@ -2,6 +2,7 @@
 
 require_relative 'errors'
 require_relative 'host_thread'
+require_relative 'dispatcher'
 
 module Lich
   module WebUI
@@ -11,6 +12,7 @@ module Lich
       HOST_LIMIT = 4096
       MAX_INTERVAL_MS = 4_294_967_295
       MIN_INTERVAL = 0.001
+      OVERLOAD_RETRY_INTERVAL = 0.1
 
       # Captures an owner and host without allowing stale handles to recreate either.
       class Handle
@@ -142,19 +144,51 @@ module Lich
         end
       end
 
-      # A discarded/rejected dispatcher item retires its still-queued source.
+      # Queue overload skips this tick and retries later; canceled accepted work retires it.
       # @return [void]
       def submit(id, source)
         executed = false
+        submitting = true
+        discarded = overloaded = false
+        cleanup = lambda do
+          unless executed
+            discarded = true
+            discard(id, source) unless submitting
+          end
+        end
         @dispatcher.enqueue(owner: source[:owner], page_id: nil, viewer_id: nil, cid: nil,
                             event: :scheduled, coalescable: false,
-                            cleanup: -> { discard(id, source) unless executed }) do
+                            cleanup: cleanup) do
           executed = true
           execute(id, source)
         end
+      rescue Dispatcher::OverflowError
+        overloaded = true
+        retry_overload(id, source)
       rescue StandardError => error
         discard(id, source)
-        @logger.call(:warning, "WebUI scheduled callback refused error=#{error.class}") rescue nil
+        Diagnostics.log(@logger, :warning, "WebUI scheduled callback refused error=#{error.class}")
+      ensure
+        submitting = false
+        discard(id, source) if discarded && !overloaded
+      end
+
+      # Rearms only still-owned queued sources, with a fairness delay and one warning
+      # per overload episode. Cancellation and shutdown never resurrect a source.
+      # @return [void]
+      def retry_overload(id, source)
+        warn = @mutex.synchronize do
+          next unless @sources[id].equal?(source) && source[:state] == :queued
+
+          source[:state] = :waiting
+          source[:due] = now + [source[:interval], OVERLOAD_RETRY_INTERVAL].max
+          @condition.signal
+          first_refusal = !source[:overload_warned]
+          source[:overload_warned] = true
+          first_refusal
+        end
+        Diagnostics.log(@logger, :warning, 'WebUI scheduled callback delayed: event queue full') if warn
+        nil
       end
 
       # Rechecks cancellation at execution, then rearms only after successful completion.
@@ -164,6 +198,7 @@ module Lich
           next unless @sources[id].equal?(source) && source[:state] == :queued
 
           source[:state] = :running
+          source[:overload_warned] = false
           source[:work]
         end
         return unless work

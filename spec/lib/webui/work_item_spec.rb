@@ -40,4 +40,27 @@ RSpec.describe Lich::WebUI::WorkItem do
     release << true
     worker&.join
   end
+  it 'reports cleanup failure separately without masking work failure or leaking error text' do
+    messages = []
+    item = described_class.new(cleanup: -> { raise IOError, 'private cleanup value' },
+                               logger: ->(*entry) { messages << entry }) { raise ArgumentError, 'primary' }
+    expect { item.call }.to raise_error(ArgumentError, 'primary')
+    expect(messages).to eq([[:error, 'WebUI callback cleanup failed error=IOError']])
+    item.cancel
+    expect(messages.length).to eq(1)
+  end
+
+  it 'isolates cleanup and diagnostic failures after successful work' do
+    item = described_class.new(cleanup: -> { raise IOError }, logger: ->(*) { raise IOError }) { :result }
+    expect(item.call).to eq(:result)
+    expect { item.cancel }.not_to raise_error
+  end
+
+  it 'preserves the primary error when cleanup raises a contained script exception' do
+    messages = []
+    item = described_class.new(cleanup: -> { raise ScriptError, 'private script text' },
+                               logger: ->(*entry) { messages << entry }) { raise ArgumentError, 'primary' }
+    expect { item.call }.to raise_error(ArgumentError, 'primary')
+    expect(messages).to eq([[:error, 'WebUI callback cleanup failed error=ScriptError']])
+  end
 end
