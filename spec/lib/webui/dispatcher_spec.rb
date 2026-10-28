@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'open3'
+require 'rbconfig'
 require 'webui/dispatcher'
 
 RSpec.describe Lich::WebUI::Dispatcher do
@@ -221,5 +223,100 @@ RSpec.describe Lich::WebUI::Dispatcher do
     end
 
     expect(result.pop).to be_a(Lich::WebUI::Dispatcher::ReentryError)
+  end
+
+  it 'contains script-class failures and stops only the owner on exit, in a fresh process' do
+    code = <<~RUBY_CODE
+      require 'webui/dispatcher'
+      logs = Queue.new
+      dispatcher = Lich::WebUI::Dispatcher.new(logger: ->(level, message) { logs << [level, message] })
+      owner = Object.new
+      enqueue = lambda do |cleanup: nil, &work|
+        dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+                           event: :activate, coalescable: false, cleanup: cleanup, &work)
+      end
+      done = Queue.new
+      enqueue.call { raise LoadError, 'missing' }
+      enqueue.call { done << :after_load_error }
+      abort 'LoadError abandoned the queue' unless done.pop == :after_load_error
+
+      gate = Queue.new
+      started = Queue.new
+      ran = []
+      disposed = Queue.new
+      enqueue.call { started << true; gate.pop; exit 3 }
+      started.pop
+      enqueue.call(cleanup: -> { disposed << :queued }) { ran << :replayed }
+      gate << true
+      abort 'queued work was not disposed' unless disposed.pop == :queued
+      abort 'queued work ran after exit' unless ran.empty?
+      begin
+        enqueue.call {}
+        abort 'owner still admitting after exit'
+      rescue Lich::WebUI::Error => error
+        abort "wrong refusal: \#{error.message}" unless error.message.include?('terminated')
+      end
+      messages = []
+      messages << logs.pop until logs.empty?
+      abort 'no exit diagnostic' unless messages.any? { |level, text| level == :warning && text.include?('status=3') }
+      puts 'ready'
+    RUBY_CODE
+    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    expect(status.success?).to be(true), errors
+    expect(output).to eq("ready\n")
+  end
+
+  it 'retires a killed worker, disposing queued callbacks without running them' do
+    started = Queue.new
+    disposed = []
+    ran = []
+    dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'blocker',
+                       event: :activate, coalescable: false) { started << Thread.current; sleep }
+    worker = started.pop
+    dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'queued', event: :activate,
+                       coalescable: false, cleanup: -> { disposed << :queued }) { ran << :queued }
+    worker.kill
+    worker.join
+
+    expect(disposed).to eq([:queued])
+    expect(ran).to be_empty
+    expect do
+      dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'late',
+                         event: :activate, coalescable: false) {}
+    end.to raise_error(Lich::WebUI::Error, /terminated/)
+  end
+
+  it 'starts workers outside the enqueuing script thread group' do
+    script_group = ThreadGroup.new
+    seen = Queue.new
+    Thread.new do
+      script_group.add(Thread.current)
+      dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+                         event: :activate, coalescable: false) { seen << Thread.current.group }
+    end.join
+
+    expect(seen.pop).to equal(ThreadGroup::Default)
+  end
+
+  it 'finishes every owner shutdown when one worker ended with a script-class exception' do
+    dead = Thread.new do
+      Thread.current.report_on_exception = false
+      raise LoadError, 'worker died'
+    end
+    sleep 0.01 while dead.status
+    workers = [->(&_block) { dead }, ->(&block) { Thread.new(&block) }]
+    isolated = described_class.new(thread_factory: ->(&block) { workers.shift.call(&block) })
+    other = Object.new
+    [owner, other].each do |candidate|
+      isolated.enqueue(owner: candidate, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+                       event: :activate, coalescable: false) {}
+    end
+
+    expect { isolated.shutdown }.not_to raise_error
+    expect do
+      isolated.enqueue(owner: other, page_id: 'page', viewer_id: 'viewer', cid: 'late',
+                       event: :activate, coalescable: false) {}
+    end.to raise_error(Lich::WebUI::Error, /stopped/)
+    expect(isolated.shutdown_owner(other)).to be(false)
   end
 end

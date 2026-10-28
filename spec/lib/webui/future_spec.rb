@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'open3'
+require 'rbconfig'
 require 'webui/dispatcher'
 require 'webui/future'
 
@@ -57,5 +59,26 @@ RSpec.describe Lich::WebUI::Future do
       .to raise_error(Lich::WebUI::Dispatcher::ReentryError, /cannot block/)
   ensure
     Thread.current.thread_variable_set(Lich::WebUI::Dispatcher::THREAD_CONTEXT_KEY, nil)
+  end
+
+  it 'contains script-class and exit failures per callback and still runs the remaining ones, in a fresh process' do
+    code = <<~RUBY_CODE
+      require 'webui/future'
+      logged = []
+      future = Lich::WebUI::Future.new(logger: ->(level, message) { logged << [level, message] })
+      observed = []
+      future.then { raise LoadError, 'missing' }
+      future.then { exit 3 }
+      future.then { raise NotImplementedError, 'todo' }
+      future.then { |result| observed << result.button }
+      abort 'resolve raised' unless (future.resolve(button: 'ok') rescue abort("escaped: \#{$!.class}"))
+      abort 'remaining callbacks abandoned' unless observed == ['ok']
+      future.then { exit 4 }
+      abort 'late exit escaped' unless logged.length == 4
+      puts 'ready'
+    RUBY_CODE
+    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    expect(status.success?).to be(true), errors
+    expect(output).to eq("ready\n")
   end
 end
