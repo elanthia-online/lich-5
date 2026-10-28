@@ -7,7 +7,7 @@ module Lich
   module WebUI
     # Machine-readable authority for the shared host/browser component contract.
     module Contract
-      VERSION = '2.51.0'
+      VERSION = '2.52.0'
       MAJOR_VERSION = 2
 
       # Serialized UTF-8 JSON budgets. A maximum-length field can require six
