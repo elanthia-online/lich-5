@@ -38,17 +38,23 @@ module Lich
       # check treats this as Slack being unavailable, not as a rejected token.
       class MalformedResponseError < ApiError; end
 
-      # Raised when Slack answers ok: false with an error code that says Slack
-      # itself failed or is briefly unavailable, or with no error code at all.
-      # Like MalformedResponseError, a token check treats this as Slack being
+      # Raised when Slack answers ok: false with an error code that says
+      # nothing about the token (Slack itself failed, is briefly unavailable,
+      # or got a mangled request), or with no error code at all. Like
+      # MalformedResponseError, a token check treats this as Slack being
       # unavailable, not as a rejected token.
       class UnavailableError < ApiError
         # Codes from Slack's auth.test error list that describe Slack's own
-        # state (a server fault, a rate limit, a truncated request or a
-        # workspace migration), not the request or its token.
+        # state (a server fault, a rate limit or a workspace migration), a
+        # request body that arrived missing, truncated or with a bad
+        # Content-Type, or a network the token may not be used from. A token
+        # found over LNet would fail the same way, so none of these replace
+        # the stored token.
         CODES = %w[
-          fatal_error internal_error ratelimited request_timeout
-          service_unavailable org_login_required team_added_to_org
+          fatal_error internal_error ratelimited service_unavailable
+          org_login_required team_added_to_org
+          request_timeout invalid_form_data invalid_post_type invalid_charset missing_post_type
+          accesslimited
         ].freeze
 
         # @param code [String, nil] the error code of an ok: false reply

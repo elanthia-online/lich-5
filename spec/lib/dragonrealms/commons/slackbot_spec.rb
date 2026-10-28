@@ -612,6 +612,21 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         expect(described_class::UnavailableError.superclass).to eq(described_class::ApiError)
       end
 
+      # Request-shape and network codes say nothing about the token either.
+      %w[request_timeout invalid_form_data invalid_post_type invalid_charset missing_post_type accesslimited].each do |code|
+        it "raises UnavailableError for #{code}" do
+          resp = double('resp')
+          allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
+          allow(resp).to receive(:code).and_return('200')
+          allow(resp).to receive(:body).and_return(%({"ok":false,"error":"#{code}"}))
+          allow(mock_http).to receive(:request).and_return(resp)
+
+          expect {
+            bot.send(:post, 'test.method', { 'token' => 'test' })
+          }.to raise_error(described_class::UnavailableError, /#{code}/)
+        end
+      end
+
       it 'raises UnavailableError when ok: false comes without an error code' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)

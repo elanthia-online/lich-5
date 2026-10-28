@@ -406,8 +406,9 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'connection failures' do
       expect(logs).not_to include(a_string_including('Slack token not accepted'))
     end
 
-    # Slack documents these auth.test codes as Slack's own state, not a
-    # verdict on the token, so they must not replace a stored token.
+    # These auth.test codes say nothing about the token (Slack's own state,
+    # a mangled request or a limited network), so they must not replace a
+    # stored token.
     Lich::DragonRealms::SlackBot::UnavailableError::CODES.each do |code|
       it "treats a token check answered ok: false with #{code} as Slack unavailable, not as a rejected token" do
         install_lnet(token: 'valid-token')
