@@ -123,15 +123,16 @@ RSpec.describe Lich::WebUI::Scheduler do
     expect(thread.group).to equal(ThreadGroup::Default)
   end
 
-  it 'retires sources refused by a full dispatcher without leaking their registrations' do
+  it 'delays sources refused by a full dispatcher and cancels them without leaking their registrations' do
     started, release = Queue.new, Queue.new
     service.runtime.dispatch(owner: owner) { started << true; release.pop }
     expect(started.pop(timeout: 2)).to be(true)
     stub_const('Lich::WebUI::Dispatcher::VIEWER_LIMIT', 1)
     service.runtime.dispatch(owner: owner) {}
     id = handle.schedule(0) { raise 'must not run' }
-    Timeout.timeout(2) { sleep 0.001 until @logs.flatten.join.include?('scheduled callback refused') }
-    expect(handle.cancel(id)).to be(false)
+    Timeout.timeout(2) { sleep 0.001 until @logs.flatten.join.include?('scheduled callback delayed') }
+    expect(handle.cancel(id)).to be(true)
+    expect(scheduler.instance_variable_get(:@mutex).synchronize { scheduler.instance_variable_get(:@sources).key?(id) }).to be(false)
   ensure
     release << true
   end
