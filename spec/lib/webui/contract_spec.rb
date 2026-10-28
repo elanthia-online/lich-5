@@ -64,4 +64,18 @@ RSpec.describe Lich::WebUI::Contract do
     expect(status.success?).to be(true), errors
     expect(output).to eq("ready\n")
   end
+  it 'G3 RC11 includes select in the exported input vocabulary' do
+    expect(described_class::INPUT_TYPES).to eq(%i[
+                                                 button toggle checkbox radio radio_option text_input password_input textarea number_input slider select
+                                               ])
+    expect(described_class::INPUT_TYPES).not_to include(:table, :dialog, :composite)
+  end
+
+  it 'G3 RC38 admits decimal majors and refuses alternate numeric spellings' do
+    %w[2 02 2.99.0].each { |version| expect(described_class.negotiate!(version)).to eq(described_class::VERSION) }
+    ['0x2.0.0', '0b10.0.0', '0o2.0.0', '+2.0.0', ' 2.0.0', '2_0.0.0', '.2', ''].each do |version|
+      expect { described_class.negotiate!(version) }.to raise_error(Lich::WebUI::VersionError, /invalid contract version/)
+    end
+    expect { described_class.negotiate!('3.0.0') }.to raise_error(Lich::WebUI::VersionError, /unsupported contract major/)
+  end
 end

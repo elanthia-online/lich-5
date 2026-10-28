@@ -239,10 +239,10 @@ module Lich
 
       def validate_enum(shape, value, context, path)
         normalized = value.is_a?(Symbol) ? value.to_s : value
-        unless normalized.is_a?(String) && shape.fetch(:values).include?(normalized)
+        unless (normalized.is_a?(String) || normalized.is_a?(Integer)) && shape.fetch(:values).include?(normalized)
           violation!("must be one of #{shape.fetch(:values).join(', ')}", context, path)
         end
-        normalized.freeze
+        normalized.is_a?(String) ? normalized.dup.freeze : normalized
       end
 
       def validate_array(shape, value, context, path)
@@ -398,12 +398,24 @@ module Lich
         unless props[:value].between?(props[:min], props[:max])
           violation!('value must be within min and max', context, :value)
         end
+        validate_step_alignment!(props[:value], props, context, :value)
         if props[:snap_to_step] == false && !props[:stepper_buttons]
           violation!('free numeric stepping requires stepper_buttons', context, :snap_to_step)
         end
         if (props.key?(:acceleration) || props.key?(:page_step)) && props[:snap_to_step] != false
           violation!('acceleration and page_step require free numeric stepping', context, :acceleration)
         end
+      end
+
+      # Step alignment is relative to min, within 1e-9 of an integral step count.
+      # Rational arithmetic retains floating-point tolerance without overflowing a Float.
+      def validate_step_alignment!(value, props, context, path)
+        return if props[:snap_to_step] == false
+
+        steps = (value.to_r - props.fetch(:min).to_r) / props.fetch(:step, 1).to_r
+        return if (steps - steps.round).abs <= Rational(1, 1_000_000_000)
+
+        violation!('value must align with step from min', context, path)
       end
 
       def validate_log!(props, context)
@@ -506,6 +518,7 @@ module Lich
           unless value.between?(props[:min], props[:max])
             violation!('event value must be within min and max', context, event_name)
           end
+          validate_step_alignment!(value, props, context, event_name)
         end
       end
 
@@ -532,6 +545,7 @@ module Lich
           unless value.between?(normalized_props[:min], normalized_props[:max])
             violation!('value must be within min and max', context, :value)
           end
+          validate_step_alignment!(value, normalized_props, context, :value)
         end
       end
 
@@ -555,15 +569,18 @@ module Lich
       def normalize_hash_keys(hash, context)
         hash.each_with_object({}) do |(key, value), normalized|
           name = normalize_name(key)
-          violation!('field names must be String or Symbol', context, key) unless name
+          unless name
+            message = key.is_a?(String) || key.is_a?(Symbol) ? 'field name has invalid identifier syntax' : 'field names must be String or Symbol'
+            violation!(message, context, key)
+          end
           violation!("duplicate field #{name}", context, name) if normalized.key?(name)
           normalized[name] = value
         end
       end
 
       def normalize_name(name)
-        return name if name.is_a?(Symbol)
-        return name.to_sym if name.is_a?(String) && name.match?(Contract::IDENTIFIER)
+        return unless name.is_a?(String) || name.is_a?(Symbol)
+        return name.to_sym if name.to_s.match?(Contract::IDENTIFIER)
 
         nil
       end

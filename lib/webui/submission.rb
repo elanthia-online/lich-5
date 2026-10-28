@@ -14,8 +14,8 @@ module Lich
       # @param input_changes [Array<Component>] nonsensitive inputs changed by
       #   this submission, compared with the previously accepted viewer state
       def initialize(viewer_id:, values:, input_changes: [])
-        @viewer_id = viewer_id.freeze
-        @values = values.freeze
+        @viewer_id = viewer_id.dup.freeze
+        @values = values.dup.freeze
         @input_changes = input_changes.dup.freeze
         @committed = false
       end
