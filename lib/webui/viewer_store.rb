@@ -21,6 +21,8 @@ module Lich
       ReleaseAdmission = Data.define(:render, :epoch, :cid, :accepted_at)
       ReleaseEpoch = Struct.new(:signature, :generation, :started_at)
       Snapshot = Data.define(:page, :viewer_id, :render, :values, :input_requests)
+      # Disconnected routing captured when a resume consumes it, so #resuspend can restore it.
+      Suspension = Data.define(:connection_id, :expires_at, :resume_state)
 
       # One viewer capability and its retained delivery/admission bookkeeping.
       class Attachment
@@ -55,6 +57,7 @@ module Lich
           @widget_revision = 0
           @release_epochs = {}
           @release_request = nil
+          @suspension = nil
         end
 
         # @return [Hash] detached viewer values, including copied mutable keys and leaves
@@ -72,6 +75,10 @@ module Lich
         # Store-only access; callers must hold the owning store monitor.
         # @return [Hash] live read-only delivery evidence
         def mutable_delivered_read_only = @delivered_read_only
+
+        # Store-only access; callers must hold the owning store monitor.
+        # @return [Suspension, nil] routing replaced by the latest resume, until it is re-suspended
+        attr_accessor :suspension
 
         # Copies under the same monitor as store updates; callers own their returned copy.
         # @param state [Hash] live attachment state
@@ -120,6 +127,11 @@ module Lich
             raise Error, 'viewer is already attached' unless attachment.expires_at
 
             remove_connection_mapping!(attachment)
+            attachment.__send__(
+              :suspension=,
+              Suspension.new(connection_id: attachment.connection_id, expires_at: attachment.expires_at,
+                             resume_state: attachment.resume_state)
+            )
             attachment.connection_id = connection_id
             attachment.expires_at = nil
             attachment.resume_state = :resumed
@@ -133,6 +145,30 @@ module Lich
           end
           @by_connection[[connection_id, address]] = attachment
           attachment
+        end
+      end
+
+      # Undoes a resume whose render could not be delivered, so the viewer keeps its resume.
+      # The attachment leaves connection routing and gets back the connection identity,
+      # resume state and original expiry it had before #attach resumed it; values and the
+      # resume token are untouched. The original deadline is kept, not extended: a viewer
+      # past it expires on the next store access, as if the resume had never happened.
+      # Only the latest resume of a still-attached viewer can be undone, once; anything
+      # else (a fresh or expired-token attachment, a closed or disconnected viewer, a
+      # second call) is left as it is.
+      # @param attachment [Attachment] viewer returned by #attach with +resume_state+ +:resumed+
+      # @return [Boolean] true when re-suspended, false when there was no resume to undo
+      def resuspend(attachment)
+        @mutex.synchronize do
+          suspension = attachment.__send__(:suspension)
+          next false unless suspension && !attachment.expires_at && @by_resume[attachment.resume_token].equal?(attachment)
+
+          remove_connection_mapping!(attachment)
+          attachment.connection_id = suspension.connection_id
+          attachment.expires_at = suspension.expires_at
+          attachment.resume_state = suspension.resume_state
+          attachment.__send__(:suspension=, nil)
+          true
         end
       end
 
@@ -158,6 +194,7 @@ module Lich
           attachments = @by_connection.each_value.select { |attachment| attachment.connection_id == connection_id }.uniq
           attachments.each do |attachment|
             attachment.expires_at = @clock.call + RECONNECT_WINDOW
+            attachment.__send__(:suspension=, nil)
             retire_widget_admission!(attachment)
           end
           @by_connection.delete_if { |(candidate, _address), _attachment| candidate == connection_id }
@@ -252,6 +289,7 @@ module Lich
         attachment_read_only(attachment).clear
         attachment.render = nil
         attachment.delivered_generation = nil
+        attachment.__send__(:suspension=, nil)
         retire_widget_admission!(attachment)
       end
 
