@@ -7,25 +7,30 @@ module Lich
       # Enqueues every detach before notifying each owner identity once, then
       # schedules one recheck at the resume deadline so expiry is delivered even
       # when no later request arrives (B2).
+      # A refused detach enqueue (queue overflow or a terminated owner) does not
+      # skip the other attachments, the expiry recheck or the owner notifications;
+      # every step is attempted and the first refusal is re-raised afterwards.
       # @param connection [Object] disconnected transport with a viewer_id
       # @return [void]
+      # @raise [Error] the first refused detach enqueue, after all steps ran
       def disconnect(connection)
         @connections_mutex.synchronize { @connections.delete(connection.viewer_id) }
         owners = {}.compare_by_identity
         disconnected = @viewers.transient_disconnect(connection.viewer_id)
-        @resumable_mutex.synchronize do
-          disconnected.each do |attachment|
-            retained = (@resumable[attachment.page] ||= [])
-            retained << attachment unless retained.any? { |candidate| candidate.equal?(attachment) }
-          end
-        end
+        retain_resumable(disconnected)
+        failure = nil
         disconnected.each do |attachment|
           attachment.page.forget_monitors(attachment.viewer_id)
-          enqueue_lifecycle(attachment, :detach)
           owners[attachment.page.owner] = true
+          begin
+            enqueue_lifecycle(attachment, :detach)
+          rescue Error => error
+            failure ||= error
+          end
         end
         schedule_viewer_expiry(owners.keys)
         owners.each_key { |owner| @viewers_changed&.call(owner) }
+        raise failure if failure
       end
 
       # A different script's open window cannot present this owner's modal.
@@ -45,8 +50,12 @@ module Lich
       # Resolves a registered page and creates/resumes its viewer attachment before delivery.
       # The render is validated before any viewer or connection bookkeeping, so a
       # render failure leaves an earlier resumable attachment untouched. A failed
-      # delivery retires the new or resumed attachment and any connection mapping
-      # this attach added, so a retry is never refused as already attached.
+      # delivery retires a new attachment, re-suspends a resumed one (it keeps its
+      # values, resume token and original deadline), and removes any connection
+      # mapping this attach added, so a retry is never refused as already attached.
+      # Store bookkeeping the failed deliver advanced (render, generation, widget
+      # and release epochs, read-only evidence) needs no undo: events require live
+      # routing, and the next resume delivers and re-records them for its render.
       # @param connection [Object] authenticated viewer transport
       # @param message [Hash] validated protocol envelope
       # @return [Symbol] :attached after render delivery and lifecycle enqueue
@@ -70,7 +79,11 @@ module Lich
           @viewers.deliver(attachment, render)
           send_render(connection, attachment)
         rescue StandardError
-          @viewers.close(connection_id: connection.viewer_id, address: message[:page]) if attachment
+          if attachment&.resume_state == :resumed && @viewers.resuspend(attachment)
+            retain_resumable([attachment])
+          elsif attachment
+            @viewers.close(connection_id: connection.viewer_id, address: message[:page])
+          end
           if added
             @connections_mutex.synchronize do
               @connections.delete(connection.viewer_id) if @connections[connection.viewer_id].equal?(connection)
@@ -90,6 +103,9 @@ module Lich
       # The attachment is retired even when a lifecycle enqueue is refused (queue
       # overflow or a terminated owner); every job is attempted, the first refusal
       # is re-raised, and no window-close claim is consumed here.
+      # Retiring discards the viewer's drafts: the detach handler receives them,
+      # but a later managed-window close of the page (browser_closed) no longer
+      # has this viewer, so its close handlers see source values, not the drafts.
       # Rechecks the owner's modal policies after removal.
       # @param connection [Object] authenticated transport
       # @param message [Hash] validated detach envelope
@@ -148,6 +164,21 @@ module Lich
         raise
       rescue Error
         raise Protocol::Refusal.new(:viewer_gone, 'viewer is no longer attached', page_id: address)
+      end
+
+      # Remembers suspended attachments for the modal viewer-presence check.
+      # A re-suspended viewer is added again because a concurrent presence check
+      # may have pruned it while its resume was live.
+      # @param attachments [Array<ViewerStore::Attachment>] disconnected or re-suspended viewers
+      # @return [void]
+      # @api private
+      def retain_resumable(attachments)
+        @resumable_mutex.synchronize do
+          attachments.each do |attachment|
+            retained = (@resumable[attachment.page] ||= [])
+            retained << attachment unless retained.any? { |candidate| candidate.equal?(attachment) }
+          end
+        end
       end
 
       # Reports whether a transiently disconnected viewer of this page is still
