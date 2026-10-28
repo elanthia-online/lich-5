@@ -13,6 +13,7 @@ module Lich
       MAX_INTERVAL_MS = 4_294_967_295
       MIN_INTERVAL = 0.001
       OVERLOAD_RETRY_INTERVAL = 0.1
+      SHUTDOWN_JOIN_TIMEOUT = 2
 
       # Captures an owner and host without allowing stale handles to recreate either.
       class Handle
@@ -102,7 +103,7 @@ module Lich
         nil
       end
 
-      # Stops the timing worker and invalidates queued callbacks before dispatcher shutdown.
+      # Invalidates queued callbacks and bounds the timing worker wait before dispatcher shutdown.
       # @return [void]
       def shutdown
         thread = @mutex.synchronize do
@@ -111,7 +112,9 @@ module Lich
           @condition.broadcast
           @thread
         end
-        thread&.join
+        if thread && !thread.join(SHUTDOWN_JOIN_TIMEOUT)
+          Diagnostics.log(@logger, :warning, "WebUI scheduler thread did not stop within #{SHUTDOWN_JOIN_TIMEOUT}s")
+        end
         nil
       end
 

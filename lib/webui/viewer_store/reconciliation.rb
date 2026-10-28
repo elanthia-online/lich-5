@@ -29,12 +29,12 @@ module Lich
           previous_components = attachment.render ? attachment.render.tree.each.to_h { |node| [node.cid, node] } : {}
           attachment.render = render
           attachment.delivered_generation = render.generation
-          previous = attachment.values.select { |(_cid, property), value| property == :checked && value }.keys
+          previous = attachment_values(attachment).select { |(_cid, property), value| property == :checked && value }.keys
           seed_values!(attachment, render.tree, previous_components)
           live_inputs = render.tree.each.select { |node| node.type == :text_input && !node.props[:sensitive] }.to_h { |node| [node.cid, true] }
           attachment.input_requests.keep_if { |cid, _request| live_inputs.key?(cid) }
           render.tree.each.select { |node| node.type == :radio_option }.group_by { |node| node.props[:group] }.each_value do |members|
-            selected = members.select { |node| attachment.values[[node.cid, :checked]] }
+            selected = members.select { |node| attachment_values(attachment)[[node.cid, :checked]] }
             next if selected.length < 2
 
             retained = selected.find { |node| previous.include?([node.cid, :checked]) } || selected.first
@@ -59,19 +59,19 @@ module Lich
           next unless retain_value?(component, name)
 
           key = [component.cid, name]
-          attachment.values[key] = component.props[name] unless attachment.values.key?(key)
+          attachment_values(attachment)[key] = component.props[name] unless attachment_values(attachment).key?(key)
           # Option removal invalidates only viewers selecting the removed item.
           # Other viewers retain their own choice; no callback is fabricated.
           if component.type == :select && name == :value
             old_options = previous_components[component.cid]&.props&.fetch(:options, []) || []
-            was_option = old_options.any? { |option| option[:value] == attachment.values[key] }
-            if (!component.props[:editable] || was_option) && component.props[:options].none? { |option| option[:value] == attachment.values[key] }
-              attachment.values[key] = component.props[:empty_value] || component.props[name]
+            was_option = old_options.any? { |option| option[:value] == attachment_values(attachment)[key] }
+            if (!component.props[:editable] || was_option) && component.props[:options].none? { |option| option[:value] == attachment_values(attachment)[key] }
+              attachment_values(attachment)[key] = component.props[:empty_value] || component.props[name]
             end
           end
         end
-        reconcile_table!(attachment.values, component, previous_components[component.cid]) if component.type == :table
-        reconcile_tabs!(attachment.values, component, previous_components[component.cid]) if component.type == :tabs
+        reconcile_table!(attachment_values(attachment), component, previous_components[component.cid]) if component.type == :table
+        reconcile_tabs!(attachment_values(attachment), component, previous_components[component.cid]) if component.type == :tabs
         component.children.each { |child| seed_values!(attachment, child, previous_components) }
       end
 

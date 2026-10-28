@@ -116,11 +116,12 @@ module Lich
       end
 
       # Compares equal-length byte sequences without stopping at the first mismatch.
-      # Unequal lengths are rejected immediately.
+      # Empty expected credentials and unequal lengths are rejected immediately.
       # @return [Boolean] whether all bytes match
       def secure_compare(expected, actual)
         expected = expected.to_s
         actual = actual.to_s
+        return false if expected.empty?
         return false unless expected.bytesize == actual.bytesize
 
         result = 0
