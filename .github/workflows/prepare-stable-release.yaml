@@ -168,12 +168,26 @@ jobs:
             echo "backup=$backup"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Mint a release-please token from the org GitHub App
+        # This step only opens/updates the release PR (skip-github-release below).
+        # A PR opened with the built-in token doesn't trigger other workflows, so the
+        # release PR would never get the required ci-gate check.
+        id: app-token
+        if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Release Please (open/update Release PR)
         if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
         # Pinned to SHA for supply-chain safety
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ inputs.target_branch || github.ref_name || 'main' }}

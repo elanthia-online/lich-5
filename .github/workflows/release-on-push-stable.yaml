@@ -50,11 +50,39 @@ jobs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
-      # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
+      # 1) Release Please for stable branch (creates public release, we convert to draft immediately).
+      #    The release is created with the built-in token, as before, so it doesn't
+      #    trigger other workflows.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
           skip-github-release: false
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+          skip-github-pull-request: true
+
+      # 1b) Open/update the release PR with the org GitHub App's token instead. A PR
+      #     opened with the built-in token doesn't trigger other workflows, so the
+      #     release PR would never get the required ci-gate check.
+      - name: Mint a release-please token from the org GitHub App
+        id: app-token
+        # Refreshing the release PR must never stop a release that was just created.
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp-pr
+        if: ${{ steps.app-token.outcome == 'success' }}
+        continue-on-error: true
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          skip-github-release: true
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ github.ref_name }}
