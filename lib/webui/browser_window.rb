@@ -8,6 +8,11 @@ module Lich
     # One isolated browser app process per page. Only its PID may be terminated;
     # closing a page never terminates the shared browser or WebUI server.
     class BrowserWindow
+      # Seconds close waits for a start in progress on another thread to
+      # install its process monitor, so a pending close (including process-exit
+      # cleanup) terminates the new process instead of leaving it running.
+      START_SETTLE_SECONDS = 2
+
       # Prepares ownership without spawning; callbacks must describe this window only.
       # @param on_close [#call] notification for an unsolicited process exit
       # @param opener [#call, nil] launcher accepting start/exit callbacks
@@ -19,6 +24,8 @@ module Lich
         @mutex = Mutex.new
         @closed = false
         @opening = false
+        @opener_thread = nil
+        @settled = ConditionVariable.new
         @pid = nil
         @presentation = WindowPresentation::Controller.new if WindowPresentation.available?
       end
@@ -47,11 +54,16 @@ module Lich
           return false if @closed
 
           @opening = true
+          @opener_thread = Thread.current
         end
         begin
           result = @opener.call(url, geometry: geometry, on_start: method(:started), on_exit: method(:exited))
         ensure
-          @mutex.synchronize { @opening = false }
+          @mutex.synchronize do
+            @opening = false
+            @opener_thread = nil
+            @settled.broadcast
+          end
         end
         return startup_failed(nil) unless result
 
@@ -63,12 +75,16 @@ module Lich
 
       # Requests closure; startup must finish installing its process monitor
       # before termination can succeed and the service can release ownership.
+      # A start in progress on another thread is awaited for up to
+      # START_SETTLE_SECONDS, then its process is terminated here; past that
+      # bound the close stays pending and open terminates once the start ends.
       # @return [Boolean] whether startup is settled and no termination retry is needed
       # @raise [SystemCallError] when the owned process could not be terminated
       def close
         @mutex.synchronize do
           @closed = true
           @presentation&.close
+          await_start
           return false if @opening
 
           terminate_process
@@ -83,6 +99,22 @@ module Lich
       end
 
       private
+
+      # Waits under the window mutex for another thread's start to settle.
+      # The opener's own thread (a close from inside the opener) never waits.
+      # @return [void]
+      # @api private
+      def await_start
+        return if @opener_thread.equal?(Thread.current)
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + START_SETTLE_SECONDS
+        while @opening
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break unless remaining.positive?
+
+          @settled.wait(@mutex, remaining)
+        end
+      end
 
       # Closes after a failed startup and reports the closure exactly once.
       # @param error [StandardError, nil] opener exception to re-raise, if any
@@ -105,8 +137,9 @@ module Lich
         false
       end
 
-      # Retain an arriving PID even after closure is requested. open performs
-      # deferred termination after the opener has installed its exit monitor.
+      # Retain an arriving PID even after closure is requested. open, or a close
+      # awaiting the start, performs deferred termination after the opener has
+      # installed its exit monitor.
       # @param pid [Integer] process returned by the opener
       # @return [void]
       # @api private
