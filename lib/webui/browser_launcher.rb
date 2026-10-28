@@ -162,13 +162,22 @@ module Lich
         end
       end
 
-      # Removes private launch data after exit or failed startup.
+      # Removes private launch data after exit or failed startup. A failure is
+      # logged with the error class and the directory to remove by hand, never
+      # the launch file contents; it is not raised into launch or exit handling.
       # @param profile_dir [String, nil] private directory, absent before allocation
       # @return [void]
       def remove_profile(profile_dir)
         FileUtils.remove_entry_secure(profile_dir) if profile_dir && File.directory?(profile_dir)
-      rescue StandardError
-        nil
+      rescue StandardError => error
+        begin
+          if Lich.respond_to?(:log)
+            Lich.log("warning: WebUI launch profile cleanup failed (#{error.class}); " \
+                     "remove #{profile_dir} manually")
+          end
+        rescue StandardError
+          nil # A failing diagnostic sink must not turn cleanup into a raise.
+        end
       end
 
       # Builds Chromium size/position arguments only from integer geometry.

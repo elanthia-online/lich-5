@@ -17,6 +17,7 @@ module Lich
       GWL_EXSTYLE = -20
       WS_EX_LAYERED = 0x00080000
       SUPPORT = { always_on_top: true, opacity: true, hidden: true }.freeze
+      DISCOVERY_TIMEOUT = 15.0
       ABI = Fiddle::Function.const_defined?(:STDCALL) ? Fiddle::Function::STDCALL : Fiddle::Function::DEFAULT
 
       class << self
@@ -59,6 +60,17 @@ module Lich
         def warn_failure(error)
           Lich.log("warning: WebUI window presentation failed: #{error.class}") if Lich.respond_to?(:log)
         end
+
+        # Names the presentation capabilities a window will lack after discovery
+        # gives up; the window itself stays open and usable without them.
+        # @param reason [String] authored cause; never window contents or URLs
+        # @return [void]
+        def warn_unavailable(reason)
+          return unless Lich.respond_to?(:log)
+
+          Lich.log("warning: WebUI window presentation unavailable (#{SUPPORT.keys.join(', ')}): " \
+                   "#{reason}; the window remains usable without them")
+        end
       end
 
       # One controller per BrowserWindow. Discovery is bounded; later changes
@@ -86,7 +98,7 @@ module Lich
           @thread_factory.call do
             # Construct the closure on the thread that calls EnumWindows.
             finder = window_finder(pid)
-            deadline = @clock.call + 15.0
+            deadline = @clock.call + DISCOVERY_TIMEOUT
             loop do
               finished = @mutex.synchronize do
                 break true if @closed
@@ -97,7 +109,10 @@ module Lich
               end
               break if finished
               if @clock.call >= deadline
-                raise Error, 'owned browser window was not found unambiguously'
+                WindowPresentation.warn_unavailable(
+                  "no single owned browser window was found within #{DISCOVERY_TIMEOUT.to_i} seconds"
+                )
+                break
               end
 
               @sleeper.call(0.1)
