@@ -40,12 +40,14 @@ module Lich
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
       # @param on_exit [#call, nil] callback after the owned process exits
       # @param on_start [#call, nil] callback receiving the spawned PID
+      # @param on_failure [#call, nil] receives a safe, actionable message when the
+      #   host could not start; on_exit instead reports a host that started and ended
       # @param waitpid [#call] blocking process-exit observer
       # @param thread_factory [#call] factory for the host-owned monitor thread
       # @return [Boolean] whether spawn and monitor setup succeeded
       def open(url, spawn: Process.method(:spawn), platform: nil,
                browser_path: nil, chrome_path: nil, geometry: nil, on_exit: nil,
-               on_start: nil, waitpid: Process.method(:waitpid),
+               on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
         native = native_host(platform, browser_path || chrome_path)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
@@ -60,8 +62,25 @@ module Lich
         true
       rescue StandardError => error
         remove_profile(profile_dir)
-        Lich.log("warning: unable to open WebUI browser: #{error.class}") if Lich.respond_to?(:log)
+        message = failure_message(error)
+        Lich.log("warning: #{message}") if Lich.respond_to?(:log)
+        begin
+          on_failure&.call(message)
+        rescue StandardError
+          nil # A failing observer cannot turn a reported launch failure into a raise.
+        end
         false
+      end
+
+      # Describes a launch failure without echoing arbitrary exception text,
+      # which could include the launch URL or other credential-bearing data.
+      # WebUI errors carry authored requirement text (for example a missing
+      # browser or helper) and are reported as written.
+      # @param error [StandardError] launch failure
+      # @return [String] safe diagnostic naming the requirement or failure class
+      def failure_message(error)
+        detail = error.is_a?(Error) ? error.message : "the window host could not be started (#{error.class})"
+        "unable to open WebUI window: #{detail}"
       end
 
       # Selects native or browser argv without invoking a shell or starting a process.
