@@ -40,7 +40,10 @@ for (const missing of familyNames) test(`missing ${missing} family stops startup
   for (const asset of assets.slice(0, -1)) {
     if (asset.name !== `renderers_${missing}.js`) vm.runInContext(asset.source, context, { filename: asset.name });
   }
-  assert.throws(() => vm.runInContext(assets.at(-1).source, context), /is not a function/);
+  assert.throws(() => vm.runInContext(assets.at(-1).source, context), {
+    name: 'Error', message: `Missing renderer family: ${missing}`
+  });
+  assert.equal(context.window.LichWebUI, undefined);
   assert.equal(sockets, 0);
 });
 
