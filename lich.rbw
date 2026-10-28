@@ -136,6 +136,9 @@ require File.join(LIB_DIR, 'common', 'settings_transformer.rb')
 # Program start
 #
 require File.join(LIB_DIR, 'main', 'argv_options.rb')
+# Core records the WebUI presentation policy once launch options are resolved and
+# before scripts or windows start; --no-gui and the legacy --no-gtk alias disable it.
+Lich::WebUI.configure_presentation(enabled: @argv_options[:gui] != false)
 require File.join(LIB_DIR, 'main', 'main.rb')
 
 include Lich::Common
