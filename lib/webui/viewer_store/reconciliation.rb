@@ -56,6 +56,7 @@ module Lich
         schema = Contract.schema(component.type)
         schema[:properties].each do |name, definition|
           next unless definition[:scope] == :viewer && component.props.key?(name)
+          next unless retain_value?(component, name)
 
           key = [component.cid, name]
           attachment.values[key] = component.props[name] unless attachment.values.key?(key)
