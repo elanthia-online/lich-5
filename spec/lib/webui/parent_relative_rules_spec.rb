@@ -14,7 +14,7 @@ RSpec.describe 'parent-relative placement and slots' do
     ['parent-relative span', :grid, { cols: 3 }, { span: 4 }, ['must be <= 3', 'placement.span'], ['must be <= 3', 'placement.span']],
     ['invalid row type', :grid, { cols: 3 }, { row: '2' }, ['must be an Integer', 'placement.row'], ['must be an Integer', 'placement.row']],
     ['ending row overflow', :grid, { cols: 3 }, { row: 1024, row_span: 2 }, ['child placement exceeds grid rows', :row_span], ['child placement exceeds grid rows', :children]],
-    ['ending column difference', :grid, { cols: 3 }, { column: 3, span: 2 }, ['child placement exceeds grid columns', :span], nil],
+    ['ending column overflow', :grid, { cols: 3 }, { column: 3, span: 2 }, ['child placement exceeds grid columns', :span], ['child placement exceeds grid columns', :children]],
     ['spread row difference', :grid, { cols: 3, row_sizing: :spread }, {}, nil, ['spread grid sizing requires an explicit row for every child', :children]],
     ['column before row overflow', :grid, { cols: 3 }, { column: 3, span: 2, row: 1024, row_span: 2 }, ['child placement exceeds grid columns', :span], ['child placement exceeds grid rows', :children]],
     ['unknown-key refusal order', :grid, { cols: 3 }, { span: 'bad', unknown: 1 }, ['must be an Integer', 'placement.span'], ['unknown child placement unknown', :children]],
