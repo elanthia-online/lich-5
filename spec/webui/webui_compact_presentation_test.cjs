@@ -429,7 +429,7 @@ test('page geometry fits minimum content, reports changes and retains user size 
   const configs = f.sent.filter(message => message.event === 'configure');
   assert.deepEqual(configs.at(-1).payload, { width: 400, height: 200, position: [-10, 0], monitors: { source: 'unavailable', screens: [] } });
   f.windowEvents.pagehide();
-  assert.equal(f.sent.at(-1).type, 'detach');
+  assert.equal(f.sent.filter(message => message.type === 'detach').length, 0);
 });
 
 test('a rerender cannot expand a manually reduced window and restores negative desktop positions once', () => {
@@ -501,20 +501,25 @@ test('collapsed expanders retain child inputs for submission and report user tog
 });
 
 
-test('explicit keyboard actions work without an added visible button, while disabled actions remain inert', () => {
+test('keyboard actions activate a visible enabled target, never a hidden or disabled one', () => {
   const f = fixture('calibration');
   f.receive({ type: 'hello', pages: [{ address: 'calibration', title: 'Calibrator' }] });
   const message = { type: 'render', page: 'calibration', generation: 1,
     bindings: { save: ['activate'] }, facilities: { accelerators: [{ keys: 's', target: 'save', event: 'activate' }] },
     tree: { type: 'page', cid: 'root', props: { title: 'Calibrator' }, children: [
-      { type: 'button', cid: 'save', props: { label: 'Keyboard save', hidden: true } }
+      { type: 'button', cid: 'save', props: { label: 'Keyboard save' } }
     ] } };
+  const press = () => f.documentEvents.keydown({ key: 's', target: f.document.body, preventDefault() {} });
   f.receive(message);
-  f.documentEvents.keydown({ key: 's', target: f.elements.pages, preventDefault() {} });
+  press();
   assert.equal(f.sent.filter(item => item.event === 'activate').length, 1);
-  message.generation = 2; message.tree.children[0].props.disabled = true;
+  message.generation = 2; message.tree.children[0].props.hidden = true;
   f.receive(message);
-  f.documentEvents.keydown({ key: 's', target: f.elements.pages, preventDefault() {} });
+  press();
+  assert.equal(f.sent.filter(item => item.event === 'activate').length, 1);
+  message.generation = 3; delete message.tree.children[0].props.hidden; message.tree.children[0].props.disabled = true;
+  f.receive(message);
+  press();
   assert.equal(f.sent.filter(item => item.event === 'activate').length, 1);
 });
 

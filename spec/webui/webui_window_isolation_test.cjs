@@ -31,7 +31,7 @@ for (const requested of catalog) {
     assert.equal(f.document.title, requested.title);
     assert.equal(f.sent.filter(message => message.type === 'attach').length, 1);
     f.windowEvents.pagehide();
-    assert.deepEqual(f.sent.filter(message => message.type === 'detach').map(message => message.page), [requested.address]);
+    assert.deepEqual(f.sent.filter(message => message.type === 'detach'), []);
   });
 }
 

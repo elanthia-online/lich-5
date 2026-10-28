@@ -42,6 +42,7 @@ function fixture(target) {
     querySelectorAll(selector) {
       return this.children.flatMap(child => [
         ...(selector === '[data-width-groups]' && child.dataset.widthGroups ? [child] : []),
+        ...(selector === 'dialog[open]' && child.tagName === 'dialog' && child.open ? [child] : []),
         ...(child.querySelectorAll?.(selector) || [])
       ]);
     }
@@ -55,8 +56,9 @@ function fixture(target) {
   }
   const elements = Object.fromEntries(['pages', 'status', 'notifications', 'announcer'].map(id => [id, new Element('div')]));
   const documentEvents = {}, documentListeners = {};
-  const document = { title: '', activeElement: null, createElement: tag => new Element(tag),
+  const document = { title: '', activeElement: null, body: new Element('body'), createElement: tag => new Element(tag),
     getElementById: id => elements[id],
+    querySelectorAll: selector => elements.pages.querySelectorAll(selector),
     addEventListener(name, callback) {
       (documentListeners[name] ||= []).push(callback);
       documentEvents[name] ||= event => documentListeners[name].forEach(listener => listener(event));
@@ -78,6 +80,7 @@ function fixture(target) {
       (windowListeners[name] ||= []).push(callback);
       windowEvents[name] ||= event => windowListeners[name].forEach(listener => listener(event));
     },
+    getComputedStyle: element => ({ visibility: element.style.visibility || 'visible' }),
     removeEventListener(name, callback) {
       windowListeners[name] = (windowListeners[name] || []).filter(listener => listener !== callback);
     } };
