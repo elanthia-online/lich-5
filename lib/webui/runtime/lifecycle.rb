@@ -12,6 +12,8 @@ module Lich
       end
 
       # Dispatches an OS close with the last retained viewer state when unambiguous.
+      # A viewer that sent an explicit detach was already retired with its drafts,
+      # so it contributes no state here; ordinary browser closes send no detach.
       # @param page [Page] page whose owned process exited
       # @return [Object, nil] dispatch result, or nil when already closed
       def browser_closed(page)
