@@ -144,7 +144,8 @@ RSpec.describe 'WebUI owner and modal termination' do
   end
 
   %i[abort default wait].each do |policy|
-    it "applies #{policy} only when the last active viewer is lost" do
+    it "applies #{policy} only once the last viewer is lost and its resume window expires" do
+      stub_const('Lich::WebUI::ViewerStore::RECONNECT_WINDOW', 0.2)
       target = page
       first = attach(target)
       second = attach(target, 'other')
@@ -152,10 +153,12 @@ RSpec.describe 'WebUI owner and modal termination' do
       service.runtime.disconnect(first)
       expect(future).not_to be_resolved
       service.runtime.disconnect(second)
+      expect(future).not_to be_resolved
       if policy == :wait
+        sleep 0.4
         expect(future).not_to be_resolved
       else
-        expect(future.await(timeout: 0)).to have_attributes(reason: :no_viewer, button: policy == :default ? 'ok' : nil)
+        expect(future.await(timeout: 3)).to have_attributes(reason: :no_viewer, button: policy == :default ? 'ok' : nil)
       end
     end
   end
