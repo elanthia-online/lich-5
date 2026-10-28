@@ -36,6 +36,9 @@ module Lich
 
       # Opens unless already closed, settling any close requested during spawn
       # only after the opener has returned and installed its process monitor.
+      # A failed startup closes the window and notifies on_close once, unless
+      # closure was already requested, so the owner sees a closed lifecycle
+      # instead of waiting on a window that never appeared.
       # @param url [String] authenticated page launch URL
       # @param geometry [Hash, nil] initial window bounds
       # @return [Boolean] opener result, or false when closed before startup
@@ -50,11 +53,12 @@ module Lich
         ensure
           @mutex.synchronize { @opening = false }
         end
-        close if !result || closed?
+        return startup_failed(nil) unless result
+
+        close if closed?
         result
-      rescue StandardError
-        close
-        raise
+      rescue StandardError => error
+        startup_failed(error)
       end
 
       # Requests closure; startup must finish installing its process monitor
@@ -79,6 +83,27 @@ module Lich
       end
 
       private
+
+      # Closes after a failed startup and reports the closure exactly once.
+      # @param error [StandardError, nil] opener exception to re-raise, if any
+      # @return [false] when the opener returned a failure
+      # @raise [StandardError] the opener's exception, after cleanup and notice
+      # @api private
+      def startup_failed(error)
+        notify = @mutex.synchronize do
+          next false if @closed
+
+          @closed = true
+        end
+        begin
+          close
+        ensure
+          @on_close.call if notify
+        end
+        raise error if error
+
+        false
+      end
 
       # Retain an arriving PID even after closure is requested. open performs
       # deferred termination after the opener has installed its exit monitor.

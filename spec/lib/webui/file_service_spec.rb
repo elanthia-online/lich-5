@@ -71,7 +71,7 @@ RSpec.describe Lich::WebUI::FileService do
       service.register('images', second, owner: owner)
       expect(service.resolve('images', 'image.png').first).to eq(File.realpath(File.join(second, 'image.png')))
       service.revoke_owner(owner)
-      expect { service.register('images', first, owner: other) }.not_to raise_error
+      expect { service.register('images', first, owner: Object.new) }.not_to raise_error
     end
   end
 
@@ -101,6 +101,45 @@ RSpec.describe Lich::WebUI::FileService do
 
       expect(service.resolve('one', 'image.png')).to be_nil
       expect(service.resolve('two', 'image.png')).not_to be_nil
+    end
+  end
+
+  it 'refuses registration by a revoked owner, including one racing the revocation' do
+    Dir.mktmpdir('webui-app') do |root|
+      File.binwrite(File.join(root, 'image.png'), 'png')
+      service = described_class.new(application_roots: [root])
+      service.register('kept', root, owner: owner)
+      service.revoke_owner(owner)
+
+      expect { service.register('late', root, owner: owner) }
+        .to raise_error(Lich::WebUI::Error, /after the owner terminated/)
+      expect(service.resolve('late', 'image.png')).to be_nil
+      expect(service.resolve('kept', 'image.png')).to be_nil
+
+      # A callback that passed every check before revocation still cannot insert.
+      racer = Object.new
+      entered = Queue.new
+      release = Queue.new
+      gated = true
+      allow(service).to receive(:permitted_roots).and_wrap_original do |original, *args|
+        if gated
+          gated = false
+          entered << true
+          release.pop
+        end
+        original.call(*args)
+      end
+      worker = Thread.new do
+        Thread.current.report_on_exception = false
+        service.register('raced', root, owner: racer)
+      end
+      entered.pop
+      service.revoke_owner(racer)
+      release << true
+
+      expect { worker.value }.to raise_error(Lich::WebUI::Error, /after the owner terminated/)
+      expect(service.resolve('raced', 'image.png')).to be_nil
+      expect(service.register('fresh', root, owner: Object.new)).to eq('/files/fresh/')
     end
   end
 end
