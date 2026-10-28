@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'errors'
+require_relative 'host_thread'
 require_relative 'work_item'
 
 module Lich
@@ -11,6 +12,10 @@ module Lich
       PAGE_LIMIT = 1024
       SHUTDOWN_JOIN_TIMEOUT = 2
       THREAD_CONTEXT_KEY = :lich_webui_dispatch_context
+      # Script failures contained per callback, matching the script runner's set.
+      # SystemExit is handled apart (it stops the owner, never Lich) and fatal VM
+      # exceptions outside this set keep propagating.
+      CONTAINED_EXCEPTIONS = [ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError].freeze
 
       Event = Data.define(:owner, :page_id, :viewer_id, :cid, :event, :coalescable, :callable)
       Context = Data.define(:owner, :page_id, :viewer_id, :cid, :event)
@@ -36,10 +41,11 @@ module Lich
 
       # Creates bounded owner queues; workers start only when work is admitted.
       # @param logger [#call, nil] diagnostic sink accepting level and message
-      # @param thread_factory [#call, nil] worker constructor accepting a block
+      # @param thread_factory [#call, nil] worker constructor accepting a block;
+      #   defaults to host threads so a worker never inherits the enqueuer's script group
       def initialize(logger: nil, thread_factory: nil)
         @logger = logger || proc { |_level, _message| }
-        @thread_factory = thread_factory || ->(&block) { Thread.new(&block) }
+        @thread_factory = thread_factory || ->(&block) { HostThread.start(&block) }
         @owners = {}.compare_by_identity
         @terminated_owners = ObjectSpace::WeakMap.new
         @mutex = Mutex.new
@@ -101,21 +107,25 @@ module Lich
           pending
         end
         dispose_events(discarded)
-        unless state.thread.equal?(Thread.current)
-          state.thread.join(SHUTDOWN_JOIN_TIMEOUT)
-          log(:warning, "WebUI callback thread did not stop within #{SHUTDOWN_JOIN_TIMEOUT}s") if state.thread.alive?
-        end
+        join_worker(state.thread) unless state.thread.equal?(Thread.current)
         true
       end
 
       # Closes admission before collecting workers, including not-yet-seen owners.
+      # Every owner is shut down even when one raises; the first failure is re-raised afterwards.
       # @return [void]
       def shutdown
         owners = @mutex.synchronize do
           @stopped = true
           @owners.keys
         end
-        owners.each { |owner| shutdown_owner(owner) }
+        failure = nil
+        owners.each do |owner|
+          shutdown_owner(owner)
+        rescue Exception => error # rubocop:disable Lint/RescueException
+          failure ||= error
+        end
+        raise failure if failure
       end
 
       # Rejects synchronous event waits, including same-page callback re-entry.
@@ -149,16 +159,20 @@ module Lich
 
           @owners[owner] ||= begin
             state = OwnerState.new
-            state.thread = @thread_factory.call { run_owner(state) }
+            state.thread = @thread_factory.call { run_owner(state, owner) }
             state
           end
         end
       end
 
       # Executes queued owner callbacks sequentially and clears thread attribution on every exit.
-      # Standard callback failures are reported without aborting the next queued event.
+      # Contained script failures are reported without aborting the next queued event.
+      # A callback's SystemExit stops this owner only. However the worker ends, the owner is
+      # retired: admission closes and still-queued work is disposed, never run or replayed.
+      # @param state [OwnerState] queue and synchronization for this worker
+      # @param owner [Object] callback lifecycle identity served by this worker
       # @return [void]
-      def run_owner(state)
+      def run_owner(state, owner)
         loop do
           queued = state.mutex.synchronize do
             state.condition.wait(state.mutex) while state.running && state.events.empty?
@@ -169,15 +183,33 @@ module Lich
           state.current = queued
           context = Context.new(queued.owner, queued.page_id, queued.viewer_id, queued.cid, queued.event)
           Thread.current.thread_variable_set(THREAD_CONTEXT_KEY, context)
+          stop_owner = false
           begin
             queued.callable.call
-          rescue StandardError => error
+          rescue SystemExit => error
+            stop_owner = true
+            log(:warning, "WebUI callback exited owner=#{owner_label(queued.owner)} status=#{error.status}; owner stopped")
+          rescue *CONTAINED_EXCEPTIONS => error
             log(:error, "WebUI callback failed owner=#{owner_label(queued.owner)} error=#{error.class} at=#{error.backtrace&.first}")
           ensure
             Thread.current.thread_variable_set(THREAD_CONTEXT_KEY, nil)
             state.current = nil
           end
+          break if stop_owner
         end
+      ensure
+        shutdown_owner(owner)
+      end
+
+      # Waits for a stopping worker without letting its terminal exception abort shutdown.
+      # @api private
+      # @param thread [Thread] owner worker
+      # @return [void]
+      def join_worker(thread)
+        thread.join(SHUTDOWN_JOIN_TIMEOUT)
+        log(:warning, "WebUI callback thread did not stop within #{SHUTDOWN_JOIN_TIMEOUT}s") if thread.alive?
+      rescue *CONTAINED_EXCEPTIONS => error
+        log(:error, "WebUI callback thread ended abnormally error=#{error.class}")
       end
 
       # Replaces a matching tail while deferring cleanup until after queue unlock.
@@ -226,7 +258,7 @@ module Lich
       def dispose_events(events)
         events.each do |event|
           event.callable.cancel
-        rescue StandardError => error
+        rescue *CONTAINED_EXCEPTIONS => error
           log(:error, "WebUI callback cleanup failed error=#{error.class}")
         end
       end
