@@ -2081,6 +2081,7 @@ end
 $_DETACHABLE_CLIENT_REGISTRY_ ||= Lich::Common::DetachableClientRegistry.new
 $_DETACHABLE_CLIENTS_ ||= []
 $_DETACHABLE_CLIENT_ ||= nil
+$_DETACHABLE_FRONTEND_PID_MUTEX_ ||= Mutex.new
 
 def sync_detachable_client_globals
   $_DETACHABLE_CLIENTS_ = $_DETACHABLE_CLIENT_REGISTRY_.snapshot
@@ -2119,10 +2120,32 @@ def detachable_client_register(client)
 end
 
 def detachable_client_unregister(client)
+  previous_primary = $_DETACHABLE_CLIENT_REGISTRY_.primary
   removed, became_empty = $_DETACHABLE_CLIENT_REGISTRY_.unregister(client)
   sync_detachable_client_globals
   detachable_listener_connected(false) if removed && became_empty
+  detachable_client_apply_frontend_pid if removed && !previous_primary.equal?($_DETACHABLE_CLIENT_REGISTRY_.primary)
   removed
+end
+
+# Points Frontend.pid at the PID the primary detachable client declared with
+# SET_FRONTEND_PID. When the primary declared none, or no client is attached,
+# it goes back to the frontend Lich launched, or to 0 (none) without one, so
+# Frontend.refocus never targets a client that has gone. The mutex keeps a
+# promotion and the promoted client's own declaration from overwriting each
+# other with a stale value.
+def detachable_client_apply_frontend_pid
+  return unless defined?(Frontend)
+
+  $_DETACHABLE_FRONTEND_PID_MUTEX_.synchronize do
+    primary = $_DETACHABLE_CLIENT_REGISTRY_.primary
+    declared = primary.declared_pid if primary.respond_to?(:declared_pid)
+    if declared.to_i > 0
+      Frontend.set_from_client(declared) unless Frontend.pid == declared
+    else
+      Frontend.pid = Frontend.launched_pid unless Frontend.pid.to_i == Frontend.launched_pid.to_i
+    end
+  end
 end
 
 def detachable_clients_respond(string)
@@ -2149,6 +2172,7 @@ def detachable_clients_close
   sync_detachable_client_globals
   clients.each { |client| client.close rescue nil }
   detachable_listener_connected(false) unless clients.empty?
+  detachable_client_apply_frontend_pid unless clients.empty?
   clients.length
 end
 
@@ -2211,8 +2235,12 @@ def handle_detachable_client(client)
   Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
 
   while (client_string = client.gets)
-    if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
-      Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
+    # match, not match?: match? never sets the capture, which read back as PID 0.
+    if (pid_match = client_string.match(/^SET_FRONTEND_PID\s+(\d+)\s*$/))
+      # Recorded even when this client is not the primary one, so the PID can
+      # be applied if it is promoted after the primary detaches.
+      client.declared_pid = pid_match[1].to_i if client.respond_to?(:declared_pid=)
+      detachable_client_apply_frontend_pid if detachable_client_primary?(client)
       next
     end
     # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles itself

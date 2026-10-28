@@ -657,6 +657,30 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.launched_pid=' do
+    around do |example|
+      original_pid = frontend.pid
+      original_launched = frontend.launched_pid
+      example.run
+      frontend.instance_variable_set(:@launched_pid, original_launched)
+      frontend.pid = original_pid
+    end
+
+    it 'records the launched frontend and makes it the current PID' do
+      frontend.launched_pid = 777
+      expect(frontend.launched_pid).to eq(777)
+      expect(frontend.pid).to eq(777)
+    end
+
+    it 'is left alone when a detachable client sets the PID' do
+      allow(Lich).to receive(:log)
+      frontend.launched_pid = 777
+      frontend.set_from_client(12_345)
+      expect(frontend.pid).to eq(12_345)
+      expect(frontend.launched_pid).to eq(777)
+    end
+  end
+
   # --- client_string ------------------------------------------
 
   describe '.client_string' do
