@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'errors'
+
 module Lich
   module WebUI
     # Owns one queued callback and its cleanup until execution or cancellation.
@@ -7,12 +9,14 @@ module Lich
     class WorkItem
       # Captures work without running it; cleanup must be safe to call once.
       # @param cleanup [Proc, nil] resource disposal on every terminal path
+      # @param logger [#call, nil] credential-safe cleanup diagnostic sink
       # @yield the work to execute at most once
-      def initialize(cleanup: nil, &work)
+      def initialize(cleanup: nil, logger: nil, &work)
         raise ArgumentError, 'work block is required' unless work
 
         @work = work
         @cleanup = cleanup
+        @logger = logger || proc { |_level, _message| }
         @state = :pending
         @mutex = Mutex.new
       end
@@ -58,6 +62,9 @@ module Lich
           callback
         end
         cleanup&.call
+        nil
+      rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+        Diagnostics.log(@logger, :error, "WebUI callback cleanup failed error=#{error.class}")
         nil
       end
     end
