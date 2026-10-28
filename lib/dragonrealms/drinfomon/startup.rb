@@ -34,9 +34,10 @@ module Lich
       # Seconds between dead? checks in the revival watcher.
       REVIVAL_POLL_INTERVAL = 0.5
 
-      # Self-watching thread that triggers startup when ready, then stays
-      # alive as the revival watcher (see #watch_for_revival).
-      # Follows the ActiveSpell.watch! pattern for lifecycle management
+      # Extra refreshes sent when a finished refresh still leaves the guild nil
+      # (e.g. the script died before `info` went out). Reset by each death.
+      REFRESH_RETRIES = 2
+
       def self.watch!
         @startup_thread ||= Thread.new do
           begin
@@ -113,30 +114,54 @@ module Lich
       # @return [void] never returns
       def self.watch_for_revival
         sleep 0.1 until startup_complete?
-        pending = dead? || DRStats.guild.nil?
+        state = { pending: dead? || DRStats.guild.nil?, refresh: nil, retries: REFRESH_RETRIES }
         loop do
-          pending = revival_tick(pending)
+          revival_tick(state)
           sleep REVIVAL_POLL_INTERVAL
         end
       end
 
       # One poll of the revival watcher.
       #
-      # @param pending [Boolean] true when a refresh is owed once alive
-      # @return [Boolean] the new pending state
-      def self.revival_tick(pending)
-        return true if dead?
-        return false unless pending
+      # Refreshes when one is pending and the character is alive. Once that
+      # refresh script has finished, a guild that is still nil gets up to
+      # REFRESH_RETRIES more refreshes; a refresh that raises is not retried.
+      #
+      # @param state [Hash] mutated in place:
+      #   :pending [Boolean] a refresh is owed once alive
+      #   :refresh [Script, false, nil] the last refresh script started
+      #   :retries [Integer] retries left for a guild still nil after a refresh
+      # @return [void]
+      def self.revival_tick(state)
+        if dead?
+          state[:pending] = true
+          state[:retries] = REFRESH_RETRIES
+          return
+        end
+        return if refresh_running?(state[:refresh])
 
-        refresh_stats
-        false
+        unless state[:pending]
+          return unless state[:refresh] && state[:retries].positive? && DRStats.guild.nil?
+
+          state[:retries] -= 1
+        end
+        state[:pending] = false
+        state[:refresh] = refresh_stats
       rescue StandardError => e
         # Drop the pending refresh rather than retrying every poll.
+        state[:pending] = false
+        state[:refresh] = nil
         safe_message('error', "DRInfomon: revival refresh failed: #{e.message}")
         safe_log("DRInfomon: revival refresh error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}")
-        false
       end
 
+      # @param script [Script, false, nil] value returned by ExecScript.start
+      # @return [Boolean] true while that refresh script is still running
+      def self.refresh_running?(script)
+        script.respond_to?(:running?) && script.running?
+      end
+
+      # @return [Script, false] the started script (false if Lich is shutting down)
       def self.refresh_stats
         ExecScript.start(refresh_script, { quiet: true, name: 'drinfomon_refresh' })
       end
