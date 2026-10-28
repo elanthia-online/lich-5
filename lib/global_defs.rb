@@ -2211,8 +2211,9 @@ def handle_detachable_client(client)
   Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
 
   while (client_string = client.gets)
-    if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
-      Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
+    # match, not match?: match? never sets the capture, which read back as PID 0.
+    if (pid_match = client_string.match(/^SET_FRONTEND_PID\s+(\d+)\s*$/))
+      Frontend.set_from_client(pid_match[1].to_i) if defined?(Frontend) && detachable_client_primary?(client)
       next
     end
     # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles itself

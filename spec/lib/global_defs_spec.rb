@@ -817,6 +817,74 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
   end
 end
 
+# A detachable client such as Saga or Profanity reports its own process ID with
+# SET_FRONTEND_PID. The real handler runs in a subprocess, as above; the PIDs
+# handed to Frontend.set_from_client and every dispatched line are recorded.
+RSpec.describe '#handle_detachable_client with SET_FRONTEND_PID' do
+  def run_handler(lines, primary: true)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require 'common/client_capabilities'
+      require './lib/global_defs'
+      require 'common/shutdown_log'
+
+      ARGV.replace(%w[--without-frontend --detachable-client=8000])
+      Frontend.define_singleton_method(:client) { 'genie' }
+      $pids = []
+      Frontend.define_singleton_method(:set_from_client) { |pid| $pids << pid }
+      Object.send(:define_method, :detachable_client_primary?) { |_client| #{primary.inspect} }
+      Object.send(:define_method, :detachable_client_send_init) { |_client| nil }
+      Object.send(:define_method, :detachable_client_send_player_id) { |_client| nil }
+      $dispatched = []
+      Object.send(:define_method, :dispatch_client_input) { |line| $dispatched << line }
+      module Lich
+        module Main
+          module UserExitDispatch
+            def self.dispatch_detachable_client(*) = false
+          end
+        end
+      end
+      $cmd_prefix = '<c>'
+
+      client = Object.new
+      lines = #{lines.inspect}
+      client.define_singleton_method(:gets) { lines.shift }
+      client.define_singleton_method(:close) { nil }
+      before = Thread.list
+      handle_detachable_client(client)
+      (Thread.list - before).each { |thread| thread.join(5) }
+      puts "PIDS=\#{$pids.inspect}"
+      puts "DISPATCHED=\#{$dispatched.inspect}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    # Bundler's notes about gems built for another Ruby are not errors.
+    expect(stderr.lines.reject { |line| line.include?('Bundler::StubSpecification') }.join).to be_empty
+    expect(status).to be_success
+    [stdout[/^PIDS=(.*)$/, 1], stdout[/^DISPATCHED=(.*)$/, 1]]
+  end
+
+  it 'stores the PID the client sent and never sends the line to the game' do
+    pids, dispatched = run_handler(["SET_FRONTEND_PID 12345\r\n", "look\n"])
+    expect(pids).to eq('[12345]')
+    expect(dispatched).to eq('["<c>look\\n"]')
+  end
+
+  # Saga ends the line with \r\n; Profanity writes it with puts, so \n alone.
+  it 'reads the PID from a line ending in a bare newline' do
+    pids, dispatched = run_handler(["SET_FRONTEND_PID 4242\n"])
+    expect(pids).to eq('[4242]')
+    expect(dispatched).to eq('[]')
+  end
+
+  it 'ignores the PID from a client that is not the primary one' do
+    pids, dispatched = run_handler(["SET_FRONTEND_PID 12345\r\n"], primary: false)
+    expect(pids).to eq('[]')
+    expect(dispatched).to eq('[]')
+  end
+end
+
 RSpec.describe '#detachable_client_send_init' do
   # Only the shared part lives in global_defs.rb: waiting until the running
   # game's module reports the login feed is ready, then sending its push. What
