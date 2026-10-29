@@ -16,8 +16,15 @@ RSpec.describe 'adapter handle ownership' do
   end
   after { service.stop }
 
+  # Ruby scans machine stacks conservatively, so a pass can keep an
+  # unreferenced object alive through a stale slot. After the usual three
+  # passes, a block keeps collecting until it holds; a real strong reference
+  # still survives every pass.
   def collect
-    3.times { GC.start(full_mark: true, immediate_sweep: true) }
+    10.times do |pass|
+      GC.start(full_mark: true, immediate_sweep: true)
+      break if pass >= 2 && (!block_given? || yield)
+    end
   end
 
   # Retire the construction stack before GC; return weak observations only.
@@ -86,7 +93,7 @@ RSpec.describe 'adapter handle ownership' do
   it 'collects abandoned detached graphs including callbacks and pending drafts' do
     parent = adapter.create(:stack, {})
     references = off_construction_stack { 80.times.map { orphan(parent) } }
-    collect
+    collect { references.none?(&:weakref_alive?) }
     expect(references.none?(&:weakref_alive?)).to be(true)
     adapter.send(:prune_bindings!)
     expect(adapter.instance_variable_get(:@nodes).size).to eq(1)
@@ -96,7 +103,7 @@ RSpec.describe 'adapter handle ownership' do
   it 'collects published rebuild generations after replacement snapshots release callbacks' do
     root = adapter.create(:page, title: 'Rebuild')
     references = off_construction_stack { 40.times.map { orphan(root, publish: true) } }
-    collect
+    collect { references.none?(&:weakref_alive?) }
     expect(references.none?(&:weakref_alive?)).to be(true)
     adapter.send(:prune_bindings!)
     expect(adapter.instance_variable_get(:@nodes).size).to eq(1)
@@ -108,7 +115,7 @@ RSpec.describe 'adapter handle ownership' do
     parent = adapter.create(:stack, {})
     3.times do
       references = off_construction_stack { 64.times.map { orphan(parent) } }
-      collect
+      collect { references.none?(&:weakref_alive?) }
       expect(references.none?(&:weakref_alive?)).to be(true)
     end
     # This normal binding reaches the next maintenance boundary, without
@@ -139,7 +146,7 @@ RSpec.describe 'adapter handle ownership' do
     handle = adapter.create(:text, content: 'Retained tombstone')
     adapter.destroy(handle)
     references = off_construction_stack { 20.times.map { tombstone } }
-    collect
+    collect { references.none?(&:weakref_alive?) }
     expect(references.none?(&:weakref_alive?)).to be(true)
     expect { adapter.destroy(handle) }.to raise_error(Lich::WebUI::Error, /already destroyed/)
     expect(adapter.instance_variable_get(:@destroyed).size).to eq(1)
@@ -169,7 +176,7 @@ RSpec.describe 'adapter handle ownership' do
   it 'does not retain abandoned detached targets through focus bookkeeping' do
     root = adapter.create(:page, title: 'Focus retirement')
     reference = off_construction_stack { abandoned_focus(root) }
-    collect
+    collect { !reference.weakref_alive? }
     expect(reference.weakref_alive?).not_to be(true)
     adapter.send(:flush!)
     expect(service.registry.pages_for(owner).first.last_render.facilities).not_to have_key(:focus)
