@@ -136,10 +136,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      cleanup_times = [10.0, 10.025, 20.0, 20.050]
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
-        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
-      end
+      stub_cleanup_clock([10.0, 10.025, 20.0, 20.050])
 
       first.kill
       first.join
@@ -158,10 +155,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      cleanup_times = [10.0, 10.025, 20.0, 20.050]
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
-        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
-      end
+      stub_cleanup_clock([10.0, 10.025, 20.0, 20.050])
 
       first.kill
       first.join
@@ -200,6 +194,21 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       expect(Lich).to have_received(:log).with(
         'debug: script kill metrics runtime_stops_last_minute=1 avg_ms=12.50 max_ms=12.50 failures=1'
       )
+    end
+  end
+
+  # Serves scripted monotonic readings to Script's own clock reads only. Other
+  # code that reads the clock on a background thread (for example a WebUI
+  # scheduler left running by an earlier example in the same process) gets the
+  # real clock, so it cannot consume the scripted values.
+  def stub_cleanup_clock(cleanup_times)
+    allow(Process).to receive(:clock_gettime).and_wrap_original do |original, *args|
+      reader = caller_locations.find { |frame| !frame.path.include?('rspec-mocks') && frame.path != __FILE__ }
+      if args == [Process::CLOCK_MONOTONIC] && reader&.path&.end_with?('/lib/common/script.rb')
+        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
+      else
+        original.call(*args)
+      end
     end
   end
 
