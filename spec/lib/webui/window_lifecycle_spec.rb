@@ -109,24 +109,42 @@ RSpec.describe 'WebUI script window lifecycle' do
     expect(service.registry.size).to eq(0)
   end
 
-  it 'delivers only one user close when pagehide precedes process exit' do
+  # Pagehide (detach) from each viewer, then process exit. Every close queued
+  # behind the first has run once the owner dispatcher reaches the barrier.
+  # @param viewer_ids [Array<String>] viewers that attach and then detach
+  # @return [Array<Lich::WebUI::Runtime::EventContext>] every close the owner observed
+  def closes_after_pagehide(viewer_ids)
+    closes = []
     closed = Queue.new
-    target = page { |event| closed << event }
+    target = page { |event| closes << event; closed << event }
     service.start
     service.open(target)
-    sent = []
-    connection = Object.new
-    connection.define_singleton_method(:viewer_id) { 'test-viewer' }
-    connection.define_singleton_method(:send_text) { |payload| sent << JSON.parse(payload) }
     address = service.registry.address_for(target)
-    service.runtime.handle(connection, type: 'attach', page: address, version: '2.7.0')
-    generation = sent.last.fetch('generation')
-    service.runtime.handle(connection, type: 'detach', page: address, generation: generation)
+    viewer_ids.each do |viewer_id|
+      sent = []
+      connection = Object.new
+      connection.define_singleton_method(:viewer_id) { viewer_id }
+      connection.define_singleton_method(:send_text) { |payload| sent << JSON.parse(payload) }
+      service.runtime.handle(connection, type: 'attach', page: address, version: '2.7.0')
+      service.runtime.handle(connection, type: 'detach', page: address, generation: sent.last.fetch('generation'))
+    end
     opened.first[:on_exit].call
     Timeout.timeout(2) { closed.pop }
-    service.runtime.instance_variable_get(:@dispatcher).shutdown_owner(target.owner)
-
+    barrier = Queue.new
+    service.runtime.dispatch(owner: target.owner) { barrier << true }
+    expect(barrier.pop(timeout: 2)).to be(true)
     expect(closed).to be_empty
+    closes
+  ensure
+    service.runtime.instance_variable_get(:@dispatcher).shutdown_owner(target.owner) if target
+  end
+
+  it 'delivers only one user close when pagehide precedes process exit' do
+    expect(closes_after_pagehide(%w[test-viewer]).size).to eq(1)
+  end
+
+  it 'delivers only one user close when every attached viewer sends pagehide before process exit' do
+    expect(closes_after_pagehide(%w[test-viewer second-viewer]).size).to eq(1)
   end
 
   it 'closes a process that finishes opening after the page was removed' do
