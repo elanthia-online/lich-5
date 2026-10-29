@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'timeout'
 require 'webui'
 
 RSpec.describe 'coherent widget-transfer admission' do
@@ -63,6 +64,24 @@ RSpec.describe 'coherent widget-transfer admission' do
     done = Queue.new
     runtime.dispatch(owner: owner) { done << true }
     expect(done.pop(timeout: 3)).to be(true)
+  end
+
+  # Starts a refresh on another thread and returns only once its replacement
+  # render is built and has reached the viewer store for delivery, and the
+  # thread is parked (on the store lock) or finished, so the caller's next
+  # step runs at that boundary.
+  # @yield refresh work for the contending thread
+  # @return [Thread] the contending refresh thread
+  def contend_with_refresh(&refresh)
+    reached = Queue.new
+    allow(viewers).to receive(:attachments_for).and_wrap_original do |method, *args|
+      reached << true
+      method.call(*args)
+    end
+    worker = Thread.new(&refresh)
+    expect(reached.pop(timeout: 3)).to be(true)
+    Timeout.timeout(3) { Thread.pass until worker.stop? }
+    worker
   end
 
   it 'admits one measured insertion through repeated unrelated paints without retry or duplicate execution' do
@@ -139,19 +158,18 @@ RSpec.describe 'coherent widget-transfer admission' do
     gate, entered = Queue.new, Queue.new
     runtime.dispatch(owner: owner) { entered << true; gate.pop }
     entered.pop(timeout: 3)
-    attempted, worker = Queue.new, nil
+    worker, sources = nil, []
     allow(runtime).to receive(:find_component!).and_wrap_original do |method, *args|
-      unless worker
-        worker = Thread.new { @source_key = 'replacement'; attempted << true; paint }
-        attempted.pop(timeout: 3)
-      end
-      method.call(*args)
+      worker ||= contend_with_refresh { @source_key = 'replacement'; paint }
+      method.call(*args).tap { |component| sources << component.props[:drag_source] if component.props[:drag_source] }
     end
     expect(runtime.handle(@connection, @event)).to eq(:queued)
-    worker.value
+    expect(worker.join(3)).to be(worker)
     gate << true
     drain
+    expect(sources).to eq(['original'])
     expect(@calls).to be_empty
+    expect(@logs.grep(/phase=retired/).length).to eq(1)
   ensure
     gate << true if gate
     worker&.join(3)
@@ -165,21 +183,17 @@ RSpec.describe 'coherent widget-transfer admission' do
     address = registry.address_for(page)
     runtime.handle(@connection, type: 'attach', page: address, version: Lich::WebUI::Contract::VERSION)
     frame = @frames.last
-    attempted, worker = Queue.new, nil
+    worker = nil
     allow(runtime).to receive(:find_component!).and_wrap_original do |method, *args|
-      unless worker
-        worker = Thread.new do
-          callback = proc { @calls << 'replacement-binding' }
-          attempted << true
-          runtime.refresh(page)
-        end
-        attempted.pop(timeout: 3)
+      worker ||= contend_with_refresh do
+        callback = proc { @calls << 'replacement-binding' }
+        runtime.refresh(page)
       end
       method.call(*args)
     end
     expect(runtime.handle(@connection, type: 'event', page: address, cid: frame['tree']['children'].first['cid'],
                                       event: 'activate', payload: {}, generation: frame['generation'])).to eq(:queued)
-    worker.value
+    expect(worker.join(3)).to be(worker)
     drain
     expect(@calls).to eq(['original-binding'])
   ensure

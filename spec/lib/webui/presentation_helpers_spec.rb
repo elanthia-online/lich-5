@@ -28,12 +28,13 @@ RSpec.describe 'native setup presentation helpers' do
   end
 
   it 'does not repair an original list callback failure or swallow its partial mutation' do
+    callback_failure = Class.new(StandardError)
     items = ['existing']
     spec = Lich::WebUI::ListSettingsForm.text_list_spec(
       value: proc { items }, delete: proc {},
-      add: proc { |text| items.push(text); items.uniq!.sort! }, clear_after_add: true
+      add: proc { |text| items.push(text); raise callback_failure, 'add callback failed after mutating' }, clear_after_add: true
     )
-    expect { spec[:add].call('new') }.to raise_error(NoMethodError)
+    expect { spec[:add].call('new') }.to raise_error(callback_failure, 'add callback failed after mutating')
     expect(items).to eq(%w[existing new])
     expect(spec[:clear_after_add]).to be(true)
   end

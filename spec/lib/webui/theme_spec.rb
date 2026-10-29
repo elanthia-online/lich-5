@@ -37,6 +37,7 @@ RSpec.describe 'WebUI theme preference' do
   end
 
   it 'uses light when embedded without the Lich preference API' do
+    allow(Lich).to receive(:respond_to?).and_call_original
     allow(Lich).to receive(:respond_to?).with(:track_dark_mode).and_return(false)
     expect(page.render.tree.props[:theme]).to eq('light')
   end
