@@ -26,8 +26,8 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
       owner: owner, id: 'abort', title: 'Abort', buttons: buttons, no_viewer: :abort
     )
 
-    expect(defaulted.await).to have_attributes(button: 'ok', reason: :no_viewer)
-    expect(aborted.await).to have_attributes(button: nil, reason: :no_viewer)
+    expect(defaulted.await(timeout: 2)).to have_attributes(button: 'ok', reason: :no_viewer)
+    expect(aborted.await(timeout: 2)).to have_attributes(button: nil, reason: :no_viewer)
     expect(registry.size).to be_zero
   end
 
@@ -43,11 +43,11 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     expect(future).not_to be_resolved
     expect(registry.size).to eq(1)
     expect(modal.terminate_owner(owner)).to eq(1)
-    expect(future.await).to have_attributes(button: nil, reason: :terminated)
+    expect(future.await(timeout: 2)).to have_attributes(button: nil, reason: :terminated)
     expect(registry.size).to be_zero
   end
 
-  it 'makes response win atomically over timeout and removes the modal page' do
+  it 'keeps the first resolution, ignores a later timeout resolution, and removes the modal page' do
     modal = coordinator(viewers_present: true)
     allow(runtime).to receive(:close_page) do |page, **|
       registry.unregister(page.owner, page.id)
@@ -58,7 +58,33 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
 
     expect(future.resolve(button: 'ok')).to be true
     expect(future.resolve(reason: :timeout)).to be false
-    expect(future.await).to have_attributes(button: 'ok', reason: nil)
+    expect(future.await(timeout: 2)).to have_attributes(button: 'ok', reason: nil)
+    expect(registry.size).to be_zero
+  end
+
+  it 'ignores a timer that fires after the response and closes the modal page once' do
+    timers = []
+    finished = Thread.new {}
+    expect(finished.join(2)).to equal(finished)
+    # Capture the host timer instead of running it, so it fires exactly after the response.
+    allow(Lich::WebUI::HostThread).to receive(:start) do |*_args, &timer|
+      timers << timer
+      finished
+    end
+    modal = coordinator(viewers_present: true)
+    allow(runtime).to receive(:close_page) do |page, **|
+      registry.unregister(page.owner, page.id)
+    end
+    future = modal.open(
+      owner: owner, id: 'timer', title: 'Timer', buttons: buttons, no_viewer: :abort, timeout: 1
+    )
+
+    expect(timers.length).to eq(1)
+    expect(future.resolve(button: 'ok')).to be true
+    expect(timers.first.call).to be false
+    expect(future.await(timeout: 2)).to have_attributes(button: 'ok', reason: nil)
+    expect(runtime).to have_received(:close_page).once
+    expect(modal.pending_count).to eq(0)
     expect(registry.size).to be_zero
   end
 
@@ -113,7 +139,7 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     event = double(payload: { button: 'ok' }, submission: { input.cid => 'Typed, not yet blurred' })
     render.bindings.fetch([dialog.cid, :response]).call(event)
     expect(received).to eq([{ input.cid => 'Typed, not yet blurred' }])
-    expect(future.await.button).to eq('ok')
+    expect(future.await(timeout: 2).button).to eq('ok')
     expect(registry.size).to eq(0)
   end
 
@@ -127,14 +153,14 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     render.bindings.fetch([dialog.cid, :response]).call(double(payload: { button: 'ok' }))
     expect(future).not_to be_resolved
     modal.terminate_owner(owner)
-    expect(future.await.reason).to eq(:terminated)
+    expect(future.await(timeout: 2).reason).to eq(:terminated)
   end
 
   it 'checks viewer availability for the requesting owner' do
     present = double('viewer predicate')
     expect(present).to receive(:call).with(owner).and_return(false)
     modal = described_class.new(registry: registry, runtime: runtime, viewers_present: present, pages_changed: pages_changed)
-    result = modal.open(owner: owner, id: 'absent', title: 'Absent', buttons: buttons, no_viewer: :abort).await
+    result = modal.open(owner: owner, id: 'absent', title: 'Absent', buttons: buttons, no_viewer: :abort).await(timeout: 2)
     expect(result.reason).to eq(:no_viewer)
   end
 
@@ -184,7 +210,7 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     expect(registry.fetch(owner, 'live')).to be_a(Lich::WebUI::Page)
     expect(logger).to have_received(:call).with(:warning, 'WebUI modal viewer check failed: RuntimeError')
     future.resolve(button: 'ok')
-    expect(future.await.button).to eq('ok')
+    expect(future.await(timeout: 2).button).to eq('ok')
     expect(modal.pending_count).to eq(0)
     expect(registry.size).to eq(0)
   ensure

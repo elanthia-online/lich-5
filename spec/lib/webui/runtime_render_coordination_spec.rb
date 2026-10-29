@@ -20,7 +20,7 @@ RSpec.describe 'Runtime render coordination' do
       calls += 1
       if calls == 1
         entered << Thread.current
-        release.pop
+        release.pop(timeout: 2)
       else
         repeated << true
       end
@@ -53,7 +53,7 @@ RSpec.describe 'Runtime render coordination' do
       key = index.zero? ? first_key : second_key
       runtime.schedule_render(key, owner: selected, delay: 0) do
         entered << [index, Thread.current]
-        releases[index].pop
+        releases[index].pop(timeout: 2)
       end
     end
     2.times do
@@ -91,7 +91,7 @@ RSpec.describe 'Runtime render coordination' do
     worker = stopper = nil
     runtime.schedule_render(Object.new, owner: owner, delay: 0) do
       entered << Thread.current
-      release.pop
+      release.pop(timeout: 2)
     end
     worker = entered.pop(timeout: 2)
     allow(worker).to receive(:join).and_wrap_original do |original, *args|
@@ -147,11 +147,13 @@ RSpec.describe 'Runtime render coordination' do
   end
 
   it 'does not retain an owner solely through render retirement records' do
-    reference = Thread.new do
+    retiring = Thread.new do
       retired = Object.new
       runtime.terminate_owner(retired)
       WeakRef.new(retired)
-    end.value
+    end
+    expect(retiring.join(2)).to equal(retiring)
+    reference = retiring.value
     # Conservative stack scanning can leave a stale slot for a pass, so retry
     # past the usual three; a real strong reference still survives every pass.
     10.times do |pass|
