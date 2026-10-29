@@ -82,6 +82,16 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     expect(output).to eq("ready\n")
   end
 
+  it 'stops the owner, its pages and its admission when an ordinary dispatched callback exits (1832:RC1)' do
+    service = Lich::WebUI::Service.new(registry: Lich::WebUI::Registry.new, logger: ->(*) {})
+    service.registry.register(Lich::WebUI::Page.new(owner: owner, id: 'main', title: 'Main') {})
+    service.runtime.dispatch(owner: owner) { exit 3 }
+    Timeout.timeout(3) { sleep 0.02 until service.registry.pages_for(owner).empty? }
+    expect { service.registry.ensure_active!(owner) }.to raise_error(Lich::WebUI::Error)
+  ensure
+    service&.stop
+  end
+
   it 'stops the owner when a modal completion callback exits, runs the remaining callbacks and keeps the process, in a fresh process (1832:RC28)' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       require 'webui'
