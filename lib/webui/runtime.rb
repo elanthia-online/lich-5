@@ -45,8 +45,8 @@ module Lich
       # @param on_page_closed [#call, nil] callback releasing a page's owned window
       # @param window_host [#call, nil] lookup from a Page to its BrowserWindow
       # @param viewers_changed [#call, nil] notification after an owner's viewer loss
-      # @param owner_exit [#call, nil] owner-stop request for a render's SystemExit;
-      #   nil terminates the owner on this runtime
+      # @param owner_exit [#call, nil] owner-stop request for a render's or default
+      #   dispatcher callback's SystemExit; nil terminates the owner on this runtime
       # @return [Runtime]
       def initialize(registry:, dispatcher: nil, viewers: ViewerStore.new,
                      validator: Validator.new, file_service: nil, logger: nil, on_page_closed: nil, window_host: nil, viewers_changed: nil,
@@ -62,7 +62,7 @@ module Lich
         @validator = validator
         @file_service = file_service
         @logger = logger || proc { |_level, _message| }
-        @dispatcher = dispatcher || Dispatcher.new(logger: @logger)
+        @dispatcher = dispatcher || Dispatcher.new(logger: @logger, owner_exit: @owner_exit)
         @scheduler = Scheduler.new(dispatcher: @dispatcher, admission: @registry.method(:ensure_active!), logger: @logger)
         @connections = {}
         @connections_mutex = Mutex.new
