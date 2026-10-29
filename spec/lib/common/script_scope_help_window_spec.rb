@@ -73,8 +73,15 @@ RSpec.describe 'bounded help-window presentation' do
 
   it 'does not retain retired parent windows through weak associations' do
     help = gtk::Window.new
-    reference = retired_parent(help)
-    3.times { GC.start(full_mark: true, immediate_sweep: true) }
+    # Ruby scans machine stacks conservatively, so a stale slot can keep the
+    # window alive with no real reference. Building it on a joined thread
+    # leaves no such slot, and the retries absorb a stale register; a real
+    # strong reference still survives every pass.
+    reference = Thread.new { retired_parent(help) }.value
+    10.times do
+      GC.start(full_mark: true, immediate_sweep: true)
+      break unless reference.weakref_alive?
+    end
     expect(reference.weakref_alive?).not_to be(true)
     expect(help.transient_for).to be_nil
   end
