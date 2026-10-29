@@ -25,22 +25,41 @@ module Lich
         @@startup_complete
       end
 
-      # Self-watching thread that triggers startup when ready
-      # Follows the ActiveSpell.watch! pattern for lifecycle management
+      # Script source shared by startup and the revival refresh.
+      # `info` is skipped while dead, so a character who logs in dead gets
+      # no guild/circle/stats until the revival watcher re-sends it.
+      INFO_COMMAND = 'Lich::Util.issue_command("info", /^Name/, /^<output class=""/, quiet: true, timeout: 1) unless dead?'
+      EXP_COMMAND = 'Lich::Util.issue_command("exp all 0", /^Circle: \d+/, /^EXP HELP/, quiet: true, timeout: 1)'
+
+      # Seconds between dead? checks in the revival watcher.
+      REVIVAL_POLL_INTERVAL = 0.5
+
+      # Extra refreshes sent when a finished refresh still leaves the guild nil
+      # (e.g. the script died before `info` went out). Reset by each death.
+      REFRESH_RETRIES = 2
+
       def self.watch!
         @startup_thread ||= Thread.new do
           begin
             # Wait for character to be ready
-            sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty?
+            sleep 0.1 until ready_for_startup?
 
             # Run startup once
             startup
+
+            # Re-populate stats/skills whenever the character comes back to life
+            watch_for_revival
           rescue StandardError => e
             Lich::Messaging.msg('error', 'DRInfomon: Error in startup thread')
             Lich::Messaging.msg('error', "DRInfomon: #{e.inspect}")
             Lich::Messaging.msg('error', "DRInfomon: #{e.backtrace.join("\n")}")
           end
         end
+      end
+
+      # @return [Boolean] true once autostart has begun and the character name is known
+      def self.ready_for_startup?
+        GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty?
       end
 
       def self.startup
@@ -50,13 +69,13 @@ module Lich
       def self.startup_script
         <<~SCRIPT
           # Populate stats, race, guild, circle, etc.
-          Lich::Util.issue_command("info", /^Name/, /^<output class=""/, quiet: true, timeout: 1) unless dead?
+          #{INFO_COMMAND}
 
           # Populate account name and subscription level
           Lich::Util.issue_command("played", /^Account Info for/, quiet: true, timeout: 1)
 
           # Populate all skill ranks and learning rates
-          Lich::Util.issue_command("exp all 0", /^Circle: \\d+/, /^EXP HELP/, quiet: true, timeout: 1)
+          #{EXP_COMMAND}
 
           # Populate known spells/abilities/khri
           # The `ability` command works for all guilds:
@@ -80,6 +99,80 @@ module Lich
           end
 
           Lich::DragonRealms::DRInfomon.startup_completed!
+        SCRIPT
+      end
+
+      # Blocking loop run on the startup thread once startup is issued. Waits
+      # for startup to finish, then polls dead? and refreshes stats/skills on
+      # every dead -> alive transition.
+      #
+      # A nil guild after startup also counts as pending: startup's `info`
+      # was skipped (dead at login) or never landed, so the refresh fires as
+      # soon as the character is alive instead of leaving the guild nil all
+      # session.
+      #
+      # @return [void] never returns
+      def self.watch_for_revival
+        sleep 0.1 until startup_complete?
+        state = { pending: dead? || DRStats.guild.nil?, refresh: nil, retries: REFRESH_RETRIES }
+        loop do
+          revival_tick(state)
+          sleep REVIVAL_POLL_INTERVAL
+        end
+      end
+
+      # One poll of the revival watcher.
+      #
+      # Refreshes when one is pending and the character is alive. Once that
+      # refresh script has finished, a guild that is still nil gets up to
+      # REFRESH_RETRIES more refreshes; a refresh that raises is not retried.
+      #
+      # @param state [Hash] mutated in place:
+      #   :pending [Boolean] a refresh is owed once alive
+      #   :refresh [Script, false, nil] the last refresh script started
+      #   :retries [Integer] retries left for a guild still nil after a refresh
+      # @return [void]
+      def self.revival_tick(state)
+        if dead?
+          state[:pending] = true
+          state[:retries] = REFRESH_RETRIES
+          return
+        end
+        return if refresh_running?(state[:refresh])
+
+        unless state[:pending]
+          return unless state[:refresh] && state[:retries].positive? && DRStats.guild.nil?
+
+          state[:retries] -= 1
+        end
+        state[:pending] = false
+        state[:refresh] = refresh_stats
+      rescue StandardError => e
+        # Drop the pending refresh rather than retrying every poll.
+        state[:pending] = false
+        state[:refresh] = nil
+        safe_message('error', "DRInfomon: revival refresh failed: #{e.message}")
+        safe_log("DRInfomon: revival refresh error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}")
+      end
+
+      # @param script [Script, false, nil] value returned by ExecScript.start
+      # @return [Boolean] true while that refresh script is still running
+      def self.refresh_running?(script)
+        script.respond_to?(:running?) && script.running?
+      end
+
+      # @return [Script, false] the started script (false if Lich is shutting down)
+      def self.refresh_stats
+        ExecScript.start(refresh_script, { quiet: true, name: 'drinfomon_refresh' })
+      end
+
+      def self.refresh_script
+        <<~SCRIPT
+          # Re-populate stats, race, guild, circle, etc.
+          #{INFO_COMMAND}
+
+          # Re-populate all skill ranks and learning rates
+          #{EXP_COMMAND}
         SCRIPT
       end
 

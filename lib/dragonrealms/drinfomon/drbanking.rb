@@ -31,37 +31,62 @@ module Lich
     #
     module DRBanking
       # Pattern constants for bank transaction parsing
+      # Every pattern is pinned to where the game's own message starts, so
+      # someone in the bank who says, whispers or thinks the same words
+      # can't change the recorded balance. Speech always starts with the
+      # speaker's name and puts the words in quotes.
       module Pattern
+        # Start of a teller-bank line: the clerk's messages always begin
+        # "The clerk", after any markup tags.
+        CLERK = /\A(?:<[^>]*>)*The clerk /i.freeze
+
+        # Start of a jar-bank deposit, withdrawal or balance line: the game
+        # opens each with one of two lead-ins, after any markup tags. One
+        # quotes the jar's label, so anything may come between the lead-in
+        # and the message.
+        # "Searching methodically through the shelves, you finally manage to locate the jar labeled "Surname, Name", and ..."
+        # "You find your jar with little effort, thankfully, and thrust your hand inside.  ..."
+        JAR = /\A(?:<[^>]*>)*(?:Searching methodically through the shelves|You find your jar with little effort).*?/i.freeze
+
         # Deposit a portion of money
-        # "The clerk slides a small metal box across the counter into which you drop 5 gold Kronars"
-        DEPOSIT_PORTION = /The clerk slides a small metal box across the counter into which you drop (?<amount>\d+) (?<denomination>\w+) (?<currency>Kronars|Lirums|Dokoras)/i.freeze
+        # "The clerk slides a small metal box across the counter into which you drop 1 platinum Kronars.  She counts them carefully and records the deposit in her ledger."
+        DEPOSIT_PORTION = /#{CLERK}slides a small metal box across the counter into which you drop (?<amount>\d+) (?<denomination>\w+) (?<currency>Kronars|Lirums|Dokoras)/i.freeze
 
         # Deposit all money (teller bank)
-        # "The clerk slides a small metal box across the counter into which you drop all your Kronars."
-        DEPOSIT_ALL_TELLER = /The clerk slides a small metal box across the counter into which you drop all your (?<currency>Kronars|Lirums|Dokoras)\.\s+She counts them carefully and records the deposit in her ledger/i.freeze
+        # "The clerk slides a small metal box across the counter into which you drop all your Kronars.  She counts them carefully and records the deposit in her ledger."
+        DEPOSIT_ALL_TELLER = /#{CLERK}slides a small metal box across the counter into which you drop all your (?<currency>Kronars|Lirums|Dokoras)\.\s+She counts them carefully and records the deposit in her ledger/i.freeze
 
-        # Deposit all money (jar bank - Hib, etc.)
-        # "You cross through the old balance on the label and update it to reflect your new balance"
-        DEPOSIT_ALL_JAR = /You cross through the old balance on the label and update it to reflect your new balance/i.freeze
+        # Deposit at a jar bank (Fang Cove), any amount. The line gives the
+        # new balance in copper.
+        # "... and drop your coins inside.  You cross through the old balance on the label and update it to reflect your new balance: 2728329 Dokoras."
+        DEPOSIT_JAR = /#{JAR}You cross through the old balance on the label and update it to reflect your new balance(?::\s*(?<copper>\d+) (?<currency>Kronars|Lirums|Dokoras))?/i.freeze
 
         # Withdraw a portion of money
-        # "The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger"
-        # "You count out 5 gold Dokoras and quickly pocket them, updating the notation on your jar"
-        WITHDRAW_PORTION = /(?:The clerk counts|You count) out (?<amount>\d+) (?<denomination>platinum|gold|silver|bronze|copper) (?<currency>Kronars|Lirums|Dokoras) (?:and hands them over, making a notation in her ledger|and quickly pocket them, updating the notation on your jar)/i.freeze
+        # "The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger."
+        # "... and thrust your hand inside.  You count out 1 platinum Dokoras and quickly pocket them, updating the notation on your jar."
+        WITHDRAW_PORTION = /#{CLERK}counts out (?<amount>\d+) (?<denomination>platinum|gold|silver|bronze|copper) (?<currency>Kronars|Lirums|Dokoras) and hands them over, making a notation in her ledger|#{JAR}You count out (?<amount>\d+) (?<denomination>platinum|gold|silver|bronze|copper) (?<currency>Kronars|Lirums|Dokoras) and quickly pocket them, updating the notation on your jar/i.freeze
 
-        # Withdraw all money
-        # "The clerk counts out all your Kronars and hands them over"
-        # "You count out all of your Dokoras and quickly pocket them"
-        WITHDRAW_ALL = /(?:The clerk counts out all your|You count out all of your) (?<currency>Kronars|Lirums|Dokoras)/i.freeze
+        # Withdraw all money. The jar form needs "and quickly pocket them":
+        # a jar money-changer's "You count out all of your Kronars and drop
+        # them in the proper jar" is an exchange, not a withdrawal.
+        # "The clerk counts out all your Kronars and hands them over, making a notation in her ledger."
+        # "... and thrust your hand inside.  You count out all of your Dokoras and quickly pocket them, updating the notation on your jar."
+        WITHDRAW_ALL = /#{CLERK}counts out all your (?<currency>Kronars|Lirums|Dokoras) and hands them over|#{JAR}You count out all of your (?<currency>Kronars|Lirums|Dokoras) and quickly pocket them/i.freeze
 
         # Balance check
-        # "it looks like your current balance is 5 platinum Kronars"
-        # "Here we are. Your current balance is 10 gold, 5 silver Lirums"
-        # "As expected, there are 100 copper Dokoras"
-        BALANCE_CHECK = /(?:it looks like|"Here we are\.)\s*[Yy]our current balance is (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)|As expected, there are (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)/i.freeze
+        # "The clerk pages through her ledger.  "Name, it looks like your current balance is 5 platinum Kronars.""
+        # "The clerk pages through her ledger.  "Surname, Name," she says to herself.  "Here we are.  Your current balance is 10 gold, 5 silver Lirums.""
+        # "... and carefully count out the contents of it.  As expected, there are 272 platinum, 8 gold, 3 silver, 2 bronze, and 9 copper Dokoras."
+        BALANCE_CHECK = /#{CLERK}.*?(?:it looks like|"Here we are\.)\s*[Yy]our current balance is (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)|#{JAR}As expected, there are (?<balance>.*)\s+(?<currency>Kronars|Lirums|Dokoras)/i.freeze
 
-        # No account at this bank
-        NO_ACCOUNT = /you do not seem to have an account with us|you should find a new deposit jar for your financial needs/i.freeze
+        # No account at this bank. A jar bank says so without the jar
+        # lead-ins: a voice calls out (the words are in its quotes), or you
+        # can't find your jar.
+        # "The clerk flips through her ledger then says, "Name, you do not seem to have an account with us.  If you would like to open one, you need only deposit a few Kronars.""
+        # "A voice behind you calls out, "I don't recognize you, ... Perhaps you should find a new deposit jar for your financial needs. ...""
+        # "You sift through shelf after shelf of the jars -- "Gorund," "Wickett," ... but can't for the life of you find one with your name!"
+        # "Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name"
+        NO_ACCOUNT = /#{CLERK}.*?you do not seem to have an account with us|\A(?:<[^>]*>)*(?:A voice behind you calls out, "I don't recognize you,.*?)?Perhaps you should find a new deposit jar for your financial needs|\A(?:<[^>]*>)*You sift through shelf after shelf of the jars/i.freeze
       end
 
       # Denomination multipliers for converting to copper
@@ -212,8 +237,10 @@ module Lich
           # Use explicit match variables instead of Regexp.last_match (more reliable)
           if (match = line.match(Pattern::DEPOSIT_PORTION))
             handle_deposit_portion(town, match)
-          elsif line.match?(Pattern::DEPOSIT_ALL_TELLER) || line.match?(Pattern::DEPOSIT_ALL_JAR)
+          elsif line.match?(Pattern::DEPOSIT_ALL_TELLER)
             handle_deposit_all(town)
+          elsif (match = line.match(Pattern::DEPOSIT_JAR))
+            handle_deposit_jar(town, match)
           elsif (match = line.match(Pattern::WITHDRAW_PORTION))
             handle_withdraw_portion(town, match)
           elsif line.match?(Pattern::WITHDRAW_ALL)
@@ -615,6 +642,13 @@ module Lich
           # The game will show the new balance, so we trigger a balance check
           Lich::Messaging.msg('info', "DRBanking: Deposited all money at #{town}. Checking balance...")
           # The balance will be updated when the balance response comes through
+        end
+
+        def handle_deposit_jar(town, match)
+          # A jar deposit of any amount reports the new balance in copper
+          return handle_deposit_all(town) unless match[:copper]
+
+          update_balance(town, match[:copper].to_i)
         end
 
         def handle_withdraw_portion(town, match)

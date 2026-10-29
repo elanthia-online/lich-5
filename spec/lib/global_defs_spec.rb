@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'open3'
 require 'rbconfig'
 require_relative '../spec_helper'
@@ -814,6 +815,216 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
     dispatched, declared = run_handler(["look\n"])
     expect(dispatched).to eq('["<c>look\\n"]')
     expect(declared).to eq('nil')
+  end
+end
+
+# A detachable client such as Saga or Profanity reports its own process ID with
+# SET_FRONTEND_PID. The real handler runs in a subprocess, as above; the PIDs
+# handed to Frontend.set_from_client, the PID recorded on the client and every
+# dispatched line are recorded.
+RSpec.describe '#handle_detachable_client with SET_FRONTEND_PID' do
+  def run_handler(lines, primary: true)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require 'common/client_capabilities'
+      require './lib/global_defs'
+      require 'common/shutdown_log'
+
+      ARGV.replace(%w[--without-frontend --detachable-client=8000])
+      Frontend.define_singleton_method(:client) { 'genie' }
+      $pids = []
+      Frontend.define_singleton_method(:pid) { $pids.last }
+      Frontend.define_singleton_method(:launched_pid) { nil }
+      Frontend.define_singleton_method(:pid=) { |_pid| nil }
+      Frontend.define_singleton_method(:set_from_client) { |pid| $pids << pid }
+      Object.send(:define_method, :detachable_client_send_init) { |_client| nil }
+      Object.send(:define_method, :detachable_client_send_player_id) { |_client| nil }
+      $dispatched = []
+      Object.send(:define_method, :dispatch_client_input) { |line| $dispatched << line }
+      module Lich
+        module Main
+          module UserExitDispatch
+            def self.dispatch_detachable_client(*) = false
+          end
+        end
+      end
+      $cmd_prefix = '<c>'
+
+      client = Object.new
+      client.singleton_class.send(:attr_accessor, :declared_pid)
+      lines = #{lines.inspect}
+      client.define_singleton_method(:gets) { lines.shift }
+      client.define_singleton_method(:close) { nil }
+      detachable_client_register(Object.new) unless #{primary.inspect}
+      detachable_client_register(client)
+      before = Thread.list
+      handle_detachable_client(client)
+      (Thread.list - before).each { |thread| thread.join(5) }
+      puts "PIDS=\#{$pids.inspect}"
+      puts "DECLARED=\#{client.declared_pid.inspect}"
+      puts "DISPATCHED=\#{$dispatched.inspect}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    # Bundler's notes about gems built for another Ruby are not errors.
+    expect(stderr.lines.reject { |line| line.include?('Bundler::StubSpecification') }.join).to be_empty
+    expect(status).to be_success
+    [stdout[/^PIDS=(.*)$/, 1], stdout[/^DISPATCHED=(.*)$/, 1], stdout[/^DECLARED=(.*)$/, 1]]
+  end
+
+  it 'stores the PID the client sent and never sends the line to the game' do
+    pids, dispatched, declared = run_handler(["SET_FRONTEND_PID 12345\r\n", "look\n"])
+    expect(pids).to eq('[12345]')
+    expect(declared).to eq('12345')
+    expect(dispatched).to eq('["<c>look\\n"]')
+  end
+
+  # Saga ends the line with \r\n; Profanity writes it with puts, so \n alone.
+  it 'reads the PID from a line ending in a bare newline' do
+    pids, dispatched = run_handler(["SET_FRONTEND_PID 4242\n"])
+    expect(pids).to eq('[4242]')
+    expect(dispatched).to eq('[]')
+  end
+
+  it 'records the PID from a client that is not the primary one without applying it' do
+    pids, dispatched, declared = run_handler(["SET_FRONTEND_PID 12345\r\n"], primary: false)
+    expect(pids).to eq('[]')
+    expect(declared).to eq('12345')
+    expect(dispatched).to eq('[]')
+  end
+end
+
+# Frontend.pid follows the primary detachable client. When the primary detaches
+# (its handler ends, or detachable_clients_respond drops its dead socket), the
+# next client is promoted and the PID it declared earlier, while it was not the
+# primary, is applied; with no client left, the launched frontend's PID (or
+# none) comes back. Runs the real handlers, registry and Lich::Common::Frontend
+# in a subprocess, one handler thread per client.
+RSpec.describe 'Frontend.pid across detachable client promotion' do
+  def run_scenario(launched_pid:, steps:)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/frontend'
+      require 'common/detachable_client_registry'
+      require 'common/client_capabilities'
+      require './lib/global_defs'
+      require 'common/shutdown_log'
+
+      Object.send(:remove_const, :Frontend)
+      Frontend = Lich::Common::Frontend
+      Lich.define_singleton_method(:log) { |_message| nil }
+      ARGV.replace(%w[--without-frontend --detachable-client=8000])
+      Frontend.define_singleton_method(:client) { 'genie' }
+      Frontend.launched_pid = #{launched_pid.inspect} unless #{launched_pid.inspect}.nil?
+      Object.send(:define_method, :detachable_client_send_init) { |_client| nil }
+      Object.send(:define_method, :dispatch_client_input) { |_line| nil }
+      module Lich
+        module Main
+          module UserExitDispatch
+            def self.dispatch_detachable_client(*) = false
+          end
+        end
+      end
+
+      # A client whose input is fed line by line; feeding nil ends its handler.
+      class FakeClient
+        attr_accessor :declared_pid
+        attr_reader :handled
+
+        def initialize
+          @input = Queue.new
+          @handled = 0
+          @alive = true
+        end
+
+        def feed(line) = @input << line
+        def gets = (@handled += 1; @input.pop)
+        def alive? = @alive
+        def die! = @alive = false
+        def close = nil
+        def puts_main_stream(*) = true
+      end
+
+      def wait_until
+        200.times { return if yield; sleep 0.01 }
+        raise 'timed out'
+      end
+
+      clients = {}
+      threads = {}
+      log = []
+      #{steps.inspect}.each do |action, name, value|
+        case action
+        when :attach
+          client = clients[name] = FakeClient.new
+          detachable_client_register(client)
+          threads[name] = Thread.new { handle_detachable_client(client) }
+          wait_until { client.handled == 1 }
+        when :declare
+          client = clients[name]
+          handled = client.handled
+          client.feed("SET_FRONTEND_PID \#{value}\\r\\n")
+          wait_until { client.handled > handled }
+        when :detach
+          clients[name].feed(nil)
+          threads[name].join(5)
+        when :die
+          # The socket dies under detachable_clients_respond, which unregisters
+          # it; its handler then ends and unregisters it a second time.
+          clients[name].die!
+          detachable_clients_respond('<output/>')
+        end
+        log << Frontend.pid
+      end
+      puts "PIDS=\#{JSON.generate(log)}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    expect(stderr.lines.reject { |line| line.include?('Bundler::StubSpecification') }.join).to be_empty
+    expect(status).to be_success
+    JSON.parse(stdout[/^PIDS=(.*)$/, 1])
+  end
+
+  it 'moves to the promoted client when the primary detaches, and back to the launched frontend after the last' do
+    pids = run_scenario(launched_pid: 900, steps: [
+                          [:attach, :a], [:attach, :b],
+                          [:declare, :a, 101], [:declare, :b, 102],
+                          [:detach, :a],
+                          [:detach, :b]
+                        ])
+    expect(pids).to eq([900, 900, 101, 101, 102, 900])
+  end
+
+  it 'follows a promotion from a dead socket, then a reconnect, then the dead handler ending' do
+    pids = run_scenario(launched_pid: nil, steps: [
+                          [:attach, :a], [:attach, :b],
+                          [:declare, :a, 101], [:declare, :b, 102],
+                          [:die, :a],
+                          [:attach, :c], [:declare, :c, 103],
+                          [:detach, :a],
+                          [:detach, :b],
+                          [:detach, :c]
+                        ])
+    expect(pids).to eq([nil, nil, 101, 101, 102, 102, 102, 102, 103, 0])
+  end
+
+  it 'drops the departed PID when the promoted client never declared one' do
+    pids = run_scenario(launched_pid: 900, steps: [
+                          [:attach, :a], [:attach, :b],
+                          [:declare, :a, 101],
+                          [:detach, :a]
+                        ])
+    expect(pids).to eq([900, 900, 101, 900])
+  end
+
+  it 'clears the PID when the promoted client never declared one and Lich launched no frontend' do
+    pids = run_scenario(launched_pid: nil, steps: [
+                          [:attach, :a], [:attach, :b],
+                          [:declare, :a, 101],
+                          [:detach, :a]
+                        ])
+    expect(pids).to eq([nil, nil, 101, 0])
   end
 end
 

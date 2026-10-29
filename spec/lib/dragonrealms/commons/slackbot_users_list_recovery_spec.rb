@@ -48,7 +48,8 @@ RSpec.describe Lich::DragonRealms::SlackBot, 'users.list failure recovery' do
   def failure(kind)
     case kind
     when :http500 then -> { http_response(500, '') }
-    when :ok_false then -> { http_response(200, { 'ok' => false, 'error' => 'internal_error' }.to_json) }
+    # Slack refuses the request (for auth.test: rejects the token).
+    when :ok_false then -> { http_response(200, { 'ok' => false, 'error' => 'invalid_auth' }.to_json) }
     when :econnreset then -> { raise Errno::ECONNRESET }
     when :throttle then -> { http_response(429, '', 'Retry-After' => '1') }
     when :throttle_long then -> { http_response(429, '', 'Retry-After' => '30') }

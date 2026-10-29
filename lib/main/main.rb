@@ -516,7 +516,7 @@ reconnect_if_wanted = proc {
                        else
                          spawn(launcher_cmd)
                        end
-        Lich::Common::Frontend.pid = frontend_pid if defined?(Lich::Common::Frontend)
+        Lich::Common::Frontend.launched_pid = frontend_pid if defined?(Lich::Common::Frontend)
       rescue
         Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)

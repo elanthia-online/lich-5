@@ -72,6 +72,7 @@ module Lich
       @session_file = nil
       @tmp_session_dir = File.join Dir.tmpdir, "simutronics", "sessions"
       @frontend_pid = nil
+      @launched_pid = nil
       @pid_mutex = Mutex.new
       ORIGIN_SENTINEL = "\x1f"
 
@@ -786,6 +787,22 @@ module Lich
       def self.pid=(value)
         value = value.to_i
         @pid_mutex.synchronize { @frontend_pid = value }
+      end
+
+      # The PID of the frontend Lich launched itself, or nil when it launched
+      # none. Frontend.pid goes back to this when no detachable client that
+      # declared a PID is attached any more.
+      # @return [Integer, nil]
+      def self.launched_pid
+        @pid_mutex.synchronize { @launched_pid }
+      end
+
+      # Records the launched frontend's PID and makes it the current one.
+      # @param value [Integer] The PID of the launched frontend process
+      # @return [Integer] The stored PID
+      def self.launched_pid=(value)
+        value = value.to_i
+        @pid_mutex.synchronize { @launched_pid = @frontend_pid = value }
       end
 
       # Initialize PID from parent process (for Warlock)
