@@ -88,7 +88,16 @@ module Lich
 
         # Page rendering calls back into the adapter to snapshot its tree. Never
         # hold the adapter monitor while waiting for a page's render mutex.
-        @service.refresh(page)
+        begin
+          @service.refresh(page)
+        rescue Error
+          # Destruction from another thread may retire this root and close its
+          # page after the snapshot above. Discard that obsolete publication, as
+          # schedule_refresh does; a live root's failure still reaches flush!.
+          raise if @mutex.synchronize { handle_for(root) }
+
+          return
+        end
         delivered = page.last_render.tree.each.to_h { |component| [component.cid, true] }
         @mutex.synchronize do
           changes = []
