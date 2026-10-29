@@ -198,6 +198,9 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASEABLE_SHAS: ${{ steps.guard.outputs.releaseable_shas }}
+          # Release PRs opened by the step above are authored by the GitHub App
+          # behind APP_ID ("<app-slug>[bot]"); older ones by github-actions[bot].
+          APP_BOT_LOGIN: ${{ steps.app-token.outputs.app-slug && format('{0}[bot]', steps.app-token.outputs.app-slug) || '' }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -219,7 +222,8 @@ jobs:
               per_page: 100,
             });
             const candidate = pulls.find(pr =>
-              (pr.user?.login === 'release-please[bot]' || pr.user?.login === 'github-actions[bot]') &&
+              (pr.user?.login === 'release-please[bot]' || pr.user?.login === 'github-actions[bot]' ||
+                (process.env.APP_BOT_LOGIN && pr.user?.login === process.env.APP_BOT_LOGIN)) &&
               pr.labels?.some(label => label.name === 'autorelease: pending')
             );
 
