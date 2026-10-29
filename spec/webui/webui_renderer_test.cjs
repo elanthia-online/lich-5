@@ -571,14 +571,13 @@ test('editable choices retain an explicitly selected empty ID across unrelated r
   assert.deepEqual(sent.at(-1).submission, ['']);
 });
 
-test('plain text preserves chart line breaks and honors nonwrapping labels', () => {
-  const { dom, page } = fixture();
+test('plain text preserves chart line breaks and honors nonwrapping labels', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const text = dom.window.LichWebUI.render(page, {
     type: 'text', cid: 'chart', props: { content: 'Armor\nFull Plate', wrap: false }
   });
   assert.equal(text.textContent, 'Armor\nFull Plate');
   assert.equal(text.style.whiteSpace, 'pre');
-  dom.window.close();
 });
 
 test('label typography disappears or restores explicit values after a live markup reset', t => {
@@ -638,8 +637,8 @@ test('end ellipsis retains full accessible text and respects character width', t
   assert.equal(label.style.textOverflow, 'ellipsis');
 });
 
-test('native typography applies bounded properties while keeping text literal', () => {
-  const { dom, page } = fixture();
+test('native typography applies bounded properties while keeping text literal', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const style = { font_size: 18, foreground: { r: 224, g: 27, b: 36, a: 1 }, background: { r: 0, g: 0, b: 0, a: 0.5 } };
   const literal = '<img src=x onerror=alert(1)>';
   const text = dom.window.LichWebUI.render(page, { type: 'text', cid: 'native', props: { content: literal, tone: 'positive', ...style } });
@@ -653,11 +652,10 @@ test('native typography applies bounded properties while keeping text literal', 
     assert.equal(element.style.color, 'rgb(224, 27, 36)');
     assert.equal(element.style.backgroundColor, 'rgba(0, 0, 0, 0.5)');
   }
-  dom.window.close();
 });
 
-test('multiline input keeps ordered script lists editable and submits their exact text', () => {
-  const { dom, page, sent } = fixture();
+test('multiline input keeps ordered script lists editable and submits their exact text', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.order = ['change'];
   const field = dom.window.LichWebUI.render(page, {
     type: 'textarea', cid: 'order', props: { value: '401\n101', rows: 8, max_length: 100, label: 'Cast order' }
@@ -670,11 +668,10 @@ test('multiline input keeps ordered script lists editable and submits their exac
   control.dispatchEvent(new dom.window.Event('input'));
   assert.equal(sent.at(-1).payload.value, '101\n401');
   assert.equal(page.controls.get('order'), control);
-  dom.window.close();
 });
 
-test('table sorting keeps stable row identities and numeric order', () => {
-  const { dom, page, sent } = fixture();
+test('table sorting keeps stable row identities and numeric order', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.catalog = ['sort_change', 'selection_change', 'row_activate'];
   const table = dom.window.LichWebUI.render(page, {
     type: 'table', cid: 'catalog', props: {
@@ -690,11 +687,10 @@ test('table sorting keeps stable row identities and numeric order', () => {
   table.querySelector('tbody tr').dispatchEvent(new dom.window.MouseEvent('dblclick'));
   assert.equal(sent.at(-1).event, 'row_activate');
   assert.equal(sent.at(-1).payload.row, 'ten');
-  dom.window.close();
 });
 
-test('composite uses scaled layout, literal labels, masked tint and vertical bars', () => {
-  const { dom, page } = fixture();
+test('composite uses scaled layout, literal labels, masked tint and vertical bars', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const surface = dom.window.LichWebUI.render(page, {
     type: 'composite', cid: 'map', props: { width: 100, height: 80, scale: 2, layers: [
       { kind: 'image', src: '/files/maps/body.png', mask: '/files/maps/wound.png', tint: { r: 255, g: 0, b: 0, a: 0.5 }, x: 0, y: 0, w: 50, h: 60 },
@@ -712,11 +708,10 @@ test('composite uses scaled layout, literal labels, masked tint and vertical bar
   assert.equal(surface.querySelector('.composite-image').style.backgroundBlendMode, 'multiply');
   assert.equal(surface.querySelector('.composite-bar-fill').style.height, '25%');
   assert.equal(surface.querySelector('.composite-bar-fill').style.bottom, '0px');
-  dom.window.close();
 });
 
-test('composite reports absolute unscaled coordinates once, including modifiers and keyboard regions', () => {
-  const { dom, page, sent } = fixture();
+test('composite reports absolute unscaled coordinates once, including modifiers and keyboard regions', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.map = ['surface_activate', 'region_activate'];
   const view = dom.window.LichWebUI.render(page, {
     type: 'composite', cid: 'map', props: { width: 100, height: 80, scale: 2, surface_events: true,
@@ -731,11 +726,10 @@ test('composite reports absolute unscaled coordinates once, including modifiers 
   assert.equal(sent.length, count + 1);
   assert.equal(sent.at(-1).event, 'region_activate');
   assert.equal(sent.at(-1).payload.region, 'room-7');
-  dom.window.close();
 });
 
-test('log and overlay render literal text and layered children without HTML execution', () => {
-  const { dom, page } = fixture();
+test('log and overlay render literal text and layered children without HTML execution', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const log = dom.window.LichWebUI.render(page, {
     type: 'log', cid: 'chat', props: { lines: ['<img src=x>', 'second'], max_lines: 1000, follow: true }
   });
@@ -749,11 +743,10 @@ test('log and overlay render literal text and layered children without HTML exec
   });
   assert.equal(overlay.querySelector('progress').value, 0.5);
   assert.equal(overlay.children[1].style.gridArea, '1 / 1');
-  dom.window.close();
 });
 
-test('terminal submission permits the server to clear a field back to its original empty value', () => {
-  const { dom, receive } = fixture();
+test('terminal submission permits the server to clear a field back to its original empty value', t => {
+  const { dom, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'locations' }] });
   const render = generation => ({ type: 'render', page: 'locations', generation,
     bindings: { create: ['activate'] }, submissions: { create: ['name'] }, tree: {
@@ -768,7 +761,6 @@ test('terminal submission permits the server to clear a field back to its origin
   dom.window.document.querySelector('button').click();
   receive(render(2));
   assert.equal(dom.window.document.querySelector('input').value, '');
-  dom.window.close();
 });
 
 for (const type of ['checkbox', 'toggle']) {
@@ -800,8 +792,8 @@ for (const type of ['checkbox', 'toggle']) {
   });
 }
 
-test('cleared sensitive text cannot return on the next render', () => {
-  const { dom, receive } = fixture();
+test('cleared sensitive text cannot return on the next render', t => {
+  const { dom, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'sensitive-text' }] });
   const render = generation => ({ type: 'render', page: 'sensitive-text', generation,
     bindings: { save: ['activate'] }, submissions: { save: ['token'] }, tree: {
@@ -817,11 +809,10 @@ test('cleared sensitive text cannot return on the next render', () => {
   receive({ type: 'clear_sensitive', cids: ['token'] });
   receive(render(2));
   assert.equal(dom.window.document.querySelector('input').value, '');
-  dom.window.close();
 });
 
-test('grid renders real children and preserves column and row spans', () => {
-  const { dom, page } = fixture();
+test('grid renders real children and preserves column and row spans', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const grid = dom.window.LichWebUI.render(page, {
     type: 'grid', cid: 'grid', props: { cols: 4, gap: 3, column_gap: 20, row_gap: 5 }, children: [{
       type: 'text', cid: 'cell', props: { content: 'Measured cell' },
@@ -834,11 +825,10 @@ test('grid renders real children and preserves column and row spans', () => {
   assert.equal(grid.firstChild.style.gridRow, 'span 3');
   assert.equal(grid.style.columnGap, '20px');
   assert.equal(grid.style.rowGap, '5px');
-  dom.window.close();
 });
 
-test('change carries only its payload; terminal submit carries the declared scope', () => {
-  const { dom, page, sent } = fixture();
+test('change carries only its payload; terminal submit carries the declared scope', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.name = ['change', 'submit'];
   page.submissions.name = ['name', 'password'];
   const component = { type: 'text_input', cid: 'name', props: { value: '' }, children: [] };
@@ -850,11 +840,10 @@ test('change carries only its payload; terminal submit carries the declared scop
   assert.equal(sent.at(-1).submission, undefined);
   input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter' }));
   assert.deepEqual(sent.at(-1).submission, ['draft', 'fixture-only']);
-  dom.window.close();
 });
 
-test('focus is an empty notification even on an input with a password submit scope', () => {
-  const { dom, page, sent } = fixture();
+test('focus is an empty notification even on an input with a password submit scope', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.name = ['focus', 'submit'];
   page.submissions.name = ['password'];
   page.controls.set('password', { type: 'password', value: 'fixture-only' });
@@ -868,11 +857,10 @@ test('focus is an empty notification even on an input with a password submit sco
   page.restoringFocus = true;
   control.dispatchEvent(new dom.window.Event('focus'));
   assert.equal(sent.length, 1, 'restoring focus after a render must not run source logic again');
-  dom.window.close();
 });
 
-test('adding a row preserves typing and focus, while an explicit server edit wins', () => {
-  const { dom, sent, receive } = fixture();
+test('adding a row preserves typing and focus, while an explicit server edit wins', t => {
+  const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'vars' }] });
   const render = (generation, value) => ({ type: 'render', page: 'vars', generation,
     bindings: { name: ['focus', 'change'] }, tree: {
@@ -896,11 +884,10 @@ test('adding a row preserves typing and focus, while an explicit server edit win
   assert.equal(sent.filter(message => message.event === 'focus').length, notifications);
   receive(render(3, 'server correction'));
   assert.equal(dom.window.document.querySelector('input').value, 'server correction');
-  dom.window.close();
 });
 
-test('scroll reports both axes and suppresses duplicate measurements', async () => {
-  const { dom, page, sent } = fixture();
+test('scroll reports both axes and suppresses duplicate measurements', async t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.scroll = ['scrolled'];
   const element = dom.window.LichWebUI.render(page, {
     type: 'scroll', cid: 'scroll', props: { scroll_position: 120, scroll_position_x: 80 }, children: []
@@ -917,7 +904,6 @@ test('scroll reports both axes and suppresses duplicate measurements', async () 
   element.scrollTop = 140;
   element.dispatchEvent(new dom.window.Event('scroll'));
   assert.equal(sent.at(-1).payload.position, 140);
-  dom.window.close();
 });
 
 test('explicit repeated scroll requests preserve manual movement on the other axis', async t => {
@@ -941,8 +927,8 @@ test('explicit repeated scroll requests preserve manual movement on the other ax
   assert.equal(element.scrollLeft, 80);
 });
 
-test('native map horizontal panning survives tree replacement without a new shim event', async () => {
-  const { dom, page } = fixture();
+test('native map horizontal panning survives tree replacement without a new shim event', async t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   const component = { type: 'scroll', cid: 'map-scroll', props: {}, children: [] };
   let view = dom.window.LichWebUI.render(page, component);
   dom.window.document.body.append(view);
@@ -955,7 +941,6 @@ test('native map horizontal panning survives tree replacement without a new shim
   await new Promise(resolve => dom.window.requestAnimationFrame(resolve));
   assert.equal(view.scrollLeft, 180);
   assert.equal(view.scrollTop, 35);
-  dom.window.close();
 });
 
 for (const type of ['checkbox', 'toggle']) {
@@ -1014,8 +999,8 @@ test('a stale submission retry retains its snapshot without reviving an old disp
   assert.equal(dom.window.document.querySelector('select').value, 'plate');
 });
 
-test('a stale refusal replays only its identified click once, across unrelated renders', () => {
-  const { dom, sent, receive } = fixture();
+test('a stale refusal replays only its identified click once, across unrelated renders', t => {
+  const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'actions' }] });
   const render = generation => ({ type: 'render', page: 'actions', generation,
     bindings: { save: ['activate'] }, tree: { type: 'page', cid: 'root', props: { title: 'Actions' }, children: [
@@ -1036,7 +1021,6 @@ test('a stale refusal replays only its identified click once, across unrelated r
   receive({ type: 'refusal', reason: 'stale_generation', page: 'actions', cid: 'save', event: 'activate', request: retry.request });
   receive(render(4));
   assert.equal(sent.filter(message => message.event === 'activate').length, 3);
-  dom.window.close();
 });
 
 function tabRetryFixture(t) {
@@ -1140,8 +1124,8 @@ for (const [name, mutate] of Object.entries({
   });
 }
 
-test('clearing a password discards every retained submit that referenced it', () => {
-  const { dom, sent, receive } = fixture();
+test('clearing a password discards every retained submit that referenced it', t => {
+  const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'login' }] });
   const render = generation => ({ type: 'render', page: 'login', generation,
     bindings: { save: ['activate'] }, submissions: { save: ['secret'] },
@@ -1158,11 +1142,10 @@ test('clearing a password discards every retained submit that referenced it', ()
   receive(render(2));
   assert.equal(dom.window.document.querySelector('input').value, '');
   assert.equal(sent.filter(message => message.event === 'activate').length, 1);
-  dom.window.close();
 });
 
-test('numeric input renders its bounded range and reports a number', () => {
-  const { dom, page, sent } = fixture();
+test('numeric input renders its bounded range and reports a number', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.level = ['change'];
   const wrapper = dom.window.LichWebUI.render(page, {
     type: 'number_input', cid: 'level', props: { value: 2, min: 0, max: 3, step: 1 }, children: []
@@ -1179,18 +1162,16 @@ test('numeric input renders its bounded range and reports a number', () => {
   control.value = '';
   control.dispatchEvent(new dom.window.Event('change'));
   assert.equal(sent.length, 1, 'a temporarily empty edit is not a numeric value');
-  dom.window.close();
 });
 
-test('modal page announcements do not reattach an already attached form', () => {
-  const { dom, sent, receive } = fixture();
+test('modal page announcements do not reattach an already attached form', t => {
+  const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'form' }] });
   receive({ type: 'render', page: 'form', generation: 1, resume: 'opaque-token',
     tree: { type: 'page', cid: 'root', props: { title: 'Form' }, children: [] } });
   receive({ type: 'pages', pages: [{ address: 'form' }, { address: 'modal' }] });
   receive({ type: 'pages', pages: [{ address: 'form' }, { address: 'modal' }] });
   assert.deepEqual(sent.filter(message => message.type === 'attach').map(message => message.page), ['form', 'modal']);
-  dom.window.close();
 });
 
 test('independent radio options submit one exclusive choice and button toggles submit booleans', t => {
@@ -1924,8 +1905,8 @@ for (const restriction of ['disabled', 'hidden']) {
 }
 
 
-test('scroll allocation retains a requested viewport minimum in fixed and expanding layouts', () => {
-  const { dom, page } = fixture();
+test('scroll allocation retains a requested viewport minimum in fixed and expanding layouts', t => {
+  const { dom, page } = fixture(); t.after(() => dom.window.close());
   for (const fill of [false, true]) {
     const element = dom.window.LichWebUI.render(page, {
       type: 'scroll', cid: 'minimum', props: { height: 75, min_height: 535, fill }, children: []
@@ -1937,7 +1918,6 @@ test('scroll allocation retains a requested viewport minimum in fixed and expand
     type: 'scroll', cid: 'reset', props: { min_height: 0, fill: true }, children: []
   });
   assert.equal(reset.style.minHeight, '0px');
-  dom.window.close();
 });
 
 
