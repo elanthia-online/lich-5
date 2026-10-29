@@ -25,11 +25,36 @@ RSpec.describe Lich::WebUI::Server do
     [uri, response, cookie]
   end
 
-  def build_server(assets_dir, logs: [], handler: proc { |_connection, _message| })
+  def build_server(assets_dir, logs: [], handler: proc { |_connection, _message| }, file_service: nil)
     described_class.new(
-      assets_dir: assets_dir, pages_provider: -> { [] }, message_handler: handler,
+      assets_dir: assets_dir, pages_provider: -> { [] }, message_handler: handler, file_service: file_service,
       logger: ->(level, message) { logs << [level, message] }
     )
+  end
+
+  # Opens /ws with a valid key, Host and Origin plus extra headers; returns [socket, response head].
+  def upgrade(server, cookie, headers = {})
+    socket = TCPSocket.new(server.host, server.port)
+    key = Base64.strict_encode64('0123456789abcdef')
+    lines = [
+      'GET /ws HTTP/1.1', "Host: 127.0.0.1:#{server.port}", 'Upgrade: websocket',
+      'Connection: Upgrade', 'Sec-WebSocket-Version: 13', "Sec-WebSocket-Key: #{key}",
+      "Origin: http://127.0.0.1:#{server.port}", "Cookie: #{cookie}",
+    ]
+    headers.each { |name, value| lines << "#{name}: #{value}" }
+    socket.write(lines.join("\r\n") + "\r\n\r\n")
+    response_head = +''
+    Timeout.timeout(2) do
+      response_head << socket.read(1) until response_head.end_with?("\r\n\r\n")
+    end
+    [socket, response_head]
+  end
+
+  def wait_for_release(server)
+    Timeout.timeout(2) do
+      sleep 0.005 until server.instance_variable_get(:@client_sockets).empty? &&
+                        server.instance_variable_get(:@connections).empty?
+    end
   end
 
   around do |example|
@@ -46,12 +71,12 @@ RSpec.describe Lich::WebUI::Server do
     server = build_server(@assets_dir)
     script_group = ThreadGroup.new
     gate = Queue.new
-    starter = Thread.new { gate.pop; server.start }
+    starter = Thread.new { Timeout.timeout(2) { gate.pop }; server.start }
     script_group.add(starter)
     gate << true
-    starter.value
+    expect(starter.join(2)).to equal(starter)
     port = server.port
-    script_group.list.each { |worker| worker.kill.join }
+    script_group.list.each { |worker| expect(worker.kill.join(2)).to equal(worker) }
 
     expect(server).to be_running
     expect { server.start }.not_to raise_error
@@ -63,7 +88,8 @@ RSpec.describe Lich::WebUI::Server do
 
   it 'recovers a dead accept thread without a failed first restart' do
     server = build_server(@assets_dir).start
-    server.instance_variable_get(:@accept_thread).kill.join
+    accept_thread = server.instance_variable_get(:@accept_thread)
+    expect(accept_thread.kill.join(2)).to equal(accept_thread)
 
     expect { server.start }.not_to raise_error
     expect(authenticate(server)[1]).to start_with('HTTP/1.1 302 Found')
@@ -76,10 +102,12 @@ RSpec.describe Lich::WebUI::Server do
     socket = double('client socket')
     server = described_class.new(
       assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {},
-      thread_factory: ->(*args, &block) { Thread.new(*args, &block).tap(&:join) }
+      thread_factory: lambda do |*args, &block|
+        Thread.new(*args, &block).tap { |worker| worker.join(2) || raise('client worker did not finish') }
+      end
     )
     server.instance_variable_set(:@server, listener)
-    server.instance_variable_get(:@client_threads) << Thread.new {}.tap(&:join)
+    server.instance_variable_get(:@client_threads) << Thread.new {}.tap { |worker| worker.join(2) || raise('fixture worker did not finish') }
     allow(server).to receive(:handle_client).with(socket)
     accepted = false
     allow(listener).to receive(:accept) do
@@ -268,7 +296,7 @@ RSpec.describe Lich::WebUI::Server do
     writer = connection.instance_variable_get(:@writer)
     expect(connection.send_text('x' * (1024 * 1024))).to be(true)
     expect(Timeout.timeout(2) { receiver.read(2) }.bytesize).to eq(2)
-    writer.kill.join(2)
+    expect(writer.kill.join(2)).to equal(writer)
 
     expect(connection).not_to be_alive
     expect(connection.send_text('must not append to an incomplete frame')).to be(false)
@@ -318,22 +346,12 @@ RSpec.describe Lich::WebUI::Server do
     delivered = Queue.new
     server = build_server(@assets_dir, handler: ->(connection, message) { delivered << [connection.viewer_id, message] }).start
     _uri, _response, cookie = authenticate(server)
-    socket = TCPSocket.new(server.host, server.port)
-    key = Base64.strict_encode64('0123456789abcdef')
-    socket.write([
-      'GET /ws HTTP/1.1', "Host: 127.0.0.1:#{server.port}", 'Upgrade: websocket',
-      'Connection: Upgrade', 'Sec-WebSocket-Version: 13', "Sec-WebSocket-Key: #{key}",
-      "Origin: http://127.0.0.1:#{server.port}", "Cookie: #{cookie}", '', '',
-    ].join("\r\n"))
-    response_head = +''
-    Timeout.timeout(2) do
-      response_head << socket.read(1) until response_head.end_with?("\r\n\r\n")
-    end
-    hello = Lich::WebUI::WebSocket.read_frame(socket, require_mask: false)
+    socket, response_head = upgrade(server, cookie)
+    hello = Timeout.timeout(2) { Lich::WebUI::WebSocket.read_frame(socket, require_mask: false) }
     socket.write(Lich::WebUI::WebSocket.encode_client_frame(JSON.generate(
                                                               type: 'attach', page: 'page-abc', version: '2.5.0'
                                                             )))
-    viewer_id, message = delivered.pop
+    viewer_id, message = Timeout.timeout(2) { delivered.pop }
 
     expect(response_head).to start_with('HTTP/1.1 101 Switching Protocols')
     expect(JSON.parse(hello.payload)).to include('type' => 'hello', 'contract_version' => '2.52.0')
@@ -346,5 +364,60 @@ RSpec.describe Lich::WebUI::Server do
   ensure
     socket&.close
     server&.stop
+  end
+
+  it 'refuses an otherwise valid /ws upgrade with cross-site or navigation Fetch Metadata (1837:RC3)' do
+    delivered = Queue.new
+    server = build_server(@assets_dir, handler: ->(connection, message) { delivered << [connection.viewer_id, message] }).start
+    _uri, _response, cookie = authenticate(server)
+    control, control_head = upgrade(server, cookie, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'websocket')
+    expect(control_head).to start_with('HTTP/1.1 101 Switching Protocols')
+    control.close
+    [
+      { 'Sec-Fetch-Site' => 'cross-site', 'Sec-Fetch-Mode' => 'websocket' },
+      { 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate' },
+    ].each do |metadata|
+      socket, response_head = upgrade(server, cookie, metadata)
+      expect(response_head).to start_with('HTTP/1.1 403 Forbidden'), metadata.inspect
+      rest = begin
+        socket.write(Lich::WebUI::WebSocket.encode_client_frame(JSON.generate(type: 'attach', page: 'page-abc', version: '2.5.0')))
+        Timeout.timeout(2) { socket.read }
+      rescue Errno::EPIPE, Errno::ECONNRESET
+        ''
+      end
+      expect(rest).not_to include('hello'), metadata.inspect
+    ensure
+      socket&.close
+    end
+
+    wait_for_release(server)
+    expect(delivered).to be_empty
+  ensure
+    control&.close
+    server&.stop
+  end
+
+  it 'refuses cross-site /files requests and never routes an alias outside the alias pattern (1837:RC4)' do
+    Dir.mktmpdir('webui-files') do |root|
+      File.binwrite(File.join(root, 'icon.png'), 'png-bytes')
+      files = Lich::WebUI::FileService.new(application_roots: [root])
+      files.register('icons', root, owner: Object.new)
+      allow(files).to receive(:resolve).and_call_original
+      server = build_server(@assets_dir, file_service: files).start
+      _uri, _response, cookie = authenticate(server)
+      same_origin = { 'Cookie' => cookie, 'Origin' => "http://127.0.0.1:#{server.port}" }
+
+      expect(request(server, '/files/icons/icon.png', same_origin.merge('Sec-Fetch-Site' => 'same-origin')))
+        .to start_with('HTTP/1.1 200 OK')
+      expect(request(server, '/files/icons/icon.png', same_origin.merge('Sec-Fetch-Site' => 'cross-site')))
+        .to start_with('HTTP/1.1 403 Forbidden')
+      ['/files/ic.ons/icon.png', '/files/ic%2Fons/icon.png', "/files/#{'a' * 129}/icon.png"].each do |target|
+        expect(request(server, target, same_origin)).to start_with('HTTP/1.1 404 Not Found'), target
+      end
+      expect(files).to have_received(:resolve).once
+      wait_for_release(server)
+    ensure
+      server&.stop
+    end
   end
 end

@@ -65,7 +65,8 @@ RSpec.describe 'owned WebUI shutdown' do
         browser_open: lambda { |_url, **callbacks|
           Thread.current.report_on_exception = false
           entered << true
-          release.pop
+          # Closure first awaits BrowserWindow::START_SETTLE_SECONDS (2s), so park longer.
+          Timeout.timeout(5) { release.pop }
           callbacks[:on_start].call(123)
           monitored = true
           true

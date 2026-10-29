@@ -664,7 +664,7 @@ RSpec.describe Lich::WebUI::Adapter do
       entry = port.create(:text_input, value: 'Initial')
       port.attach(root, entry)
       ready << true
-      release.pop
+      release.pop(timeout: 3)
       port.set(entry, :value, 'Completed before publication')
     end
     expect(ready.pop(timeout: 3)).to be(true)
@@ -818,7 +818,7 @@ RSpec.describe Lich::WebUI::Adapter do
           entered << true
           scoped.set(input, :value, 'Newer')
         end
-        entered.pop
+        expect(entered.pop(timeout: 3)).to be(true)
         writer.join(0.05)
         original.call(*args)
       end
