@@ -116,7 +116,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
             expect(result).to eq(:queued)
             expect(LEGACY_BOX_RESULTS.pop(timeout: 2)).to eq([:save, 'edited', true, child])
           when :cancel
-            host.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
+            # A viewer detach alone never closes the window; the managed window's exit does.
+            host.runtime.disconnect(connection)
+            host.runtime.browser_closed(page)
             expect(LEGACY_BOX_RESULTS.pop(timeout: 2)).to eq([:cancel, child])
           when :shutdown
             child.kill(context: :shutdown)
