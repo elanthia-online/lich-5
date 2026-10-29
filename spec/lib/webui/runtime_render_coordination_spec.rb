@@ -152,7 +152,12 @@ RSpec.describe 'Runtime render coordination' do
       runtime.terminate_owner(retired)
       WeakRef.new(retired)
     end.value
-    3.times { GC.start(full_mark: true, immediate_sweep: true) }
+    # Conservative stack scanning can leave a stale slot for a pass, so retry
+    # past the usual three; a real strong reference still survives every pass.
+    10.times do |pass|
+      GC.start(full_mark: true, immediate_sweep: true)
+      break if pass >= 2 && !reference.weakref_alive?
+    end
     expect(reference.weakref_alive?).not_to be(true)
   end
 end
