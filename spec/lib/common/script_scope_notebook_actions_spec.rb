@@ -136,7 +136,12 @@ RSpec.describe 'Notebook auxiliary action ownership' do
     retained = notebook.get_action_widget(:end)
     handle = retained.materialize
     notebook.set_action_widget(nil, :end)
-    3.times { GC.start(full_mark: true, immediate_sweep: true) }
+    # Conservative stack scanning can leave a stale slot for a pass, so retry
+    # past the usual three; a real strong reference still survives every pass.
+    10.times do |pass|
+      GC.start(full_mark: true, immediate_sweep: true)
+      break if pass >= 2 && references.take(29).none?(&:weakref_alive?)
+    end
     expect(references.take(29).none?(&:weakref_alive?)).to be(true)
     provider.load_from_data('label.help { color: gold; }')
     gtk::Box.new(:vertical).add(retained).materialize
