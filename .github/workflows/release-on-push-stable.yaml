@@ -62,7 +62,25 @@ jobs:
           target-branch: ${{ github.ref_name }}
           skip-github-pull-request: true
 
-      # 1b) Open/update the release PR with the org GitHub App's token instead. A PR
+      - name: Trace RP outputs
+        if: ${{ steps.rp.outputs.release_created != '' }}
+        run: |
+          echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
+          echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+          echo "rp.version=${{ steps.rp.outputs.version }}"
+
+      # 2) Immediately convert release to draft (before any public visibility)
+      - name: Convert release to draft
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          # Convert the release to draft immediately (invisible until human publishes)
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft
+
+      # 3) Open/update the release PR with the org GitHub App's token instead. A PR
       #     opened with the built-in token doesn't trigger other workflows, so the
       #     release PR would never get the required ci-gate check.
       - name: Mint a release-please token from the org GitHub App
@@ -88,24 +106,6 @@ jobs:
           target-branch: ${{ github.ref_name }}
           skip-github-pull-request: false
           
-      - name: Trace RP outputs
-        if: ${{ steps.rp.outputs.release_created != '' }}
-        run: |
-          echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
-          echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
-          echo "rp.version=${{ steps.rp.outputs.version }}"
-
-      # 2) Immediately convert release to draft (before any public visibility)
-      - name: Convert release to draft
-        if: ${{ steps.rp.outputs.release_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.rp.outputs.tag_name }}
-        run: |
-          set -euo pipefail
-          # Convert the release to draft immediately (invisible until human publishes)
-          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft
-
       # --- FAST-PATH: finalize title/body before packaging ---
       - name: Derive release vars from tag (no REST)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
