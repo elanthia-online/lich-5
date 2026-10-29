@@ -24,8 +24,15 @@ RSpec.describe 'bounded rich list compatibility' do
     service.stop
   end
 
+  # Ruby scans machine stacks conservatively, so a pass can keep an
+  # unreferenced object alive through a stale slot. After the usual three
+  # passes, a block keeps collecting until it holds; a real strong reference
+  # still survives every pass.
   def collect_lists
-    3.times { GC.start(full_mark: true, immediate_sweep: true) }
+    10.times do |pass|
+      GC.start(full_mark: true, immediate_sweep: true)
+      break if pass >= 2 && (!block_given? || yield)
+    end
   end
 
   def detached_generation(parent, provider)
@@ -45,7 +52,7 @@ RSpec.describe 'bounded rich list compatibility' do
   it 'collects abandoned rich generations without a provider or index retaining their graphs' do
     parent, provider = gtk::Box.new(:vertical), gtk::CssProvider.new
     references = 40.times.map { detached_generation(parent, provider) }
-    collect_lists
+    collect_lists { references.none?(&:weakref_alive?) }
     expect(references.none?(&:weakref_alive?)).to be(true)
     parent.session.port.send(:prune_bindings!)
     expect(parent.session.instance_variable_get(:@style_contexts)).to be_empty
