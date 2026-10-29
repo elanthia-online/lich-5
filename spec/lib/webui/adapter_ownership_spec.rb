@@ -28,9 +28,12 @@ RSpec.describe 'adapter handle ownership' do
   end
 
   # Retire the construction stack before GC; return weak observations only.
-  # Thread#value joins the worker and propagates construction failures.
+  # A bounded join fails a stalled worker; Thread#value then propagates construction failures.
   def off_construction_stack(&work)
-    Thread.new(&work).value
+    worker = Thread.new(&work)
+    raise 'construction worker did not finish' unless worker.join(5)
+
+    worker.value
   end
 
   def orphan(parent, publish: false)
@@ -180,6 +183,20 @@ RSpec.describe 'adapter handle ownership' do
     expect(reference.weakref_alive?).not_to be(true)
     adapter.send(:flush!)
     expect(service.registry.pages_for(owner).first.last_render.facilities).not_to have_key(:focus)
+  end
+
+  it 'prunes collected keys from the weak identity map behind adapter handles (1832:RC30)' do
+    map = Lich::WebUI::WeakIdentityMap.new
+    live_key, live_value = Object.new, Object.new
+    map[live_key] = live_value
+    # Values stay strongly held, so only key collection can prune their entries.
+    values = Array.new(8) { Object.new }
+    off_construction_stack { values.each { |value| map[Object.new] = value }; nil }
+    collect { map.size == 1 }
+    expect(map.size).to eq(1)
+    expect(map.keys).to eq([live_key])
+    expect(map.fetch(live_key)).to equal(live_value)
+    expect(values.length).to eq(8)
   end
 
   it 'does not let a weak index accept foreign or duplicate handles' do

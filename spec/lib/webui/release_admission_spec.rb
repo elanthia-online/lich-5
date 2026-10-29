@@ -151,7 +151,7 @@ RSpec.describe 'bounded release admission' do
     it "retires an admitted queued release on #{change}" do
       publish
       gate, entered = Queue.new, Queue.new
-      runtime.dispatch(owner: owner) { entered << true; gate.pop }
+      runtime.dispatch(owner: owner) { entered << true; gate.pop(timeout: 3) }
       expect(entered.pop(timeout: 3)).to be(true)
       expect(runtime.handle(@connection, @event)).to eq(:queued)
       case change
@@ -183,7 +183,7 @@ RSpec.describe 'bounded release admission' do
   it 'keeps an already queued release valid through unrelated paints' do
     publish
     gate, entered = Queue.new, Queue.new
-    runtime.dispatch(owner: owner) { entered << true; gate.pop }
+    runtime.dispatch(owner: owner) { entered << true; gate.pop(timeout: 3) }
     expect(entered.pop(timeout: 3)).to be(true)
     expect(runtime.handle(@connection, @event)).to eq(:queued)
     5.times { paint }

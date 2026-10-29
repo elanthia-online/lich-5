@@ -66,7 +66,7 @@ RSpec.describe 'WebUI owner and modal termination' do
     dispatcher = service.runtime.instance_variable_get(:@dispatcher)
     dispatcher.enqueue(owner: owner, page_id: target.id, viewer_id: nil, cid: nil, event: :activate, coalescable: false) do
       started << true
-      release.pop
+      Timeout.timeout(2) { release.pop }
       begin
         Lich::WebUI.page(owner: owner, id: 'late', title: 'Late') {}
         result << :accepted
@@ -106,27 +106,23 @@ RSpec.describe 'WebUI owner and modal termination' do
   end
 
   it 'includes a modal admitted concurrently with owner termination in cleanup' do
-    admitted, release, retiring = Queue.new, Queue.new, Queue.new
-    allow(service.registry).to receive(:register).and_wrap_original do |original, target, **options|
-      original.call(target, **options).tap do
-        if options[:modal]
-          admitted << true
-          release.pop
-        end
-      end
-    end
-    allow(service.registry).to receive(:terminate_owner).and_wrap_original do |original, target|
-      original.call(target)
-      retiring << true
+    parked, release = Queue.new, Queue.new
+    # Park the opener after registry admission returned and before its pending
+    # record exists. Both happen under the coordinator lock, so termination
+    # cannot collect modals until the pending record is published.
+    allow(Lich::WebUI::ModalCoordinator::Pending).to receive(:new).and_wrap_original do |original, *args|
+      parked << true
+      Timeout.timeout(2) { release.pop }
+      original.call(*args)
     end
     opening = Thread.new { modal(:wait) }
-    Timeout.timeout(2) { admitted.pop }
+    Timeout.timeout(2) { parked.pop }
     closing = Thread.new { service.terminate_owner(owner) }
-    Timeout.timeout(2) { retiring.pop }
+    expect(closing.join(0.2)).to be_nil
     release << true
-    future = Timeout.timeout(2) { opening.value }
-    Timeout.timeout(2) { closing.value }
-    expect(future.await(timeout: 0)).to have_attributes(reason: :terminated)
+    expect(opening.join(2)).to equal(opening)
+    expect(closing.join(2)).to equal(closing)
+    expect(opening.value.await(timeout: 2)).to have_attributes(reason: :terminated)
     expect(service.modals.pending_count).to eq(0)
     expect(service.registry.pages_for(owner)).to be_empty
   ensure
