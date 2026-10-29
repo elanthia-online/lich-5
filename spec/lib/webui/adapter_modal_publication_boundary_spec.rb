@@ -3,8 +3,8 @@
 require_relative '../../spec_helper'
 require 'webui'
 
-# Adapter owner attribution, per-root publication and attach diagnostics:
-# 1836:RC1, 1836:RC2 and 1836:RC3.
+# Adapter owner attribution, per-root publication, retired-root publication
+# and attach diagnostics: 1836:RC1, 1836:RC2, 1836:RC19 and 1836:RC3.
 RSpec.describe 'WebUI adapter modal and publication boundaries' do
   let(:owner) { Object.new }
   let(:registry) { Lich::WebUI::Registry.new }
@@ -71,6 +71,26 @@ RSpec.describe 'WebUI adapter modal and publication boundaries' do
       expect(published).to be_empty
       adapter.send(:flush!)
       expect(published).to eq(['Shown'])
+    end
+  end
+
+  describe 'retired-root publication (1836:RC19)' do
+    it 'discards a publication whose root another thread destroyed after the snapshot' do
+      root = adapter.create(:page, title: 'Closing')
+      adapter.send(:flush!)
+      page = registry.pages_for(owner).fetch(0)
+      published.clear
+      adapter.set(root, :title, 'Late')
+      # The destroy lands between the root snapshot and the unlocked refresh.
+      allow(service).to receive(:refresh).and_wrap_original do |original, target|
+        adapter.destroy(root)
+        original.call(target)
+      end
+
+      expect { adapter.send(:flush!) }.not_to raise_error
+      expect(service).to have_received(:refresh).with(page)
+      expect(published).to be_empty
+      expect(registry.pages_for(owner)).to be_empty
     end
   end
 
