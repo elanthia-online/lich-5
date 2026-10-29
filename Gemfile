@@ -87,8 +87,5 @@ gem "win32ole", platforms: :windows
 gem "yaml"
 gem "zlib"
 
-if Gem.win_platform?
-  gem "sqlite3", platforms: :windows, force_ruby_platform: true
-else
-  gem "sqlite3"
-end
+# Windows uses the upstream UCRT package selected by Gemfile.lock.
+gem "sqlite3"

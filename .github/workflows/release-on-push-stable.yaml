@@ -50,6 +50,12 @@ jobs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
+      - name: Checkout consumer contract before release writes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/check-r4l5-contract
+
       # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
@@ -403,6 +409,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag_name }}
+          persist-credentials: false
       - name: Download latest Ruby4Lich5 installer
         shell: bash
         run: |
@@ -411,6 +421,10 @@ jobs:
             --output Ruby4Lich5.exe \
             https://github.com/elanthia-online/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
           test -s Ruby4Lich5.exe
+
+      - uses: ./.github/actions/check-r4l5-contract
+        with:
+          installer: Ruby4Lich5.exe
 
       - name: Upload installer to release
         env:
