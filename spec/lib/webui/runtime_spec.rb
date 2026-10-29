@@ -395,10 +395,10 @@ RSpec.describe Lich::WebUI::Runtime do
       dispatcher.enqueue(owner: owner, page_id: page.id, viewer_id: 'blocker', cid: 'blocker', event: :activate,
                          coalescable: false) do
         started << true
-        release.pop
+        release.pop(timeout: 2)
         dispatcher.shutdown_owner(owner) if termination == :shutdown
       end
-      started.pop
+      expect(started.pop(timeout: 2)).to be(true)
       if termination != :shutdown
         error = termination == :overflow ? Lich::WebUI::Dispatcher::OverflowError : Lich::WebUI::Error
         allow(dispatcher).to receive(:enqueue).and_raise(error, 'refused')
@@ -497,8 +497,8 @@ RSpec.describe Lich::WebUI::Runtime do
       expect(notifications.first).to include(:close) if process_first
       expect(aborted).to be_resolved
       expect(defaulted).to be_resolved
-      expect(aborted.await).to have_attributes(reason: :no_viewer, button: nil)
-      expect(defaulted.await).to have_attributes(reason: :no_viewer, button: 'ok')
+      expect(aborted.await(timeout: 2)).to have_attributes(reason: :no_viewer, button: nil)
+      expect(defaulted.await(timeout: 2)).to have_attributes(reason: :no_viewer, button: 'ok')
       notification_count = notifications.length
       expect(host.browser_closed(page)).to be_nil
       expect(notifications.length).to eq(notification_count)
@@ -616,7 +616,7 @@ RSpec.describe Lich::WebUI::Runtime do
     attach(first_connection, page)
     dispatcher.enqueue(owner: owner, page_id: page.id, viewer_id: 'busy', cid: 'busy', event: :activate, coalescable: false) do
       entered << true
-      release.pop
+      release.pop(timeout: 2)
     end
     Timeout.timeout(2) { entered.pop }
     runtime.browser_closed(page)
@@ -625,7 +625,7 @@ RSpec.describe Lich::WebUI::Runtime do
     shutdown = Thread.new { dispatcher.shutdown_owner(owner) }
     Timeout.timeout(2) { sleep 0.001 until closing.values.empty? }
     release << true
-    shutdown.join
+    expect(shutdown.join(2)).to equal(shutdown)
     expect(closing.values).to be_empty
   ensure
     release << true
@@ -637,7 +637,7 @@ RSpec.describe Lich::WebUI::Runtime do
     release = Queue.new
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'retention', title: 'Retention') do
       entered << true
-      release.pop
+      release.pop(timeout: 2)
       text(content: 'late')
     end)
     worker = Thread.new { runtime.refresh(page) rescue Lich::WebUI::Error }
@@ -659,7 +659,7 @@ RSpec.describe Lich::WebUI::Runtime do
     allow(runtime).to receive(:log)
     allow(runtime).to receive(:refresh).and_wrap_original do |original, target|
       entered << Thread.current
-      release.pop
+      release.pop(timeout: 2)
       original.call(target)
     end
     runtime.send(:schedule_refresh, page)
@@ -723,7 +723,7 @@ RSpec.describe Lich::WebUI::Runtime do
       type: 'event', page: address, cid: button_cid, event: 'activate',
       generation: first_render['generation'], payload: {},
     })
-    callback = callbacks.pop
+    callback = callbacks.pop(timeout: 2) || raise('activate callback did not run')
 
     expect(second_render['generation']).to be > first_render['generation']
     expect(result).to eq(:queued)
@@ -742,7 +742,7 @@ RSpec.describe Lich::WebUI::Runtime do
     allow(viewers).to receive(:deliver).and_wrap_original do |original, attachment, render|
       if render.generation == initial['generation'] + 1
         waiting << true
-        release.pop
+        release.pop(timeout: 2)
       end
       original.call(attachment, render)
     end
@@ -760,7 +760,7 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(result).to eq(:queued)
     expect(Timeout.timeout(2) { callbacks.pop }).to eq(:saved)
   ensure
-    delayed&.kill&.join
+    delayed&.kill&.join(2)
   end
 
   it 'reports presentation support and records refused requests as declared degradations' do
@@ -850,7 +850,7 @@ RSpec.describe Lich::WebUI::Runtime do
     }
 
     runtime.handle(first_connection, message)
-    _callback, carrier, observed = callbacks.pop
+    _callback, carrier, observed = callbacks.pop(timeout: 2) || raise('submission callback did not run')
 
     expect(carrier).to be_a(Lich::WebUI::SensitiveValue)
     expect(carrier.origin).to eq(:viewer)
@@ -950,7 +950,7 @@ RSpec.describe Lich::WebUI::Runtime do
       generation: render['generation'], payload: { value: 'Alice' },
     })
 
-    expect(observed.pop).to eq('Alice')
+    expect(observed.pop(timeout: 2)).to eq('Alice')
     expect { page.get(input_cid) }.to raise_error(Lich::WebUI::AmbiguousViewerError, /explicit viewer/)
     attachment = viewers.attachments_for(page).first
     expect(page.get(input_cid, viewer: attachment.viewer_id)).to eq('Alice')
@@ -1158,7 +1158,7 @@ RSpec.describe Lich::WebUI::Runtime do
     entered = Queue.new
     release = Queue.new
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'ending', title: 'Ending') do
-      button(key: 'go', label: 'Go', on: { activate: ->(_event) { entered << true; release.pop } })
+      button(key: 'go', label: 'Go', on: { activate: ->(_event) { entered << true; release.pop(timeout: 2) } })
     end)
     address, render = attach(first_connection, page)
     button_cid = render.dig('tree', 'children', 0, 'cid')
@@ -1166,14 +1166,55 @@ RSpec.describe Lich::WebUI::Runtime do
       type: 'event', page: address, cid: button_cid, event: 'activate',
       generation: render['generation'], payload: {},
     })
-    entered.pop
+    expect(entered.pop(timeout: 2)).to be(true)
     teardown = Thread.new { runtime.terminate_owner(owner) }
 
     expect(registry.fetch_address(address)).to equal(page)
     release << true
-    teardown.join
+    expect(teardown.join(2)).to equal(teardown)
     expect { registry.fetch_address(address) }.to raise_error(Lich::WebUI::Error)
     expect(first_connection.sent.last).to include('type' => 'page_closed', 'reason' => 'owner')
+  ensure
+    release << true
+    teardown&.join(2)
+  end
+
+  it 'cancels and cleans up an event queued behind a running callback when the owner terminates (1837:RC1)' do
+    entered, release, ran, cleaned = Queue.new, Queue.new, Queue.new, Queue.new
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'queued-ending', title: 'Ending') do
+      # The parked wait outlasts the disposal wait below, so a skipped
+      # cancellation fails on disposal instead of racing the callback's timeout.
+      button(key: 'go', label: 'Go', on: { activate: ->(_event) { entered << true; release.pop(timeout: 5) } })
+      button(key: 'later', label: 'Later', on: { activate: ->(_event) { ran << :queued } })
+    end)
+    address, render = attach(first_connection, page)
+    go_cid, later_cid = render.dig('tree', 'children').map { |child| child['cid'] }
+    allow(dispatcher).to receive(:enqueue).and_wrap_original do |original, **options, &work|
+      if options[:cid] == later_cid
+        cleanup = options[:cleanup]
+        options = options.merge(cleanup: -> { cleaned << true; cleanup&.call })
+      end
+      original.call(**options, &work)
+    end
+    event = { type: 'event', page: address, event: 'activate', generation: render['generation'], payload: {} }
+    expect(runtime.handle(first_connection, event.merge(cid: go_cid))).to eq(:queued)
+    expect(entered.pop(timeout: 2)).to be(true)
+    expect(runtime.handle(first_connection, event.merge(cid: later_cid))).to eq(:queued)
+
+    teardown = Thread.new { runtime.terminate_owner(owner) }
+    # Termination disposes queued work before it waits for the running callback.
+    expect(cleaned.pop(timeout: 2)).to be(true)
+    release << true
+    expect(teardown.join(2)).to equal(teardown)
+    expect(teardown.value).to eq([page])
+    expect(ran).to be_empty
+    expect(cleaned).to be_empty
+    expect { registry.fetch_address(address) }.to raise_error(Lich::WebUI::Error)
+    expect(registry.pages_for(owner)).to be_empty
+    expect(first_connection.sent.last).to include('type' => 'page_closed', 'reason' => 'owner')
+  ensure
+    release << true
+    teardown&.join(2)
   end
 
   it 'refuses image resources that do not resolve through a registered served root' do

@@ -16,7 +16,7 @@ RSpec.describe Lich::WebUI::Scheduler do
   def barrier
     ready = Queue.new
     service.runtime.dispatch(owner: owner) { ready << Thread.current }
-    ready.pop(timeout: 2)
+    ready.pop(timeout: 2) || raise('owner dispatcher barrier did not run')
   end
 
   def queued(id)
@@ -46,7 +46,7 @@ RSpec.describe Lich::WebUI::Scheduler do
 
   it 'cancels already queued work before it executes and never overlaps ticks' do
     started, release, results = Queue.new, Queue.new, Queue.new
-    service.runtime.dispatch(owner: owner) { started << true; release.pop }
+    service.runtime.dispatch(owner: owner) { started << true; release.pop(timeout: 2) }
     expect(started.pop(timeout: 2)).to be(true)
     id = handle.schedule(0) { results << :unexpected; true }
     queued(id)
@@ -63,7 +63,7 @@ RSpec.describe Lich::WebUI::Scheduler do
   it 'lets an executing callback finish but cancellation prevents rearming' do
     started, release = Queue.new, Queue.new
     calls = 0
-    id = handle.schedule(0) { calls += 1; started << true; release.pop; true }
+    id = handle.schedule(0) { calls += 1; started << true; release.pop(timeout: 2); true }
     expect(started.pop(timeout: 2)).to be(true)
     expect(handle.cancel(id)).to be(true)
     release << true
@@ -125,7 +125,7 @@ RSpec.describe Lich::WebUI::Scheduler do
 
   it 'delays sources refused by a full dispatcher and cancels them without leaking their registrations' do
     started, release = Queue.new, Queue.new
-    service.runtime.dispatch(owner: owner) { started << true; release.pop }
+    service.runtime.dispatch(owner: owner) { started << true; release.pop(timeout: 2) }
     expect(started.pop(timeout: 2)).to be(true)
     stub_const('Lich::WebUI::Dispatcher::VIEWER_LIMIT', 1)
     service.runtime.dispatch(owner: owner) {}
