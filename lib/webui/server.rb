@@ -38,8 +38,9 @@ module Lich
       MAX_LAUNCH_TOKENS = 64
       # Malformed-request refusals log at most once per interval; the next
       # report carries the count suppressed since the previous one. Authenticated
-      # message and WebSocket refusals are throttled the same way, each kind
-      # on its own interval.
+      # message and WebSocket refusals and handler failures are throttled the
+      # same way, each kind (each class and raise location for handler
+      # failures) on its own interval.
       REFUSAL_LOG_INTERVAL = 60
       # Every HTTP response (head, body and a streamed image) must be written
       # within this many seconds, as each WebSocket message is, so a peer that
@@ -558,7 +559,8 @@ module Lich
         log_throttled_refusal(:message, "WebUI message refusal=#{error.reason}")
         connection.send_text(Protocol.refusal(reason: error.reason, message: 'Message refused'))
       rescue StandardError => error
-        log(:warning, "WebUI handler refusal=#{error.class} at=#{error_location(error)}")
+        location = error_location(error)
+        log_throttled_refusal([:handler, error.class, location], "WebUI handler refusal=#{error.class} at=#{location}")
         connection.send_text(Protocol.refusal(reason: :handler, message: 'Message refused'))
       end
 
@@ -589,8 +591,9 @@ module Lich
 
       # Applies the REFUSAL_LOG_INTERVAL throttle to one authenticated refusal
       # kind, so a connected client cannot flood diagnostics with refusals.
-      # The message names only a class or refusal reason, never the payload.
-      # @param kind [Symbol] refusal kind with its own interval
+      # The message names only a class, refusal reason or raise location, never
+      # the payload.
+      # @param kind [Symbol, Array] refusal kind with its own interval
       # @param message [String] sanitized diagnostic for this refusal
       # @return [void]
       def log_throttled_refusal(kind, message)
