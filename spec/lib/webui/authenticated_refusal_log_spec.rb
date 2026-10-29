@@ -6,8 +6,9 @@ require 'socket'
 require 'tmpdir'
 require 'webui/server'
 
-# Authenticated message and WebSocket refusals use the same once-per-interval
-# log throttle as malformed requests, each kind on its own interval.
+# Authenticated message and WebSocket refusals and handler failures use the
+# same once-per-interval log throttle as malformed requests, each kind on its
+# own interval; handler failures are keyed by class and raise location.
 RSpec.describe Lich::WebUI::Server do
   let(:logs) { [] }
   let(:server) do
@@ -61,6 +62,34 @@ RSpec.describe Lich::WebUI::Server do
     expire_window(:websocket)
     refuse_websocket
     expect(logs.last).to eq([:warning, 'WebUI websocket refusal=Lich::WebUI::WebSocket::ProtocolError suppressed=2'])
+    expect(logs.flatten.join).not_to include('secret', 'payload')
+  end
+
+  it 'logs one handler failure per class and raise location per interval, never its message' do
+    handler = lambda do |_connection, message|
+      raise ArgumentError, 'secret payload' if message[:page] == 'a'
+
+      raise ArgumentError, 'secret payload'
+    end
+    failing = described_class.new(assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: handler,
+                                  logger: ->(level, message) { logs << [level, message] })
+    detach = ->(page) { JSON.generate(type: 'detach', page: page, generation: 1) }
+
+    3.times { failing.send(:dispatch_message, connection, detach.call('a')) }
+    failing.send(:dispatch_message, connection, detach.call('b'))
+
+    expect(connection).to have_received(:send_text).exactly(4).times
+    expect(logs.size).to eq(2)
+    expect(logs.map(&:first)).to eq(%i[warning warning])
+    expect(logs.map(&:last)).to all(match(/\AWebUI handler refusal=ArgumentError at=authenticated_refusal_log_spec\.rb:\d+:/))
+    expect(logs.map(&:last).uniq.size).to eq(2)
+
+    windows = failing.instance_variable_get(:@refusal_windows)
+    first_key = windows.keys.find { |key| logs.first.last.end_with?("at=#{key.last}") }
+    logged_at, suppressed = windows.fetch(first_key)
+    windows[first_key] = [logged_at - described_class::REFUSAL_LOG_INTERVAL - 1, suppressed]
+    failing.send(:dispatch_message, connection, detach.call('a'))
+    expect(logs.last).to eq([:warning, "#{logs.first.last} suppressed=2"])
     expect(logs.flatten.join).not_to include('secret', 'payload')
   end
 
