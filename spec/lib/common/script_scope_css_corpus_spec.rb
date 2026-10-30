@@ -6,7 +6,26 @@ require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
 RSpec.describe 'source-derived CSS decoration acceptance' do
-  corpus = JSON.parse(File.read(File.expand_path('../../fixtures/webui/css-decoration.json', __dir__)))
+  corpus_path = File.expand_path('../../fixtures/webui/css-decoration.json', __dir__)
+  audit_path = File.expand_path('../../fixtures/webui/css-provenance.json', __dir__)
+  corpus = JSON.parse(File.read(corpus_path))
+  # Test-level attribution (settled B5): script, tested version or exact source
+  # revision, and credited author exactly as recorded from the pinned source header.
+  credit = lambda do |name|
+    record = corpus.fetch('scripts').find { |r| r['name'] == name }
+    by = record.fetch('attribution')
+    version = by['version'] ? "version #{by['version']}" : 'no stated version'
+    author = [by['author'] ? "author #{by['author']}" : 'author not stated', by['contributors'] && "contributors #{by['contributors']}"].compact.join('; ')
+    "[#{name} #{version}, #{record.fetch('source')} #{record.fetch('revision')}, #{author}]"
+  end
+  # Ruby-level file routes the grids image branch could use to read its image.
+  # Bounded on purpose; the shim's image-file seam is checked separately.
+  file_routes = {
+    File   => %i[read binread readlines foreach open new realpath exist? file? stat size],
+    IO     => %i[read binread readlines foreach open sysopen],
+    Dir    => %i[glob [] entries children exist?],
+    Kernel => %i[open],
+  }
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope.const_get(:Gtk, false) }
   let(:gdk) { scope.const_get(:Gdk, false) }
@@ -45,12 +64,16 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     eval(excerpt.fetch('source'), source_binding, "#{record.fetch('name')}.lic", line)
   end
 
-  it 'retains all cached sources, the 30-script exposure subset and internally consistent sizes' do
-    audit = JSON.parse(File.read(File.expand_path('../../fixtures/webui/css-provenance.json', __dir__)))
+  it 'retains all cached sources, the 30-script exposure subset and internally consistent sizes (per-script credits in each record attribution)' do
+    audit = JSON.parse(File.read(audit_path))
     cached = audit.fetch('whole_corpus_provider_references')
+    expect(corpus.fetch('audit_sha256')).to eq(Digest::SHA256.file(audit_path).hexdigest)
     expect(corpus.fetch('scripts').map { |r| [r['name'], r['source_sha256']] }).to eq(cached.map { |r| [r['name'], r['sha256']] })
     expect(corpus.fetch('scripts').count { |r| r['remaining_exposure'] }).to eq(30)
     corpus.fetch('scripts').each do |record|
+      expect(record.fetch('source')).to eq(record.fetch('path').start_with?('scripts/') ? 'eo' : 'mirror')
+      expect(record.fetch('revision')).to match(/\A\h{40}\z/)
+      expect(record.fetch('attribution').keys).to eq(%w[author contributors version lines])
       loads = record.fetch('calls').select { |call| %w[load load_from_data].include?(call['method']) }.map { |call| call['line'] }
       expect(record.fetch('samples').map { |sample| sample['loader_line'] }.uniq.sort).to eq(loads.uniq.sort)
       record.fetch('samples').each do |sample|
@@ -62,8 +85,16 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     end
   end
 
+  it 'rebuilds the committed corpus byte for byte from the pinned EO and mirror sources' do
+    eo_repo = ENV.fetch('CSS_CORPUS_EO_REPO', nil)
+    mirror_repo = ENV.fetch('CSS_CORPUS_MIRROR_REPO', nil)
+    skip 'set CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO to local scripts and lich_repo_mirror clones' unless eo_repo && mirror_repo
+    require_relative '../../support/build_css_decoration_corpus'
+    expect("#{JSON.pretty_generate(CssDecorationCorpus.build(eo_repo, mirror_repo))}\n").to eq(File.binread(corpus_path))
+  end
+
   corpus.fetch('scripts').each do |record|
-    it "accepts the measured #{record.fetch('name')} CSS inputs without changing unrelated controls" do
+    it "accepts the measured #{record.fetch('name')} CSS inputs without changing unrelated controls #{credit.call(record.fetch('name'))}" do
       provider = gtk.const_get(:CssProvider).new
       handle = bar.materialize
       bar.set_fraction(0.375)
@@ -89,7 +120,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     end
   end
 
-  it 'accepts every observed priority and attachment call shape from the cached cohort' do
+  it 'accepts every observed priority and attachment call shape from the cached cohort (per-script credits in each record attribution)' do
     provider = gtk.const_get(:CssProvider).new
     context = label.style_context
     styles = gtk.const_get(:StyleContext)
@@ -113,7 +144,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(Lich).to have_received(:log).with(/operation=css_decoration/).once
   end
 
-  it 'continues tpick global/local CSS, required-setting and HeaderBar construction calls' do
+  it "continues tpick global/local CSS, required-setting and HeaderBar construction calls #{credit.call('tpick')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'tpick' }
     target.instance_variable_set(:@labels, { 'field' => label })
     run_excerpt(record, 94)
@@ -126,7 +157,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(Lich).to have_received(:log).with(/operation=css_decoration source=tpick.lic:95/).once
   end
 
-  it 'executes manatimer attach-before-load and original proc reloads with inert decoration' do
+  it "executes manatimer attach-before-load and original proc reloads with inert decoration #{credit.call('manatimer')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'manatimer' }
     bar.set_fraction(0.5)
     run_excerpt(record, 83, bar: bar, label: label)
@@ -140,7 +171,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
   end
 
   %w[spellson staminabar2].each do |name|
-    it "preserves recognized progress from the original #{name} load/attach excerpt" do
+    it "preserves recognized progress from the original #{name} load/attach excerpt #{credit.call(name)}" do
       record = corpus.fetch('scripts').find { |r| r['name'] == name }
       target.instance_variable_set(:@bar, bar)
       target.instance_variable_set(:@spell_p_bar, { 1 => bar })
@@ -151,7 +182,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     end
   end
 
-  it 'executes as_audit typography loading on real supported Window and TextView facades' do
+  it "executes as_audit typography loading on real supported Window and TextView facades #{credit.call('as_audit')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'as_audit' }
     target.instance_variable_set(:@window, gtk.const_get(:Window).new)
     text = gtk.const_get(:TextView).new
@@ -161,7 +192,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(text.send(:component_props)).to eq(before)
   end
 
-  it 'executes panelcontrol palette reloads without changing controls' do
+  it "executes panelcontrol palette reloads without changing controls #{credit.call('panelcontrol')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'panelcontrol' }
     provider = gtk.const_get(:CssProvider).new
     target.instance_variable_set(:@css_provider, provider)
@@ -172,7 +203,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(Lich).to have_received(:log).with(/operation=css_decoration/).once
   end
 
-  it 'executes Combatical screen registration and drag/drop class changes as omitted metadata' do
+  it "executes Combatical screen registration and drag/drop class changes as omitted metadata #{credit.call('Combatical')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'Combatical' }
     run_excerpt(record, 2342, s: Hash.new('#112233'))
     run_excerpt(record, 2192, new_child: label)
@@ -182,7 +213,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(label.style_context.list_classes).to be_empty
   end
 
-  it 'executes all five grinsawl border tiers without relying on its blanket rescue' do
+  it "executes all five grinsawl border tiers without relying on its blanket rescue #{credit.call('grinsawl')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'grinsawl' }
     palette = Module.new
     palette.const_set(:FOIL_COLORS, { gold: '#d4af37', silver: '#c0c0c0', bronze: '#cd7f32' })
@@ -193,7 +224,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(source_binding.local_variable_get(:css)).to eq(record.fetch('samples').first.fetch('css'))
   end
 
-  it 'executes stormsync selection CSS and omitted-priority attachments without running Builder' do
+  it "executes stormsync selection CSS and omitted-priority attachments without running Builder #{credit.call('stormsync')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'stormsync' }
     target.instance_variable_set(:@css, {})
     controls = Hash.new { |hash, key| hash[key] = gtk.const_get(:Label).new(key) }
@@ -203,7 +234,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(controls.values.all? { |widget| widget.style_context.is_a?(gtk.const_get(:StyleContext)) }).to be true
   end
 
-  it 'executes timers progress CSS while preserving the control fraction' do
+  it "executes timers progress CSS while preserving the control fraction #{credit.call('timers')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'timers' }
     bar.set_fraction(0.6)
     run_excerpt(record, 378, settings: { 'Bar Height' => 22, 'Bar Color' => '#112233', 'Trough Color' => '#445566' })
@@ -213,13 +244,28 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     expect(bar.send(:component_props)).not_to have_key(:height)
   end
 
-  it 'executes grids image and gradient branches as inert data without file access' do
+  it "executes grids image and gradient branches as inert data without file access #{credit.call('grids')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'grids' }
+    session = gtk.session
+    accessed = []
+    watch = lambda do |receiver, name, tag = "#{receiver}.#{name}"|
+      allow(receiver).to receive(name).and_wrap_original do |original, *args, **options, &block|
+        accessed << tag if args.any? { |arg| arg.to_s.include?('missing-css-image') }
+        original.call(*args, **options, &block)
+      end
+    end
+    file_routes.each { |receiver, names| names.each { |name| watch.call(receiver, name) } }
+    watch.call(target, :open, 'Kernel#open') # Called without a receiver inside the excerpt.
+    # The shim's only image-file seam; any call would register a file route.
+    allow(session).to receive(:image_source).and_wrap_original do |original, path|
+      accessed << "Session#image_source(#{path})"
+      original.call(path)
+    end
     %w[Image Radial Linear].each do |kind|
       settings = Hash.new('12').merge('Widget Background' => kind, 'Image Location' => 'missing-css-image.png')
-      expect(File).not_to receive(:read).with(/missing-css-image/)
       run_excerpt(record, 1731, needed_settings: settings, css_name: 'label', widget: label)
     end
+    expect(accessed).to be_empty
     expect(label.send(:component_props)[:content]).to eq('Retained text')
     expect(label.send(:component_props)).not_to have_key(:fill_color)
   end
