@@ -125,6 +125,13 @@ RSpec.describe Lich::RuntimeGemContract do
     expect(described_class.digest('b' => 2, 'a' => { 'z' => 1, 'y' => 2 })).to eq(described_class.digest('a' => { 'y' => 2, 'z' => 1 }, 'b' => 2))
   end
 
+  it 'reads startup declarations without a lockfile or evaluating plugins' do
+    contract = described_class.new(gemfile: gemfile + "\ngroup :gtk do\n gem 'native-ui'\nend\n", groups: %i[default gtk])
+    expect(contract.roots.keys).to contain_exactly('redis', 'json', 'sqlite3', 'gtk3', 'native-ui')
+    expect(contract.lock_sha256).to be_nil
+    expect { contract.resolve(inventory) }.to raise_error(described_class::Error, /lockfile is required/)
+  end
+
   it 'reads all 18 non-GTK Windows packages from the real repository declarations and lock' do
     root = File.expand_path('../..', __dir__)
     contract = described_class.new(gemfile: File.binread(File.join(root, 'Gemfile')), lockfile: File.binread(File.join(root, 'Gemfile.lock')))
