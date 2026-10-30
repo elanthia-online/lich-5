@@ -15,6 +15,9 @@ module Lich
         class TextBuffer
           # Only insertion advances its supplied iterator, as in GTK. Callers cannot
           # assign offsets without going through buffer validation.
+          # An iterator is a same-buffer character offset, not a content anchor:
+          # after another edit it names whatever text now sits at that offset, and
+          # it is refused only once the offset falls outside the current text.
           class Iter
             attr_reader :buffer, :offset
 
@@ -78,9 +81,10 @@ module Lich
           # Validation precedes both the renderer write and retained-state update.
           # @param value [String] literal text; log mode keeps the latest 1,000 lines
           # @return [TextBuffer] self
-          # @raise [UnsupportedOperation] for nontext or oversized content
+          # @raise [UnsupportedOperation] for nontext, non-UTF-8 or oversized content
           def set_text(value)
             session.synchronize do
+              value = Gtk.wire_text(value) if value.is_a?(String)
               session.refuse(self, :text=) unless value.is_a?(String)
               commit_text(bounded_text(value))
             end
@@ -111,6 +115,7 @@ module Lich
           def insert(iterator, value)
             session.synchronize do
               valid_iter!(iterator, :insert)
+              value = Gtk.wire_text(value) if value.is_a?(String)
               session.refuse(self, :insert) unless value.is_a?(String)
               inserted = text.insert(iterator.offset, value)
               target = bounded_text(inserted)
@@ -256,16 +261,17 @@ module Lich
 
           # Applies the selected presentation's limits before any mutation.
           # Logs explicitly degrade history length; editors reject excess text.
+          # Only retained lines are validated; a discarded prefix cannot refuse a valid tail.
+          # @param log [Boolean] presentation to bound for; a view stages its next mode here
           # @return [String] original text or the retained log tail
-          # @raise [UnsupportedOperation] for oversized lines or editor content
-          def bounded_text(value)
-            if @view&.send(:log?)
+          # @raise [UnsupportedOperation] for oversized retained lines or editor content
+          def bounded_text(value, log: @view&.send(:log?))
+            if log
               lines = value.split("\n", -1)
+              trimmed = lines.length > MAX_LINES
+              lines = lines.last(MAX_LINES) if trimmed
               session.refuse(self, :text) if lines.any? { |line| line.length > Lich::WebUI::Contract::BOUNDS[:log_line] }
-              if lines.length > MAX_LINES
-                session.degrade(:text_history, 'compatibility text history retains the latest 1000 lines')
-                lines = lines.last(MAX_LINES)
-              end
+              session.degrade(:text_history, 'compatibility text history retains the latest 1000 lines') if trimmed
               lines.join("\n")
             else
               session.refuse(self, :text) if value.length > Lich::WebUI::Contract::BOUNDS[:multiline_text]
@@ -274,6 +280,8 @@ module Lich
           end
 
           # Rejects foreign/stale offsets with the source operation's attribution.
+          # Stale means outside the current bounds; iterators carry no text revision,
+          # so a retained in-bounds offset stays valid across edits by design.
           # @return [nil]
           def valid_iter!(iterator, operation)
             valid = iterator.is_a?(Iter) && iterator.buffer.equal?(self) && iterator.offset.between?(0, text.length)
@@ -330,15 +338,23 @@ module Lich
 
           # Selects log presentation before publication, or textarea read-only mode.
           # A published log cannot become an editor without replacing the view.
+          # The converted text is bounded before the mode changes, so a refusal
+          # leaves the view in its previous presentation with its text intact.
           # @param value [Boolean] whether user edits are allowed
           # @return [TextView] self
           def set_editable(value)
             session.refuse(self, :editable=) unless [true, false].include?(value)
             session.refuse(self, :editable=) if @handle && @log && value
             unless @handle
-              retained = @buffer.text
-              @log = !value
-              apply_buffer_text(retained)
+              target = @buffer.send(:bounded_text, @buffer.text, log: !value)
+              previous = @log
+              begin
+                @log = !value
+                apply_buffer_text(target)
+              rescue StandardError
+                @log = previous
+                raise
+              end
             end
             @editable = value
             write(:read_only, !value) unless @log
@@ -347,6 +363,14 @@ module Lich
           alias editable= set_editable
           # @return [Boolean] whether this view accepts user edits
           def editable? = @editable
+
+          # Releases the buffer with its current text before destroy handlers run,
+          # so a replacement view can bind it. Repeated retirement is a no-op.
+          # @return [void]
+          def mark_destroyed
+            @buffer&.unbind(self) unless destroyed?
+            super
+          end
 
           # Cursor visibility applies only to editable text; log views have no cursor.
           # @param value [Boolean] whether the browser caret is visible
