@@ -7,6 +7,7 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
+      - "spec/support/native_dll_holder.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
@@ -21,6 +22,7 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
+      - "spec/support/native_dll_holder.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"

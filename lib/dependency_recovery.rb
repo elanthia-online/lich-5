@@ -4,6 +4,7 @@ require 'fileutils'
 require 'json'
 require 'open-uri'
 require 'open3'
+require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
 require 'tempfile'
@@ -47,7 +48,7 @@ module Lich
     # A validated, manifest-derived set of units. Planning intentionally
     # fetches no gem artifacts, so callers can obtain user consent before an
     # installation changes the runtime.
-    Plan = Struct.new(:units, :error, :target, keyword_init: true) do
+    Plan = Struct.new(:units, :error, :target, :error_kind, keyword_init: true) do
       # @return [Boolean] whether the requested units are approved and valid
       def success?
         error.nil?
@@ -112,8 +113,10 @@ module Lich
       effective = target.merge('units' => RecoveryUnitPolicy.select(target, @lich_version))
       requested = Array(gem_names).select { |name| effective.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
       Plan.new(units: units_for(manifest, requested), target: effective)
+    rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
     rescue StandardError => e
-      Plan.new(units: [], error: "#{e.class}: #{e.message}")
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :invalid)
     end
 
     # Downloads, verifies, and installs a previously approved manifest plan.
@@ -375,7 +378,7 @@ module Lich
         by_name = staged.fetch(:unit).fetch('packages').to_h { |package| [package.fetch('name'), package] }
         staged.fetch(:unit).fetch('install_order').each do |name|
           package = by_name.fetch(name)
-          if packages.key?(name) && packages[name].values_at('version', 'sha256') != package.values_at('version', 'sha256')
+          if packages.key?(name) && RecoveryUnitPolicy.package_identity(packages[name], Gem::Platform.local.to_s) != RecoveryUnitPolicy.package_identity(package, Gem::Platform.local.to_s)
             raise Error, "conflicting replacement package identities for #{name}"
           end
           packages[name] ||= package.merge('path' => staged.fetch(:package_paths).fetch(name))

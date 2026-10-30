@@ -34,6 +34,32 @@ module Lich
       result
     end
 
+    # Decode JSON text separately from the raw bytes used for integrity checks.
+    def self.read_json(location)
+      bytes = read(location)
+      JSON.parse(bytes.b.delete_prefix([239, 187, 191].pack('C*')).force_encoding(Encoding::UTF_8))
+    end
+
+    # Offline callers can supply a version explicitly. Release workflows use
+    # the prepared candidate's own version; no next-release version is guessed.
+    def self.version_for(manifest_bytes, gemfile, explicit: nil)
+      document = JSON.parse(manifest_bytes)
+      targets = document.is_a?(Hash) ? document['targets'] : nil
+      ranged = targets.is_a?(Array) && targets.any? do |target|
+        target.is_a?(Hash) && target['platform'] == RuntimeGemContract::PLATFORM && target['ruby_abi'] == '4.0' &&
+          target['units'].is_a?(Array) && target['units'].any? { |unit| unit.is_a?(Hash) && unit.key?('lich_versions') }
+      end
+      return nil unless explicit || ranged
+      version = explicit
+      unless version
+        path = File.join(File.dirname(gemfile), 'lib/version.rb')
+        raise RuntimeGemContract::Error, 'ranged checks require --lich-version or candidate lib/version.rb' unless File.file?(path)
+        version = File.binread(path)[/^LICH_VERSION = '([^']+)'/, 1]
+      end
+      raise RuntimeGemContract::Error, 'invalid candidate Lich version' unless version.is_a?(String) && !version.empty? && Gem::Version.correct?(version)
+      version
+    end
+
     def self.check_size!(bytes)
       raise RuntimeGemContract::Error, 'contract document exceeds size limit' if bytes.bytesize > LIMIT
     end
@@ -50,7 +76,7 @@ if $PROGRAM_NAME == __FILE__
   }
   parser = OptionParser.new do |opts|
     opts.banner = 'Usage: ruby .github/scripts/check_r4l5_contract.rb [options]'
-    %i[gemfile lockfile manifest provenance candidate_sha installer].each do |key|
+    %i[gemfile lockfile manifest provenance candidate_sha installer lich_version].each do |key|
       opts.on("--#{key.to_s.tr('_', '-')} VALUE") { |value| options[key] = value }
     end
   end
@@ -60,12 +86,13 @@ if $PROGRAM_NAME == __FILE__
     if options[:candidate_sha] && !Lich::RuntimeGemContract::COMMIT.match?(options[:candidate_sha])
       raise Lich::RuntimeGemContract::Error, '--candidate-sha requires a full commit SHA'
     end
+    manifest_bytes = Lich::ContractDocument.read(options[:manifest])
+    version = Lich::ContractDocument.version_for(manifest_bytes, options[:gemfile], explicit: options[:lich_version])
     result = Lich::R4L5ContractCheck.verify!(
       gemfile: File.binread(options[:gemfile]), lockfile: File.binread(options[:lockfile]),
-      manifest_bytes: Lich::ContractDocument.read(options[:manifest]),
-      provenance: JSON.parse(Lich::ContractDocument.read(options[:provenance])),
-      candidate_sha: options[:candidate_sha], installer_path: options[:installer],
-      lich_version: File.read(File.join(File.dirname(options[:gemfile]), 'lib/version.rb'))[/^LICH_VERSION = '([^']+)'/, 1]
+      manifest_bytes: manifest_bytes,
+      provenance: Lich::ContractDocument.read_json(options[:provenance]),
+      candidate_sha: options[:candidate_sha], installer_path: options[:installer], lich_version: version
     )
     puts "R4L5 contract accepted: #{result.fetch('packages').length} locked Windows packages; matching installer predecessor"
     result.fetch('bundled').each do |name, versions|

@@ -155,4 +155,70 @@ RSpec.describe Lich::R4L5ContractCheck do
       expect { verify(installer_path: path) }.to raise_error(described_class::Error, /downloaded installer checksum/)
     end
   end
+
+  it 'checks an advertised GTK-only non-GTK lock member without requiring unused lock entries' do
+    extra = "    red-colors (0.5.0)\n    unused (1.0)\n"
+    lockfile.sub!("\nCHECKSUMS", "#{extra}\nCHECKSUMS")
+    lockfile << "  red-colors (0.5.0) sha256=#{'e' * 64}\n  unused (1.0) sha256=#{'f' * 64}\n"
+    unit['members'] << 'red-colors'
+    unit['install_order'].unshift('red-colors')
+    packages.unshift('name' => 'red-colors', 'version' => '0.5.0', 'filename' => 'red-colors-0.5.0.gem', 'sha256' => "sha256:#{'e' * 64}")
+    expect { verify }.not_to raise_error
+    packages.first['version'] = '0.6.0'
+    expect { verify }.to raise_error(described_class::Error, /version mismatch for red-colors/)
+  end
+
+  it 'parses BOM provenance in the actual CLI and still rejects mismatched semantic digests' do
+    require 'open3'
+    require_relative '../../.github/scripts/check_r4l5_contract'
+    Dir.mktmpdir do |dir|
+      inputs = { 'Gemfile' => gemfile, 'Gemfile.lock' => lockfile, 'manifest.json' => JSON.generate(manifest),
+                 'provenance.json' => [239, 187, 191].pack('C*') + JSON.generate(provenance).b }
+      inputs.each { |name, bytes| File.binwrite(File.join(dir, name), bytes) }
+      cli = File.expand_path('../../.github/scripts/check_r4l5_contract.rb', __dir__)
+      args = %w[gemfile lockfile manifest provenance].zip(%w[Gemfile Gemfile.lock manifest.json provenance.json]).flat_map { |key, name| ["--#{key}", File.join(dir, name)] }
+      output, error, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.success?).to be(true), error
+      expect(output).to include('contract accepted')
+      provenance['recovery_manifest_sha256'] = '0' * 64
+      File.binwrite(File.join(dir, 'provenance.json'), [239, 187, 191].pack('C*') + JSON.generate(provenance).b)
+      _output, error, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.exitstatus).to eq(1)
+      expect(error).to include('matching installer predecessor')
+      expect(error).not_to include('unexpected character')
+    end
+  end
+
+  it 'retains strict publication lifecycle validation despite lenient startup selection' do
+    unit['lifecycle'] = { 'state' => 'obsolete', 'reason' => 'unsupported publication key' }
+    expect { verify }.to raise_error(described_class::Error, /lifecycle/)
+  end
+
+  it 'checks portable ranged inputs with an explicit version and never guesses the next release' do
+    require 'open3'
+    old = Marshal.load(Marshal.dump(unit)).merge('id' => 'legacy')
+    old['packages'].each { |package| package['version'] = '0.1' }
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [old, unit]
+    Dir.mktmpdir do |dir|
+      inputs = { 'Gemfile' => gemfile, 'Gemfile.lock' => lockfile, 'manifest.json' => JSON.generate(manifest), 'provenance.json' => JSON.generate(provenance) }
+      inputs.each { |name, bytes| File.binwrite(File.join(dir, name), bytes) }
+      cli = File.expand_path('../../.github/scripts/check_r4l5_contract.rb', __dir__)
+      args = %w[gemfile lockfile manifest provenance].zip(%w[Gemfile Gemfile.lock manifest.json provenance.json]).flat_map { |key, name| ["--#{key}", File.join(dir, name)] }
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('--lich-version')
+      stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args, '--lich-version', '5.24.0')
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to include('contract accepted')
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args, '--lich-version', '5.24.0-beta.1')
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('version mismatch')
+      Dir.mkdir(File.join(dir, 'lib'))
+      File.write(File.join(dir, 'lib/version.rb'), "LICH_VERSION = '5.23.0'\n")
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('version mismatch')
+    end
+  end
 end

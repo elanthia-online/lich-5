@@ -9,7 +9,7 @@ module Lich
     class Error < StandardError; end
     NAME = /\A[a-zA-Z0-9_.-]+\z/
 
-    def self.validate!(target)
+    def self.validate!(target, strict: true)
       units = target.fetch('units')
       raise Error, 'recovery units must be an array' unless units.is_a?(Array)
       withdrawn = target.fetch('withdrawn_members', [])
@@ -19,8 +19,8 @@ module Lich
       units.each do |unit|
         range = unit['lich_versions']
         if unit.key?('lich_versions')
-          unless range.is_a?(Hash) && !range.empty? && (range.keys - %w[min_inclusive max_exclusive]).empty? &&
-                 range.values.all? { |version| version.is_a?(String) && !version.empty? && Gem::Version.correct?(version) }
+          unless range.is_a?(Hash) && (range.keys & %w[min_inclusive max_exclusive]).any? && (!strict || (range.keys - %w[min_inclusive max_exclusive]).empty?) &&
+                 range.select { |key, _value| %w[min_inclusive max_exclusive].include?(key) }.values.all? { |version| version.is_a?(String) && !version.empty? && Gem::Version.correct?(version) }
             raise Error, 'invalid Lich version range'
           end
           if range.key?('min_inclusive') && range.key?('max_exclusive') && Gem::Version.new(range['min_inclusive']) >= Gem::Version.new(range['max_exclusive'])
@@ -38,7 +38,7 @@ module Lich
         end
         names = unit.fetch('members') | unit.fetch('packages').map { |package| package.fetch('name') }
         raise Error, 'withdrawn member remains in a recovery unit' unless (names & withdrawn).empty?
-        validate_lifecycle!(unit['lifecycle']) if unit.key?('lifecycle')
+        validate_lifecycle!(unit['lifecycle']) if strict && unit.key?('lifecycle')
       end
       true
     end
@@ -61,6 +61,15 @@ module Lich
       raise Error, 'invalid lifecycle end date'
     end
 
+    def self.package_platform(package, platform)
+      package.fetch('filename').end_with?("-#{platform}.gem") ? platform : 'ruby'
+    end
+
+    def self.package_identity(package, platform)
+      package.values_at('version', 'sha256') + [package_platform(package, platform)]
+    end
+
+    # Bounds use literal Gem::Version ordering, including prereleases.
     def self.applicable?(unit, version)
       range = unit['lich_versions']
       return true unless range
@@ -70,15 +79,17 @@ module Lich
         (!range['max_exclusive'] || current < Gem::Version.new(range['max_exclusive']))
     end
 
-    def self.select(target, version)
-      validate!(target)
+    # Startup ignores documentation-only fields. New mandatory selection rules
+    # require a schema/capability transition; release/producer checks stay strict.
+    def self.select(target, version, strict: false)
+      validate!(target, strict: strict)
       units = target.fetch('units')
       ranged = units.select { |unit| unit.key?('lich_versions') && applicable?(unit, version) }
       identities = {}
       ranged.each do |unit|
         unit.fetch('packages').each do |package|
           name = package.fetch('name')
-          identity = package.values_at('version', 'sha256')
+          identity = package_identity(package, target.fetch('platform', 'x64-mingw-ucrt'))
           raise Error, "ambiguous ranged recovery: #{name}" if identities.key?(name) && identities[name] != identity
           identities[name] = identity
         end
