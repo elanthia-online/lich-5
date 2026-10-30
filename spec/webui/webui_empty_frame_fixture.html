@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI empty GtkFrame control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page" data-density="compact" data-theme="light">
+  <fieldset class="webui-group" id="native" style="border:0;margin:0;padding:0"><div>Native child</div></fieldset>
+  <fieldset class="webui-group" id="shim" style="border:0;margin:0;padding:0"><div>Shim child</div></fieldset>
+  <fieldset class="webui-group" id="named" style="border:0;margin:0;padding:0"><legend>Named</legend><div>Named child</div></fieldset>
+</section>
+<section class="webui-page" data-density="compact" data-theme="dark">
+  <fieldset class="webui-group" id="dark" style="border:0;margin:0;padding:0"><div>Dark child</div></fieldset>
+</section>
+<pre id="measured"></pre>
+<script>
+  const topInset = id => {
+    const frame = document.getElementById(id);
+    return frame.querySelector('div').getBoundingClientRect().top - frame.getBoundingClientRect().top;
+  };
+  const result = Object.fromEntries(['native', 'shim', 'named', 'dark'].map(id => [id, topInset(id)]));
+  const pass = result.native === 15 && result.shim === 15 && result.named === 15 && result.dark === 15;
+  document.getElementById('measured').textContent = `${pass ? 'PASS' : 'FAIL'} ${JSON.stringify(result)}`;
+</script>

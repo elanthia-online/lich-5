@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI selected table row control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page bare" data-density="compact" data-theme="light">
+  <h1>Selected table row control</h1>
+  <table class="webui-table" aria-label="SoundFX control">
+    <tbody>
+      <tr id="soundfx" aria-selected="true" tabindex="0"><td>gong</td><td>new notice</td></tr>
+      <tr id="ordinary" aria-selected="false"><td>bell</td><td>old notice</td></tr>
+    </tbody>
+  </table>
+  <table class="webui-table" aria-label="Repository control">
+    <tbody>
+      <tr id="repository" aria-selected="true" tabindex="0"><td>beta.lic</td><td>TRAVEL</td></tr>
+    </tbody>
+  </table>
+  <table class="webui-table" aria-label="Explicit style control">
+    <tbody>
+      <tr id="explicit" aria-selected="true"><td><span style="color:#c00000">Script red</span></td></tr>
+    </tbody>
+  </table>
+</section>
+<section class="webui-page" aria-label="Noncompact control">
+  <table class="webui-table"><tbody><tr id="noncompact" aria-selected="true"><td>Launcher row</td></tr></tbody></table>
+</section>
+<pre id="measured"></pre>
+<script>
+  const color = id => {
+    const row = document.getElementById(id);
+    const style = getComputedStyle(row);
+    return `${id}: background=${style.backgroundColor}, foreground=${style.color}`;
+  };
+  document.getElementById('soundfx').focus();
+  const selectedBackground = 'rgb(53, 132, 228)';
+  const selectedForeground = 'rgb(255, 255, 255)';
+  const matches = ['soundfx', 'repository'].every(id => {
+    const style = getComputedStyle(document.getElementById(id));
+    return style.backgroundColor === selectedBackground && style.color === selectedForeground;
+  });
+  const ordinary = getComputedStyle(document.getElementById('ordinary'));
+  const noncompact = getComputedStyle(document.getElementById('noncompact'));
+  const explicit = getComputedStyle(document.querySelector('#explicit span'));
+  const passed = matches && document.activeElement.id === 'soundfx' &&
+    ordinary.backgroundColor !== selectedBackground &&
+    noncompact.backgroundColor !== selectedBackground &&
+    explicit.color === 'rgb(192, 0, 0)';
+  document.getElementById('measured').textContent = [
+    passed ? 'PASS' : 'FAIL',
+    color('soundfx'), color('repository'),
+    `ordinary: background=${ordinary.backgroundColor}`,
+    `noncompact: background=${noncompact.backgroundColor}`,
+    `explicit span: foreground=${explicit.color}`
+  ].join('\n');
+</script>
