@@ -1,0 +1,3 @@
+# Setup fixtures are digest-checked as stored bytes (LF, CRLF or mixed);
+# never convert their line endings on checkout or commit.
+*_setup.lic -text
