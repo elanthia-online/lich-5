@@ -1,0 +1,84 @@
+# frozen_string_literal: true
+
+require_relative '../../spec_helper'
+require 'open3'
+require 'rbconfig'
+require 'webui/dispatcher'
+require 'webui/future'
+
+RSpec.describe Lich::WebUI::Future do
+  it 'isolates failing callbacks registered both before and after completion' do
+    logger = double('logger', call: nil)
+    future = described_class.new(logger: logger)
+    observed = []
+    future.then { raise 'private callback details' }
+    future.then { |result| observed << result.button }
+    expect(future.resolve(button: 'ok')).to be(true)
+    expect { future.then { raise 'late callback' } }.not_to raise_error
+    expect(observed).to eq(['ok'])
+    expect(logger).to have_received(:call).with(:error, 'WebUI completion callback failed: RuntimeError').twice
+  end
+
+  it 'resolves once and notifies callbacks registered before and after completion' do
+    observed = []
+    future = described_class.new
+    future.then { |result| observed << result }
+
+    expect(future.resolve(button: 'yes')).to be true
+    expect(future.resolve(button: 'no')).to be false
+    future.then { |result| observed << result }
+
+    expect(future.await.button).to eq('yes')
+    expect(observed.map(&:button)).to eq(%w[yes yes])
+  end
+
+  it 'continues completion when both a callback and its diagnostic sink fail' do
+    future = described_class.new(logger: proc { raise 'logger failed' })
+    completed = false
+    future.then { raise 'callback failed' }
+    future.then { completed = true }
+    expect { future.cancel }.not_to raise_error
+    expect(completed).to be(true)
+  end
+
+  it 'supports cancellation and a bounded blocking wait for the compatibility shim' do
+    future = described_class.new
+
+    expect(future.await(timeout: 0.001)).to be_nil
+    expect(future.cancel(reason: :terminated)).to be true
+    expect(future.await).to have_attributes(button: nil, reason: :terminated)
+  end
+
+  it 'refuses blocking waits from a WebUI dispatch callback' do
+    Thread.current.thread_variable_set(
+      Lich::WebUI::Dispatcher::THREAD_CONTEXT_KEY,
+      Lich::WebUI::Dispatcher::Context.new(Object.new, 'page', 'viewer', 'cid', :activate)
+    )
+
+    expect { described_class.new.await(timeout: 0) }
+      .to raise_error(Lich::WebUI::Dispatcher::ReentryError, /cannot block/)
+  ensure
+    Thread.current.thread_variable_set(Lich::WebUI::Dispatcher::THREAD_CONTEXT_KEY, nil)
+  end
+
+  it 'contains script-class and exit failures per callback and still runs the remaining ones, in a fresh process' do
+    code = <<~RUBY_CODE
+      require 'webui/future'
+      logged = []
+      future = Lich::WebUI::Future.new(logger: ->(level, message) { logged << [level, message] })
+      observed = []
+      future.then { raise LoadError, 'missing' }
+      future.then { exit 3 }
+      future.then { raise NotImplementedError, 'todo' }
+      future.then { |result| observed << result.button }
+      abort 'resolve raised' unless (future.resolve(button: 'ok') rescue abort("escaped: \#{$!.class}"))
+      abort 'remaining callbacks abandoned' unless observed == ['ok']
+      future.then { exit 4 }
+      abort 'late exit escaped' unless logged.length == 4
+      puts 'ready'
+    RUBY_CODE
+    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    expect(status.success?).to be(true), errors
+    expect(output).to eq("ready\n")
+  end
+end
