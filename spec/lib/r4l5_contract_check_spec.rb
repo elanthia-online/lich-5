@@ -4,7 +4,7 @@ require 'tmpdir'
 require_relative '../../lib/r4l5_contract_check'
 
 RSpec.describe Lich::R4L5ContractCheck do
-  let(:gemfile) { "gem 'redis'\n" }
+  let(:gemfile) { +"gem 'redis'\n" }
   let(:lockfile) do
     <<~LOCK
       GEM
@@ -20,8 +20,11 @@ RSpec.describe Lich::R4L5ContractCheck do
     LOCK
   end
   let(:contract) do
-    { 'schema' => 1, 'lich5_commit' => 'c' * 40, 'gemfile_sha256' => Digest::SHA256.hexdigest(gemfile),
-      'lock_sha256' => Digest::SHA256.hexdigest(lockfile), 'promotable' => true, 'overrides' => {},
+    { 'schema' => 2, 'lich5_commit' => 'c' * 40, 'gemfile_sha256' => Digest::SHA256.hexdigest(gemfile),
+      'lock_sha256' => Digest::SHA256.hexdigest(lockfile),
+      'windows_contract_sha256' => Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile).windows_contract_digest(
+        { 'ruby_version' => '4.0.9', 'ruby_abi' => '4.0', 'platform' => 'x64-mingw-ucrt', 'gems' => {} }, advertised_members: unit.fetch('members')
+      ), 'promotable' => true, 'overrides' => {},
       'ruby_inventory' => { 'ruby_version' => '4.0.9', 'ruby_abi' => '4.0', 'platform' => 'x64-mingw-ucrt', 'gems' => {} } }
   end
   let(:packages) do
@@ -39,6 +42,12 @@ RSpec.describe Lich::R4L5ContractCheck do
     { 'runtime_contract_sha256' => Lich::RuntimeGemContract.digest(contract),
       'recovery_manifest_sha256' => Digest::SHA256.hexdigest(JSON.generate(manifest)),
       'ruby_installer_version' => '4.0.9-1', 'installer_sha256' => Digest::SHA256.hexdigest('tested executable') }
+  end
+
+  def refresh_identity
+    contract['windows_contract_sha256'] = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile).windows_contract_digest(
+      contract.fetch('ruby_inventory'), build_roles: contract.fetch('build_roles', {}), advertised_members: unit.fetch('members')
+    )
   end
 
   def verify(**options)
@@ -60,8 +69,41 @@ RSpec.describe Lich::R4L5ContractCheck do
   end
 
   it 'rejects Lich-first delivery before the producer serves its lock' do
-    contract['lock_sha256'] = '0' * 64
+    contract['windows_contract_sha256'] = '0' * 64
     expect { verify }.to raise_error(described_class::Error, /build and promote this candidate first/)
+  end
+
+  it 'accepts dev-only edits while retaining the original producer provenance hashes' do
+    provenance
+    gemfile << "# consumer-only comment\ngroup :development do\n gem 'rspec'\nend\n"
+    lockfile.sub!("\nCHECKSUMS", "    rspec (3.13.0)\n\nCHECKSUMS")
+    lockfile << "  rspec (3.13.0) sha256=#{'f' * 64}\n"
+    expect { verify }.not_to raise_error
+  end
+
+  it 'requires the semantic identity and well-formed raw provenance hashes' do
+    contract.delete('windows_contract_sha256')
+    expect { verify }.to raise_error(described_class::Error, /windows_contract_sha256/)
+    refresh_identity
+    contract['gemfile_sha256'] = 'bad'
+    expect { verify }.to raise_error(described_class::Error, /invalid gemfile_sha256/)
+  end
+
+  it 'keeps the raw producer hashes bound to installer provenance' do
+    provenance
+    contract['gemfile_sha256'] = '0' * 64
+    expect { verify }.to raise_error(described_class::Error, /matching installer predecessor/)
+  end
+
+  it 'rejects schema 1 instead of silently applying new eligibility semantics to old contracts' do
+    contract['schema'] = 1
+    expect { verify }.to raise_error(described_class::Error, /unsupported runtime contract/)
+  end
+
+  it 'rejects a runtime requirement change even when the selected version remains valid' do
+    provenance
+    gemfile.replace("gem 'redis', '>= 5'\n")
+    expect { verify }.to raise_error(described_class::Error, /Windows projection/)
   end
 
   it 'rejects producer-first version drift from the selected consumer lock' do
@@ -166,6 +208,30 @@ RSpec.describe Lich::R4L5ContractCheck do
     expect { verify }.not_to raise_error
     packages.first['version'] = '0.6.0'
     expect { verify }.to raise_error(described_class::Error, /version mismatch for red-colors/)
+  end
+
+  it 'accepts producer-owned GTK versions but rejects the same drift outside the GTK role' do
+    contract['build_roles'] = { 'gtk' => ['redis-client'] }
+    packages.first['version'] = '0.30.2'
+    refresh_identity
+    expect { verify }.not_to raise_error
+    contract['build_roles']['gtk'] = []
+    refresh_identity
+    expect { verify }.to raise_error(described_class::Error, /version mismatch for redis-client/)
+  end
+
+  it 'rejects shipping a RubyInstaller-supplied transitive even with matching provenance' do
+    contract['ruby_inventory']['gems']['redis-client'] = { 'version' => '0.30.1', 'dependencies' => {} }
+    shipped = packages.shift
+    unit['members'].delete('redis-client')
+    unit['install_order'].delete('redis-client')
+    refresh_identity
+    expect(verify.fetch('bundled')).to have_key('redis-client')
+    packages.unshift(shipped)
+    unit['members'] << 'redis-client'
+    unit['install_order'].unshift('redis-client')
+    provenance['recovery_manifest_sha256'] = Digest::SHA256.hexdigest(JSON.generate(manifest))
+    expect { verify }.to raise_error(described_class::Error, /RubyInstaller-supplied gems must not be shipped: redis-client/)
   end
 
   it 'parses BOM provenance in the actual CLI and still rejects mismatched semantic digests' do

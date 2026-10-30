@@ -135,7 +135,7 @@ GEM
     ruby-progressbar (1.13.0)
     sequel (5.109.0)
       bigdecimal
-    sorbet-runtime (0.6.13593)
+    sorbet-runtime (0.6.13602)
     sqlite3 (2.10.2)
       mini_portile2 (~> 2.8.0)
     sqlite3 (2.10.2-aarch64-linux-gnu)
@@ -312,7 +312,7 @@ CHECKSUMS
   ruby-lsp (0.26.11) sha256=4cc8f1587237ff8c9031680b5491df901a82559eeaa1ae96863ffe700b32583d
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
   sequel (5.109.0) sha256=e0d1d474442d620c8497d7f4851c0cc3a277920519051b8014b2877aa55efffe
-  sorbet-runtime (0.6.13593) sha256=c26451975cd3490baafbd18abab2aa348020794646cbe0329ab7b710a09ecc56
+  sorbet-runtime (0.6.13602) sha256=a6738fe7b6f22253a32a65ccdcafc2ff0d48dcfcc8df3b1f19c11471bacdd4ac
   sqlite3 (2.10.2) sha256=f1ea68cd3287f8a49f39a088ac9e4bd0ef4e7f394c3d4a60dd4c7e44b0566964
   sqlite3 (2.10.2-aarch64-linux-gnu) sha256=e9aea2c2b3476fc875dd8a89313a9a2862818519c0186bfb5b56d6f57bb08d98
   sqlite3 (2.10.2-aarch64-linux-musl) sha256=4986fc40cdf21342362b72a941df28e95cfe0e644f3ad2532d948b157c39dbee
@@ -342,4 +342,4 @@ CHECKSUMS
   zlib (3.2.4) sha256=a0d0e5845a18d839c078fb5b6e4ae523ffb918601c2004a77c081ee211f9b038
 
 BUNDLED WITH
-  4.0.20
+  4.0.23

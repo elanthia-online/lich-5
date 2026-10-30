@@ -57,6 +57,12 @@ RSpec.describe Lich::RecoveryUnitPolicy do
     expect { described_class.select(target, '5.24') }.to raise_error(described_class::Error, /withdrawn member/)
   end
 
+  it 'ignores an unknown upper-bound key at startup but rejects publishing that shape' do
+    modern['lich_versions'] = { 'min_inclusive' => '5.24.0', 'max_inclusive' => '6.0' }
+    expect(described_class.select(target, '7.0')).to eq([modern])
+    expect { described_class.select(target, '7.0', strict: true) }.to raise_error(described_class::Error, /invalid Lich version range/)
+  end
+
   it 'does not turn an unknown-only range into unbounded recovery' do
     modern['lich_versions'] = { 'future_rule' => 'selection needs a new capability' }
     expect { described_class.select(target, '5.24') }.to raise_error(described_class::Error, /invalid Lich version range/)

@@ -21,10 +21,11 @@ Bundler. Default and profanity roots apply to Windows. Development, VS Code
 and GTK groups do not enter this version contract. Unsupported dynamic runtime
 declarations fail the check and require an explicit reader update.
 
-The Windows target's `contract` object has `schema: 1`, `lich5_commit` (40
+The Windows target's `contract` object has `schema: 2`, `lich5_commit` (40
 lowercase hex characters), `gemfile_sha256`, `lock_sha256`, `promotable: true`,
-`overrides: {}`, and `ruby_inventory`. The two file digests are bare lowercase
-SHA-256 hex strings. `ruby_inventory` records the pristine target RubyInstaller's
+`overrides: {}`, `windows_contract_sha256`, and `ruby_inventory`. All three
+digests are bare lowercase SHA-256 hex strings. The raw file digests identify
+the producer input bytes for provenance; they are not consumer eligibility gates. `ruby_inventory` records the pristine target RubyInstaller's
 `ruby_version`, `ruby_abi`, `platform`, and `gems` mapping. Each supplied gem
 records `version` and `dependencies` (a name-to-requirement-array mapping).
 This inventory must be measured before application gems are installed.
@@ -32,6 +33,15 @@ Supplied versions are checked against dependency requirements and differences
 from the lock are reported; those gems are not shipped to hide a difference.
 The reader selects the UCRT variant before a generic Ruby variant, so Windows
 sqlite3 uses its upstream binary and excludes source-only mini_portile2.
+
+The contract also carries producer-owned `build_roles.gtk`, an array of package
+names in the tested GTK build role. Listed packages are exempt from the consumer
+lock version/checksum comparison because Ruby4Lich5 owns that role's versions.
+Non-GTK packages reached only through GTK remain lock-governed unless explicitly
+assigned to that producer-owned role. The exemption does not bypass unit shape,
+RubyInstaller-supplied package exclusion, manifest/contract digest checks or
+installer provenance verification. Packages outside the role retain exact lock
+version enforcement.
 
 `.github/scripts/check_r4l5_contract.rb` checks all non-GTK Windows closure versions
 against the served recovery manifest and requires a matching installer
@@ -57,13 +67,30 @@ The effort-3 producer PR requires Ruby4Lich5 PR #47 to merge first. The consumer
 PR must wait for that producer's accepted recovery and installer. PR activity
 does not dispatch privileged producer work.
 
-The producer validates the selected candidate SHA explicitly. Consumers check
-the exact Gemfile/lock bytes and a full producer-recorded candidate identity;
-`--candidate-sha SHA` additionally requires that specific identity. A normal
-merge may change the checkout SHA without changing contract bytes. Do not add
-an exact comparison with the superseded main lock to producer promotion:
-supported consumers retain coverage/recovery gates, while the selected
-candidate supplies new exact versions. This avoids a circular handoff.
+The producer validates the selected candidate SHA explicitly. Both producer and
+consumer compute `RuntimeGemContract#windows_contract_digest` with the measured
+`ruby_inventory`, producer `build_roles`, and the flattened candidate-applicable
+recovery-unit member names as `advertised_members` (after strict range selection
+when ranges are present). The method hashes a versioned Windows projection:
+normalized runtime root requirements, relevant selected Windows lock packages
+(including checksums and normalized dependency requirements), supplied-gem
+resolution and the pristine target inventory. Relevant packages include runtime
+closure packages and advertised GTK-only non-GTK lock members. Producer-owned GTK
+role members remain exempt from lock pinning. Unused development entries,
+non-Windows variants and source comments do not enter eligibility. Changing an
+applicable version, checksum or requirement does change eligibility even when the
+old selected version would still satisfy a changed requirement.
+
+Schema 2 requires this semantic digest and retains the full candidate SHA and raw
+Gemfile/lock hashes for provenance. A normal merge or dev-only edit may change
+consumer bytes without changing eligibility. `--candidate-sha SHA` still requires
+the selected producer identity. Schema 1 contracts are rejected rather than
+silently reinterpreted: the paired Ruby4Lich5 #48 producer change must vendor this
+reader, emit schema 2 and its digest, and preserve provenance/installer binding.
+Publish matching accepted recovery and installer before clearing consumer gates.
+Do not add equality with the superseded main lock to producer promotion:
+supported consumers retain coverage/recovery gates while the selected candidate
+supplies new exact versions. This avoids a circular handoff.
 
 Single-package units that require no local build use original rubygems.org
 files and lock digests. Complete multi-package closures retain the ZIP
@@ -102,6 +129,34 @@ limits. Unavailable service, an unsupported target, invalid declarations or
 invalid policy stops Windows startup with an explicit error. There is no cached
 policy or offline success fallback. A healthy local gem set still requires the
 accepted policy lookup.
+
+A missing transitive dependency in an otherwise accepted installed gem is a
+local installation failure: repair or reinstall Ruby4Lich5, then retry. It is
+reported separately from unreachable policy, missing server coverage and
+incompatible accepted versions. Lich does not download an unlisted dependency
+to conceal a damaged installation. Genuine requirement conflicts remain policy
+compatibility failures and retain maintainer guidance.
+
+## Supported-client policy retention
+
+Because Windows startup requires reachable accepted policy, promotion must
+preserve startup compatibility for every explicitly supported client revision,
+including its roots, manifest schema, target ABI/platform and requirements.
+A new client declaration or dependency floor must not silently withdraw policy
+coverage or invalidate requirements for a still-supported older client. Retain
+that client's compatible policy and recovery coverage until maintainers explicitly
+retire support; a new producer candidate alone does not retire an older client.
+No minimum supported version or retirement date is selected here.
+
+Producer acceptance must exercise each supported revision's own startup-policy
+implementation with its declarations and the proposed manifest. Running all
+historical declarations through the newest reader is insufficient. Clients that
+predate online startup policy require their pinned legacy recovery checks rather
+than a claim that they implement the new policy. The paired producer enforcement
+belongs in Ruby4Lich5 #50; this consumer documentation does not establish that
+those per-version acceptance runs have passed.
+
+## Recovery transaction
 
 After consent, all selected artifacts are staged and hash-verified under Lich's
 `temp` directory before a runtime write. Required version repairs are forced and
@@ -213,6 +268,35 @@ Applicable ranged closures replace intersecting legacy closures as whole units;
 Lich never mixes a retained older shared package into a newer closure. Conflicting
 applicable range package identities fail closed. Release checks apply the same selection
 before comparing the candidate lock.
+
+### Explicitly versioned candidates and prerelease bounds
+
+A ranged producer candidate must be a prepared commit containing both the
+candidate lock and its intended `LICH_VERSION`. Administrators select that full
+commit SHA; the producer does not infer a future release version from an
+unversioned lock PR. Contract validation uses that candidate's version (or the
+explicit offline checker version) when selecting applicable units.
+
+Bounds use literal RubyGems `Gem::Version` ordering. For example,
+`5.24.0-beta.1` precedes `5.24.0`: a minimum of `5.24.0` excludes its betas.
+To include the beta series, use an explicit prerelease minimum such as
+`5.24.0-beta.0`. These are illustrative bounds, not selected support cutoffs.
+
+### Publication strictness and startup compatibility
+
+Publication checks reject unknown `lich_versions` keys and malformed or unknown
+lifecycle metadata. Startup ignores lifecycle annotations and unknown range
+keys, but requires at least one recognized bound. It applies known
+`min_inclusive` and `max_exclusive` bounds literally. Thus a range with a known
+minimum and an unknown `max_inclusive` key has no recognized upper bound;
+a range containing only unknown keys is rejected. This is the existing tolerant
+startup rule, not permission to publish those shapes: strict checks reject both.
+
+New fields that change mandatory selection semantics require an explicit
+manifest-schema or reader-capability transition and supported-client acceptance.
+Do not treat an ignored key as an enforced restriction on old readers. This
+manifest schema transition is separate from the runtime contract's schema-2
+semantic identity; the recovery manifest envelope remains schema 1 here.
 
 Keep a complete legacy unit ahead of every ranged replacement. Older first-match
 readers ignore these added fields and continue recovering their legacy closure.

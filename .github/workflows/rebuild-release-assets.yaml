@@ -44,16 +44,6 @@ jobs:
       - name: Checkout target consumer contract
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release_guard.outputs.tag }}
-          path: release-target
-          persist-credentials: false
-      - name: Checkout contract tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Checkout target consumer contract
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
           ref: ${{ inputs.tag }}
           path: release-target
           persist-credentials: false
@@ -137,6 +127,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout contract tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout target consumer contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release_guard.outputs.tag }}
+          path: release-target
+          persist-credentials: false
       - name: Download latest Ruby4Lich5 installer
         shell: bash
         run: |

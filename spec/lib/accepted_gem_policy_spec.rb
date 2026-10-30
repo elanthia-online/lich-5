@@ -81,6 +81,33 @@ RSpec.describe Lich::AcceptedGemPolicy do
     expect(active).to be_empty
   end
 
+  it 'reports an absent unlisted installed transitive as local damage and accepts its restoration' do
+    installed['sqlite3'] = [spec('sqlite3', '2.10.2', 'local-child' => '>= 1')]
+    expect(recovery).not_to receive(:recover)
+    expect { policy.check(dependencies) }.to raise_error(described_class::LocalInstallationError, /local-child is missing/) do |error|
+      expect(error).not_to be_a(described_class::PolicyError)
+    end
+    expect(active).to be_empty
+    installed['local-child'] = [spec('local-child', '1.0')]
+    check = policy.check(dependencies)
+    expect(check.needed).to be_empty
+    policy.activate!(check)
+    expect(active.keys).to contain_exactly('local-child', 'sqlite3')
+  end
+
+  it 'retains policy classification for an installed transitive that conflicts with requirements' do
+    installed['sqlite3'] = [spec('sqlite3', '2.10.2', 'local-child' => '>= 2')]
+    installed['local-child'] = [spec('local-child', '1.0')]
+    expect { policy.check(dependencies) }.to raise_error(described_class::PolicyError)
+    expect(active).to be_empty
+  end
+
+  it 'retains policy classification when the accepted floor conflicts with the client requirement' do
+    installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+    expect { policy.check([Gem::Dependency.new('sqlite3', '< 2')]) }.to raise_error(described_class::PolicyError)
+    expect(active).to be_empty
+  end
+
   it 'honors installed dependency requirements while selecting newer versions' do
     unit['members'] << 'closure'
     unit['packages'] << { 'name' => 'closure', 'version' => '1.0', 'filename' => 'closure-1.0.gem', 'sha256' => "sha256:#{'b' * 64}" }
