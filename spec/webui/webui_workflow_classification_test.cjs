@@ -85,11 +85,37 @@ for (const filename of [
   });
 }
 
+// Files the launcher presentation browser spec and the login helpers load
+// (1852:RC4); each one maps to a distinct WEBUI_PATHS entry.
+for (const filename of [
+  'spec/lib/common/webui_launcher_presentation_browser_spec.rb', 'spec/support/data_dir.rb',
+  '.rspec', '.rspec_parallel',
+  'lib/common/authentication/entry_store.rb', 'lib/common/gui/master_password_manager.rb', 'lib/common/gui_login.rb',
+  'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_editor.rb',
+  'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
+  'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
+  'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
+]) {
+  test(`launcher provider dependency selects WebUI jobs: ${filename}`, async () => {
+    assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'true']]);
+  });
+}
+
+test('every browser shard spec file selects WebUI jobs', async () => {
+  const browser = workflow.slice(workflow.indexOf('\n  browser:\n'));
+  const shardFiles = [...browser.matchAll(/^ {14}(spec\/\S+_spec\.rb)$/gm)].map(match => match[1]);
+  assert.ok(shardFiles.length > 0, 'expected browser shard spec files');
+  for (const filename of shardFiles) {
+    assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'true']], filename);
+  }
+});
+
 for (const filename of [
   'docs/unrelated.md',
   'lib/common/webui_launcher.rb.bak', 'lib/common/webui_launcher_extra.rb',
   'lib/common/webui_launcher_other/catalog.rb',
   'spec/login_spec_helper.rb.bak', 'spec/support/frontend_mock.rb.bak',
+  'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
 ]) {
   test(`unrelated or near-prefix path does not select WebUI jobs: ${filename}`, async () => {
     assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'false']]);
