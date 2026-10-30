@@ -75,6 +75,21 @@ module Lich
             end
           end
 
+          # Allocates the next SizeGroup identity for this script session. The
+          # count only grows: the bound limits creations over the session's life.
+          # @param receiver [SizeGroup] group being created
+          # @param limit [Integer] lifetime creation bound
+          # @return [Integer] new sequence number
+          # @raise [UnsupportedOperation] past the bound
+          # @api private
+          def next_size_group_sequence(receiver, limit)
+            synchronize do
+              sequence = @size_group_sequence.to_i + 1
+              refuse(receiver, :new) if sequence > limit
+              @size_group_sequence = sequence
+            end
+          end
+
           # Screen providers are session-local; callers receive an independent map.
           # @api private
           def screen_style_providers = (@screen_style_providers || {}).dup
@@ -224,19 +239,23 @@ module Lich
 
           # Adopts script ownership and viewer context while executing a mapped GTK signal.
           # Terminal actions commit input shadow state before the handler; context clears on exit.
+          # Signal handlers share the queue error boundary: script failures are
+          # contained and attributed here, and SystemExit reaches the dispatcher.
           # @param event [Lich::WebUI::Runtime::EventContext] validated core event
           # @param terminal [Boolean] whether to capture current inputs before the handler
           # @param widget [Widget, nil] source used to select its own window
           # @yield legacy signal handler
-          # @return [Object] handler result
+          # @return [Object, nil] handler result, or nil after a reported failure
           def callback(event, terminal: false, widget: nil)
             @owner.thread_group.add(Thread.current) unless Script.current.equal?(@owner)
-            synchronize do
-              root = root_for(widget) if widget
-              @window_viewers[root] = event.viewer_id if root
-              with_callback_context(event.viewer_id, root) do
-                root.commit_inputs if terminal && root
-                model_batch { yield }
+            run_queue_block(:signal) do
+              synchronize do
+                root = root_for(widget) if widget
+                @window_viewers[root] = event.viewer_id if root
+                with_callback_context(event.viewer_id, root) do
+                  root.commit_inputs if terminal && root
+                  model_batch { yield }
+                end
               end
             end
           end
@@ -299,13 +318,14 @@ module Lich
           end
 
           # Isolates script cleanup failures so later handlers/windows still close.
-          # Fatal VM failures are not treated as recoverable script errors.
+          # Uses the core dispatcher's contained set; fatal VM failures outside
+          # it are not treated as recoverable script errors.
           # @param receiver [Widget] object whose cleanup is running
           # @yield cleanup action
           # @return [Object, nil] cleanup result, or nil after a reported failure
           def cleanup(receiver)
             yield
-          rescue StandardError, ScriptError, SystemExit => error
+          rescue SystemExit, *Lich::WebUI::Dispatcher::CONTAINED_EXCEPTIONS => error
             source_warning(receiver, :destroy, "cleanup failed error=#{error.class} at=#{error.backtrace&.first}")
             nil
           end
@@ -375,22 +395,30 @@ module Lich
               Thread.current.thread_variable_get(Script::CLEANUP_SCRIPT_THREAD_KEY).equal?(@owner)
           end
 
-          # Applies the legacy error boundary to ordinary and exit-handler work.
+          # Applies the legacy error boundary to queue, timer, signal and exit-handler work.
+          # Script failures use the core dispatcher's contained set. SystemExit
+          # is re-raised so the dispatcher stops this owner through its owner_exit
+          # hook (never Lich); only an already-stopping owner's cleanup thread
+          # contains it here.
           # Only shim class/operation tokens are retained from exception messages;
           # arbitrary script messages may contain sensitive input.
+          # @param operation [Symbol] :queue for queued/timer work, :signal for handlers
           # @yield queued script operation
           # @return [Object, nil] callback result, or nil after a reported failure
-          def run_queue_block
+          # @raise [SystemExit] from a dispatched callback, for the owner-stop path
+          def run_queue_block(operation = :queue)
             yield
-          rescue StandardError, SyntaxError, SystemExit, SecurityError, SystemStackError, LoadError, NoMemoryError => error
+          rescue SystemExit, *Lich::WebUI::Dispatcher::CONTAINED_EXCEPTIONS => error
+            raise if error.is_a?(SystemExit) && !cleanup_thread?
+
             source = Array(error.backtrace).find { |frame| frame.start_with?("#{@owner.name}:") || frame.include?('.lic:') }
             detail = error.message[/\b(?:class=[\w:]+ )?operation=[\w?!=]+/] if error.is_a?(UnsupportedOperation)
             # Builder failures carry structural diagnostics, not raw XML/property text.
             # Preserve these through the queue boundary so a refused form is actionable.
             detail = "#{detail} #{error.diagnostic}" if defined?(BuilderError) && error.is_a?(BuilderError)
             detail = "#{detail} #{error.diagnostic}" if defined?(ModelValueError) && error.is_a?(ModelValueError)
-            source_warning(self, :queue, "callback failed error=#{error.class} at=#{source || error.backtrace&.first}#{" rejected=#{detail}" if detail}")
-            respond "error in Gtk.queue (#{@owner.name}): #{error.class}; see debug log"
+            source_warning(self, operation, "callback failed error=#{error.class} at=#{source || error.backtrace&.first}#{" rejected=#{detail}" if detail}")
+            respond "error in #{operation == :signal ? 'GTK signal handler' : 'Gtk.queue'} (#{@owner.name}): #{error.class}; see debug log"
             # An unhandled Builder failure can leave an allocated form without
             # its Close/destroy handlers. Retire this owner's UI and use Script's
             # existing asynchronous stop path; never leave a partial form running.
