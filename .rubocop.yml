@@ -2,3 +2,17 @@
 # copy of the master in elanthia-online/.github. Do not change rules here; this
 # file may only list files to exclude.
 inherit_from: .rubocop/base.yml
+
+# Upstream Setup class excerpts for digest-checked compatibility tests: class
+# bodies keep source formatting and the unused local. They are not exact
+# upstream bytes: module wrapper lines are synthetic LF, bigshot's class line
+# lost its indentation, and the class-closing lines of bigshot and huntplan are
+# LF inside CRLF bodies. Safety/ASCII and other lint cops run.
+Layout:
+  Exclude:
+    - 'spec/fixtures/webui/bigshot_setup.lic'
+    - 'spec/fixtures/webui/huntplan_setup.lic'
+
+Lint/UselessAssignment:
+  Exclude:
+    - 'spec/fixtures/webui/huntplan_setup.lic'
