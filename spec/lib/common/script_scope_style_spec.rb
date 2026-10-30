@@ -5,6 +5,12 @@ require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
 RSpec.describe 'progress provider lifecycle' do
+  # Settled B5: the staminabar2 example names the script, its pinned source
+  # revision and what its header states, from that script's css-decoration.json
+  # attribution record (spec/fixtures/webui/README.txt); the header states no
+  # version or author.
+  attribution = '[staminabar2 version not established, mirror 549e33506e121453e3c01cfe5df46a902f44fc5f, author not established]'
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope.const_get(:Gtk, false) }
   let(:owner) { Struct.new(:name).new('style.lic') }
@@ -92,7 +98,7 @@ RSpec.describe 'progress provider lifecycle' do
     bar.materialize
   end
 
-  it 'accepts the staminabar2 progress declarations with no final semicolon' do
+  it "accepts the staminabar2 progress declarations with no final semicolon #{attribution}" do
     # Mirror lib/staminabar2.lic:34-36, whitespace normalized, unchanged declarations.
     # SHA256 c6d2d696ac57ea13d8359dc4650a4a7a209706ecf6c8af06e6be252e3058d377.
     provider.load(data: stylesheet('blue', ''))
