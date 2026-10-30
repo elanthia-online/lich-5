@@ -77,7 +77,9 @@ expansion. Scripts that cannot be supported require conversion.
 
 Within script ownership, `require 'gtk2'` and `require 'gtk3'` resolve to the
 already-loaded compatibility layer. They do not load native GTK gems or install
-a global `Gtk`. Recognizable GTK dependency subloads are refused, including
+a global `Gtk`. Script `HAVE_GTK` follows the core presentation policy: with
+`--no-gui` (or `--no-gtk`) it is false, and those requires raise `LoadError` as
+if GTK were not installed. Recognizable GTK dependency subloads are refused, including
 explicit Kernel loader calls. This dependency boundary is not a sandbox against
 arbitrary Ruby or direct native calls. Core must never consume shim controls.
 
@@ -141,6 +143,13 @@ the user's ordinary browser. Native presentation properties must be requested
 through the component contract; CSS cannot establish an OS-level topmost window.
 Explicit caller geometry takes precedence over saved geometry and defaults.
 Pages with configure handlers own their geometry policy, including shim windows.
+
+Monitor geometry comes from the native host or local screen discovery where
+available. A Chrome/Edge window reports only its current screen, as source
+`browser` with `primary` false, because browser screen APIs give no reliable
+cross-platform primary identity. A `target: :primary` request against such a
+viewer falls back to its active screen and reports `fallback: true`; Lich does
+not invent a primary display.
 
 The shared loopback host authenticates page and WebSocket access. Launch URLs
 are short-lived credentials: do not persist or log them. Registered file access
