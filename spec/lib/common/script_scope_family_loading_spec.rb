@@ -89,4 +89,68 @@ RSpec.describe 'GTK bridge family loading and Builder transactions' do
     expect(builder['candidate'].text).to eq('Retry')
     expect(builder.objects).to eq([retained, builder['candidate']])
   end
+
+  context 'Builder limits' do
+    def adjustments(count) = "<interface>#{'<object class="GtkAdjustment"/>' * count}</interface>"
+
+    # Objects sit at odd XML depths below <interface>; each <child> adds one level.
+    def nested_boxes(levels, inner)
+      levels.zero? ? inner : %(<object class="GtkBox"><child>#{nested_boxes(levels - 1, inner)}</child></object>)
+    end
+
+    it 'refuses an over-limit document while counting, before any XPath query, and keeps the prior graph' do
+      builder = gtk::Builder.new
+      builder.add_from_string(adjustments(1))
+      prior = builder.objects
+      # REXML's own child iteration also calls XPath.match, with a nil path.
+      allow(REXML::XPath).to receive(:match).and_call_original
+      expect { builder.add_from_string(adjustments(gtk::Builder::MAX_OBJECTS)) }
+        .to raise_error(gtk::BuilderError, /property=objects reason=object limit exceeded/)
+      expect(REXML::XPath).not_to have_received(:match).with(anything, '//object')
+      expect(builder.objects).to eq(prior)
+    end
+
+    it 'accepts exactly the cumulative object limit and refuses one more without changing the graph' do
+      expect(gtk::Builder::MAX_OBJECTS).to eq(2048)
+      builder = gtk::Builder.new
+      builder.add_from_string(adjustments(1))
+      builder.add_from_string(adjustments(2047))
+      full = builder.objects
+      expect(full.length).to eq(2048)
+      expect { builder.add_from_string(adjustments(1)) }.to raise_error(gtk::BuilderError, /object limit exceeded/)
+      expect(builder.objects).to eq(full)
+    end
+
+    it 'accepts an element at XML depth 64, refuses depth 65 and keeps the earlier load' do
+      expect(gtk::Builder::MAX_DEPTH).to eq(64)
+      builder = gtk::Builder.new
+      deepest_property = '<object class="GtkBox"><property name="spacing">1</property></object>'
+      builder.add_from_string("<interface>#{nested_boxes(31, deepest_property)}</interface>")
+      accepted = builder.objects
+      expect(accepted.length).to eq(32)
+      expect { builder.add_from_string("<interface>#{nested_boxes(32, '<object class="GtkLabel"/>')}</interface>") }
+        .to raise_error(gtk::BuilderError, /property=nesting reason=XML depth limit exceeded/)
+      expect(builder.objects).to eq(accepted)
+      builder.add_from_string(adjustments(1))
+      expect(builder.objects.length).to eq(33)
+    end
+  end
+
+  it 'refuses a DTD the parser finds in encoded input that the raw check cannot see' do
+    xml = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE interface [<!ENTITY e "x">]>' \
+          '<interface><object class="GtkLabel" id="label"><property name="label">&e;</property></object></interface>'
+    encoded = [0xFE, 0xFF].pack('C*') + xml.encode('UTF-16BE').b
+    expect(encoded.match?(/<!\s*(?:DOCTYPE|ENTITY)\b/i)).to be(false)
+    builder = gtk::Builder.new
+    expect { builder.add_from_string(encoded) }.to raise_error(gtk::BuilderError, /reason=DTD and entity declarations are unsupported/)
+    expect(builder.objects).to be_empty
+  end
+
+  it 'keeps a handler resolver exception instead of reporting a missing handler' do
+    builder = gtk::Builder.new
+    builder.add_from_string('<interface><object class="GtkButton" id="button"><signal name="clicked" handler="on_click"/></object></interface>')
+    expect { builder.connect_signals { |_handler| Object.new.resolver_typo } }.to raise_error(NoMethodError, /resolver_typo/)
+    expect(Lich).to have_received(:log).with(/handler resolver failed error=NoMethodError object=button xml_class=GtkButton signal=clicked/)
+    expect { builder.connect_signals }.to raise_error(gtk::BuilderError, /reason=missing handler on_click/)
+  end
 end

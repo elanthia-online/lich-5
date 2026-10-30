@@ -84,10 +84,15 @@ module Lich
               fail_at(nil, 'document', 'expected bounded XML text') unless xml.is_a?(String) && xml.bytesize <= MAX_BYTES
               fail_at(nil, 'document', 'DTD and entity declarations are unsupported') if xml.match?(/<!\s*(?:DOCTYPE|ENTITY)\b/i)
               document = REXML::Document.new(xml)
+              # The raw check misses encoded input (for example UTF-16 bytes
+              # with a BOM); refuse any declaration the parser actually found.
+              fail_at(nil, 'document', 'DTD and entity declarations are unsupported') if document.doctype
               fail_at(nil, 'document', 'root must be interface') unless document.root&.name == 'interface'
+              # check_elements counts objects against the cumulative limit
+              # before any XPath traversal of an oversized document.
+              @object_count = 0
               check_elements(document.root)
               @elements = REXML::XPath.match(document, '//object')
-              fail_at(nil, 'objects', 'object limit exceeded') if @objects.length + @elements.length > MAX_OBJECTS
               @pending_ids, @built, @building, @created, @pending_signals, @visible_windows = {}, {}, {}, [], [], []
               @object_elements = {}.compare_by_identity
               @positions = @elements.each_with_index.to_h
@@ -123,7 +128,7 @@ module Lich
               fail_at(@location&.first, @location&.last || 'document', "rejected by shim: #{detail}")
             ensure
               @elements = @pending_ids = @built = @building = @created = @pending_signals = @visible_windows = nil
-              @positions = @object_elements = nil
+              @positions = @object_elements = @object_count = nil
             end
           end
 
@@ -147,11 +152,27 @@ module Lich
           def connect_signals
             session.synchronize do
               connections = @signals.map do |object, name, handler, element|
-                callable = block_given? ? yield(handler) : method(handler)
+                # Only this Builder's own method lookup means a missing handler;
+                # a script resolver's exception propagates unchanged, after a
+                # value-free note naming the XML declaration being resolved.
+                callable = if block_given?
+                             begin
+                               yield(handler)
+                             rescue StandardError => error
+                               detail = issue(element, "signal:#{name}", 'handler resolver failed')
+                               session.source_warning(self, :connect_signals,
+                                                      "handler resolver failed error=#{error.class} object=#{detail[:object]} xml_class=#{detail[:xml_class]} signal=#{name}")
+                               raise
+                             end
+                           else
+                             begin
+                               method(handler)
+                             rescue NameError
+                               fail_at(element, "signal:#{name}", "missing handler #{handler}")
+                             end
+                           end
                 fail_at(element, "signal:#{name}", 'handler must be a Method or Proc') unless callable.is_a?(Method) || callable.is_a?(Proc)
                 [object, name, callable]
-              rescue NameError
-                fail_at(element, "signal:#{name}", "missing handler #{handler}")
               end
               connections.each do |object, name, callable|
                 object.signal_connect(name) do |*args|
