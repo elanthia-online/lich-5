@@ -86,11 +86,12 @@ RSpec.describe Lich::Common::WebUILauncher do
   end
 
   it 'authors saved geometry and persists bounded browser geometry proposals' do
+    proposal = { width: 1000, height: 760, position: [-80, 60] }
     geometry_store = instance_double(
       Lich::Common::WebUILauncher::WindowGeometryStore,
-      load: { width: 960, height: 720, position: [120, 48] }
+      load: { width: 960, height: 720, position: [120, 48] }, validate: proposal
     )
-    allow(geometry_store).to receive(:save).and_return(width: 1000, height: 760, position: [-80, 60])
+    allow(geometry_store).to receive(:save).and_return(proposal)
     geometry_launcher = described_class.new(
       data_dir: '/fixture', catalog: catalog, on_launch: proc {}, browser_open: proc { true },
       geometry_store: geometry_store
@@ -102,11 +103,16 @@ RSpec.describe Lich::Common::WebUILauncher do
 
     expect(render.facilities[:geometry]).to eq(width: 960, height: 720, x: 120, y: 48)
     expect(geometry_control.props[:hidden]).to be(true)
-    expect(geometry_launcher.window_geometry_changed(event))
-      .to eq(width: 1000, height: 760, position: [-80, 60])
-    expect(geometry_store).to have_received(:save).with(
+    expect(geometry_launcher.window_geometry_changed(event)).to eq(proposal)
+    expect(geometry_store).to have_received(:validate).with(
       'width' => 1000, 'height' => 760, 'position' => [-80, 60]
     )
+    # A resize updates memory only; the validated value is written once on close.
+    expect(geometry_store).not_to have_received(:save)
+    geometry_launcher.close
+    expect(geometry_store).to have_received(:save).with(proposal).once
+    expect(geometry_launcher.window_geometry_changed(event)).to be_nil
+    expect(geometry_store).to have_received(:save).once
   end
 
   it 'preserves the GTK GUI Settings toggle and its setting order' do
