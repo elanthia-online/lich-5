@@ -31,6 +31,42 @@ module Lich
         'DR' => 'DR Prime', 'DRF' => 'DR Fallen', 'DRT' => 'DR Test',
       }.freeze
       Operation = Data.define(:id, :kind, :viewer_id)
+      # A refused submission whose message is authored, fixed and secret-free,
+      # so it can be shown to the user as the reason.
+      class ValidationRefused < StandardError; end
+      MASTER_PASSWORD_MIN_LENGTH = 8
+      LEGACY_CONVERSION_GUIDANCE = "#{Catalog::LEGACY_CONVERSION_NOTICE} " \
+                                   'See the Lich release notes for conversion guidance.'
+      EXIT_CLEANUP_TIMEOUT = 2
+      EXIT_CLEANUP_MUTEX = Mutex.new
+      private_constant :EXIT_CLEANUP_MUTEX
+
+      # Registers one process-exit hook (per process) that closes every started
+      # launcher. The launcher owns its browser process and its service directly,
+      # outside the service's window registry, so it needs its own hook. It covers
+      # ordinary exit and default SIGINT/SIGTERM handling, including exits before
+      # any viewer connects; it runs no signal handler and cannot cover SIGKILL.
+      # Launchers are held weakly.
+      # @param launcher [WebUILauncher] launcher that has begun starting
+      # @return [void]
+      # @api private
+      def self.register_exit_cleanup(launcher)
+        EXIT_CLEANUP_MUTEX.synchronize do
+          (@exit_launchers ||= ObjectSpace::WeakMap.new)[launcher] = true
+          next if @exit_hook_pid == Process.pid
+
+          pid = @exit_hook_pid = Process.pid
+          at_exit { close_launchers_at_exit if Process.pid == pid }
+        end
+      end
+
+      # Closes every registered launcher once at process exit.
+      # @return [void]
+      # @api private
+      def self.close_launchers_at_exit
+        launchers = EXIT_CLEANUP_MUTEX.synchronize { @exit_launchers ? @exit_launchers.keys : [] }
+        launchers.each(&:close_at_exit)
+      end
 
       attr_reader :page
 
@@ -56,6 +92,8 @@ module Lich
       # @param dark_theme [Boolean] initial stored theme preference
       # @param geometry_store [Object, nil] window geometry persistence
       # @param frontend_locator [Object] discovers supported frontend executables
+      # @param viewer_expiry [#call, nil] schedules a block after a delay in seconds;
+      #   nil uses a timer thread for the WebUI reconnect window
       def initialize(data_dir:, on_launch:, service: Lich::WebUI.service, catalog: nil,
                      authenticator: Authentication, launch_data: Authentication::LaunchData,
                      session_launcher: SessionLauncher, executor: SerialExecutor.new,
@@ -63,7 +101,7 @@ module Lich
                      browser_terminate: Process.method(:kill),
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
-                     frontend_locator: FrontendLocator)
+                     frontend_locator: FrontendLocator, viewer_expiry: nil)
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
 
@@ -79,13 +117,19 @@ module Lich
         @frontend_options = discover_frontends(refresh: true)
         @geometry_store = geometry_store || WindowGeometryStore.new(data_dir: data_dir)
         @window_geometry = @geometry_store.load
+        @geometry_dirty = false
         @browser_pid = nil
+        @browser_handle = nil
         @browser_terminate = browser_terminate
+        @browser_failure = nil
+        @failure = nil
         @browser_open = browser_open || lambda do |url|
+          handle = Object.new
           Lich::WebUI::BrowserLauncher.open(
             url, geometry: @window_geometry,
-                 on_start: ->(pid) { @mutex.synchronize { @browser_pid = pid } },
-                 on_exit: -> { close(reason: :browser_process_exit) }
+                 on_start: ->(pid) { browser_started(handle, pid) },
+                 on_exit: -> { browser_exited(handle) },
+                 on_failure: ->(message) { @mutex.synchronize { @browser_failure = message } }
           )
         end
         @on_launch = on_launch
@@ -103,12 +147,23 @@ module Lich
         @settings_visible = false
         @active = {}
         @notice = nil
+        @notice_revision = 0
+        @notice_delivered = 0
         @modal = nil
         @selected_entry = nil
         @manual = default_manual_state
         @manual_credentials = {}
+        @departed_viewers = {}
+        @viewer_expiry = viewer_expiry || lambda do |delay, &work|
+          Thread.new do
+            Thread.current.report_on_exception = false
+            sleep(delay)
+            work.call
+          end
+        end
         @draft_entry_key = nil
         reload_catalog
+        refresh_capabilities
         @frontend_tab = FrontendTab.new(
           data_dir: @data_dir, locator: @frontend_locator, executor: @executor,
           commit: ->(&work) { commit(&work) },
@@ -128,6 +183,7 @@ module Lich
       # Browser launch failure closes the service rather than opening a tab.
       # @return [WebUILauncher] this launcher, for chaining with {#await_launch}
       def start
+        self.class.register_exit_cleanup(self)
         @page = build_page
         @service.registry.register(@page)
         @page.bind_runtime(@service.runtime)
@@ -139,17 +195,24 @@ module Lich
           return self
         end
 
+        detail = @mutex.synchronize { @browser_failure }
         raise Lich::WebUI::Error,
-              'dedicated launcher window failed to open; check the configured WebUI host and debug log, then retry'
+              "#{detail || 'dedicated launcher window failed to open'}; check the configured WebUI host and debug log, then retry"
       rescue Lich::WebUI::Error => error
-        report_feedback("ERROR: #{error.message}. The WebUI launcher has stopped.")
+        fail_launcher("ERROR: #{error.message}. The WebUI launcher has stopped.")
         close(reason: :browser_failure)
         raise
       rescue StandardError => error
-        report_feedback("WebUI launcher unavailable: #{error.class}. Retry after correcting the failure or abort safely.")
+        fail_launcher("WebUI launcher unavailable: #{error.class}. Retry after correcting the failure or abort safely.")
         close(reason: :browser_failure)
         raise
       end
+
+      # Distinguishes a launcher that failed from ordinary cancellation. A host
+      # that could not start, or that exited before any viewer connected, is a
+      # failure; a user closing a connected window is not.
+      # @return [String, nil] the authored failure message, or nil
+      def failure = @mutex.synchronize { @failure }
 
       # Closes the owned browser, page, service and operation worker once.
       # Racing browser-exit and page-detach callbacks share this lifecycle gate.
@@ -173,6 +236,7 @@ module Lich
             @manual_credentials.clear
             browser_pid = @browser_pid
             @browser_pid = nil
+            @browser_handle = nil
             true
           end
         end
@@ -182,6 +246,7 @@ module Lich
         begin
           [
             -> { terminate_browser(browser_pid) if browser_pid },
+            -> { flush_window_geometry },
             -> { @frontend_tab.close },
             -> { @service.terminate_owner(self) },
             -> { @service.stop },
@@ -192,7 +257,7 @@ module Lich
             teardown_error ||= error
           end
           log_diagnostic(:info, "WebUI launcher closed reason=#{reason}")
-          report_feedback('The WebUI launcher window closed before connecting. Check the debug log and retry.') if unattached_exit
+          fail_launcher('The WebUI launcher window closed before connecting. Check the debug log and retry.') if unattached_exit
         ensure
           @mutex.synchronize do
             @lifecycle = :closed
@@ -207,6 +272,32 @@ module Lich
         raise teardown_error if teardown_error
 
         true
+      end
+
+      # Process-exit cleanup: closes within a bounded wait. If an admitted step
+      # holds the close gate past that wait, the owned browser is still retired
+      # directly; close and this fallback take the retained PID exactly once.
+      # Failures are logged, never raised into process exit.
+      # @param timeout [Numeric] seconds to wait for the ordinary close
+      # @return [void]
+      def close_at_exit(timeout: EXIT_CLEANUP_TIMEOUT)
+        worker = Thread.new do
+          Thread.current.report_on_exception = false
+          close(reason: :process_exit)
+        rescue StandardError => error
+          log_diagnostic(:warning, "launcher exit cleanup failed error=#{error.class}")
+        end
+        return if worker.join(timeout)
+
+        pid = @mutex.synchronize do
+          retained = @browser_pid
+          @browser_pid = nil
+          @browser_handle = nil
+          retained
+        end
+        terminate_browser(pid) if pid
+      rescue StandardError => error
+        log_diagnostic(:warning, "launcher exit cleanup failed error=#{error.class}")
       end
 
       # Reads the launcher state while holding its lifecycle mutex.
@@ -243,10 +334,10 @@ module Lich
         @mutex.synchronize do
           {
             initial_tab: @entries.empty? ? 1 : 0, entries: @entries.dup, accounts: @accounts.dup,
-            encryption_mode: @encryption_mode, keychain: @catalog.enhanced_encryption_available?,
+            encryption_mode: @encryption_mode, keychain: @keychain_available, legacy_conversion: @legacy_conversion,
             persistent: @persistent, autosort: @autosort, tab_layout: @tab_layout,
             dark_theme: @dark_theme, settings_visible: @settings_visible,
-            notice: @notice, modal: @modal&.dup, catalog_error: @catalog_error,
+            notice: @notice, notify: undelivered_notice_locked, modal: @modal&.dup, catalog_error: @catalog_error,
             manual: @manual.merge(characters: @manual[:characters].dup), active: @active.keys,
             draft_entry_key: @draft_entry_key, window_geometry: @window_geometry.dup,
             frontend_options: @frontend_options.map(&:dup),
@@ -296,16 +387,21 @@ module Lich
         refresh
       end
 
-      # Saves validated geometry only while the launcher is open.
+      # Accepts validated geometry only while the launcher is open. Resize events
+      # update memory only; the latest value is written once, by {#close}.
       # @param event [WebUI::Runtime::EventContext] JSON geometry payload
       # @return [Hash, false, nil] accepted geometry, or invalid/closed result
       def window_geometry_changed(event)
-        geometry = nil
-        commit do
-          geometry = @geometry_store.save(JSON.parse(event.payload.fetch(:value)))
-          @mutex.synchronize { @window_geometry = geometry } if geometry
+        geometry = @geometry_store.validate(JSON.parse(event.payload.fetch(:value)))
+        return false unless geometry
+
+        accepted = @mutex.synchronize do
+          next false if %i[closing closed].include?(@lifecycle)
+
+          @window_geometry = geometry
+          @geometry_dirty = true
         end
-        geometry
+        accepted ? geometry : nil
       rescue JSON::ParserError, KeyError
         false
       end
@@ -322,40 +418,124 @@ module Lich
       # @return [void]
       def refresh_catalog
         @executor.post do
+          refresh_capabilities
           reload_catalog
           refresh
         end
       end
 
-      # Invalidates a viewer's operations before releasing its retained credentials.
+      # Treats a detach as resumable (B2): the viewer's credentials, operations,
+      # manual entry and dialog are kept for the WebUI reconnect window and are
+      # discarded only if the same viewer has not re-attached when it expires.
       # @param viewer_id [String] departing attachment identifier
       # @return [void]
       def viewer_gone(viewer_id)
-        @commit_mutex.synchronize do
-          @mutex.synchronize do
-            @manual_credentials.delete(viewer_id)&.discard!
-            @active.delete_if { |_kind, operation| operation.viewer_id == viewer_id }
-            @manual = default_manual_state
-            @modal = nil
-          end
+        token = Object.new
+        departed = @mutex.synchronize do
+          next false if %i[closing closed].include?(@lifecycle)
+
+          @departed_viewers[viewer_id] = token
+          true
         end
+        return unless departed
+
+        @viewer_expiry.call(Lich::WebUI::ViewerStore::RECONNECT_WINDOW) { viewer_expired(viewer_id, token) }
       end
 
       # Closes only for an explicit window-close event, never a reconnectable detach.
       # @param viewer_id [String, nil] closing attachment, if known
       # @return [Boolean] whether shutdown began
       def browser_window_closed(viewer_id)
-        viewer_gone(viewer_id)
+        @commit_mutex.synchronize { @mutex.synchronize { discard_viewer_locked(viewer_id) } }
         close(reason: :browser_window_closed)
       end
 
       # Records first connection without treating later transport loss as closure.
+      # A resumed viewer cancels its pending expiry.
+      # @param viewer_id [String, nil] attaching viewer, if known
       # @return [Boolean] true after an attachment has been observed
-      def viewer_attached
-        @mutex.synchronize { @viewer_attached = true }
+      def viewer_attached(viewer_id = nil)
+        @mutex.synchronize do
+          @departed_viewers.delete(viewer_id) if viewer_id
+          @viewer_attached = true
+        end
       end
 
       private
+
+      # Retains the spawned PID together with the identity of the launch that
+      # produced it.
+      # @param handle [Object] identity of one browser launch
+      # @param pid [Integer] spawned process id
+      # @return [void]
+      # @api private
+      def browser_started(handle, pid)
+        @mutex.synchronize do
+          @browser_handle = handle
+          @browser_pid = pid
+        end
+      end
+
+      # The monitor has already reaped this process: retire its PID before close
+      # so teardown never signals a reaped (and possibly reused) PID. A callback
+      # for any other launch leaves the current handle untouched.
+      # @param handle [Object] identity of the launch whose process exited
+      # @return [Boolean] whether this call began shutdown
+      # @api private
+      def browser_exited(handle)
+        @mutex.synchronize do
+          if @browser_handle.equal?(handle)
+            @browser_handle = nil
+            @browser_pid = nil
+          end
+        end
+        close(reason: :browser_process_exit)
+      end
+
+      # Writes the coalesced window geometry once, during close. Updates are
+      # refused once closing begins, so nothing is written after this.
+      # @return [void]
+      # @api private
+      def flush_window_geometry
+        geometry = @mutex.synchronize do
+          next unless @geometry_dirty
+
+          @geometry_dirty = false
+          @window_geometry.dup
+        end
+        @geometry_store.save(geometry) if geometry
+      end
+
+      # Discards a departed viewer's state once its reconnect window has expired,
+      # unless it re-attached or departed again since this expiry was scheduled.
+      # @param viewer_id [String] departed attachment identifier
+      # @param token [Object] departure identity captured by {#viewer_gone}
+      # @return [void]
+      # @api private
+      def viewer_expired(viewer_id, token)
+        discarded = @commit_mutex.synchronize do
+          @mutex.synchronize do
+            next false unless @departed_viewers[viewer_id].equal?(token)
+
+            discard_viewer_locked(viewer_id)
+            true
+          end
+        end
+        refresh if discarded
+      end
+
+      # Invalidates a viewer's operations before releasing its retained credentials.
+      # Callers hold the commit gate and the lifecycle mutex.
+      # @param viewer_id [String, nil] viewer whose state is discarded
+      # @return [void]
+      # @api private
+      def discard_viewer_locked(viewer_id)
+        @departed_viewers.delete(viewer_id)
+        @manual_credentials.delete(viewer_id)&.discard!
+        @active.delete_if { |_kind, operation| operation.viewer_id == viewer_id }
+        @manual = default_manual_state
+        @modal = nil
+      end
 
       # Reports feedback that must survive window closure through the existing
       # platform notifier (terminal/debug log off Windows). Notification failures
@@ -368,6 +548,18 @@ module Lich
       rescue StandardError => error
         log_diagnostic(:warning, "launcher feedback failed error=#{error.class}")
         nil
+      end
+
+      # Records a launcher failure for {#failure}, keeps the authored message in
+      # the debug log even where the platform notifier shows nothing, and then
+      # reports it through the notifier.
+      # @param message [String] authored message containing no submitted secrets
+      # @return [Object, nil] notifier result
+      # @api private
+      def fail_launcher(message)
+        @mutex.synchronize { @failure ||= message }
+        log_diagnostic(:error, message)
+        report_feedback(message)
       end
 
       # Attempts diagnostic logging without making feedback or closure depend on
@@ -427,6 +619,9 @@ module Lich
         accepted = @mutex.synchronize do
           next false unless @active[operation.kind]&.id == operation.id && @lifecycle != :closed
           @active.delete(operation.kind)
+          # A completed operation supersedes an earlier failure; a failing one
+          # retains its own notice in the block below.
+          @notice = nil if @notice&.fetch(:level, nil) == 'error'
           yield if block_given?
           true
         end
@@ -447,12 +642,14 @@ module Lich
         complete(operation) do
           @manual.merge!(phase: :editing, error: manual) if manual
           @modal = modal unless modal == :unchanged
-          @notice = { text: notice, level: 'error' } if notice
+          retain_notice_locked(notice, :error) if notice
         end
         @logger.call(:error, "launcher operation failed kind=#{operation.kind} error=#{error.class}")
       end
 
       # Serializes final launch against cancellation, then releases the gate before teardown.
+      # {#await_launch} sees the launch only after on_launch has returned; a
+      # callback failure leaves no launch result.
       # @api private
       # @param operation [Operation] launch token still owned by the worker
       # @param launch [Array] prepared frontend launch data
@@ -460,8 +657,8 @@ module Lich
       # @return [Boolean] whether launch was admitted
       def terminal_launch(operation, launch, origin)
         accepted = commit(operation) do
-          @mutex.synchronize { @launch_result = launch }
           @on_launch.call(launch, origin)
+          @mutex.synchronize { @launch_result = launch }
         end
         close(reason: :launch) if accepted && !(origin == :saved_entry && @persistent)
         accepted
@@ -540,6 +737,31 @@ module Lich
         refresh
       end
 
+      # Probes platform capabilities outside the lifecycle mutex (the keychain
+      # probe can run an external command) and caches the result for renders,
+      # with whether legacy entry.dat conversion is still needed. Runs at
+      # construction and on an explicit catalog refresh.
+      # @return [void]
+      # @api private
+      def refresh_capabilities
+        keychain = begin
+          @catalog.enhanced_encryption_available? == true
+        rescue StandardError => error
+          log_diagnostic(:warning, "keychain capability check failed error=#{error.class}")
+          false
+        end
+        legacy = begin
+          @catalog.respond_to?(:legacy_conversion_needed?) && @catalog.legacy_conversion_needed? == true
+        rescue StandardError => error
+          log_diagnostic(:warning, "legacy catalog check failed error=#{error.class}")
+          false
+        end
+        @mutex.synchronize do
+          @keychain_available = keychain
+          @legacy_conversion = legacy
+        end
+      end
+
       # Reloads catalog presentation state under the lifecycle mutex.
       # @return [void] replaces cached catalog presentation under the mutex
       # @api private
@@ -596,8 +818,31 @@ module Lich
       # @return [void] requests refresh after retaining the notice
       # @api private
       def set_notice(message, level)
-        @mutex.synchronize { @notice = { text: message, level: level.to_s } }
+        @mutex.synchronize { retain_notice_locked(message, level) }
         refresh
+      end
+
+      # Replaces the current notice and gives it a new revision. Callers hold
+      # the lifecycle mutex.
+      # @param message [String] authored feedback excluding submitted secrets
+      # @param level [Symbol] notice severity converted to its wire spelling
+      # @return [Hash] retained notice
+      # @api private
+      def retain_notice_locked(message, level)
+        @notice_revision += 1
+        @notice = { text: message, level: level.to_s, revision: @notice_revision }
+      end
+
+      # Delivers each notice revision in exactly one render. A render is sent to
+      # every viewer attached at that time, so no active viewer misses it; later
+      # refreshes do not repeat it. Callers hold the lifecycle mutex.
+      # @return [Hash, nil] notify facility value, or nil when already delivered
+      # @api private
+      def undelivered_notice_locked
+        return unless @notice && @notice[:revision] > @notice_delivered
+
+        @notice_delivered = @notice[:revision]
+        { text: @notice[:text], level: @notice[:level] }
       end
 
       # Projects authenticated character metadata into the manual selection rows.
@@ -731,12 +976,13 @@ module Lich
 
       # Builds frontend launch metadata with explicit installation path flags.
       # Credentials are supplied through the separate authenticated launch path.
-      # @param entry [Catalog::Entry] saved character and launch configuration without credentials
+      # @param entry [Catalog::Entry, Hash] saved or manual character and launch configuration without credentials
       # @return [Hash] launch arguments
       # @api private
       def launch_context(entry)
-        { char_name: entry.char_name, game_code: entry.game_code, frontend: entry.frontend,
-          custom_launch: entry.custom_launch, custom_launch_dir: entry.custom_launch_dir,
+        values = entry.to_h
+        { char_name: values[:char_name], game_code: values[:game_code], frontend: values[:frontend],
+          custom_launch: values[:custom_launch], custom_launch_dir: values[:custom_launch_dir],
           data_dir: @data_dir, force_path_flags: true }
       end
 

@@ -100,6 +100,9 @@ module Lich
 
         values = submission_values(event.submission)
         return manual_error('The selected front end changed. Choose it again.') unless submitted(values, 'select:manual-frontend') == frontend
+        if submitted(values, 'checkbox:manual-custom-enabled') && submitted(values, 'text_input:manual-custom').to_s.strip.empty?
+          return manual_error('Custom launch command is required when Custom launch command is checked. Enter a command or uncheck it.')
+        end
 
         operation = begin_operation(:manual_launch, event)
         @mutex.synchronize { @manual_credentials.delete(event.viewer_id) }

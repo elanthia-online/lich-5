@@ -40,7 +40,7 @@ module Lich
                   { key: 'favorite', label: 'Favorite' },
                 ], rows: rows, selection: :single, selected: Array(state[:draft_entry_key]),
                 on: { selection_change: ->(event) { launcher.select_managed_entry(event) } })
-          columns(count: 4, weights: [1, 1, 1, 1]) do
+          columns(count: 5, weights: [1, 1, 1, 1, 1]) do
             button(slot: '0', key: 'accounts-refresh', label: 'Refresh', on: { activate: ->(_event) { launcher.refresh_catalog } })
             button(slot: '1', key: 'accounts-edit', label: 'Edit Character', disabled: state[:draft_entry_key].nil?,
                    on: { activate: ->(_event) { launcher.begin_edit } })
@@ -48,6 +48,8 @@ module Lich
                    disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.remove_selected_entry(event) } })
             button(slot: '3', key: 'accounts-remove-account', label: 'Remove Account', variant: :danger,
                    disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.remove_selected_account(event) } })
+            button(slot: '4', key: 'accounts-change-password', label: 'Change Password',
+                   disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.begin_change_password(event) } })
           end
         end
       end

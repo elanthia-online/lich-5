@@ -4,11 +4,15 @@ module Lich
   module Common
     class WebUILauncher
       # Queues a saved configuration by stable identity and checks liveness before launch.
+      # The page is refreshed once the operation is active, so every Play action
+      # renders disabled while authentication runs; the operation gate still
+      # refuses an overlapping launch.
       # @param event [WebUI::Runtime::EventContext] requesting viewer
       # @param entry_key [String] saved configuration identity
       # @return [Boolean] whether work was accepted
       def saved_launch(event, entry_key)
         operation = begin_operation(:saved_launch, event)
+        refresh
         post_operation(operation) { perform_saved_launch(operation, entry_key) }
       end
 
@@ -23,6 +27,7 @@ module Lich
         return event.submission.discard_sensitive! unless entry_key
 
         operation = begin_operation(:saved_launch, event)
+        refresh
         master = transfer_secret(event.submission.fetch(password_cid))
         post_operation(operation, secrets: [master]) do
           credential = nil
