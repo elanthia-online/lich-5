@@ -1,20 +1,20 @@
 # lib/gemcheck.rb
-require 'bundler'
 require 'timeout'
 require_relative 'bundler_recovery'
 require_relative 'dependency_recovery'
+require_relative 'accepted_gem_policy'
+require_relative 'runtime_gem_contract'
 
 module Lich
-  # Verifies bundled gems are installed at Lich startup and alerts the
-  # user via a native OS dialog (with a log-file fallback) when any
-  # are missing. Runs once during boot, before scripts load.
+  # Verifies runtime dependencies at startup, including accepted Windows
+  # versions, before application scripts load. Native dialogs have log fallback.
   module GemCheck
     WINDOWS_MESSAGE = "You're missing required Ruby gems!\n\n" \
                       "Please update to the latest Ruby version using the\n" \
                       "Ruby4Lich5 installer."
     UNIX_MESSAGE    = "You're missing required Ruby gems!\n\n" \
                       "Please run 'bundle install' from your Lich5 folder."
-    TITLE           = 'Lich5: Missing Ruby Gems'
+    TITLE           = 'Lich5: Ruby Gem Check'
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
     CONSENT_TIMEOUT_SECONDS = 120
@@ -24,39 +24,27 @@ module Lich
     # Records why a recovery did not run without treating that decision as a
     # manifest or Bundler failure.
     class ConsentError < StandardError; end
+    class DeclarationError < DependencyRecovery::Error; end
 
     module_function
 
     # Verifies every gem required by the requested Bundler groups is installed,
     # alerting the user (native OS dialog, with a log-file fallback) and exiting
     # when any remain missing after one manifest-backed recovery attempt. This
-    # remains a presence check only: it does not call Bundler.setup or lock the
-    # load path, leaving scripts free to require gems they install at runtime.
+    # enforces accepted manifest versions on Windows and retains the existing
+    # non-Windows recovery boundaries. It does not call Bundler.setup; scripts
+    # remain free to require their own additional gems. Unreadable required
+    # declarations stop startup on every platform.
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
 
+      return verify_windows!(groups) if self_healing_supported?
+
       missing = missing_gems(groups)
       return if missing.empty?
-
-      if self_healing_supported?
-        result = recover_with_consent!(missing, groups: groups)
-        exit 1 unless result
-        exit 0 if result.restart_required
-
-        if result.success?
-          missing = missing_gems(groups)
-          return if missing.empty?
-
-          alert(missing: missing, groups: groups)
-        else
-          alert(missing: missing, groups: groups,
-                error: DependencyRecovery::Error.new(result.error))
-        end
-        exit 1
-      end
 
       if bundler_recovery_supported?(groups)
         result = recover_with_bundler_consent!(missing, groups: groups)
@@ -73,6 +61,33 @@ module Lich
         alert(missing: missing, groups: groups)
         exit 1
       end
+    rescue StandardError, Gem::LoadError => error
+      alert(missing: [], groups: groups, error: error)
+      exit 1
+    end
+
+    # Accepted manifest versions apply before any application dependency loads.
+    # Repair always restarts; already-loaded native or pure code cannot be
+    # safely replaced by changing the installed-spec registry in this process.
+    def verify_windows!(groups)
+      recovery = DependencyRecovery.new
+      policy = AcceptedGemPolicy.new(recovery: recovery)
+      check = policy.check(required_dependencies(groups))
+      return policy.activate!(check) if check.needed.empty?
+      exit 1 unless recovery_units_approved?(check.plan.units, groups)
+
+      write_recovery_log(missing: check.needed, groups: groups, units: check.plan.units)
+      result = recovery.recover(check.needed, force: true, plan: check.plan, restart: true, preserve_newer: true)
+      raise DependencyRecovery::Error, result.error unless result.success?
+      raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
+      exit 0
+    end
+
+    # Load Bundler only for non-Windows declaration/recovery operations. The
+    # Windows policy reader and its diagnostics do not evaluate Gemfile plugins.
+    def bundler
+      require 'bundler'
+      Bundler
     end
 
     # Ensures Bundler resolves Lich's Gemfile even when the app is launched
@@ -224,8 +239,9 @@ module Lich
         details = members.length > 1 ? ": #{members.join(', ')}" : ''
         "  - #{recovery_unit_label(unit)}#{details}"
       end
-      "Required Ruby gems are not installed:\n#{listed_units.join("\n")}\n\n" \
-        "Lich can download and install the approved, hash-verified packages now.\n\n" \
+      "Required Ruby gems are missing or need repair:\n#{listed_units.join("\n")}\n\n" \
+        "Close all other Lich instances before continuing; they may hold native DLLs needed by this repair.\n" \
+        "Lich can download and install the approved, hash-verified packages now.\nA required version repair restarts Lich before continuing.\n\n" \
         'Install now?'
     end
 
@@ -259,25 +275,30 @@ module Lich
       show_notice("Required gem#{'s' if missing.length != 1} #{missing.join(', ')} not installed. Exiting.")
     end
 
-    # Names of gems declared in the Gemfile that are not installed at any
-    # version satisfying the declared requirement, scoped to the given groups.
-    # Relies on installed Gem::Specifications; git/path-sourced gems are not
-    # detected here (the current Gemfile has none).
+    # Reads required declarations without evaluating Windows Gemfile plugins.
     # @param groups [Array<Symbol>] groups being verified
-    # @return [Array<String>] sorted, unique gem names
+    # @return [Array<Gem::Dependency>]
+    def required_dependencies(groups)
+      if self_healing_supported?
+        path = ENV['BUNDLE_GEMFILE'] || File.expand_path('../Gemfile', __dir__)
+        reader = RuntimeGemContract.new(gemfile: File.binread(path), groups: groups)
+        return reader.roots.map { |name, requirements| Gem::Dependency.new(name, *requirements) }
+      end
+      bundler.definition.current_dependencies.select { |dep| (dep.groups & groups).any? }
+    rescue StandardError, LoadError, SyntaxError => error
+      raise DeclarationError, "could not read required gem declarations: #{error.message}"
+    end
+
+    # @return [Array<String>] missing names satisfying no installed version
     def missing_gems(groups = [:default])
-      Bundler.definition.current_dependencies.select do |dep|
-        (dep.groups & groups).any?
-      end.reject do |dep|
+      required_dependencies(groups).reject do |dep|
         Gem::Specification.find_all_by_name(dep.name, dep.requirement).any?
       end.map(&:name).sort.uniq
-    rescue StandardError
-      []
     end
 
     # @return [Array<Symbol>] all groups declared in the Gemfile
     def all_groups
-      Bundler.definition.groups
+      bundler.definition.groups
     rescue StandardError
       [:default]
     end
@@ -290,7 +311,7 @@ module Lich
       write_log(missing: missing, groups: groups, error: error)
       body = build_alert_body(missing, error)
       case RUBY_PLATFORM
-      when /mswin|mingw|cygwin/ then alert_windows(body)
+      when /mswin|mingw|cygwin/ then alert_windows(body, download: !policy_failure?(error))
       when /darwin/             then alert_macos(body)
       else                           alert_linux(body)
       end
@@ -313,7 +334,7 @@ module Lich
     # @param error [Exception, nil]
     # @return [String]
     def build_alert_body(missing, error)
-      parts = [message]
+      parts = [failure_message(error)]
       if missing.any?
         parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
       end
@@ -322,6 +343,28 @@ module Lich
       end
       parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
       parts.join("\n\n")
+    end
+
+    def policy_failure?(error)
+      error.is_a?(AcceptedGemPolicy::PolicyError) || error.is_a?(DeclarationError)
+    end
+
+    def failure_message(error)
+      case error
+      when AcceptedGemPolicy::AcquisitionError
+        "Lich could not retrieve the accepted runtime policy.\nCheck your network connection and retry. Startup requires reachable policy."
+      when AcceptedGemPolicy::CoverageError
+        "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
+      when AcceptedGemPolicy::InvalidPolicyError
+        "The accepted runtime policy is invalid or incompatible with this runtime.\nAsk the release maintainer to check the published policy."
+      when AcceptedGemPolicy::LocalInstallationError
+        "This Ruby installation has a missing gem dependency.\nRepair or reinstall Ruby4Lich5, then retry."
+      when AcceptedGemPolicy::PolicyError
+        "Installed gems cannot satisfy the accepted runtime policy and declared dependencies.\nAsk the release maintainer to check compatibility for this Lich version."
+      when DeclarationError
+        "Lich could not read its required gem declarations.\nRestore the Gemfile or correct its permissions, then retry."
+      else message
+      end
     end
 
     # Records a successful user-approved recovery attempt so self-healing is
@@ -357,7 +400,7 @@ module Lich
       Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
       File.open(log_path, 'a') do |f|
         f.puts "[#{Time.now}] Lich5 GemCheck #{event}"
-        f.puts message.gsub(/^/, '  ') if event == 'failure'
+        f.puts failure_message(error).gsub(/^/, '  ') if event == 'failure'
         f.puts
 
         if recovery_units
@@ -375,12 +418,12 @@ module Lich
 
         f.puts '  Diagnostics:'
         f.puts "    Ruby:            #{RUBY_DESCRIPTION}"
-        f.puts "    Bundler:         #{safe_call { Bundler::VERSION }}"
-        f.puts "    Gemfile:         #{safe_call { Bundler.default_gemfile }}"
-        f.puts "    Lockfile:        #{safe_call { Bundler.default_lockfile }}"
+        f.puts "    Bundler:         #{self_healing_supported? ? 'not used by Windows startup policy' : safe_call { bundler::VERSION }}"
+        f.puts "    Gemfile:         #{self_healing_supported? ? ENV.fetch('BUNDLE_GEMFILE', File.expand_path('../Gemfile', __dir__)) : safe_call { bundler.default_gemfile }}"
+        f.puts "    Lockfile:        #{self_healing_supported? ? 'not used by Windows startup policy' : safe_call { bundler.default_lockfile }}"
         f.puts "    Working dir:     #{Dir.pwd}"
         f.puts "    Groups checked:  #{groups.inspect}"
-        f.puts "    All groups:      #{all_groups.inspect}"
+        f.puts "    All groups:      #{self_healing_supported? ? 'not evaluated by Windows version policy' : all_groups.inspect}"
         f.puts
 
         if missing.any?
@@ -392,7 +435,7 @@ module Lich
         f.puts
 
         if error
-          f.puts '  Bundler error:'
+          f.puts '  Underlying error:'
           f.puts "    Class:   #{error.class}"
           error.message.each_line { |line| f.puts "    #{line.chomp}" }
           f.puts
@@ -404,7 +447,7 @@ module Lich
         end
         f.puts
 
-        f.puts "  Download: #{RELEASE_URL}" if event == 'failure' && RUBY_PLATFORM =~ /mswin|mingw|cygwin/
+        f.puts "  Download: #{RELEASE_URL}" if event == 'failure' && !policy_failure?(error) && RUBY_PLATFORM =~ /mswin|mingw|cygwin/
         f.puts
       end
     rescue StandardError
@@ -418,9 +461,7 @@ module Lich
     # @param groups [Array<Symbol>]
     # @return [String]
     def dependency_report(groups)
-      deps = Bundler.definition.current_dependencies.select do |dep|
-        (dep.groups & groups).any?
-      end
+      deps = required_dependencies(groups)
       return '(none)' if deps.empty?
 
       deps.sort_by(&:name).map do |dep|
@@ -480,12 +521,12 @@ module Lich
 
     # @param body [String]
     # @return [void]
-    def alert_windows(body)
+    def alert_windows(body, download: true)
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
-      result = shell.Popup("#{body}\nClick OK to open the download page.",
-                           ALERT_TIMEOUT_SECONDS, TITLE, 1 + 64) # OK/Cancel + Information icon
-      shell.Run(RELEASE_URL) if result == 1
+      suffix = download ? "\nClick OK to open the download page." : ''
+      result = shell.Popup("#{body}#{suffix}", ALERT_TIMEOUT_SECONDS, TITLE, download ? 1 + 64 : 64)
+      shell.Run(RELEASE_URL) if download && result == 1
     end
 
     # @param body [String]

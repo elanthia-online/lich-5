@@ -81,6 +81,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows_contract:
+    name: Windows recovery and installer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/check-r4l5-contract
+
   # Shared lint from elanthia-online/.github, pinned by full SHA. Tests run in
   # the repo-specific jobs below.
   ruby:
@@ -272,7 +284,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [ruby, workflow_guard, test, changed_specs]
+    needs: [ruby, workflow_guard, test, changed_specs, windows_contract]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to pass

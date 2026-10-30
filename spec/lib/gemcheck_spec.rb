@@ -16,6 +16,11 @@ end
 require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
+  # Declaration-provider seam: these unit tests never evaluate a Gemfile or
+  # load Bundler. CI separately runs the real Bundler/RubyGems fixture lane.
+  let(:bundler) { double('declaration provider', default_gemfile: 'Gemfile', default_lockfile: 'Gemfile.lock', definition: double('default declarations', groups: [:default], current_dependencies: [])) }
+  before { allow(described_class).to receive(:bundler).and_return(bundler) }
+
   describe '.startup_groups' do
     it 'checks default and GTK dependencies for a Windows graphical launch' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
@@ -41,183 +46,103 @@ RSpec.describe Lich::GemCheck do
   end
 
   describe '.verify!' do
-    let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: []) }
-
     before do
       allow(described_class).to receive(:configure_gemfile!)
-      allow(described_class).to receive(:self_healing_supported?).and_return(true)
-      allow(described_class).to receive(:recover_with_consent!).and_return(recovery_result)
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      allow(described_class).to receive(:bundler_recovery_supported?).and_return(false)
+      allow(described_class).to receive(:alert)
     end
 
-    context 'when nothing is missing' do
-      before { allow(described_class).to receive(:missing_gems).and_return([]) }
+    it 'retains the non-Windows presence check without a manifest fetch' do
+      allow(described_class).to receive(:missing_gems).with([:default]).and_return([])
+      expect(Lich::DependencyRecovery).not_to receive(:new)
+      expect(bundler).not_to receive(:setup)
+      expect(described_class).not_to receive(:alert)
+      expect { described_class.verify! }.not_to raise_error
+    end
 
-      it 'does not alert' do
-        expect(described_class).not_to receive(:alert)
-        described_class.verify!
+    it 'retains the non-Windows missing-gem alert and failure exit' do
+      allow(described_class).to receive(:missing_gems).and_return(['ox'])
+      expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default])
+      expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+    end
+
+    it 'retains consented macOS Bundler recovery for default gems' do
+      allow(described_class).to receive(:missing_gems).and_return(['ox'])
+      allow(described_class).to receive(:bundler_recovery_supported?).and_return(true)
+      result = Lich::BundlerRecovery::Result.new(log_path: '/tmp/fixture', restart_required: true)
+      expect(described_class).to receive(:recover_with_bundler_consent!).with(['ox'], groups: [:default]).and_return(result)
+      expect(described_class).to receive(:write_bundler_recovery_log)
+      expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
+    end
+
+    context 'Windows accepted versions' do
+      let(:dependencies) { [Gem::Dependency.new('sqlite3')] }
+      let(:recovery) { instance_double(Lich::DependencyRecovery) }
+      let(:policy) { instance_double(Lich::AcceptedGemPolicy) }
+      let(:units) { [{ 'id' => 'sqlite3', 'members' => ['sqlite3'] }] }
+      let(:plan) { Lich::DependencyRecovery::Plan.new(units: units) }
+      let(:check) { Lich::AcceptedGemPolicy::Check.new(plan: plan, needed: [], specs: []) }
+
+      before do
+        allow(described_class).to receive(:self_healing_supported?).and_return(true)
+        allow(described_class).to receive(:required_dependencies).and_return(dependencies)
+        allow(Lich::DependencyRecovery).to receive(:new).and_return(recovery)
+        allow(Lich::AcceptedGemPolicy).to receive(:new).with(recovery: recovery).and_return(policy)
+        allow(policy).to receive(:check).with(dependencies).and_return(check)
+        allow(policy).to receive(:activate!).with(check).and_return(true)
+        allow(described_class).to receive(:recovery_units_approved?).and_return(true)
+        allow(described_class).to receive(:write_recovery_log)
       end
 
-      it 'returns without exiting' do
+      it 'always evaluates and activates accepted versions even if no gem is missing' do
+        expect(described_class).not_to receive(:missing_gems)
+        expect(policy).to receive(:check).with(dependencies).and_return(check)
+        expect(policy).to receive(:activate!).with(check)
+        expect(bundler).not_to receive(:setup)
         expect { described_class.verify! }.not_to raise_error
       end
 
-      it 'never locks the load path via Bundler.setup' do
-        expect(Bundler).not_to receive(:setup)
-        described_class.verify!
-      end
-
-      it 'configures the Gemfile path before checking' do
-        expect(described_class).to receive(:configure_gemfile!)
-        described_class.verify!
-      end
-
-      it 'defaults to the :default group when none is given' do
-        expect(described_class).to receive(:missing_gems).with([:default]).and_return([])
-        described_class.verify!
-      end
-
-      it 'forwards custom groups to the detector' do
-        expect(described_class).to receive(:missing_gems).with([:default, :gtk]).and_return([])
+      it 'uses requested groups when reading required declarations' do
+        expect(described_class).to receive(:required_dependencies).with(%i[default gtk]).and_return(dependencies)
         described_class.verify!(:default, :gtk)
       end
-    end
 
-    context 'when required gems are missing' do
-      before do
-        allow(described_class).to receive(:missing_gems).with([:default]).and_return(['ox'])
+      it 'requires consent and forces the complete planned repair before restarting' do
+        check.needed = ['sqlite3']
+        expect(described_class).to receive(:recovery_units_approved?).with(units, [:default]).and_return(true)
+        expect(recovery).to receive(:recover).with(['sqlite3'], force: true, plan: plan, restart: true, preserve_newer: true)
+                                             .and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true))
+        expect(policy).not_to receive(:activate!)
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
       end
 
-      it 'alerts with the detected list and exits 1' do
-        expect(described_class).to receive(:alert)
-          .with(missing: ['ox'], groups: [:default])
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
+      it 'does not repair or continue when consent is refused' do
+        check.needed = ['sqlite3']
+        allow(described_class).to receive(:recovery_units_approved?).and_return(false)
+        expect(recovery).not_to receive(:recover)
+        expect(policy).not_to receive(:activate!)
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
-      it 'does not lock the load path via Bundler.setup' do
-        allow(described_class).to receive(:alert)
-        expect(Bundler).not_to receive(:setup)
-        expect { described_class.verify! }.to raise_error(SystemExit)
-      end
-    end
-
-    context 'when self-healing is unsupported on the running platform' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'])
-        allow(described_class).to receive(:self_healing_supported?).and_return(false)
-        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(false)
+      it 'fails closed on an unavailable or invalid accepted manifest' do
+        allow(policy).to receive(:check).and_raise(Lich::DependencyRecovery::Error, 'manifest unavailable')
+        expect(described_class).to receive(:alert) { |**args| expect(args.fetch(:error).message).to include('manifest unavailable') }
+        expect(recovery).not_to receive(:recover)
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
-      it 'uses the ordinary missing-gem alert without fetching a manifest' do
-        expect(described_class).not_to receive(:recover_with_consent!)
-        expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default])
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when macOS atomic Bundler recovery is available for default gems' do
-      let(:bundler_result) { Lich::BundlerRecovery::Result.new(log_path: '/tmp/bundler-recovery.log', restart_required: true) }
-
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'])
-        allow(described_class).to receive(:self_healing_supported?).and_return(false)
-        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(true)
-        allow(described_class).to receive(:recover_with_bundler_consent!)
-          .with(['ox'], groups: [:default])
-          .and_return(bundler_result)
+      it 'fails closed when reading declarations fails instead of accepting an empty missing list' do
+        allow(described_class).to receive(:required_dependencies).and_raise(Lich::DependencyRecovery::Error, 'invalid Gemfile')
+        expect(described_class).to receive(:alert) { |**args| expect(args.fetch(:error).message).to include('invalid Gemfile') }
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
-      it 'logs the approved recovery and exits so the detached helper can promote and relaunch' do
-        expect(described_class).to receive(:write_bundler_recovery_log)
-          .with(missing: ['ox'], groups: [:default], result: bundler_result)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(0)
-        end
-      end
-
-      it 'reports a failed staged recovery without attempting a relaunch' do
-        failed_result = Lich::BundlerRecovery::Result.new(error: 'compiler unavailable')
-        allow(described_class).to receive(:recover_with_bundler_consent!).and_return(failed_result)
-        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
-          expect(missing).to eq(['ox'])
-          expect(groups).to eq([:default])
-          expect(error.message).to eq('compiler unavailable')
-        end
-
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when manifest recovery restores the missing gems' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'], [])
-      end
-
-      it 'rechecks the requested groups and continues without alerting' do
-        expect(described_class).to receive(:recover_with_consent!)
-          .with(['ox'], groups: [:default]).and_return(recovery_result)
-        expect(described_class).not_to receive(:alert)
-
-        expect { described_class.verify! }.not_to raise_error
-      end
-    end
-
-    context 'when native runtime replacement is scheduled' do
-      let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true) }
-
-      before do
-        allow(described_class).to receive(:missing_gems).with([:default]).and_return(['ox'])
-      end
-
-      it 'exits cleanly so the hidden helper can replace files and relaunch Lich' do
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(0)
-        end
-      end
-    end
-
-    context 'when manifest recovery cannot restore a detected gem' do
-      let(:recovery_result) do
-        Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'manifest unavailable')
-      end
-
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'])
-      end
-
-      it 'logs the recovery reason and exits' do
-        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
-          expect(missing).to eq(['ox'])
-          expect(groups).to eq([:default])
-          expect(error.message).to eq('manifest unavailable')
-        end
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when user consent is declined or unavailable' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'])
-        allow(described_class).to receive(:recover_with_consent!).and_return(nil)
-      end
-
-      it 'exits without a second generic missing-gem dialog' do
-        expect(described_class).not_to receive(:alert)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
-          expect(error.status).to eq(1)
-        end
+      it 'reports an unwritable runtime instead of continuing after a failed repair' do
+        check.needed = ['sqlite3']
+        allow(recovery).to receive(:recover).and_return(Lich::DependencyRecovery::Result.new(error: 'Cannot write Gem.dir'))
+        expect(described_class).to receive(:alert) { |**args| expect(args.fetch(:error).message).to include('Cannot write Gem.dir') }
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
     end
   end
@@ -254,7 +179,7 @@ RSpec.describe Lich::GemCheck do
       unit = { 'id' => 'ox', 'members' => ['ox'] }
 
       expect(described_class.build_recovery_prompt([unit]))
-        .to include("packages now.\n\nInstall now?")
+        .to include("restarts Lich before continuing.\n\nInstall now?")
     end
   end
 
@@ -401,6 +326,17 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe '.required_dependencies on Windows' do
+    it 'reads runtime groups without evaluating Gemfile plugins or requiring a shipped lockfile' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
+      source = "plugin 'must-not-run'\ngem 'sqlite3'\ngroup :gtk do\n gem 'gtk3'\nend\n"
+      allow(File).to receive(:binread).and_return(source)
+      expect(bundler).not_to receive(:definition)
+      expect(described_class.required_dependencies([:default]).map(&:name)).to eq(['sqlite3'])
+      expect(described_class.required_dependencies(%i[default gtk]).map(&:name)).to eq(%w[sqlite3 gtk3])
+    end
+  end
+
   describe '.missing_gems' do
     let(:default_present) do
       double('dep', name: 'sqlite3', requirement: Gem::Requirement.default, groups: [:default])
@@ -416,7 +352,7 @@ RSpec.describe Lich::GemCheck do
     end
 
     before do
-      allow(Bundler).to receive(:definition).and_return(definition)
+      allow(bundler).to receive(:definition).and_return(definition)
       allow(Gem::Specification).to receive(:find_all_by_name)
         .with('sqlite3', anything).and_return([double('spec')])
       allow(Gem::Specification).to receive(:find_all_by_name)
@@ -452,21 +388,21 @@ RSpec.describe Lich::GemCheck do
       expect(described_class.missing_gems([:default])).to eq(%w[atk ox])
     end
 
-    it 'returns an empty array when Bundler.definition raises' do
-      allow(Bundler).to receive(:definition).and_raise(StandardError)
-      expect(described_class.missing_gems([:default])).to eq([])
+    it 'surfaces declaration lookup failures instead of returning an empty missing list' do
+      allow(bundler).to receive(:definition).and_raise(StandardError)
+      expect { described_class.missing_gems([:default]) }.to raise_error(Lich::DependencyRecovery::Error, /could not read required gem declarations/)
     end
   end
 
   describe '.all_groups' do
     it 'returns the groups from Bundler.definition' do
-      allow(Bundler).to receive(:definition)
+      allow(bundler).to receive(:definition)
         .and_return(double('definition', groups: [:default, :development, :gtk]))
       expect(described_class.all_groups).to eq([:default, :development, :gtk])
     end
 
     it 'returns [:default] when Bundler.definition raises' do
-      allow(Bundler).to receive(:definition).and_raise(StandardError)
+      allow(bundler).to receive(:definition).and_raise(StandardError)
       expect(described_class.all_groups).to eq([:default])
     end
   end
@@ -592,11 +528,11 @@ RSpec.describe Lich::GemCheck do
 
     it 'writes the Bundler error details when provided' do
       error = double('error',
-                     class: Bundler::GemNotFound,
+                     class: StandardError,
                      message: "Could not find gem 'foo' in locally installed gems.")
       described_class.write_log(error: error)
       contents = File.read(log_path)
-      expect(contents).to include('Bundler error:')
+      expect(contents).to include('Underlying error:')
       expect(contents).to include("Could not find gem 'foo'")
     end
 
@@ -660,7 +596,7 @@ RSpec.describe Lich::GemCheck do
     end
 
     before do
-      allow(Bundler).to receive(:definition).and_return(
+      allow(bundler).to receive(:definition).and_return(
         double('definition', current_dependencies: [present_dep, missing_dep, out_of_scope_dep])
       )
       allow(Gem::Specification).to receive(:find_all_by_name)
@@ -803,5 +739,86 @@ RSpec.describe Lich::GemCheck do
       end
       expect(elapsed).to be < 5
     end
+  end
+
+  describe 'policy diagnostics and native repair guidance' do
+    before do
+      stub_const('RUBY_PLATFORM', 'x64-mingw-ucrt')
+      allow(described_class).to receive(:write_log)
+    end
+
+    it 'stops an offline healthy installation with retry guidance and no installer link' do
+      error = Lich::AcceptedGemPolicy::AcquisitionError.new('SocketError: offline')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('Check your network connection and retry', 'Startup requires reachable policy')
+      expect(body).not_to include("You're missing", 'Missing gems:')
+      expect(described_class).to receive(:alert_windows).with(body, download: false)
+      described_class.alert(error: error)
+    end
+
+    it 'explains missing server coverage without offering an installer' do
+      error = Lich::AcceptedGemPolicy::CoverageError.new('missing root')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('release maintainer', 'reinstalling Ruby will not fix')
+      expect(described_class).to receive(:alert_windows).with(body, download: false)
+      described_class.alert(error: error)
+    end
+
+    it 'explains malformed policy separately from missing installed gems' do
+      body = described_class.build_alert_body([], Lich::AcceptedGemPolicy::InvalidPolicyError.new('schema'))
+      expect(body).to include('invalid or incompatible', 'published policy')
+      expect(body).not_to include("You're missing")
+    end
+
+    it 'offers repair guidance and the installer link for a damaged local dependency' do
+      error = Lich::AcceptedGemPolicy::LocalInstallationError.new('local-child is missing')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('missing gem dependency', 'Repair or reinstall Ruby4Lich5', 'local-child is missing')
+      expect(body).not_to include('release maintainer', 'could not retrieve')
+      expect(described_class).to receive(:alert_windows).with(body, download: true)
+      described_class.alert(error: error)
+    end
+
+    it 'does not open a browser when a policy-only Windows notice is acknowledged' do
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      shell = double('shell')
+      stub_const('WIN32OLE', Class.new)
+      allow(WIN32OLE).to receive(:new).with('WScript.Shell').and_return(shell)
+      expect(shell).to receive(:Popup).with('retry', described_class::ALERT_TIMEOUT_SECONDS, described_class::TITLE, 64).and_return(1)
+      expect(shell).not_to receive(:Run)
+      described_class.alert_windows('retry', download: false)
+    end
+
+    it 'tells the user to close other instances before consenting to native repair' do
+      prompt = described_class.build_recovery_prompt([{ 'id' => 'sqlite3', 'members' => ['sqlite3'] }])
+      expect(prompt).to include('Close all other Lich instances', 'native DLLs', 'restarts Lich')
+      expect(prompt.index('Close all other Lich instances')).to be < prompt.index('Install now?')
+    end
+
+    it 'retains fail-closed non-Windows startup for a missing Gemfile without fetching policy' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      allow(described_class).to receive(:configure_gemfile!)
+      allow(bundler).to receive(:definition).and_raise(Errno::ENOENT, 'Gemfile')
+      expect(Lich::DependencyRecovery).not_to receive(:new)
+      expect(described_class).to receive(:alert) do |missing:, groups:, error:|
+        expect(missing).to be_empty
+        expect(groups).to eq([:default])
+        expect(error).to be_a(described_class::DeclarationError)
+        expect(described_class.build_alert_body(missing, error)).to include('Restore the Gemfile')
+      end
+      expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+    end
+  end
+
+  it 'logs policy failures without a misleading download link or loading Bundler on Windows' do
+    stub_const('RUBY_PLATFORM', 'x64-mingw-ucrt')
+    allow(described_class).to receive(:self_healing_supported?).and_return(true)
+    allow(described_class).to receive(:required_dependencies).and_return([])
+    expect(described_class).not_to receive(:bundler)
+    described_class.write_log(error: Lich::AcceptedGemPolicy::AcquisitionError.new('offline'))
+    contents = File.read(File.join(TEMP_DIR, described_class::LOG_FILENAME))
+    latest = contents.split('Lich5 GemCheck failure').last
+    expect(latest).to include('Check your network connection', 'Underlying error:')
+    expect(latest).not_to include('Download:', "You're missing")
   end
 end
