@@ -62,6 +62,11 @@ RSpec.describe 'script canvas interaction' do
     expect(released.pop(timeout: 2)).to eq(:button_release)
     expect(layout.pointer_viewer).to be_nil
     service.runtime.disconnect(connection)
+    # Drain the live owner's queue so release work queued by either disconnect
+    # has run before asserting that no duplicate release was delivered.
+    done = Queue.new
+    service.runtime.dispatch(owner: owner) { done << true }
+    expect(done.pop(timeout: 2)).to be(true)
     expect(released).to be_empty
   end
 
