@@ -43,8 +43,11 @@ module Lich
       # @param logger [#call, nil] diagnostic sink accepting level and message
       # @param thread_factory [#call, nil] worker constructor accepting a block;
       #   defaults to host threads so a worker never inherits the enqueuer's script group
-      def initialize(logger: nil, thread_factory: nil)
+      # @param owner_exit [#call, nil] owner-stop request after a callback's SystemExit,
+      #   called with the owner once its worker is retired
+      def initialize(logger: nil, thread_factory: nil, owner_exit: nil)
         @logger = logger || proc { |_level, _message| }
+        @owner_exit = owner_exit
         @thread_factory = thread_factory || ->(&block) { HostThread.start(&block) }
         @owners = {}.compare_by_identity
         @terminated_owners = ObjectSpace::WeakMap.new
@@ -173,6 +176,7 @@ module Lich
       # @param owner [Object] callback lifecycle identity served by this worker
       # @return [void]
       def run_owner(state, owner)
+        stop_owner = false
         loop do
           queued = state.mutex.synchronize do
             state.condition.wait(state.mutex) while state.running && state.events.empty?
@@ -183,7 +187,6 @@ module Lich
           state.current = queued
           context = Context.new(queued.owner, queued.page_id, queued.viewer_id, queued.cid, queued.event)
           Thread.current.thread_variable_set(THREAD_CONTEXT_KEY, context)
-          stop_owner = false
           begin
             queued.callable.call
           rescue SystemExit => error
@@ -199,6 +202,17 @@ module Lich
         end
       ensure
         shutdown_owner(owner)
+        # Retiring the queue alone leaves the owner's pages and admission open.
+        request_owner_exit(owner) if stop_owner
+      end
+
+      # Asks the owner's runtime to stop it; a failing request never escapes the worker.
+      # @param owner [Object] owner whose callback exited
+      # @return [void]
+      def request_owner_exit(owner)
+        @owner_exit&.call(owner)
+      rescue *CONTAINED_EXCEPTIONS => error
+        log(:error, "WebUI owner stop request failed owner=#{owner_label(owner)} error=#{error.class}")
       end
 
       # Waits for a stopping worker without letting its terminal exception abort shutdown.
