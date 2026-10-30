@@ -96,14 +96,27 @@ RSpec.describe 'bounded script compatibility pilot' do
 
   it 'reports Gtk.queue errors without killing the caller or skipping subsequent work' do
     completed = Queue.new
-    [RuntimeError, SyntaxError, SystemExit].each do |error|
+    [RuntimeError, SyntaxError].each do |error|
       expect(compatibility.queue { raise error, 'script failure' }).to eq(:queued)
     end
     compatibility.queue { completed << true }
     expect(completed.pop(timeout: 2)).to be(true)
-    [RuntimeError, SyntaxError, SystemExit].each do |error|
+    [RuntimeError, SyntaxError].each do |error|
       expect(Lich).to have_received(:log).with(/script=pilot\.lic.*operation=queue.*error=#{error}/)
     end
+    # A queued exit is not a contained failure: it stops only this owner
+    # through the dispatcher, and the enqueuing caller keeps running.
+    late = Queue.new
+    expect(compatibility.queue { raise SystemExit, 'script exit' }).to eq(:queued)
+    stopped = lambda do
+      compatibility.queue { late << :ran }
+      false
+    rescue Lich::WebUI::Error => error
+      error.message.include?('terminated')
+    end
+    Timeout.timeout(3) { sleep 0.01 until stopped.call }
+    expect(late).to be_empty
+    expect(Lich).not_to have_received(:log).with(/operation=queue.*error=SystemExit/)
   end
 
   it 'cancels pending Gtk.queue blocks on owner termination and refuses late submissions' do
