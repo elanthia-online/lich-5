@@ -75,14 +75,35 @@ module Lich
                       bottom <= Lich::WebUI::Contract::BOUNDS[:children]
             session.refuse(self, :attach) unless valid
             session.refuse(self, :attach) unless [xoptions, yoptions].all? { |value| %i[fill expand shrink].include?(value) || (value.is_a?(Integer) && value.between?(0, 7)) }
-            if right > @columns
-              @columns = right
-              write(:cols, @columns)
+            session.synchronize do
+              # Apply the shared add checks before touching the table or the
+              # child, so a refused or duplicate attachment changes neither.
+              session.refuse(self, :add) unless child.is_a?(Widget) && child.session.equal?(session)
+              ancestor = self
+              while ancestor
+                session.refuse(self, :add) if ancestor.equal?(child)
+                ancestor = ancestor.parent
+              end
+              return add(child) if child.parent.equal?(self)
+
+              session.refuse(self, :add) if child.parent
+              child_props = child.instance_variable_get(:@props)
+              previous = { columns: @columns, rows: @n_rows, placement: child.instance_variable_get(:@placement),
+                           margin: child_props.key?(:margin), margin_value: child_props[:margin] }
+              begin
+                if right > @columns
+                  @columns = right
+                  write(:cols, @columns)
+                end
+                child.placement = { column: left + 1, row: top + 1, span: right - left, row_span: bottom - top }
+                child.send(:write, :margin, { left: xpadding, right: xpadding, top: ypadding, bottom: ypadding })
+                @n_rows = [@n_rows, bottom].max
+                add(child)
+              rescue StandardError
+                restore_table_attachment(child, previous)
+                raise
+              end
             end
-            child.placement = { column: left + 1, row: top + 1, span: right - left, row_span: bottom - top }
-            child.send(:write, :margin, { left: xpadding, right: xpadding, top: ypadding, bottom: ypadding })
-            @n_rows = [@n_rows, bottom].max
-            add(child)
           end
 
           # Legacy convenience spelling uses the same default expansion and padding.
@@ -115,6 +136,34 @@ module Lich
               (first...(first + placement.fetch(:span, 1))).to_a
             end
             { expand_columns: columns.uniq.sort }
+          end
+
+          private
+
+          # Undoes a failed Table attachment: detaches an inserted child and
+          # restores the table's columns and rows and the child's placement and margin.
+          # @param child [Widget] same-session child whose attachment failed
+          # @param previous [Hash] captured table dimensions and child placement/margin
+          # @return [void] result is not part of the supported script contract
+          # @api private
+          def restore_table_attachment(child, previous)
+            if child.parent.equal?(self)
+              session.port.detach(@handle, child.materialize) if @handle
+              @children.delete(child)
+              child.parent = nil
+            end
+            child.placement = previous[:placement]
+            if previous[:margin]
+              child.send(:write, :margin, previous[:margin_value])
+            else
+              # An absent margin renders as zero; the shadow returns to unset.
+              child.send(:write, :margin, 0) if child.instance_variable_get(:@handle)
+              child.instance_variable_get(:@props).delete(:margin)
+            end
+            @n_rows = previous[:rows]
+            write(:cols, previous[:columns]) unless @columns == previous[:columns]
+            @columns = previous[:columns]
+            refresh_layout!
           end
         end
 

@@ -189,6 +189,39 @@ RSpec.describe 'legacy GTK spellings and entry initialization' do
     expect { gtk::Grid.new.attach_defaults(gtk::Label.new, 0, 1, 0, 1) }.to raise_error(gtk::UnsupportedOperation)
   end
 
+  it 'leaves the table and child unchanged when a table attachment is refused, duplicated or rejected by the port' do
+    table = gtk::Table.new(1, 2)
+    packed = gtk::Label.new('packed')
+    table.attach(packed, 0, 1, 0, 1)
+    parented = gtk::Label.new('parented')
+    gtk::Table.new(1, 1).attach(parented, 0, 1, 0, 1)
+    stranger = Struct.new(:name).new('stranger.lic')
+    allow(Lich::Common::Script).to receive(:current).and_return(stranger)
+    foreign = gtk::Label.new('foreign')
+    allow(Lich::Common::Script).to receive(:current).and_return(owner)
+    state = lambda do |child|
+      [table.instance_variable_get(:@columns), table.n_rows, table.send(:component_props)[:cols], table.children,
+       child.instance_variable_get(:@placement), child.instance_variable_get(:@props)[:margin], child.parent]
+    end
+    [parented, foreign, table].each do |child|
+      before = state.call(child)
+      expect { table.attach(child, 3, 5, 2, 4, 5, 5, 7, 7) }.to raise_error(gtk::UnsupportedOperation)
+      expect(state.call(child)).to eq(before)
+    end
+    before = state.call(packed)
+    expect(table.attach(packed, 3, 5, 2, 4, 5, 5, 7, 7)).to equal(table)
+    expect(state.call(packed)).to eq(before)
+    expect(Lich).to have_received(:log).with(/duplicate ignored/)
+    table.materialize
+    rejected = gtk::Label.new('rejected')
+    before = state.call(rejected)
+    allow(table.session.port).to receive(:attach).and_raise(RuntimeError, 'port refused')
+    expect { table.attach(rejected, 3, 5, 2, 4, 5, 5, 7, 7) }.to raise_error(RuntimeError, 'port refused')
+    expect(state.call(rejected)).to eq(before)
+  ensure
+    Lich::Common::ScriptDeath.run(stranger) if stranger
+  end
+
   it 'changes live entry editability without replacing the handle or text' do
     entry = gtk::Entry.new
     entry.text = 'retained'
