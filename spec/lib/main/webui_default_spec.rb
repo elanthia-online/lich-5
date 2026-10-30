@@ -7,7 +7,10 @@ require 'rbconfig'
 RSpec.describe 'default native WebUI startup' do
   it 'activates script-local compatibility through both real script binding entrypoints' do
     source = <<~RUBY
+      require_relative 'lib/webui'
       require_relative 'lib/common/script'
+      # Core startup records the presentation policy before the first activation.
+      Lich::WebUI.configure_presentation(enabled: true)
       bindings = [Lich::Common::TRUSTED_SCRIPT_BINDING.call, Lich::Common::Scripting.new.script]
       abort 'shim missing' unless bindings.all? { |scope| eval('Gtk::Version::MAJOR == 3 && HAVE_GTK', scope) }
       abort 'core GTK leaked' if [Object, Lich::Common].any? { |scope| scope.const_defined?(:Gtk, false) }
@@ -68,7 +71,7 @@ RSpec.describe 'default native WebUI startup' do
     expect(options).not_to include('webui_dev')
     expect(main).to include('elsif ARGV.empty? or @argv_options[:gui]')
     expect(main).to include("require File.join(LIB_DIR, 'common', 'webui_launcher.rb')")
-    expect(main).to include("@launch_data = webui_launcher.start.await_launch\n    next unless @launch_data")
+    expect(main).to include("@launch_data = Lich::Main::WebUIStartup.await(webui_launcher)\n    next unless @launch_data")
     expect(main).not_to include('gui_login')
     expect(main).not_to match(/\bGtk(?:::|\.)/)
   end
