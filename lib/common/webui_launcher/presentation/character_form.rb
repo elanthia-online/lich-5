@@ -5,7 +5,8 @@ module Lich
     class WebUILauncher
       private
 
-      # Builds the character editor, retaining a removed frontend for explicit repair.
+      # Builds the character editor, retaining a removed frontend or an unsupported
+      # saved game code as an annotated option for explicit repair.
       # @param ui [WebUI::TreeBuilder] builder receiving the form widgets
       # @param state [Hash] account, entry and available-frontend snapshot
       # @return [void]
@@ -20,7 +21,11 @@ module Lich
           account_props[:value] = draft&.user_id || state[:accounts].first unless options.empty?
           account = select(**account_props)
           name = text_input(key: 'character-name', label: 'Character', value: draft&.char_name.to_s)
-          game = select(key: 'character-game', label: 'Game', options: GAMES, value: draft&.game_code || 'GS3')
+          game_options = GAMES.map(&:dup)
+          if draft && !game_options.any? { |option| option[:value] == draft.game_code }
+            game_options << { value: draft.game_code, label: "#{draft.game_code} (unsupported; choose a replacement)" }
+          end
+          game = select(key: 'character-game', label: 'Game', options: game_options, value: draft&.game_code || 'GS3')
           frontend_options = state[:frontend_options].map(&:dup)
           if draft && !frontend_options.any? { |option| option[:value] == draft.frontend }
             frontend_options << { value: draft.frontend, label: "#{draft.frontend} (removed; choose a replacement)" }

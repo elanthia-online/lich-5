@@ -6,6 +6,8 @@ module Lich
       private
 
       # Prepares a manual login, then independently admits optional save and launch.
+      # Multi-Launch keeps the launcher open and starts a child session, as for
+      # saved entries.
       # @api private
       # @param operation [Operation] cancelable launch token
       # @param account [String] account to authenticate
@@ -16,6 +18,7 @@ module Lich
       def perform_manual_launch(operation, account, character, credential, values)
         launch = nil
         save_notice = nil
+        entry = nil
         credential.consume do |password|
           auth = @authenticator.authenticate(account: account, password: password,
                                              character: character[:char_name], game_code: character[:game_code])
@@ -26,13 +29,17 @@ module Lich
           launch = @launch_data.prepare(auth, frontend, custom, custom_dir)
           save = submitted(values, 'checkbox:manual-save')
           favorite = submitted(values, 'checkbox:manual-favorite')
+          entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
           if save || favorite
-            entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
             commit(operation) { save_notice = save_manual_entry(entry, password, favorite: favorite) }
           end
         end
         report_feedback(save_notice) if save_notice && operation_live?(operation)
-        terminal_launch(operation, launch, :manual)
+        if @persistent
+          child_launch(operation, launch, entry) { @manual = default_manual_state }
+        else
+          terminal_launch(operation, launch, :manual)
+        end
       rescue StandardError => error
         fail_operation(operation, error, manual: 'Launch failed. Retry from Manual Entry.')
       end
@@ -99,11 +106,7 @@ module Lich
         end
         failure_notice = 'Login succeeded, but the session could not be launched. Check the front end configuration and debug log.'
         if @persistent
-          result = nil
-          return unless commit(operation) { result = @session_launcher.launch(launch, launch_context: launch_context(entry)) }
-          raise 'session launch failed' unless result[:ok]
-          complete(operation) { @modal = nil }
-          set_notice('Session launched.', :info)
+          child_launch(operation, launch, entry)
         else
           terminal_launch(operation, launch, :saved_entry)
         end
@@ -118,6 +121,26 @@ module Lich
         fail_operation(operation, error, modal: nil, notice: notice)
       ensure
         credential&.discard!
+      end
+
+      # Starts a persistent child session and keeps the launcher open.
+      # @param operation [Operation] cancelable launch token
+      # @param launch [Array] prepared frontend launch data
+      # @param entry [Catalog::Entry, Hash] character and launch configuration without credentials
+      # @yield optional state change applied with the accepted completion
+      # @return [void]
+      # @raise [RuntimeError] when the child session does not start
+      # @api private
+      def child_launch(operation, launch, entry)
+        result = nil
+        return unless commit(operation) { result = @session_launcher.launch(launch, launch_context: launch_context(entry)) }
+        raise 'session launch failed' unless result[:ok]
+
+        complete(operation) do
+          @modal = nil
+          yield if block_given?
+        end
+        set_notice('Session launched.', :info)
       end
 
       # Lets Saga own saved-entry authentication and its Via-Lich child process.

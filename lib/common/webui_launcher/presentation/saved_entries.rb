@@ -23,7 +23,7 @@ module Lich
                                 empty: 'No favorite characters yet.')
             end
             account_names.each do |account|
-              stack(slot: account, key: "saved-account-#{account}") do
+              stack(slot: account, key: "saved-#{Catalog.account_key(account)}") do
                 launcher.__send__(:render_entry_rows, self,
                                   state[:entries].select { |entry| entry.user_id == account }, state,
                                   empty: 'No saved characters for this account.')
@@ -33,7 +33,7 @@ module Lich
         else
           ui.stack(key: 'saved-list-layout') do
             account_names.each do |account|
-              group(key: "saved-list-account-#{account}", label: "Account: #{account.downcase}") do
+              group(key: "saved-list-#{Catalog.account_key(account)}", label: "Account: #{account.downcase}") do
                 launcher.__send__(:render_entry_rows, self,
                                   state[:entries].select { |entry| entry.user_id == account }, state,
                                   empty: 'No saved characters for this account.')

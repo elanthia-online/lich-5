@@ -20,6 +20,21 @@ RSpec.describe Lich::Common::WebUILauncher::WindowGeometryStore do
     end
   end
 
+  it 'replaces the geometry file atomically and leaves no temporary file' do
+    Dir.mktmpdir do |data_dir|
+      store = described_class.new(data_dir: data_dir)
+      path = File.join(data_dir, described_class::FILE_NAME)
+      File.write(path, YAML.dump(width: 900, height: 700, position: nil))
+      allow(File).to receive(:rename).and_call_original
+
+      expect(store.save(width: 1000, height: 760, position: nil)).to eq(width: 1000, height: 760, position: nil)
+      expect(File).to have_received(:rename).with(a_string_starting_with(data_dir), path)
+      expect(Dir.children(data_dir)).to eq([described_class::FILE_NAME])
+      expect(File.stat(path).mode & 0o777).to eq(0o600)
+      expect(store.load).to eq(width: 1000, height: 760, position: nil)
+    end
+  end
+
   it 'rejects malformed and unbounded geometry' do
     store = described_class.new(data_dir: Dir.tmpdir)
 
