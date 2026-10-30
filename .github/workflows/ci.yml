@@ -70,7 +70,10 @@ on:
   push:
     branches:
       - main
+      - "webui/**"
   pull_request:
+    branches-ignore:
+      - "webui/**"
 
 permissions:
   contents: read
@@ -159,7 +162,7 @@ jobs:
             async function changedFilesForPush() {
               const before = (context.payload.before || '').trim();
               const head   = context.sha;
-              if (!before) return null;
+              if (!before || /^0+$/.test(before)) return null;
               const cmp = await github.rest.repos.compareCommits({ owner, repo, base: before, head });
               return (cmp.data.files || []).map(f => ({ name: f.filename, status: f.status }));
             }
@@ -230,7 +233,7 @@ jobs:
             if (context.eventName === 'pull_request') {
               files = await github.paginate(github.rest.pulls.listFiles,
                 { owner, repo, pull_number: context.payload.pull_request.number, per_page: 100 });
-            } else if (context.eventName === 'push' && (context.payload.before || '').trim()) {
+            } else if (context.eventName === 'push' && (context.payload.before || '').trim() && !/^0+$/.test(context.payload.before)) {
               const cmp = await github.rest.repos.compareCommits({ owner, repo, base: context.payload.before, head: context.sha });
               files = cmp.data.files || [];
             }
