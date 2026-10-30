@@ -180,6 +180,13 @@ module Lich
             else
               script_binding = Scripting.new.script
             end
+          rescue ScriptScope::ScopeActivationError => error
+            # The recorded activation failure, raised again for every start. The
+            # debug log keeps it when no frontend shows script output.
+            message = "--- Lich: cannot start #{registry_name}: #{error.message}"
+            respond message
+            Lich.log "error: #{message}"
+            next nil
           rescue
             respond "--- Lich: error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             next nil

@@ -202,6 +202,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
           stub_const('SCRIPT_DIR', root)
           stub_const('SCRIPT_QUEUE_EVENTS', Queue.new)
           stub_const('SCRIPT_QUEUE_RELEASE', Queue.new)
+          # Run alone, nothing earlier has loaded WebUI; activation does.
+          Lich::Common::ScriptScope.activate!
           host = Lich::WebUI.service
           allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
             Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
@@ -297,6 +299,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
             #{"Done:\nnil" if label_based}
           RUBY
           $LOAD_PATH.unshift(root)
+          # The compatibility entrypoints resolve only while presentation is enabled.
+          Lich::Common::ScriptScope.activate!
+          Lich::WebUI.configure_presentation(enabled: true)
           child = script_class.start('boundary')
           expect(child.join(2)).to equal(child)
           expect(child).to be_completed_successfully
@@ -305,6 +310,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
           expect($LOADED_FEATURES).not_to include(File.join(root, 'gtk3.rb'))
         ensure
           $LOAD_PATH.delete(root)
+          Lich::WebUI.configure_presentation(enabled: nil) if defined?(Lich::WebUI)
         end
       end
     end
@@ -881,6 +887,27 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         expect(started).to be_a(script_class)
         expect(started.join(2)).to equal(started)
         expect(started).to be_completed_successfully
+      end
+    end
+
+    it 'reports a recorded scope activation failure on every start, to the frontend and the debug log' do
+      Dir.mktmpdir('script-scope-failure') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'ordinary.lic'), "# quiet\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        failure = 'script scope activation failed: LoadError: boot failed; not retried, restart Lich'
+        allow(Lich::Common::ScriptScope).to receive(:activate!)
+          .and_raise(Lich::Common::ScriptScope::ScopeActivationError, failure)
+        allow(script_class).to receive(:respond)
+
+        2.times { expect(script_class.start('ordinary')).to be_nil }
+
+        message = "--- Lich: cannot start ordinary: #{failure}"
+        expect(script_class).to have_received(:respond).with(message).twice
+        expect(Lich).to have_received(:log).with("error: #{message}").twice
+        expect(script_class.list).to be_empty
+        expect(script_class.class_variable_get(:@@startup_reservations)).to be_empty
       end
     end
 

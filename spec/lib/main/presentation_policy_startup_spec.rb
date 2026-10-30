@@ -17,6 +17,15 @@ RSpec.describe 'WebUI presentation policy at startup' do
     expect(policy).to be < started
   end
 
+  it 'records the policy before anything can activate the script scope, which fixes HAVE_GTK' do
+    policy = entrypoint.index('Lich::WebUI.configure_presentation(')
+    prefix = entrypoint[0...policy]
+    expect(prefix).not_to match(/ScriptScope|TRUSTED_SCRIPT_BINDING|Scripting\.new|Script\.start|Script\.run/)
+    lib = File.expand_path('../../../lib', __dir__)
+    callers = Dir[File.join(lib, '**', '*.rb')].select { |path| File.read(path).match?(/ScriptScope\.activate!/) }
+    expect(callers.map { |path| path.delete_prefix("#{lib}/") }).to eq(['common/script.rb'])
+  end
+
   it 'enables presentation unless --no-gui or --no-gtk resolved gui to false' do
     { {} => true, { gui: true } => true, { gui: false } => false }.each do |options, enabled|
       Lich::WebUI.configure_presentation(enabled: options[:gui] != false)
