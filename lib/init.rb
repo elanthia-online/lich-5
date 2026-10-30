@@ -396,45 +396,6 @@ rescue LoadError => sqlite_load_error
   end
 end
 
-unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
-  begin
-    require 'gtk3'
-    HAVE_GTK = true
-  rescue LoadError => gtk_load_error
-    # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
-    # native dependency therefore restores the complete, ordered closure.
-    if Lich::GemCheck.self_healing_supported?
-      result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
-      if result.nil?
-        exit 1
-      elsif result.restart_required
-        exit 0
-      elsif result.success?
-        begin
-          require 'gtk3'
-          HAVE_GTK = true
-        rescue LoadError => recovered_error
-          Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: recovered_error)
-          exit 1
-        end
-      else
-        Lich::GemCheck.alert(
-          missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
-        )
-        exit 1
-      end
-    else
-      # GTK is required unless the user explicitly selected a headless launch.
-      # Do not infer that choice from DISPLAY, TTY, or cron environment state.
-      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: gtk_load_error)
-      exit 1
-    end
-  end
-else
-  HAVE_GTK = false
-  @early_gtk_error = 'info: GTK disabled by command-line option'
-end
-
 unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
@@ -491,8 +452,6 @@ Lich.log "info: Branch - #{LICH_BRANCH}" if defined?(LICH_BRANCH)
 Lich.log "info: Repo - #{LICH_BRANCH_REPO}" if defined?(LICH_BRANCH_REPO)
 Lich.log "info: Ruby #{RUBY_VERSION}"
 Lich.log "info: #{RUBY_PLATFORM}"
-Lich.log @early_gtk_error if @early_gtk_error
-@early_gtk_error = nil
 
 unless File.exist?(DATA_DIR)
   begin

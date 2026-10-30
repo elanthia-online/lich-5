@@ -8,7 +8,6 @@ require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
 require_relative '../authentication/login_helpers'
 require_relative '../authentication/web_login'
-require_relative '../gui/game_selection'
 require_relative 'cli_option_validator'
 
 module Lich

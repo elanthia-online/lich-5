@@ -95,7 +95,7 @@ module Lich
     end
 
     # The initial non-Windows recovery is deliberately macOS-only and only
-    # covers default runtime gems. GTK remains outside this Bundler path.
+    # covers the default runtime group used by current startup.
     # @param groups [Array<Symbol>]
     # @return [Boolean]
     def bundler_recovery_supported?(groups)
@@ -103,16 +103,12 @@ module Lich
     end
 
     # Chooses the dependency groups that must be present before normal startup.
-    # Only Windows verifies GTK here, because Ruby4Lich5 publishes a Windows
-    # recovery unit for it. On every platform, init.rb treats GTK as required
-    # unless the user explicitly passes --no-gtk or --no-gui.
+    # The native WebUI launcher has no GUI gem dependency.
     #
-    # @param argv [Array<String>] command-line arguments
+    # @param _argv [Array<String>] retained compatibility argument; WebUI needs only the default group
     # @return [Array<Symbol>]
-    def startup_groups(argv = ARGV)
-      groups = [:default]
-      groups << :gtk if self_healing_supported? && !Array(argv).any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
-      groups
+    def startup_groups(_argv = ARGV)
+      [:default]
     end
 
     # Fetches and validates the manifest, requests consent for each affected
@@ -134,7 +130,7 @@ module Lich
       recovery.recover(gem_names, force: force, plan: plan)
     end
 
-    # Runs a consented Bundler repair for the default non-GTK runtime gems on
+    # Runs a consented Bundler repair for the default runtime gem group on
     # macOS. The recovery object uses a shipped lockfile when present, or
     # resolves only within staging before making the private RubyGems home
     # active.

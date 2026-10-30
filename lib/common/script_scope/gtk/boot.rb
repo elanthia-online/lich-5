@@ -30,7 +30,10 @@ module Lich
   module Common
     module ScriptScope
       # Availability describes this compatibility surface, never a native load.
-      HAVE_GTK = true
+      # It reads the core presentation policy (never sets it) and is fixed when
+      # the scope first activates, so core startup configures the policy first;
+      # an unconfigured policy reads false.
+      HAVE_GTK = Lich::WebUI.presentation_enabled?
 
       module Gtk
         # Legacy spelling for the existing browser-owned automatic scroll policy.

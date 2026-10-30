@@ -10,13 +10,17 @@
 require 'weakref'
 require_relative 'script_death'
 require_relative 'script_execution_guard'
+require_relative 'script_scope'
 
 module Lich
   module Common
     # module Gemstone
     class Scripting
+      # Activates the GTK-free compatibility boundary and creates a fresh label-script binding.
+      # @return [Binding] isolated locals/receiver within the shared lexical script scope
       def script
-        Proc.new {}.binding
+        ScriptScope.activate!
+        ScriptScope.untrusted_binding
       end
     end
 
@@ -24,7 +28,10 @@ module Lich
       Proc.new {}.binding
     end
 
-    TRUSTED_SCRIPT_BINDING = proc { _script }
+    TRUSTED_SCRIPT_BINDING = proc do
+      ScriptScope.activate!
+      ScriptScope.script_binding
+    end
 
     class Script
       VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
@@ -173,6 +180,13 @@ module Lich
             else
               script_binding = Scripting.new.script
             end
+          rescue ScriptScope::ScopeActivationError => error
+            # The recorded activation failure, raised again for every start. The
+            # debug log keeps it when no frontend shows script output.
+            message = "--- Lich: cannot start #{registry_name}: #{error.message}"
+            respond message
+            Lich.log "error: #{message}"
+            next nil
           rescue
             respond "--- Lich: error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             next nil

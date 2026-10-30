@@ -122,8 +122,7 @@ jobs:
               spec/lib/common/script_scope_geometry_cursor_spec.rb
               spec/lib/common/script_scope_drawing_spec.rb
     env:
-      # Retire gtk exclusion at P22 when Gemfile removes the native GTK group.
-      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+      BUNDLE_WITHOUT: 'vscode:profanity'
       NATIVE_BROWSER: '1'
     steps:
       - *classify

@@ -195,11 +195,23 @@ reconnect_if_wanted = proc {
       raise SystemExit.new(1) # With abort_on_exception=true, this propagates to main thread
     end
 
-  ## GUI starts here
+  ## Native WebUI starts here
 
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'common', 'gui_login.rb')
-    gui_login
+  elsif ARGV.empty? or @argv_options[:gui]
+    require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
+    require File.join(LIB_DIR, 'main', 'webui_startup.rb')
+    webui_launcher = Lich::Common::WebUILauncher.new(
+      data_dir: DATA_DIR,
+      on_launch: proc {},
+      dark_theme: Lich.track_dark_mode,
+      tab_layout: Lich.track_layout_state,
+      autosort: Lich.track_autosort_state,
+      persistent: Lich.track_persistent_launcher_mode
+    )
+    # A launcher failure exits 1 (abort_on_exception propagates it); a cancel
+    # ends startup normally. The launcher is torn down either way.
+    @launch_data = Lich::Main::WebUIStartup.await(webui_launcher)
+    next unless @launch_data
   end
 
   #
@@ -536,7 +548,6 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Lich::Common.shutdown_gtk_before_exit
         exit
       end
       #      if defined?(Win32)
@@ -561,7 +572,6 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Lich::Common.shutdown_gtk_before_exit
         exit
       end
     end
@@ -1181,6 +1191,7 @@ reconnect_if_wanted = proc {
       Lich::Common::ShutdownLog.info('saving script settings...')
       shutdown_step.call('Vars.save') { Vars.save }
     end
+    shutdown_step.call('WebUI reset') { Lich::WebUI.reset! if defined?(Lich::WebUI) }
     Lich::Common::ShutdownLog.info('closing connections...')
     shutdown_step.call('Game.close') { Game.close }
     shutdown_step.call('client_thread.kill') { client_thread.kill }
@@ -1218,9 +1229,14 @@ reconnect_if_wanted = proc {
       Lich::Common::ShutdownLog.flush_user_exit_summary!
     end
     Lich::Common::ShutdownLog.info('exiting...')
-    Lich::Common.shutdown_gtk_before_exit
     exit
   ensure
+    # Retry failed owned-window closes, including abnormal teardown exits.
+    begin
+      Lich::WebUI.reset! if defined?(Lich::WebUI)
+    rescue StandardError => error
+      Lich::Common::ShutdownLog.warning("WebUI shutdown failed: #{error.class}: #{error.message}")
+    end
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
     Lich::Common::ShutdownLog.flush_user_exit_summary! rescue nil
