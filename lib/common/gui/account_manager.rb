@@ -440,7 +440,8 @@ module Lich
         end
 
         # Gets all accounts with their characters
-        # This method is used by AccountManagerUI.populate_accounts_view
+        # Public provider API; no in-tree caller remains since the GTK
+        # account manager view was retired
         #
         # @param data_dir [String] Directory containing entry data
         # @return [Hash] Hash of accounts with their characters
