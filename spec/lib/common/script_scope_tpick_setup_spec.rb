@@ -8,6 +8,11 @@ require 'json'
 require 'timeout'
 
 RSpec.describe 'Original tpick setup acceptance' do
+  # Settled B5: every example here runs the retained tpick-titlebar.json blocks,
+  # so each names the script, tested version, pinned source revision and credited
+  # author as the source header writes them (spec/fixtures/webui/README.txt).
+  attribution = '[tpick version 48, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]'
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope.const_get(:Gtk, false) }
   let(:owner) { Struct.new(:name).new('tpick.lic') }
@@ -88,7 +93,7 @@ RSpec.describe 'Original tpick setup acceptance' do
   end
 
   %w[Rogue Warrior Bard Wizard].each do |profession|
-    it "constructs every original settings tab for #{profession} and preserves required cues" do
+    it "constructs every original settings tab for #{profession} and preserves required cues #{attribution}" do
       tpick = original(profession: profession)
       tpick.create_settings_window
       window = tpick.instance_variable_get(:@windows).fetch('Settings')
@@ -106,14 +111,14 @@ RSpec.describe 'Original tpick setup acceptance' do
   end
 
   %w[Monk Paladin].each do |profession|
-    it "retains the source's missing Spells grid defect for spell-less #{profession}" do
+    it "retains the source's missing Spells grid defect for spell-less #{profession} #{attribution}" do
       tpick = original(profession: profession, spells: false)
       expect { tpick.create_settings_window }.to raise_error(NoMethodError, /attach/)
       expect(tpick.instance_variable_get(:@grids)).not_to have_key('Spells Main')
     end
   end
 
-  it 'runs original profile/default callbacks and saves values to an isolated settings file' do
+  it "runs original profile/default callbacks and saves values to an isolated settings file #{attribution}" do
     tpick = original
     tpick.create_settings_window
     controls = tpick.instance_variable_get(:@buttons)
@@ -131,7 +136,7 @@ RSpec.describe 'Original tpick setup acceptance' do
     expect(tpick).not_to have_received(:message).with(/Save error/)
   end
 
-  it 'constructs the original information window, updates messages/stats and closes cleanly' do
+  it "constructs the original information window, updates messages/stats and closes cleanly #{attribution}" do
     tpick = original
     tpick.create_information_window
     drain
@@ -148,13 +153,13 @@ RSpec.describe 'Original tpick setup acceptance' do
     expect(JSON.parse(File.read(tpick.instance_variable_get(:@save_file))).fetch('Fixture')).to have_key('Picking Mode')
   end
 
-  it 'retains the explicit optional image-window boundary' do
+  it "retains the explicit optional image-window boundary #{attribution}" do
     tpick = original
     tpick.instance_variable_set(:@show_images, true)
     expect { tpick.create_information_window }.to raise_error(gtk::UnsupportedOperation, /operation=Justification source=tpick.lic:2771/)
   end
 
-  it 'opens complete information for live browser acceptance', browser: true do
+  it "opens complete information for live browser acceptance #{attribution}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     tpick = original
     tpick.create_information_window
@@ -169,7 +174,7 @@ RSpec.describe 'Original tpick setup acceptance' do
     expect(JSON.parse(File.read(tpick.instance_variable_get(:@save_file))).fetch('Fixture')).to have_key('Picking Mode')
   end
 
-  it 'opens complete settings for live browser acceptance', browser: true do
+  it "opens complete settings for live browser acceptance #{attribution}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     tpick = original
     tpick.create_settings_window

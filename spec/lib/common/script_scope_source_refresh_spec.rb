@@ -8,6 +8,17 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'refreshed original script setup acceptance' do
+  # Settled B5: each script-derived example names the script, the tested version
+  # and pinned source revision, and the credited author, as the source header
+  # writes them (spec/fixtures/webui/README.txt, Attribution). Revisions are
+  # those recorded in source-refresh.json; compass_and_wings cites its header
+  # version (its VERSION constant, line 109, is 1.6.11).
+  attribution = {
+    'abyssx'  => '[abyssx version 3.0, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Hexbane]',
+    'bigshot' => '[bigshot version 5.17.0, revision c4a96840ea2a29a445fd797c7baec0b012b0dd12, author elanthia-online]',
+    'compass' => '[compass_and_wings version 2.2.0, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, authors Khaell, Ruseoffools]',
+  }
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope::Gtk }
   let(:owner) { Struct.new(:name).new('source-refresh.lic') }
@@ -143,14 +154,14 @@ RSpec.describe 'refreshed original script setup acceptance' do
     end.to_h
   end
 
-  it 'confirms newer Bigshot still uses the identical retained Setup bytes' do
+  it "confirms newer Bigshot still uses the identical retained Setup bytes #{attribution.fetch('bigshot')}" do
     entry = fixture.fetch('scripts').fetch('bigshot')
     source = File.binread(File.expand_path("../../fixtures/webui/#{entry.fetch('fixture')}", __dir__))
     expect(Digest::SHA256.hexdigest(source.lines[1...-1].join.lstrip.chomp)).to eq(entry.fetch('setup_sha256'))
     expect(entry.fetch('revision')).to eq('c4a96840ea2a29a445fd797c7baec0b012b0dd12')
   end
 
-  it 'runs abyssx defaults, exclusive radio selection, source coercion and Save unchanged' do
+  it "runs abyssx defaults, exclusive radio selection, source coercion and Save unchanged #{attribution.fetch('abyssx')}" do
     abyssx
     expect(@gui.instance_variable_get(:@entry_lootsack).text).to eq('default sack')
     set(@gui.instance_variable_get(:@entry_lootsack), :text, ' pack ')
@@ -164,7 +175,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
   end
 
   %i[cancel close].each do |action|
-    it "loads saved abyssx settings and exits without saving on #{action}" do
+    it "loads saved abyssx settings and exits without saving on #{action} #{attribution.fetch('abyssx')}" do
       abyssx('lootsack' => 'kept', 'attack_mode' => 'spell', 'spell_number' => 702)
       expect(@gui.instance_variable_get(:@radio_spell).active?).to be(true)
       set(@gui.instance_variable_get(:@entry_lootsack), :text, 'discard')
@@ -178,7 +189,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
     end
   end
 
-  it 'keeps compass validation failures open, then saves through the original normalization helpers' do
+  it "keeps compass validation failures open, then saves through the original normalization helpers #{attribution.fetch('compass')}" do
     compass('energywings_use_prep_reaction' => false)
     entries = descendants.grep(gtk::Entry)
     expect(entries.length).to eq(20)
@@ -205,7 +216,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
     expect(@exit_hooks).to be_empty
   end
 
-  it 'preserves compass initial normalization but does not save canceled edits' do
+  it "preserves compass initial normalization but does not save canceled edits #{attribution.fetch('compass')}" do
     compass
     before = @saved.dup
     set(descendants.grep(gtk::Entry)[1], :text, 'discarded')
@@ -217,7 +228,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
     expect(@saved).to eq(before)
   end
 
-  it 'runs the original compass before_dying cleanup without saving edits' do
+  it "runs the original compass before_dying cleanup without saving edits #{attribution.fetch('compass')}" do
     compass
     @exit_hooks.fetch(0).call
     drain
@@ -226,7 +237,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
     expect(@saved.length).to eq(1)
   end
 
-  it 'validates abyssx setup and saving in the browser', browser: true do
+  it "validates abyssx setup and saving in the browser #{attribution.fetch('abyssx')}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     abyssx
     fields = %i[entry_lootsack entry_spell entry_mana entry_mind_pause entry_mind_resume].to_h do |name|
@@ -237,7 +248,7 @@ RSpec.describe 'refreshed original script setup acceptance' do
     expect(@saved.last).to include('lootsack' => 'browser sack', 'attack_mode' => 'spell', 'spell_number' => 901)
   end
 
-  it 'validates compass scrolling, error feedback and saving in the browser', browser: true do
+  it "validates compass scrolling, error feedback and saving in the browser #{attribution.fetch('compass')}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     compass
     entries = descendants.grep(gtk::Entry)
