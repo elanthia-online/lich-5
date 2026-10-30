@@ -191,7 +191,13 @@ RSpec.describe 'bounded shim collaboration contracts' do
       payload = { x: 4, y: 5, button: 1, time: 0, state: 0 }
       press.call(context(payload))
       expect([window.pointer_viewer, layout.pointer_viewer]).to eq(%w[origin origin])
-      expect { press.call(context(payload, viewer: 'other')) }.to raise_error(gtk::UnsupportedOperation, /operation=pointer_press/)
+      # The second viewer's press is refused inside the shim's signal boundary:
+      # contained and logged with attribution, never raised to the caller.
+      expect { press.call(context(payload, viewer: 'other')) }.not_to raise_error
+      expect(Lich).to have_received(:log)
+        .with(/operation=signal .*callback failed error=Lich::Common::ScriptScope::Gtk::UnsupportedOperation .*rejected=.*operation=pointer_press/)
+      expect([window.pointer_viewer, layout.pointer_viewer]).to eq(%w[origin origin])
+      expect(seen).to be_empty
       2.times { layout.cancel_pointer('origin') }
       expect(seen).to eq(%i[first second])
       expect(window.pointer_viewer).to be_nil
