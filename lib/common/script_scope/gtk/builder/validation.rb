@@ -31,12 +31,18 @@ module Lich
           end
 
           # Rejects unsupported XML syntax instead of silently ignoring unvisited nodes.
+          # Counts object declarations here so the cumulative object limit is
+          # enforced during this traversal, before any XPath query runs.
           # @param element [REXML::Element] XML declaration providing source attribution
           # @param depth [Integer] current bounded XML nesting depth
           # @return [void] result is not part of the supported script contract
           # @api private
           def check_elements(element, depth = 0)
             fail_at(element, 'nesting', 'XML depth limit exceeded') if depth > MAX_DEPTH
+            if element.name == 'object'
+              @object_count += 1
+              fail_at(element, 'objects', 'object limit exceeded') if @objects.length + @object_count > MAX_OBJECTS
+            end
             shape = ELEMENTS[element.name]
             fail_at(element, element.name, 'unsupported XML element') unless shape
             element.attributes.each_attribute do |attribute|

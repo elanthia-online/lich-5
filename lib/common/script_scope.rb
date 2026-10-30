@@ -227,11 +227,12 @@ module Lich
         # Forwards a call the superclass chain does not answer to the script's top-level helpers.
         #
         # @param name [Symbol] the method the script called
-        # @param args [Array<Object>] its arguments
+        # @param args [Array<Object>] its positional arguments
+        # @param kwargs [Hash] its keyword arguments, forwarded separately as in {LegacyHelpers}
         # @return [Object] whatever the helper returns, or +super+'s result when no helper matches
         # @raise [NoMethodError] from +super+ when neither the ancestors nor ScriptScope answer
-        def method_missing(name, *args, &block)
-          return ScriptScope.public_send(name, *args, &block) if ScriptScope.public_instance_methods(false).include?(name)
+        def method_missing(name, *args, **kwargs, &block)
+          return ScriptScope.public_send(name, *args, **kwargs, &block) if ScriptScope.public_instance_methods(false).include?(name)
 
           super
         end
@@ -250,27 +251,42 @@ module Lich
       # Glob that finds every plugin's entry file under lib/common/script_scope/<name>/boot.rb.
       PLUGIN_GLOB = File.join(__dir__, 'script_scope', '*', 'boot.rb').freeze
 
+      # Raised when plugin boot fails, and on every later activation attempt.
+      # A StandardError, so a caller's ordinary error boundary reports it even
+      # when the underlying failure was a ScriptError such as LoadError.
+      class ScopeActivationError < StandardError; end
+
       @active = false
+      @activation_failure = nil
       @activation_mutex = Mutex.new
 
       # Loads every plugin and routes trusted scripts through this scope.
       # Idempotent. Scripts already running keep the binding they started with.
       # Captures plugin exclusions, synchronizes core aliases and installs the
       # legacy lookup hooks before accepting script-owned declarations.
+      # A failed boot is recorded and never retried in this process: plugin
+      # files may be partially loaded, so later calls raise the same failure.
       #
       # @return [Boolean] true once active
+      # @raise [ScopeActivationError] when activation fails now or failed earlier
       def self.activate!
         @activation_mutex.synchronize do
           return true if @active
+          raise ScopeActivationError, "#{@activation_failure}; not retried, restart Lich" if @activation_failure
 
-          @legacy_helpers = public_instance_methods(false).to_h { |name| [name, true] }
-          Dir[PLUGIN_GLOB].sort.each { |boot| require boot }
-          @plugin_names = constants(false) - @core_aliases.keys
-          @plugin_modules = @plugin_names.filter_map { |name| value = const_get(name, false); value if value.is_a?(Module) }
-          sync_core_constants!
-          Object.include(LegacyConstants)
-          Object.prepend(LegacyHelpers)
-          Lich::Common.singleton_class.prepend(CoreConstants)
+          begin
+            @legacy_helpers = public_instance_methods(false).to_h { |name| [name, true] }
+            Dir[PLUGIN_GLOB].sort.each { |boot| require boot }
+            @plugin_names = constants(false) - @core_aliases.keys
+            @plugin_modules = @plugin_names.filter_map { |name| value = const_get(name, false); value if value.is_a?(Module) }
+            sync_core_constants!
+            Object.include(LegacyConstants)
+            Object.prepend(LegacyHelpers)
+            Lich::Common.singleton_class.prepend(CoreConstants)
+          rescue StandardError, ScriptError => error
+            @activation_failure = "script scope activation failed: #{error.class}: #{error.message}"
+            raise ScopeActivationError, @activation_failure
+          end
           @adopt_nested_constants = true
           @active = true
         end

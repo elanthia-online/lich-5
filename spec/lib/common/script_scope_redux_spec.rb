@@ -3,6 +3,8 @@
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 require 'open3'
+require 'fileutils'
+require 'tmpdir'
 
 RSpec.describe Lich::Common::ScriptScope do
   it 'isolates locals, including file, between fresh script bindings' do
@@ -45,6 +47,51 @@ RSpec.describe Lich::Common::ScriptScope do
       described_class.send(:remove_const, name) if described_class.const_defined?(name, false)
     end
     described_class.send(:remove_method, :scope_runtime_helper) if described_class.instance_methods(false).include?(:scope_runtime_helper)
+  end
+
+  it 'forwards positional and keyword arguments separately to a helper called from a subclass' do
+    described_class.activate!
+    result = eval(<<~RUBY, described_class.script_binding)
+      def scope_keyword_helper(value, scale: 1, &block) = [value, scale, block&.call]
+      class ScopeKeywordError < StandardError
+        def probe = [scope_keyword_helper(2, scale: 3) { :block }, scope_keyword_helper({ scale: 5 })]
+      end
+      ScopeKeywordError.new.probe
+    RUBY
+    expect(result).to eq([[2, 3, :block], [{ scale: 5 }, 1, nil]])
+  ensure
+    described_class.send(:remove_const, :ScopeKeywordError) if described_class.const_defined?(:ScopeKeywordError, false)
+    described_class.send(:remove_method, :scope_keyword_helper) if described_class.instance_methods(false).include?(:scope_keyword_helper)
+  end
+
+  it 'reports a failed plugin boot as a StandardError and never retries into partial state' do
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, 'broken'))
+      File.write(File.join(dir, 'broken', 'boot.rb'), <<~RUBY)
+        $boot_attempts = ($boot_attempts || 0) + 1
+        module Lich::Common::ScriptScope::BrokenPlugin; end
+        raise LoadError, 'native dependency missing'
+      RUBY
+      source = <<~'RUBY'
+        scope = Lich::Common::ScriptScope
+        scope.send(:remove_const, :PLUGIN_GLOB)
+        scope.const_set(:PLUGIN_GLOB, File.join(ARGV.fetch(0), '*', 'boot.rb'))
+        errors = Array.new(2) do
+          scope.activate!
+          :activated
+        rescue StandardError => error
+          error
+        end
+        abort errors.inspect unless errors.all?(scope::ScopeActivationError)
+        abort "retried #{$boot_attempts}" unless $boot_attempts == 1
+        abort 'failure cause lost' unless errors.first.cause.is_a?(LoadError) && errors.last.message.include?('LoadError')
+        abort 'activated after failure' if scope.active?
+        abort 'hooks installed' if Object.ancestors.include?(scope::LegacyConstants) || Object.ancestors.include?(scope::LegacyHelpers)
+      RUBY
+      output, status = Open3.capture2e(RbConfig.ruby, '-I', File.expand_path('../../../lib', __dir__),
+                                       '-rcommon/script_scope', '-e', source, dir)
+      expect(status.success?).to be(true), output
+    end
   end
 
   it 'does not mutate Comparable or core classes through a script constant alias' do
