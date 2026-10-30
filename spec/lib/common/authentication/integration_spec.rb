@@ -101,7 +101,8 @@ RSpec.describe 'Authentication module integration' do
   end
 
   describe 'module loading order' do
-    # Verify that requiring gui_login.rb loads all dependencies correctly
+    # Verify that requiring the retained authentication and credential providers
+    # (via login_spec_helper) loads all dependencies correctly
     # This catches missing require statements
 
     it 'loads EntryStore module' do
