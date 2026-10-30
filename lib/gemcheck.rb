@@ -357,6 +357,8 @@ module Lich
         "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
       when AcceptedGemPolicy::InvalidPolicyError
         "The accepted runtime policy is invalid or incompatible with this runtime.\nAsk the release maintainer to check the published policy."
+      when AcceptedGemPolicy::LocalInstallationError
+        "This Ruby installation has a missing gem dependency.\nRepair or reinstall Ruby4Lich5, then retry."
       when AcceptedGemPolicy::PolicyError
         "Installed gems cannot satisfy the accepted runtime policy and declared dependencies.\nAsk the release maintainer to check compatibility for this Lich version."
       when DeclarationError

@@ -770,6 +770,15 @@ RSpec.describe Lich::GemCheck do
       expect(body).not_to include("You're missing")
     end
 
+    it 'offers repair guidance and the installer link for a damaged local dependency' do
+      error = Lich::AcceptedGemPolicy::LocalInstallationError.new('local-child is missing')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('missing gem dependency', 'Repair or reinstall Ruby4Lich5', 'local-child is missing')
+      expect(body).not_to include('release maintainer', 'could not retrieve')
+      expect(described_class).to receive(:alert_windows).with(body, download: true)
+      described_class.alert(error: error)
+    end
+
     it 'does not open a browser when a policy-only Windows notice is acknowledged' do
       allow(described_class).to receive(:require).with('win32ole').and_return(true)
       shell = double('shell')

@@ -9,6 +9,7 @@ module Lich
   class AcceptedGemPolicy
     Error = DependencyRecovery::Error
     # Policy acquisition/coverage failures are distinct from broken local gems.
+    class LocalInstallationError < Error; end
     class PolicyError < Error; end
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
@@ -96,6 +97,11 @@ module Lich
       end
       requests = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms)).resolve
       Check.new(plan: plan, needed: [], specs: requests.map(&:spec))
+    rescue Gem::UnsatisfiableDependencyError => e
+      if @find_specs.call(e.name).empty?
+        raise LocalInstallationError, "installed dependency #{e.name} is missing; repair or reinstall Ruby4Lich5: #{e.message}"
+      end
+      raise PolicyError, "installed gems cannot satisfy accepted startup policy: #{e.message}"
     rescue Gem::Exception => e
       raise PolicyError, "installed gems cannot satisfy accepted startup policy: #{e.message}"
     end

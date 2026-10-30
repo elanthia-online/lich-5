@@ -103,6 +103,34 @@ invalid policy stops Windows startup with an explicit error. There is no cached
 policy or offline success fallback. A healthy local gem set still requires the
 accepted policy lookup.
 
+A missing transitive dependency in an otherwise accepted installed gem is a
+local installation failure: repair or reinstall Ruby4Lich5, then retry. It is
+reported separately from unreachable policy, missing server coverage and
+incompatible accepted versions. Lich does not download an unlisted dependency
+to conceal a damaged installation. Genuine requirement conflicts remain policy
+compatibility failures and retain maintainer guidance.
+
+## Supported-client policy retention
+
+Because Windows startup requires reachable accepted policy, promotion must
+preserve startup compatibility for every explicitly supported client revision,
+including its roots, manifest schema, target ABI/platform and requirements.
+A new client declaration or dependency floor must not silently withdraw policy
+coverage or invalidate requirements for a still-supported older client. Retain
+that client's compatible policy and recovery coverage until maintainers explicitly
+retire support; a new producer candidate alone does not retire an older client.
+No minimum supported version or retirement date is selected here.
+
+Producer acceptance must exercise each supported revision's own startup-policy
+implementation with its declarations and the proposed manifest. Running all
+historical declarations through the newest reader is insufficient. Clients that
+predate online startup policy require their pinned legacy recovery checks rather
+than a claim that they implement the new policy. The paired producer enforcement
+belongs in Ruby4Lich5 #50; this consumer documentation does not establish that
+those per-version acceptance runs have passed.
+
+## Recovery transaction
+
 After consent, all selected artifacts are staged and hash-verified under Lich's
 `temp` directory before a runtime write. Required version repairs are forced and
 always restart, including pure-gem repairs and direct native `.gem` downloads.
