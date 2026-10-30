@@ -8,6 +8,11 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'manatimer progress and overlay acceptance' do
+  # Settled B5: examples that run the retained manatimer.json blocks name the
+  # script, tested version, pinned source revision and credited author as the
+  # source header writes them (spec/fixtures/webui/README.txt).
+  attribution = '[manatimer version 0.1, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Drafix]'
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope.const_get(:Gtk, false) }
   let(:gdk) { scope.const_get(:Gdk, false) }
@@ -177,7 +182,7 @@ RSpec.describe 'manatimer progress and overlay acceptance' do
     expect { window.decorated = nil }.to raise_error(gtk::UnsupportedOperation)
   end
 
-  it 'replays original controls, providers, countdown and cleanup without monitor or game code' do
+  it "replays original controls, providers, countdown and cleanup without monitor or game code #{attribution}" do
     widget = partial_controls
     source_binding.local_variable_set(:ticks, 60)
     original('tick')
@@ -196,7 +201,7 @@ RSpec.describe 'manatimer progress and overlay acceptance' do
     expect(@diagnostics.grep(/operation=css_decoration/).size).to eq(1)
   end
 
-  it 'completes unchanged setup through measured monitor geometry and updates progress' do
+  it "completes unchanged setup through measured monitor geometry and updates progress #{attribution}" do
     allow(service).to receive(:monitor_geometry).and_return(x: -1280, y: 0, width: 1280, height: 800, source: 'native', fallback: false)
     original('defaults')
     original('locals')
@@ -209,7 +214,7 @@ RSpec.describe 'manatimer progress and overlay acceptance' do
     expect(progress.fraction).to eq(0.5)
   end
 
-  it 'exercises the source controls and right-click callback in the browser', browser: true do
+  it "exercises the source controls and right-click callback in the browser #{attribution}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     original('defaults')
     original('locals')

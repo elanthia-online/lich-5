@@ -9,6 +9,11 @@ require 'json'
 require 'timeout'
 
 RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
+  # Settled B5: examples that run the retained tpick-titlebar.json methods name
+  # the script, tested version, pinned source revision and credited author as
+  # the source header writes them (spec/fixtures/webui/README.txt).
+  attribution = '[tpick version 48, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]'
+
   include WebUISpecSupport::ShimBindings
 
   let(:scope) { Lich::Common::ScriptScope }
@@ -330,7 +335,7 @@ RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
     expect(service.registry.pages_for(owner)).to be_empty
   end
 
-  it 'runs the original tpick welcome setup and its original destroy handler' do
+  it "runs the original tpick welcome setup and its original destroy handler #{attribution}" do
     tpick = original
     Dir.mktmpdir do |directory|
       tpick.instance_variable_set(:@save_file, File.join(directory, 'missing.json'))
@@ -346,7 +351,7 @@ RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
     end
   end
 
-  it 'runs both original information and settings header methods without rewriting their widgets' do
+  it "runs both original information and settings header methods without rewriting their widgets #{attribution}" do
     tpick = original
     windows = tpick.instance_variable_get(:@windows)
     windows['Information'] = gtk::Window.new('Information')
@@ -362,7 +367,7 @@ RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
     end
   end
 
-  it 'constructs the original main-tab controls on their negative Grid row' do
+  it "constructs the original main-tab controls on their negative Grid row #{attribution}" do
     tpick = original
     tpick.instance_variable_get(:@grids)['Main Main'] = gtk::Grid.new
     tpick.create_main_tab
@@ -394,7 +399,7 @@ RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
     drain
   end
 
-  it 'renders and closes the original tpick welcome window in Chrome', browser: true do
+  it "renders and closes the original tpick welcome window in Chrome #{attribution}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
 
     tpick = original
