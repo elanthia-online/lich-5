@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'yaml'
+require 'tempfile'
 
 module Lich
   module Common
@@ -29,14 +30,23 @@ module Lich
             read_geometry(File.join(@data_dir, LEGACY_FILE_NAME)) || DEFAULT.dup
         end
 
-        # Writes valid launcher geometry to its private YAML file.
+        # Replaces the private YAML file atomically: a uniquely named temporary
+        # file (created 0600) in the same directory is renamed over it, so a reader
+        # never sees a truncated file. This is atomic replacement, not fsync durability.
         # @return [Hash, false] normalized saved geometry, or false on validation/write failure
         def save(geometry)
           validated = validate(geometry)
           return false unless validated
 
-          File.open(File.join(@data_dir, FILE_NAME), File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
-            file.write(YAML.dump(validated))
+          temporary = Tempfile.create([File.basename(FILE_NAME, '.yml'), '.tmp'], @data_dir)
+          begin
+            temporary.write(YAML.dump(validated))
+            temporary.close
+            File.rename(temporary.path, File.join(@data_dir, FILE_NAME))
+            renamed = true
+          ensure
+            temporary.close unless temporary.closed?
+            File.unlink(temporary.path) if !renamed && File.exist?(temporary.path)
           end
           validated
         rescue StandardError => error

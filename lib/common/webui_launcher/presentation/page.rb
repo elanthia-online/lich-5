@@ -14,7 +14,7 @@ module Lich
           owner: self, id: 'launcher', title: "Lich v#{defined?(LICH_VERSION) ? LICH_VERSION : ''}".strip,
           props: { bare: true },
           on: {
-            attach: ->(_event) { launcher.viewer_attached },
+            attach: ->(event) { launcher.viewer_attached(event.viewer_id) },
             close: ->(event) { launcher.browser_window_closed(event.viewer_id) },
             detach: ->(event) { launcher.viewer_gone(event.viewer_id) },
           }
@@ -37,7 +37,8 @@ module Lich
                      max_length: 256, on: { change: ->(event) { launcher.window_geometry_changed(event) } })
           launcher.__send__(:render_modal, self, state[:modal]) if state[:modal]
           text(key: 'catalog-error', content: state[:catalog_error], tone: :caution) if state[:catalog_error]
-          notify(state[:notice]) if state[:notice]
+          text(key: 'legacy-conversion', content: LEGACY_CONVERSION_GUIDANCE, tone: :caution) if state[:legacy_conversion]
+          notify(state[:notify]) if state[:notify]
           geometry_options = {
             width: state[:window_geometry][:width], height: state[:window_geometry][:height]
           }

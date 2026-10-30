@@ -37,6 +37,15 @@ module Lich
 
         attr_reader :data_dir
 
+        # Derives an opaque component key for an account, independent of the
+        # characters its name may contain, following {#entry_key}'s identity
+        # encoding with an account-specific prefix. Labels keep the name itself.
+        # @param account [String] saved account name
+        # @return [String] deterministic identifier-safe key
+        def self.account_key(account)
+          "account-#{OpenSSL::Digest::SHA256.hexdigest(JSON.generate(['account', account.to_s]))}"
+        end
+
         # Scopes account persistence and credential operations to one installation.
         # @param data_dir [String] installation-owned data directory
         # @param entry_store [Object] credential storage/persistence implementation
