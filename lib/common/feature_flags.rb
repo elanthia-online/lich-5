@@ -22,7 +22,11 @@ module Lich
       #
       # Add new flags here as infrastructure is adopted by production code. The
       # persisted value in `lich_settings` always overrides the default.
-      DEFAULTS = {}.freeze
+      DEFAULTS = {
+        # Prompt-acked typeahead window on Game._puts (see UpstreamGate).
+        # Disable (then reconnect) for GM accounts with no server-side cap.
+        upstream_gate: true
+      }.freeze
 
       # Returns whether a feature flag is enabled.
       #
