@@ -48,6 +48,14 @@ jobs:
               'lib/common/webui_launcher.rb', 'lib/common/webui_launcher/',
               'spec/webui/', 'spec/fixtures/webui/', 'spec/lib/webui/', 'spec/lib/common/script_scope_',
               'spec/support/webui_', 'spec/spec_helper.rb', 'spec/login_spec_helper.rb', 'spec/support/frontend_mock.rb',
+              'spec/support/data_dir.rb', 'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
+              '.rspec', '.rspec_parallel',
+              // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
+              'lib/common/authentication/', 'lib/common/gui/', 'lib/common/gui_login.rb',
+              'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_',
+              'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
+              'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
+              'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
               'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
             ];
             const matches = path => WEBUI_PATHS.some(p => p.endsWith('/') || p.endsWith('_') ? path.startsWith(p) : path === p);

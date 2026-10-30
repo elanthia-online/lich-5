@@ -9,10 +9,17 @@ require 'uri'
 
 acceptance_root = ENV.fetch('LICH_CI_DEFAULT_WEBUI_ROOT')
 FileUtils.mkdir_p(acceptance_root)
+# Every writable root lib/constants.rb would derive from the checkout points into
+# the temporary root; only LIB_DIR stays on the checkout, as the code under test.
+LIB_DIR = File.expand_path('../../lib', __dir__).freeze unless defined?(LIB_DIR)
+LICH_DIR = File.join(acceptance_root, 'home').freeze unless defined?(LICH_DIR)
 DATA_DIR = File.join(acceptance_root, 'data').freeze unless defined?(DATA_DIR)
 TEMP_DIR = File.join(acceptance_root, 'temp').freeze unless defined?(TEMP_DIR)
-FileUtils.mkdir_p(DATA_DIR)
-FileUtils.mkdir_p(TEMP_DIR)
+SCRIPT_DIR = File.join(acceptance_root, 'scripts').freeze unless defined?(SCRIPT_DIR)
+MAP_DIR = File.join(acceptance_root, 'maps').freeze unless defined?(MAP_DIR)
+LOG_DIR = File.join(acceptance_root, 'logs').freeze unless defined?(LOG_DIR)
+BACKUP_DIR = File.join(acceptance_root, 'backup').freeze unless defined?(BACKUP_DIR)
+FileUtils.mkdir_p([LICH_DIR, DATA_DIR, TEMP_DIR, SCRIPT_DIR, MAP_DIR, LOG_DIR, BACKUP_DIR])
 
 module LichCiDefaultWebUIAcceptance
   module_function
@@ -118,6 +125,7 @@ module LichCiDefaultWebUIAcceptance
       'launcher_start_source'      => start_source,
       'launcher_await_source'      => await_source,
       'entrypoint_argv'            => ARGV.dup,
+      'effective_roots'            => effective_roots,
       'gtk_family_loaded_features' => $LOADED_FEATURES.grep(GTK_FAMILY_PATTERN)
     }
   ensure
@@ -202,6 +210,18 @@ module LichCiDefaultWebUIAcceptance
     raise "launcher #{method_name} was replaced" unless path&.end_with?('/lib/common/webui_launcher.rb')
 
     "lib/common/webui_launcher.rb:#{line}"
+  end
+
+  # Reports the writable roots the entrypoint actually resolved, plus its working
+  # directory, so the supervisor can verify each one lies in the temporary root.
+  # @return [Hash{String => String}] root name to expanded path
+  def effective_roots
+    roots = %i[LICH_DIR DATA_DIR TEMP_DIR SCRIPT_DIR MAP_DIR LOG_DIR BACKUP_DIR].to_h do |name|
+      [name.to_s, File.expand_path(Object.const_get(name).to_s)]
+    end
+    roots['ACTIVE_SESSION_DIR'] = File.expand_path(ACTIVE_SESSION_DIR.to_s) if defined?(ACTIVE_SESSION_DIR)
+    roots['working_directory'] = Dir.pwd
+    roots
   end
 
   # Writes one JSON result to the inherited report descriptor, then closes that writer.
