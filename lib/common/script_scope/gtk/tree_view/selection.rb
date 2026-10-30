@@ -90,9 +90,10 @@ module Lich
           # Counts surviving rows selected by the originating viewer.
           # @return [Integer] number of selected surviving rows
           def count_selected_rows = @view.selected_iters.length
-          # Checks membership in the originating viewer selection.
+          # Checks one live row's identity against the originating viewer selection,
+          # without rebuilding the model's row list per query.
           # @param iter [TreeIter] live row in the owning view model
-          def iter_is_selected?(iter) = @view.selected_iters.include?(iter)
+          def iter_is_selected?(iter) = !!@view.model&.iter_is_valid?(iter) && @view.selected_key?(iter.key)
           # Resolves a current model path before checking selection membership.
           # @param path [TreePath, String, Array<Integer>] current model path
           def path_is_selected?(path) = iter_is_selected?(@view.model&.get_iter(path))

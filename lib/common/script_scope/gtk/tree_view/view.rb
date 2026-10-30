@@ -206,6 +206,12 @@ module Lich
             model ? model.rows.select { |iter| keys[iter.key] } : []
           end
 
+          # Checks one identity against the scoped viewer selection.
+          # @param key [String] live row identity already validated by the caller
+          # @return [Boolean] whether the attributed viewer selects that row
+          # @api private
+          def selected_key?(key) = (view_state(:selected) || []).include?(key)
+
           # Updates the target viewer's selection and emits changed only when it changes.
           # @param keys [Array<String>] same-model identities
           # @return [TreeView] self

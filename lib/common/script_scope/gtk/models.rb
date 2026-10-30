@@ -4,6 +4,20 @@ module Lich
   module Common
     module ScriptScope
       module Gtk
+        # Normalizes script text for the UTF-8 JSON wire without loosening core admission.
+        # Socket and file reads often tag valid UTF-8 bytes as binary; only that tag is
+        # corrected. Any other non-UTF-8 text is refused, never transcoded.
+        # @param value [String] script-supplied text
+        # @return [String, nil] wire-compatible text, or nil when it must be refused
+        # @api private
+        def self.wire_text(value)
+          return value if value.ascii_only? || (value.encoding == Encoding::UTF_8 && value.valid_encoding?)
+          return nil unless value.encoding == Encoding::BINARY
+
+          text = value.dup.force_encoding(Encoding::UTF_8)
+          text.valid_encoding? ? text : nil
+        end
+
         # Nonvisual compatibility objects share the script monitor and refusal boundary.
         class ModelObject
           attr_reader :session
@@ -27,9 +41,16 @@ module Lich
         class TreePath < ModelObject
           attr_reader :indices
 
+          # No model holds more rows than the table bound, so a larger index can name
+          # no row. Refusing it keeps huge Integers away from native Array indexing.
+          # @param index [Object] candidate sibling index
+          # @return [Boolean] whether the index is a nonnegative in-capacity Integer
+          # @api private
+          def self.index?(index) = index.is_a?(Integer) && index.between?(0, Lich::WebUI::Contract::BOUNDS[:table_rows] - 1)
+
           # Validates and freezes a positional snapshot with no mutable model reference.
           # @param value [String, Integer, Array<Integer>, TreePath] nonnegative indices
-          # @raise [UnsupportedOperation] for malformed or excessively deep paths
+          # @raise [UnsupportedOperation] for malformed, out-of-capacity or excessively deep paths
           def initialize(value = [])
             super()
             parts = case value
@@ -41,7 +62,7 @@ module Lich
                       value.split(':').map(&:to_i)
                     else session.refuse(self, :new)
                     end
-            valid = parts.length <= Lich::WebUI::Contract::BOUNDS[:tree_depth] && parts.all? { |index| index.is_a?(Integer) && index >= 0 }
+            valid = parts.length <= Lich::WebUI::Contract::BOUNDS[:tree_depth] && parts.all? { |index| TreePath.index?(index) }
             session.refuse(self, :new) unless valid
             @indices = parts.dup.freeze
           end
@@ -255,7 +276,7 @@ module Lich
           # @return [TreeIter, nil] independent child handle
           def iter_nth_child(parent, index)
             session.synchronize do
-              session.refuse(self, :iter_nth_child) unless index.is_a?(Integer) && index >= 0
+              session.refuse(self, :iter_nth_child) unless TreePath.index?(index)
               row = siblings(parent && row_for(parent).key)[index]
               row && TreeIter.new(self, row.key)
             end
@@ -309,14 +330,17 @@ module Lich
               check_column(column)
               row = row_for(iter)
               type = column_types[column]
+              text = Gtk.wire_text(value) if value.is_a?(String)
+              value = text if text
               valid = type == TrueClass ? value == true || value == false : value.is_a?(type)
               valid ||= type == String && value.nil?
               valid &&= value.finite? if value.is_a?(Float)
-              valid &&= value.length <= MAX_STRING_LENGTH if value.is_a?(String)
+              valid &&= !text.nil? && value.length <= MAX_STRING_LENGTH if value.is_a?(String)
               unless valid
-                actual = [String, Integer, Float, TrueClass, FalseClass, NilClass].find { |klass| value.is_a?(klass) }
+                actual = [String, Integer, Float, TrueClass, FalseClass, NilClass].find { |klass| value.is_a?(klass) }&.name || 'other'
+                actual = 'non-UTF-8 String' if value.is_a?(String) && text.nil?
                 session.refuse(self, :set_value, error_class: ModelValueError, column: column,
-                                               expected: type.name, actual: actual&.name || 'other',
+                                               expected: type.name, actual: actual,
                                                length: value.is_a?(String) ? value.length : nil, limit: MAX_STRING_LENGTH)
               end
               row.cells[column] = value.is_a?(String) ? value.dup.freeze : value
