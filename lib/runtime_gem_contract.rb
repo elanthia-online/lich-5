@@ -67,6 +67,25 @@ module Lich
       raise Error, "invalid lock or RubyInstaller inventory: #{e.message}"
     end
 
+    # Shared producer/consumer eligibility projection. Raw source hashes remain
+    # provenance; only applicable Windows package constraints enter this digest.
+    def windows_contract_digest(inventory, build_roles: {}, advertised_members: [])
+      resolved = resolve(inventory)
+      gtk = build_roles.fetch('gtk', [])
+      unless gtk.is_a?(Array) && gtk.all? { |name| name.is_a?(String) }
+        raise Error, 'GTK build role must be an array of package names'
+      end
+      relevant = resolved.fetch('packages').keys | advertised_members
+      packages = locked_packages.select do |name, _spec|
+        relevant.include?(name) && !gtk.include?(name) && !inventory.fetch('gems').key?(name)
+      end.transform_values do |spec|
+        spec.merge('dependencies' => spec.fetch('dependencies').transform_values { |requirements| normalized_requirements(requirements) })
+      end
+      self.class.digest('schema' => 1, 'platform' => PLATFORM, 'ruby_abi' => '4.0',
+                        'roots' => roots.transform_values { |requirements| normalized_requirements(requirements) },
+                        'packages' => packages, 'bundled' => resolved.fetch('bundled'), 'ruby_inventory' => inventory)
+    end
+
     def self.digest(document)
       canonical = lambda do |value|
         case value
@@ -79,6 +98,10 @@ module Lich
     end
 
     private
+
+    def normalized_requirements(requirements)
+      Gem::Requirement.new(requirements).requirements.map { |operator, version| [operator, version.to_s] }.uniq.sort
+    end
 
     def declarations(node, groups = [])
       return unless node.is_a?(Array)

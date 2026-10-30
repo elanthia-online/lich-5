@@ -82,6 +82,12 @@ RSpec.describe Lich::RuntimeGemContract do
     expect { reader.resolve(inventory) }.to raise_error(described_class::Error, /target Windows/)
   end
 
+  it 'rejects the wrong ABI even with the correct Windows platform' do
+    expect { reader.resolve(inventory) }.not_to raise_error
+    inventory['ruby_abi'] = '3.4'
+    expect { reader.resolve(inventory) }.to raise_error(described_class::Error, /Ruby ABI 4.0/)
+  end
+
   it 'follows a newly declared runtime root instead of a fixed root list' do
     contract = described_class.new(gemfile: gemfile + "\ngem 'mini_portile2'\n", lockfile: lockfile)
     expect(contract.resolve(inventory).fetch('packages')).to have_key('mini_portile2')
@@ -123,6 +129,37 @@ RSpec.describe Lich::RuntimeGemContract do
 
   it 'canonicalizes contract hashes independently of key order' do
     expect(described_class.digest('b' => 2, 'a' => { 'z' => 1, 'y' => 2 })).to eq(described_class.digest('a' => { 'y' => 2, 'z' => 1 }, 'b' => 2))
+  end
+
+  it 'keeps identity stable across comments, dev pins, non-Windows variants and requirement order' do
+    source = "gem 'redis', '>= 5', '< 7'\n"
+    original = described_class.new(gemfile: source, lockfile: lockfile)
+    edited = lockfile.sub('    curses (1.7.0)', "    dev-tool (2.0)\n    redis (6.0.1-arm64-darwin)\n    curses (1.7.0)")
+    edited << "  dev-tool (2.0) sha256=#{'a' * 64}\n"
+    changed = described_class.new(gemfile: "# comment\ngem 'redis', '< 7', '>= 5'\ngroup :development do\n gem 'dev-tool'\nend\n", lockfile: edited)
+    expect(changed.windows_contract_digest(inventory)).to eq(original.windows_contract_digest(inventory))
+    expect(changed.gemfile_sha256).not_to eq(original.gemfile_sha256)
+    expect(changed.lock_sha256).not_to eq(original.lock_sha256)
+  end
+
+  it 'binds Windows package checksums and transitive requirements' do
+    baseline = reader.windows_contract_digest(inventory)
+    checksum = lockfile.sub("sha256=#{'d' * 64}", "sha256=#{'a' * 64}")
+    expect(described_class.new(gemfile: gemfile, lockfile: checksum).windows_contract_digest(inventory)).not_to eq(baseline)
+    dependencies = lockfile.sub('redis-client (= 0.30.1)', 'redis-client (>= 0.30.1)')
+    expect(described_class.new(gemfile: gemfile, lockfile: dependencies).windows_contract_digest(inventory)).not_to eq(baseline)
+  end
+
+  it 'binds advertised GTK-only non-GTK packages without coupling unused dev entries' do
+    names = ['mini_portile2']
+    baseline = reader.windows_contract_digest(inventory, advertised_members: names)
+    changed = described_class.new(gemfile: gemfile, lockfile: lockfile.gsub('mini_portile2 (2.8.9)', 'mini_portile2 (2.8.8)'))
+    expect(changed.windows_contract_digest(inventory, advertised_members: names)).not_to eq(baseline)
+    expect(changed.windows_contract_digest(inventory)).to eq(reader.windows_contract_digest(inventory))
+    role = { 'gtk' => names }
+    expect(changed.windows_contract_digest(inventory, build_roles: role, advertised_members: names)).to eq(
+      reader.windows_contract_digest(inventory, build_roles: role, advertised_members: names)
+    )
   end
 
   it 'reads all 18 non-GTK Windows packages from the real repository declarations and lock' do

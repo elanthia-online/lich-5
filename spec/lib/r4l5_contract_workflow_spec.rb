@@ -33,6 +33,31 @@ RSpec.describe 'Windows release contract gates' do
     end
   end
 
+  %w[ci.yml release-on-push-stable.yaml release-on-push-prerelease.yaml rebuild-release-assets.yaml].each do |name|
+    it "checks out tooling and explicit consumer inputs before every local contract action in #{name}" do
+      workflow(name).fetch('jobs').each do |job_name, job|
+        steps = job.fetch('steps', [])
+        steps.each_with_index do |step, index|
+          next unless step['uses'] == './.github/actions/check-r4l5-contract'
+
+          prior = steps.take(index)
+          checkouts = prior.select { |entry| entry['uses']&.start_with?('actions/checkout@') }
+          expect(checkouts.count { |entry| !entry.dig('with', 'path') }).to eq(1), "#{name}:#{job_name} tooling"
+          if step.dig('with', 'gemfile') == 'release-target/Gemfile'
+            target = checkouts.select { |entry| entry.dig('with', 'path') == 'release-target' }
+            expect(target.length).to eq(1), "#{name}:#{job_name} target"
+            expect(target.first.dig('with', 'ref')).not_to be_nil
+            expect(target.first.dig('with', 'persist-credentials')).to be(false)
+            if name == 'rebuild-release-assets.yaml'
+              expected = job_name == 'release_guard' ? '${{ inputs.tag }}' : '${{ needs.release_guard.outputs.tag }}'
+              expect(target.first.dig('with', 'ref')).to eq(expected)
+            end
+          end
+        end
+      end
+    end
+  end
+
   it 'checks the requested rebuild target before any job may upload archives' do
     jobs = workflow('rebuild-release-assets.yaml').fetch('jobs')
     steps = jobs.fetch('release_guard').fetch('steps')
