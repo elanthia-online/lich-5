@@ -121,6 +121,53 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(replacement.send(:buffer_text)).to eq('next')
   end
 
+  context 'when a signal callback destroys the window holding an editor' do
+    retiring_port = Class.new(port_class) do
+      attr_reader :bindings, :retired_reads
+
+      def bind(handle, event, callback) = (@bindings ||= {})[[handle, event]] = callback
+      def seed(handle, property, value) = @values[[handle, property]] = value
+      # Like the core adapter, retiring the root retires every subtree handle.
+      def destroy(_handle) = @retired = true
+
+      def get(handle, property)
+        return super unless @retired
+
+        (@retired_reads ||= []) << [property, 'handle is already destroyed']
+        raise Lich::WebUI::Error, 'handle is already destroyed'
+      end
+    end
+    let(:port) { retiring_port.new }
+
+    it 'completes teardown and keeps the last editor text for a replacement view (1844:RC6)' do
+      logs = []
+      allow(Lich).to receive(:log) { |message| logs << message }
+      buffer = gtk::TextBuffer.new
+      buffer.text = 'saved'
+      window = gtk::Window.new('form')
+      box = gtk::VBox.new
+      view = gtk::TextView.new(buffer)
+      close = gtk::Button.new('Close')
+      box.add(view)
+      box.add(close)
+      window.add(box)
+      window.materialize
+      port.seed(view.materialize, :value, 'typed')
+      closed = []
+      window.signal_connect('destroy') { closed << :window }
+      close.signal_connect('clicked') { window.destroy }
+
+      port.bindings.fetch([close.materialize, :activate]).call(Struct.new(:viewer_id, :payload).new('viewer', {}))
+
+      expect(port.retired_reads).to be_nil
+      expect(logs.grep(/callback failed/)).to be_empty
+      expect([window.destroyed?, view.destroyed?, closed]).to eq([true, true, [:window]])
+      expect(buffer.text).to eq('typed')
+      replacement = gtk::TextView.new(buffer)
+      expect([replacement.buffer, replacement.send(:buffer_text)]).to eq([buffer, 'typed'])
+    end
+  end
+
   it 'refuses out-of-capacity path and child indices with attribution while missing rows stay nil (1844:RC1)' do
     store = gtk::TreeStore.new(String)
     store.append

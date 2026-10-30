@@ -364,11 +364,14 @@ module Lich
           # @return [Boolean] whether this view accepts user edits
           def editable? = @editable
 
-          # Releases the buffer with its current text before destroy handlers run,
-          # so a replacement view can bind it. Repeated retirement is a no-op.
+          # Releases the buffer with its last stored text before destroy handlers
+          # run, so a replacement view can bind it. Widget#destroy has already
+          # retired this subtree's handles, so no live viewer read is attempted;
+          # a terminal action has committed the editor draft before its handler.
+          # Repeated retirement is a no-op.
           # @return [void]
           def mark_destroyed
-            @buffer&.unbind(self) unless destroyed?
+            @buffer&.unbind(self, retained: stored_text) unless destroyed?
             super
           end
 
@@ -459,6 +462,9 @@ module Lich
           # Reads shared log lines or the core's callback-scoped editor draft.
           # @return [String]
           def buffer_text = @log ? @props.fetch(:lines, []).join("\n") : read(:value)
+          # Committed or last written text, as read outside a callback; never the port.
+          # @return [String]
+          def stored_text = @log ? buffer_text : @committed.fetch(:value, @props[:value])
 
           # Removes properties belonging to the other presentation before validation.
           # @return [Hash] properties for the selected core component
