@@ -7,8 +7,10 @@ require 'rbconfig'
 require 'tmpdir'
 
 # Subprocess supervisor for the real no-argument entrypoint with a protocol-only
-# browser substitute. Temporary data and the inherited report pipe isolate it from
-# installed accounts. Process-group cleanup makes this a POSIX acceptance helper;
+# browser substitute. The probe points the home, data, temp, script, map, log and
+# backup roots into one temporary root (only lib stays on the checkout), and the
+# verdict fails unless every reported root resolves inside it; the inherited report
+# pipe carries the record. Process-group cleanup makes this a POSIX acceptance helper;
 # it does not verify a browser cookie jar, native window geometry, or Windows cleanup.
 root = File.expand_path('../..', __dir__)
 probe = File.join(root, 'spec/support/default_webui_acceptance_probe.rb')
@@ -31,13 +33,17 @@ begin
   drain = Thread.new { output << combined.read }
   raw = IO.select([reader], nil, nil, 20) ? reader.gets.to_s : ''
   wait.join(10)
-  if wait.alive?
-    Process.kill('TERM', -wait.pid)
-    wait.join(2)
-  end
-  if wait.alive?
-    Process.kill('KILL', -wait.pid)
-    wait.join
+  [['TERM', 2], ['KILL', nil]].each do |signal, grace|
+    break unless wait.alive?
+
+    begin
+      Process.kill(signal, -wait.pid)
+    rescue Errno::ESRCH
+      # The group exited between the liveness check and the signal; its own
+      # exit status, reaped below, is the outcome.
+      nil
+    end
+    wait.join(grace)
   end
   status = wait.value
   drain.join
@@ -46,7 +52,14 @@ begin
   result['exit_status'] = status.exitstatus
   result['term_signal'] = status.termsig
   result['gtk_family_loaded_features'] ||= []
-  result['verdict'] = 'fail' unless result['clean_shutdown'] && result['gtk_family_loaded_features'].empty?
+  isolated = File.realpath(acceptance_root)
+  escaped_roots = (result['effective_roots'] || {}).reject do |_name, path|
+    resolved = File.exist?(path) ? File.realpath(path) : File.expand_path(path)
+    resolved == isolated || resolved.start_with?("#{isolated}/")
+  end
+  result['escaped_roots'] = escaped_roots
+  roots_isolated = result.key?('effective_roots') && escaped_roots.empty?
+  result['verdict'] = 'fail' unless result['clean_shutdown'] && result['gtk_family_loaded_features'].empty? && roots_isolated
   result['log'] = output unless result['verdict'] == 'pass'
   artifact = ENV['LICH_CI_DEFAULT_WEBUI_ARTIFACT']
   if artifact
