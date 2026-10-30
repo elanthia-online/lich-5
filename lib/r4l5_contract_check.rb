@@ -16,14 +16,14 @@ module Lich
       raise Error, 'expected exactly one Windows Ruby 4.0 target' unless targets.length == 1
       target = targets.first
       contract = target.fetch('contract')
-      raise Error, 'unsupported runtime contract' unless contract['schema'] == 1
+      raise Error, 'unsupported runtime contract' unless contract['schema'] == 2
       raise Error, 'runtime contract must name a full lich-5 commit SHA' unless RuntimeGemContract::COMMIT.match?(contract.fetch('lich5_commit'))
       if candidate_sha && contract['lich5_commit'] != candidate_sha
         raise Error, 'served runtime contract names a different candidate SHA'
       end
       raise Error, 'override or diagnostic builds cannot be accepted' unless contract['promotable'] == true && contract['overrides'] == {}
-      unless contract['gemfile_sha256'] == reader.gemfile_sha256 && contract['lock_sha256'] == reader.lock_sha256
-        raise Error, 'served runtime contract does not match this Gemfile and Gemfile.lock; build and promote this candidate first'
+      %w[gemfile_sha256 lock_sha256 windows_contract_sha256].each do |field|
+        raise Error, "runtime contract has invalid #{field}" unless RuntimeGemContract::SHA256.match?(contract.fetch(field))
       end
       resolved = reader.resolve(contract.fetch('ruby_inventory'))
       units = target.fetch('units')
@@ -34,6 +34,11 @@ module Lich
       required = resolved.fetch('packages')
       advertised = units.flat_map { |unit| unit.fetch('members') }
       gtk = contract.fetch('build_roles', {}).fetch('gtk', [])
+      identity = reader.windows_contract_digest(contract.fetch('ruby_inventory'),
+                                                build_roles: contract.fetch('build_roles', {}), advertised_members: advertised)
+      unless contract['windows_contract_sha256'] == identity
+        raise Error, 'served runtime contract does not match this Windows projection; build and promote this candidate first'
+      end
       checked = reader.locked_packages.select { |name, _spec| !gtk.include?(name) && !contract.fetch('ruby_inventory').fetch('gems').key?(name) && (required.key?(name) || advertised.include?(name)) }
       checked.each do |name, spec|
         # Existing consumers use the first unit advertising a member.
