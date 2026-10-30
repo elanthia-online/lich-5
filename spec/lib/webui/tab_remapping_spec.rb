@@ -50,13 +50,20 @@ RSpec.describe 'stable tab selection across structural edits' do
   context 'delivered viewer choices' do
     cases.each do |label, old_keys, index, headers, expected|
       it "preserves #{label} independently of the replacement authored default" do
-        props = { names: old_keys || %w[a b c], selected: index }
+        # The viewer's own choice differs from the old authored default, and the
+        # replacement default differs from the expected remap wherever the new
+        # collection admits another index, so a reset to either default fails.
+        # An empty collection admits only index 0.
+        props = { names: old_keys || %w[a b c], selected: 0 }
         props[:headers] = old_keys.map { |key| { key: key } } if old_keys
         target = Lich::WebUI::Page.new(owner: owner, id: 'tabs', title: 'Tabs') { tabs(key: 'pages', **props) }
         store = Lich::WebUI::ViewerStore.new
         viewer = store.attach(connection_id: 'viewer', address: 'tabs', page: target)
-        store.deliver(viewer, target.render)
-        props = { names: headers.map { |header| header[:key] }, headers: headers, selected: 0 }
+        render = target.render
+        store.deliver(viewer, render)
+        store.set_property(viewer, render.tree.children.first, :selected, index)
+        replacement = (0...headers.length).find { |candidate| candidate != expected } || 0
+        props = { names: headers.map { |header| header[:key] }, headers: headers, selected: replacement }
 
         store.deliver(viewer, target.render)
         expect(store.serialize(viewer).dig(:children, 0, :props, :selected)).to eq(expected)
