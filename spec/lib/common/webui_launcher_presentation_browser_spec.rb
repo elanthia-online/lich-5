@@ -20,7 +20,7 @@ RSpec.describe 'WebUI Launcher presentation', browser: true do
     end
     service = Lich::WebUI::Service.new
     geometry = { width: 960, height: 720 }
-    store = instance_double(Lich::Common::WebUILauncher::WindowGeometryStore, load: geometry, save: geometry)
+    store = instance_double(Lich::Common::WebUILauncher::WindowGeometryStore, load: geometry, validate: geometry, save: geometry)
     launcher = Lich::Common::WebUILauncher.new(
       data_dir: '/fixture', catalog: catalog, service: service, executor: fixtures::ImmediateExecutor.new,
       geometry_store: store, on_launch: proc {}, browser_open: proc { true }, frontend_locator: fixtures::ReduxFrontendLocator
