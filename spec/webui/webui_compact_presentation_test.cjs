@@ -1,6 +1,26 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { fixture } = require('./webui_renderer_fixture.cjs');
+const { fixture: syntheticFixture } = require('./webui_renderer_fixture.cjs');
+
+// Unit checks of the renderer's sizing and style formulas against synthetic
+// measurements. They pin the values the renderer computes; they are not
+// measured layout acceptance, which needs a real browser.
+//
+// A browser CSSStyleDeclaration reads an unset property as '', where the
+// shared double returns undefined. Model the browser here so that unset-style
+// assertions state what a browser would report.
+function fixture(target) {
+  const f = syntheticFixture(target);
+  const create = f.document.createElement;
+  f.document.createElement = tag => {
+    const element = create(tag);
+    element.style = new Proxy(element.style, {
+      get: (style, name) => typeof name === 'string' && !(name in style) ? '' : style[name]
+    });
+    return element;
+  };
+  return f;
+}
 
 function frame(generation = 1) {
   return { type: 'render', page: 'spells', generation, bindings: { page: ['configure'], split: ['move'] },
@@ -105,7 +125,7 @@ test('native and shim resize measurements use the target width before measuring 
     });
     f.frame();
     assert.deepEqual(f.resized, [[600, 430]]);
-    assert.equal(root.style.width, undefined);
+    assert.equal(root.style.width, '');
     f.receive({ type: 'render', page: 'form', generation: 2, bindings: { root: ['configure'] },
       tree: { type: 'page', cid: 'root', props: { bare: true, viewport,
         resize_request: { id: 'narrower', size: [400, 300] } }, children: [] } });
@@ -637,7 +657,7 @@ test('a requested editable choice height reaches its control and picker row', ()
   const ordinary = f.elements.pages.children[0].children[1];
   assert.equal(requested.style.minHeight, '42px');
   assert.equal(requested.children[0].style.minHeight, '42px');
-  assert.equal(ordinary.style.minHeight, undefined);
+  assert.equal(ordinary.style.minHeight, '');
   assert.equal(f.elements.pages.children[0].children[2].children[0].style.minHeight, '42px');
 });
 
@@ -754,7 +774,7 @@ test('native panel minimum height and explicit label font do not become fixed co
     ] } });
   const panel = f.elements.pages.children[0].children[0];
   assert.equal(panel.style.minHeight, '181px');
-  assert.equal(panel.style.height, undefined);
+  assert.equal(panel.style.height, '');
   assert.equal(panel.children[0].style.fontSize, '12px');
   assert.equal(panel.children[0].style.fontFamily, 'Arial');
 });
@@ -773,7 +793,7 @@ test('natural grid allocates extra width only to declared expanding columns', ()
   assert.equal(grid.style.gridTemplateColumns, 'max-content auto max-content');
   assert.equal(grid.style.justifyContent, 'stretch');
   assert.equal(grid.children[0].style.minWidth, '168px');
-  assert.equal(grid.children[0].style.width, undefined);
+  assert.equal(grid.children[0].style.width, '');
 });
 
 
@@ -979,7 +999,7 @@ test('character minima retain pixel requests and leave stretching fields unfixed
   const [label, sheath, hoard, boost] = f.elements.pages.children[0].children;
   assert.equal(label.style.minWidth, 'calc(17 * round(up, 1ch, 1px))');
   assert.equal(sheath.style.minWidth, 'calc(20 * round(up, 1ch, 1px) + 2 * var(--entry-padding, 8px) + 2px)');
-  assert.equal(sheath.children[0].style.width, undefined);
+  assert.equal(sheath.children[0].style.width, '');
   assert.equal(hoard.style.minWidth, 'max(300px, calc(20 * round(up, 1ch, 1px) + 2 * var(--entry-padding, 8px) + 2px))');
   assert.equal(boost.children[0].style.width, 'calc(12 * round(up, 1ch, 1px) + 2 * var(--entry-padding, 8px) + 2px + 35px)');
 });
@@ -1008,7 +1028,7 @@ test('explicit spread rows share a spanning minimum across occupied and empty tr
   first.clientHeight = second.clientHeight = 80; spanning.clientHeight = 320;
   f.frame();
   assert.equal(grid.style.gridTemplateRows, '100px 100px 20px 20px 20px 20px 20px 20px');
-  assert.equal(first.style.alignSelf, undefined);
+  assert.equal(first.style.alignSelf, '');
   spanning.clientHeight = 400;
   observers[0].callback();
   assert.equal(grid.style.gridTemplateRows, '110px 110px 30px 30px 30px 30px 30px 30px');
@@ -1032,7 +1052,7 @@ test('frame content alignment centers natural children without changing the fram
   assert.equal(frame.style.display, 'flex');
   assert.equal(frame.style.flexDirection, 'column');
   assert.equal(frame.style.justifyContent, 'center');
-  assert.equal(frame.style.height, undefined);
+  assert.equal(frame.style.height, '');
 });
 
 
