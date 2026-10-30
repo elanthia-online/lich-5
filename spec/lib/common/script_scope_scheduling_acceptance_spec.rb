@@ -8,6 +8,16 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
+  # Settled B5: each script-derived example names the script, the tested version
+  # and pinned source revision, and the credited author, as the source header
+  # writes them (spec/fixtures/webui/README.txt, Attribution). Revisions are those
+  # recorded in scheduling.json; sail2's header has no author field and is signed.
+  attribution = {
+    'gemstonev'  => '[gemstonev version 3, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]',
+    'repository' => '[repository version 2.76, revision c4a96840ea2a29a445fd797c7baec0b012b0dd12, author elanthia-online]',
+    'sail2'      => '[sail2 version 1.0.8, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, no author field, signed Peggyanne]',
+  }
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope::Gtk }
   let(:glib) { scope::GLib }
@@ -131,7 +141,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     [sandbox, sandbox.instance_variable_get(:@windows).fetch('Difficulty')]
   end
 
-  it 'accepts gemstonev difficulty setup and its unchanged repeating 50ms handoff callback' do
+  it "accepts gemstonev difficulty setup and its unchanged repeating 50ms handoff callback #{attribution.fetch('gemstonev')}" do
     sandbox, window = gemstonev
     buttons = window.children.first.children
     expect(buttons.map(&:label)).to eq(%w[Easy Medium Hard])
@@ -156,7 +166,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     window.destroy
   end
 
-  it 'validates gemstonev difficulty setup and scheduled handoff in the browser', :browser do
+  it "validates gemstonev difficulty setup and scheduled handoff in the browser #{attribution.fetch('gemstonev')}", :browser do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     sandbox, window = gemstonev
     # A synthetic game response is already available; the original timer still
@@ -171,7 +181,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     expect(@logs.grep(/callback failed/)).to be_empty
   end
 
-  it 'preserves sail2 original startup failure when the deferred creation has not run' do
+  it "preserves sail2 original startup failure when the deferred creation has not run #{attribution.fetch('sail2')}" do
     started, release = Queue.new, Queue.new
     service.runtime.dispatch(owner: owner) { started << true; release.pop }
     expect(started.pop(timeout: 2)).to be(true)
@@ -185,7 +195,33 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     release << true
   end
 
-  it 'accepts repaired sail2 creation, inherited sensitivity, save and close' do
+  # The first stop guard in queued execution precedes worker adoption and the
+  # pause lookup; the inner guard only skips the body. Queue work behind a held
+  # callback, stop the session, then release it on an unowned worker.
+  it 'adopts no worker, looks up no pause and runs no body for work queued before stop' do
+    started, release, ran, lookups = Queue.new, Queue.new, Queue.new, Queue.new
+    group = ThreadGroup.new
+    owner.define_singleton_method(:thread_group) { group }
+    service.runtime.dispatch(owner: owner) { started << true; release.pop }
+    expect(started.pop(timeout: 2)).to be(true)
+    gtk.queue { ran << true }
+    gtk.session.close
+    main = Thread.current
+    allow(Lich::Common::Script).to receive(:current) do
+      lookups << Thread.current unless Thread.current.equal?(main)
+      nil
+    end
+    release << true
+    drain
+    expect(ran).to be_empty
+    expect(lookups).to be_empty
+    expect(group.list).to be_empty
+  ensure
+    release << true
+    allow(Lich::Common::Script).to receive(:current).and_return(owner)
+  end
+
+  it "accepts repaired sail2 creation, inherited sensitivity, save and close #{attribution.fetch('sail2')}" do
     sail2(repaired: true)
     window = $sail2_config_window
     descendants = lambda { |widget| [widget] + widget.children.flat_map { |child| descendants.call(child) } }
@@ -212,7 +248,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     expect(window).to be_destroyed
   end
 
-  it 'runs the current repository download, replacement timer and ten-second re-enable unchanged' do
+  it "runs the current repository download, replacement timer and ten-second re-enable unchanged #{attribution.fetch('repository')}" do
     form = repository
     button = form['download_link']
     form['link_data'].text = 'download alpha.lic --author=Ada --game=GS'
@@ -235,7 +271,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     expect(service.runtime.scheduler.for_owner(owner).cancel(pending)).to be(false)
   end
 
-  it 'validates repository download suppression and re-enable in the browser', :browser do
+  it "validates repository download suppression and re-enable in the browser #{attribution.fetch('repository')}", :browser do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     form = repository
     WebUIBrowser.check(service: service, page: @page, scenario: 'shim-repository-scheduling')
@@ -276,7 +312,7 @@ RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
     expect(@logs.grep(/callback failed/)).to be_empty
   end
 
-  it 'validates repaired sail2 setup, inherited sensitivity and close in the browser', :browser do
+  it "validates repaired sail2 setup, inherited sensitivity and close in the browser #{attribution.fetch('sail2')}", :browser do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     sail2(repaired: true)
     WebUIBrowser.check(service: service, page: @page, scenario: 'shim-sail2-scheduling')

@@ -8,6 +8,14 @@ require 'timeout'
 require_relative '../../support/webui_browser'
 
 RSpec.describe 'bounded display geometry and cursor compatibility' do
+  # Settled B5: the example that runs retained geometry-cursors.json blocks names
+  # each script, its tested version and pinned source revision, and the credited
+  # author as the source header writes them (spec/fixtures/webui/README.txt).
+  attribution = {
+    'gemstonev'         => '[gemstonev version 3, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]',
+    'highlight-manager' => '[highlight-manager version 1.2.0, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Mystienne]',
+  }
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:gtk) { scope.const_get(:Gtk, false) }
   let(:gdk) { scope.const_get(:Gdk, false) }
@@ -38,7 +46,7 @@ RSpec.describe 'bounded display geometry and cursor compatibility' do
     source.module_eval(entry.fetch('source'), "#{name}.lic", entry.fetch('line'))
   end
 
-  it 'runs gemstonev geometry and cursor calls and highlight-manager guarded helper unchanged' do
+  it "runs gemstonev geometry and cursor calls and highlight-manager guarded helper unchanged #{attribution.fetch('gemstonev')} #{attribution.fetch('highlight-manager')}" do
     source = Module.new
     source.const_set(:Gdk, gdk)
     source.const_set(:Gtk, gtk)
