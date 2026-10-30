@@ -1,0 +1,189 @@
+# ------------------------------------------------------------------------------
+# WebUI Tests
+#
+# On pull requests the jobs do their work only when a WebUI-relevant path
+# changed (see WEBUI_PATHS in the classify step); otherwise their steps are
+# skipped and the job passes. Pushes to main and manual runs always run, so
+# anything a PR filter misses is still caught on main. If the changed-file
+# list cannot be read, the jobs run.
+#
+# The browser job is split into two shards (matrix), each running its spec
+# files with two parallel workers. A new browser spec file must be added to
+# one shard's file list (shard 1 fails if one is missing); keep the shards'
+# total browser time roughly equal.
+# ------------------------------------------------------------------------------
+name: WebUI Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  renderer:
+    name: JavaScript renderer
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - &classify
+        name: Classify changed files
+        id: classify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // Paths the renderer and browser jobs depend on. Prefix match for
+            // entries ending in '/' or '_', exact match otherwise.
+            const WEBUI_PATHS = [
+              'lib/webui/', 'lib/webui.rb',
+              'lib/common/script_scope/', 'lib/common/script_scope.rb', 'lib/common/script_death.rb',
+              'lib/common/webui_launcher.rb', 'lib/common/webui_launcher/',
+              'spec/webui/', 'spec/fixtures/webui/', 'spec/lib/webui/', 'spec/lib/common/script_scope_',
+              'spec/support/webui_', 'spec/spec_helper.rb', 'spec/login_spec_helper.rb', 'spec/support/frontend_mock.rb',
+              'spec/support/data_dir.rb', 'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
+              '.rspec', '.rspec_parallel',
+              // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
+              'lib/common/authentication/', 'lib/common/gui/', 'lib/common/gui_login.rb',
+              'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_',
+              'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
+              'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
+              'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
+              'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
+            ];
+            const matches = path => WEBUI_PATHS.some(p => p.endsWith('/') || p.endsWith('_') ? path.startsWith(p) : path === p);
+            if (context.eventName !== 'pull_request') {
+              core.info(`Event ${context.eventName}: running WebUI jobs.`);
+              core.setOutput('webui', 'true');
+              return;
+            }
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner, repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number, per_page: 100,
+              });
+              // A rename out of a WebUI path still counts: check the old name too.
+              const hits = files.filter(f => matches(f.filename) || (f.previous_filename && matches(f.previous_filename)));
+              // The API returns at most 3,000 files; a capped list may hide a WebUI path.
+              const capped = files.length >= 3000;
+              core.info(`Changed files = ${files.length}${capped ? ' (API limit reached)' : ''}, WebUI-relevant = ${hits.length}`);
+              core.setOutput('webui', capped || hits.length > 0 ? 'true' : 'false');
+            } catch (error) {
+              core.notice(`Could not read changed files (${error.message}); running WebUI jobs.`);
+              core.setOutput('webui', 'true');
+            }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.classify.outputs.webui == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.classify.outputs.webui == 'true'
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: spec/webui/package-lock.json
+      - if: steps.classify.outputs.webui == 'true'
+        run: npm ci --prefix spec/webui
+      - if: steps.classify.outputs.webui == 'true'
+        run: npm test --prefix spec/webui
+
+  browser:
+    name: Chrome browser integration (${{ matrix.shard }}/2)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Split by measured browser time, not file count.
+          - shard: 1
+            files: >-
+              spec/lib/common/script_scope_scheduling_acceptance_spec.rb
+              spec/lib/common/script_scope_builder_remaining_spec.rb
+              spec/lib/common/script_scope_header_bar_spec.rb
+              spec/lib/common/script_scope_tpick_setup_spec.rb
+              spec/lib/common/script_scope_content_spec.rb
+              spec/lib/common/script_scope_canvas_spec.rb
+              spec/lib/common/webui_launcher_presentation_browser_spec.rb
+          - shard: 2
+            files: >-
+              spec/lib/common/script_scope_builder_spec.rb
+              spec/lib/common/script_scope_widgets_spec.rb
+              spec/lib/webui/browser_integration_spec.rb
+              spec/lib/common/script_scope_source_refresh_spec.rb
+              spec/lib/common/script_scope_manatimer_spec.rb
+              spec/lib/common/script_scope_geometry_cursor_spec.rb
+              spec/lib/common/script_scope_drawing_spec.rb
+    env:
+      # Retire gtk exclusion at P22 when Gemfile removes the native GTK group.
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+      NATIVE_BROWSER: '1'
+    steps:
+      - *classify
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.classify.outputs.webui == 'true'
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        if: steps.classify.outputs.webui == 'true'
+        with:
+          bundler-cache: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.classify.outputs.webui == 'true'
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: spec/webui/package-lock.json
+      - if: steps.classify.outputs.webui == 'true'
+        run: npm ci --prefix spec/webui
+      - name: Install browser system dependencies (reuse the image's Chrome)
+        if: steps.classify.outputs.webui == 'true'
+        working-directory: spec/webui
+        run: |
+          npx --no-install playwright install-deps chrome
+          # The runner image ships Google Chrome; install it only if missing.
+          google-chrome --version || npx --no-install playwright install chrome
+      - name: Check every browser spec file is in a shard
+        if: steps.classify.outputs.webui == 'true' && matrix.shard == 1
+        run: |
+          ruby -ryaml -e '
+            jobs = YAML.load_file(".github/workflows/webui_tests.yaml", aliases: true)["jobs"]
+            listed = jobs["browser"]["strategy"]["matrix"]["include"].flat_map { |s| s["files"].split }
+            specs = Dir["spec/**/*_spec.rb"]
+            browser = specs.select { |f| File.read(f).match?(/ENV\[.NATIVE_BROWSER.\]/) }
+            missing = (browser - listed).sort
+            stale = (listed - specs).sort
+            missing.each { |f| puts "::error file=#{f}::Has NATIVE_BROWSER examples but is in no browser shard; add it to one shard in webui_tests.yaml." }
+            stale.each { |f| puts "::error::#{f} is listed in a browser shard but does not exist." }
+            exit 1 unless missing.empty? && stale.empty?
+            puts "All #{browser.size} browser spec files are in a shard."'
+      - name: Restore shard runtime log
+        if: steps.classify.outputs.webui == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmp/parallel_runtime_rspec.log
+          key: webui-runtime-${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: webui-runtime-${{ matrix.shard }}-
+      - name: Exercise shim controls and file bootstrap
+        if: steps.classify.outputs.webui == 'true'
+        env:
+          # End-to-end Chrome scenarios take seconds by design; 60s here only
+          # flags pathological examples (the 2s default is for unit examples).
+          RSPEC_SLOW_EXAMPLE_SECONDS: '60'
+          SHARD_FILES: ${{ matrix.files }}
+        run: bundle exec parallel_rspec -n 2 --serialize-stdout --verbose-rerun-command -o '--tag browser' $SHARD_FILES
+      - name: Upload browser failure diagnostics
+        if: failure() && steps.classify.outputs.webui == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webui-browser-failures-${{ matrix.shard }}
+          path: spec/webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
