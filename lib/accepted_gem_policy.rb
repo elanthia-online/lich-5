@@ -8,6 +8,12 @@ module Lich
   # lockfile. Installed newer versions remain eligible; active versions count.
   class AcceptedGemPolicy
     Error = DependencyRecovery::Error
+    # Policy acquisition/coverage failures are distinct from broken local gems.
+    class PolicyError < Error; end
+    class AcquisitionError < PolicyError; end
+    class InvalidPolicyError < PolicyError; end
+    class CoverageError < PolicyError; end
+
     Check = Struct.new(:plan, :needed, :specs, keyword_init: true)
 
     class InstalledSet < Gem::Resolver::Set
@@ -35,16 +41,22 @@ module Lich
       dependencies = Array(dependencies)
       raise Error, 'no required startup dependencies were declared' if dependencies.empty?
       plan = @recovery.policy_plan(dependencies.map(&:name))
-      raise Error, plan.error unless plan.success?
-      supplied = plan.target.dig('contract', 'ruby_inventory', 'gems') || {}
+      unless plan.success?
+        type = plan.error_kind == :acquisition ? AcquisitionError : InvalidPolicyError
+        raise type, plan.error
+      end
+      supplied = self.class.supplied_gems(plan.target)
       covered = plan.units.flat_map { |unit| unit.fetch('members') }
       supplied_roots = {}
       dependencies.each do |dep|
         next if covered.include?(dep.name)
-        floor = supplied.key?(dep.name) ? Gem::Version.new(supplied.fetch(dep.name).fetch('version')) : nil
+        unless supplied.key?(dep.name)
+          raise CoverageError, "accepted recovery policy does not cover required gem #{dep.name}; ask the release maintainer to restore supported-client coverage"
+        end
+        floor = Gem::Version.new(supplied.fetch(dep.name).fetch('version'))
         active = @loaded_specs[dep.name]
-        unless floor && @find_specs.call(dep.name).any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
-          raise Error, "#{dep.name} is not covered by accepted recovery or the available RubyInstaller gems; reinstall Ruby4Lich5"
+        unless @find_specs.call(dep.name).any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
+          raise Error, "installed RubyInstaller gem #{dep.name} does not satisfy its inventory floor and declared requirement; repair the Ruby installation"
         end
         supplied_roots[dep.name] = floor
       end
@@ -53,7 +65,7 @@ module Lich
         unit.fetch('packages').each do |package|
           name = package.fetch('name')
           if packages.key?(name) && packages[name].values_at('version', 'sha256', 'filename') != package.values_at('version', 'sha256', 'filename')
-            raise Error, "conflicting accepted package identities for #{name}"
+            raise InvalidPolicyError, "conflicting accepted package identities for #{name}"
           end
           packages[name] = package
         end
@@ -85,7 +97,20 @@ module Lich
       requests = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms)).resolve
       Check.new(plan: plan, needed: [], specs: requests.map(&:spec))
     rescue Gem::Exception => e
-      raise Error, "installed gems cannot satisfy accepted startup policy: #{e.message}"
+      raise PolicyError, "installed gems cannot satisfy accepted startup policy: #{e.message}"
+    end
+
+    def self.supplied_gems(target)
+      supplied = target.dig('contract', 'ruby_inventory', 'gems') || {}
+      unless supplied.is_a?(Hash) && supplied.all? do |name, entry|
+        name.is_a?(String) && entry.is_a?(Hash) && entry['version'].is_a?(String) &&
+        Gem::Version.correct?(entry['version']) && entry.fetch('dependencies', {}).is_a?(Hash)
+      end
+        raise InvalidPolicyError, 'accepted RubyInstaller inventory is malformed'
+      end
+      supplied
+    rescue TypeError => e
+      raise InvalidPolicyError, "accepted RubyInstaller inventory is malformed: #{e.message}"
     end
 
     def activate!(check)

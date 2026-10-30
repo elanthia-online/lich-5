@@ -423,6 +423,65 @@ RSpec.describe Lich::DependencyRecovery do
       allow(subject).to receive(:restart_lich)
     end
 
+    it 'rolls back Windows sharing contention with a second DLL holder, then retries and relaunches with native load' do
+      skip 'requires the native Windows loader and sharing rules' unless Gem.win_platform?
+
+      require 'digest/sha2'
+      native = $LOADED_FEATURES.find { |path| File.basename(path).match?(/\Asha2\.(?:so|dll)\z/i) }
+      raise 'Ruby digest native fixture is unavailable' unless native && File.file?(native)
+      blocked = runtime_specs.first.extension_dir
+      held_library = File.join(blocked, 'original.dll')
+      FileUtils.cp(native, held_library)
+      originals = original_files.to_h { |path| [path, File.binread(path)] }
+      helper = File.expand_path('../support/native_dll_holder.rb', __dir__)
+      environment = { 'RUBYOPT' => nil, 'RUBYLIB' => nil, 'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil }
+      input, output, errors, holder = Open3.popen3(environment, RbConfig.ruby, helper, held_library, blocked)
+      ready = Timeout.timeout(15) { output.gets }
+      unless ready == "native-library-held\n"
+        diagnostics = Timeout.timeout(5) { errors.read }
+        raise "native library holder failed: #{diagnostics}"
+      end
+      allow(subject).to receive(:backup_path).and_call_original
+      allow(installer).to receive(:call).and_wrap_original do |install, path, home|
+        install.call(path, home)
+        spec = runtime_specs.find { |entry| File.basename(path) == "#{entry.full_name}.gem" }
+        FileUtils.cp(native, File.join(spec.extension_dir, 'original.dll'))
+      end
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(described_class::Error)
+      expect(subject).to have_received(:backup_path).with(blocked, kind_of(String), kind_of(Array))
+      expect(installer).not_to have_received(:call)
+      expect(subject).not_to have_received(:restart_lich)
+      expect(originals.keys.to_h { |path| [path, File.binread(path)] }).to eq(originals)
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
+
+      input.write('x')
+      input.close
+      released = Timeout.timeout(15) { holder.value }
+      expect(released.success?).to be(true), errors.read
+      marker = File.join(recovery_temp_dir, 'native-relaunch-complete')
+      relaunch = File.join(recovery_temp_dir, 'native-relaunch.rb')
+      File.write(relaunch, "require 'fiddle'\nFiddle.dlopen(#{held_library.inspect}).close\nFile.write(#{marker.inspect}, 'native-load-ok')\n")
+      payload['restart'] = { 'program' => relaunch, 'argv' => [], 'chdir' => recovery_temp_dir }
+      allow(subject).to receive(:restart_lich).and_call_original
+      restarted = subject.send(:run_windows_replacement!, payload)
+      _pid, status = Timeout.timeout(15) { Process.waitpid2(restarted) }
+      restarted = nil
+      expect(status.success?).to be(true)
+      expect(File.read(marker)).to eq('native-load-ok')
+      expect(subject).to have_received(:restart_lich).once
+    ensure
+      input.close if input && !input.closed?
+      if holder&.alive?
+        Process.kill('KILL', holder.pid) rescue nil
+        holder.join(5)
+      end
+      [output, errors].compact.each { |io| io.close unless io.closed? }
+      if restarted
+        Process.kill('KILL', restarted) rescue nil
+        Process.waitpid(restarted) rescue nil
+      end
+    end
+
     it 'restores completed moves and preserves untouched originals after a partial backup' do
       blocked = runtime_specs.first.loaded_from
       allow(FileUtils).to receive(:mv).and_wrap_original do |move, from, to|

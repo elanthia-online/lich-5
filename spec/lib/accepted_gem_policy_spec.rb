@@ -98,21 +98,21 @@ RSpec.describe Lich::AcceptedGemPolicy do
 
   it 'requires declared roots to be covered by accepted policy or supplied RubyInstaller gems' do
     plan.units = []
-    expect { policy.check(dependencies) }.to raise_error(described_class::Error, /not covered/)
+    expect { policy.check(dependencies) }.to raise_error(described_class::Error, /does not cover/)
   end
 
   it 'checks the actual supplied gem against the Gemfile requirement' do
     plan.units = []
     target['contract']['ruby_inventory']['gems']['json'] = { 'version' => '3.1' }
     installed['json'] = [spec('json', '2.0')]
-    expect { policy.check([Gem::Dependency.new('json', '>= 3')]) }.to raise_error(described_class::Error, /reinstall Ruby4Lich5/)
+    expect { policy.check([Gem::Dependency.new('json', '>= 3')]) }.to raise_error(described_class::Error, /repair the Ruby installation/)
   end
 
   it 'enforces the supplied inventory floor even with an unrestricted Gemfile root' do
     plan.units = []
     target['contract']['ruby_inventory']['gems']['json'] = { 'version' => '3.1' }
     installed['json'] = [spec('json', '3.0')]
-    expect { policy.check([Gem::Dependency.new('json')]) }.to raise_error(described_class::Error, /reinstall Ruby4Lich5/)
+    expect { policy.check([Gem::Dependency.new('json')]) }.to raise_error(described_class::Error, /repair the Ruby installation/)
   end
 
   it 'accepts and activates a supplied version at or above its inventory floor' do
@@ -129,7 +129,7 @@ RSpec.describe Lich::AcceptedGemPolicy do
     installed['json'] = [spec('json', '3.1')]
     installed['unapproved'] = [spec('unapproved', '9.0')]
     expect { policy.check([Gem::Dependency.new('json'), Gem::Dependency.new('unapproved')]) }
-      .to raise_error(described_class::Error, /unapproved.*not covered/)
+      .to raise_error(described_class::Error, /does not cover.*unapproved/)
   end
 
   it 'rejects conflicting package identities across selected units' do
@@ -159,6 +159,7 @@ RSpec.describe Lich::AcceptedGemPolicy do
         File.write(File.join(home, 'specifications', "#{specification.full_name}.gemspec"), specification.to_ruby)
       end
       program = <<~'RUBY'
+        abort 'dependency environment leaked' if ENV['BUNDLER_SETUP'] || ENV['RUBYGEMS_GEMDEPS']
         require ARGV.shift
         home = ARGV.shift
         mode = ARGV.shift
@@ -184,14 +185,41 @@ RSpec.describe Lich::AcceptedGemPolicy do
         abort 'incorrect selected gem' unless POLICY_FIXTURE_VERSION == '2.0' && Gem.loaded_specs.fetch('policy_fixture').version.to_s == '2.0'
         puts POLICY_FIXTURE_VERSION
       RUBY
+      poison = File.join(home, 'must-not-load.rb')
+      File.write(poison, "raise 'ambient dependency setup executed'\n")
+      original = ENV.to_h.slice('BUNDLER_SETUP', 'RUBYGEMS_GEMDEPS')
+      ENV['BUNDLER_SETUP'] = poison
+      ENV['RUBYGEMS_GEMDEPS'] = poison
       { 'old' => 'restart-required', 'fresh' => '2.0' }.each do |mode, expected|
         stdout, stderr, status = Open3.capture3(
-          { 'GEM_HOME' => home, 'GEM_PATH' => home, 'RUBYOPT' => nil, 'RUBYLIB' => nil },
+          { 'GEM_HOME' => home, 'GEM_PATH' => home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
+            'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil },
           RbConfig.ruby, '-e', program, File.expand_path('../../lib/accepted_gem_policy.rb', __dir__), home, mode
         )
         expect(status.success?).to be(true), stderr
         expect(stdout.strip).to eq(expected)
       end
+    ensure
+      original&.each { |name, value| ENV[name] = value }
+      %w[BUNDLER_SETUP RUBYGEMS_GEMDEPS].each { |name| ENV.delete(name) unless original&.key?(name) }
     end
+  end
+
+  it 'preserves an acquisition failure category from the actual policy reader' do
+    reader = Lich::DependencyRecovery.new(http_get: ->(_url) { raise SocketError, 'fixture offline' })
+    actual = described_class.new(recovery: reader, find_specs: ->(_name) { [spec('sqlite3', '2.10.2')] }, loaded_specs: {})
+    expect(reader).not_to receive(:recover)
+    expect { actual.check(dependencies) }.to raise_error(described_class::AcquisitionError, /fixture offline/)
+  end
+
+  it 'preserves a malformed-policy failure category from the actual reader' do
+    reader = Lich::DependencyRecovery.new(http_get: ->(_url) { '{invalid' })
+    actual = described_class.new(recovery: reader)
+    expect { actual.check(dependencies) }.to raise_error(described_class::InvalidPolicyError)
+  end
+
+  it 'classifies malformed RubyInstaller inventory as policy failure rather than missing gems' do
+    target['contract']['ruby_inventory']['gems'] = ['invalid']
+    expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /inventory is malformed/)
   end
 end

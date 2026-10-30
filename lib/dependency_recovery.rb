@@ -4,6 +4,7 @@ require 'fileutils'
 require 'json'
 require 'open-uri'
 require 'open3'
+require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
 require 'tempfile'
@@ -46,7 +47,7 @@ module Lich
     # A validated, manifest-derived set of units. Planning intentionally
     # fetches no gem artifacts, so callers can obtain user consent before an
     # installation changes the runtime.
-    Plan = Struct.new(:units, :error, :target, keyword_init: true) do
+    Plan = Struct.new(:units, :error, :target, :error_kind, keyword_init: true) do
       # @return [Boolean] whether the requested units are approved and valid
       def success?
         error.nil?
@@ -109,8 +110,10 @@ module Lich
       end
       requested = Array(gem_names).select { |name| target.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
       Plan.new(units: units_for(manifest, requested), target: target)
+    rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
     rescue StandardError => e
-      Plan.new(units: [], error: "#{e.class}: #{e.message}")
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :invalid)
     end
 
     # Downloads, verifies, and installs a previously approved manifest plan.
