@@ -44,6 +44,55 @@ module Lich
         refresh
       end
 
+      # Opens the per-account password change dialog for the selected character's account.
+      # @param _event [WebUI::Runtime::EventContext] unused originating event; selection is server-owned
+      # @return [void]
+      def begin_change_password(_event)
+        entry = @mutex.synchronize { @entries.find { |candidate| candidate.key == @draft_entry_key } }
+        return unless entry
+
+        @mutex.synchronize { @modal = { kind: :change_password, account: entry.user_id, error: nil } }
+        refresh
+      end
+
+      # Verifies the current account password and stores its replacement through
+      # the catalog's existing change_account_password provider. Validation
+      # reasons are fixed, secret-free messages shown in the dialog.
+      # @param event [WebUI::Runtime::EventContext] dialog response with three password fields
+      # @param password_cids [Array<String>] current, new and confirmation field IDs
+      # @return [void]
+      def change_password_response(event, password_cids)
+        unless event.payload[:button] == 'change'
+          event.submission.discard_sensitive!
+          return cancel_modal
+        end
+        account = @mutex.synchronize { @modal[:account] if @modal&.fetch(:kind, nil) == :change_password }
+        return event.submission.discard_sensitive! unless account
+
+        operation = begin_operation(:account_password, event)
+        carriers = password_cids.map { |cid| transfer_secret(event.submission.fetch(cid)) }
+        post_operation(operation, secrets: carriers) do
+          consume_three(carriers) do |current, replacement, confirmation|
+            raise ValidationRefused, 'Current password is required.' if current.empty?
+            raise ValidationRefused, 'New password is required.' if replacement.empty?
+            raise ValidationRefused, 'New passwords do not match.' unless secure_equal?(replacement, confirmation)
+            commit(operation) do
+              unless @catalog.change_account_password(account, current, replacement)
+                raise ValidationRefused, 'Current password was not accepted.'
+              end
+            end
+          end
+          complete(operation) do
+            @modal = nil
+            reload_catalog_locked
+          end
+          set_notice("Password changed for account #{account}.", :info)
+        rescue StandardError => error
+          message = error.is_a?(ValidationRefused) ? error.message : 'Password change failed.'
+          fail_operation(operation, error, modal: { kind: :change_password, account: account, error: message })
+        end
+      end
+
       # Cancels or queues the confirmed account/character removal from a modal response.
       # @param event [WebUI::Runtime::EventContext] originating viewer payload and declared submission
       # @return [void]
@@ -77,6 +126,7 @@ module Lich
         character[:game_name] = GAME_NAMES.fetch(character[:game_code], character[:game_code])
         account = submitted(values, 'select:character-account').to_s
         return set_notice('Character name is required.', :error) if character[:char_name].empty?
+        return set_notice('Choose a supported game.', :error) unless GAMES.any? { |option| option[:value] == character[:game_code] }
         return set_notice('Choose a supported front end.', :error) unless @frontend_options.any? { |option| option[:value] == character[:frontend] }
         if native_launch_only?(character[:frontend]) && character[:custom_launch]
           return set_notice('This front end requires native launch; remove the Custom Launch command.', :error)

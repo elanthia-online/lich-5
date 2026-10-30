@@ -58,6 +58,7 @@ module Lich
       end
 
       # Validates replacement fields and gates re-encryption against launcher closure.
+      # Each refusal reason is a fixed message that never includes password contents.
       # @param event [WebUI::Runtime::EventContext] current, replacement and confirmation
       # @return [void]
       def change_master_password(event)
@@ -74,16 +75,21 @@ module Lich
         carriers = pairs.map { |pair| transfer_secret(pair.last) }
         post_operation(operation, secrets: carriers) do
           consume_three(carriers) do |current, replacement, confirmation|
-            raise 'passwords do not match' unless secure_equal?(replacement, confirmation)
-            raise 'password too short' if replacement.length < 8
+            raise ValidationRefused, 'New master passwords do not match.' unless secure_equal?(replacement, confirmation)
+            if replacement.length < MASTER_PASSWORD_MIN_LENGTH
+              raise ValidationRefused, "New master password must be at least #{MASTER_PASSWORD_MIN_LENGTH} characters."
+            end
             commit(operation) do
-              raise 'master password change failed' unless @catalog.change_master_password(current, replacement)
+              unless @catalog.change_master_password(current, replacement)
+                raise ValidationRefused, 'The current master password was not accepted, or the change could not be saved.'
+              end
             end
           end
           complete(operation) { reload_catalog_locked }
           set_notice('Encryption password changed.', :info)
         rescue StandardError => error
-          fail_operation(operation, error, notice: 'Master password change failed.')
+          fail_operation(operation, error,
+                         notice: error.is_a?(ValidationRefused) ? error.message : 'Master password change failed.')
         end
       end
     end
