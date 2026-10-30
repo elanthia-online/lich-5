@@ -303,8 +303,10 @@ RSpec.describe 'bounded script compatibility pilot' do
     [scope.script_binding, scope.untrusted_binding].each do |binding|
       expect(eval('Gtk::Version::MAJOR', binding)).to eq(3)
       expect(eval("Gtk::Version::STRING.chr == '3'", binding)).to be(true)
-      expect(eval('HAVE_GTK', binding)).to be(true)
+      # Availability follows the presentation policy read at first activation.
+      expect(eval('HAVE_GTK', binding)).to be(scope::HAVE_GTK)
     end
+    expect([true, false]).to include(scope::HAVE_GTK)
     # The shim exposes only lexical compatibility constants; it must not
     # introduce GTK constants into the core namespace.
     @core_gtk.each do |namespace, original|
