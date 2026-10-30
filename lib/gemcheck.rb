@@ -3,11 +3,12 @@ require 'bundler'
 require 'timeout'
 require_relative 'bundler_recovery'
 require_relative 'dependency_recovery'
+require_relative 'accepted_gem_policy'
+require_relative 'runtime_gem_contract'
 
 module Lich
-  # Verifies bundled gems are installed at Lich startup and alerts the
-  # user via a native OS dialog (with a log-file fallback) when any
-  # are missing. Runs once during boot, before scripts load.
+  # Verifies runtime dependencies at startup, including accepted Windows
+  # versions, before application scripts load. Native dialogs have log fallback.
   module GemCheck
     WINDOWS_MESSAGE = "You're missing required Ruby gems!\n\n" \
                       "Please update to the latest Ruby version using the\n" \
@@ -30,33 +31,19 @@ module Lich
     # Verifies every gem required by the requested Bundler groups is installed,
     # alerting the user (native OS dialog, with a log-file fallback) and exiting
     # when any remain missing after one manifest-backed recovery attempt. This
-    # remains a presence check only: it does not call Bundler.setup or lock the
-    # load path, leaving scripts free to require gems they install at runtime.
+    # enforces accepted manifest versions on Windows and retains the existing
+    # non-Windows recovery boundaries. It does not call Bundler.setup; scripts
+    # remain free to require their own additional gems.
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
 
+      return verify_windows!(groups) if self_healing_supported?
+
       missing = missing_gems(groups)
       return if missing.empty?
-
-      if self_healing_supported?
-        result = recover_with_consent!(missing, groups: groups)
-        exit 1 unless result
-        exit 0 if result.restart_required
-
-        if result.success?
-          missing = missing_gems(groups)
-          return if missing.empty?
-
-          alert(missing: missing, groups: groups)
-        else
-          alert(missing: missing, groups: groups,
-                error: DependencyRecovery::Error.new(result.error))
-        end
-        exit 1
-      end
 
       if bundler_recovery_supported?(groups)
         result = recover_with_bundler_consent!(missing, groups: groups)
@@ -73,6 +60,26 @@ module Lich
         alert(missing: missing, groups: groups)
         exit 1
       end
+    rescue StandardError, Gem::LoadError => error
+      alert(missing: [], groups: groups, error: error)
+      exit 1
+    end
+
+    # Accepted manifest versions apply before any application dependency loads.
+    # Repair always restarts; already-loaded native or pure code cannot be
+    # safely replaced by changing the installed-spec registry in this process.
+    def verify_windows!(groups)
+      recovery = DependencyRecovery.new
+      policy = AcceptedGemPolicy.new(recovery: recovery)
+      check = policy.check(required_dependencies(groups))
+      return policy.activate!(check) if check.needed.empty?
+      exit 1 unless recovery_units_approved?(check.plan.units, groups)
+
+      write_recovery_log(missing: check.needed, groups: groups, units: check.plan.units)
+      result = recovery.recover(check.needed, force: true, plan: check.plan, restart: true, preserve_newer: true)
+      raise DependencyRecovery::Error, result.error unless result.success?
+      raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
+      exit 0
     end
 
     # Ensures Bundler resolves Lich's Gemfile even when the app is launched
@@ -224,8 +231,8 @@ module Lich
         details = members.length > 1 ? ": #{members.join(', ')}" : ''
         "  - #{recovery_unit_label(unit)}#{details}"
       end
-      "Required Ruby gems are not installed:\n#{listed_units.join("\n")}\n\n" \
-        "Lich can download and install the approved, hash-verified packages now.\n\n" \
+      "Required Ruby gems are missing or need repair:\n#{listed_units.join("\n")}\n\n" \
+        "Lich can download and install the approved, hash-verified packages now.\nA required version repair restarts Lich before continuing.\n\n" \
         'Install now?'
     end
 
@@ -259,20 +266,25 @@ module Lich
       show_notice("Required gem#{'s' if missing.length != 1} #{missing.join(', ')} not installed. Exiting.")
     end
 
-    # Names of gems declared in the Gemfile that are not installed at any
-    # version satisfying the declared requirement, scoped to the given groups.
-    # Relies on installed Gem::Specifications; git/path-sourced gems are not
-    # detected here (the current Gemfile has none).
+    # Reads required declarations without evaluating Windows Gemfile plugins.
     # @param groups [Array<Symbol>] groups being verified
-    # @return [Array<String>] sorted, unique gem names
+    # @return [Array<Gem::Dependency>]
+    def required_dependencies(groups)
+      if self_healing_supported?
+        path = ENV['BUNDLE_GEMFILE'] || File.expand_path('../Gemfile', __dir__)
+        reader = RuntimeGemContract.new(gemfile: File.binread(path), groups: groups)
+        return reader.roots.map { |name, requirements| Gem::Dependency.new(name, *requirements) }
+      end
+      Bundler.definition.current_dependencies.select { |dep| (dep.groups & groups).any? }
+    rescue StandardError, LoadError, SyntaxError => error
+      raise DependencyRecovery::Error, "could not read required gem declarations: #{error.message}"
+    end
+
+    # @return [Array<String>] missing names satisfying no installed version
     def missing_gems(groups = [:default])
-      Bundler.definition.current_dependencies.select do |dep|
-        (dep.groups & groups).any?
-      end.reject do |dep|
+      required_dependencies(groups).reject do |dep|
         Gem::Specification.find_all_by_name(dep.name, dep.requirement).any?
       end.map(&:name).sort.uniq
-    rescue StandardError
-      []
     end
 
     # @return [Array<Symbol>] all groups declared in the Gemfile
@@ -380,7 +392,7 @@ module Lich
         f.puts "    Lockfile:        #{safe_call { Bundler.default_lockfile }}"
         f.puts "    Working dir:     #{Dir.pwd}"
         f.puts "    Groups checked:  #{groups.inspect}"
-        f.puts "    All groups:      #{all_groups.inspect}"
+        f.puts "    All groups:      #{self_healing_supported? ? 'not evaluated by Windows version policy' : all_groups.inspect}"
         f.puts
 
         if missing.any?

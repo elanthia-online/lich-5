@@ -1,7 +1,7 @@
 # Ruby4Lich5 gem recovery manifest
 
-`Lich::DependencyRecovery` reads `R4L5-gem-manifest.json` before it attempts
-to repair a missing runtime dependency. The default location is the released
+`Lich::GemCheck` reads `R4L5-gem-manifest.json` on every Windows startup,
+before application dependency activation. The default location is the released
 `R4L5-gem-bundle-x64-mingw-ucrt` asset; development may override it with
 `LICH_GEM_MANIFEST_URL`.
 
@@ -72,38 +72,64 @@ evidence. The installer must acquire both kinds from the accepted artifact
 map rather than assume every file remains in the smaller ZIP. Any diagnostic
 or override build is unpromotable, even if its versions happen to match.
 
-When a required gem is missing, Lich fetches and validates this manifest before
-showing one native consent dialog listing every affected recovery unit. It does
-not download a gem artifact or write to the runtime until the combined request
-is approved. A declined prompt, or the absence of a native confirmation UI,
-fails closed: Lich records the reason (including `user consent not available`)
-in `temp/lich5-missing-gems.log` and exits. GTK is verified and recovered on
-Windows unless the user explicitly passes `--no-gtk` or `--no-gui`.
+## Startup version enforcement
 
-On Windows, the consent dialog expires after two minutes. An unattended launch
-fails closed with `user consent timed out` in the same early-startup log.
+The accepted manifest is Windows startup version policy. The static shared
+reader reads selected Gemfile declarations without evaluating plugins or needing
+a shipped lockfile. Default roots always apply; GTK also applies unless the user
+passes `--no-gtk` or `--no-gui`. The build-time non-GTK contract still includes
+the profanity group independently of these launch-time groups.
 
-After consent, Lich downloads and expands recovery artifacts only in its own
-`lich-5/temp` directory. It removes the per-recovery workspace after direct
-recovery completes. A native-suite helper retains it only until replacement and
-validation complete, then removes it before relaunching Lich.
+Lich validates every unit in the applicable ABI/platform target before selecting
+required roots and their complete recovery closures. Every selected package
+version is a minimum. An installed-only RubyGems resolver checks the declared
+requirements, closure floors and package platforms, then Lich explicitly
+activates and verifies the selected versions. Eligible newer installations remain
+eligible; an already active accepted newer version is retained. RubyInstaller-
+supplied roots must satisfy both their measured inventory floor and the Gemfile;
+an unavailable supplied version requires reinstalling Ruby4Lich5.
 
-Native ZIP units are replaced as a complete suite. Lich first hashes every
-package, then starts a hidden `rubyw.exe` helper and exits. Once the original
-process has released native files, the helper moves prior variants to a
-temporary rollback directory, installs and validates the complete manifest
-unit in the normal Ruby4Lich5 gem tree, deletes the rollback copy, and restarts
-the original Lich command with its original arguments. It never uses a user
-`GEM_HOME` or retains a second permanent GTK tree. Failure restores the moved
-packages and records the error in the same early-startup log.
+A working older gem triggers repair even when no gem is missing. If an older
+version is already active, merely installing a fixed copy does not permit
+startup to continue. Lich requests one native consent decision for all affected
+complete units before downloading artifacts or changing the runtime. Refusal,
+missing confirmation UI or the two-minute consent timeout stops startup and
+records the reason in `temp/lich5-missing-gems.log`.
 
+Manifest lookup and parsing have a 30-second total deadline and a 5 MiB limit;
+artifact staging has a five-minute total deadline, plus per-connection/read
+limits. Unavailable service, an unsupported target, invalid declarations or
+invalid policy stops Windows startup with an explicit error. There is no cached
+policy or offline success fallback. A healthy local gem set still requires the
+accepted policy lookup.
 
-This recovery path is currently Windows-only. On macOS and Linux, Lich does
-not fetch this manifest or attempt self-healing. GTK remains required unless
-the user explicitly passes `--no-gtk` or `--no-gui`; `DISPLAY`, terminal, and
-cron environment state never implicitly select a headless launch. Required
-default dependencies such as `sqlite3` continue to show the ordinary
-missing-gem warning and exit.
+After consent, all selected artifacts are staged and hash-verified under Lich's
+`temp` directory before a runtime write. Required version repairs are forced and
+always restart, including pure-gem repairs and direct native `.gem` downloads.
+One hidden `rubyw.exe` helper handles the complete transaction after the original
+process exits. It backs up replaced variants in the runtime gem directory,
+installs and verifies exact accepted packages, probes sqlite3/GTK entry points
+in a fresh bounded process when present, then relaunches the original Lich
+command and arguments. Startup then selects and verifies accepted versions in
+the new process. Existing newer packages are retained. Failed installation rolls
+back moved files and stops without relaunching. An unwritable gem home reports
+an error rather than continuing with an older version.
+
+No second permanent GTK tree or user `GEM_HOME` is used. Staging is removed after
+direct recovery or after the replacement helper completes. This policy does not
+remove old Ruby installations or user-added gems.
+
+Release order: accepted recovery artifacts and a matching installer must already
+be available before this runtime change is released. Only clients that receive
+this Lich update gain version enforcement; older clients continue to need the
+recorded Ruby4Lich5 reinstall guidance. The producer's vendored static reader
+must match the selected Lich candidate when building a new contract.
+
+Other platforms retain their existing recovery paths: macOS may consent to
+private non-GTK Bundler recovery, while Linux uses its existing missing-gem
+notice. Neither fetches Windows policy at startup. GTK/headless selection is
+explicit; terminal, `DISPLAY` and cron state do not implicitly select headless
+operation.
 
 ```json
 {
@@ -117,16 +143,16 @@ missing-gem warning and exit.
           "id": "sqlite3",
           "members": ["sqlite3"],
           "artifact": {
-            "url": "https://github.com/elanthia-online/Ruby4Lich5/releases/download/R4L5-sqlite3-2.9.5-x64-mingw-ucrt/R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
-            "filename": "R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
+            "url": "https://rubygems.org/downloads/sqlite3-2.10.2-x64-mingw-ucrt.gem",
+            "filename": "sqlite3-2.10.2-x64-mingw-ucrt.gem",
             "sha256": "sha256:<64-lowercase-hex-characters>",
             "archive": "gem"
           },
           "packages": [
             {
               "name": "sqlite3",
-              "version": "2.9.5",
-              "filename": "R4L5-sqlite3-2.9.5-x64-mingw-ucrt.gem",
+              "version": "2.10.2",
+              "filename": "sqlite3-2.10.2-x64-mingw-ucrt.gem",
               "sha256": "sha256:<64-lowercase-hex-characters>"
             }
           ],
