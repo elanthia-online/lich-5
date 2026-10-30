@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.23.1](https://github.com/elanthia-online/lich-5/compare/v5.23.0...v5.23.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **all:** follow the promoted detachable client's PID in Frontend.pid ([#2098](https://github.com/elanthia-online/lich-5/issues/2098)) ([274ff78](https://github.com/elanthia-online/lich-5/commit/274ff78cbd0fdd1bd42f3fc2125ff4cff2e5c4dd))
+* **all:** read the PID a detachable client sends with SET_FRONTEND_PID ([#2094](https://github.com/elanthia-online/lich-5/issues/2094)) ([37136c9](https://github.com/elanthia-online/lich-5/commit/37136c933aadc145e608d966f355192de8aa25e9))
+* **dr:** only let the game's own bank lines change DRBanking balances ([#2096](https://github.com/elanthia-online/lich-5/issues/2096)) ([fea28ef](https://github.com/elanthia-online/lich-5/commit/fea28ef7ce366b35a050c3ea0917b7ad1c94e376))
+* **dr:** refresh DR stats and skills when the character comes back to life ([#2097](https://github.com/elanthia-online/lich-5/issues/2097)) ([ad66122](https://github.com/elanthia-online/lich-5/commit/ad66122ca71c99bda5af4ffeb607055e45918492))
+* **dr:** treat a SlackBot token check Slack could not answer as no answer ([#2095](https://github.com/elanthia-online/lich-5/issues/2095)) ([89fa0fd](https://github.com/elanthia-online/lich-5/commit/89fa0fd77758e6d4c4385c6194dbc65535e47a3d))
+
 ## [5.23.0](https://github.com/elanthia-online/lich-5/compare/v5.22.0...v5.23.0) (2026-10-27)
 
 
