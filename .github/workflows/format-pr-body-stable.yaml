@@ -44,11 +44,15 @@ jobs:
     # Block scalar note:
     #   - Prefer (>) for multi-line `if:`; (|) preserves newlines and is more fragile.
     name: Format PR Body on Pull Request
+    # eo-release-bot[bot] is the GitHub App behind lich-5's APP_ID secret, which
+    # opens stable release PRs (release-on-push-stable / prepare-stable-release).
+    # Renaming that App changes this login; update it here and below.
     # Keep the pull_request gate first so this job does not evaluate on workflow_run.
     if: >
       github.event_name == 'pull_request' &&
       (github.event.pull_request.user.login == 'release-please[bot]' ||
-       github.event.pull_request.user.login == 'github-actions[bot]') &&
+       github.event.pull_request.user.login == 'github-actions[bot]' ||
+       github.event.pull_request.user.login == 'eo-release-bot[bot]') &&
       contains(join(github.event.pull_request.labels.*.name, ','), 'autorelease: pending') &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
@@ -94,7 +98,8 @@ jobs:
               owner, repo, state: 'open', base: 'main', sort: 'updated', direction: 'desc', per_page: 50
             });
             const match = all.find(pr =>
-              pr.user && (pr.user.login === 'release-please[bot]' || pr.user.login === 'github-actions[bot]') &&
+              pr.user && (pr.user.login === 'release-please[bot]' || pr.user.login === 'github-actions[bot]' ||
+                pr.user.login === 'eo-release-bot[bot]') &&
               pr.labels && pr.labels.some(l => l.name === 'autorelease: pending')
             );
             if (!match) { core.notice('No open Release Please PR (stable) found. Skipping.'); return; }

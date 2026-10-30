@@ -168,12 +168,27 @@ jobs:
             echo "backup=$backup"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Mint a release-please token from the org GitHub App
+        # This step only opens/updates the release PR (skip-github-release below).
+        # When the built-in token opens or updates a PR, its CI runs wait for a
+        # maintainer to approve them; with the App token, CI (and the required
+        # ci-gate check) runs on the release PR without that step.
+        id: app-token
+        if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Release Please (open/update Release PR)
         if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
         # Pinned to SHA for supply-chain safety
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ inputs.target_branch || github.ref_name || 'main' }}
@@ -184,6 +199,9 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASEABLE_SHAS: ${{ steps.guard.outputs.releaseable_shas }}
+          # Release PRs opened by the step above are authored by the GitHub App
+          # behind APP_ID ("<app-slug>[bot]"); older ones by github-actions[bot].
+          APP_BOT_LOGIN: ${{ steps.app-token.outputs.app-slug && format('{0}[bot]', steps.app-token.outputs.app-slug) || '' }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -205,7 +223,8 @@ jobs:
               per_page: 100,
             });
             const candidate = pulls.find(pr =>
-              (pr.user?.login === 'release-please[bot]' || pr.user?.login === 'github-actions[bot]') &&
+              (pr.user?.login === 'release-please[bot]' || pr.user?.login === 'github-actions[bot]' ||
+                (process.env.APP_BOT_LOGIN && pr.user?.login === process.env.APP_BOT_LOGIN)) &&
               pr.labels?.some(label => label.name === 'autorelease: pending')
             );
 
