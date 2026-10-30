@@ -31,29 +31,94 @@ function frame(generation) {
     ] } };
 }
 
-for (const hold of ['splitDragging', 'columnDragging', 'editingCell', 'pointerActive', 'rowDragging']) {
-  test(`${hold} defers only the newest generation without retiring the current DOM`, t => {
+// The base frame plus one surface for each gesture hold: a split handle, a
+// resizable and transferable table column/row, and a widget drag source.
+function holdFrame(generation) {
+  const message = frame(generation);
+  const table = message.tree.children.find(child => child.cid === 'table');
+  table.props = { ...table.props, transfer_group: 'rows',
+    columns: table.props.columns.map(column => ({ ...column, resizable: true })) };
+  message.tree.children.push(
+    { type: 'split', cid: 'split', props: { orientation: 'horizontal' }, children: [
+      { type: 'text', cid: 'left', slot: 'first', props: { content: 'Left' } },
+      { type: 'text', cid: 'right', slot: 'second', props: { content: 'Right' } }
+    ] },
+    { type: 'button', cid: 'carry', props: { label: 'Carry', drag_source: true } });
+  return message;
+}
+
+function pointer(f, type) {
+  return new f.dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
+}
+
+function drag(f, type) {
+  const event = new f.dom.window.Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', { value: { effectAllowed: '', setData() {} } });
+  return event;
+}
+
+function key(f, value) {
+  return new f.dom.window.KeyboardEvent('keydown', { key: value, bubbles: true });
+}
+
+// Each hold is entered and released only through the shipped event handler
+// that owns it, so a release handler that stops replaying the deferred render
+// fails its own case. Document-level releases replay after a zero timeout.
+const holds = {
+  splitDragging: {
+    target: f => f.element('split').querySelector('.split-handle'),
+    enter: (f, handle) => handle.dispatchEvent(pointer(f, 'pointerdown')),
+    release: (f, handle) => handle.dispatchEvent(pointer(f, 'pointerup'))
+  },
+  columnDragging: {
+    target: f => f.element('table').querySelector('.webui-column-resize'),
+    enter: (f, handle) => handle.dispatchEvent(pointer(f, 'pointerdown')),
+    release: (f, handle) => handle.dispatchEvent(pointer(f, 'pointerup'))
+  },
+  editingCell: {
+    target: f => f.element('table').querySelector('td'),
+    enter: (f, cell) => cell.dispatchEvent(key(f, 'F2')),
+    release: (f, cell) => cell.querySelector('input').dispatchEvent(key(f, 'Escape'))
+  },
+  pointerActive: {
+    target: f => f.element('carry'),
+    enter: (f, source) => source.dispatchEvent(pointer(f, 'pointerdown')),
+    release: (f, source) => source.dispatchEvent(pointer(f, 'pointerup'))
+  },
+  rowDragging: {
+    target: f => f.element('table').querySelector('tbody tr'),
+    enter: (f, row) => row.dispatchEvent(drag(f, 'dragstart')),
+    release: (f, row) => row.dispatchEvent(drag(f, 'dragend'))
+  }
+};
+
+for (const [hold, gesture] of Object.entries(holds)) {
+  test(`${hold} defers only the newest generation without retiring the current DOM`, async t => {
     const f = fixture(t);
-    f.receive(frame(1));
+    // jsdom has no pointer capture; the split handle requires the call to exist.
+    f.dom.window.Element.prototype.setPointerCapture ??= () => {};
+    f.receive(holdFrame(1));
     const root = f.page.element;
     let retired = 0;
     f.page.inputDisposers.push(() => retired++);
-    f.page[hold] = true;
-    f.receive(frame(3));
-    f.receive(frame(2));
-    f.receive(frame(3));
+    const target = gesture.target(f);
+    gesture.enter(f, target);
+    assert.equal(f.page[hold], true, `the real ${hold} gesture did not start`);
+    f.receive(holdFrame(3));
+    f.receive(holdFrame(2));
+    f.receive(holdFrame(3));
     assert.equal(f.page.element, root);
     assert.equal(f.page.generation, 1);
     assert.equal(f.page.deferredRender.generation, 3);
     assert.equal(retired, 0);
-    f.page[hold] = false;
-    const deferred = f.page.deferredRender;
-    f.page.deferredRender = null;
-    f.receive(deferred);
-    assert.equal(f.page.generation, 3);
+    gesture.release(f, target);
+    await new Promise(resolve => f.dom.window.setTimeout(resolve, 0));
+    assert.equal(f.page[hold], false);
+    assert.equal(f.page.deferredRender, null);
+    assert.equal(f.page.generation, 3, `releasing ${hold} did not install the deferred generation`);
     assert.equal(root.isConnected, false);
     assert.equal(retired, 1);
-    f.receive(frame(2));
+    f.receive(holdFrame(2));
     assert.equal(f.page.generation, 3);
     assert.equal(retired, 1);
   });

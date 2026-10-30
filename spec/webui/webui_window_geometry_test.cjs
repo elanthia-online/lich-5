@@ -6,6 +6,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+// Slice a private helper out of app.js, failing by marker name when the
+// helper layout changes rather than evaluating a wrong or empty slice.
+function helperSource(source, start, end) {
+  const from = source.indexOf(start);
+  assert.notEqual(from, -1, `app.js start marker not found: ${JSON.stringify(start)}`);
+  const to = source.indexOf(end);
+  assert.notEqual(to, -1, `app.js end marker not found: ${JSON.stringify(end)}`);
+  assert.ok(to > from, `app.js end marker ${JSON.stringify(end)} precedes start marker ${JSON.stringify(start)}`);
+  return source.slice(from, to);
+}
+
 function fixture(content = true) {
   const source = fs.readFileSync(path.join(__dirname, '../../lib/webui/assets/app.js'), 'utf8');
   const handlers = new Map();
@@ -20,7 +31,7 @@ function fixture(content = true) {
     setInterval: callback => { intervals.add(callback); return callback; },
     clearInterval: callback => intervals.delete(callback) };
   const context = vm.createContext({ window, emit: (page, component, event, payload) => sent.push(JSON.parse(payload.value)) });
-  vm.runInContext(source.slice(source.indexOf('  function windowGeometry('), source.indexOf('  function node(')), context);
+  vm.runInContext(helperSource(source, '  function windowGeometry(', '  function node('), context);
   const page = {};
   const component = { props: { value: JSON.stringify({ width: 196, height: 254 }) } };
   const render = () => context.trackWindowGeometry(page, component, content);
