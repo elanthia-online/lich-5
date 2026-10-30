@@ -95,6 +95,8 @@ module Lich
           end
 
           # Removes the widget once and runs each destroy handler independently.
+          # A failed port teardown still retires the shadow state; its error is
+          # re-raised for diagnostics, and host resources stay with the core.
           # @return [Widget] self, including repeated destruction
           def destroy
             session.synchronize do
@@ -103,11 +105,14 @@ module Lich
               # Keep handle retirement and provider detachment atomic with reloads.
               @dialogs&.dup&.each { |dialog| session.cleanup(dialog) { dialog.destroy } }
               @tab_owner&.send(:retire_header, self)
-              session.port.destroy(@handle) if @handle
-              @parent&.send(:forget_child, self)
-              @parent = nil
-              mark_destroyed
-              session.forget(self)
+              begin
+                session.port.destroy(@handle) if @handle
+              ensure
+                @parent&.send(:forget_child, self)
+                @parent = nil
+                mark_destroyed
+                session.forget(self)
+              end
               self
             end
           end

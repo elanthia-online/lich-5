@@ -249,13 +249,20 @@ module Lich
                 # A shadow handler change can precede its next published tree.
                 # Never retarget an admitted release to replacement handlers.
                 session.refuse(self, :pointer_release) if release_handlers && release_handlers != @signals.fetch(event, [])
+                vetoed = false
                 result = if event == :scroll
                            scroll = ScrollEvent.new(context.payload)
                            stopped = @signals.fetch(event, []).dup.any? { |_name, handler| handler.call(widget, scroll) == true }
                            unless destroyed? || (stopped && !scroll.replayed?)
                              delta = scroll.deltas
                              previous = session.with_widget(self) { session.port.get(@handle, :scroll_request) } || { x: 0, y: 0 }
-                             write(:scroll_request, { x: previous[:x] + delta[0], y: previous[:y] + delta[1] })
+                             # The accumulated request stays inside the contract range;
+                             # a request already at its bound is past any real extent.
+                             fields = session.port.schema(component_type).dig(:properties, :scroll_request, :shape, :fields)
+                             request = { x: previous[:x] + delta[0], y: previous[:y] + delta[1] }.to_h do |axis, value|
+                               [axis, value.clamp(fields.dig(axis, :shape, :min), fields.dig(axis, :shape, :max))]
+                             end
+                             write(:scroll_request, request)
                            end
                          elsif %i[key_press key_release].include?(event)
                            key = KeyEvent.new(**context.payload)
@@ -272,7 +279,11 @@ module Lich
                          else
                            widget.send(:emit_handlers, event)
                          end
-                widget.destroy if event == :close && result != true
+                vetoed = event == :close && result == true
+              ensure
+                # Only a handler's explicit true vetoes close; a failing handler
+                # still completes the default destruction before its error is reported.
+                widget.destroy if event == :close && !vetoed
               end
             end)
           end
