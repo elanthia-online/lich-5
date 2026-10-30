@@ -1,0 +1,303 @@
+module EHerbs
+  if defined?(Gtk)
+    class Setup < Gtk::Builder
+      attr_accessor :settings
+
+      @@categories = {
+        general: {
+          :buy_missing    => { default: false },
+          :deposit_coins  => { default: false },
+          :use_mending    => { default: false },
+          :skip_scars     => { default: false },
+          :blood_toggle   => { default: false },
+          :herb_container => { default: '' },
+          :use650         => { default: false },
+          :use1035        => { default: false },
+          :use_yaba       => { default: false },
+          :split_blood    => { default: false },
+          :use_potions    => { default: false },
+          :stock          => { default: '' },
+          :distiller      => { default: false },
+        }
+      }
+
+      def self.get_category(key)
+        @@categories.each { |category, data| return category unless data[key].nil? }
+        nil
+      end
+
+      def self.get_setting(key)
+        cat = Setup.get_category(key)
+        return nil if cat.nil?
+
+        @@categories[cat].each { |setting, data| return data if setting == key }
+        nil
+      end
+
+      def initialize(settings)
+        super()
+
+        @settings = settings
+
+        # set default values if they don't exist
+        @@categories.each do |_, data|
+          data.each { |key, value| @settings[key] = value[:default] if @settings[key].nil? }
+        end
+        # remove settings that doesn't exist
+        @settings.delete_if { |key, _| next Setup.get_category(key).nil? }
+        # use a GTK Builder to setup all the basics of the window then expand on that base
+
+        # GoS only for Sigil of Mending
+        @settings[:use_mending] = false unless Society.status == 'Guardians of Sunfist' && Society.rank >= 13
+
+        return unless defined?(Gtk) && Gtk::Version::MAJOR == 3
+
+        Gtk.queue do
+          # add_from_file("#{$data_dir}eherb.ui")
+          add_from_string(Setup.eherbs_ui)
+          load_settings
+          self['main'].keep_above = true
+          self['main'].set_title 'EHerbs Setup'
+          # connect signals after settings are loaded to a bunch of handlers don't trigger
+          connect_signals { |handler| method(handler) }
+        end
+      end
+
+      def self.eherbs_ui
+        '<?xml version="1.0" encoding="UTF-8"?><!-- Generated with glade 3.38.2 --><interface><requires lib="gtk+" version="3.20"/><object class="GtkWindow" id="main"><property name="width-request">650</property><property name="height-request">375</property><property name="can-focus">False</property><property name="title" translatable="yes">EHerbs Setup</property><property name="default-width">-1</property><property name="default-height">425</property><signal name="destroy" handler="on_destroy" swapped="no"/><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><property name="spacing">5</property><child><object class="GtkNotebook"><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="vexpand">True</property><child><object class="GtkScrolledWindow"><property name="visible">True</property><property name="can-focus">True</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-bottom">5</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=5 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkCheckButton" id="buy_missing"><property name="label" translatable="yes">Buy missing herbs</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_mending"><property name="label" translatable="yes">Use Sigil of Mending</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="skip_scars"><property name="label" translatable="yes">Skip level 1 scars</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">3</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">40</property><property name="label" translatable="yes">Herb Sack</property></object><packing><property name="left-attach">1</property><property name="top-attach">0</property><property name="height">2</property>
+        </packing></child><child><object class="GtkEntry" id="herb_container"><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="valign">center</property><property name="margin-end">10</property><property name="width-chars">40</property></object><packing><property name="left-attach">2</property><property name="top-attach">0</property><property name="height">2</property></packing></child><child><object class="GtkCheckButton" id="blood_toggle"><property name="label" translatable="yes">Heal Blood Only</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">4</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">25</property><property name="label" translatable="yes">Stock to % of Capacity</property></object><packing><property name="left-attach">1</property><property name="top-attach">2</property></packing></child><child><object class="GtkEntry" id="stock"><property name="visible">True</property><property name="can-focus">True</property><property name="tooltip-text" translatable="yes">When using ;eherbs stock it will fill your herb sack to a percentage of it\'s capacity.
+        Primarily intended for survival kits but will work for ordinary containers.</property><property name="halign">start</property><property name="valign">center</property><property name="width-chars">15</property><property name="placeholder-text" translatable="yes">0 - 100</property>
+        </object><packing><property name="left-attach">2</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="deposit_coins"><property name="label" translatable="yes">Deposit Coins</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">General</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property>
+        </packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-bottom">5</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkCheckButton" id="use650"><property name="label" translatable="yes">Assume Aspect (650) Yierka</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use1035"><property name="label" translatable="yes">Song of Tonis (1035)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_yaba"><property name="label" translatable="yes">Use yabathilium first</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_potions"><property name="label" translatable="yes">Try to use potions before plants</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="distiller"><property name="label" translatable="yes">Use Distiller (survival kits only)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Checks the survival kit when eherbs is used and keeps the distiller active. Survival kits were introduced at Dusk Ruin 2023 as a special herb container.</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property>
+        </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="split_blood"><property name="label" translatable="yes">Separate major/minor blood</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Count and stock major blood (yabathilium, Bloody Krolvin ale, Olak\'s Ol\'style ale, green mushroom potion, sassafras tea) separately from acantha. When off, all blood herbs are combined as before.</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">7</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Misc</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing>
+        </child></object></child></object></child></object></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">General</property></object><packing><property name="tab-fill">False</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Changes are only saved if you use the Close button --&gt;</property><attributes><attribute name="style" value="italic"/>
+        </attributes></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkButton"><property name="label" translatable="yes">Close</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="hexpand">True</property><signal name="clicked" handler="on_close_clicked" swapped="no"/>
+        </object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="pack-type">end</property><property name="position">1</property></packing></child></object></child></object></interface>'
+      end
+
+      # This is connected to automatically during load_settings and syncs data back to CharSettings.
+      def on_update(obj)
+        Gtk.queue do
+          key = obj.builder_name.to_sym
+          setting = Setup.get_setting(key)
+          return if setting.nil?
+
+          if obj.instance_of?(Gtk::CheckButton)
+            @settings[key] = obj.active?
+          elsif obj.instance_of?(Gtk::Entry)
+            @settings[key] = obj.text.strip
+          elsif objinstance_of?(Gtk::SpinButton)
+            # update from text entry
+            obj.update
+            # force int, we don't use floats anywhere
+            @settings[key] = obj.adjustment.value.to_i
+          elsif obj.instance_of?(Gtk::ComboBoxText)
+            @settings[key] = obj.active_text
+          end
+        end
+      end
+
+      def on_close_clicked
+        EHerbs.load(@settings)
+        self['main'].destroy
+      end
+
+      def on_destroy
+        Gtk.queue do
+          @running = false
+        end
+      end
+
+      # iterate all objects and for any that match a setting name directly we set the default
+      def load_settings
+        Gtk.queue do
+          # load up the generic settings which are just matching by name of the widget
+          objects.each do |obj|
+            next unless obj.methods.include?(:builder_name)
+
+            key = obj.builder_name.to_sym
+            next if (setting = Setup.get_setting(key)).nil?
+
+            if obj.instance_of?(Gtk::CheckButton)
+              obj.set_sensitive(false) if obj.builder_name.to_s.eql?("use_mending") && Society.status != 'Guardians of Sunfist' && Society.rank < 13
+              obj.set_sensitive(false) if obj.builder_name.to_s.eql?('use650') && !Spell[650].known?
+              obj.set_sensitive(false) if obj.builder_name.to_s.eql?('use1035') && !Spell[1035].known?
+
+              if obj.builder_name =~ /^([^:]+):(.*)$/i
+                key = Regexp.last_match(1).to_sym
+                value = Regexp.last_match(2).to_s
+                obj.active = @settings[key].include?(value)
+              else
+                obj.active = @settings[key]
+              end
+              obj.signal_connect('toggled') { on_update(obj) }
+            elsif obj.instance_of?(Gtk::Entry)
+              if @settings[key].instance_of?(String)
+                obj.text = @settings[key].strip
+              else
+                obj.text = @settings[key].to_s
+              end
+              obj.signal_connect('changed') { on_update(obj) }
+            elsif obj.instance_of?(Gtk::SpinButton)
+              obj.value = @settings[key]
+              obj.adjustment.value = @settings[key]
+              obj.signal_connect('changed') { on_update(obj) }
+            elsif obj.instance_of?(Gtk::ComboBoxText)
+              obj.set_active(item) if item
+              obj.signal_connect('changed') { on_update(obj) }
+            elsif obj.instance_of?(Gtk::TreeView)
+              if (store = self["#{key}_store"]).nil?
+                respond "** failed to find store for treeview #{key}"
+                next
+              elsif setting[:load].nil?
+                respond "** no :load defined #{key}"
+                next
+              end
+
+              setting[:load].call(store, @settings[key])
+
+              # setup the signals
+              if (add = self["#{key}_add"]).nil?
+                respond "** failed to find add for treeview #{key}"
+                next
+              elsif (delete = self["#{key}_delete"]).nil?
+                respond "** failed to find delete for treeview #{key}"
+                next
+              elsif (entry = self["#{key}_entry"]).nil?
+                respond "** failed to find entry for treeview #{key}"
+                next
+              end
+
+              add.signal_connect('clicked') do
+                if setting[:set].nil?
+                  respond "** no :set defined for #{key}"
+                  next
+                elsif entry.text.empty?
+                  next
+                end
+                setting[:set].call(store, entry.text, @settings[key])
+                setting[:load].call(store, @settings[key])
+              end
+
+              delete.signal_connect('clicked') do
+                if setting[:delete].nil?
+                  respond "** no :delete defined for #{key}"
+                  next
+                elsif (selected = obj.selection.selected).nil?
+                  next
+                end
+                setting[:delete].call(store, selected, @settings[key])
+                setting[:load].call(store, @settings[key])
+              end
+            end
+          end
+        end
+      end
+
+      def start
+        @running = true
+        Gtk.queue { self['main'].show_all }
+        wait_while { @running }
+      end
+
+      def list(cat_to_list: 'all')
+        indent_size = 2
+        print_array =
+          proc do |key, value, indent|
+            _respond("#{' ' * indent_size * indent.to_i}#{key}:")
+            value.sort!.each { |entry| _respond("#{' ' * indent_size * (indent.to_i + 1)}#{value.index(entry) + 1}. #{entry}") }
+          end
+
+        print_value = proc { |key, value, indent| _respond("#{' ' * indent_size * indent.to_i}#{key}: #{value}") }
+
+        categories = cat_to_list == 'all' ? %w[general] : [cat_to_list]
+
+        output = if $frontend == 'stormfront'
+                   "<output class=\"mono\"/>\n"
+                 else
+                   String.new
+                 end
+        if EHerbs.data[:herb_sack].nil?
+          EHerbs.data[:herb_sack] = Utility.find_herbsack
+        end
+
+        categories.each do |opt|
+          _respond(output) unless output.empty?
+          _respond("#{monsterbold_start}= #{opt.capitalize} =#{monsterbold_end}\n")
+          @@categories[opt.to_sym].each do |id, _|
+            if id == :herb_container
+              value = "id: #{EHerbs.data[:herb_sack].id} | name: #{EHerbs.data[:herb_sack].name}"
+            else
+              value = @settings[id]
+            end
+            value.instance_of?(Array) ? print_array.call(id, value, 1) : print_value.call(id, value, 1)
+          end
+        end
+
+        herb_names = []
+        EHerbs.data[:herb_sack].contents.each { |herb|
+          next unless herb.type =~ /herb/
+          herb_names << herb.name
+        }
+        _respond
+        _respond("#{' ' * indent_size}#{Msg.title_case(EHerbs.data[:herb_sack].name)} herbs:")
+
+        herb_names.uniq.each { |item| _respond("#{' ' * indent_size} #{item}") }
+        _respond
+
+        return unless $frontend == 'stormfront'
+
+        _respond("<output class=\"\"/>\n")
+      end
+
+      def self.update_setting(key, value)
+        setting = Setup.get_setting(key)
+        echo "** Setting #{key.inspect} does not exist" if setting.nil?
+        action = nil
+
+        if value =~ /^([+-])(.*)$/
+          action = Regexp.last_match(1)
+          value = Regexp.last_match(2).strip.downcase
+        end
+
+        if value == 'reset'
+          @settings.delete(key)
+          echo " Reset #{key}"
+        elsif @settings[key].instance_of?(Array)
+          if value =~ /\d/ && @settings[key][value.to_i]
+            @settings[key].delete_at(value.to_i)
+          else
+            @settings[key].delete(value)
+          end
+
+          if action == '-'
+            echo " #{value.inspect} removed from #{key.inspect}"
+          else
+            @settings[key].push(value)
+            echo " #{value.inspect} added to #{key.inspect}"
+          end
+
+          echo " #{key.inspect} is now #{@settings[key].join(', ').inspect}"
+        else
+          if @settings[key].instance_of?(FalseClass) || @settings[key].instance_of?(TrueClass)
+            value = value =~ /^true|1|yes|on/ ? true : false
+          elsif @settings[key].instance_of?(Integer)
+            value = value.to_i
+          end
+
+          echo "#{key.inspect} has been set to #{value.inspect}"
+          @settings[key] = value
+        end
+      end
+    end
+  end
+end
