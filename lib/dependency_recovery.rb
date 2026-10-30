@@ -10,6 +10,7 @@ require 'tempfile'
 require 'timeout'
 require 'tmpdir'
 require 'uri'
+require_relative 'recovery_unit_policy'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -66,7 +67,8 @@ module Lich
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
                    http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
-                   helper_launcher: nil)
+                   helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
+      @lich_version = lich_version
       @manifest_url = manifest_url
       @gem_home = gem_home
       @temp_dir = temp_dir
@@ -107,8 +109,9 @@ module Lich
           raise Error, "unit #{unit.fetch('id')} members disagree with packages"
         end
       end
-      requested = Array(gem_names).select { |name| target.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
-      Plan.new(units: units_for(manifest, requested), target: target)
+      effective = target.merge('units' => RecoveryUnitPolicy.select(target, @lich_version))
+      requested = Array(gem_names).select { |name| effective.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
+      Plan.new(units: units_for(manifest, requested), target: effective)
     rescue StandardError => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}")
     end
@@ -221,7 +224,7 @@ module Lich
     def units_for(manifest, requested)
       target = target_for(manifest)
 
-      units = target['units']
+      units = RecoveryUnitPolicy.select(target, @lich_version)
       raise Error, 'manifest target units must be an array' unless units.is_a?(Array)
 
       selected = requested.map do |name|

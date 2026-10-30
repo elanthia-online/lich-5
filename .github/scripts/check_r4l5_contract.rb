@@ -64,7 +64,8 @@ if $PROGRAM_NAME == __FILE__
       gemfile: File.binread(options[:gemfile]), lockfile: File.binread(options[:lockfile]),
       manifest_bytes: Lich::ContractDocument.read(options[:manifest]),
       provenance: JSON.parse(Lich::ContractDocument.read(options[:provenance])),
-      candidate_sha: options[:candidate_sha], installer_path: options[:installer]
+      candidate_sha: options[:candidate_sha], installer_path: options[:installer],
+      lich_version: File.read(File.join(File.dirname(options[:gemfile]), 'lib/version.rb'))[/^LICH_VERSION = '([^']+)'/, 1]
     )
     puts "R4L5 contract accepted: #{result.fetch('packages').length} locked Windows packages; matching installer predecessor"
     result.fetch('bundled').each do |name, versions|

@@ -45,6 +45,16 @@ RSpec.describe Lich::R4L5ContractCheck do
     described_class.verify!(gemfile: gemfile, lockfile: lockfile, manifest_bytes: JSON.generate(manifest), provenance: provenance, **options)
   end
 
+  it 'checks the applicable range instead of rejecting retained legacy package versions' do
+    legacy = Marshal.load(Marshal.dump(unit))
+    legacy['id'] = 'redis-legacy'
+    legacy.fetch('packages').first['version'] = '0.20.0'
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [legacy, unit]
+    expect(verify(lich_version: '5.24.0').fetch('packages').keys).to eq(%w[redis redis-client])
+    expect { verify(lich_version: '5.23.0') }.to raise_error(described_class::Error, /version mismatch/)
+  end
+
   it 'accepts the candidate only after matching recovery and installer are available' do
     expect(verify(candidate_sha: 'c' * 40).fetch('packages').keys).to eq(%w[redis redis-client])
   end

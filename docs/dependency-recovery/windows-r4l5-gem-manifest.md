@@ -203,3 +203,34 @@ release-assembly mistakes, but a party able to replace both the manifest and
 asset can also replace the expected hash. Treat the release promotion review
 and GitHub repository protections as the current trust boundary until signing
 is funded.
+
+## Range-aware recovery and lifecycle
+
+Units may carry `lich_versions` with an inclusive `min_inclusive` and/or an
+exclusive `max_exclusive` version. At least one bound is required. The running
+`LICH_VERSION` is used before both repair planning and startup version policy.
+Applicable ranged closures replace intersecting legacy closures as whole units;
+Lich never mixes a retained older shared package into a newer closure. Conflicting
+applicable range package identities fail closed. Release checks apply the same selection
+before comparing the candidate lock.
+
+Keep a complete legacy unit ahead of every ranged replacement. Older first-match
+readers ignore these added fields and continue recovering their legacy closure.
+The producer gates both pinned legacy consumers and the explicitly selected new
+consumer on clean RubyInstaller. Before promoting ranges, it also verifies an
+explicit `range_reader` release tag and full commit against the reviewed reader.
+Release/install this Lich capability before publishing policy that relies on it.
+No range or support cutoff is enabled by this change.
+
+An obsolete unit carries `lifecycle: {"state":"obsolete"}`, optionally with one
+`until_date` (ISO date) or `floor_lich_version`. These fields document support;
+they never automatically remove service. Withdrawal is a separate reviewed
+producer change, emitting `withdrawn_members` and its explicit decisions. No
+unit may advertise or package a withdrawn member, including alternate units and
+the promotion rollback manifest. Historical release files are kept.
+
+GTK remains built and served under the current policy. Frozen GTK preparation
+copies the complete published, hash-verified Ruby 4.0 closure into an immutable
+standalone ZIP. Actual freeze waits for webUI go-live; the shim-retirement change
+sets the future support floor. The v5.19.0 compaction boundary is a compatibility
+consideration for that decision, not a selected support cutoff.

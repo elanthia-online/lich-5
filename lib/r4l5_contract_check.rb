@@ -8,7 +8,7 @@ module Lich
   class R4L5ContractCheck
     Error = RuntimeGemContract::Error
 
-    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil)
+    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
       reader = RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile)
       manifest = JSON.parse(manifest_bytes)
       raise Error, 'unsupported recovery manifest' unless manifest['schema'] == 1
@@ -31,8 +31,9 @@ module Lich
       recovery = DependencyRecovery.new
       units.each { |unit| recovery.send(:validate_unit!, unit) }
       raise Error, 'duplicate recovery unit ids' unless units.map { |unit| unit['id'] }.uniq.length == units.length
+      units = RecoveryUnitPolicy.select(target, lich_version)
       resolved.fetch('packages').each do |name, spec|
-        # Existing consumers use the first unit advertising a member.
+        # Select the applicable closure before checking exact locked versions.
         unit = units.find { |entry| entry.fetch('members').include?(name) }
         raise Error, "recovery does not cover #{name}" unless unit
         package = unit.fetch('packages').find { |entry| entry['name'] == name }
@@ -66,7 +67,7 @@ module Lich
         raise Error, 'downloaded installer checksum does not match the accepted predecessor'
       end
       resolved
-    rescue JSON::ParserError, KeyError, TypeError, NoMethodError, ArgumentError, DependencyRecovery::Error => e
+    rescue JSON::ParserError, KeyError, TypeError, NoMethodError, ArgumentError, DependencyRecovery::Error, RecoveryUnitPolicy::Error => e
       raise Error, "invalid R4L5 contract: #{e.message}"
     end
   end

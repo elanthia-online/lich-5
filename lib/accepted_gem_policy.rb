@@ -52,7 +52,7 @@ module Lich
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|
           name = package.fetch('name')
-          if packages.key?(name) && packages[name].values_at('version', 'sha256', 'filename') != package.values_at('version', 'sha256', 'filename')
+          if packages.key?(name) && packages[name].values_at('version', 'sha256') != package.values_at('version', 'sha256')
             raise Error, "conflicting accepted package identities for #{name}"
           end
           packages[name] = package
