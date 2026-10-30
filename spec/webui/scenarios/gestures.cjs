@@ -85,7 +85,8 @@ async function runPriority16Events({ page, context, expect }) {
     await entry.fill('barrier');
     await page.getByRole('button', { name: 'Reveal', exact: true }).focus();
     await expect(page.getByText('Blur: barrier', { exact: true })).toBeVisible();
-    expect(await scroller.evaluate(element => element.scrollTop)).toBe(70);
+    // Restoration runs on an animation frame after the refresh; poll for it.
+    await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBe(70);
     const other = await context.newPage();
     await other.goto(page.url());
     await expect(other.getByPlaceholder('Search fixture')).toHaveValue('');
@@ -165,8 +166,9 @@ async function runPriority17WidgetDrag({ page, expect }) {
     await page.mouse.move(position.x + 4, position.y + 4);
     await page.mouse.down();
     const before = await page.getByText(/^Tick \d+$/).textContent();
-    // Let several real timer renders arrive while the release-only surface holds.
-    await page.waitForTimeout(150);
+    const held = await page.evaluate(() => window.fixtureRenderCount);
+    // Wait until real timer renders have arrived while the release-only surface holds.
+    await expect.poll(() => page.evaluate(() => window.fixtureRenderCount)).toBeGreaterThan(held + 1);
     await expect(page.getByText(/^Tick \d+$/)).toHaveText(before);
     await page.mouse.up();
     await expect(page.getByText('Releases 1', { exact: true })).toBeVisible();

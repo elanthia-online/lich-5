@@ -71,6 +71,7 @@ test(`WebUI ${scenario || 'missing fixture'}`, async ({ page, context }) => {
   expect(auth, 'The browser must visit the authentication intermediate document').toBeTruthy();
   expect(auth.status()).toBe(200);
   const final = documents.find(response => response.url() === page.url());
+  expect(final, 'The browser must receive the final page document').toBeTruthy();
   expect(final.status()).toBe(200);
   const cookies = await context.cookies(page.url());
   expect(cookies).toEqual(expect.arrayContaining([
