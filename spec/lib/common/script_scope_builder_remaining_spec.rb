@@ -9,6 +9,17 @@ require 'digest'
 require 'yaml'
 
 RSpec.describe 'remaining Builder setup families' do
+  # Settled B5: each script-derived example names the script, the tested version
+  # and pinned source revision, and the credited author, as the source header
+  # writes them (spec/fixtures/webui/README.txt, Attribution). EO revision
+  # 7fd0b971 holds the setup fixtures; huntplan's source states neither.
+  attribution = {
+    'bigshot'    => '[bigshot version 5.16.1, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+    'go2'        => '[go2 version 2.4.0, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author Tillmen]',
+    'huntplan'   => '[huntplan version not established, revision not established, author not established]',
+    'repository' => '[repository version 2.74, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+  }
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:owner) { Struct.new(:name).new('remaining-builder.lic') }
   let(:service) { Lich::WebUI::Service.new }
@@ -266,7 +277,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(widget.send(:component_props)[:margin]).to eq(right: 7, bottom: 2, left: 3)
   end
 
-  it 'loads repository, preserves numeric sorting and filters before activating the original download callback' do
+  it "loads repository, preserves numeric sorting and filters before activating the original download callback #{attribution.fetch('repository')}" do
     form = original('repository')
     connect
     tabs = @page.last_render.tree.each.find { |node| node.type == :tabs }
@@ -291,7 +302,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(service.registry.pages_for(owner)).to be_empty
   end
 
-  it 'populates repository with long and absent comments and displays each without truncation' do
+  it "populates repository with long and absent comments and displays each without truncation #{attribution.fetch('repository')}" do
     comment = 'Full description. ' * 1000
     listing = [['header'], ['long.lic', 'GS', '2048', '1700000000', 'Test', '1', '0', '0', '', comment],
                ['absent.lic', 'GS', '2048', '1700000000', 'Test', '1', '0', '0', '', nil]]
@@ -312,7 +323,7 @@ RSpec.describe 'remaining Builder setup families' do
   end
 
   %w[GS DR].each do |game|
-    it "loads go2 #{game} settings and runs the original update/Close callbacks" do
+    it "loads go2 #{game} settings and runs the original update/Close callbacks #{attribution.fetch('go2')}" do
       form = original('go2', game: game)
       connect
       event(form['delay'], 'change', { value: 7 })
@@ -326,7 +337,7 @@ RSpec.describe 'remaining Builder setup families' do
     end
   end
 
-  it 'reports the unchanged bigshot obsolete tooltip target instead of inventing a widget' do
+  it "reports the unchanged bigshot obsolete tooltip target instead of inventing a widget #{attribution.fetch('bigshot')}" do
     allow(owner).to receive(:kill)
     form = original('bigshot', source_failure: true)
     failures = @diagnostics.grep(/callback failed/)
@@ -339,7 +350,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(gtk.queue { raise 'late work must not run' }).to be_nil
   end
 
-  it 'loads the explicitly corrected bigshot candidate and saves through its original Close handler' do
+  it "loads the explicitly corrected bigshot candidate and saves through its original Close handler #{attribution.fetch('bigshot')}" do
     form = original('bigshot', corrected: true)
     connect
     event(form['resting_room_id'], 'change', { value: '1234' })
@@ -356,7 +367,7 @@ RSpec.describe 'remaining Builder setup families' do
   end
 
   [true, false, nil].each do |legacy|
-    it "migrates corrected bigshot legacy boon flag #{legacy.inspect} without replaying it", :slow do
+    it "migrates corrected bigshot legacy boon flag #{legacy.inspect} without replaying it #{attribution.fetch('bigshot')}", :slow do
       form = original('bigshot', corrected: true, settings: { boon_flee_from: legacy })
       connect
       expect(form.settings).not_to have_key(:boon_flee_from)
@@ -382,7 +393,7 @@ RSpec.describe 'remaining Builder setup families' do
     end
   end
 
-  it 'loads a corrected bigshot profile and applies its dependent fog control' do
+  it "loads a corrected bigshot profile and applies its dependent fog control #{attribution.fetch('bigshot')}" do
     form = original('bigshot', corrected: true)
     connect
     choice = form['profile_name'].send(:component_props)[:options].find { |option| option[:label] == 'fixture' }
@@ -407,7 +418,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(@variables.op).to be_nil
   end
 
-  it 'updates corrected bigshot scalar fields and text areas through their original handlers' do
+  it "updates corrected bigshot scalar fields and text areas through their original handlers #{attribution.fetch('bigshot')}" do
     form = original('bigshot', corrected: true)
     connect
     custom = form['fog_return'].send(:component_props)[:options].find { |option| option[:label] == 'Custom' }
@@ -448,7 +459,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(@variables.op).to be_nil
   end
 
-  it 'runs corrected bigshot new-profile, overwrite/cancel and update-profile paths', :slow do
+  it "runs corrected bigshot new-profile, overwrite/cancel and update-profile paths #{attribution.fetch('bigshot')}", :slow do
     form = original('bigshot', corrected: true)
     connect
     existing = Dir.children(@profile_directory)
@@ -484,7 +495,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(@runner.join(2)).to equal(@runner)
   end
 
-  it 'loads unchanged huntplan, rejects an invalid slot and saves the original settings' do
+  it "loads unchanged huntplan, rejects an invalid slot and saves the original settings #{attribution.fetch('huntplan')}" do
     form = original('huntplan')
     connect
     expect(form['ebounty_slot'].name).to eq('ebounty_slot_label')
@@ -504,7 +515,7 @@ RSpec.describe 'remaining Builder setup families' do
     expect(service.registry.pages_for(owner)).to be_empty
   end
 
-  it 'runs the corrected bigshot candidate through Chrome controls, boons and profile saving', browser: true do
+  it "runs the corrected bigshot candidate through Chrome controls, boons and profile saving #{attribution.fetch('bigshot')}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
 
     form = original('bigshot', corrected: true)
@@ -524,7 +535,7 @@ RSpec.describe 'remaining Builder setup families' do
   end
 
   [['repository', 'GS'], ['go2', 'GS'], ['go2', 'DR'], ['huntplan', 'GS']].each do |name, game|
-    it "runs original #{name} #{game} setup interactions in Chrome", browser: true do
+    it "runs original #{name} #{game} setup interactions in Chrome #{attribution.fetch(name)}", browser: true do
       skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
 
       # Include production-shaped missing and long metadata in the browser path,

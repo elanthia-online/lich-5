@@ -8,6 +8,20 @@ require 'timeout'
 require 'digest'
 
 RSpec.describe 'bounded Gtk Builder compatibility' do
+  # Settled B5: each script-derived example names the script, the tested version
+  # and pinned source revision, and the credited author, as the source header
+  # writes them (spec/fixtures/webui/README.txt, Attribution). EO revisions
+  # 7fd0b971 (setup fixtures) and c4a96840 (refreshed eloot setup).
+  attribution = {
+    'blackarts'       => '[BlackArts version 1.3.6, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+    'ebounty'         => '[ebounty version 1.12.3, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+    'ecleanse'        => '[ecleanse version 2.3.6, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author Deysh]',
+    'eherbs'          => '[eherbs version 2.2.1, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author Elanthia-Online]',
+    'eloot'           => '[eloot version 2.11.9, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+    'eloot-refreshed' => '[eloot version 2.13.0, revision c4a96840ea2a29a445fd797c7baec0b012b0dd12, author elanthia-online]',
+    'ewaggle'         => '[ewaggle version 2.1.6, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
+  }
+
   let(:scope) { Lich::Common::ScriptScope }
   let(:owner) { Struct.new(:name).new('builder.lic') }
   let(:service) { Lich::WebUI::Service.new }
@@ -24,16 +38,50 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
   # Original list callbacks rely on Lich's real nil extension (uniq!.sort!).
   # Exercise that production environment without contaminating the parent suite
   # or replacing source callbacks. Each browser case still runs independently.
+  # The child runs from the repository root (example.id is root-relative) and,
+  # through a distinct TEST_ENV_NUMBER, keeps its own RSpec status file.
   def production_nil_example(example)
     return false if ENV['WEBUI_PRODUCTION_NIL'] == '1'
 
-    extension = File.expand_path('../../../lib/common/class_exts/nilclass.rb', __dir__)
-    output, status = Open3.capture2e(
-      { 'WEBUI_PRODUCTION_NIL' => '1' }, RbConfig.ruby, '-S', 'rspec', '--require', extension, example.id
-    )
+    root = File.expand_path('../../..', __dir__)
+    extension = File.join(root, 'lib/common/class_exts/nilclass.rb')
+    environment = { 'WEBUI_PRODUCTION_NIL' => '1', 'TEST_ENV_NUMBER' => "#{ENV.fetch('TEST_ENV_NUMBER', '')}-production-nil" }
+    seconds = production_nil_seconds
+    status, output = bounded_child(environment, [RbConfig.ruby, '-S', 'rspec', '--require', extension, example.id], root, seconds)
+    expect(status).not_to be_nil, "nested rspec exceeded #{seconds}s and its process group was stopped:\n#{output}"
     expect(status.success?).to be(true), output
     expect(output).to match(/1 example, 0 failures(?:\n|\r)/), output
     true
+  end
+
+  # Bounds one nested example, including Ruby and RSpec startup; a hung child
+  # fails the parent example instead of holding the suite.
+  def production_nil_seconds = 120
+
+  # Runs a child in its own process group and waits at most `seconds`. On
+  # timeout or any error the group is stopped and the child reaped in ensure.
+  # @return [Array(Process::Status, String)] status (nil after a timeout) and combined output
+  def bounded_child(environment, command, directory, seconds)
+    stdin, stream, waiter = Open3.popen2e(environment, *command, chdir: directory, pgroup: true)
+    stdin.close
+    reader = Thread.new { stream.read }
+    reader.report_on_exception = false
+    status = waiter.join(seconds)&.value
+    stop_group(waiter) unless status
+    [status, reader.join(5) ? reader.value : '']
+  ensure
+    stop_group(waiter) if waiter&.alive?
+    reader&.kill
+    stream&.close
+  end
+
+  # TERM lets a child run its own cleanup; KILL follows after a short grace.
+  def stop_group(waiter)
+    Process.kill('TERM', -waiter.pid)
+    Process.kill('KILL', -waiter.pid) unless waiter.join(2)
+    waiter.join
+  rescue Errno::ESRCH
+    waiter.join
   end
 
   before do
@@ -185,7 +233,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
   end
 
   %w[ebounty eherbs blackarts].each do |name|
-    it "loads and publishes the unchanged #{name} setup with original callbacks" do |example|
+    it "loads and publishes the unchanged #{name} setup with original callbacks #{attribution.fetch(name)}" do |example|
       next if name != 'eherbs' && production_nil_example(example)
 
       settings = {}
@@ -222,7 +270,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     end
   end
 
-  it 'retains the refreshed eloot original missing-label failure' do |example|
+  it "retains the refreshed eloot original missing-label failure #{attribution.fetch('eloot-refreshed')}" do |example|
     next if production_nil_example(example)
 
     allow(owner).to receive(:kill)
@@ -231,7 +279,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(owner).to have_received(:kill).with(async: true)
   end
 
-  it 'loads and saves all seven refreshed eloot stance choices in the repaired candidate' do |example|
+  it "loads and saves all seven refreshed eloot stance choices in the repaired candidate #{attribution.fetch('eloot-refreshed')}" do |example|
     next if production_nil_example(example)
 
     settings = { loot_stance: 'guarded' }
@@ -250,7 +298,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(YAML.unsafe_load_file(File.join(@settings_directory, 'eloot.yaml'))[:loot_stance]).to eq('defensive')
   end
 
-  it 'validates the refreshed eloot stance selector and save in the browser', browser: true do |example|
+  it "validates the refreshed eloot stance selector and save in the browser #{attribution.fetch('eloot-refreshed')}", browser: true do |example|
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     next if production_nil_example(example)
 
@@ -269,7 +317,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(form['main']).to be_destroyed
   end
 
-  it 'loads the explicitly corrected eloot candidate and preserves its Close/save callback' do |example|
+  it "loads the explicitly corrected eloot candidate and preserves its Close/save callback #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     settings = {}
@@ -284,7 +332,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(YAML.unsafe_load_file(File.join(@settings_directory, 'eloot.yaml'))).to eq(settings)
   end
 
-  it 'exercises every corrected eloot list add/delete handler and retains the empty lists on save' do |example|
+  it "exercises every corrected eloot list add/delete handler and retains the empty lists on save #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     settings = {}
@@ -312,7 +360,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(YAML.unsafe_load_file(File.join(@settings_directory, 'eloot.yaml'))).to eq(settings)
   end
 
-  it 'updates every corrected eloot scalar entry and spin setting through its connected handler' do |example|
+  it "updates every corrected eloot scalar entry and spin setting through its connected handler #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     settings = {}
@@ -337,7 +385,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(File).not_to exist(File.join(@settings_directory, 'eloot.yaml'))
   end
 
-  it 'dispatches the corrected eloot tipping preview with the current settings' do |example|
+  it "dispatches the corrected eloot tipping preview with the current settings #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     settings = {}
@@ -354,7 +402,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(File).not_to exist(File.join(@settings_directory, 'eloot.yaml'))
   end
 
-  it 'runs the corrected eloot candidate through Chrome settings, lists, dependencies and saving', browser: true do |example|
+  it "runs the corrected eloot candidate through Chrome settings, lists, dependencies and saving #{attribution.fetch('eloot')}", browser: true do |example|
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     next if production_nil_example(example)
 
@@ -379,7 +427,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(form['main']).to be_destroyed
   end
 
-  it 'refuses the original eloot missing tooltip target with a conversion diagnostic' do |example|
+  it "refuses the original eloot missing tooltip target with a conversion diagnostic #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     allow(owner).to receive(:kill)
@@ -392,7 +440,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
   end
 
   %w[ebounty eherbs blackarts].each do |name|
-    it "validates #{name} original interactions and layout in Chrome", browser: true do |example|
+    it "validates #{name} original interactions and layout in Chrome #{attribution.fetch(name)}", browser: true do |example|
       skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
       next if name != 'eherbs' && production_nil_example(example)
 
@@ -466,7 +514,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     form
   end
 
-  it 'loads the original ewaggle setup, named choices and numeric callbacks without source edits' do
+  it "loads the original ewaggle setup, named choices and numeric callbacks without source edits #{attribution.fetch('ewaggle')}" do
     form = original_ewaggle
     expect(Digest::SHA256.hexdigest(form.class.ewaggle_ui)).to eq('c617157ee342adb4bfcb9d3281de5d63c17ef777d4f75fcad60544ec6049eddf')
     expect(form['sonic_armor'].active_id).to eq('Robes')
@@ -484,7 +532,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(@messages.join).to include('WITHOUT saving')
   end
 
-  it 'routes validated row drops through the original ewaggle callbacks without automatic model edits' do
+  it "routes validated row drops through the original ewaggle callbacks without automatic model edits #{attribution.fetch('ewaggle')}" do
     diagnostics = []
     allow(Lich).to receive(:log) { |message| diagnostics << message }
     form = original_ewaggle
@@ -539,7 +587,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect { spin.text = 'not a number' }.to raise_error(gtk::UnsupportedOperation)
   end
 
-  it 'saves original ewaggle settings when Close overtakes its input change events' do
+  it "saves original ewaggle settings when Close overtakes its input change events #{attribution.fetch('ewaggle')}" do
     form = original_ewaggle
     form['main'].show_all
     page = nil
@@ -585,7 +633,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     end
   end
 
-  it 'preserves ewaggle search, transfers, choice edits and original save callbacks in Chrome', browser: true do
+  it "preserves ewaggle search, transfers, choice edits and original save callbacks in Chrome #{attribution.fetch('ewaggle')}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
     form = original_ewaggle
     runner = Thread.new { form.start }
@@ -620,7 +668,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     runner&.join(2)
   end
 
-  it 'loads unchanged ecleanse XML and preserves original initialization, changes and Close saving' do
+  it "loads unchanged ecleanse XML and preserves original initialization, changes and Close saving #{attribution.fetch('ecleanse')}" do
     settings = { stop_scripts: 'bigshot', cleanse_disease: true, cleanse_poison: false }
     form = original_ecleanse(settings)
     expect(Digest::SHA256.hexdigest(form.class.ui)).to eq('1dec1310d30d6b3f1e34beb7a39aeccdffdd6da70e87c476818759405be13eea')
@@ -648,7 +696,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
   end
 
   %i[detach process_exit].each do |close_path|
-    it "runs the original destroy callback without saving changed settings on #{close_path}" do
+    it "runs the original destroy callback without saving changed settings on #{close_path} #{attribution.fetch('ecleanse')}" do
       settings = {}
       form = original_ecleanse(settings)
       form['main'].show_all
@@ -678,6 +726,40 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
       expect(form['main']).to be_destroyed
       expect(form.instance_variable_get(:@running)).to be(false)
     end
+  end
+
+  # Objects sit at odd XML depths below <interface>; each <child> adds one level.
+  def nested_boxes(levels, inner)
+    levels.zero? ? inner : %(<object class="GtkBox"><child>#{nested_boxes(levels - 1, inner)}</child></object>)
+  end
+
+  # The limits count every object the form's Builder already holds, so the
+  # boundaries are pinned on top of the unchanged 54-object ecleanse load.
+  it "keeps an original setup intact across cumulative depth and object limits #{attribution.fetch('ecleanse')}" do
+    expect([gtk::Builder::MAX_DEPTH, gtk::Builder::MAX_OBJECTS]).to eq([64, 2048])
+    settings = { stop_scripts: 'bigshot' }
+    form = original_ecleanse(settings)
+    loaded = form.objects
+    deepest_property = '<object class="GtkBox"><property name="spacing">1</property></object>'
+    form.add_from_string("<interface>#{nested_boxes(31, deepest_property)}</interface>")
+    accepted = form.objects
+    expect(accepted.length).to eq(54 + 32)
+    expect { form.add_from_string("<interface>#{nested_boxes(32, '<object class="GtkLabel"/>')}</interface>") }
+      .to raise_error(gtk::BuilderError, /property=nesting reason=XML depth limit exceeded/)
+    expect(form.objects).to eq(accepted)
+    adjustments = ->(count) { "<interface>#{'<object class="GtkAdjustment"/>' * count}</interface>" }
+    form.add_from_string(adjustments.call(gtk::Builder::MAX_OBJECTS - accepted.length))
+    full = form.objects
+    expect(full.length).to eq(2048)
+    expect { form.add_from_string(adjustments.call(1)) }.to raise_error(gtk::BuilderError, /property=objects reason=object limit exceeded/)
+    expect(form.objects).to eq(full)
+    expect(full.first(loaded.length)).to eq(loaded)
+    expect(form['stop_scripts'].text).to eq('bigshot')
+    close = loaded.find { |object| object.instance_of?(gtk::Button) && object.label == 'Close' }
+    gtk.queue { close.send(:emit_handlers, :activate) }
+    drain_gtk
+    expect(YAML.unsafe_load_file(saved_settings_path)).to include(stop_scripts: 'bigshot')
+    expect(form['main']).to be_destroyed
   end
 
   it 'keeps widget names separate from Builder IDs and enforces the Entry character limit' do
@@ -1082,7 +1164,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     end
   end
 
-  it 'runs unchanged ecleanse setup through Chrome with the original callbacks', browser: true do
+  it "runs unchanged ecleanse setup through Chrome with the original callbacks #{attribution.fetch('ecleanse')}", browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
 
     settings = { stop_scripts: 'bigshot', cleanse_poison: false }
