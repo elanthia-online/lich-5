@@ -742,7 +742,11 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     payload = { x: 1, y: 1, button: 1, time: 0, state: 0, click_count: 1 }
     context = Lich::WebUI::Runtime::EventContext.new(nil, page, component, :pointer_release, payload, nil, admitted)
     surface.signal_connect('button-release-event') { calls << :second }
-    expect { original.call(context) }.to raise_error(gtk::UnsupportedOperation, /operation=pointer_release/)
+    # A refused signal is contained by the shim boundary and logged with its
+    # attributed refusal; it never reaches the bound callback's caller.
+    refusal = /operation=signal .*callback failed error=Lich::Common::ScriptScope::Gtk::UnsupportedOperation .*rejected=.*operation=pointer_release/
+    expect { original.call(context) }.not_to raise_error
+    expect(Lich).to have_received(:log).with(refusal).once
     expect(calls).to be_empty
     wait_for { !page.last_render.bindings[[component.cid, :pointer_release]].equal?(original) }
     replacement = page.last_render.bindings[[component.cid, :pointer_release]]
@@ -750,7 +754,9 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     expect(calls).to eq(%i[first second])
     calls.clear
     surface.send(:disconnect_signal_handler, first)
-    expect { replacement.call(context) }.to raise_error(gtk::UnsupportedOperation, /operation=pointer_release/)
+    expect { replacement.call(context) }.not_to raise_error
+    expect(Lich).to have_received(:log).with(refusal).twice
+    expect(calls).to be_empty
     wait_for { !page.last_render.bindings[[component.cid, :pointer_release]].equal?(replacement) }
     page.last_render.bindings[[component.cid, :pointer_release]].call(context)
     expect(calls).to eq([:second])
@@ -2314,7 +2320,10 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     retired_context = Lich::WebUI::Runtime::EventContext.new(
       nil, page, admitted.tree.each.find { |node| node.cid == to['cid'] }, :widget_drop, payload, nil, admitted
     )
-    expect { previous_binding.call(retired_context) }.to raise_error(gtk::UnsupportedOperation, /operation=widget_drop/)
+    # The retired binding's refusal is contained and attributed in the log.
+    expect { previous_binding.call(retired_context) }.not_to raise_error
+    expect(Lich).to have_received(:log)
+      .with(/operation=signal .*callback failed error=Lich::Common::ScriptScope::Gtk::UnsupportedOperation .*rejected=.*operation=widget_drop/).once
     expect(calls).to be_empty
     wait_for { !page.last_render.bindings[[to['cid'], :widget_drop]].equal?(previous_binding) }
     deliver.call(payload)

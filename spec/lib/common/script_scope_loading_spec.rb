@@ -15,12 +15,17 @@ RSpec.describe 'GTK-free Ruby dependency boundary' do
 
   it 'refuses native entrypoints outside script ownership instead of loading installed gems' do
     Dir.mktmpdir('gtk-entrypoints') do |root|
+      # An installed gem's entrypoint sits directly under a load root; the
+      # boundary classifies absolute Ruby paths by that root, not by basename.
+      $LOAD_PATH.unshift(root)
       %w[gtk3 glib2 gio2 cairo cairo-gobject cairo_gobject gobject-introspection gobject_introspection
          gi gtk4 gdk3 gdk_pixbuf2 pango atk].each do |feature|
         target = File.join(root, "#{feature}.rb")
         File.write(target, 'raise "native entrypoint sentinel executed"')
         expect { Kernel.require(target) }.to raise_error(scope::Gtk::UnsupportedOperation, /script=none.*native GTK loading is disabled/)
       end
+    ensure
+      $LOAD_PATH.delete(root)
     end
   end
 
@@ -56,6 +61,7 @@ RSpec.describe 'GTK-free Ruby dependency boundary' do
   it 'guards Ruby autoload when the deferred native feature is resolved' do
     Dir.mktmpdir('gtk-autoload') do |root|
       stub_const('GTK_AUTOLOAD_EXECUTED', [])
+      $LOAD_PATH.unshift(root)
       target = File.join(root, 'gdk_pixbuf2.rb')
       File.write(target, 'GTK_AUTOLOAD_EXECUTED << true')
       namespace = Module.new
@@ -63,11 +69,15 @@ RSpec.describe 'GTK-free Ruby dependency boundary' do
 
       expect { namespace.const_get(:NativeProbe) }.to raise_error(scope::Gtk::UnsupportedOperation)
       expect(GTK_AUTOLOAD_EXECUTED).to be_empty
+    ensure
+      $LOAD_PATH.delete(root)
     end
   end
 
   it 'rejects absolute loads, relative loads and native extensions before executing them' do
     Dir.mktmpdir('gtk-load-boundary') do |root|
+      # Absolute and caller-relative Ruby paths are refused under a load root.
+      $LOAD_PATH.unshift(root)
       File.write(File.join(root, 'gtk3.rb'), 'raise "native sentinel executed"')
       File.write(File.join(root, 'relative_probe.rb'), "require_relative 'gtk3'\n")
       [-> { Kernel.load(File.join(root, 'gtk3.rb')) },
@@ -76,6 +86,8 @@ RSpec.describe 'GTK-free Ruby dependency boundary' do
        -> { Kernel.require('gtk3/loader') }].each do |load|
         expect(&load).to raise_error(scope::Gtk::UnsupportedOperation, /native GTK loading is disabled/)
       end
+    ensure
+      $LOAD_PATH.delete(root)
     end
   end
 
