@@ -35,13 +35,14 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
       end
     end
   end
+  let(:viewer_expiry) { nil }
   let(:launcher) do
     described_class.new(
       data_dir: '/fixture', catalog: catalog, service: service, authenticator: authenticator,
       executor: executor, on_launch: ->(launch, origin) { launches << [origin, launch] },
       browser_open: proc { true }, frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator,
       recovery: ->(message) { feedback << message },
-      logger: ->(level, message) { messages << [level, message] }
+      logger: ->(level, message) { messages << [level, message] }, viewer_expiry: viewer_expiry
     )
   end
 
@@ -634,13 +635,23 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     expect(launcher.send(:render_state)[:notice][:text]).to include('requires native launch')
   end
 
-  it 'keeps the launcher open on detach while invalidating viewer-owned work' do
-    launcher.manual_connect(event({ 'account' => 'DOUG', 'password' => viewer_secret('synthetic') }), 'account', 'password')
-    page = launcher.send(:build_page)
-    page.lifecycle_bindings.fetch(:detach).call(event)
-    expect(launcher.lifecycle).not_to eq(:closed)
-    expect(service.stopped).to be_nil
-    expect(launcher.send(:render_state)[:manual][:phase]).to eq(:editing)
+  context 'when a viewer detaches' do
+    let(:scheduled) { [] }
+    let(:viewer_expiry) { ->(delay, &work) { scheduled << [delay, work] } }
+
+    it 'keeps the launcher open on detach while invalidating viewer-owned work' do
+      launcher.manual_connect(event({ 'account' => 'DOUG', 'password' => viewer_secret('synthetic') }), 'account', 'password')
+      page = launcher.send(:build_page)
+      page.lifecycle_bindings.fetch(:detach).call(event)
+      # A detach is resumable: viewer-owned work survives the reconnect window.
+      expect(launcher.send(:render_state)[:manual][:phase]).to eq(:selecting_character)
+      expect(scheduled.map(&:first)).to eq([Lich::WebUI::ViewerStore::RECONNECT_WINDOW])
+
+      scheduled.each { |_delay, work| work.call }
+      expect(launcher.lifecycle).not_to eq(:closed)
+      expect(service.stopped).to be_nil
+      expect(launcher.send(:render_state)[:manual][:phase]).to eq(:editing)
+    end
   end
 
   it 'keeps Manual Entry renderable when the catalog is damaged' do
@@ -794,7 +805,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     launcher.setting_changed(event({}, payload: { value: true }), :tab_layout)
     launcher.setting_changed(event({}, payload: { value: true }), :autosort)
     sorted_tree = launcher.send(:build_page).render.tree
-    doug_panel = sorted_tree.each.find { |component| component.cid.end_with?('stack:saved-account-DOUG') }
+    doug_key = "stack:saved-#{described_class::Catalog.account_key('DOUG')}"
+    doug_panel = sorted_tree.each.find { |component| component.cid.end_with?(doug_key) }
     expect(doug_panel.each.select { |component| component.type == :group }.map { |group| group.props[:label] })
       .to eq(['Aldor (GS Prime)', 'Bera (GS Prime)'])
     expect(catalog.calls).to include([:setting, :tab_layout, false], [:setting, :tab_layout, true],
