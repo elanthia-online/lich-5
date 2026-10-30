@@ -170,8 +170,9 @@ jobs:
 
       - name: Mint a release-please token from the org GitHub App
         # This step only opens/updates the release PR (skip-github-release below).
-        # A PR opened with the built-in token doesn't trigger other workflows, so the
-        # release PR would never get the required ci-gate check.
+        # When the built-in token opens or updates a PR, its CI runs wait for a
+        # maintainer to approve them; with the App token, CI (and the required
+        # ci-gate check) runs on the release PR without that step.
         id: app-token
         if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0

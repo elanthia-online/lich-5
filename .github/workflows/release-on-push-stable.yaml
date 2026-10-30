@@ -80,9 +80,10 @@ jobs:
           # Convert the release to draft immediately (invisible until human publishes)
           gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft
 
-      # 3) Open/update the release PR with the org GitHub App's token instead. A PR
-      #     opened with the built-in token doesn't trigger other workflows, so the
-      #     release PR would never get the required ci-gate check.
+      # 2b) Open/update the release PR with the org GitHub App's token instead. When
+      #     the built-in token opens or updates a PR, its CI runs wait for a
+      #     maintainer to approve them; with the App token, CI (and the required
+      #     ci-gate check) runs on the release PR without that step.
       - name: Mint a release-please token from the org GitHub App
         id: app-token
         # Refreshing the release PR must never stop a release that was just created.
