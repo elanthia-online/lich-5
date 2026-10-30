@@ -39,13 +39,15 @@ module Lich
 
           # Resolve feature roots against Ruby's load paths rather than matching
           # arbitrary ancestor directory names in an installation path.
-          # Direct entrypoint filenames remain reserved, including absolute loads.
+          # Compiled extension filenames remain reserved anywhere, including
+          # absolute loads; a nested Ruby file is classified by its load root,
+          # so an unrelated helper named like a GTK package still loads.
           # @param path [String] feature or path with forward-slash separators
           # @return [Boolean] whether the request identifies a native GTK dependency
           def self.native_feature?(path)
             absolute = path.start_with?('/') || path.match?(/\A[A-Za-z]:\//)
             return true if !absolute && NATIVE_FEATURE.match?(path.sub(%r{\A(?:\./)+}, ''))
-            return true if NATIVE_FEATURE.match?(File.basename(path))
+            return true if path.match?(/\.(?:so|bundle|dll)\z/i) && NATIVE_FEATURE.match?(File.basename(path))
 
             return false unless absolute
 

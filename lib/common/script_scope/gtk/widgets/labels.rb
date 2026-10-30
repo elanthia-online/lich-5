@@ -56,13 +56,17 @@ module Lich
           alias single_line_mode= set_single_line_mode
 
           # Writes literal label content through the shared text control.
+          # A link label stays a Markdown component, where brackets could form
+          # a new link; such text is refused rather than rendered as markup.
           # @param value [Object] literal text converted with String before publication
           # @return [Label] self
           def text=(value)
             if @use_markup
               set_markup(String(value))
             else
-              write(:content, String(value))
+              text = String(value)
+              session.refuse(self, :text=) if @link_markup && text.match?(/[\[\]]/)
+              write(:content, text)
             end
           end
           alias set_text text=

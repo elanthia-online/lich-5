@@ -324,6 +324,10 @@ module Lich
             return self unless value
 
             session.synchronize do
+              # A retired member left its group and cannot be selected, so it
+              # must not deselect the surviving members either.
+              next if destroyed?
+
               changes = @group.filter_map do |peer|
                 desired = peer.equal?(self) ? !!value : (value ? false : peer.active?)
                 [peer, desired] if peer.active? != desired

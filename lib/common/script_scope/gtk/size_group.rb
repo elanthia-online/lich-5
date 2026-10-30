@@ -13,18 +13,20 @@ module Lich
 
         # Horizontal requisitions share page-local browser measurements, not guessed text widths.
         # Membership is owner-bound, limited to eight groups per widget and 1024 live members.
+        # Creation is a lifetime bound: one script session creates at most
+        # LIFETIME_LIMIT groups, and groups that are no longer used are not reclaimed.
         class SizeGroup
+          LIFETIME_LIMIT = 512
+
           attr_reader :session, :key
 
           # @param mode [Symbol] only :horizontal is implemented
+          # @raise [UnsupportedOperation] for another mode or past LIFETIME_LIMIT creations
           def initialize(mode)
             @session = Gtk.session
             session.refuse(self, :new) unless mode == :horizontal
             session.style_operation(self, :new) do
-              sequence = session.instance_variable_get(:@size_group_sequence).to_i + 1
-              session.refuse(self, :new) if sequence > 512
-              session.instance_variable_set(:@size_group_sequence, sequence)
-              @key = "sizegroup-#{sequence}".freeze
+              @key = "sizegroup-#{session.next_size_group_sequence(self, LIFETIME_LIMIT)}".freeze
               @widgets = []
             end
           end
