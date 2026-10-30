@@ -199,6 +199,7 @@ reconnect_if_wanted = proc {
 
   elsif ARGV.empty? or @argv_options[:gui]
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
+    require File.join(LIB_DIR, 'main', 'webui_startup.rb')
     webui_launcher = Lich::Common::WebUILauncher.new(
       data_dir: DATA_DIR,
       on_launch: proc {},
@@ -207,7 +208,9 @@ reconnect_if_wanted = proc {
       autosort: Lich.track_autosort_state,
       persistent: Lich.track_persistent_launcher_mode
     )
-    @launch_data = webui_launcher.start.await_launch
+    # A launcher failure exits 1 (abort_on_exception propagates it); a cancel
+    # ends startup normally. The launcher is torn down either way.
+    @launch_data = Lich::Main::WebUIStartup.await(webui_launcher)
     next unless @launch_data
   end
 
