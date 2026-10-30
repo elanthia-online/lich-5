@@ -132,4 +132,27 @@ RSpec.describe Lich::RuntimeGemContract do
     expected = %w[ascii_charts concurrent-ruby connection_pool curses ffi kramdown os ox redis redis-client sequel sqlite3 terminal-table tzinfo tzinfo-data unicode-display_width unicode-emoji webrick]
     expect(contract.resolve(synthetic).fetch('packages').keys).to match_array(expected)
   end
+
+  it 'does not treat ruby or mri selectors as Windows roots' do
+    contract = described_class.new(gemfile: "gem 'redis'\ngem 'missing', platforms: [:ruby, :mri]\n", lockfile: lockfile)
+    expect(contract.roots.keys).to eq(['redis'])
+  end
+
+  it 'retains either selected enclosing group through nested groups' do
+    source = "group :profanity do\n group :test do\n  gem 'redis'\n end\nend\n" \
+             "group :test do\n group :profanity do\n  gem 'curses'\n end\nend\n" \
+             "group :test do\n gem 'missing'\nend\n"
+    contract = described_class.new(gemfile: source, lockfile: lockfile)
+    expect(contract.roots.keys).to contain_exactly('redis', 'curses')
+  end
+
+  it 'exposes selected Windows lock members without making unused entries roots' do
+    expect(reader.locked_packages.fetch('sqlite3')).to include('platform' => 'x64-mingw-ucrt', 'sha256' => '0' * 64)
+    expect(reader.locked_packages).to have_key('mini_portile2')
+    expect(reader.roots).not_to have_key('mini_portile2')
+    expect(reader.resolve(inventory).fetch('packages')).not_to have_key('mini_portile2')
+  end
+  it 'reports invalid literal version requirements as a reader error' do
+    expect { described_class.new(gemfile: "gem 'redis', 'not-a-version'", lockfile: lockfile) }.to raise_error(described_class::Error, /invalid runtime declarations/)
+  end
 end

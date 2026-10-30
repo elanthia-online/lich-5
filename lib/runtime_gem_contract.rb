@@ -16,7 +16,7 @@ module Lich
     SHA256 = /\A[0-9a-f]{64}\z/
     COMMIT = /\A[0-9a-f]{40}\z/
 
-    attr_reader :roots, :gemfile_sha256, :lock_sha256
+    attr_reader :roots, :gemfile_sha256, :lock_sha256, :locked_packages
 
     def initialize(gemfile:, lockfile:)
       @gemfile_sha256 = Digest::SHA256.hexdigest(gemfile)
@@ -27,6 +27,9 @@ module Lich
       declarations(tree)
       raise Error, 'Gemfile has no Windows runtime roots' if roots.empty?
       @specs = parse_lock(lockfile)
+      @locked_packages = @specs
+    rescue ArgumentError => e
+      raise Error, "invalid runtime declarations or lock: #{e.message}"
     end
 
     # Inventory must be captured from the pristine target RubyInstaller before
@@ -77,7 +80,7 @@ module Lich
 
     private
 
-    def declarations(node, groups = ['default'])
+    def declarations(node, groups = [])
       return unless node.is_a?(Array)
       case node.first
       when :program then node[1].each { |child| declarations(child, groups) }
@@ -94,8 +97,7 @@ module Lich
         method = call[0] == :method_add_arg && call.dig(1, 0) == :fcall ? call.dig(1, 1, 1) : call.dig(1, 1)
         return if method == 'git_source'
         raise Error, 'unsupported Gemfile block (use literal group declarations)' unless method == 'group'
-        selected = arguments(call[2]).map { |arg| literal(arg) }
-        return if (selected & GROUPS).empty?
+        selected = groups | arguments(call[2]).map { |arg| literal(arg) }
         body = node[2]
         raise Error, 'unsupported group body' unless body[0] == :do_block && body[2][0] == :bodystmt && body[2][2..].all?(&:nil?)
         body[2][1].each { |child| declarations(child, selected) }
@@ -124,7 +126,7 @@ module Lich
     end
 
     def add_root(node, groups)
-      return if (groups & GROUPS).empty?
+      return unless groups.empty? || (groups & GROUPS).any?
       args = arguments(node).dup
       options = args.last&.first == :bare_assoc_hash ? args.pop[1] : []
       platforms = nil
@@ -134,7 +136,7 @@ module Lich
         unknown = platforms - %w[windows mingw x64_mingw mswin ruby mri jruby]
         raise Error, "unknown platform selectors #{unknown.inspect}" unless unknown.empty?
       end
-      return if platforms && (platforms & %w[windows mingw x64_mingw ruby mri]).empty?
+      return if platforms && (platforms & %w[windows mingw x64_mingw]).empty?
       name, *requirements = args.map { |arg| literal(arg) }
       raise Error, 'unsafe or duplicate runtime gem name' unless name.is_a?(String) && name.match?(/\A[a-zA-Z0-9_][a-zA-Z0-9_.-]*\z/) && !roots.key?(name)
       requirements = ['>= 0'] if requirements.empty?

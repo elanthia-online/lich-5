@@ -34,6 +34,12 @@ module Lich
       result
     end
 
+    # Decode JSON text separately from the raw bytes used for integrity checks.
+    def self.read_json(location)
+      bytes = read(location)
+      JSON.parse(bytes.b.delete_prefix([239, 187, 191].pack('C*')).force_encoding(Encoding::UTF_8))
+    end
+
     def self.check_size!(bytes)
       raise RuntimeGemContract::Error, 'contract document exceeds size limit' if bytes.bytesize > LIMIT
     end
@@ -63,7 +69,7 @@ if $PROGRAM_NAME == __FILE__
     result = Lich::R4L5ContractCheck.verify!(
       gemfile: File.binread(options[:gemfile]), lockfile: File.binread(options[:lockfile]),
       manifest_bytes: Lich::ContractDocument.read(options[:manifest]),
-      provenance: JSON.parse(Lich::ContractDocument.read(options[:provenance])),
+      provenance: Lich::ContractDocument.read_json(options[:provenance]),
       candidate_sha: options[:candidate_sha], installer_path: options[:installer]
     )
     puts "R4L5 contract accepted: #{result.fetch('packages').length} locked Windows packages; matching installer predecessor"

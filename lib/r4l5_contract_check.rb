@@ -31,7 +31,11 @@ module Lich
       recovery = DependencyRecovery.new
       units.each { |unit| recovery.send(:validate_unit!, unit) }
       raise Error, 'duplicate recovery unit ids' unless units.map { |unit| unit['id'] }.uniq.length == units.length
-      resolved.fetch('packages').each do |name, spec|
+      required = resolved.fetch('packages')
+      advertised = units.flat_map { |unit| unit.fetch('members') }
+      gtk = contract.fetch('build_roles', {}).fetch('gtk', [])
+      checked = reader.locked_packages.select { |name, _spec| !gtk.include?(name) && !contract.fetch('ruby_inventory').fetch('gems').key?(name) && (required.key?(name) || advertised.include?(name)) }
+      checked.each do |name, spec|
         # Existing consumers use the first unit advertising a member.
         unit = units.find { |entry| entry.fetch('members').include?(name) }
         raise Error, "recovery does not cover #{name}" unless unit
