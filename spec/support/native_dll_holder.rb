@@ -16,21 +16,23 @@ module NativeDirectoryHandle
     [-1, (1 << (Fiddle::SIZEOF_VOIDP * 8)) - 1].include?(handle.to_i)
   end
 
-  def self.hold(directory, api: self)
+  def self.hold(directory, api: self, error_source: Fiddle)
     encoded = directory.encode('UTF-16LE').b + [0].pack('v')
     # Zero desired access is metadata-only and need not participate in sharing
     # checks. Request directory-list access while withholding FILE_SHARE_DELETE.
     handle = api.CreateFileW(encoded, FILE_LIST_DIRECTORY, FILE_SHARE_READ_WRITE, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
-    raise "could not hold the native extension directory: Windows error #{api.GetLastError()}" if invalid?(handle)
+    # Use Fiddle's saved error before pointer conversion or another native call.
+    hold_error = error_source.win32_last_error
+    raise "could not hold the native extension directory: Windows error #{hold_error}" if invalid?(handle)
 
     begin
       # Prove the hold denies deletion before telling the parent it is ready.
       probe = api.CreateFileW(encoded, DELETE_ACCESS, 7, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
+      error = error_source.win32_last_error
       unless invalid?(probe)
         api.CloseHandle(probe)
         raise 'native extension directory hold did not block delete access'
       end
-      error = api.GetLastError()
       raise "unexpected delete-access probe failure: Windows error #{error}" unless error == ERROR_SHARING_VIOLATION
 
       yield
@@ -46,7 +48,6 @@ if $PROGRAM_NAME == __FILE__
   NativeDirectoryHandle.dlload 'kernel32.dll'
   NativeDirectoryHandle.extern 'void* CreateFileW(void*, unsigned long, unsigned long, void*, unsigned long, unsigned long, void*)'
   NativeDirectoryHandle.extern 'int CloseHandle(void*)'
-  NativeDirectoryHandle.extern 'unsigned long GetLastError()'
 
   library = Fiddle.dlopen(ARGV.fetch(0))
   begin
