@@ -85,7 +85,9 @@ RSpec.describe 'bounded script compatibility pilot' do
       end
     end
     expect(started.pop(timeout: 2)).to be(true)
-    expect(returned.pop(timeout: 0.2)).to eq(:queued)
+    # The unreleased callback gate proves the caller was not blocked; the bound
+    # only limits a failure, it does not measure how quickly queue returned.
+    expect(returned.pop(timeout: 2)).to eq(:queued)
     compatibility.queue { delivered << :second }
     release << true
     expect(3.times.map { delivered.pop(timeout: 2) }).to eq(%i[first second nested])
@@ -121,7 +123,9 @@ RSpec.describe 'bounded script compatibility pilot' do
 
   it 'cancels pending Gtk.queue blocks on owner termination and refuses late submissions' do
     started, release, stopped, delivered = Queue.new, Queue.new, Queue.new, Queue.new
+    worker = nil
     compatibility.queue do
+      worker = Thread.current
       started << true
       release.pop
       service.runtime.terminate_owner(owner)
@@ -131,6 +135,9 @@ RSpec.describe 'bounded script compatibility pilot' do
     compatibility.queue { delivered << :must_not_run }
     release << true
     expect(stopped.pop(timeout: 2)).to be(true)
+    # Admission is closed, so no barrier can be queued behind the pending block.
+    # The owner's worker ending proves it can no longer run that block.
+    expect(worker.join(2)).to equal(worker)
     expect(delivered).to be_empty
     expect { compatibility.queue {} }.to raise_error(Lich::WebUI::Error, /terminated/)
   ensure
@@ -967,7 +974,8 @@ RSpec.describe 'bounded script compatibility pilot' do
     expect(compatibility.const_get(:Settings).default.gtk_application_prefer_dark_theme?).to be false
   end
 
-  it 'reloads, omits and removes progress providers through browser callbacks', browser: true do
+  it 'reloads, omits and removes progress providers through browser callbacks ' \
+     '[tpick version 48, mirror 549e33506e121453e3c01cfe5df46a902f44fc5f, author Dreaven]', browser: true do
     skip 'explicit browser run only' unless ENV['NATIVE_BROWSER'] == '1'
 
     window = compatibility::Window.new('Progress provider lifecycle')
