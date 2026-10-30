@@ -10,6 +10,94 @@ gem must be mapped to a specific package or ordered bundle unit. Lich accepts
 only the exact Ruby ABI and platform of the running runtime, HTTPS URLs, and
 lowercase SHA-256 digests in `sha256:<hex>` form.
 
+## Shared Windows version contract
+
+`Gemfile` and `Gemfile.lock` at an explicitly selected full lich-5 commit are
+the version authority for non-GTK Windows packages, including transitive
+dependencies. Ruby4Lich5 owns GTK versions and packaging. The producer vendors
+`lib/runtime_gem_contract.rb` from that commit; the reader uses static Gemfile
+declarations and lock checksums without evaluating Gemfile plugins or running
+Bundler. Default and profanity roots apply to Windows. Development, VS Code
+and GTK groups do not enter this version contract. Unsupported dynamic runtime
+declarations fail the check and require an explicit reader update.
+
+The Windows target's `contract` object has `schema: 2`, `lich5_commit` (40
+lowercase hex characters), `gemfile_sha256`, `lock_sha256`, `promotable: true`,
+`overrides: {}`, `windows_contract_sha256`, and `ruby_inventory`. All three
+digests are bare lowercase SHA-256 hex strings. The raw file digests identify
+the producer input bytes for provenance; they are not consumer eligibility gates. `ruby_inventory` records the pristine target RubyInstaller's
+`ruby_version`, `ruby_abi`, `platform`, and `gems` mapping. Each supplied gem
+records `version` and `dependencies` (a name-to-requirement-array mapping).
+This inventory must be measured before application gems are installed.
+Supplied versions are checked against dependency requirements and differences
+from the lock are reported; those gems are not shipped to hide a difference.
+The reader selects the UCRT variant before a generic Ruby variant, so Windows
+sqlite3 uses its upstream binary and excludes source-only mini_portile2.
+
+The contract also carries producer-owned `build_roles.gtk`, an array of package
+names in the tested GTK build role. Listed packages are exempt from the consumer
+lock version/checksum comparison because Ruby4Lich5 owns that role's versions.
+Non-GTK packages reached only through GTK remain lock-governed unless explicitly
+assigned to that producer-owned role. The exemption does not bypass unit shape,
+RubyInstaller-supplied package exclusion, manifest/contract digest checks or
+installer provenance verification. Packages outside the role retain exact lock
+version enforcement.
+
+`.github/scripts/check_r4l5_contract.rb` checks all non-GTK Windows closure versions
+against the served recovery manifest and requires a matching installer
+predecessor. The published `installer-provenance.json` must carry
+`runtime_contract_sha256` (the canonical contract digest from
+`Lich::RuntimeGemContract.digest`), `recovery_manifest_sha256` (the exact served
+manifest bytes), `ruby_installer_version`, and `installer_sha256`. All four
+digests use bare lowercase hex. Existing installer provenance fields remain.
+`--installer PATH` also verifies the executable before release attachment.
+`--manifest PATH --provenance PATH` supports offline validation. This is a
+build/release check; it does not install gems or change startup recovery.
+
+The CI contract job always reports and is included in `ci-gate`. Stable and
+prerelease workflows recheck before Release Please can write, and verify the
+downloaded installer before attaching it. Manual asset rebuilds check the
+target tag's Gemfile and lock before uploads, using the workflow checkout's
+checker. Skipping installer attachment does not bypass the recovery check.
+
+Release order: prepare the candidate lock, have an administrator select its
+full SHA in Ruby4Lich5, promote tested recovery and publish its matching tested
+installer, then rerun the lich-5 check before accepting/releasing the consumer.
+The effort-3 producer PR requires Ruby4Lich5 PR #47 to merge first. The consumer
+PR must wait for that producer's accepted recovery and installer. PR activity
+does not dispatch privileged producer work.
+
+The producer validates the selected candidate SHA explicitly. Both producer and
+consumer compute `RuntimeGemContract#windows_contract_digest` with the measured
+`ruby_inventory`, producer `build_roles`, and the flattened recovery-unit member
+names as `advertised_members`. The method hashes a versioned Windows projection:
+normalized runtime root requirements, relevant selected Windows lock packages
+(including checksums and normalized dependency requirements), supplied-gem
+resolution and the pristine target inventory. Relevant packages include runtime
+closure packages and advertised GTK-only non-GTK lock members. Producer-owned GTK
+role members remain exempt from lock pinning. Unused development entries,
+non-Windows variants and source comments do not enter eligibility. Changing an
+applicable version, checksum or requirement does change eligibility even when the
+old selected version would still satisfy a changed requirement.
+
+Schema 2 requires this semantic digest and retains the full candidate SHA and raw
+Gemfile/lock hashes for provenance. A normal merge or dev-only edit may change
+consumer bytes without changing eligibility. `--candidate-sha SHA` still requires
+the selected producer identity. Schema 1 contracts are rejected rather than
+silently reinterpreted: the paired Ruby4Lich5 #48 producer change must vendor this
+reader, emit schema 2 and its digest, and preserve provenance/installer binding.
+Publish matching accepted recovery and installer before clearing consumer gates.
+Do not add equality with the superseded main lock to producer promotion:
+supported consumers retain coverage/recovery gates while the selected candidate
+supplies new exact versions. This avoids a circular handoff.
+
+Single-package units that require no local build use original rubygems.org
+files and lock digests. Complete multi-package closures retain the ZIP
+exception. Built/repacked packages have new digests tied to producer smoke
+evidence. The installer must acquire both kinds from the accepted artifact
+map rather than assume every file remains in the smaller ZIP. Any diagnostic
+or override build is unpromotable, even if its versions happen to match.
+
 When a required gem is missing, Lich fetches and validates this manifest before
 showing one native consent dialog listing every affected recovery unit. It does
 not download a gem artifact or write to the runtime until the combined request
