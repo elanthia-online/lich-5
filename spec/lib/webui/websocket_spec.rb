@@ -3,6 +3,7 @@
 require_relative '../../spec_helper'
 require 'socket'
 require 'stringio'
+require 'timeout'
 require 'webui/websocket'
 
 RSpec.describe Lich::WebUI::WebSocket do
@@ -124,7 +125,7 @@ RSpec.describe Lich::WebUI::WebSocket do
     end
   end
 
-  it 'bounds a fragmented message by its first deadline and ends promptly when the peer is shut down' do
+  it 'bounds a fragmented message by its first deadline and ends promptly when the peer closes' do
     client, server = Socket.pair(:UNIX, :STREAM, 0)
     client.write(described_class.encode_client_frame('part', final: false))
     expect { described_class.read_message(server, deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.2) }
@@ -137,8 +138,10 @@ RSpec.describe Lich::WebUI::WebSocket do
     rescue described_class::ProtocolError => error
       error
     end
-    sleep 0.05
-    server.shutdown(Socket::SHUT_RDWR)
+    Timeout.timeout(2) { Thread.pass until reader.status == 'sleep' || !reader.alive? }
+    # Close the writing peer so the reader sees end of stream. A local shutdown of the
+    # reading socket does not wake a blocked IO.select on Windows AF_UNIX sockets.
+    client.close
     expect(reader.join(2)).not_to be_nil
     expect(reader.value).to be_a(described_class::ProtocolError)
   ensure

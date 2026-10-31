@@ -101,13 +101,18 @@ RSpec.describe Lich::WebUI::Server do
       { cookie: cookie, origin: nil },
       { cookie: cookie, host: 'evil.test' },
     ]
+    # After the server closes a refused socket, a client read ends in EOF or a reset.
+    # Windows reports a closed-then-reset connection as ECONNABORTED; elsewhere that
+    # error stays a failure.
+    closed_by_server = [Errno::EPIPE, Errno::ECONNRESET]
+    closed_by_server << Errno::ECONNABORTED if Gem.win_platform?
     attempts.each do |options|
       socket, head = upgrade(server, **options)
       expect(head).to start_with('HTTP/1.1 403 Forbidden'), options.inspect
       rest = begin
         socket.write(Lich::WebUI::WebSocket.encode_client_frame(JSON.generate(type: 'attach', page: 'p', version: '1')))
         Timeout.timeout(3) { socket.read }
-      rescue Errno::EPIPE, Errno::ECONNRESET
+      rescue *closed_by_server
         ''
       end
       expect(rest).not_to include('hello')
