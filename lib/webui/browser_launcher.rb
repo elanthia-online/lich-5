@@ -13,9 +13,13 @@ require_relative 'native_host'
 module Lich
   module WebUI
     # Opens an authenticated loopback URL in a native helper or a
-    # dedicated browser app process. Explicit browser paths remain available
-    # for browser comparisons and callers that intentionally choose Chrome.
+    # dedicated browser app process. Automatic discovery finds Chrome (and Edge
+    # on Windows); an explicit browser path, such as the launcher Settings
+    # "Browser path", selects any other Chromium-based browser at the user's risk.
     module BrowserLauncher
+      SETTING_HINT = 'set the Browser path in the launcher Settings'
+      private_constant :SETTING_HINT
+
       MACOS_PATHS = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         File.join(Dir.home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
@@ -49,6 +53,7 @@ module Lich
                browser_path: nil, chrome_path: nil, geometry: nil, on_exit: nil,
                on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
+        verify_browser_path(browser_path || chrome_path)
         native = native_host(platform, browser_path || chrome_path)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
         target = launch_file(url, profile_dir, native: native)
@@ -102,7 +107,8 @@ module Lich
         executable = browser_path || chrome_path || app_browser_path(platform: platform)
         unless executable
           requirement = windows?(platform) ? 'Google Chrome or Microsoft Edge' : 'Google Chrome'
-          raise Error, "#{requirement} is required to open the WebUI launcher window"
+          raise Error, "#{requirement} is required to open the WebUI launcher window; install it, " \
+                       "or #{SETTING_HINT} to another browser"
         end
 
         profile_arguments = if profile_dir
@@ -111,6 +117,22 @@ module Lich
                               []
                             end
         [executable, '--new-window', *profile_arguments, *geometry_arguments(geometry), "--app=#{url}"]
+      end
+
+      # Refuses an explicit browser that is not an executable file, so a stale or
+      # mistyped setting fails with a message naming it instead of a generic launch
+      # error. File tests only: Windows decides executability by extension.
+      # @param path [String, nil] explicit browser path; nil means automatic discovery
+      # @return [void]
+      # @raise [Error] if the path does not exist or is not an executable file
+      def verify_browser_path(path)
+        return if path.nil?
+
+        shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
+        raise Error, "the configured browser '#{shown}' does not exist; #{SETTING_HINT} or clear it" unless File.exist?(path)
+        return if File.file?(path) && File.executable?(path)
+
+        raise Error, "the configured browser '#{shown}' is not an executable file; #{SETTING_HINT} or clear it"
       end
 
       # An explicit platform is a test/discovery override; normal dispatch uses
