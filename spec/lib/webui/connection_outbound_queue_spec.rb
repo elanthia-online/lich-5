@@ -26,6 +26,22 @@ RSpec.describe Lich::WebUI::Server::Connection do
     [sender, receiver]
   end
 
+  # Writes until the kernel refuses more, so the next write stalls whatever the platform's
+  # socket buffer size. Windows AF_UNIX sockets absorb far more than SO_SNDBUF suggests, so a
+  # fixed message size does not reliably stall there. Bounded by time and by bytes.
+  def fill_send_buffer(sender, limit: 512 * 1024 * 1024)
+    chunk = 'f' * 65_536
+    total = 0
+    deadline = monotonic + 5
+    loop do
+      written = sender.write_nonblock(chunk, exception: false)
+      break if written == :wait_writable
+
+      total += written
+      raise "send buffer never filled (#{total} bytes)" if total > limit || monotonic > deadline
+    end
+  end
+
   it 'returns to a broadcasting caller at once and still delivers to other viewers when one peer stops reading' do
     slow_sender, slow_receiver = stalled_pair
     fast_sender, fast_receiver = Socket.pair(:UNIX, :STREAM, 0)
@@ -90,6 +106,7 @@ RSpec.describe Lich::WebUI::Server::Connection do
   it 'still retires a peer that stops reading past the write deadline' do
     stub_const("#{described_class}::WRITE_TIMEOUT", 0.05)
     sender, receiver = stalled_pair
+    fill_send_buffer(sender)
     connection = described_class.new(sender)
 
     expect(connection.send_text('x' * (1024 * 1024))).to be(true)

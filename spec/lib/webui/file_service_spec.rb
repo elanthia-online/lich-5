@@ -8,14 +8,13 @@ RSpec.describe Lich::WebUI::FileService do
   let(:owner) { Object.new }
   let(:logs) { [] }
 
-  it 'serves allowlisted files, refuses traversal/symlink/extensions/directories, and revokes' do
+  it 'serves allowlisted files, refuses traversal/extensions/directories, and revokes' do
     Dir.mktmpdir('webui-app') do |application_root|
       Dir.mktmpdir('webui-outside') do |outside_root|
         File.binwrite(File.join(application_root, 'inside.png'), 'png')
         File.binwrite(File.join(application_root, 'inside.BMP'), 'bmp')
         File.binwrite(File.join(application_root, 'inside.txt'), 'text')
         File.binwrite(File.join(outside_root, 'outside.png'), 'outside')
-        File.symlink(File.join(outside_root, 'outside.png'), File.join(application_root, 'escape.png'))
         service = described_class.new(application_roots: [application_root])
 
         expect(service.register('images', application_root, owner: owner)).to eq('/files/images/')
@@ -27,11 +26,29 @@ RSpec.describe Lich::WebUI::FileService do
           .to eq(File.realpath(File.join(application_root, 'plus+name.png')))
         expect(service.resolve_url('https://example.com/inside.png')).to be_nil
         expect(service.resolve('images', '../outside.png')).to be_nil
-        expect(service.resolve('images', 'escape.png')).to be_nil
         expect(service.resolve('images', 'inside.txt')).to be_nil
         expect(service.resolve('images', '')).to be_nil
         expect(service.unregister('images', owner: owner)).to be true
         expect(service.resolve('images', 'inside.png')).to be_nil
+      end
+    end
+  end
+
+  it 'refuses a symlink that escapes the registered root' do
+    Dir.mktmpdir('webui-app') do |application_root|
+      Dir.mktmpdir('webui-outside') do |outside_root|
+        File.binwrite(File.join(outside_root, 'outside.png'), 'outside')
+        begin
+          File.symlink(File.join(outside_root, 'outside.png'), File.join(application_root, 'escape.png'))
+        rescue NotImplementedError, Errno::EACCES, Errno::EPERM => error
+          # Windows creates symlinks only for accounts holding the symlink privilege
+          # (administrator or Developer Mode). Skip only when creation itself is refused.
+          skip "File.symlink is unavailable to this account (#{error.class}); needs the platform symlink privilege"
+        end
+        service = described_class.new(application_roots: [application_root])
+        service.register('images', application_root, owner: owner)
+
+        expect(service.resolve('images', 'escape.png')).to be_nil
       end
     end
   end

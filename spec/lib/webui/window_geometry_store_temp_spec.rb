@@ -56,10 +56,54 @@ RSpec.describe Lich::WebUI::WindowGeometryStore do
   it 'removes its own temporary file when the write fails' do
     Dir.mktmpdir('webui-geometry') do |directory|
       store = described_class.new(directory: directory, context: -> { 'gs:character' })
-      allow(File).to receive(:rename).and_raise(Errno::EACCES)
+      allow(File).to receive(:rename).and_raise(IOError, 'synthetic write failure')
 
-      expect { store.save(page({ width: 1, height: 1, position: [0, 0] })) }.to raise_error(Errno::EACCES)
+      expect { store.save(page({ width: 1, height: 1, position: [0, 0] })) }.to raise_error(IOError)
       expect(Dir.children(directory)).to be_empty
+    end
+  end
+
+  describe 'when the operating system refuses the rename' do
+    let(:geometry) { { width: 640, height: 480, position: [10, 20] } }
+
+    around do |example|
+      Dir.mktmpdir('webui-geometry') do |directory|
+        @directory = directory
+        example.run
+      end
+    end
+
+    before { stub_const("#{described_class}::RENAME_RETRY_DELAY", 0) }
+
+    def store = described_class.new(directory: @directory, context: -> { 'gs:character' })
+
+    it 'retries a transient refusal and saves the geometry' do
+      refusals = 0
+      allow(File).to receive(:rename).and_wrap_original do |original, from, to|
+        refusals += 1
+        raise Errno::EACCES if refusals <= 2
+
+        original.call(from, to)
+      end
+
+      expect { store.save(page(geometry)) }.not_to raise_error
+      expect(refusals).to eq(3)
+      saved = Dir.children(@directory)
+      expect(saved.size).to eq(1)
+      expect(JSON.parse(File.read(File.join(@directory, saved.first)), symbolize_names: true)).to eq(geometry)
+    end
+
+    it 'gives up after a bounded number of attempts, logs, leaves no temporary file and does not raise' do
+      attempts = 0
+      allow(File).to receive(:rename) { attempts += 1; raise Errno::EACCES }
+      logs = []
+      allow(Lich).to receive(:log) { |message| logs << message }
+
+      expect { store.save(page(geometry)) }.not_to raise_error
+      expect(attempts).to eq(described_class::RENAME_ATTEMPTS)
+      expect(logs.size).to eq(1)
+      expect(logs.first).to include('not saved', 'Errno::EACCES')
+      expect(Dir.children(@directory)).to be_empty
     end
   end
 end
