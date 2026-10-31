@@ -164,4 +164,149 @@ RSpec.describe 'script compatibility owner stop' do
     expect([errors, status.success?]).to eq(['', true])
     expect(output).to eq("ready\n")
   end
+
+  # 1843:RC18: while an owner is stopping, queue runs the block inline for that
+  # owner's own threads (legacy parity), so a killed thread's ensure that queues
+  # and then waits with no timeout cannot hang the script stop. Real Script
+  # owner and real host service in a fresh process; only the stop is bounded.
+  def run_real_script(body)
+    prelude = <<~RUBY_CODE
+      require 'webui'
+      require 'tmpdir'
+      require 'timeout'
+      module Lich
+        def self.log(_message) = nil
+        module Common; end
+      end
+      def respond(*) = nil
+      require 'common/class_exts/nilclass'
+      require 'common/limitedarray'
+      require 'common/script'
+      require 'common/script_scope/gtk/session'
+      require 'common/script_scope/gtk/widgets'
+      GTK = Lich::Common::ScriptScope::Gtk
+      SCRIPT = Lich::Common::Script
+      SERVICE = Lich::WebUI::Service.new(logger: ->(*) {}, browser_open: ->(_url, **) { true }, browser_terminate: ->(*) {})
+      Lich::WebUI.define_singleton_method(:service) { SERVICE }
+      SESSIONS = {}.compare_by_identity
+      GTK.define_singleton_method(:session) { SESSIONS[SCRIPT.current] ||= GTK::Session.new(SCRIPT.current) }
+
+      # Runs the body as the owner's main thread, kills the owner and reports
+      # whether its teardown finished inside the bound, with the recorded events.
+      def stop_case(label)
+        file = File.join(Dir.mktmpdir('rc18'), "\#{label}.lic")
+        File.write(file, "# rc18\\n")
+        owner = SCRIPT.new(file: file, quiet: true)
+        rec = Queue.new
+        ready = Queue.new
+        Thread.new do
+          owner.thread_group.add(Thread.current)
+          yield GTK.session, rec, ready
+        end
+        raise "\#{label}: body did not start" unless ready.pop(timeout: 10)
+
+        owner.kill(async: true)
+        stopped = !owner.join(8).nil? && !owner.running?
+        [label, stopped, Array.new(rec.size) { rec.pop }]
+      end
+    RUBY_CODE
+    Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+  end
+
+  it 'completes a killed thread queue-then-wait without a timeout and finishes the owner stop' do
+    output, errors, status = run_real_script(<<~RUBY_CODE)
+      results = [
+        stop_case('main') do |session, rec, ready|
+          begin
+            ready << true
+            sleep
+          ensure
+            done = Queue.new
+            rec << session.queue { done << :value }
+            rec << done.pop
+          end
+        end,
+        stop_case('worker') do |session, rec, ready|
+          worker = Thread.new do
+            begin
+              sleep
+            ensure
+              done = Queue.new
+              rec << session.queue { done << :value }
+              rec << done.pop
+            end
+          end
+          Thread.pass until worker.status == 'sleep'
+          ready << true
+          sleep
+        end
+      ]
+      abort results.inspect unless results.all? { |_label, stopped, events| stopped && events == [:queued, :value] }
+    RUBY_CODE
+
+    expect([errors, status.success?]).to eq(['', true])
+    expect(output).to eq("ready\n")
+  end
+
+  it 'keeps other threads, a closed session and exit inside an inline block unchanged' do
+    output, errors, status = run_real_script(<<~RUBY_CODE)
+      results = [
+        stop_case('foreign') do |session, rec, ready|
+          SCRIPT.at_exit do
+            foreign = Thread.new { session.queue { rec << :foreign_ran } }
+            ThreadGroup::Default.add(foreign)
+            rec << foreign.value
+          end
+          ready << true
+          sleep
+        end,
+        stop_case('closed') do |session, rec, ready|
+          begin
+            ready << true
+            sleep
+          ensure
+            session.close
+            rec << session.queue { rec << :closed_ran }
+          end
+        end,
+        stop_case('exit') do |session, rec, ready|
+          begin
+            ready << true
+            sleep
+          ensure
+            rec << session.queue { exit 3 }
+            rec << :survived
+          end
+        end
+      ]
+      expected = { 'foreign' => [nil], 'closed' => [nil], 'exit' => [:queued, :survived] }
+      abort results.inspect unless results.all? { |label, stopped, events| stopped && events == expected.fetch(label) }
+    RUBY_CODE
+
+    expect([errors, status.success?]).to eq(['', true])
+    expect(output).to eq("ready\n")
+  end
+
+  it 'keeps a live owner thread on the dispatcher instead of running its queue inline' do
+    output, errors, status = run_real_script(<<~RUBY_CODE)
+      file = File.join(Dir.mktmpdir('rc18'), 'live.lic')
+      File.write(file, "# rc18\\n")
+      owner = SCRIPT.new(file: file, quiet: true)
+      ran_on = Queue.new
+      caller_thread = nil
+      queued = nil
+      Thread.new do
+        owner.thread_group.add(Thread.current)
+        caller_thread = Thread.current
+        queued = GTK.session.queue { ran_on << Thread.current }
+      end.join
+      worker = ran_on.pop(timeout: 5)
+      owner.kill(async: true)
+      abort 'owner did not stop' unless owner.join(8)
+      abort "live queue ran inline: \#{[queued, worker.equal?(caller_thread)].inspect}" unless queued == :queued && worker && !worker.equal?(caller_thread)
+    RUBY_CODE
+
+    expect([errors, status.success?]).to eq(['', true])
+    expect(output).to eq("ready\n")
+  end
 end

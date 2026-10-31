@@ -129,9 +129,13 @@ module Lich
           # Exit handlers (before_dying procs) run inline on the owner's cleanup
           # thread because its ordinary workers have already been stopped. This
           # also permits their existing queue-then-wait cleanup pattern, including
-          # the destroys they trigger, without reviving dispatch. Destroy handlers
-          # run by the owner-death close, and any later call, get nil: that work
-          # is skipped, not deferred.
+          # the destroys they trigger, without reviving dispatch. The stopping
+          # owner's own threads (a killed worker's ensure block) run inline the
+          # same way, so a queue-then-wait there completes instead of hanging the
+          # stop (1843:RC18, legacy parity); the wait needs no timeout. Other
+          # threads get nil while the owner is stopping. Destroy handlers run by
+          # the owner-death close, and any later call, get nil: that work is
+          # skipped, not deferred.
           # @yield one-shot callback; must not wait for another callback on this owner
           # @return [Symbol, nil] :queued when admitted/cleaned up, nil for late work
           # @raise [ArgumentError] when no block is supplied
@@ -139,8 +143,8 @@ module Lich
           def queue(&block)
             raise ArgumentError, 'work block is required' unless block
             return if @closed
-            if cleanup_thread?
-              run_queue_block { synchronize { model_batch { block.call unless @closed } } }
+            if owner_stopping_thread?
+              run_queue_block(:queue, inline: true) { synchronize { model_batch { block.call unless @closed } } }
               return :queued
             end
             return if stopping?
@@ -407,21 +411,36 @@ module Lich
               Thread.current.thread_variable_get(Script::CLEANUP_SCRIPT_THREAD_KEY).equal?(@owner)
           end
 
+          # Recognizes the stopping owner's own threads: Script's cleanup executor,
+          # or a thread in the owner's worker groups (a killed worker still running
+          # its ensure block). Membership is tested on Thread.current itself, so
+          # the block can only run inline on a thread that is already this owner's;
+          # Script.current is not used because it waits out a pause and resolves
+          # nothing once the owner has left the running registry.
+          # @return [Boolean] whether queue work may run inline during owner stop
+          def owner_stopping_thread?
+            return true if cleanup_thread?
+
+            @owner.respond_to?(:stopping?) && @owner.stopping? &&
+              @owner.respond_to?(:has_thread?) && @owner.has_thread?(Thread.current)
+          end
+
           # Applies the legacy error boundary to queue, timer, signal and exit-handler work.
           # Script failures use the core dispatcher's contained set. SystemExit
           # is re-raised so the dispatcher stops this owner through its owner_exit
-          # hook (never Lich); only an already-stopping owner's cleanup thread
-          # contains it here.
+          # hook (never Lich); only an already-stopping owner's cleanup thread,
+          # or its own thread running a queue inline, contains it here.
           # Only shim class/operation tokens are retained from exception messages;
           # arbitrary script messages may contain sensitive input.
           # @param operation [Symbol] :queue for queued/timer work, :signal for handlers
+          # @param inline [Boolean] whether the block runs on a stopping owner's own thread
           # @yield queued script operation
           # @return [Object, nil] callback result, or nil after a reported failure
           # @raise [SystemExit] from a dispatched callback, for the owner-stop path
-          def run_queue_block(operation = :queue)
+          def run_queue_block(operation = :queue, inline: false)
             yield
           rescue SystemExit, *Lich::WebUI::Dispatcher::CONTAINED_EXCEPTIONS => error
-            raise if error.is_a?(SystemExit) && !cleanup_thread?
+            raise if error.is_a?(SystemExit) && !inline && !cleanup_thread?
 
             source = Array(error.backtrace).find { |frame| frame.start_with?("#{@owner.name}:") || frame.include?('.lic:') }
             detail = error.message[/\b(?:class=[\w:]+ )?operation=[\w?!=]+/] if error.is_a?(UnsupportedOperation)
