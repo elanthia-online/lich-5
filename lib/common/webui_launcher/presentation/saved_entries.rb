@@ -60,6 +60,11 @@ module Lich
             text(key: 'sort-order-description',
                  content: state[:autosort] ? 'Sort order: favorites first, then account/game/character.' :
                                             'Sort order: saved entry order.')
+            browser = text_input(key: 'browser-path', label: 'Browser path (optional)', value: state[:browser_path].to_s,
+                                 max_length: 1024)
+            text(key: 'browser-support', content: BROWSER_SUPPORT_NOTE)
+            button(key: 'browser-path-save', label: 'Save Browser Path', submit: [browser],
+                   on: { activate: ->(event) { launcher.browser_path_changed(event, browser.cid) } })
           end
         end
       end

@@ -14,7 +14,7 @@ module Lich
 
         operation = begin_operation(:manual_auth, event)
         credential = transfer_secret(event.submission.fetch(password_cid))
-        @mutex.synchronize { @manual.merge!(phase: :authenticating, account: account, error: nil) }
+        @mutex.synchronize { @manual.merge!(phase: :authenticating, account: account, error: nil, owner: event.viewer_id) }
         refresh
         post_operation(operation, secrets: [credential]) do
           characters = nil

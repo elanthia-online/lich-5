@@ -35,8 +35,12 @@ module Lich
       # so it can be shown to the user as the reason.
       class ValidationRefused < StandardError; end
       MASTER_PASSWORD_MIN_LENGTH = 8
+      MASTER_PASSWORD_LOCKED_HINT = 'The master password is locked. Choose Play on a saved character, enter the ' \
+                                    'master password when asked, then retry.'
       LEGACY_CONVERSION_GUIDANCE = "#{Catalog::LEGACY_CONVERSION_NOTICE} " \
                                    'See the Lich release notes for conversion guidance.'
+      BROWSER_SUPPORT_NOTE = 'Google Chrome and Microsoft Edge are supported. Another Chromium-based browser can be ' \
+                             'chosen here and is used at your own risk. Leave blank to detect Chrome or Edge automatically.'
       EXIT_CLEANUP_TIMEOUT = 2
       EXIT_CLEANUP_MUTEX = Mutex.new
       private_constant :EXIT_CLEANUP_MUTEX
@@ -94,6 +98,8 @@ module Lich
       # @param frontend_locator [Object] discovers supported frontend executables
       # @param viewer_expiry [#call, nil] schedules a block after a delay in seconds;
       #   nil uses a timer thread for the WebUI reconnect window
+      # @param browser_path [String, nil] browser executable for the app window; nil uses
+      #   the catalog's saved choice, then automatic Chrome or Edge detection
       def initialize(data_dir:, on_launch:, service: Lich::WebUI.service, catalog: nil,
                      authenticator: Authentication, launch_data: Authentication::LaunchData,
                      session_launcher: SessionLauncher, executor: SerialExecutor.new,
@@ -101,7 +107,7 @@ module Lich
                      browser_terminate: Process.method(:kill),
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
-                     frontend_locator: FrontendLocator, viewer_expiry: nil)
+                     frontend_locator: FrontendLocator, viewer_expiry: nil, browser_path: nil)
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
 
@@ -123,10 +129,11 @@ module Lich
         @browser_terminate = browser_terminate
         @browser_failure = nil
         @failure = nil
+        @browser_path = browser_path || (@catalog.browser_path if @catalog.respond_to?(:browser_path))
         @browser_open = browser_open || lambda do |url|
           handle = Object.new
           Lich::WebUI::BrowserLauncher.open(
-            url, geometry: @window_geometry,
+            url, geometry: @window_geometry, browser_path: @mutex.synchronize { @browser_path },
                  on_start: ->(pid) { browser_started(handle, pid) },
                  on_exit: -> { browser_exited(handle) },
                  on_failure: ->(message) { @mutex.synchronize { @browser_failure = message } }
@@ -154,6 +161,7 @@ module Lich
         @manual = default_manual_state
         @manual_credentials = {}
         @departed_viewers = {}
+        @attached_viewers = {}
         @viewer_expiry = viewer_expiry || lambda do |delay, &work|
           Thread.new do
             Thread.current.report_on_exception = false
@@ -162,6 +170,7 @@ module Lich
           end
         end
         @draft_entry_key = nil
+        @draft_account_key = nil
         reload_catalog
         refresh_capabilities
         @frontend_tab = FrontendTab.new(
@@ -339,7 +348,7 @@ module Lich
             dark_theme: @dark_theme, settings_visible: @settings_visible,
             notice: @notice, notify: undelivered_notice_locked, modal: @modal&.dup, catalog_error: @catalog_error,
             manual: @manual.merge(characters: @manual[:characters].dup), active: @active.keys,
-            draft_entry_key: @draft_entry_key, window_geometry: @window_geometry.dup,
+            browser_path: @browser_path, draft_entry_key: @draft_entry_key, draft_account_key: @draft_account_key, window_geometry: @window_geometry.dup,
             frontend_options: @frontend_options.map(&:dup),
           }
         end
@@ -387,6 +396,28 @@ module Lich
         refresh
       end
 
+      # Saves the browser used for the launcher window. The window is already open, so
+      # the choice applies the next time the launcher opens. An empty value restores
+      # automatic Chrome or Edge detection; anything else must be an absolute path to
+      # an executable file.
+      # @param event [WebUI::Runtime::EventContext] submission holding the path field
+      # @param path_cid [String] submitted browser-path field
+      # @return [void]
+      def browser_path_changed(event, path_cid)
+        value = event.submission.fetch(path_cid).to_s.strip
+        unless value.empty? || (File.absolute_path?(value) && File.file?(value) && File.executable?(value))
+          return set_notice('Browser path must be the full path of an executable file.', :error)
+        end
+
+        stored = false
+        commit { stored = @catalog.respond_to?(:update_browser_path) && @catalog.update_browser_path(value) == true }
+        return set_notice('The browser path could not be saved.', :error) unless stored
+
+        @mutex.synchronize { @browser_path = value.empty? ? nil : value }
+        set_notice(value.empty? ? 'Browser path cleared; Chrome or Edge is detected automatically.' :
+                                  'Browser path saved. It is used the next time Lich opens this window.', :info)
+      end
+
       # Accepts validated geometry only while the launcher is open. Resize events
       # update memory only; the latest value is written once, by {#close}.
       # @param event [WebUI::Runtime::EventContext] JSON geometry payload
@@ -432,6 +463,7 @@ module Lich
       def viewer_gone(viewer_id)
         token = Object.new
         departed = @mutex.synchronize do
+          @attached_viewers.delete(viewer_id)
           next false if %i[closing closed].include?(@lifecycle)
 
           @departed_viewers[viewer_id] = token
@@ -451,14 +483,19 @@ module Lich
       end
 
       # Records first connection without treating later transport loss as closure.
-      # A resumed viewer cancels its pending expiry.
+      # A resumed viewer cancels its pending expiry. A notice retained while no
+      # viewer was attached is delivered now, because this attachment can receive it.
       # @param viewer_id [String, nil] attaching viewer, if known
       # @return [Boolean] true after an attachment has been observed
       def viewer_attached(viewer_id = nil)
-        @mutex.synchronize do
+        notice_waiting = @mutex.synchronize do
           @departed_viewers.delete(viewer_id) if viewer_id
+          @attached_viewers[viewer_id] = true
           @viewer_attached = true
+          !@notice.nil? && @notice[:revision] > @notice_delivered
         end
+        refresh if notice_waiting
+        true
       end
 
       private
@@ -525,16 +562,22 @@ module Lich
       end
 
       # Invalidates a viewer's operations before releasing its retained credentials.
+      # The manual-entry state and the dialog are launcher-wide, so they are reset
+      # only when this viewer's departure leaves nobody to use them, or when the
+      # manual entry was started by this viewer. While another viewer is attached
+      # or still inside its reconnect window, its manual entry and dialog stay.
       # Callers hold the commit gate and the lifecycle mutex.
       # @param viewer_id [String, nil] viewer whose state is discarded
       # @return [void]
       # @api private
       def discard_viewer_locked(viewer_id)
         @departed_viewers.delete(viewer_id)
+        @attached_viewers.delete(viewer_id)
         @manual_credentials.delete(viewer_id)&.discard!
         @active.delete_if { |_kind, operation| operation.viewer_id == viewer_id }
-        @manual = default_manual_state
-        @modal = nil
+        others_present = !(@attached_viewers.empty? && @departed_viewers.empty?)
+        @manual = default_manual_state if @manual[:owner] == viewer_id || !others_present
+        @modal = nil unless others_present
       end
 
       # Reports feedback that must survive window closure through the existing
@@ -729,6 +772,18 @@ module Lich
         }
       end
 
+      # Resolves the account the account table has selected: the account of a
+      # selected character, or an account row that has no characters. Callers
+      # hold the lifecycle mutex.
+      # @return [String, nil] saved account name, or nil when nothing is selected
+      # @api private
+      def selected_account_locked
+        entry = @entries.find { |candidate| candidate.key == @draft_entry_key }
+        return entry.user_id if entry
+
+        @accounts.find { |account| Catalog.account_key(account) == @draft_account_key } if @draft_account_key
+      end
+
       # Clears the current dialog and refreshes its existing page.
       # @return [void] updates dialog state and requests refresh
       # @api private
@@ -835,11 +890,15 @@ module Lich
 
       # Delivers each notice revision in exactly one render. A render is sent to
       # every viewer attached at that time, so no active viewer misses it; later
-      # refreshes do not repeat it. Callers hold the lifecycle mutex.
+      # refreshes do not repeat it. While no viewer is attached (for example during
+      # a reconnect window) a render reaches nobody, so the notice stays pending
+      # and {#viewer_attached} delivers it. Callers hold the lifecycle mutex.
       # @return [Hash, nil] notify facility value, or nil when already delivered
+      #   or when no viewer is attached to receive it
       # @api private
       def undelivered_notice_locked
         return unless @notice && @notice[:revision] > @notice_delivered
+        return if @attached_viewers.empty?
 
         @notice_delivered = @notice[:revision]
         { text: @notice[:text], level: @notice[:level] }

@@ -19,6 +19,9 @@ module Lich
           persistent: :track_persistent_launcher_mode=,
         }.freeze
 
+        # lich_settings row holding the player's chosen app-window browser.
+        BROWSER_PATH_SETTING = 'webui_launcher_browser_path'
+
         class MasterPasswordRequired < StandardError; end
         class LegacyConversionRequired < StandardError; end
         class InvalidCatalogError < StandardError; end
@@ -95,6 +98,28 @@ module Lich
         def update_launcher_setting(setting, value)
           Lich.public_send(SETTING_WRITERS.fetch(setting), value)
           true
+        end
+
+        # Reads the browser the player chose for the launcher window.
+        # @return [String, nil] executable path, or nil to detect Chrome or Edge automatically
+        def browser_path
+          value = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='#{BROWSER_PATH_SETTING}';").to_s.strip
+          value.empty? ? nil : value
+        rescue StandardError => error
+          Lich.log("warning: unable to read launcher browser path: #{error.class}") if Lich.respond_to?(:log)
+          nil
+        end
+
+        # Persists the launcher browser choice; an empty path restores automatic detection.
+        # @param path [String] executable path, or empty to clear
+        # @return [Boolean] whether the choice was stored
+        def update_browser_path(path)
+          Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('#{BROWSER_PATH_SETTING}',?);",
+                          [path.to_s.encode('UTF-8')])
+          true
+        rescue StandardError => error
+          Lich.log("warning: unable to save launcher browser path: #{error.class}") if Lich.respond_to?(:log)
+          false
         end
 
         # Detects a legacy entry.dat without its replacement YAML catalog.
@@ -266,6 +291,7 @@ module Lich
         # Verifies the current password before encrypting and saving its replacement.
         # The decrypted comparison buffer is scrubbed on all exits.
         # @return [Boolean] whether the verified change was persisted
+        # @raise [MasterPasswordRequired] when enhanced encryption has no unlocked master password
         def change_account_password(account, current_password, new_password)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -275,6 +301,8 @@ module Lich
 
             mode = data.fetch('encryption_mode', 'plaintext').to_sym
             master = mode == :enhanced ? @master_password_manager.retrieve_master_password : nil
+            raise MasterPasswordRequired, 'master password is required' if mode == :enhanced && master.to_s.empty?
+
             plaintext = @entry_store.decrypt_password(
               account_data.fetch('password').to_s, mode: mode, account_name: name, master_password: master
             )
@@ -376,8 +404,12 @@ module Lich
             return false if data['master_password_validation_test'].nil?
 
             begin
+              # The entry store at this layer publishes through GUI::MasterPasswordManager and
+              # takes no manager: keyword; passing one raised ArgumentError, reported as a
+              # wrong password. Retire this call shape when EntryStore.write_yaml_with_master_password
+              # accepts manager: (WebUI activation commit), which passes @master_password_manager again.
               @entry_store.write_yaml_with_master_password(
-                @entry_store.yaml_file_path(data_dir), data, new_password, manager: @master_password_manager
+                @entry_store.yaml_file_path(data_dir), data, new_password
               )
               true
             rescue StandardError => error
