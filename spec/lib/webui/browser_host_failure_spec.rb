@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'tmpdir'
 require 'webui/browser_window'
 
 RSpec.describe 'WebUI window host startup failure' do
@@ -10,7 +11,17 @@ RSpec.describe 'WebUI window host startup failure' do
     let(:logs) { [] }
     let(:failures) { [] }
 
+    let(:browser_dir) { Dir.mktmpdir('webui-browser') }
+    let(:browser) do
+      File.join(browser_dir, 'browser.exe').tap do |path|
+        File.write(path, '')
+        File.chmod(0o755, path)
+      end
+    end
+
     before { allow(Lich).to receive(:log) { |message| logs << message } }
+
+    after { FileUtils.remove_entry(browser_dir) if File.directory?(browser_dir) }
 
     def open_with(**options)
       described_class.open(
@@ -23,30 +34,32 @@ RSpec.describe 'WebUI window host startup failure' do
       allow(File).to receive(:executable?).and_return(false)
 
       expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
-      expect(failures).to eq(['unable to open WebUI window: Google Chrome is required to open the WebUI launcher window'])
-      expect(logs).to eq(['warning: unable to open WebUI window: Google Chrome is required to open the WebUI launcher window'])
+      message = 'unable to open WebUI window: Google Chrome is required to open the WebUI launcher window; ' \
+                'install it, or set the Browser path in the launcher Settings to another browser'
+      expect(failures).to eq([message])
+      expect(logs).to eq(["warning: #{message}"])
     end
 
     it 'names only the failure class for an unexpected error and never echoes its message' do
       spawn = ->(*argv, **) { raise ArgumentError, "bad launch #{url} #{argv.inspect}" }
 
-      expect(open_with(browser_path: '/bin/browser', spawn: spawn)).to be(false)
+      expect(open_with(browser_path: browser, spawn: spawn)).to be(false)
       expect(failures).to eq(['unable to open WebUI window: the window host could not be started (ArgumentError)'])
       expect((failures + logs).join).not_to include('token', 'f' * 64, 'launch')
     end
 
     it 'reports a failed start once, separately from a host that started and exited' do
       exits = []
-      spawn = ->(*) { raise Errno::ENOENT, '/bin/browser' }
+      spawn = ->(*) { raise Errno::ENOENT, browser }
 
-      expect(open_with(browser_path: '/bin/browser', spawn: spawn, on_exit: -> { exits << true })).to be(false)
+      expect(open_with(browser_path: browser, spawn: spawn, on_exit: -> { exits << true })).to be(false)
       expect(failures.size).to eq(1)
       expect(failures.first).to include('Errno::ENOENT')
       expect(exits).to be_empty
     end
 
     it 'still returns false when the failure observer itself raises' do
-      result = described_class.open(url, browser_path: '/bin/browser', spawn: ->(*) { raise IOError },
+      result = described_class.open(url, browser_path: browser, spawn: ->(*) { raise IOError },
                                          on_failure: ->(_message) { raise 'observer failed' })
       expect(result).to be(false)
     end
