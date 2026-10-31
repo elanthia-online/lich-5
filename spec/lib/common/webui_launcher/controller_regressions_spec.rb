@@ -135,6 +135,69 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
     end
   end
 
+  describe 'viewer expiry with another viewer present' do
+    let(:page) { launcher.send(:build_page) }
+    let(:launcher_options) { { viewer_expiry: ->(delay, &work) { scheduled << [delay, work] } } }
+    let(:second) { event({}, viewer: 'viewer-2') }
+
+    def credential_of(viewer) = launcher.instance_variable_get(:@manual_credentials)[viewer]
+
+    def lifecycle(name, viewer_event) = page.lifecycle_bindings.fetch(name).call(viewer_event)
+
+    def second_viewer_connects_and_opens_dialog
+      lifecycle(:attach, second)
+      launcher.manual_connect(event({ 'account' => 'OTHER', 'password' => viewer_secret('second-canary') }, viewer: 'viewer-2'),
+                              'account', 'password')
+      launcher.manual_select(event({}, viewer: 'viewer-2', payload: { rows: ['character-0'] }))
+      launcher.remove_entry(second, 'entry-0')
+    end
+
+    before do
+      lifecycle(:attach, event)
+      connect_manual
+      lifecycle(:detach, event)
+    end
+
+    it 'keeps a later viewer manual entry and dialog when the earlier viewer expires' do
+      first_credential = credential_of('viewer-1')
+      second_viewer_connects_and_opens_dialog
+      second_credential = credential_of('viewer-2')
+
+      scheduled.each { |_delay, work| work.call }
+
+      state = launcher.send(:render_state)
+      expect(state[:manual]).to include(phase: :selecting_character, account: 'OTHER')
+      expect(state[:modal]).to include(kind: :confirm_delete)
+      expect(second_credential).not_to be_consumed
+      expect(first_credential).to be_consumed
+      expect(credential_of('viewer-1')).to be_nil
+    end
+
+    it 'keeps shared state while another viewer is inside its reconnect window, then resets it' do
+      second_viewer_connects_and_opens_dialog
+      lifecycle(:detach, second)
+      first_expiry, second_expiry = scheduled.map(&:last)
+
+      first_expiry.call
+      expect(launcher.send(:render_state)[:manual]).to include(phase: :selecting_character, account: 'OTHER')
+      expect(launcher.send(:render_state)[:modal]).to include(kind: :confirm_delete)
+
+      second_expiry.call
+      expect(launcher.send(:render_state)[:manual][:phase]).to eq(:editing)
+      expect(launcher.send(:render_state)[:modal]).to be_nil
+    end
+
+    it 'resets the manual entry the departing viewer started even while another viewer is attached' do
+      lifecycle(:attach, second)
+      first_credential = credential_of('viewer-1')
+
+      scheduled.each { |_delay, work| work.call }
+
+      expect(launcher.send(:render_state)[:manual][:phase]).to eq(:editing)
+      expect(first_credential).to be_consumed
+    end
+  end
+
   describe 'startup failure reporting' do
     it 'reports the host-start reason and records a failure distinct from cancellation' do
       allow(Lich::WebUI::BrowserLauncher).to receive(:open) do |_url, **options|
@@ -166,6 +229,141 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       connected.viewer_attached('viewer-1')
       connected.close(reason: :browser_process_exit)
       expect(connected.failure).to be_nil
+    end
+  end
+
+  describe 'launcher browser' do
+    let(:chromium) { '/usr/bin/chromium' }
+
+    def start_with(options = {}, saved: nil)
+      saved_path = saved
+      browsing = catalog
+      browsing.define_singleton_method(:browser_path) { saved_path }
+      opened = []
+      allow(Lich::WebUI::BrowserLauncher).to receive(:open) do |_url, **arguments|
+        opened << arguments
+        true
+      end
+      configured = described_class.new(
+        data_dir: '/fixture', catalog: browsing, service: started_service, on_launch: proc {},
+        frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator,
+        recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }, **options
+      )
+      yield configured if block_given?
+      configured.start
+      opened
+    end
+
+    it 'opens the window with the saved browser path' do
+      expect(start_with(saved: chromium).map { |arguments| arguments[:browser_path] }).to eq([chromium])
+    end
+
+    it 'lets an explicit browser path win over the saved one' do
+      expect(start_with({ browser_path: '/opt/other/browser' }, saved: chromium).map { |arguments| arguments[:browser_path] })
+        .to eq(['/opt/other/browser'])
+    end
+
+    it 'detects Chrome or Edge automatically when no path is set' do
+      expect(start_with.map { |arguments| arguments[:browser_path] }).to eq([nil])
+    end
+
+    it 'gives a configured Chromium an isolated profile that is removed after it exits' do
+      calls = []
+      profile = nil
+      spawn = lambda do |*arguments, **_options|
+        calls << arguments
+        profile = arguments.find { |argument| argument.start_with?('--user-data-dir=') }.delete_prefix('--user-data-dir=')
+        expect(File.directory?(profile)).to be(true)
+        42
+      end
+
+      expect(Lich::WebUI::BrowserLauncher.open('http://127.0.0.1:1234/auth?token=x', spawn: spawn, platform: 'linux',
+                                                                                      browser_path: chromium, waitpid: ->(_pid, _flags) {},
+                                                                                      thread_factory: ->(&work) { work.call })).to be(true)
+      expect(calls.first.first).to eq(chromium)
+      expect(calls.first).to include('--new-window', '--no-first-run')
+      expect(File.exist?(profile)).to be(false)
+    end
+
+    it 'builds the isolated-profile command for a configured browser without the native host' do
+      expect(Lich::WebUI::NativeHost).not_to receive(:command_for)
+
+      command = Lich::WebUI::BrowserLauncher.command_for('file:///launch.html', platform: 'linux', browser_path: chromium,
+                                                                                profile_dir: '/tmp/profile')
+
+      expect(command).to eq([chromium, '--new-window', '--user-data-dir=/tmp/profile', '--no-first-run',
+                             '--no-default-browser-check', '--app=file:///launch.html'])
+    end
+
+    context 'when the player edits the setting' do
+      let(:stored) { [] }
+      let(:browser_file) do
+        directory = Dir.mktmpdir('webui-browser')
+        (@browser_dirs ||= []) << directory
+        File.join(directory, 'chromium.exe').tap do |path|
+          File.write(path, '')
+          File.chmod(0o755, path)
+        end
+      end
+
+      after { (@browser_dirs || []).each { |directory| FileUtils.remove_entry(directory) } }
+
+      before do
+        recorded = stored
+        catalog.define_singleton_method(:update_browser_path) do |path|
+          recorded << path
+          true
+        end
+      end
+
+      def save_browser(path) = launcher.browser_path_changed(event({ 'browser' => path }), 'browser')
+
+      it 'states the support line and shows the saved path' do
+        launcher.instance_variable_set(:@browser_path, chromium)
+        launcher.setting_changed(event({}, payload: { value: true }), :settings_visible)
+        rendered = tree
+
+        expect(find(rendered, 'text_input:browser-path').props[:value]).to eq(chromium)
+        support = find(rendered, 'text:browser-support').props[:content]
+        expect(support).to include('Google Chrome and Microsoft Edge are supported', 'at your own risk')
+      end
+
+      it 'stores an executable path and uses it the next time the window opens' do
+        path = browser_file
+        save_browser(path)
+
+        expect(stored).to eq([path])
+        expect(launcher.send(:render_state)[:browser_path]).to eq(path)
+        expect(launcher.send(:render_state)[:notice]).to include(level: 'info')
+        expect(launcher.instance_variable_get(:@browser_path)).to eq(path)
+      end
+
+      it 'refuses a path that is not an absolute executable file, storing nothing' do
+        save_browser('chromium')
+        save_browser(File.dirname(browser_file))
+        save_browser(File.join(File.dirname(browser_file), 'missing.exe'))
+
+        expect(stored).to be_empty
+        expect(launcher.send(:render_state)[:browser_path]).to be_nil
+        expect(launcher.send(:render_state)[:notice]).to include(level: 'error')
+      end
+
+      it 'clears the choice with an empty path' do
+        launcher.instance_variable_set(:@browser_path, chromium)
+        save_browser('  ')
+
+        expect(stored).to eq([''])
+        expect(launcher.send(:render_state)[:browser_path]).to be_nil
+      end
+
+      it 'reports a failed store and keeps the current choice' do
+        catalog.define_singleton_method(:update_browser_path) { |_path| false }
+        launcher.instance_variable_set(:@browser_path, chromium)
+        save_browser(browser_file)
+
+        expect(launcher.send(:render_state)[:browser_path]).to eq(chromium)
+        expect(launcher.send(:render_state)[:notice][:text]).to match(/could not be saved/)
+      end
     end
   end
 
@@ -263,6 +461,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
   describe 'notices' do
     it 'delivers a notice in one render and does not repeat it on later refreshes' do
+      launcher.viewer_attached('viewer-1')
       launcher.send(:set_notice, 'Synthetic notice', :info)
       page = launcher.send(:build_page)
 
@@ -271,6 +470,41 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
       launcher.send(:set_notice, 'Synthetic notice', :info)
       expect(page.render.facilities[:notify]).to eq(text: 'Synthetic notice', level: 'info')
+    end
+
+    context 'when a render reaches no viewer' do
+      let(:launcher_options) { { viewer_expiry: ->(delay, &work) { scheduled << [delay, work] } } }
+      let(:notified) { [] }
+
+      before do
+        seen = notified
+        service.define_singleton_method(:refresh) do |page|
+          seen << page.render.facilities[:notify]
+          @refreshes += 1
+        end
+        launcher.instance_variable_set(:@page, launcher.send(:build_page))
+      end
+
+      it 'keeps the notice until a viewer attaches, then delivers it once' do
+        launcher.viewer_attached('viewer-1')
+        launcher.viewer_gone('viewer-1')
+        launcher.send(:set_notice, 'Operation failed while reconnecting', :error)
+        launcher.send(:refresh)
+        expect(notified).to eq([nil, nil])
+
+        launcher.viewer_attached('viewer-1')
+        expect(notified.last).to eq(text: 'Operation failed while reconnecting', level: 'error')
+
+        launcher.send(:refresh)
+        expect(notified.last).to be_nil
+        expect(notified.compact.size).to eq(1)
+      end
+
+      it 'does not refresh on attach when no notice is waiting' do
+        launcher.viewer_attached('viewer-1')
+
+        expect(notified).to be_empty
+      end
     end
 
     it 'clears a stale failure when a later operation succeeds' do
@@ -393,11 +627,92 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
     end
 
+    it 'tells the player how to unlock a locked master password instead of a generic failure' do
+      catalog.define_singleton_method(:change_account_password) do |*_arguments|
+        raise Lich::Common::WebUILauncher::Catalog::MasterPasswordRequired, 'master password is required'
+      end
+      launcher.begin_change_password(event)
+      respond('old-secret', 'new-secret', 'new-secret')
+
+      expect(launcher.send(:render_state)[:modal])
+        .to include(kind: :change_password, error: described_class::MASTER_PASSWORD_LOCKED_HINT)
+    end
+
+    it 'still reports other failures generically' do
+      catalog.define_singleton_method(:change_account_password) { |*_arguments| raise IOError, 'synthetic' }
+      launcher.begin_change_password(event)
+      respond('old-secret', 'new-secret', 'new-secret')
+
+      expect(launcher.send(:render_state)[:modal]).to include(kind: :change_password, error: 'Password change failed.')
+    end
+
     it 'cancels without changing anything' do
       launcher.begin_change_password(event)
       respond('old-secret', 'new-secret', 'new-secret', button: 'cancel')
 
       expect(changes).to be_empty
+      expect(launcher.send(:render_state)[:modal]).to be_nil
+    end
+  end
+
+  describe 'account whose characters were all removed' do
+    let(:account_row) { described_class::Catalog.account_key('DOUG') }
+    let(:saved_accounts) { ['DOUG'] }
+
+    before do
+      names = saved_accounts
+      catalog.entries_value = []
+      catalog.define_singleton_method(:accounts) { names }
+      catalog.define_singleton_method(:remove_account) do |account|
+        @calls << [:remove_account, account]
+        names.delete(account)
+        true
+      end
+      launcher.send(:reload_catalog)
+    end
+
+    def table_rows = find(tree, 'table:accounts-table').props[:rows]
+
+    it 'keeps a row for the account so Remove Account and Change Password can reach it' do
+      expect(table_rows.map { |row| row[:key] }).to eq([account_row])
+      expect(table_rows.first[:cells]).to include('account' => 'DOUG', 'character' => '(no characters)')
+      expect(find(tree, 'button:accounts-change-password').props[:disabled]).to be(true)
+
+      launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+
+      expect(find(tree, 'table:accounts-table').props[:selected]).to eq([account_row])
+      expect(find(tree, 'button:accounts-change-password').props[:disabled]).to be(false)
+      expect(find(tree, 'button:accounts-remove-account').props[:disabled]).to be(false)
+      expect(find(tree, 'button:accounts-edit').props[:disabled]).to be(true)
+      expect(find(tree, 'button:accounts-remove-character').props[:disabled]).to be(true)
+    end
+
+    it 'opens the password dialog and the removal confirmation for that account' do
+      launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+
+      launcher.begin_change_password(event)
+      expect(launcher.send(:render_state)[:modal]).to include(kind: :change_password, account: 'DOUG')
+
+      launcher.remove_selected_account(event)
+      expect(launcher.send(:render_state)[:modal]).to include(kind: :confirm_delete, account: 'DOUG')
+      launcher.delete_response(event({}, payload: { button: 'remove' }))
+      expect(catalog.calls).to include([:remove_account, 'DOUG'])
+    end
+
+    it 'clears the selection when the account is removed, so the page still renders' do
+      launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+      launcher.remove_selected_account(event)
+      launcher.delete_response(event({}, payload: { button: 'remove' }))
+
+      removed = find(tree, 'table:accounts-table')
+      expect(removed.props[:rows]).to be_empty
+      expect(removed.props[:selected]).to be_empty
+    end
+
+    it 'does not offer character actions for an account row' do
+      launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+      launcher.remove_selected_entry(event)
+
       expect(launcher.send(:render_state)[:modal]).to be_nil
     end
   end
@@ -589,13 +904,21 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
     end
 
-    it 'refreshes the page so Play renders disabled, and still refuses an overlapping launch' do
+    it 'delivers a disabled Play to the viewer once the launch begins, and still refuses an overlapping launch' do
+      # A rebuilt page always reflects the active operation, so only the render the
+      # service delivered at each refresh shows what the viewer actually sees.
+      delivered = []
+      service.define_singleton_method(:refresh) do |page|
+        delivered << page.render.tree
+        @refreshes += 1
+      end
       launcher.instance_variable_set(:@page, launcher.send(:build_page))
-      before = service.refreshes
+      launcher.send(:refresh)
+      expect(find(delivered.last, 'button:play-entry-0').props[:disabled]).to be_falsey
+
       launcher.saved_launch(event, 'entry-0')
 
-      expect(service.refreshes).to be > before
-      expect(find(tree, 'button:play-entry-0').props[:disabled]).to be(true)
+      expect(find(delivered.last, 'button:play-entry-0').props[:disabled]).to be(true)
       expect { launcher.saved_launch(event, 'entry-0') }.to raise_error(Lich::WebUI::Error, /already active/)
     end
   end

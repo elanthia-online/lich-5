@@ -7,7 +7,12 @@ module Lich
       # @param event [WebUI::Runtime::EventContext] originating viewer payload and declared submission
       # @return [void]
       def select_managed_entry(event)
-        @mutex.synchronize { @draft_entry_key = event.payload.fetch(:rows).first }
+        row = event.payload.fetch(:rows).first
+        @mutex.synchronize do
+          # An account with no characters has a row of its own, keyed by the account.
+          @draft_account_key = @accounts.any? { |account| Catalog.account_key(account) == row } ? row : nil
+          @draft_entry_key = @draft_account_key ? nil : row
+        end
         refresh
       end
 
@@ -18,7 +23,7 @@ module Lich
       # Clears the character edit target without modifying catalog data.
       # @return [void]
       def cancel_edit
-        @mutex.synchronize { @draft_entry_key = nil }
+        @mutex.synchronize { @draft_entry_key = @draft_account_key = nil }
         refresh
       end
 
@@ -34,12 +39,12 @@ module Lich
       # @param _event [WebUI::Runtime::EventContext] unused originating event; selection is server-owned
       # @return [void]
       def remove_selected_account(_event)
-        entry = @mutex.synchronize { @entries.find { |candidate| candidate.key == @draft_entry_key } }
-        return unless entry
+        account = @mutex.synchronize { selected_account_locked }
+        return unless account
 
         @mutex.synchronize do
-          @modal = { kind: :confirm_delete, account: entry.user_id,
-                     body: "Remove account #{entry.user_id} and all saved characters?" }
+          @modal = { kind: :confirm_delete, account: account,
+                     body: "Remove account #{account} and all saved characters?" }
         end
         refresh
       end
@@ -48,10 +53,10 @@ module Lich
       # @param _event [WebUI::Runtime::EventContext] unused originating event; selection is server-owned
       # @return [void]
       def begin_change_password(_event)
-        entry = @mutex.synchronize { @entries.find { |candidate| candidate.key == @draft_entry_key } }
-        return unless entry
+        account = @mutex.synchronize { selected_account_locked }
+        return unless account
 
-        @mutex.synchronize { @modal = { kind: :change_password, account: entry.user_id, error: nil } }
+        @mutex.synchronize { @modal = { kind: :change_password, account: account, error: nil } }
         refresh
       end
 
@@ -88,7 +93,11 @@ module Lich
           end
           set_notice("Password changed for account #{account}.", :info)
         rescue StandardError => error
-          message = error.is_a?(ValidationRefused) ? error.message : 'Password change failed.'
+          message = case error
+                    when ValidationRefused then error.message
+                    when Catalog::MasterPasswordRequired then MASTER_PASSWORD_LOCKED_HINT
+                    else 'Password change failed.'
+                    end
           fail_operation(operation, error, modal: { kind: :change_password, account: account, error: message })
         end
       end
@@ -106,6 +115,9 @@ module Lich
         mutate(:delete, event, 'Removal failed.') do
           result = target[:account] ? @catalog.remove_account(target[:account]) : @catalog.remove_entry(target[:entry_key])
           raise 'removal failed' unless result
+
+          # The removed row can no longer be selected; a stale selection refuses the next render.
+          @mutex.synchronize { @draft_entry_key = @draft_account_key = nil }
         end
       end
 

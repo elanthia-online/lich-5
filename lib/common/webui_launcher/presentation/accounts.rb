@@ -33,12 +33,19 @@ module Lich
                                      'game' => entry.game_code, 'frontend' => display_frontend(entry),
                                      'favorite' => entry.favorite ? 'Yes' : 'No' } }
         end
+        # An account whose characters were all removed still exists; its row keeps
+        # Remove Account and Change Password reachable.
+        state[:accounts].reject { |account| state[:entries].any? { |entry| entry.user_id == account } }.each do |account|
+          rows << { key: Catalog.account_key(account), cells: { 'account' => account, 'character' => '(no characters)',
+                                                                'game' => '-', 'frontend' => '-', 'favorite' => '-' } }
+        end
+        account_selected = !state[:draft_entry_key].nil? || rows.any? { |row| row[:key] == state[:draft_account_key] }
         ui.group(label: 'Saved Accounts and Characters', key: 'accounts-table-section') do
           table(key: 'accounts-table', columns: [
                   { key: 'account', label: 'Account' }, { key: 'character', label: 'Character' },
                   { key: 'game', label: 'Game' }, { key: 'frontend', label: 'Frontend' },
                   { key: 'favorite', label: 'Favorite' },
-                ], rows: rows, selection: :single, selected: Array(state[:draft_entry_key]),
+                ], rows: rows, selection: :single, selected: Array(state[:draft_entry_key] || state[:draft_account_key]),
                 on: { selection_change: ->(event) { launcher.select_managed_entry(event) } })
           columns(count: 5, weights: [1, 1, 1, 1, 1]) do
             button(slot: '0', key: 'accounts-refresh', label: 'Refresh', on: { activate: ->(_event) { launcher.refresh_catalog } })
@@ -47,9 +54,9 @@ module Lich
             button(slot: '2', key: 'accounts-remove-character', label: 'Remove Character', variant: :danger,
                    disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.remove_selected_entry(event) } })
             button(slot: '3', key: 'accounts-remove-account', label: 'Remove Account', variant: :danger,
-                   disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.remove_selected_account(event) } })
+                   disabled: !account_selected, on: { activate: ->(event) { launcher.remove_selected_account(event) } })
             button(slot: '4', key: 'accounts-change-password', label: 'Change Password',
-                   disabled: state[:draft_entry_key].nil?, on: { activate: ->(event) { launcher.begin_change_password(event) } })
+                   disabled: !account_selected, on: { activate: ->(event) { launcher.begin_change_password(event) } })
           end
         end
       end
