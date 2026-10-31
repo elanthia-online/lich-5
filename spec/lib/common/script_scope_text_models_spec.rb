@@ -10,7 +10,7 @@ require_relative '../../../lib/common/script_scope/gtk/text'
 require_relative '../../../lib/common/script_scope/gtk/combo_box'
 
 # Model, table and text boundaries: the P13 share of 1831:RC27, plus 1844:RC1,
-# RC5, RC6, RC7, RC9 and RC10 and 1845:RC3 and RC5. A recording port stands in for core.
+# RC5, RC6, RC7, RC9, RC10, RC11 and RC12 and 1845:RC3 and RC5. A recording port stands in for core.
 RSpec.describe 'script compatibility models, tables and text' do
   port_class = Class.new do
     attr_reader :sets
@@ -285,5 +285,50 @@ RSpec.describe 'script compatibility models, tables and text' do
     proposed = cafe
     expect { view.materialize }.not_to raise_error
     expect(view.send(:row_definitions).first[:cells].values).to eq([utf8(cafe)])
+  end
+
+  it 'refuses non-UTF-8 combo entry text at the setter and re-tags binary-tagged UTF-8 (1844:RC11)' do
+    cafe = 'caf'.b + bytes(0xC3, 0xA9)
+    combo = gtk::ComboBox.new(entry: true)
+    handle = combo.materialize
+    entry = combo.child
+
+    [bytes(0xFF), utf8(bytes(0xFF)), 'caf'.b + bytes(0xFF)].each do |rejected|
+      expect { entry.text = rejected }.to raise_error(gtk::UnsupportedOperation, /operation=text=/)
+    end
+    expect([entry.text, port.sets.count { |property, _| property == :value }]).to eq(['', 0])
+
+    entry.text = cafe
+    published = port.get(handle, :value)
+    expect([published, published.encoding, entry.text, entry.text.encoding]).to eq(['text:caf' + utf8(bytes(0xC3, 0xA9)), Encoding::UTF_8, utf8(cafe), Encoding::UTF_8])
+  end
+
+  it 'matches binary-tagged UTF-8 entry text to a closed combo label (1844:RC11)' do
+    cafe = 'caf'.b + bytes(0xC3, 0xA9)
+    combo = gtk::ComboBox.new(entry: true)
+    combo.append_text(utf8(cafe))
+    combo.child.editable = false
+
+    combo.child.text = cafe
+    expect(combo.child.text).to eq(utf8(cafe))
+  end
+
+  it 'refuses non-UTF-8 column tooltips at the setter and re-tags binary-tagged UTF-8 (1844:RC12)' do
+    store = gtk::ListStore.new(String)
+    store.append[0] = 'row'
+    column = gtk::TreeViewColumn.new('Name', gtk::CellRendererText.new, text: 0)
+    view = gtk::TreeView.new(store)
+    view.append_column(column)
+    cafe = 'caf'.b + bytes(0xC3, 0xA9)
+
+    [bytes(0xFF), utf8(bytes(0xFF)), 'caf'.b + bytes(0xFF), cafe.dup.force_encoding(Encoding::ISO_8859_1)].each do |rejected|
+      expect { column.tooltip_text = rejected }.to raise_error(gtk::UnsupportedOperation, /operation=tooltip_text=/)
+    end
+    expect(column.tooltip_text).to be_nil
+
+    column.tooltip_text = cafe
+    expect([column.tooltip_text, column.tooltip_text.encoding]).to eq([utf8(cafe), Encoding::UTF_8])
+    expect { view.materialize }.not_to raise_error
+    expect(column.send(:definition)[:tooltip]).to eq(utf8(cafe))
   end
 end
