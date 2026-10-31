@@ -108,7 +108,7 @@ module Lich
           owner = Script.current
           raise UnsupportedOperation, 'script owner is required for Gtk' unless owner
 
-          current = @mutex.synchronize { @sessions[owner] ||= Session.new(owner) }
+          current = @mutex.synchronize { @sessions[owner] ||= Session.new(owner).tap { |created| close_on_death(owner, created) } }
           Thread.current.thread_variable_set(:lich_script_compatibility_session, current)
           current
         end
@@ -182,10 +182,22 @@ module Lich
           super
         end
 
-        ScriptDeath.on_death do |owner|
-          current = @mutex.synchronize { @sessions.delete(owner) }
-          current&.close
+        # Closes the dying script's windows through the core's pre-terminate hook,
+        # so their destroy handlers run while the owner's pages are still
+        # registered; a plain ScriptDeath handler would run after the core
+        # retired them (1836:RC20). The hook is registered for this owner only,
+        # when its session is created: the hook runner costs a host thread and a
+        # wait on the cleanup thread per hook, and scripts that never used Gtk
+        # must not pay it. It runs on a host thread, bounded by
+        # Lich::WebUI::BEFORE_TERMINATE_TIMEOUT.
+        # @api private
+        def self.close_on_death(owner, session)
+          Lich::WebUI.before_owner_terminate(owner: owner) do |dying|
+            @mutex.synchronize { @sessions.delete(dying) }
+            session.close_for_owner_death
+          end
         end
+        private_class_method :close_on_death
       end
     end
   end

@@ -222,6 +222,28 @@ RSpec.describe 'legacy GTK spellings and entry initialization' do
     Lich::Common::ScriptDeath.run(stranger) if stranger
   end
 
+  it 'detaches an already inserted child and restores table and child state when its layout publication fails' do
+    table = gtk::Table.new(1, 2)
+    table.attach(gtk::Label.new('packed'), 0, 1, 0, 1)
+    table.materialize
+    child = gtk::Button.new
+    state = lambda do
+      [table.instance_variable_get(:@columns), table.n_rows, table.send(:component_props)[:cols], table.children,
+       child.instance_variable_get(:@placement), child.instance_variable_get(:@props)[:margin], child.parent]
+    end
+    before = state.call
+    port = table.session.port
+    allow(port).to receive(:detach).and_call_original
+    allow(child).to receive(:publish_layout!).and_raise(RuntimeError, 'layout refused')
+
+    expect { table.attach(child, 3, 5, 2, 4, 5, 5, 7, 7) }.to raise_error(RuntimeError, 'layout refused')
+
+    expect(port).to have_received(:detach).once
+    expect(state.call).to eq(before)
+    expect(child.parent).to be_nil
+    expect(table.children).not_to include(child)
+  end
+
   it 'changes live entry editability without replacing the handle or text' do
     entry = gtk::Entry.new
     entry.text = 'retained'
