@@ -201,7 +201,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
   describe 'startup failure reporting' do
     it 'reports the host-start reason and records a failure distinct from cancellation' do
       allow(Lich::WebUI::BrowserLauncher).to receive(:open) do |_url, **options|
-        options[:on_failure]&.call('unable to open WebUI window: Google Chrome is required to open the WebUI launcher window')
+        options[:on_failure]&.call('unable to open WebUI window: Google Chrome is required to open the WebUI launcher window; ' \
+                                   'install it, or set the Browser path in the launcher Settings to another browser')
         false
       end
       failing = described_class.new(
@@ -268,21 +269,27 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
     end
 
     it 'gives a configured Chromium an isolated profile that is removed after it exits' do
-      calls = []
-      profile = nil
-      spawn = lambda do |*arguments, **_options|
-        calls << arguments
-        profile = arguments.find { |argument| argument.start_with?('--user-data-dir=') }.delete_prefix('--user-data-dir=')
-        expect(File.directory?(profile)).to be(true)
-        42
-      end
+      # An explicit browser path must be a real executable file or open refuses it.
+      Dir.mktmpdir('webui-browser') do |directory|
+        browser = File.join(directory, 'chromium.exe')
+        File.write(browser, '')
+        File.chmod(0o755, browser)
+        calls = []
+        profile = nil
+        spawn = lambda do |*arguments, **_options|
+          calls << arguments
+          profile = arguments.find { |argument| argument.start_with?('--user-data-dir=') }.delete_prefix('--user-data-dir=')
+          expect(File.directory?(profile)).to be(true)
+          42
+        end
 
-      expect(Lich::WebUI::BrowserLauncher.open('http://127.0.0.1:1234/auth?token=x', spawn: spawn, platform: 'linux',
-                                                                                      browser_path: chromium, waitpid: ->(_pid, _flags) {},
-                                                                                      thread_factory: ->(&work) { work.call })).to be(true)
-      expect(calls.first.first).to eq(chromium)
-      expect(calls.first).to include('--new-window', '--no-first-run')
-      expect(File.exist?(profile)).to be(false)
+        expect(Lich::WebUI::BrowserLauncher.open('http://127.0.0.1:1234/auth?token=x', spawn: spawn, platform: 'linux',
+                                                                                        browser_path: browser, waitpid: ->(_pid, _flags) {},
+                                                                                        thread_factory: ->(&work) { work.call })).to be(true)
+        expect(calls.first.first).to eq(browser)
+        expect(calls.first).to include('--new-window', '--no-first-run')
+        expect(File.exist?(profile)).to be(false)
+      end
     end
 
     it 'builds the isolated-profile command for a configured browser without the native host' do
