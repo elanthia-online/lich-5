@@ -118,6 +118,26 @@ RSpec.describe 'script compatibility owner stop' do
     expect(output).to eq("ready\n")
   end
 
+  it 'removes a window from its session when a destroy handler exits while the owner is live' do
+    output, errors, status = run_fresh(<<~RUBY_CODE)
+      session = nil
+      window = nil
+      requested = stop_requested?('forget.lic') do
+        session = GTK.session
+        window = GTK::Window.new('forget')
+        window.signal_connect('destroy') { exit 10 }
+        session.queue { window.destroy }
+      end
+      abort 'owner not stopped' unless requested
+      abort 'window not destroyed' unless window.destroyed?
+      windows = session.instance_variable_get(:@windows)
+      abort "window left in session: \#{windows.size}" unless windows.empty?
+    RUBY_CODE
+
+    expect([errors, status.success?]).to eq(['', true])
+    expect(output).to eq("ready\n")
+  end
+
   it 'leaves a live owner running after an ordinary destroy and contains an exit during teardown' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       owner = KillableOwner.new('ordinary.lic')

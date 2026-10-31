@@ -126,9 +126,12 @@ module Lich
           # wrapper supplies Script ownership and the legacy queue error boundary.
           # Work queued by a signal retains its viewer and window for input reads
           # and writes. Unrelated threads must not inherit the active signal's viewer.
-          # Exit handlers run inline on the owner's cleanup thread because its
-          # ordinary workers have already been stopped. This also permits their
-          # existing queue-then-wait cleanup pattern without reviving dispatch.
+          # Exit handlers (before_dying procs) run inline on the owner's cleanup
+          # thread because its ordinary workers have already been stopped. This
+          # also permits their existing queue-then-wait cleanup pattern, including
+          # the destroys they trigger, without reviving dispatch. Destroy handlers
+          # run by the owner-death close, and any later call, get nil: that work
+          # is skipped, not deferred.
           # @yield one-shot callback; must not wait for another callback on this owner
           # @return [Symbol, nil] :queued when admitted/cleaned up, nil for late work
           # @raise [ArgumentError] when no block is supplied
