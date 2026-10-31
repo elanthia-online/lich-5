@@ -12,6 +12,12 @@ module Lich
     # Explicit script geometry wins; this supplies persistence to native forms
     # that never had their own window settings. No form draft is stored here.
     class WindowGeometryStore
+      # Windows refuses a rename over a file another process or store is replacing at
+      # that moment (EACCES). The replacement is retried briefly; a save that still
+      # cannot land is skipped and logged, since the next window change saves again.
+      RENAME_ATTEMPTS = 3
+      RENAME_RETRY_DELAY = 0.02
+
       # Scopes geometry filenames to caller-supplied game/character context.
       # @param directory [String] storage directory
       # @param context [#call] callback supplying the current persistence context
@@ -36,6 +42,7 @@ module Lich
       # Each save creates its own uniquely named temporary file, so stores that
       # share a directory never write or rename one another's file.
       # Unnamed owners are not persisted. This is atomic replacement, not fsync durability.
+      # A rename the operating system keeps refusing is logged and skipped, not raised.
       # @return [void]
       def save(page)
         value = page.window_geometry
@@ -50,8 +57,7 @@ module Lich
           begin
             temporary.write(JSON.generate(value))
             temporary.close
-            File.rename(temporary.path, path)
-            renamed = true
+            renamed = replace_file(temporary.path, path)
           ensure
             temporary.close unless temporary.closed?
             File.unlink(temporary.path) if !renamed && File.exist?(temporary.path)
@@ -60,6 +66,25 @@ module Lich
       end
 
       private
+
+      # Renames the temporary file over the target, retrying a refused rename a bounded
+      # number of times with a short, growing pause (backoff, not synchronization).
+      # @return [Boolean] whether the target was replaced
+      def replace_file(source, target)
+        attempts = 0
+        begin
+          attempts += 1
+          File.rename(source, target)
+          true
+        rescue SystemCallError => error
+          if attempts < RENAME_ATTEMPTS
+            sleep(RENAME_RETRY_DELAY * attempts)
+            retry
+          end
+          Lich.log("warning: WebUI window geometry not saved (#{error.class})") if Lich.respond_to?(:log)
+          false
+        end
+      end
 
       # Hashes context, script name, and page ID into an installation-local filename.
       # @return [String, nil] persistence path, or nil for an unnamed owner
