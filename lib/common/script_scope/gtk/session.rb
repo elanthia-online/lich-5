@@ -319,13 +319,22 @@ module Lich
 
           # Isolates script cleanup failures so later handlers/windows still close.
           # Uses the core dispatcher's contained set; fatal VM failures outside
-          # it are not treated as recoverable script errors.
+          # it are not treated as recoverable script errors. SystemExit is
+          # contained only once this session is closed or its owner is already
+          # stopping. A destroy handler that exits while the owner is live (a
+          # window closed from a signal, or an explicit destroy) is an owner-stop
+          # request like any other callback exit (1843:RC3): it propagates to the
+          # dispatcher or the script thread, and the remaining handlers of that
+          # destroy are skipped because the owner is being stopped.
           # @param receiver [Widget] object whose cleanup is running
           # @yield cleanup action
           # @return [Object, nil] cleanup result, or nil after a reported failure
+          # @raise [SystemExit] from a destroy handler while the owner is live
           def cleanup(receiver)
             yield
           rescue SystemExit, *Lich::WebUI::Dispatcher::CONTAINED_EXCEPTIONS => error
+            raise if error.is_a?(SystemExit) && !stopping?
+
             source_warning(receiver, :destroy, "cleanup failed error=#{error.class} at=#{error.backtrace&.first}")
             nil
           end
