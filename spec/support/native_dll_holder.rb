@@ -1,29 +1,62 @@
 # frozen_string_literal: true
 
 require 'fiddle/import'
-abort 'native DLL holder is Windows-only' unless Gem.win_platform?
 
 module NativeDirectoryHandle
   extend Fiddle::Importer
-  dlload 'kernel32.dll'
-  extern 'void* CreateFileW(void*, unsigned long, unsigned long, void*, unsigned long, unsigned long, void*)'
-  extern 'int CloseHandle(void*)'
-  extern 'unsigned long GetLastError()'
+
+  FILE_LIST_DIRECTORY = 1
+  FILE_SHARE_READ_WRITE = 3
+  DELETE_ACCESS = 0x00010000
+  OPEN_EXISTING = 3
+  FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+  ERROR_SHARING_VIOLATION = 32
+
+  def self.invalid?(handle)
+    [-1, (1 << (Fiddle::SIZEOF_VOIDP * 8)) - 1].include?(handle.to_i)
+  end
+
+  def self.hold(directory, api: self, error_source: Fiddle)
+    encoded = directory.encode('UTF-16LE').b + [0].pack('v')
+    # Zero desired access is metadata-only and need not participate in sharing
+    # checks. Request directory-list access while withholding FILE_SHARE_DELETE.
+    handle = api.CreateFileW(encoded, FILE_LIST_DIRECTORY, FILE_SHARE_READ_WRITE, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
+    # Use Fiddle's saved error before pointer conversion or another native call.
+    hold_error = error_source.win32_last_error
+    raise "could not hold the native extension directory: Windows error #{hold_error}" if invalid?(handle)
+
+    begin
+      # Prove the hold denies deletion before telling the parent it is ready.
+      probe = api.CreateFileW(encoded, DELETE_ACCESS, 7, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
+      error = error_source.win32_last_error
+      unless invalid?(probe)
+        api.CloseHandle(probe)
+        raise 'native extension directory hold did not block delete access'
+      end
+      raise "unexpected delete-access probe failure: Windows error #{error}" unless error == ERROR_SHARING_VIOLATION
+
+      yield
+    ensure
+      api.CloseHandle(handle)
+    end
+  end
 end
 
-library = Fiddle.dlopen(ARGV.fetch(0))
-handle = nil
-begin
-  directory = ARGV.fetch(1).encode('UTF-16LE').b + [0].pack('v')
-  # A loaded image plus an explicit directory handle without FILE_SHARE_DELETE
-  # makes the sharing violation deterministic, independent of loader sharing.
-  handle = NativeDirectoryHandle.CreateFileW(directory, 0, 3, 0, 3, 0x02000000, 0)
-  invalid = (1 << (Fiddle::SIZEOF_VOIDP * 8)) - 1
-  abort "could not hold the native extension directory: Windows error #{NativeDirectoryHandle.GetLastError()}" if [-1, invalid].include?(handle.to_i)
-  $stdout.sync = true
-  puts 'native-library-held'
-  $stdin.read(1)
-ensure
-  NativeDirectoryHandle.CloseHandle(handle) if handle && ![-1, invalid].include?(handle.to_i)
-  library.close
+if $PROGRAM_NAME == __FILE__
+  abort 'native DLL holder is Windows-only' unless Gem.win_platform?
+
+  NativeDirectoryHandle.dlload 'kernel32.dll'
+  NativeDirectoryHandle.extern 'void* CreateFileW(void*, unsigned long, unsigned long, void*, unsigned long, unsigned long, void*)'
+  NativeDirectoryHandle.extern 'int CloseHandle(void*)'
+
+  library = Fiddle.dlopen(ARGV.fetch(0))
+  begin
+    NativeDirectoryHandle.hold(ARGV.fetch(1)) do
+      $stdout.sync = true
+      puts 'native-library-held'
+      $stdin.read(1)
+    end
+  ensure
+    library.close
+  end
 end
