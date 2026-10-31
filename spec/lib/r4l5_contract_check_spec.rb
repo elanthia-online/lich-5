@@ -68,6 +68,31 @@ RSpec.describe Lich::R4L5ContractCheck do
     expect(verify(candidate_sha: 'c' * 40).fetch('packages').keys).to eq(%w[redis redis-client])
   end
 
+  it 'binds the digest to selected members instead of a displaced legacy-only lock member' do
+    lockfile.sub!("\nCHECKSUMS", "    ast (2.4.3)\n\nCHECKSUMS")
+    lockfile << "  ast (2.4.3) sha256=#{'e' * 64}\n"
+    legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+    legacy['members'] << 'ast'
+    legacy['install_order'].unshift('ast')
+    legacy['packages'].unshift('name' => 'ast', 'version' => '2.4.3', 'filename' => 'ast-2.4.3.gem', 'sha256' => "sha256:#{'e' * 64}")
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [legacy, unit]
+
+    reader = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile)
+    selected_digest = reader.windows_contract_digest(contract.fetch('ruby_inventory'), advertised_members: %w[redis redis-client])
+    all_members = target.fetch('units').flat_map { |entry| entry.fetch('members') }.uniq
+    all_digest = reader.windows_contract_digest(contract.fetch('ruby_inventory'), advertised_members: all_members)
+    expect(reader.locked_packages).to have_key('ast')
+    expect(all_digest).not_to eq(selected_digest)
+    contract['windows_contract_sha256'] = selected_digest
+    expect(verify(lich_version: '5.24.0').fetch('packages').keys).to eq(%w[redis redis-client])
+
+    contract['windows_contract_sha256'] = all_digest
+    provenance['runtime_contract_sha256'] = Lich::RuntimeGemContract.digest(contract)
+    provenance['recovery_manifest_sha256'] = Digest::SHA256.hexdigest(JSON.generate(manifest))
+    expect { verify(lich_version: '5.24.0') }.to raise_error(described_class::Error, /does not match this Windows projection/)
+  end
+
   it 'rejects Lich-first delivery before the producer serves its lock' do
     contract['windows_contract_sha256'] = '0' * 64
     expect { verify }.to raise_error(described_class::Error, /build and promote this candidate first/)
