@@ -1,16 +1,29 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'tmpdir'
 require 'webui'
 
 RSpec.describe Lich::WebUI::BrowserLauncher do
+  # An explicit browser path must be a real executable file or open refuses it.
+  # File tests only (no POSIX mode assertions), so this holds on Windows as well.
+  let(:browser_directory) { Dir.mktmpdir('webui-launcher-browser') }
+  let(:browser) do
+    File.join(browser_directory, 'browser.exe').tap do |path|
+      File.write(path, '')
+      File.chmod(0o755, path)
+    end
+  end
+
+  after { FileUtils.remove_entry(browser_directory) if File.directory?(browser_directory) }
+
   %w[darwin mingw linux].each do |platform|
     it "keeps launch credentials off #{platform} process arguments" do
       allow(File).to receive(:executable?).and_return(true)
       url = 'http://127.0.0.1:1234/auth?token=synthetic-launch-secret&to=%2F'
       arguments = nil
       result = described_class.open(url, platform: platform,
-                                    browser_path: platform == 'darwin' ? nil : '/test/browser',
+                                    browser_path: platform == 'darwin' ? nil : browser,
                                     spawn: ->(*argv, **_options) { arguments = argv; 42 },
                                     on_exit: proc {}, waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })
       expect(result).to be(true)
@@ -72,8 +85,8 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
 
     expect(described_class.open('http://127.0.0.1:1234/auth?token=x&to=%2F', spawn: spawn,
                                 waitpid: ->(pid, _flags) { waited << pid }, thread_factory: ->(&work) { work.call },
-                                platform: 'darwin', browser_path: '/Applications/Google Chrome')).to be(true)
-    expect(calls.first.first).to include('/Applications/Google Chrome', '--new-window', a_string_starting_with('--user-data-dir='))
+                                platform: 'darwin', browser_path: browser)).to be(true)
+    expect(calls.first.first).to include(browser, '--new-window', a_string_starting_with('--user-data-dir='))
     expect(calls.first.last).to eq(out: File::NULL, err: File::NULL)
     expect(waited).to eq([42])
     expect(File.exist?(File.dirname(launch_file))).to be(false)
@@ -93,7 +106,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
 
     expect(described_class.open(
              'http://127.0.0.1:1234/', spawn: spawn,
-             platform: 'darwin', browser_path: '/Applications/Google Chrome', on_exit: -> { exited << true },
+             platform: 'darwin', browser_path: browser, on_exit: -> { exited << true },
              on_start: ->(pid) { started << pid }, waitpid: ->(pid, flags) { waited << [pid, flags]; pid },
              thread_factory: ->(&work) { work.call }
            )).to be(true)
@@ -116,7 +129,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
 
     expect(described_class.open(
              'http://127.0.0.1:1234/', spawn: spawn, platform: 'darwin',
-             browser_path: '/Applications/Google Chrome', on_exit: -> { exited << true },
+             browser_path: browser, on_exit: -> { exited << true },
              waitpid: ->(*) { raise Errno::ECHILD }, thread_factory: ->(&work) { work.call }
            )).to be(true)
     expect(exited).to eq([true])
@@ -215,7 +228,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
       raise Errno::ENOENT, 'synthetic-private-error'
     end
     expect(described_class.open('http://127.0.0.1/', spawn: spawn, platform: 'darwin',
-                                browser_path: '/Applications/Google Chrome')).to be(false)
+                                browser_path: browser)).to be(false)
     expect(File.exist?(directory)).to be(false)
     expect(messages.join).not_to include('synthetic-private-error')
   end
