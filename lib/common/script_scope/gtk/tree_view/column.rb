@@ -132,11 +132,14 @@ module Lich
           alias set_min_width min_width=
 
           # Retains bounded literal tooltip text and refreshes the column definition.
+          # Binary-tagged UTF-8 is re-tagged as ListStore does; other non-UTF-8
+          # text is refused here, not later at publication (1844:RC12).
           # @param value [String] bounded literal header tooltip
           # @return [void] result is not part of the supported script contract
           def set_tooltip_text(value)
-            session.refuse(self, :tooltip_text=) unless value.is_a?(String) && value.valid_encoding? && value.length <= Lich::WebUI::Contract::BOUNDS[:body_text]
-            @tooltip = value.dup.freeze
+            text = Gtk.wire_text(value) if value.is_a?(String)
+            session.refuse(self, :tooltip_text=) unless text && text.length <= Lich::WebUI::Contract::BOUNDS[:body_text]
+            @tooltip = text.dup.freeze
             changed!
           end
           alias tooltip_text= set_tooltip_text
