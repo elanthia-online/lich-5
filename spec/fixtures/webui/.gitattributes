@@ -1,3 +1,6 @@
+# The CSS decoration corpus is compared as stored bytes (a rebuild must equal
+# it byte for byte); never convert its line endings on checkout or commit.
+css-decoration.json -text
 # Setup fixtures are digest-checked as stored bytes (LF, CRLF or mixed);
 # never convert their line endings on checkout or commit.
 *_setup.lic -text
