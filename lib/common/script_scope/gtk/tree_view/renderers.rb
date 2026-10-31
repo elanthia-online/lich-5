@@ -94,11 +94,14 @@ module Lich
           def unwatch(column) = @columns.delete(column)
 
           # Literal display text is independent of the model's identity/sort value.
-          # @param value [Object] literal text converted with String before publication
+          # Binary-tagged UTF-8 is re-tagged as ListStore and TextBuffer do; other
+          # non-UTF-8 text is refused here, not later at projection (1844:RC10).
+          # @param value [String] literal text published as UTF-8
           # @return [void] result is not part of the supported script contract
           def text=(value)
-            session.refuse(self, :text=) unless value.is_a?(String) && value.valid_encoding? && value.length <= Lich::WebUI::Contract::BOUNDS[:body_text]
-            @cell_text = value.dup.freeze
+            text = Gtk.wire_text(value) if value.is_a?(String)
+            session.refuse(self, :text=) unless text && text.length <= Lich::WebUI::Contract::BOUNDS[:body_text]
+            @cell_text = text.dup.freeze
             @columns.each(&:changed!) unless @projecting_cell
           end
 
