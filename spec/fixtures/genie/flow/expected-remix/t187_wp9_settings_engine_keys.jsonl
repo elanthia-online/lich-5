@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"config","files":"<lab>/flow-oracle/tests/t187_cfg/settings.cfg","ignorescriptwarnings":true,"triggeroninput":true,"abortdupescript":true,"maxgosubdepth":3,"scripttimeout":5000}
+{"t":0,"ev":"input","text":".t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"script-start","script":"t187_wp9_settings_engine_keys","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t187_wp9_settings_engine_keys.cmd]","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"echo","text":"a","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"echo","text":"err=%lastscripterror","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"error","text":"[Script error in t187_wp9_settings_engine_keys.cmd(15): Maximum GOSUB depth (3) on: a3]","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"print","text":"Trace follows:","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"print","text":"\tpassing label x (5)\n\tpassing label x (6)\n\tgosub a1 (8)\n\tgosub a2 (12)\n\tgosub a3 (15)","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"print","text":"[Script aborted! (Run time: 0.00 seconds): t187_wp9_settings_engine_keys.cmd]","script":"t187_wp9_settings_engine_keys"}
+{"t":0,"ev":"script-finish","script":"t187_wp9_settings_engine_keys"}
+{"t":10,"ev":"end","live":0}

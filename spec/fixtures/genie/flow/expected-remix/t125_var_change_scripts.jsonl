@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t125_var_change_scripts"}
+{"t":0,"ev":"script-start","script":"t125_var_change_scripts","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t125_var_change_scripts.cmd]","script":"t125_var_change_scripts"}
+{"t":0,"ev":"var","name":"$foo","value":"1","src":"cmd"}
+{"t":100,"ev":"var","name":"$foo","value":"1","src":"cmd"}
+{"t":100,"ev":"echo","text":"EARLY","script":"t125_var_change_scripts"}
+{"t":100,"ev":"script-start","script":"_t125_watcher","args":""}
+{"t":100,"ev":"print","text":"[Script loaded: _t125_watcher.cmd]","script":"_t125_watcher"}
+{"t":200,"ev":"var","name":"$bar","value":"1","src":"cmd"}
+{"t":200,"ev":"echo","text":"B-SAW 1","script":"_t125_watcher"}
+{"t":300,"ev":"print","text":"[Script paused: _t125_watcher.cmd]","script":"_t125_watcher"}
+{"t":300,"ev":"script-pause","script":"_t125_watcher"}
+{"t":300,"ev":"var","name":"$bar","value":"2","src":"cmd"}
+{"t":400,"ev":"print","text":"[Script resumed: _t125_watcher.cmd]","script":"_t125_watcher"}
+{"t":400,"ev":"script-resume","script":"_t125_watcher"}
+{"t":500,"ev":"echo","text":"end","script":"t125_var_change_scripts"}
+{"t":500,"ev":"print","text":"[Script finished (In 0.50 seconds): t125_var_change_scripts.cmd]","script":"t125_var_change_scripts"}
+{"t":500,"ev":"script-finish","script":"t125_var_change_scripts"}
+{"t":2010,"ev":"end","live":1}

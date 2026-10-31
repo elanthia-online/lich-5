@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t148_corpus_automapper_waiteval_depth"}
+{"t":0,"ev":"script-start","script":"t148_corpus_automapper_waiteval_depth","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t148_corpus_automapper_waiteval_depth.cmd]","script":"t148_corpus_automapper_waiteval_depth"}
+{"t":210,"ev":"in","text":"GO"}
+{"t":220,"ev":"echo","text":"before 3","script":"t148_corpus_automapper_waiteval_depth"}
+{"t":520,"ev":"in","text":"Obvious paths: north."}
+{"t":520,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":520,"ev":"prompt-event"}
+{"t":530,"ev":"echo","text":"after 2","script":"t148_corpus_automapper_waiteval_depth"}
+{"t":530,"ev":"print","text":"[Script finished (In 0.53 seconds): t148_corpus_automapper_waiteval_depth.cmd]","script":"t148_corpus_automapper_waiteval_depth"}
+{"t":530,"ev":"script-finish","script":"t148_corpus_automapper_waiteval_depth"}
+{"t":730,"ev":"in","text":"Obvious paths: north."}
+{"t":730,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":730,"ev":"prompt-event"}
+{"t":940,"ev":"in","text":"Obvious paths: north."}
+{"t":940,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":940,"ev":"prompt-event"}
+{"t":1650,"ev":"end","live":0}

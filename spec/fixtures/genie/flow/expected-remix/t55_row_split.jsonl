@@ -1,0 +1,30 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t55_row_split"}
+{"t":0,"ev":"script-start","script":"t55_row_split","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t55_row_split.cmd]","script":"t55_row_split"}
+{"t":10,"ev":"input","text":"#trigger {^\\s*You also see the stairway} {#echo trig-own-line}"}
+{"t":20,"ev":"input","text":"#trigger {^A stone-paved walkway lies to the west\\.$} {#echo trig-desc-own-line}"}
+{"t":30,"ev":"input","text":"#trigger {lies to the west\\.\\s+You also see} {#echo trig-joined}"}
+{"t":40,"ev":"input","text":"#trigger {^PRE MID POST$} {#echo trig-whole}"}
+{"t":50,"ev":"input","text":"#trigger {^PRE\\s*$} {#echo trig-pre}"}
+{"t":60,"ev":"input","text":"#trigger {^MID$} {#echo trig-mid}"}
+{"t":70,"ev":"input","text":"#trigger {^ POST$} {#echo trig-post}"}
+{"t":180,"ev":"in","text":"<style id=\"\"/><preset id='roomDesc'>A stone-paved walkway lies to the west.</preset>  You also see the stairway to the street."}
+{"t":180,"ev":"trigger-fire","pattern":"^A stone-paved walkway lies to the west\\.$","text":"A stone-paved walkway lies to the west."}
+{"t":180,"ev":"cmdecho","text":"trig-desc-own-line","window":""}
+{"t":180,"ev":"trigger-fire","pattern":"^\\s*You also see the stairway","text":"You also see the stairway to the street."}
+{"t":180,"ev":"cmdecho","text":"trig-own-line","window":""}
+{"t":190,"ev":"echo","text":"own-line","script":"t55_row_split"}
+{"t":490,"ev":"in","text":"PRE <pushStream id='thoughts'/>MID<popStream/> POST"}
+{"t":490,"ev":"trigger-fire","pattern":"^PRE\\s*$","text":"PRE "}
+{"t":490,"ev":"cmdecho","text":"trig-pre","window":""}
+{"t":490,"ev":"trigger-fire","pattern":"^MID$","text":"MID"}
+{"t":490,"ev":"cmdecho","text":"trig-mid","window":""}
+{"t":490,"ev":"trigger-fire","pattern":"^ POST$","text":" POST"}
+{"t":490,"ev":"cmdecho","text":"trig-post","window":""}
+{"t":500,"ev":"echo","text":"pre:PRE","script":"t55_row_split"}
+{"t":800,"ev":"in","text":"DONETOK"}
+{"t":810,"ev":"echo","text":"done","script":"t55_row_split"}
+{"t":810,"ev":"print","text":"[Script finished (In 0.81 seconds): t55_row_split.cmd]","script":"t55_row_split"}
+{"t":810,"ev":"script-finish","script":"t55_row_split"}
+{"t":1110,"ev":"end","live":0}

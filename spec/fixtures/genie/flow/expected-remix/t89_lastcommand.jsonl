@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t89_lastcommand"}
+{"t":0,"ev":"script-start","script":"t89_lastcommand","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t89_lastcommand.cmd]","script":"t89_lastcommand"}
+{"t":0,"ev":"echo","text":"0 g=[] l=[%lastcommand]","script":"t89_lastcommand"}
+{"t":0,"ev":"send","text":"look","origin":"t89_lastcommand","user":false}
+{"t":0,"ev":"echo","text":"1 g=[look] l=[look]","script":"t89_lastcommand"}
+{"t":0,"ev":"queue","text":"smile","delay":0,"script":"t89_lastcommand"}
+{"t":10,"ev":"send","text":"smile","origin":"","user":false}
+{"t":100,"ev":"echo","text":"2 g=[smile] l=[look]","script":"t89_lastcommand"}
+{"t":100,"ev":"cmdecho","text":"hi","window":""}
+{"t":100,"ev":"echo","text":"3 g=[smile] l=[#echo hi]","script":"t89_lastcommand"}
+{"t":310,"ev":"input","text":"wave"}
+{"t":310,"ev":"send","text":"wave","origin":"","user":true}
+{"t":320,"ev":"in","text":"STEP1"}
+{"t":330,"ev":"echo","text":"4 g=[wave] l=[#echo hi] i=[wave]","script":"t89_lastcommand"}
+{"t":330,"ev":"print","text":"[Script finished (In 0.33 seconds): t89_lastcommand.cmd]","script":"t89_lastcommand"}
+{"t":330,"ev":"script-finish","script":"t89_lastcommand"}
+{"t":330,"ev":"end","live":0}

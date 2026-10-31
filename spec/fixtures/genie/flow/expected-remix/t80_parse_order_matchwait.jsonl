@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t80_parse_order_matchwait"}
+{"t":0,"ev":"script-start","script":"t80_parse_order_matchwait","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t80_parse_order_matchwait.cmd]","script":"t80_parse_order_matchwait"}
+{"t":110,"ev":"in","text":"HIT first"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":120,"ev":"echo","text":"m=first","script":"t80_parse_order_matchwait"}
+{"t":120,"ev":"print","text":"[Script finished (In 0.12 seconds): t80_parse_order_matchwait.cmd]","script":"t80_parse_order_matchwait"}
+{"t":120,"ev":"script-finish","script":"t80_parse_order_matchwait"}
+{"t":2120,"ev":"end","live":0}

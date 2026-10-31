@@ -1,0 +1,7 @@
+EXPECT look
+IN ...wait 1 seconds.
+PROMPT
+WAIT 1500
+EXPECT look
+IN You see a room.
+PROMPT

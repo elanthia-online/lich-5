@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t185_wp9_scripterror_label"}
+{"t":0,"ev":"script-start","script":"t185_wp9_scripterror_label","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t185_wp9_scripterror_label.cmd]","script":"t185_wp9_scripterror_label"}
+{"t":0,"ev":"echo","text":"start %lastscripterror","script":"t185_wp9_scripterror_label"}
+{"t":0,"ev":"error","text":"[Script error in t185_wp9_scripterror_label.cmd(4): Unknown label from GOTO: nowhere]","script":"t185_wp9_scripterror_label"}
+{"t":0,"ev":"print","text":"[Script moving to scripterror label (t185_wp9_scripterror_label.cmd)]","script":"t185_wp9_scripterror_label"}
+{"t":20,"ev":"echo","text":"caught Unknown label from GOTO: nowhere","script":"t185_wp9_scripterror_label"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t185_wp9_scripterror_label.cmd]","script":"t185_wp9_scripterror_label"}
+{"t":20,"ev":"script-finish","script":"t185_wp9_scripterror_label"}
+{"t":20,"ev":"end","live":0}

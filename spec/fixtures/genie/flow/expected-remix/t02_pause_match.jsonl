@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t02_pause_match"}
+{"t":0,"ev":"script-start","script":"t02_pause_match","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t02_pause_match.cmd]","script":"t02_pause_match"}
+{"t":0,"ev":"echo","text":"begin","script":"t02_pause_match"}
+{"t":2000,"ev":"echo","text":"after pause","script":"t02_pause_match"}
+{"t":2000,"ev":"send","text":"look","origin":"t02_pause_match","user":false}
+{"t":2000,"ev":"expect-ok","want":"look","got":"look"}
+{"t":2000,"ev":"in","text":"Something irrelevant."}
+{"t":2000,"ev":"in","text":"<prompt time=\"1700000002\">&gt;</prompt>"}
+{"t":2000,"ev":"prompt-event"}
+{"t":7000,"ev":"echo","text":"TIMEOUT","script":"t02_pause_match"}
+{"t":7000,"ev":"send","text":"timedout","origin":"t02_pause_match","user":false}
+{"t":8010,"ev":"in","text":"The orc dies."}
+{"t":8010,"ev":"in","text":"<prompt time=\"1700000008\">&gt;</prompt>"}
+{"t":8010,"ev":"prompt-event"}
+{"t":8020,"ev":"echo","text":"caught orc dies [The orc dies.]","script":"t02_pause_match"}
+{"t":8020,"ev":"print","text":"[Script finished (In 8.02 seconds): t02_pause_match.cmd(20)]","script":"t02_pause_match"}
+{"t":8020,"ev":"script-finish","script":"t02_pause_match"}
+{"t":8020,"ev":"end","live":0}

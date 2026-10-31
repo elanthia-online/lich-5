@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t92_spell_specials"}
+{"t":0,"ev":"script-start","script":"t92_spell_specials","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t92_spell_specials.cmd]","script":"t92_spell_specials"}
+{"t":0,"ev":"echo","text":"0 st=[0] pt=[@spellpreptime@] ctr=[0] sst=[0]","script":"t92_spell_specials"}
+{"t":1010,"ev":"in","text":"<spell exist='spell'>Dragon's Breath</spell><castTime value='1767222006'/>"}
+{"t":4000,"ev":"echo","text":"1 st=[2.99] pt=[5] ctr=[2.01] sst=[1767222001] ps=[Dragon's Breath]","script":"t92_spell_specials"}
+{"t":8000,"ev":"echo","text":"2 st=[6.99] pt=[5] ctr=[0]","script":"t92_spell_specials"}
+{"t":9020,"ev":"in","text":"<spell>None</spell>"}
+{"t":10000,"ev":"echo","text":"3 st=[0] pt=[@spellpreptime@] ctr=[0] sst=[1767222001]","script":"t92_spell_specials"}
+{"t":10000,"ev":"print","text":"[Script finished (In 10 seconds): t92_spell_specials.cmd]","script":"t92_spell_specials"}
+{"t":10000,"ev":"script-finish","script":"t92_spell_specials"}
+{"t":10000,"ev":"end","live":0}

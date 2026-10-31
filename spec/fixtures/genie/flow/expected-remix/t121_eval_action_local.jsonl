@@ -1,0 +1,24 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t121_eval_action_local"}
+{"t":0,"ev":"script-start","script":"t121_eval_action_local","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t121_eval_action_local.cmd]","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"LOCAL 1","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"LOCAL 1","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"BARE","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"ZERO 2","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"AB 1","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"AB 1","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"SHIFT","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"LBL here","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"SAVE","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"CNT 3","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"EM","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"EV","script":"t121_eval_action_local"}
+{"t":0,"ev":"cmdecho","text":"hello","window":""}
+{"t":0,"ev":"echo","text":"LC","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"UNV","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"CLS","script":"t121_eval_action_local"}
+{"t":0,"ev":"echo","text":"end","script":"t121_eval_action_local"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t121_eval_action_local.cmd]","script":"t121_eval_action_local"}
+{"t":0,"ev":"script-finish","script":"t121_eval_action_local"}
+{"t":10,"ev":"end","live":0}

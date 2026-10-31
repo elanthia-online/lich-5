@@ -1,0 +1,12 @@
+INPUT #trigger {^hel} {#echo A-fired;#class xx off}
+INPUT #trigger {^hello} {#echo B-fired} {xx}
+INPUT #trigger {^help} {#echo C-fired;#class yy on}
+INPUT #trigger {^helpme} {#echo D-fired} {yy}
+INPUT #class yy off
+WAIT 100
+IN hello there
+PROMPT
+WAIT 100
+IN helpme now
+PROMPT
+WAIT 300

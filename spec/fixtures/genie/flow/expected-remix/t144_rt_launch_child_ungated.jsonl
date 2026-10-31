@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t144_rt_launch_child_ungated"}
+{"t":0,"ev":"script-start","script":"t144_rt_launch_child_ungated","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t144_rt_launch_child_ungated.cmd]","script":"t144_rt_launch_child_ungated"}
+{"t":10,"ev":"in","text":"You swing."}
+{"t":10,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":3}
+{"t":10,"ev":"prompt-event"}
+{"t":320,"ev":"input","text":"._t144_child"}
+{"t":320,"ev":"script-start","script":"_t144_child","args":""}
+{"t":320,"ev":"print","text":"[Script loaded: _t144_child.cmd]","script":"_t144_child"}
+{"t":320,"ev":"queue","text":"look","delay":0,"script":"_t144_child"}
+{"t":320,"ev":"echo","text":"child-after-send","script":"_t144_child"}
+{"t":320,"ev":"send","text":"glance","origin":"_t144_child","user":false}
+{"t":320,"ev":"echo","text":"child-end","script":"_t144_child"}
+{"t":320,"ev":"print","text":"[Script finished (In 0.00 seconds): _t144_child.cmd]","script":"_t144_child"}
+{"t":320,"ev":"script-finish","script":"_t144_child"}
+{"t":3010,"ev":"send","text":"look","origin":"","user":false}
+{"t":6330,"ev":"end","live":1}

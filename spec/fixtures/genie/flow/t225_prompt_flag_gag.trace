@@ -1,0 +1,8 @@
+WAIT 100
+PROMPT
+IN hide me
+PROMPT
+IN blank this
+PROMPT
+IN shown line
+PROMPT

@@ -1,0 +1,33 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t152_move_variants"}
+{"t":0,"ev":"script-start","script":"t152_move_variants","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t152_move_variants.cmd]","script":"t152_move_variants"}
+{"t":0,"ev":"send","text":"go","origin":"t152_move_variants","user":false}
+{"t":0,"ev":"echo","text":"after-empty-move","script":"t152_move_variants"}
+{"t":0,"ev":"echo","text":"after-nextroom","script":"t152_move_variants"}
+{"t":0,"ev":"send","text":"north","origin":"t152_move_variants","user":false}
+{"t":10,"ev":"expect-ok","want":"north","got":"north"}
+{"t":10,"ev":"in","text":"Obvious paths: north."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":320,"ev":"in","text":"<streamWindow id='main' title='Story' subtitle=\" - [North Room]\" location='center' target='drop'/>"}
+{"t":320,"ev":"in","text":"<component id='room desc'>You are in North Room.</component>"}
+{"t":320,"ev":"move-event"}
+{"t":320,"ev":"in","text":"You also see a rock."}
+{"t":320,"ev":"echo","text":"act-a rock","script":"t152_move_variants"}
+{"t":320,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":320,"ev":"prompt-event"}
+{"t":330,"ev":"echo","text":"after-move","script":"t152_move_variants"}
+{"t":330,"ev":"send","text":"south","origin":"t152_move_variants","user":false}
+{"t":330,"ev":"expect-ok","want":"south","got":"south"}
+{"t":330,"ev":"in","text":"<streamWindow id='main' title='Story' subtitle=\" - [South Room]\" location='center' target='drop'/>"}
+{"t":330,"ev":"in","text":"<component id='room desc'>You are in South Room.</component>"}
+{"t":330,"ev":"move-event"}
+{"t":330,"ev":"in","text":"<roundTime value='1700000002'/>"}
+{"t":330,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":330,"ev":"roundtime-event","seconds":2}
+{"t":330,"ev":"prompt-event"}
+{"t":2330,"ev":"echo","text":"after-move-rt","script":"t152_move_variants"}
+{"t":2330,"ev":"print","text":"[Script finished (In 2.33 seconds): t152_move_variants.cmd]","script":"t152_move_variants"}
+{"t":2330,"ev":"script-finish","script":"t152_move_variants"}
+{"t":3340,"ev":"end","live":0}

@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t19_subscript"}
+{"t":0,"ev":"script-start","script":"t19_subscript","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t19_subscript.cmd]","script":"t19_subscript"}
+{"t":0,"ev":"script-start","script":"_t19_helper","args":"one"}
+{"t":0,"ev":"print","text":"[Script loaded: _t19_helper.cmd]","script":"_t19_helper"}
+{"t":0,"ev":"echo","text":"helper start one","script":"_t19_helper"}
+{"t":0,"ev":"var","name":"$helpervar","value":"fromhelper","src":"cmd"}
+{"t":500,"ev":"echo","text":"main sees fromhelper","script":"t19_subscript"}
+{"t":500,"ev":"print","text":"[Script aborted! (Run time: 0.50 seconds): _t19_helper.cmd]","script":"_t19_helper"}
+{"t":500,"ev":"script-finish","script":"_t19_helper"}
+{"t":1000,"ev":"echo","text":"main done","script":"t19_subscript"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t19_subscript.cmd]","script":"t19_subscript"}
+{"t":1000,"ev":"script-finish","script":"t19_subscript"}
+{"t":1000,"ev":"end","live":0}

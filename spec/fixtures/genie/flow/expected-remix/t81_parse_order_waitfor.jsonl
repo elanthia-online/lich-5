@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t81_parse_order_waitfor"}
+{"t":0,"ev":"script-start","script":"t81_parse_order_waitfor","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t81_parse_order_waitfor.cmd]","script":"t81_parse_order_waitfor"}
+{"t":110,"ev":"in","text":"x"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":120,"ev":"echo","text":"w=x","script":"t81_parse_order_waitfor"}
+{"t":120,"ev":"print","text":"[Script finished (In 0.12 seconds): t81_parse_order_waitfor.cmd]","script":"t81_parse_order_waitfor"}
+{"t":120,"ev":"script-finish","script":"t81_parse_order_waitfor"}
+{"t":2120,"ev":"end","live":0}

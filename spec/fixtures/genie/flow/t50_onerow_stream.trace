@@ -1,0 +1,4 @@
+EXPECT look
+IN <pushStream id='inv'/>a shiny rock<popStream/>
+IN plain text
+PROMPT

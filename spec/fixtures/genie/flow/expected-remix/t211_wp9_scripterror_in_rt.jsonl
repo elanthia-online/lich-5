@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t211_wp9_scripterror_in_rt"}
+{"t":0,"ev":"script-start","script":"t211_wp9_scripterror_in_rt","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t211_wp9_scripterror_in_rt.cmd]","script":"t211_wp9_scripterror_in_rt"}
+{"t":110,"ev":"in","text":"boom"}
+{"t":110,"ev":"error","text":"[Script error in t211_wp9_scripterror_in_rt.cmd(2): Invalid RegExp in matchre: x []","script":"t211_wp9_scripterror_in_rt"}
+{"t":110,"ev":"print","text":"[Script moving to scripterror label (t211_wp9_scripterror_in_rt.cmd)]","script":"t211_wp9_scripterror_in_rt"}
+{"t":110,"ev":"in","text":"<roundTime value='1700000005'/>"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"roundtime-event","seconds":5}
+{"t":110,"ev":"prompt-event"}
+{"t":120,"ev":"echo","text":"caught","script":"t211_wp9_scripterror_in_rt"}
+{"t":120,"ev":"print","text":"[Script finished (In 0.12 seconds): t211_wp9_scripterror_in_rt.cmd]","script":"t211_wp9_scripterror_in_rt"}
+{"t":120,"ev":"script-finish","script":"t211_wp9_scripterror_in_rt"}
+{"t":6120,"ev":"end","live":0}

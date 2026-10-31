@@ -1,0 +1,4 @@
+WAIT 1000
+IN <spell exist='spell'>Dragon's Breath</spell><castTime value='1767222006'/>
+WAIT 8000
+IN <spell>None</spell>
