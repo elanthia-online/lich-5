@@ -7,6 +7,8 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
+      - "spec/support/native_dll_holder.rb"
+      - "spec/lib/native_dll_holder_spec.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
@@ -21,6 +23,8 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
+      - "spec/support/native_dll_holder.rb"
+      - "spec/lib/native_dll_holder_spec.rb"
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
@@ -57,4 +61,4 @@ jobs:
         run: bundle exec rspec spec/lib/common/frontend_settings_spec.rb spec/lib/common/sharing_violation_retry_spec.rb
       - name: Run dependency recovery specs
         if: ${{ !cancelled() }}
-        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb
+        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb spec/lib/native_dll_holder_spec.rb

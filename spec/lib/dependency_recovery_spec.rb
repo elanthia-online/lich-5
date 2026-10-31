@@ -2,6 +2,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'pp'
 require 'rubygems/package'
 require 'stringio'
 require 'tmpdir'
@@ -71,6 +72,82 @@ RSpec.describe Lich::DependencyRecovery do
       powershell_runner: powershell_runner,
       helper_launcher: helper_launcher
     )
+  end
+
+  context 'Lich version ranges' do
+    let(:legacy) { gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body) }
+    let(:modern) do
+      gem_unit(name: 'sqlite3', artifact_url: 'https://example.test/new.gem', body: 'new payload').merge(
+        'id' => 'sqlite3-current', 'lich_versions' => { 'min_inclusive' => '5.24.0', 'max_exclusive' => '6.0' }
+      ).tap { |unit| unit.fetch('packages').first['version'] = '2.10.2' }
+    end
+
+    def ranged_recovery(version, units: [legacy, modern])
+      described_class.new(manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+                          lich_version: version, http_get: ->(_url) { manifest_for(units, ruby_abi: ruby_abi, platform: platform) })
+    end
+
+    it 'keeps the legacy closure below the lower bound and at the exclusive upper bound' do
+      %w[5.23.9 6.0].each do |version|
+        expect(ranged_recovery(version).recovery_plan(['sqlite3']).units.map { |unit| unit['id'] }).to eq(['sqlite3'])
+      end
+    end
+
+    it 'selects the modern closure at the inclusive lower bound for recovery and startup policy' do
+      recovery = ranged_recovery('5.24.0')
+      expect(recovery.recovery_plan(['sqlite3']).units).to eq([modern])
+      expect(recovery.policy_plan(['sqlite3']).target.fetch('units')).to eq([modern])
+    end
+
+    it 'rejects invalid, ambiguous or unknown-version range policy before downloading packages' do
+      expect(ranged_recovery(nil).recovery_plan(['sqlite3'])).not_to be_success
+      modern['lich_versions']['max_exclusive'] = '5.0'
+      expect(ranged_recovery('5.24').policy_plan(['sqlite3']).error).to include('empty Lich version range')
+      modern['lich_versions'].delete('max_exclusive')
+      duplicate = Marshal.load(Marshal.dump(modern)).merge('id' => 'overlap')
+      duplicate.fetch('packages').first['version'] = '2.10.3'
+      expect(ranged_recovery('5.24', units: [legacy, modern, duplicate]).recovery_plan(['sqlite3']).error).to include('ambiguous ranged')
+    end
+
+    it 'requires legacy coverage to precede ranges and rejects withdrawal through alternate units' do
+      expect(ranged_recovery('5.24', units: [modern, legacy]).recovery_plan(['sqlite3']).error).to include('legacy coverage')
+      target = { 'units' => [legacy], 'withdrawn_members' => ['sqlite3'] }
+      expect { Lich::RecoveryUnitPolicy.select(target, '5.24') }.to raise_error(Lich::RecoveryUnitPolicy::Error, /withdrawn member/)
+    end
+
+    it 'recovers an added transitive package only with the applicable newer closure' do
+      modern['members'] << 'added-child'
+      child = { 'name' => 'added-child', 'version' => '1.0', 'filename' => 'added-child.gem', 'sha256' => sha256('child bytes') }
+      modern['packages'] << child
+      modern['install_order'] = ['added-child', 'sqlite3']
+      modern['artifact'] = { 'url' => 'https://example.test/new.zip', 'filename' => 'new.zip', 'archive' => 'zip', 'sha256' => sha256('zip bytes') }
+      manifest = manifest_for([legacy, modern], ruby_abi: ruby_abi, platform: platform)
+      fetches = []
+      fetch = lambda do |url|
+        fetches << url
+        { manifest_url => manifest, 'https://example.test/new.zip' => 'zip bytes' }.fetch(url)
+      end
+      extractor = lambda do |_zip, destination|
+        File.write(File.join(destination, 'sqlite3.gem'), 'new payload')
+        File.write(File.join(destination, 'added-child.gem'), 'child bytes')
+      end
+      engine = described_class.new(manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+                                   lich_version: '5.24', http_get: fetch, extract_zip: extractor,
+                                   install_gem: ->(path, _home) { installed << File.basename(path) })
+      expect(engine.recover(['sqlite3'])).to be_success
+      expect(installed).to eq(['added-child.gem', 'sqlite3.gem'])
+      expect(fetches).not_to include(artifact_url)
+      expect(ranged_recovery('5.23').recovery_plan(['sqlite3']).units).to eq([legacy])
+    end
+
+    it 'never installs an older shared package via an overlapping legacy closure' do
+      legacy['members'] << 'parent'
+      legacy['packages'] << legacy['packages'].first.merge('name' => 'parent')
+      legacy['install_order'] << 'parent'
+      result = ranged_recovery('5.24').recovery_plan(['parent', 'sqlite3'])
+      expect(result).not_to be_success
+      expect(result.error).to include('does not approve recovery')
+    end
   end
 
   it 'installs an exact, hash-verified single-gem unit into the runtime Gem.dir' do
@@ -334,7 +411,7 @@ RSpec.describe Lich::DependencyRecovery do
     expect(payloads.first.fetch('packages').map { |package| package.fetch('name') }).to eq(%w[glib2 gtk3])
   end
 
-  it 'installs a native single-gem artifact in process rather than scheduling a replacement' do
+  it 'defers a native single-gem artifact until the current process has exited' do
     body = 'native gem payload'
     unit = {
       'id'            => 'ox',
@@ -353,9 +430,9 @@ RSpec.describe Lich::DependencyRecovery do
     result = subject.recover(['ox'])
 
     expect(result).to be_success
-    expect(result.restart_required).to be_nil
-    expect(launcher).not_to have_received(:call)
-    expect(installed.map(&:first)).to eq(["ox-1.2.3-#{platform}.gem"])
+    expect(result.restart_required).to be(true)
+    expect(launcher).to have_received(:call)
+    expect(installed).to be_empty
   end
 
   describe 'native replacement rollback' do
@@ -420,6 +497,65 @@ RSpec.describe Lich::DependencyRecovery do
       end
       allow(subject).to receive(:wait_for_parent_exit)
       allow(subject).to receive(:restart_lich)
+    end
+
+    it 'rolls back Windows sharing contention with a second DLL holder, then retries and relaunches with native load' do
+      skip 'requires the native Windows loader and sharing rules' unless Gem.win_platform?
+
+      require 'digest/sha2'
+      native = $LOADED_FEATURES.find { |path| File.basename(path).match?(/\Asha2\.(?:so|dll)\z/i) }
+      raise 'Ruby digest native fixture is unavailable' unless native && File.file?(native)
+      blocked = runtime_specs.first.extension_dir
+      held_library = File.join(blocked, 'original.dll')
+      FileUtils.cp(native, held_library)
+      originals = original_files.to_h { |path| [path, File.binread(path)] }
+      helper = File.expand_path('../support/native_dll_holder.rb', __dir__)
+      environment = { 'RUBYOPT' => nil, 'RUBYLIB' => nil, 'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil }
+      input, output, errors, holder = Open3.popen3(environment, RbConfig.ruby, helper, held_library, blocked)
+      ready = Timeout.timeout(15) { output.gets }
+      unless ready == "native-library-held\n"
+        diagnostics = Timeout.timeout(5) { errors.read }
+        raise "native library holder failed: #{diagnostics}"
+      end
+      allow(subject).to receive(:backup_path).and_call_original
+      allow(installer).to receive(:call).and_wrap_original do |install, path, home|
+        install.call(path, home)
+        spec = runtime_specs.find { |entry| File.basename(path) == "#{entry.full_name}.gem" }
+        FileUtils.cp(native, File.join(spec.extension_dir, 'original.dll'))
+      end
+      expect { subject.send(:run_windows_replacement!, payload) }.to raise_error(described_class::Error)
+      expect(subject).to have_received(:backup_path).with(blocked, kind_of(String), kind_of(Array))
+      expect(installer).not_to have_received(:call)
+      expect(subject).not_to have_received(:restart_lich)
+      expect(originals.keys.to_h { |path| [path, File.binread(path)] }).to eq(originals)
+      expect(Dir.glob(File.join(gem_home, '.lich-previous-runtime-*'))).to be_empty
+
+      input.write('x')
+      input.close
+      released = Timeout.timeout(15) { holder.value }
+      expect(released.success?).to be(true), errors.read
+      marker = File.join(recovery_temp_dir, 'native-relaunch-complete')
+      relaunch = File.join(recovery_temp_dir, 'native-relaunch.rb')
+      File.write(relaunch, "require 'fiddle'\nFiddle.dlopen(#{held_library.inspect}).close\nFile.write(#{marker.inspect}, 'native-load-ok')\n")
+      payload['restart'] = { 'program' => relaunch, 'argv' => [], 'chdir' => recovery_temp_dir }
+      allow(subject).to receive(:restart_lich).and_call_original
+      restarted = subject.send(:run_windows_replacement!, payload)
+      _pid, status = Timeout.timeout(15) { Process.waitpid2(restarted) }
+      restarted = nil
+      expect(status.success?).to be(true)
+      expect(File.read(marker)).to eq('native-load-ok')
+      expect(subject).to have_received(:restart_lich).once
+    ensure
+      input.close if input && !input.closed?
+      if holder&.alive?
+        Process.kill('KILL', holder.pid) rescue nil
+        holder.join(5)
+      end
+      [output, errors].compact.each { |io| io.close unless io.closed? }
+      if restarted
+        Process.kill('KILL', restarted) rescue nil
+        Process.waitpid(restarted) rescue nil
+      end
     end
 
     it 'restores completed moves and preserves untouched originals after a partial backup' do
@@ -808,6 +944,26 @@ RSpec.describe Lich::DependencyRecovery do
       expect(subject).to have_received(:restart_lich).once
     end
 
+    context 'when repairing a direct sqlite3 unit' do
+      let(:gem_name) { 'sqlite3' }
+
+      it 'checks the exact accepted sqlite3 in a fresh process before relaunching' do
+        subject.send(:run_windows_replacement!, payload)
+        expect(installed_versions).to eq(['2.0.0'])
+        expect(subject).to have_received(:restart_lich).once
+      end
+
+      context 'when the replacement cannot load' do
+        let(:replacement_body) { "raise LoadError, 'fixture sqlite DLL unavailable'\n" }
+
+        it 'restores the prior registration and stops instead of repeatedly restarting' do
+          expect { subject.send(:run_windows_replacement!, payload) }
+            .to raise_error(described_class::Error, /sqlite3 runtime could not load.*fixture sqlite DLL unavailable/m)
+          expect_original_runtime
+        end
+      end
+    end
+
     context 'when the bundle contains GTK' do
       let(:gem_name) { 'gtk3' }
 
@@ -997,6 +1153,94 @@ RSpec.describe Lich::DependencyRecovery do
 
     it 'accepts ordinary filenames' do
       expect { subject.send(:require_filename!, 'sqlite3.gem', 'artifact') }.not_to raise_error
+    end
+  end
+  describe 'accepted policy and upgrade transactions' do
+    let(:unit) { gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body) }
+    let(:manifest) { manifest_for([unit], ruby_abi: ruby_abi, platform: platform) }
+    let(:subject) { recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body }) }
+
+    it 'validates all applicable units even when an invalid one is not requested' do
+      invalid = gem_unit(name: 'other', artifact_url: artifact_url, body: artifact_body)
+      invalid['packages'].first['sha256'] = 'invalid'
+      data = manifest_for([unit, invalid], ruby_abi: ruby_abi, platform: platform)
+      subject = recovery(artifacts: { manifest_url => data })
+      expect(subject.policy_plan(['sqlite3']).error).to include('SHA-256')
+      expect(installed).to be_empty
+    end
+
+    it 'rejects duplicate applicable targets rather than picking the first' do
+      data = JSON.parse(manifest)
+      data['targets'] << data['targets'].first.dup
+      subject = recovery(artifacts: { manifest_url => JSON.generate(data) })
+      expect(subject.policy_plan(['sqlite3']).error).to include('duplicate targets')
+    end
+
+    it 'rejects empty policy rather than reporting all dependencies satisfied' do
+      subject = recovery(artifacts: { manifest_url => manifest_for([], ruby_abi: ruby_abi, platform: platform) })
+      expect(subject.policy_plan(['sqlite3']).error).to include('no recovery units')
+    end
+
+    it 'reports an unavailable policy without making runtime changes' do
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir, http_get: ->(_) { raise SocketError, 'offline' })
+      expect(subject.policy_plan(['sqlite3']).error).to include('offline')
+      expect(installed).to be_empty
+    end
+
+    it 'bounds the whole manifest fetch and parse operation' do
+      expect(Timeout).to receive(:timeout).with(described_class::MANIFEST_TIMEOUT_SECONDS).and_raise(Timeout::Error)
+      expect(subject.policy_plan(['sqlite3'])).not_to be_success
+      expect(installed).to be_empty
+    end
+
+    it 'rejects oversized manifest bytes' do
+      subject = recovery(artifacts: { manifest_url => 'x' * (described_class::MAX_MANIFEST_BYTES + 1) })
+      expect(subject.policy_plan(['sqlite3']).error).to include('size limit')
+    end
+
+    it 'bounds the whole staging operation before starting a helper' do
+      plan = subject.recovery_plan(['sqlite3'])
+      expect(Timeout).to receive(:timeout).with(described_class::DOWNLOAD_TIMEOUT_SECONDS).and_raise(Timeout::Error)
+      result = subject.recover(['sqlite3'], plan: plan, restart: true)
+      expect(result).not_to be_success
+      expect(installed).to be_empty
+      expect(Dir.children(recovery_temp_dir)).to be_empty
+    end
+
+    it 'starts only one helper for multiple complete units, including pure repairs' do
+      second = gem_unit(name: 'other', artifact_url: 'https://example.test/other.gem', body: 'other')
+      data = manifest_for([unit, second], ruby_abi: ruby_abi, platform: platform)
+      payloads = []
+      subject = recovery(artifacts: { manifest_url => data, artifact_url => artifact_body, 'https://example.test/other.gem' => 'other' },
+                         helper_launcher: ->(path) { payloads << JSON.parse(File.read(path)) })
+      result = subject.recover(%w[sqlite3 other], force: true, restart: true, preserve_newer: true)
+      expect(result).to be_success
+      expect(result.restart_required).to be(true)
+      expect(installed).to be_empty
+      expect(payloads.length).to eq(1)
+      expect(payloads.first.fetch('packages').map { |package| package.fetch('name') }).to eq(%w[sqlite3 other])
+      expect(payloads.first.fetch('preserve_newer')).to be(true)
+    end
+
+    it 'does not launch a repair helper when the gem home is unwritable' do
+      allow(File).to receive(:open).and_call_original
+      expect(File).to receive(:open).with(File.join(gem_home, described_class::LOCK_FILENAME), anything, anything).and_raise(Errno::EACCES)
+      expect(subject).not_to receive(:schedule_runtime_replacement)
+      result = subject.recover(['sqlite3'], restart: true)
+      expect(result.error).to include('Cannot write Ruby runtime gem directory')
+      expect(installed).to be_empty
+    end
+
+    it 'preserves a newer installed package when backing up versions for a floor repair' do
+      newer = Gem::Specification.new { |spec| spec.name = 'sqlite3'; spec.version = '9.0' }
+      newer.loaded_from = File.join(gem_home, 'specifications', 'sqlite3-9.0.gemspec')
+      FileUtils.mkdir_p(File.dirname(newer.loaded_from))
+      File.write(newer.loaded_from, 'newer registration')
+      allow(Gem::Specification).to receive(:find_all_by_name).with('sqlite3').and_return([newer])
+      moved = []
+      subject.send(:backup_existing_packages, unit.fetch('packages'), File.join(gem_home, 'backup'), moved, preserve_newer: true)
+      expect(moved).to be_empty
+      expect(File.read(newer.loaded_from)).to eq('newer registration')
     end
   end
 end

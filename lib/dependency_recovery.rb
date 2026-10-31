@@ -4,12 +4,14 @@ require 'fileutils'
 require 'json'
 require 'open-uri'
 require 'open3'
+require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
 require 'tempfile'
 require 'timeout'
 require 'tmpdir'
 require 'uri'
+require_relative 'recovery_unit_policy'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -27,6 +29,9 @@ module Lich
     LOCK_FILENAME = '.lich-dependency-recovery.lock'
     HTTP_OPEN_TIMEOUT_SECONDS = 10
     HTTP_READ_TIMEOUT_SECONDS = 60
+    MANIFEST_TIMEOUT_SECONDS = 30
+    DOWNLOAD_TIMEOUT_SECONDS = 300
+    MAX_MANIFEST_BYTES = 5 * 1024 * 1024
     NATIVE_LOAD_TIMEOUT_SECONDS = 60
     SHA256_PATTERN = /\Asha256:[0-9a-f]{64}\z/
     SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
@@ -43,7 +48,7 @@ module Lich
     # A validated, manifest-derived set of units. Planning intentionally
     # fetches no gem artifacts, so callers can obtain user consent before an
     # installation changes the runtime.
-    Plan = Struct.new(:units, :error, keyword_init: true) do
+    Plan = Struct.new(:units, :error, :target, :error_kind, keyword_init: true) do
       # @return [Boolean] whether the requested units are approved and valid
       def success?
         error.nil?
@@ -63,7 +68,8 @@ module Lich
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
                    http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
-                   helper_launcher: nil)
+                   helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
+      @lich_version = lich_version
       @manifest_url = manifest_url
       @gem_home = gem_home
       @temp_dir = temp_dir
@@ -90,6 +96,29 @@ module Lich
       Plan.new(units: [], error: "#{e.class}: #{e.message}")
     end
 
+    # The complete applicable target is checked before choosing required roots.
+    # RubyInstaller-provided roots need no artifact, and are checked separately.
+    def policy_plan(gem_names)
+      manifest = load_manifest
+      target = target_for(manifest)
+      raise Error, 'accepted policy has no recovery units' if target.fetch('units').empty?
+      target.fetch('units').each { |unit| validate_unit!(unit) }
+      ids = target.fetch('units').map { |unit| unit.fetch('id') }
+      raise Error, 'accepted policy has duplicate unit IDs' unless ids.uniq.length == ids.length
+      target.fetch('units').each do |unit|
+        unless unit.fetch('members').sort == unit.fetch('packages').map { |package| package.fetch('name') }.sort
+          raise Error, "unit #{unit.fetch('id')} members disagree with packages"
+        end
+      end
+      effective = target.merge('units' => RecoveryUnitPolicy.select(target, @lich_version))
+      requested = Array(gem_names).select { |name| effective.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
+      Plan.new(units: units_for(manifest, requested), target: effective)
+    rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
+    rescue StandardError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :invalid)
+    end
+
     # Downloads, verifies, and installs a previously approved manifest plan.
     # Installation always targets +Gem.dir+ (or the injected runtime directory),
     # never a user-controlled GEM_HOME.
@@ -97,8 +126,10 @@ module Lich
     # @param gem_names [Array<String>] approved gem names to restore
     # @param force [Boolean] reinstall even when the manifest version is present
     # @param plan [Plan, nil] plan obtained before user consent
+    # @param restart [Boolean] defer all replacements until this process exits
+    # @param preserve_newer [Boolean] retain installed versions above the policy floor
     # @return [Result]
-    def recover(gem_names, force: false, plan: nil)
+    def recover(gem_names, force: false, plan: nil, restart: false, preserve_newer: false)
       planned = plan || recovery_plan(gem_names)
       return Result.new(installed_gems: [], error: planned.error) unless planned.success?
 
@@ -107,18 +138,14 @@ module Lich
         # No runtime lock or Gem.dir write occurs until every requested unit is
         # downloaded, extracted, and hash-verified. An unreachable release
         # endpoint therefore fails closed without changing the runtime.
-        staged_units = planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) }
+        staged_units = Timeout.timeout(DOWNLOAD_TIMEOUT_SECONDS) { planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) } }
         with_install_lock do
-          replacement, direct = staged_units.partition { |staged| native_runtime_unit?(staged.fetch(:unit)) }
-          installed = direct.flat_map { |staged| install_staged_unit(staged, force: force) }
-
-          if replacement.empty?
-            Result.new(installed_gems: installed)
-          elsif replacement.length == 1
-            schedule_runtime_replacement(replacement.first, work_dir)
-            Result.new(installed_gems: installed, restart_required: true)
+          if restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+            schedule_runtime_replacement(staged_units, work_dir, preserve_newer: preserve_newer)
+            Result.new(installed_gems: [], restart_required: true)
           else
-            raise Error, 'multiple native runtime replacement units are not supported in one recovery'
+            installed = staged_units.flat_map { |staged| install_staged_unit(staged, force: force) }
+            Result.new(installed_gems: installed)
           end
         end
       end
@@ -163,7 +190,7 @@ module Lich
 
       require 'win32ole'
       WIN32OLE.new('WScript.Shell').Popup(
-        "Lich could not update the GTK runtime. See #{log_path} for details.",
+        "Lich could not update the Ruby gem runtime. See #{log_path} for details.",
         0, 'Lich5: Ruby Gem Recovery', 16
       )
     rescue StandardError
@@ -174,7 +201,7 @@ module Lich
 
     # @return [Hash] validated manifest document
     def load_manifest
-      document = JSON.parse(fetch(@manifest_url))
+      document = Timeout.timeout(MANIFEST_TIMEOUT_SECONDS) { JSON.parse(fetch(@manifest_url)) }
       raise Error, 'manifest must be a JSON object' unless document.is_a?(Hash)
       raise Error, "unsupported manifest schema #{document['schema'].inspect}" unless document['schema'] == 1
       raise Error, 'manifest targets must be an array' unless document['targets'].is_a?(Array)
@@ -182,19 +209,25 @@ module Lich
       document
     end
 
+    def target_for(manifest)
+      targets = manifest.fetch('targets').select do |candidate|
+        candidate.is_a?(Hash) && candidate['ruby_abi'] == ruby_abi && candidate['platform'] == Gem::Platform.local.to_s
+      end
+      raise Error, "manifest has no target for Ruby #{ruby_abi} on #{Gem::Platform.local}" if targets.empty?
+      raise Error, 'manifest has duplicate targets for this runtime' unless targets.length == 1
+      target = targets.first
+      raise Error, 'manifest target units must be an array' unless target['units'].is_a?(Array)
+      target
+    end
+
     # Selects units only from the exact Ruby ABI and platform that are running.
     # @param manifest [Hash]
     # @param requested [Array<String>]
     # @return [Array<Hash>]
     def units_for(manifest, requested)
-      target = manifest.fetch('targets').find do |candidate|
-        candidate.is_a?(Hash) &&
-          candidate['ruby_abi'] == ruby_abi &&
-          candidate['platform'] == Gem::Platform.local.to_s
-      end
-      raise Error, "manifest has no target for Ruby #{ruby_abi} on #{Gem::Platform.local}" unless target
+      target = target_for(manifest)
 
-      units = target['units']
+      units = RecoveryUnitPolicy.select(target, @lich_version)
       raise Error, 'manifest target units must be an array' unless units.is_a?(Array)
 
       selected = requested.map do |name|
@@ -306,7 +339,7 @@ module Lich
       artifact_cache[identity] = { path: artifact_path, package_dir: package_dir }
     end
 
-    # @param staged [Hash]
+    # @param staged_units [Array<Hash>]
     # @param force [Boolean]
     # @return [Array<String>] installed package names
     def install_staged_unit(staged, force:)
@@ -325,13 +358,13 @@ module Lich
       end
     end
 
-    # A ZIP unit containing native gems cannot safely be overwritten while the
+    # A unit containing native gems cannot safely be overwritten while the
     # Lich Ruby process is alive. It is replaced as one coherent suite after
     # this process exits, rather than mixing old and new native components.
     # @param unit [Hash]
     # @return [Boolean]
     def native_runtime_unit?(unit)
-      Gem.win_platform? && unit.fetch('artifact').fetch('archive') == 'zip' && unit.fetch('packages').any? do |package|
+      Gem.win_platform? && unit.fetch('packages').any? do |package|
         package.fetch('filename').end_with?("-#{Gem::Platform.local}.gem")
       end
     end
@@ -339,18 +372,28 @@ module Lich
     # @param staged [Hash]
     # @param work_dir [String]
     # @return [void]
-    def schedule_runtime_replacement(staged, work_dir)
+    def schedule_runtime_replacement(staged_units, work_dir, preserve_newer: false)
+      packages = {}
+      Array(staged_units).each do |staged|
+        by_name = staged.fetch(:unit).fetch('packages').to_h { |package| [package.fetch('name'), package] }
+        staged.fetch(:unit).fetch('install_order').each do |name|
+          package = by_name.fetch(name)
+          if packages.key?(name) && RecoveryUnitPolicy.package_identity(packages[name], Gem::Platform.local.to_s) != RecoveryUnitPolicy.package_identity(package, Gem::Platform.local.to_s)
+            raise Error, "conflicting replacement package identities for #{name}"
+          end
+          packages[name] ||= package.merge('path' => staged.fetch(:package_paths).fetch(name))
+        end
+      end
       payload_path = File.join(work_dir, 'native-runtime-replacement.json')
       payload = {
-        'schema'     => 1,
-        'parent_pid' => Process.pid,
-        'gem_home'   => @gem_home,
-        'temp_dir'   => @temp_dir,
-        'work_dir'   => work_dir,
-        'packages'   => staged.fetch(:unit).fetch('packages').map do |package|
-          package.merge('path' => staged.fetch(:package_paths).fetch(package.fetch('name')))
-        end,
-        'restart'    => {
+        'schema'         => 1,
+        'parent_pid'     => Process.pid,
+        'gem_home'       => @gem_home,
+        'temp_dir'       => @temp_dir,
+        'work_dir'       => work_dir,
+        'packages'       => packages.values,
+        'preserve_newer' => preserve_newer,
+        'restart'        => {
           'program' => File.expand_path($PROGRAM_NAME),
           'argv'    => ARGV,
           'chdir'   => Dir.pwd
@@ -408,7 +451,7 @@ module Lich
         moved = []
         replacements = []
         begin
-          backup_existing_packages(payload.fetch('packages'), rollback_dir, moved)
+          backup_existing_packages(payload.fetch('packages'), rollback_dir, moved, preserve_newer: payload['preserve_newer'] == true)
           refresh_rubygems!
           payload.fetch('packages').each do |package|
             verify_file!(package.fetch('path'), package.fetch('sha256'), "#{package.fetch('name')} gem")
@@ -476,10 +519,12 @@ module Lich
     # @param rollback_dir [String]
     # @param moved [Array<Array<String>>] caller-owned journal updated per move
     # @return [Array<Array<String>>] original and temporary paths
-    def backup_existing_packages(packages, rollback_dir, moved)
+    def backup_existing_packages(packages, rollback_dir, moved, preserve_newer: false)
       names = packages.map { |package| package.fetch('name') }.uniq
       specs = names.flat_map { |name| Gem::Specification.find_all_by_name(name) }.uniq(&:loaded_from)
       specs.each do |spec|
+        expected = packages.find { |package| package.fetch('name') == spec.name }
+        next if preserve_newer && spec.version > Gem::Version.new(expected.fetch('version'))
         [spec.full_gem_path, spec.loaded_from, spec.extension_dir].each do |path|
           next unless File.exist?(path)
           raise Error, "installed gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
@@ -574,20 +619,23 @@ module Lich
         installed = Gem::Specification.find_all_by_name(package.fetch('name'), requirement)
         raise Error, "#{package.fetch('name')} was not installed during native runtime replacement" if installed.empty?
       end
-      verify_gtk_load!(packages) if packages.any? { |package| package.fetch('name') == 'gtk3' }
+      entrypoints = %w[gtk3 sqlite3] & packages.map { |package| package.fetch('name') }
+      verify_native_load!(packages, entrypoints) unless entrypoints.empty?
     end
 
-    # Check the GTK entry point used by init.rb in a fresh process, before
+    # Check the native recovery entry points used by init.rb in a fresh process, before
     # discarding the prior suite. Loading it here would lock its native DLLs
     # and prevent rollback on Windows. A failed check never relaunches Lich.
     # @param packages [Array<Hash>]
+    # @param entrypoints [Array<String>]
     # @return [void]
-    def verify_gtk_load!(packages)
+    def verify_native_load!(packages, entrypoints)
+      label = entrypoints.include?('gtk3') ? 'GTK runtime' : 'sqlite3 runtime'
       script = <<~RUBY
         require 'rubygems'
         Gem.use_paths(ARGV.shift)
         ARGV.each_slice(2) { |name, version| gem(name, "= \#{version}") }
-        require 'gtk3'
+        #{entrypoints.inspect}.each { |name| require name }
       RUBY
       versions = packages.flat_map { |package| [package.fetch('name'), package.fetch('version')] }
       # RubyGems can activate a parent bundle before this script starts, even
@@ -596,7 +644,7 @@ module Lich
         'GEM_HOME' => @gem_home, 'GEM_PATH' => @gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
         'BUNDLER_SETUP' => nil, 'RUBYGEMS_GEMDEPS' => nil
       }
-      Tempfile.create(['lich-gtk-load-', '.log'], @temp_dir) do |log|
+      Tempfile.create(['lich-native-load-', '.log'], @temp_dir) do |log|
         pid = Process.spawn(environment, rubyw_binary, '-e', script, @gem_home, *versions, out: log, err: log)
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + NATIVE_LOAD_TIMEOUT_SECONDS
         loop do
@@ -605,9 +653,9 @@ module Lich
             break if finished.last.success?
 
             log.rewind
-            raise Error, "GTK runtime could not load after replacement: #{log.read.strip}"
+            raise Error, "#{label} could not load after replacement: #{log.read.strip}"
           end
-          raise Error, 'timed out checking the replacement GTK runtime' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+          raise Error, "timed out checking the replacement #{label}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
           sleep 0.05
         end
@@ -676,12 +724,18 @@ module Lich
     # @return [String]
     def fetch(url)
       uri = parse_https_uri!(url, 'manifest URL')
-      return @http_get.call(url) if @http_get
+      if @http_get
+        bytes = @http_get.call(url)
+        raise Error, 'manifest exceeds size limit' if bytes.bytesize > MAX_MANIFEST_BYTES
+        return bytes
+      end
 
       uri.open(http_open_options) do |remote|
         final_uri = remote.base_uri
         parse_https_uri!(final_uri.to_s, 'redirected manifest URL') if final_uri
-        remote.read
+        bytes = remote.read(MAX_MANIFEST_BYTES + 1)
+        raise Error, 'manifest exceeds size limit' if bytes.bytesize > MAX_MANIFEST_BYTES
+        bytes
       end
     end
 
