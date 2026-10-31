@@ -97,6 +97,8 @@ module Lich
           # Removes the widget once and runs each destroy handler independently.
           # A failed port teardown still retires the shadow state; its error is
           # re-raised for diagnostics, and host resources stay with the core.
+          # A destroy handler's SystemExit (owner live) propagates after the window
+          # leaves its session; the remaining handlers of this destroy are skipped.
           # @return [Widget] self, including repeated destruction
           def destroy
             session.synchronize do
@@ -110,8 +112,12 @@ module Lich
               ensure
                 @parent&.send(:forget_child, self)
                 @parent = nil
-                mark_destroyed
-                session.forget(self)
+                begin
+                  mark_destroyed
+                ensure
+                  # A destroy handler's SystemExit (owner live) must not keep the window in the session.
+                  session.forget(self)
+                end
               end
               self
             end
