@@ -37,6 +37,23 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     expect { host.registry.ensure_active!(owner) }.to raise_error(Lich::WebUI::Error)
   end
 
+  it 'runs an owner-bound hook once, for that owner only, and spends no host thread on other deaths' do
+    other = Object.new
+    seen = []
+    hooks << Lich::WebUI.before_owner_terminate(owner: owner) { |dying| seen << dying }
+    allow(Lich::WebUI::HostThread).to receive(:start).and_call_original
+
+    Lich::Common::ScriptDeath.run(other)
+    expect(seen).to be_empty
+    expect(Lich::WebUI::HostThread).not_to have_received(:start)
+
+    Lich::Common::ScriptDeath.run(owner)
+    Lich::Common::ScriptDeath.run(owner)
+
+    expect(seen).to eq([owner])
+    expect(Lich::WebUI::HostThread).to have_received(:start).once
+  end
+
   it 'retires the owner when a hook raises or exits, and still runs the remaining hooks' do
     host = Lich::WebUI.service
     Lich::WebUI.page(owner: owner, id: 'main', title: 'Main') {}
