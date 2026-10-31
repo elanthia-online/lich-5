@@ -80,8 +80,45 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     Lich::Common::ScriptDeath.run(owner)
 
     expect(host.registry.pages_for(owner)).to be_empty
-    expect(logged.grep(/WebUI pre-terminate hook did not finish within 0.2s/)).not_to be_empty
+    expect(logged.grep(/WebUI pre-terminate hook did not finish within 0.2s .*abandoning it \(not stopped\)/)).not_to be_empty
   ensure
     release&.push(true)
+  end
+
+  it 'bounds the wait at 5 seconds, matching the owner stop bound' do
+    expect(Lich::WebUI::BEFORE_TERMINATE_TIMEOUT).to eq(5)
+    expect(Lich::WebUI::BEFORE_TERMINATE_TIMEOUT).to eq(Lich::WebUI::Service::OWNER_STOP_TIMEOUT)
+  end
+
+  it 'waits for a hook that ends after the old 2 second bound, without abandoning it' do
+    host = Lich::WebUI.service
+    Lich::WebUI.page(owner: owner, id: 'main', title: 'Main') {}
+    started = Queue.new
+    release = Queue.new
+    finished = []
+    register do
+      started << true
+      release.pop
+      finished << :done
+    end
+
+    runner = Thread.new { Lich::Common::ScriptDeath.run(owner) }
+    expect(started.pop(timeout: 5)).to be(true)
+
+    # Hold the hook past the old 2 second bound, measured on the monotonic
+    # clock with a bounded poll; the runner must still be waiting.
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2.5
+    sleep 0.05 while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+    expect(runner).to be_alive
+    expect(logged.grep(/did not finish within/)).to be_empty
+
+    release << true
+    expect(runner.join(10)).not_to be_nil
+    expect(finished).to eq([:done])
+    expect(logged.grep(/did not finish within/)).to be_empty
+    expect(host.registry.pages_for(owner)).to be_empty
+  ensure
+    release&.push(true)
+    runner&.join(10)
   end
 end
