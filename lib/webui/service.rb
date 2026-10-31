@@ -16,6 +16,11 @@ module Lich
       ASSETS_DIR = File.expand_path('assets', __dir__).freeze
       EXIT_CLEANUP_MUTEX = Mutex.new
       private_constant :EXIT_CLEANUP_MUTEX
+      # Seconds an exiting Script owner gets to finish its own teardown before
+      # its UI is retired regardless (B3: the owner must not stay active).
+      # Ordinary cleanup takes milliseconds; at_exit handlers, die_with stops
+      # (Script::CHILD_JOIN_TIMEOUT each) and worker joins fit well inside it.
+      OWNER_STOP_TIMEOUT = 5
 
       # Registers one process-exit hook (per process) that closes the windows of
       # every service owning one. It covers ordinary exit and the default
@@ -303,16 +308,40 @@ module Lich
 
       private
 
-      # Retires an owner whose callback or render requested exit (B3), on a host
-      # thread so the request never runs termination inside the exiting callback.
+      # Stops an owner whose callback or render requested exit (B3), on a host
+      # thread: never inside the exiting callback, and never on the owner's
+      # dispatcher worker, which a script's cleanup may kill. A Script owner
+      # (one that responds to kill) is asked to stop asynchronously and gets
+      # OWNER_STOP_TIMEOUT for its own cleanup, which already closes a
+      # compatibility session with its windows and destroy handlers. Then, or
+      # once that bound expires, terminate_owner retires whatever remains; it
+      # is idempotent, so a cleanup that already ran it is harmless. An owner
+      # without kill is retired immediately.
       # @param owner [Object] owner to retire
       # @return [Thread] termination worker
       def request_owner_stop(owner)
         HostThread.start do
+          stop_owner_script(owner) if owner.respond_to?(:kill)
           terminate_owner(owner)
         rescue StandardError => error
           Diagnostics.log(@logger, :error, "WebUI owner stop failed: #{error.class}")
         end
+      end
+
+      # Requests a script-like owner's asynchronous stop and waits, bounded, for
+      # its teardown. A failed request or an expired bound is logged and falls
+      # through to the caller's terminate_owner.
+      # @param owner [#kill] owner whose callback exited
+      # @return [void]
+      def stop_owner_script(owner)
+        owner.kill(async: true)
+        return unless owner.respond_to?(:join)
+        return if owner.join(OWNER_STOP_TIMEOUT)
+
+        Diagnostics.log(@logger, :warning,
+                        "WebUI owner did not stop within #{OWNER_STOP_TIMEOUT}s owner=#{Diagnostics.owner_label(owner)}; retiring its pages")
+      rescue StandardError => error
+        Diagnostics.log(@logger, :error, "WebUI owner kill request failed owner=#{Diagnostics.owner_label(owner)} error=#{error.class}")
       end
 
       # Safe diagnostic for a window that could not be opened; never logs the URL.
