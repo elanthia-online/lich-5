@@ -57,6 +57,8 @@ jobs:
               'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
               'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
               'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
+              // setup-ruby in the browser job passes no ruby-version, so it reads this file.
+              '.ruby-version',
             ];
             const matches = path => WEBUI_PATHS.some(p => p.endsWith('/') || p.endsWith('_') ? path.startsWith(p) : path === p);
             if (context.eventName !== 'pull_request') {
