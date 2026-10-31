@@ -281,6 +281,11 @@ module Lich
         @tab_communicator.notify_data_changed(change_type, data)
       })
 
+      # Let Account Management's Create Character launch like a saved-entry Play
+      @account_manager_ui.set_play_callback(->(launch_data, login_context) {
+        handle_play_action(launch_data, login_context)
+      })
+
       # Register account manager to receive data change notifications
       @account_manager_ui.register_for_notifications(@tab_communicator)
     end

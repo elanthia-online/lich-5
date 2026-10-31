@@ -28,7 +28,8 @@ module Lich
         #
         # @param launch_data [Array<String>] Launch lines from Authentication::LaunchData.prepare
         # @param launch_context [Hash, nil] Optional context keys:
-        #   :char_name, :game_code, :frontend, :custom_launch, :dark_mode
+        #   :char_name, :game_code, :frontend, :custom_launch, :dark_mode,
+        #   :generator with :user_id (enter the character generator on that account)
         #   and optional directory overrides (:home_dir, :data_dir, :script_dir,
         #   :temp_dir, :map_dir, :log_dir, :backup_dir, :lib_dir,
         #   :active_session_dir).
@@ -98,9 +99,19 @@ module Lich
                             launch_map['CUSTOMLAUNCH']
                           end
 
-          raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
+          args = if context[:generator]
+                   # The generator has no character to log in as: the child must take
+                   # main's `--login NEW --account=` route, or it would look up a saved
+                   # character literally named "New".
+                   account = context[:user_id]
+                   raise ArgumentError, 'missing account for generator launcher spawn' if account.to_s.empty?
 
-          args = [entrypoint, '--login', character.to_s]
+                   [entrypoint, '--login', 'NEW', "--account=#{account}"]
+                 else
+                   raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
+
+                   [entrypoint, '--login', character.to_s]
+                 end
           if game_code && !game_code.to_s.empty?
             game_flag = Lich::Common::Authentication::LoginHelpers.format_launch_flag(game_code)
             args << game_flag if game_flag
