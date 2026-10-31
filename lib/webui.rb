@@ -228,17 +228,27 @@ module Lich
       # (for example compatibility windows and their destroy handlers) while
       # the owner is still admitted. ScriptDeath runs handlers in registration
       # order with no priority, so this is the only way to run ahead of the
-      # core handler. Hooks run for every script death, one at a time on a host
-      # thread (not the script's cleanup thread), each contained and bounded by
-      # BEFORE_TERMINATE_TIMEOUT: a raising, exiting or late hook is logged and
-      # never prevents or delays the owner's retirement beyond that bound.
+      # core handler. Hooks run one at a time on a host thread (not the script's
+      # cleanup thread), each contained and bounded by BEFORE_TERMINATE_TIMEOUT:
+      # a raising, exiting or late hook is logged and never prevents or delays
+      # the owner's retirement beyond that bound. A hook registered without an
+      # owner runs for every script death, which costs every death a host thread
+      # and a wait on its cleanup thread; a hook registered for one owner runs
+      # only for that owner's death, once, and other deaths pay nothing.
+      # @param owner [Object, nil] script the hook is for, or nil for every script
       # @yieldparam owner [Object] the dying script
       # @return [Proc] the registered hook
       # @raise [ArgumentError] without a block
-      def before_owner_terminate(&hook)
+      def before_owner_terminate(owner: nil, &hook)
         raise ArgumentError, 'hook block is required' unless hook
 
-        INITIALIZATION_MUTEX.synchronize { (@before_terminate_hooks ||= []) << hook }
+        INITIALIZATION_MUTEX.synchronize do
+          if owner
+            ((@owner_terminate_hooks ||= {}.compare_by_identity)[owner] ||= []) << hook
+          else
+            (@before_terminate_hooks ||= []) << hook
+          end
+        end
         hook
       end
 
@@ -247,7 +257,9 @@ module Lich
       # @return [void]
       # @api private
       def run_before_terminate_hooks(owner)
-        hooks = INITIALIZATION_MUTEX.synchronize { Array(@before_terminate_hooks).dup }
+        hooks = INITIALIZATION_MUTEX.synchronize do
+          Array(@before_terminate_hooks) + Array(@owner_terminate_hooks&.delete(owner))
+        end
         hooks.each do |hook|
           worker = HostThread.start do
             hook.call(owner)
