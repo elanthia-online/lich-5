@@ -344,11 +344,15 @@ module Lich
           end
 
           # Encodes literal text separately from option IDs and the clearing sentinel.
+          # Binary-tagged UTF-8 is re-tagged as ListStore does, so it publishes and
+          # matches a closed combo's UTF-8 labels; other non-UTF-8 text is refused
+          # here, not later at publication (1844:RC11).
           # @param text [String] literal text for the entry facade
           # @return [ComboBox] self
           # @api private
           def set_entry_text(text)
-            session.refuse(self, :text=) unless has_entry? && text.is_a?(String) && text.length <= Lich::WebUI::Contract::BOUNDS[:input_text] - 5
+            text = Gtk.wire_text(text) if text.is_a?(String)
+            session.refuse(self, :text=) unless has_entry? && text && text.length <= Lich::WebUI::Contract::BOUNDS[:input_text] - 5
             if @props[:editable]
               set_choice("text:#{text}")
             else
