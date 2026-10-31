@@ -79,6 +79,7 @@ for (const filename of [
   'spec/webui/browser.spec.cjs', 'spec/fixtures/webui/fixture.json', 'spec/lib/webui/runtime_spec.rb',
   'spec/lib/common/script_scope_widgets_spec.rb', 'spec/support/webui_browser.rb', 'spec/spec_helper.rb',
   'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
+  '.ruby-version', // setup-ruby reads it for the browser job (1852:RC10)
 ]) {
   test(`existing WebUI dependency remains selected: ${filename}`, async () => {
     assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'true']]);
