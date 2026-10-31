@@ -27,8 +27,9 @@ module Lich
     INITIALIZATION_MUTEX = Mutex.new
     # Seconds each before_owner_terminate hook gets before the dying script's
     # pages are retired without it. Hooks close already-known resources, which
-    # takes milliseconds; the bound matches the dispatcher's worker join.
-    BEFORE_TERMINATE_TIMEOUT = 2
+    # takes milliseconds; the bound only limits a join that returns as soon as
+    # the hook ends, so it matches Service::OWNER_STOP_TIMEOUT.
+    BEFORE_TERMINATE_TIMEOUT = 5
 
     class << self
       attr_writer :registry, :service
@@ -235,6 +236,13 @@ module Lich
       # owner runs for every script death, which costs every death a host thread
       # and a wait on its cleanup thread; a hook registered for one owner runs
       # only for that owner's death, once, and other deaths pay nothing.
+      #
+      # The bound limits the wait, not the hook: a hook still running when it
+      # expires is abandoned on its host thread, not stopped, and keeps running
+      # while the owner's pages are retired. A hook that can run long (for
+      # example closing a session with slow destroy handlers) must therefore
+      # tolerate its owner's pages being retired mid-run, and must not assume
+      # its work is finished or cancelled when the owner's death completes.
       # @param owner [Object, nil] script the hook is for, or nil for every script
       # @yieldparam owner [Object] the dying script
       # @return [Proc] the registered hook
@@ -270,7 +278,7 @@ module Lich
 
           if Lich.respond_to?(:log)
             Lich.log("warning: WebUI pre-terminate hook did not finish within #{BEFORE_TERMINATE_TIMEOUT}s " \
-                     "owner=#{Diagnostics.owner_label(owner)}; retiring its pages")
+                     "owner=#{Diagnostics.owner_label(owner)}; abandoning it (not stopped) and retiring its pages")
           end
         end
       end
