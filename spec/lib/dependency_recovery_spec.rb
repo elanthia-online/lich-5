@@ -1111,6 +1111,16 @@ RSpec.describe Lich::DependencyRecovery do
       expect(installed).to be_empty
     end
 
+    [Net::ProtocolError, Net::HTTPBadResponse].each do |error_class|
+      it "classifies #{error_class} as a policy acquisition failure" do
+        subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir, http_get: ->(_) { raise error_class, 'proxy failure' })
+        plan = subject.policy_plan(['sqlite3'])
+        expect(plan.error_kind).to eq(:acquisition)
+        expect(plan.error).to include('proxy failure')
+        expect(installed).to be_empty
+      end
+    end
+
     it 'bounds the whole manifest fetch and parse operation' do
       expect(Timeout).to receive(:timeout).with(described_class::MANIFEST_TIMEOUT_SECONDS).and_raise(Timeout::Error)
       expect(subject.policy_plan(['sqlite3'])).not_to be_success
@@ -1124,10 +1134,41 @@ RSpec.describe Lich::DependencyRecovery do
 
     it 'bounds the whole staging operation before starting a helper' do
       plan = subject.recovery_plan(['sqlite3'])
-      expect(Timeout).to receive(:timeout).with(described_class::DOWNLOAD_TIMEOUT_SECONDS).and_raise(Timeout::Error)
+      expect(Timeout).to receive(:timeout).with(described_class::DOWNLOAD_TIMEOUT_SECONDS, described_class::StagingTimeoutError).and_raise(described_class::StagingTimeoutError)
       result = subject.recover(['sqlite3'], plan: plan, restart: true)
       expect(result).not_to be_success
+      expect(result.error_kind).to eq(:timeout)
       expect(installed).to be_empty
+      expect(Dir.children(recovery_temp_dir)).to be_empty
+    end
+
+    it 'retains timeout classification through unit staging and removes partial downloads before any runtime write' do
+      plan = subject.recovery_plan(['sqlite3'])
+      expect(subject).not_to receive(:with_install_lock)
+      allow(subject).to receive(:download_to) do |_url, path|
+        File.binwrite(path, 'partial download')
+        raise Net::ReadTimeout, 'slow connection'
+      end
+      result = subject.recover(['sqlite3'], plan: plan, restart: true)
+      expect(result.error_kind).to eq(:timeout)
+      expect(result.error).to include('timed out')
+      expect(installed).to be_empty
+      expect(Dir.children(gem_home)).to be_empty
+      expect(Dir.children(recovery_temp_dir)).to be_empty
+    end
+
+    it 'cleans staging when the actual whole-transaction deadline interrupts a download' do
+      plan = subject.recovery_plan(['sqlite3'])
+      stub_const('Lich::DependencyRecovery::DOWNLOAD_TIMEOUT_SECONDS', 0.03)
+      expect(subject).not_to receive(:with_install_lock)
+      allow(subject).to receive(:download_to) do |_url, path|
+        File.binwrite(path, 'partial download')
+        sleep 1
+      end
+      result = subject.recover(['sqlite3'], plan: plan, restart: true)
+      expect(result.error_kind).to eq(:timeout)
+      expect(installed).to be_empty
+      expect(Dir.children(gem_home)).to be_empty
       expect(Dir.children(recovery_temp_dir)).to be_empty
     end
 

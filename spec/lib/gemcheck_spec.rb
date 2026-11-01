@@ -117,6 +117,15 @@ RSpec.describe Lich::GemCheck do
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
       end
 
+      it 'preserves the staging timeout type through Windows startup failure reporting' do
+        check.needed = ['sqlite3']
+        allow(recovery).to receive(:recover).and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'staging timed out', error_kind: :timeout))
+        expect(described_class).to receive(:alert) do |**args|
+          expect(args.fetch(:error)).to be_a(Lich::DependencyRecovery::StagingTimeoutError)
+        end
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+      end
+
       it 'does not repair or continue when consent is refused' do
         check.needed = ['sqlite3']
         allow(described_class).to receive(:recovery_units_approved?).and_return(false)
@@ -752,6 +761,15 @@ RSpec.describe Lich::GemCheck do
       body = described_class.build_alert_body([], error)
       expect(body).to include('Check your network connection and retry', 'Startup requires reachable policy')
       expect(body).not_to include("You're missing", 'Missing gems:')
+      expect(described_class).to receive(:alert_windows).with(body, download: false)
+      described_class.alert(error: error)
+    end
+
+    it 'gives a staging timeout retry guidance without an installer link' do
+      error = Lich::DependencyRecovery::StagingTimeoutError.new('staging timed out')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('download timed out', 'Check your connection and retry')
+      expect(body).not_to include('reinstall', "You're missing")
       expect(described_class).to receive(:alert_windows).with(body, download: false)
       described_class.alert(error: error)
     end

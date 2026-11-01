@@ -55,7 +55,7 @@ module Lich
           exit(result.restart_required ? 0 : 1)
         end
 
-        alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
+        alert(missing: missing, groups: groups, error: recovery_error(result))
         exit 1
       else
         alert(missing: missing, groups: groups)
@@ -78,9 +78,14 @@ module Lich
 
       write_recovery_log(missing: check.needed, groups: groups, units: check.plan.units)
       result = recovery.recover(check.needed, force: true, plan: check.plan, restart: true, preserve_newer: true)
-      raise DependencyRecovery::Error, result.error unless result.success?
+      raise recovery_error(result) unless result.success?
       raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
       exit 0
+    end
+
+    def recovery_error(result)
+      type = result.error_kind == :timeout ? DependencyRecovery::StagingTimeoutError : DependencyRecovery::Error
+      type.new(result.error)
     end
 
     # Load Bundler only for non-Windows declaration/recovery operations. The
@@ -346,11 +351,13 @@ module Lich
     end
 
     def policy_failure?(error)
-      error.is_a?(AcceptedGemPolicy::PolicyError) || error.is_a?(DeclarationError)
+      error.is_a?(AcceptedGemPolicy::PolicyError) || error.is_a?(DeclarationError) || error.is_a?(DependencyRecovery::StagingTimeoutError)
     end
 
     def failure_message(error)
       case error
+      when DependencyRecovery::StagingTimeoutError
+        "The runtime recovery download timed out.\nCheck your connection and retry. If it repeats, use a faster connection or contact the release maintainer."
       when AcceptedGemPolicy::AcquisitionError
         "Lich could not retrieve the accepted runtime policy.\nCheck your network connection and retry. Startup requires reachable policy."
       when AcceptedGemPolicy::CoverageError
