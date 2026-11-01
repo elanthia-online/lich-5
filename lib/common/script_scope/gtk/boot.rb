@@ -107,18 +107,22 @@ module Lich
         # An owner whose death close has begun gets no new session: its pre-terminate
         # hook has already run (or is running) and would never close another, so a
         # session created now, for example by a widget built in a destroy handler,
-        # would stay held with a hook that never fires. An owner that is merely
+        # would stay held with a hook that never fires. The same holds for an owner
+        # that never used Gtk, whose core pre-terminate hooks have already run
+        # (Lich::WebUI.owner_terminate_hooks_done?): its first widget, built by a
+        # worker unwinding after the hooks, gets no session either (1836:RC22).
+        # Both refuse through the closed-owner error below. An owner that is merely
         # stopping, before its death close, still gets one (1845:RC12).
         # @return [Session]
         # @raise [UnsupportedOperation] when no Script owns the call, or the owner's
-        #   death close has begun and it has no session
+        #   death close has begun or its pre-terminate hooks have run, and it has no session
         def self.session
           owner = Script.current
           raise UnsupportedOperation, 'script owner is required for Gtk' unless owner
 
           current = @mutex.synchronize do
             @sessions[owner] ||= begin
-              if @closed_owners.key?(owner)
+              if @closed_owners.key?(owner) || Lich::WebUI.owner_terminate_hooks_done?(owner)
                 raise UnsupportedOperation, "#{owner.name}: Gtk session is closed because the script is past its death close"
               end
 

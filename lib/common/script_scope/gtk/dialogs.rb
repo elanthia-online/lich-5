@@ -13,14 +13,15 @@ module Lich
           # @param flags [Array<Symbol>, Symbol] modal/destroy_with_parent compatibility flags
           # @param type [Symbol] :info or :error
           # @param buttons [Symbol] :ok only
-          # @param message [Object] content converted to plain text
+          # @param message [Object] content converted to plain text; binary-tagged UTF-8 is
+          #   re-tagged and other non-UTF-8 text is refused at construction
           # @raise [UnsupportedOperation] for unsupported dialog forms
           def initialize(parent:, flags:, type:, buttons:, message:)
             super()
             valid_flags = Array(flags) - %i[modal destroy_with_parent]
             session.refuse(self, :new) unless parent.is_a?(Window) && parent.session.equal?(session)
             session.refuse(self, :new) unless valid_flags.empty? && %i[info error].include?(type) && buttons == :ok
-            @message = String(message)
+            @message = wire_literal(message, :new)
             @title = type == :error ? 'Error' : 'Information'
             @dialog_parent = parent
             parent.own_dialog(self)

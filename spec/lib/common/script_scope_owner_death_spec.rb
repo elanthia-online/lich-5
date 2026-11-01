@@ -127,6 +127,56 @@ RSpec.describe 'script compatibility close on script death' do
     expect(output).to eq("ready\n")
   end
 
+  # 1836:RC22: an owner that never used Gtk has no shim hook, so the refusal
+  # above cannot key on it. Its killed worker's ensure builds a first widget
+  # after the core has run the owner's pre-terminate hooks; a session created
+  # then would be held with a terminate hook that never fires.
+  it 'refuses a first session for an owner whose pre-terminate hooks have already run' do
+    output, errors, status = run_fresh(<<~RUBY_CODE)
+      service = Lich::WebUI::Service.new(logger: ->(*) {})
+      Lich::WebUI.instance_variable_set(:@service, service)
+      owner = new_owner('first.lic')
+      core_done = false
+      seen = Queue.new
+      # Registered after the core's handler, so it runs once the hooks have run
+      # and keeps the owner running (still the worker's Script.current) a while.
+      Lich::Common::ScriptDeath.on_death do |dying|
+        next unless dying.equal?(owner)
+
+        core_done = true
+        sleep 1.0
+      end
+      stop_owner(owner) do
+        parked = Queue.new
+        Thread.new do
+          owner.thread_group.add(Thread.current)
+          begin
+            parked << true
+            sleep
+          ensure
+            deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 6
+            sleep 0.005 until core_done || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+            seen << [:hooks_done, Lich::WebUI.owner_terminate_hooks_done?(owner)]
+            seen << [:current, SCRIPT.current.equal?(owner)]
+            seen << [:label, (GTK::Label.new('late') && :built rescue $!.class.name)]
+            seen << [:session, (GTK.session && :built rescue $!.class.name)]
+          end
+        end
+        abort 'worker did not park' unless parked.pop(timeout: 5)
+      end
+      events = 4.times.map { seen.pop(timeout: 6) }
+      refused = 'Lich::Common::ScriptScope::Gtk::UnsupportedOperation'
+      abort "seen: \#{events.inspect}" unless events == [[:hooks_done, true], [:current, true], [:label, refused], [:session, refused]]
+      abort 'a session is retained' unless GTK.instance_variable_get(:@sessions).empty?
+      hooks = Lich::WebUI.instance_variable_get(:@owner_terminate_hooks)
+      abort 'a terminate hook is retained' if hooks&.key?(owner)
+      service.stop
+    RUBY_CODE
+
+    expect([errors, status.success?]).to eq(['', true])
+    expect(output).to eq("ready\n")
+  end
+
   it 'still lets a stopping owner build its first widget before the death close' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       service = Lich::WebUI::Service.new(logger: ->(*) {})
