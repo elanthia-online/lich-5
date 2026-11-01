@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative '../../script_death'
 require_relative '../../../webui'
 require_relative 'session'
 require_relative 'scheduling'
@@ -80,6 +79,9 @@ module Lich
         end
 
         @sessions = {}.compare_by_identity
+        # Owners whose death close has begun (1845:RC12). Weak: the marker must
+        # not keep a dead Script alive.
+        @closed_owners = Lich::WebUI::WeakIdentityMap.new
         @mutex = Mutex.new
 
         # Checks the advertised compatibility version without loading native GTK.
@@ -102,13 +104,27 @@ module Lich
 
         # Finds or creates the running Script's identity-owned compatibility session.
         # Retains callback attribution on the current thread without loading native GTK.
+        # An owner whose death close has begun gets no new session: its pre-terminate
+        # hook has already run (or is running) and would never close another, so a
+        # session created now, for example by a widget built in a destroy handler,
+        # would stay held with a hook that never fires. An owner that is merely
+        # stopping, before its death close, still gets one (1845:RC12).
         # @return [Session]
-        # @raise [UnsupportedOperation] when no Script owns the call
+        # @raise [UnsupportedOperation] when no Script owns the call, or the owner's
+        #   death close has begun and it has no session
         def self.session
           owner = Script.current
           raise UnsupportedOperation, 'script owner is required for Gtk' unless owner
 
-          current = @mutex.synchronize { @sessions[owner] ||= Session.new(owner).tap { |created| close_on_death(owner, created) } }
+          current = @mutex.synchronize do
+            @sessions[owner] ||= begin
+              if @closed_owners.key?(owner)
+                raise UnsupportedOperation, "#{owner.name}: Gtk session is closed because the script is past its death close"
+              end
+
+              Session.new(owner).tap { |created| close_on_death(owner, created) }
+            end
+          end
           Thread.current.thread_variable_set(:lich_script_compatibility_session, current)
           current
         end
@@ -189,11 +205,15 @@ module Lich
         # when its session is created: the hook runner costs a host thread and a
         # wait on the cleanup thread per hook, and scripts that never used Gtk
         # must not pay it. It runs on a host thread, bounded by
-        # Lich::WebUI::BEFORE_TERMINATE_TIMEOUT.
+        # Lich::WebUI::BEFORE_TERMINATE_TIMEOUT. The hook marks the owner closed
+        # before it drops the session, so no later call recreates one (1845:RC12).
         # @api private
         def self.close_on_death(owner, session)
           Lich::WebUI.before_owner_terminate(owner: owner) do |dying|
-            @mutex.synchronize { @sessions.delete(dying) }
+            @mutex.synchronize do
+              @closed_owners[dying] = true
+              @sessions.delete(dying)
+            end
             session.close_for_owner_death
           end
         end
