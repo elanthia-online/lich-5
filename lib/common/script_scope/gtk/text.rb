@@ -504,10 +504,12 @@ module Lich
 
           # Creates a collapsed single-child disclosure with a literal label.
           # @param label [#to_s] visible heading; markup is not interpreted
+          # @raise [UnsupportedOperation] for text that is not UTF-8 or binary-tagged UTF-8
           def initialize(label = '')
             super()
-            @props.merge!(label: String(label), open: false)
-            @caption_label = Label.new(String(label))
+            text = wire_literal(label, :new)
+            @props.merge!(label: text, open: false)
+            @caption_label = Label.new(text)
             @caption_label.send(:caption_owner=, self)
           end
 
@@ -515,8 +517,9 @@ module Lich
           def label = read(:label)
 
           # @return [Expander] self after replacing the literal heading
+          # @raise [UnsupportedOperation] for text that is not UTF-8 or binary-tagged UTF-8
           def set_label(value)
-            text = String(value)
+            text = wire_literal(value, :label=)
             write(:label, text)
             @caption_label.text = text unless @caption_label.text == text
             self
