@@ -76,6 +76,35 @@ RSpec.describe Lich::RecoveryUnitPolicy do
     expect(described_class.select(target, '5.24.0-beta.1')).to eq([modern])
   end
 
+  it 'intentionally drops legacy-only members when a complete ranged closure replaces it' do
+    legacy['members'] << 'legacy-only'
+    legacy['packages'] << legacy['packages'].first.merge('name' => 'legacy-only', 'filename' => 'legacy-only-1.0.gem')
+    modern['members'] << 'new-only'
+    modern['packages'] << modern['packages'].first.merge('name' => 'new-only', 'filename' => 'new-only-1.0.gem')
+    expect(described_class.select(target, '5.23.0', strict: true)).to eq([legacy])
+    expect(described_class.select(target, '5.24.0', strict: true).flat_map { |entry| entry.fetch('members') }).to eq(%w[os new-only])
+  end
+
+  it 'accepts a legacy_unit reference only to preceding overlapping legacy coverage' do
+    modern['legacy_unit'] = legacy.fetch('id')
+    expect(described_class.select(target, '5.24.0', strict: true)).to eq([modern])
+    modern['legacy_unit'] = 'missing'
+    expect { described_class.validate!(target) }.to raise_error(described_class::Error, /legacy coverage/)
+    modern['legacy_unit'] = legacy.fetch('id')
+    target['units'] = [modern, legacy]
+    expect { described_class.validate!(target) }.to raise_error(described_class::Error, /legacy coverage/)
+  end
+
+  it 'rejects a legacy_unit reference whose named predecessor shares no members' do
+    unrelated = unit('unrelated').merge('members' => ['unrelated'])
+    unrelated['packages'] = [unrelated['packages'].first.merge('name' => 'unrelated')]
+    modern['legacy_unit'] = 'unrelated'
+    target['units'] = [legacy, unrelated, modern]
+    [true, false].each do |strict|
+      expect { described_class.select(target, '5.24.0', strict: strict) }.to raise_error(described_class::Error, /legacy coverage/)
+    end
+  end
+
   it 'starts a healthy installation despite unrelated lifecycle documentation' do
     unrelated = unit('unrelated').merge('members' => ['unrelated'], 'install_order' => ['unrelated'])
     unrelated['packages'] = [unrelated['packages'].first.merge('name' => 'unrelated')]

@@ -54,11 +54,20 @@ digests use bare lowercase hex. Existing installer provenance fields remain.
 `--manifest PATH --provenance PATH` supports offline validation. This is a
 build/release check; it does not install gems or change startup recovery.
 
-The CI contract job always reports and is included in `ci-gate`. Stable and
-prerelease workflows recheck before Release Please can write, and verify the
-downloaded installer before attaching it. Manual asset rebuilds check the
+The CI contract job always reports and is included in `ci-gate`.
+All PRs intentionally check the live contract, including unrelated changes:
+unavailable or nonconformant accepted recovery keeps the aggregate check red
+until the producer handoff is restored. There is no path-filter exemption.
+Stable and prerelease workflows recheck before Release Please can write, and
+verify the downloaded installer before attaching it. Manual asset rebuilds check the
 target tag's Gemfile and lock before uploads, using the workflow checkout's
 checker. Skipping installer attachment does not bypass the recovery check.
+Only draft tags with supported static declarations and a Windows projection
+matching the currently accepted contract are eligible. Pre-contract or
+incompatible older tags are intentionally unsupported by this workflow; there
+is no bypass input. A compatible older tag can still pass, so eligibility is
+not determined by the tag's age alone. The workflow rejects a non-draft release
+before checking its contract, and both checks precede all asset writes.
 
 Release order: prepare the candidate lock, have an administrator select its
 full SHA in Ruby4Lich5, promote tested recovery and publish its matching tested
@@ -123,10 +132,17 @@ complete units before downloading artifacts or changing the runtime. Refusal,
 missing confirmation UI or the two-minute consent timeout stops startup and
 records the reason in `temp/lich5-missing-gems.log`.
 
-Manifest lookup and parsing have a 30-second total deadline and a 5 MiB limit;
-artifact staging has a five-minute total deadline, plus per-connection/read
-limits. Unavailable service, an unsupported target, invalid declarations or
-invalid policy stops Windows startup with an explicit error. There is no cached
+Manifest lookup and parsing have a 30-second total deadline and a 5 MiB limit.
+The complete staging transaction has a separate 300-second total budget for all
+unit downloads, extraction and checksum verification. This bounds startup work;
+it is not a claim that every supported connection can transfer any closure in
+that time. No measured bundle-size or minimum-throughput guarantee is asserted.
+Timeout stops before runtime writes or helper launch, removes partial staging,
+and reports network retry guidance without an installer link. The next launch
+starts a new workspace, so a persistently slow connection may hit the cap again;
+use a faster connection or request a reviewed budget/package-sizing adjustment.
+Per-connection/read limits also apply. Unavailable service, an unsupported target,
+invalid declarations or invalid policy stops Windows startup with an explicit error. There is no cached
 policy or offline success fallback. A healthy local gem set still requires the
 accepted policy lookup.
 
@@ -268,6 +284,22 @@ Applicable ranged closures replace intersecting legacy closures as whole units;
 Lich never mixes a retained older shared package into a newer closure. Conflicting
 applicable range package identities fail closed. Release checks apply the same selection
 before comparing the candidate lock.
+
+Whole-closure replacement intentionally permits shrinking: legacy `{a,b}` and
+applicable ranged `{a,c}` select only `{a,c}` for the newer client. Legacy-only
+members, including advertised-only or GTK-role members, are not automatically
+retained and do not need tombstones merely because that version selects another
+closure. Required application roots must still be covered, and the producer's
+supported-client checks retain compatibility for published clients. This is the
+same selection rule used by the producer, not permission to withdraw service
+from supported older clients.
+
+A ranged unit may name `legacy_unit`, the ID of a preceding, unranged unit
+sharing at least one member. The reference validates legacy coverage; it does
+not choose the replacement or relax package identity checks. Selection still
+replaces every legacy unit intersecting the applicable ranged members. Missing,
+disjoint or later references are rejected. Omitting `legacy_unit` retains the
+normal preceding-overlap check.
 
 ### Explicitly versioned candidates and prerelease bounds
 

@@ -28,7 +28,7 @@ module Lich
           end
           legacy = units.take_while { |item| !item.equal?(unit) }.reject { |item| item.key?('lich_versions') }
           covered = if unit.key?('legacy_unit')
-                      legacy.any? { |item| item['id'] == unit['legacy_unit'] }
+                      legacy.any? { |item| item['id'] == unit['legacy_unit'] && !(item.fetch('members') & unit.fetch('members')).empty? }
                     else
                       legacy.any? { |item| !(item.fetch('members') & unit.fetch('members')).empty? }
                     end

@@ -2,6 +2,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'net/http'
 require 'open-uri'
 require 'open3'
 require 'openssl'
@@ -38,7 +39,7 @@ module Lich
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
 
     # Result of a successful or unsuccessful recovery attempt.
-    Result = Struct.new(:installed_gems, :error, :restart_required, keyword_init: true) do
+    Result = Struct.new(:installed_gems, :error, :restart_required, :error_kind, keyword_init: true) do
       # @return [Boolean] whether recovery completed successfully
       def success?
         error.nil?
@@ -57,6 +58,7 @@ module Lich
 
     # Raised internally for malformed manifests and rejected artifacts.
     class Error < StandardError; end
+    class StagingTimeoutError < Error; end
 
     # @param manifest_url [String] HTTPS manifest location
     # @param gem_home [String] runtime-owned installation directory
@@ -113,7 +115,7 @@ module Lich
       effective = target.merge('units' => RecoveryUnitPolicy.select(target, @lich_version))
       requested = Array(gem_names).select { |name| effective.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
       Plan.new(units: units_for(manifest, requested), target: effective)
-    rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError => e
+    rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError, Net::ProtocolError, Net::HTTPBadResponse => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
     rescue StandardError => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :invalid)
@@ -138,7 +140,7 @@ module Lich
         # No runtime lock or Gem.dir write occurs until every requested unit is
         # downloaded, extracted, and hash-verified. An unreachable release
         # endpoint therefore fails closed without changing the runtime.
-        staged_units = Timeout.timeout(DOWNLOAD_TIMEOUT_SECONDS) { planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) } }
+        staged_units = Timeout.timeout(DOWNLOAD_TIMEOUT_SECONDS, StagingTimeoutError) { planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) } }
         with_install_lock do
           if restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
             schedule_runtime_replacement(staged_units, work_dir, preserve_newer: preserve_newer)
@@ -151,6 +153,8 @@ module Lich
       end
       refresh_rubygems! unless result.restart_required
       result
+    rescue StagingTimeoutError => e
+      Result.new(installed_gems: [], error: "Recovery staging timed out: #{e.message}", error_kind: :timeout)
     rescue Error, JSON::ParserError, OpenURI::HTTPError, SocketError, SystemCallError => e
       Result.new(installed_gems: [], error: e.message)
     rescue StandardError => e
@@ -308,7 +312,9 @@ module Lich
         [package.fetch('name'), path]
       end
       { unit: unit, package_paths: package_paths }
-    rescue Error, OpenURI::HTTPError, SocketError, SystemCallError, Timeout::Error => e
+    rescue StagingTimeoutError, Timeout::Error
+      raise StagingTimeoutError, 'Recovery download or staging exceeded its time budget'
+    rescue Error, OpenURI::HTTPError, SocketError, SystemCallError => e
       raise Error, "Could not stage recovery unit #{unit.fetch('id')}: #{e.message}"
     end
 
