@@ -197,13 +197,22 @@ module Lich
         elsif XMLData.room_count == @@fuzzy_room_count && !@@current_room_id.nil?
           return @@list[@@current_room_id]
         end
-        ids = XMLData.room_id.zero? ? [] : ids_from_uid(XMLData.room_id)
-        return set_current(uid_room_unless_retitled(ids[0])) if ids.size == 1
+        loop do
+          count = XMLData.room_count
+          ids = XMLData.room_id.zero? ? [] : ids_from_uid(XMLData.room_id)
+          if ids.size == 1
+            id = uid_room_unless_retitled(ids[0], count)
+            # nil: the room changed during the text match; read its UID again.
+            next if id.nil?
 
-        if ids.size > 1 && !@@current_room_id.nil? && (id = match_multi_ids(ids))
-          return set_current(id)
+            return set_current(id)
+          end
+
+          if ids.size > 1 && !@@current_room_id.nil? && (id = match_multi_ids(ids))
+            return set_current(id)
+          end
+          return match_no_uid
         end
-        match_no_uid
       end
 
       # The room the live UID names, unless the live title is not one of its
@@ -214,13 +223,21 @@ module Lich
       # UID can be placed this way: the live UID vetoes any other. When the
       # text places the character nowhere, the UID room stands.
       #
+      # The text matchers retry against any room that arrives while they run.
+      # The UID was read for the room before it, so neither the UID room nor a
+      # text match vetted against that UID can stand for the new room.
+      #
       # @param id [Integer] the one room storing the live UID
-      # @return [Integer] the room id to make current
-      def self.uid_room_unless_retitled(id)
+      # @param count [Integer] the room count when the UID was read
+      # @return [Integer, nil] the room id to make current; +nil+ when the room
+      #   count moved past +count+ during the text match
+      def self.uid_room_unless_retitled(id, count)
         room = @@list[id]
         return id if room.nil? || Array(room.title).include?(XMLData.room_title)
 
         text_id = (script = Script.current) ? match_current(script) : match_fuzzy
+        return nil unless XMLData.room_count == count
+
         text_id || id
       end
 

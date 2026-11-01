@@ -1118,6 +1118,77 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
         expect(map_class.current&.id).to eq(30)
       end
     end
+
+    # The game thread can deliver the next room while the text match for the
+    # forge runs. The matchers retry against the new display; the UID room
+    # picked for the forge display must not be kept for it.
+    context 'when the next room arrives during the text match' do
+      let(:street_title) { '[[Crossing, Street]]' }
+
+      # A street room the next arrival's UID names, and a no-UID room with the
+      # street's live text that only a stale UID could let the text match win.
+      def build_street(copy: false)
+        build_room(40, title: street_title, description: 'A street as mapped.', exits: exits, uid: [900])
+        build_room(41, title: street_title, description: 'A street as shown.', exits: exits) if copy
+        map_class.load_uids
+      end
+
+      def arrive_at_street
+        live_room(title: street_title, description: 'A street as shown.', exits: exits, room_id: 900, room_count: 3)
+      end
+
+      # Deliver the street once, at the start of +matcher+.
+      def arrive_when_matching_starts(matcher)
+        allow(map_class).to receive(matcher).and_wrap_original do |original, *args|
+          arrive_at_street
+          original.call(*args)
+        end
+      end
+
+      # Deliver the street once, after the first text pass and before the
+      # matcher checks the room count.
+      def arrive_after_first_text_pass
+        arrived = false
+        allow(map_class).to receive(:match_live_text).and_wrap_original do |original, **kwargs|
+          result = original.call(**kwargs)
+          arrive_at_street unless arrived
+          arrived = true
+          result
+        end
+      end
+
+      [[:test_script, :match_current], [nil, :match_fuzzy]].each do |script, matcher|
+        context(script ? 'with a script running' : 'without a script') do
+          before(:each) { Script.current = script }
+
+          it 'resolves the newer UID room when the street arrives as matching starts' do
+            build_forges
+            build_street
+            enter_forge(title: cross_title)
+            arrive_when_matching_starts(matcher)
+            4.times { expect(map_class.current&.id).to eq(40) }
+            expect(map_class.previous_room_id).to eq(10)
+          end
+
+          it 'resolves the newer UID room when the street arrives after the first text pass' do
+            build_forges
+            build_street
+            enter_forge(title: cross_title)
+            arrive_after_first_text_pass
+            4.times { expect(map_class.current&.id).to eq(40) }
+            expect(map_class.previous_room_id).to eq(10)
+          end
+
+          it 'does not let a no-UID copy of the street win over its UID room' do
+            build_forges
+            build_street(copy: true)
+            enter_forge(title: cross_title)
+            arrive_when_matching_starts(matcher)
+            4.times { expect(map_class.current&.id).to eq(40) }
+          end
+        end
+      end
+    end
   end
 
   # ---------------------------------------------------------------------------
