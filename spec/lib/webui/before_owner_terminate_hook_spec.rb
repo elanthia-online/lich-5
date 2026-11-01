@@ -70,6 +70,36 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     expect(failures).to contain_exactly('error=LoadError', 'error=SystemExit')
   end
 
+  it 'records, per owner, that its hooks are done only once they have run (1836:RC22)' do
+    other = Object.new
+    during = []
+    register { |dying| during << Lich::WebUI.owner_terminate_hooks_done?(dying) }
+
+    expect(Lich::WebUI.owner_terminate_hooks_done?(owner)).to be(false)
+
+    Lich::Common::ScriptDeath.run(owner)
+
+    expect(during).to eq([false])
+    expect(Lich::WebUI.owner_terminate_hooks_done?(owner)).to be(true)
+    expect(Lich::WebUI.owner_terminate_hooks_done?(other)).to be(false)
+  end
+
+  it 'records the owner as done for an owner with no hooks, and when its hooks raise or are abandoned' do
+    stub_const('Lich::WebUI::BEFORE_TERMINATE_TIMEOUT', 0.2)
+    plain = Object.new
+    raising = Object.new
+    late = Object.new
+    release = Queue.new
+    Lich::WebUI.before_owner_terminate(owner: raising) { raise LoadError, 'missing' }
+    Lich::WebUI.before_owner_terminate(owner: late) { release.pop }
+
+    [plain, raising, late].each { |dying| Lich::Common::ScriptDeath.run(dying) }
+
+    expect([plain, raising, late].map { |dying| Lich::WebUI.owner_terminate_hooks_done?(dying) }).to eq([true] * 3)
+  ensure
+    release&.push(true)
+  end
+
   it 'bounds a hook that does not finish and retires the owner anyway' do
     stub_const('Lich::WebUI::BEFORE_TERMINATE_TIMEOUT', 0.2)
     host = Lich::WebUI.service
