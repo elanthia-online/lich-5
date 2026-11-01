@@ -76,6 +76,26 @@ RSpec.describe Lich::GemCheck do
       expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
     end
 
+    {
+      'a macOS Bundler preflight refusal'   => 'Xcode Command Line Tools are required to build native Ruby gems',
+      'a failed macOS Bundler installation' => 'Bundler install failed (see fixture log)'
+    }.each do |scenario, reason|
+      it "preserves the missing gems and original reason for #{scenario}" do
+        allow(described_class).to receive(:missing_gems).and_return(['sqlite3'])
+        allow(described_class).to receive(:bundler_recovery_supported?).and_return(true)
+        result = Lich::BundlerRecovery::Result.new(error: reason)
+        expect(described_class).to receive(:recover_with_bundler_consent!).with(['sqlite3'], groups: [:default]).and_return(result)
+        expect(Lich::DependencyRecovery).not_to receive(:new)
+        expect(described_class).to receive(:alert) do |args|
+          expect(args.fetch(:missing)).to eq(['sqlite3'])
+          expect(args.fetch(:groups)).to eq([:default])
+          expect(args.fetch(:error)).to be_an_instance_of(Lich::DependencyRecovery::Error)
+          expect(args.fetch(:error).message).to eq(reason)
+        end
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+      end
+    end
+
     context 'Windows accepted versions' do
       let(:dependencies) { [Gem::Dependency.new('sqlite3')] }
       let(:recovery) { instance_double(Lich::DependencyRecovery) }

@@ -55,7 +55,7 @@ module Lich
           exit(result.restart_required ? 0 : 1)
         end
 
-        alert(missing: missing, groups: groups, error: recovery_error(result))
+        alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
         exit 1
       else
         alert(missing: missing, groups: groups)
