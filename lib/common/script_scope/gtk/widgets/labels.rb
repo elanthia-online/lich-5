@@ -139,7 +139,11 @@ module Lich
             # Merchantical's located-item cue colors one entire literal label.
             # Reuse the shared background property, not raw HTML or fragment CSS.
             if (background = value.match(/\A<span background=(['"])([^'"<>]*)\1>([^<>]*)<\/span>\z/m))
-              color = Color.parse_markup(background[2])
+              # Later-layer constants (Color; defined at P13 or P14) are absent from
+              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+              # Retirement: replace these guards with plain constant references once this
+              # file is no longer shipped or tested without the later layers.
+              color = Color.parse_markup(background[2]) if defined?(Color)
               session.refuse(self, :set_markup) unless color
               replace_markup_font(background: color)
               write(:font_style, :normal)
@@ -177,6 +181,7 @@ module Lich
             # Boon's measured blue bold tip maps to literal text and the native
             # bounded color record. Source markup never reaches the browser.
             if (tip = value.match(/\A<span color="blue" weight="bold">([^<>]*)<\/span>\z/m))
+              session.refuse(self, :set_markup) unless defined?(Color)
               replace_markup_font(foreground: Color.parse('blue'))
               write(:emphasis, :strong)
               write(:font_style, :normal)

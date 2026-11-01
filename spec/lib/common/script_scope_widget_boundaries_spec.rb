@@ -9,7 +9,7 @@ require_relative '../../../lib/common/script_scope/gtk/widgets'
 require_relative '../../../lib/common/script_scope/gtk/size_group'
 
 # Shim callback, lifecycle and classification boundaries: the P12 shares of
-# 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC13 and RC14.
+# 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC13, RC14, RC20 and RC21.
 # Exit and LoadError paths run in a fresh process; the rest use a recording port.
 RSpec.describe 'script compatibility widget boundaries' do
   port_class = Class.new do
@@ -249,5 +249,103 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(second.set_active(true)).to equal(second)
     expect([first.active?, second.active?, third.active?]).to eq([true, false, false])
     expect(toggled).to be_empty
+  end
+
+  it 'appends a notebook page with a Label header before EventBox exists (1843:RC20)' do
+    # EventBox first loads with the layout layer, so this must hold without it.
+    hide_const('Lich::Common::ScriptScope::Gtk::EventBox')
+    notebook = gtk::Notebook.new
+    page = gtk::Label.new('page')
+    header = gtk::Label.new('one')
+
+    expect(notebook.append_page(page, header)).to eq(0)
+    expect([notebook.n_pages, notebook.get_nth_page(0)]).to eq([1, page])
+    expect { notebook.append_page(gtk::Label.new('p2'), gtk::Button.new('b')) }.to raise_error(gtk::UnsupportedOperation, /operation=append_page/)
+    expect(notebook.n_pages).to eq(1)
+  end
+
+  it 'still takes an EventBox-wrapped Label header once EventBox exists (1843:RC20)' do
+    stub_const('Lich::Common::ScriptScope::Gtk::EventBox', gtk::Box)
+    notebook = gtk::Notebook.new
+    wrapper = gtk::Box.new
+    wrapper.add(gtk::Label.new('wrapped'))
+
+    expect(notebook.append_page(gtk::Label.new('page'), wrapper)).to eq(0)
+    expect(notebook.n_pages).to eq(1)
+  end
+
+  # Classes that a later layer defines (layout, style, header bar, image). hide_const
+  # makes any layer behave as P12 and P13 do, where none of them exist.
+  later_layer = %w[
+    Table EventBox Overlay ScrolledWindow StateFlags CssProvider Color Image HeaderBar StyleContext
+  ].map { |name| "Lich::Common::ScriptScope::Gtk::#{name}" } +
+                %w[Screen Color RGBA EventMask WindowTypeHint].map { |name| "Lich::Common::ScriptScope::Gdk::#{name}" } +
+                ['Lich::Common::ScriptScope::Pango::FontDescription']
+
+  context 'without the classes a later layer defines (1843:RC21)' do
+    before { later_layer.each { |name| hide_const(name) } }
+
+    it 'valigns a widget inside a parent without raising NameError' do
+      box = gtk::VBox.new
+      child = gtk::Label.new('x')
+      box.add(child)
+      frame = gtk::Frame.new('f')
+      framed = gtk::Label.new('y')
+      frame.add(framed)
+
+      expect { child.valign = :start }.not_to raise_error
+      expect { framed.valign = :center }.not_to raise_error
+      expect([child.send(:read, :vertical_align), framed.send(:read, :vertical_align)]).to eq(%i[start center])
+    end
+
+    it 'refuses a valign parent that is neither supported nor defined yet' do
+      window = gtk::Window.new('w')
+      child = gtk::Label.new('x')
+      window.add(child)
+
+      expect { child.valign = :start }.to raise_error(gtk::UnsupportedOperation, /operation=valign_parent/)
+    end
+
+    # [description, refused operation, call against fresh widgets]
+    [
+      ['Widget#override_font', 'override_font', ->(w) { w[:label].override_font(Object.new) }],
+      ['Widget#style_context', 'style_context', ->(w) { w[:label].style_context }],
+      ['Widget#override_color', 'override_color', ->(w) { w[:label].override_color(:normal, Object.new) }],
+      ['Widget#override_background_color', 'override_background_color', ->(w) { w[:label].override_background_color(:normal, Object.new) }],
+      ['Entry#modify_base', 'modify_base', ->(w) { w[:entry].modify_base(:normal, Object.new) }],
+      ['Button#set_image', 'image=', ->(w) { w[:button].set_image(Object.new) }],
+      ['Window#set_titlebar', 'set_titlebar', ->(w) { w[:window].set_titlebar(Object.new) }],
+      ['Window#set_type_hint', 'set_type_hint', ->(w) { w[:window].set_type_hint(:utility) }],
+      ['Widget#add_events', 'add_events', ->(w) { w[:label].add_events(:scroll_mask) }],
+      ['Label#set_markup background span', 'set_markup', ->(w) { w[:label].set_markup('<span background="red">x</span>') }],
+      ['Label#set_markup blue bold tip', 'set_markup', ->(w) { w[:label].set_markup('<span color="blue" weight="bold">x</span>') }],
+      ['Label#set_markup foreground span', 'set_markup', ->(w) { w[:label].set_markup('<span foreground="#ff0000">x</span>') }],
+      ['Label#set_markup font_desc span', 'set_markup', ->(w) { w[:label].set_markup('<i><span font_desc="Sans 10">x</span></i>') }],
+      ['Session#screen_style_operation', 'screen_probe', ->(w) { w[:session].screen_style_operation(w[:label], :screen_probe, Object.new, Object.new) { nil } }]
+    ].each do |description, operation, call|
+      it "#{description} refuses instead of raising NameError" do
+        widgets = { label: gtk::Label.new('x'), entry: gtk::Entry.new, button: gtk::Button.new('b'), window: gtk::Window.new('w'), session: session }
+
+        expect { call.call(widgets) }.to raise_error(gtk::UnsupportedOperation, /operation=#{Regexp.escape(operation)}/)
+      end
+    end
+
+    it 'checks each later-layer class on its own when only some are loaded' do
+      session_ref = session
+      screen_class = Class.new { define_method(:session) { session_ref } }
+      stub_const('Lich::Common::ScriptScope::Gdk::Screen', screen_class)
+      stub_const('Lich::Common::ScriptScope::Gtk::StateFlags::NORMAL', :normal)
+      label = gtk::Label.new('x')
+
+      expect { session.screen_style_operation(label, :screen_probe, screen_class.new, Object.new) { nil } }
+        .to raise_error(gtk::UnsupportedOperation, /operation=screen_probe/)
+      expect { label.override_color(:normal, Object.new) }.to raise_error(gtk::UnsupportedOperation, /operation=override_color/)
+    end
+
+    it 'still removes a titlebar with nil' do
+      window = gtk::Window.new('w')
+
+      expect(window.set_titlebar(nil)).to equal(window)
+    end
   end
 end

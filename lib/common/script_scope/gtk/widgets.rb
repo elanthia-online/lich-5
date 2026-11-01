@@ -133,7 +133,11 @@ module Lich
           # @return [Widget] self
           # @raise [UnsupportedOperation] for widgets without a text-style contract
           def override_font(font)
-            valid = font.is_a?(Pango::FontDescription) && %i[text button text_input].include?(component_type)
+            # Later-layer constants (Pango::FontDescription; defined at P13 or P14) are absent from
+            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+            # Retirement: replace these guards with plain constant references once this
+            # file is no longer shipped or tested without the later layers.
+            valid = defined?(Pango::FontDescription) && font.is_a?(Pango::FontDescription) && %i[text button text_input].include?(component_type)
             session.refuse(self, :override_font) unless valid
             font.properties.each { |property, value| write(property, value) }
             write(:emphasis, font.weight == :bold ? :strong : :normal)
@@ -148,7 +152,11 @@ module Lich
           # @return [StyleContext]
           def style_context
             session.style_operation(self, :style_context) do
-              session.refuse(self, :style_context) if destroyed?
+              # Later-layer constants (StyleContext; defined at P13 or P14) are absent from
+              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+              # Retirement: replace these guards with plain constant references once this
+              # file is no longer shipped or tested without the later layers.
+              session.refuse(self, :style_context) if destroyed? || !defined?(StyleContext)
               @style_context ||= StyleContext.new(self)
             end
           end
