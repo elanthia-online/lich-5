@@ -43,8 +43,13 @@ module Lich
           # @return [void] result is not part of the supported script contract
           # @api private
           def validate_vertical_parent(alignment)
-            supported = parent.is_a?(Table) || parent.is_a?(Frame) || parent.is_a?(EventBox) || parent.is_a?(Overlay) ||
-                        (parent.is_a?(ScrolledWindow) && parent.children.length == 1) ||
+            # Later-layer constants (Table, EventBox, Overlay and ScrolledWindow; defined at P13 or P14) are absent from
+            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+            # Retirement: replace these guards with plain constant references once this
+            # file is no longer shipped or tested without the later layers.
+            supported = (defined?(Table) && parent.is_a?(Table)) || parent.is_a?(Frame) ||
+                        (defined?(EventBox) && parent.is_a?(EventBox)) || (defined?(Overlay) && parent.is_a?(Overlay)) ||
+                        (defined?(ScrolledWindow) && parent.is_a?(ScrolledWindow) && parent.children.length == 1) ||
                         (parent.is_a?(Box) && (!parent.vertical? || (alignment == :start && !expands?(:vertical))))
             session.refuse(self, :valign_parent) unless supported
           end

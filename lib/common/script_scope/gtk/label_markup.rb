@@ -75,6 +75,11 @@ module Lich
                 result[:scale] = scale
               end
               if attributes['font_desc']
+                # Later-layer constants (Pango::FontDescription and Color; defined at P13 or P14) are absent from
+                # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+                # Retirement: replace these guards with plain constant references once this
+                # file is no longer shipped or tested without the later layers.
+                refuse unless defined?(Pango::FontDescription)
                 font = Pango::FontDescription.new(attributes['font_desc'])
                 result.merge!(font.properties)
               end
@@ -84,7 +89,7 @@ module Lich
                 result[:letter_spacing] = spacing.to_i / 1024.0
               end
               if attributes['foreground']
-                color = Color.parse_markup(attributes['foreground'])
+                color = Color.parse_markup(attributes['foreground']) if defined?(Color)
                 refuse unless color
                 result[:foreground] = color
               end

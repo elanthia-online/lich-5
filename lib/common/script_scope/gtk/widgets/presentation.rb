@@ -58,7 +58,11 @@ module Lich
           # @return [Widget] self
           # @raise [UnsupportedOperation] for other state/color objects
           def override_background_color(state, colour)
-            session.refuse(self, :override_background_color) unless state == :normal && colour.is_a?(Gdk::RGBA)
+            # Later-layer constants (Gdk::RGBA and StateFlags; defined at P13 or P14) are absent from
+            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+            # Retirement: replace these guards with plain constant references once this
+            # file is no longer shipped or tested without the later layers.
+            session.refuse(self, :override_background_color) unless state == :normal && defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA)
             session.degrade(:background_colour, 'widget background colours follow browser theme; displayed values are retained')
             self
           end
@@ -70,7 +74,9 @@ module Lich
           # @raise [UnsupportedOperation] for unknown states, colors, widgets or owner/lifetime misuse
           def override_color(state, colour)
             session.style_operation(self, :override_color) do
-              session.refuse(self, :override_color) if destroyed? || state != StateFlags::NORMAL || !colour.is_a?(Gdk::RGBA)
+              invalid = destroyed? || !defined?(StateFlags::NORMAL) || state != StateFlags::NORMAL
+              invalid ||= !(defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA))
+              session.refuse(self, :override_color) if invalid
               if is_a?(Label) && !@link_markup
                 write(:foreground, @label_color || colour.to_h)
                 @props[:foreground] = colour.to_h

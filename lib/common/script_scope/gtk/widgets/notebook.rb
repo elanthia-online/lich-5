@@ -163,7 +163,11 @@ module Lich
                 valid &&= !ancestor.equal?(child)
                 ancestor = ancestor.parent
               end
-              text = label.is_a?(EventBox) ? label.children.first : label
+              # EventBox is defined by the layout layer (P14), which P12 and P13 trees
+              # load without; resolve it at call time. No EventBox means no wrapped header.
+              # Retirement: replace the guard with a plain is_a?(EventBox) once this file
+              # is no longer shipped or tested without layout.
+              text = defined?(EventBox) && label.is_a?(EventBox) ? label.children.first : label
               valid &&= label.is_a?(Widget) && label.session.equal?(session) && !label.destroyed? && label.parent.nil? &&
                         text.instance_of?(Label) && !text.destroyed? && text.session.equal?(session) && !label.equal?(child) &&
                         !label.tab_owner && !text.tab_owner

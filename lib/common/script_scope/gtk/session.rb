@@ -67,8 +67,12 @@ module Lich
           # @api private
           def screen_style_operation(receiver, operation, screen, provider)
             style_operation(receiver, operation) do
-              valid = screen.is_a?(Gdk::Screen) && screen.session.equal?(self) &&
-                      provider.is_a?(CssProvider) && provider.session.equal?(self)
+              # Later-layer constants (Gdk::Screen and CssProvider; defined at P13 or P14) are absent from
+              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+              # Retirement: replace these guards with plain constant references once this
+              # file is no longer shipped or tested without the later layers.
+              valid = defined?(Gdk::Screen) && screen.is_a?(Gdk::Screen) && screen.session.equal?(self) &&
+                      defined?(CssProvider) && provider.is_a?(CssProvider) && provider.session.equal?(self)
               refuse(receiver, operation) unless valid
               @screen_style_providers ||= {}.compare_by_identity
               yield @screen_style_providers
