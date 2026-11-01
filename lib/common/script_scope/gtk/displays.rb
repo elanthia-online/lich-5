@@ -224,13 +224,15 @@ module Lich
           def show_text? = @show_text == true
 
           # Retains bounded plain text even while hidden; nil selects percentage text.
-          # @param value [String, nil] literal progress text
+          # @param value [String, nil] literal progress text; binary-tagged UTF-8 is re-tagged
+          #   and other non-UTF-8 text is refused at the call
           # @return [ProgressBar] self
           def set_text(value)
-            valid = value.nil? || (value.is_a?(String) && value.length <= Lich::WebUI::Contract::BOUNDS[:short_text])
+            wired = Gtk.wire_text(value) if value.is_a?(String)
+            valid = value.nil? || (wired && wired.length <= Lich::WebUI::Contract::BOUNDS[:short_text])
             session.refuse(self, :text=) unless valid
             session.synchronize do
-              text = value&.dup&.freeze
+              text = wired&.dup&.freeze
               publish_progress_text(show_text?, text)
               @text = text
             end
