@@ -243,6 +243,10 @@ module Lich
       # example closing a session with slow destroy handlers) must therefore
       # tolerate its owner's pages being retired mid-run, and must not assume
       # its work is finished or cancelled when the owner's death completes.
+      # A hook registered for an owner whose hooks already ran never fires: the
+      # owner's workers can still be unwinding then (for example a killed
+      # worker's ensure), so a layer that registers a hook lazily must check
+      # owner_terminate_hooks_done? first and refuse instead (1836:RC22).
       # @param owner [Object, nil] script the hook is for, or nil for every script
       # @yieldparam owner [Object] the dying script
       # @return [Proc] the registered hook
@@ -260,7 +264,18 @@ module Lich
         hook
       end
 
-      # Runs the registered pre-terminate hooks for one dying script.
+      # Whether the pre-terminate hooks for this owner have already run (or the
+      # runner was left by an error), so a hook registered now would never fire.
+      # False before the owner's death and for any object that never died. The
+      # record holds no strong reference to the owner.
+      # @param owner [Object] script to check, by identity
+      # @return [Boolean]
+      def owner_terminate_hooks_done?(owner)
+        INITIALIZATION_MUTEX.synchronize { @terminate_hooks_done&.key?(owner) == true }
+      end
+
+      # Runs the registered pre-terminate hooks for one dying script, then
+      # records that they are done for it.
       # @param owner [Object] the dying script
       # @return [void]
       # @api private
@@ -281,6 +296,8 @@ module Lich
                      "owner=#{Diagnostics.owner_label(owner)}; abandoning it (not stopped) and retiring its pages")
           end
         end
+      ensure
+        INITIALIZATION_MUTEX.synchronize { (@terminate_hooks_done ||= WeakIdentityMap.new)[owner] = true }
       end
       private :run_before_terminate_hooks
 
