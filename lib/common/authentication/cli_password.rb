@@ -499,7 +499,8 @@ module Lich
 
             # Publish through the shared writer, restoring keychain state on failure.
             Lich::Common::Authentication::EntryStore.write_yaml_with_master_password(
-              yaml_file, yaml_data, new_password
+              yaml_file, yaml_data, new_password,
+              manager: Lich::Common::GUI::MasterPasswordManager
             )
 
             puts 'success: Master password changed'

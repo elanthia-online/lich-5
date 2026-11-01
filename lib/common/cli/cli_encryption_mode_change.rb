@@ -128,7 +128,8 @@ module Lich
           success = Lich::Common::Authentication::EntryStore.change_encryption_mode(
             data_dir,
             new_mode,
-            new_master_password
+            new_master_password,
+            manager: Lich::Common::GUI::MasterPasswordManager
           )
 
           unless success

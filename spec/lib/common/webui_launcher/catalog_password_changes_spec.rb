@@ -34,7 +34,7 @@ RSpec.describe Lich::Common::WebUILauncher::Catalog, 'password changes through t
   after { FileUtils.remove_entry(data_dir) }
 
   describe '#change_master_password' do
-    it 'publishes the re-encrypted accounts with an entry store that takes no manager keyword' do
+    it 'publishes the re-encrypted accounts through the catalog manager' do
       expect(catalog.change_master_password(current_master, new_master)).to be(true)
 
       saved = YAML.safe_load_file(path)
@@ -43,6 +43,26 @@ RSpec.describe Lich::Common::WebUILauncher::Catalog, 'password changes through t
       expect(entry_store.decrypt_password(saved['accounts']['DOUG']['password'], mode: :enhanced,
                                                                                account_name: 'DOUG', master_password: new_master))
         .to eq('server-origin-canary')
+    end
+  end
+
+  describe '#change_encryption_mode' do
+    it 'drives the entry store through the catalog manager, never the real module' do
+      injected = class_double(Lich::Common::GUI::MasterPasswordManager)
+      allow(injected).to receive(:retrieve_master_password) { |**| keychain[:password] }
+      allow(injected).to receive(:delete_master_password) do
+        keychain[:password] = nil
+        true
+      end
+      isolated = described_class.new(data_dir: data_dir, entry_store: entry_store, master_password_manager: injected)
+      allow(manager).to receive(:delete_master_password).and_raise('real keychain reached')
+
+      expect(isolated.change_encryption_mode(:standard)).to be(true)
+
+      expect(YAML.safe_load_file(path)['encryption_mode']).to eq('standard')
+      expect(keychain[:password]).to be_nil
+      expect(injected).to have_received(:delete_master_password)
+      expect(manager).not_to have_received(:delete_master_password)
     end
   end
 

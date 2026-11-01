@@ -305,8 +305,10 @@ module Lich
         # @param data_dir [String] Directory containing account data
         # @param new_mode [Symbol] Target encryption mode (:plaintext, :standard, :enhanced)
         # @param new_master_password [String, nil] New master password (required if entering Enhanced)
+        # @param manager [Object] credential provider for every keychain operation; required so
+        #   an omitted provider raises ArgumentError instead of reaching the host credential store
         # @return [Boolean] true if successful, false on failure (errors logged to Lich.log)
-        def self.change_encryption_mode(data_dir, new_mode, new_master_password = nil)
+        def self.change_encryption_mode(data_dir, new_mode, new_master_password = nil, manager:)
           yaml_file = yaml_file_path(data_dir)
 
           # Load YAML
@@ -336,7 +338,7 @@ module Lich
           backup_file = "#{yaml_file}.bak"
           begin
             if current_mode == :enhanced || new_mode == :enhanced
-              previous_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password(strict: true)
+              previous_master_password = manager.retrieve_master_password(strict: true)
             end
             if current_mode == :enhanced && previous_master_password.nil?
               raise StandardError, "Master password not found in keychain for encryption mode change"
@@ -380,13 +382,13 @@ module Lich
             # Handle Enhanced mode metadata
             if new_mode == :enhanced
               # Create validation test
-              validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_master_password)
+              validation_test = manager.create_validation_test(new_master_password)
               raise StandardError, "Failed to create master password validation test" if validation_test.nil?
               yaml_data['master_password_validation_test'] = validation_test
 
               # A failed store may already have removed or changed the old value.
               keychain_touched = true
-              unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_master_password)
+              unless manager.store_master_password(new_master_password)
                 raise StandardError, "Failed to store master password in keychain"
               end
             elsif current_mode == :enhanced
@@ -395,7 +397,7 @@ module Lich
               # stale master password behind in the credential store.
               yaml_data.delete('master_password_validation_test')
               keychain_touched = true
-              unless Lich::Common::GUI::MasterPasswordManager.delete_master_password
+              unless manager.delete_master_password
                 raise StandardError, "Failed to delete master password from keychain"
               end
             end
@@ -404,7 +406,7 @@ module Lich
             write_yaml_file(yaml_file, yaml_data)
           rescue StandardError => e
             # Retain the owner-only backup for recovery after any failed transition.
-            restore_master_password(previous_master_password) if keychain_touched
+            restore_master_password(previous_master_password, manager: manager) if keychain_touched
             Lich.log "error: Encryption mode change failed: #{e.class}: #{e.message}"
             return false
           end
@@ -425,9 +427,9 @@ module Lich
         # Reports unsuccessful rollback without including password values.
         #
         # @param previous_password [String, nil] previous value, or nil for absence
-        # @param manager [Object] credential provider used by the publishing caller
+        # @param manager [Object] credential provider used by the publishing caller; required
         # @return [Boolean] whether the previous observable state was restored
-        def self.restore_master_password(previous_password, manager: Lich::Common::GUI::MasterPasswordManager)
+        def self.restore_master_password(previous_password, manager:)
           return true if manager.retrieve_master_password(strict: true) == previous_password
 
           restored = if previous_password.nil?
@@ -1046,10 +1048,10 @@ module Lich
         # @param yaml_file [String] credential destination
         # @param yaml_data [Hash] already re-encrypted credentials and validation data
         # @param password [String] new master password
-        # @param manager [Object] credential provider used by CLI or WebUI
+        # @param manager [Object] credential provider used by CLI or WebUI; required
         # @return [void]
         # @raise [StandardError] on publication failure or incomplete rollback
-        def self.write_yaml_with_master_password(yaml_file, yaml_data, password, manager: Lich::Common::GUI::MasterPasswordManager)
+        def self.write_yaml_with_master_password(yaml_file, yaml_data, password, manager:)
           content = generate_yaml_content(yaml_data)
           previous_password = manager.retrieve_master_password(strict: true)
           begin
