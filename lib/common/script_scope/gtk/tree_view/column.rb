@@ -14,7 +14,7 @@ module Lich
           # @param attributes [Hash] text or active mapped to a model column
           def initialize(title = '', renderer = nil, attributes = {})
             super()
-            @title, @visible, @resizable, @width = String(title), true, false, nil
+            @title, @visible, @resizable, @width = column_title(title, :new), true, false, nil
             @value_column, @sort_column_id = 0, nil
             @key = "c#{SecureRandom.hex(8)}"
             pack_start(renderer, true) if renderer
@@ -96,7 +96,7 @@ module Lich
           # @param value [String] header caption
           # @return [void] caption changes notify the owning view
           def title=(value)
-            @title = String(value)
+            @title = column_title(value, :title=)
             changed!
           end
           alias set_title title=
@@ -233,6 +233,20 @@ module Lich
           # Refreshes the owning view after a column presentation change.
           # @return [void] result is not part of the supported script contract
           def changed! = view&.columns_changed!
+
+          # Normalizes a header caption: binary-tagged UTF-8 is re-tagged and other
+          # non-UTF-8 text is refused at the call, not at publication (1844:RC13).
+          # @param value [#to_s] header caption
+          # @param operation [Symbol] public operation named in the refusal
+          # @return [String] caption as UTF-8
+          # @raise [UnsupportedOperation] for text that is not UTF-8 or binary-tagged UTF-8
+          # @api private
+          def column_title(value, operation)
+            text = Gtk.wire_text(String(value))
+            session.refuse(self, operation) unless text
+            text
+          end
+          private :column_title
 
           # Warn on an invalid optional GTK binding while retaining the literal fill.
           # @param model [ListStore, TreeStore] same-session backing model

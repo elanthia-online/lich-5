@@ -4,19 +4,7 @@ module Lich
   module Common
     module ScriptScope
       module Gtk
-        # Normalizes script text for the UTF-8 JSON wire without loosening core admission.
-        # Socket and file reads often tag valid UTF-8 bytes as binary; only that tag is
-        # corrected. Any other non-UTF-8 text is refused, never transcoded.
-        # @param value [String] script-supplied text
-        # @return [String, nil] wire-compatible text, or nil when it must be refused
-        # @api private
-        def self.wire_text(value)
-          return value if value.ascii_only? || (value.encoding == Encoding::UTF_8 && value.valid_encoding?)
-          return nil unless value.encoding == Encoding::BINARY
-
-          text = value.dup.force_encoding(Encoding::UTF_8)
-          text.valid_encoding? ? text : nil
-        end
+        # Gtk.wire_text is defined once, in widgets.rb, which loads first.
 
         # Nonvisual compatibility objects share the script monitor and refusal boundary.
         class ModelObject
