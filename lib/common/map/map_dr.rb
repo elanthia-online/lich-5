@@ -198,12 +198,30 @@ module Lich
           return @@list[@@current_room_id]
         end
         ids = XMLData.room_id.zero? ? [] : ids_from_uid(XMLData.room_id)
-        return set_current(ids[0]) if ids.size == 1
+        return set_current(uid_room_unless_retitled(ids[0])) if ids.size == 1
 
         if ids.size > 1 && !@@current_room_id.nil? && (id = match_multi_ids(ids))
           return set_current(id)
         end
         match_no_uid
+      end
+
+      # The room the live UID names, unless the live title is not one of its
+      # titles and the live text (see {match_current}, {match_fuzzy}) places the
+      # character in another room. Instanced rooms such as private forges take
+      # their UIDs from a pool several towns share, so the map can hold the
+      # live UID on another town's copy of the room. Only a room storing no
+      # UID can be placed this way: the live UID vetoes any other. When the
+      # text places the character nowhere, the UID room stands.
+      #
+      # @param id [Integer] the one room storing the live UID
+      # @return [Integer] the room id to make current
+      def self.uid_room_unless_retitled(id)
+        room = @@list[id]
+        return id if room.nil? || Array(room.title).include?(XMLData.room_title)
+
+        text_id = (script = Script.current) ? match_current(script) : match_fuzzy
+        text_id || id
       end
 
       # Pattern for the live exits line when fog hides the exits. The exits
