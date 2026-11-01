@@ -62,6 +62,10 @@ RSpec.describe 'Windows release contract gates' do
     jobs = workflow('rebuild-release-assets.yaml').fetch('jobs')
     steps = jobs.fetch('release_guard').fetch('steps')
     gate = steps.find { |step| step['uses'] == './.github/actions/check-r4l5-contract' }
+    draft = steps.index { |step| step['name'] == 'Verify draft release exists for tag' }
+    expect(draft).to be < steps.index(gate)
+    expect(steps.fetch(draft).fetch('run')).to include('isDraft', 'Refusing to clobber assets on a published release.')
+    expect(gate).not_to have_key('if')
     expect(gate.fetch('with')).to include('gemfile' => 'release-target/Gemfile', 'lockfile' => 'release-target/Gemfile.lock')
     expect(jobs.fetch('build_archives').fetch('needs')).to eq('release_guard')
   end

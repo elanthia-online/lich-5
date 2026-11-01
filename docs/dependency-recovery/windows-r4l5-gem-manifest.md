@@ -59,6 +59,12 @@ prerelease workflows recheck before Release Please can write, and verify the
 downloaded installer before attaching it. Manual asset rebuilds check the
 target tag's Gemfile and lock before uploads, using the workflow checkout's
 checker. Skipping installer attachment does not bypass the recovery check.
+Only draft tags with supported static declarations and a Windows projection
+matching the currently accepted contract are eligible. Pre-contract or
+incompatible older tags are intentionally unsupported by this workflow; there
+is no bypass input. A compatible older tag can still pass, so eligibility is
+not determined by the tag's age alone. The workflow rejects a non-draft release
+before checking its contract, and both checks precede all asset writes.
 
 Release order: prepare the candidate lock, have an administrator select its
 full SHA in Ruby4Lich5, promote tested recovery and publish its matching tested
