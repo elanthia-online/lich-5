@@ -1,1 +1,2 @@
 --require ./spec/support/frontend_mock
+--require ./spec/support/real_keychain_fence
