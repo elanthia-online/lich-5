@@ -16,10 +16,11 @@ file's own SHA-256.
 
 Byte-pinned files and line endings
 
-`.gitattributes` in this directory marks `*_setup.lic` and `css-provenance.json`
-`-text`, so Git never converts their line endings on checkout or commit. The
-setup fixtures are digest-checked as stored bytes (LF, CRLF or mixed), and
-`css-decoration.json` records the whole-file SHA-256 of `css-provenance.json`.
+`.gitattributes` in this directory marks `*_setup.lic`, `css-decoration.json` and
+`css-provenance.json` `-text`, so Git never converts their line endings on checkout
+or commit. The setup fixtures are digest-checked as stored bytes (LF, CRLF or mixed),
+`css-decoration.json` is compared byte for byte with its rebuild, and it records the
+whole-file SHA-256 of `css-provenance.json`.
 The other JSON fixtures escape CR inside their strings, so their parsed block
 hashes do not depend on checkout line endings.
 
