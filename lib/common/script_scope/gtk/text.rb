@@ -421,7 +421,11 @@ module Lich
 
           # Preserves the existing explicit chat-font degradation.
           def override_font(font)
-            session.refuse(self, :override_font) unless font.is_a?(Pango::FontDescription)
+            # Later-layer constant (Pango::FontDescription; first defined at P14) is absent from
+            # P13 trees; resolve it at call time. An absent class has no instances.
+            # Retirement: replace this guard with a plain constant reference once this
+            # file is no longer shipped or tested without the later layers.
+            session.refuse(self, :override_font) unless defined?(Pango::FontDescription) && font.is_a?(Pango::FontDescription)
             session.degrade(:font_face, 'chat font face and size follow browser theme')
           end
 
