@@ -8,9 +8,11 @@ require_relative '../../../lib/common/script_scope/gtk/models'
 require_relative '../../../lib/common/script_scope/gtk/tree_view'
 require_relative '../../../lib/common/script_scope/gtk/text'
 require_relative '../../../lib/common/script_scope/gtk/combo_box'
+require_relative '../../../lib/common/script_scope/gtk/menus'
+require_relative '../../../lib/common/script_scope/gtk/transfers'
 
 # Model, table and text boundaries: the P13 share of 1831:RC27, plus 1844:RC1,
-# RC5, RC6, RC7, RC9, RC10, RC11 and RC12 and 1845:RC3 and RC5. A recording port stands in for core.
+# RC5, RC6, RC7, RC9, RC10, RC11, RC12 and RC13 and 1845:RC3 and RC5. A recording port stands in for core.
 RSpec.describe 'script compatibility models, tables and text' do
   port_class = Class.new do
     attr_reader :sets
@@ -330,5 +332,94 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect([column.tooltip_text, column.tooltip_text.encoding]).to eq([utf8(cafe), Encoding::UTF_8])
     expect { view.materialize }.not_to raise_error
     expect(column.send(:definition)[:tooltip]).to eq(utf8(cafe))
+  end
+
+  # Text kept as ASCII-8BIT, or in another encoding, failed only at publication.
+  # The setters now share Gtk.wire_text: binary-tagged UTF-8 is re-tagged and every
+  # other non-UTF-8 text is refused at the call (1844:RC13).
+  describe 'non-UTF-8 text at the P13 setters (1844:RC13)' do
+    let(:cafe) { 'caf'.b + bytes(0xC3, 0xA9) }
+    let(:rejected) do
+      [
+        'caf'.b + bytes(0xFF),
+        utf8('caf'.b + bytes(0xFF)),
+        'caf'.dup.force_encoding(Encoding::ISO_8859_1) + bytes(0xE9).force_encoding(Encoding::ISO_8859_1),
+        cafe.dup.force_encoding(Encoding::ISO_8859_1),
+        'hi'.encode(Encoding::UTF_16LE)
+      ]
+    end
+
+    # [name, refused operation, build, apply, read]
+    g = Lich::Common::ScriptScope::Gtk
+    cases = [
+      ['MenuItem#set_label', :label, -> { g::MenuItem.new('old') }, ->(w, v) { w.set_label(v) }, ->(w) { w.label }],
+      ['MenuItem#label=', :label, -> { g::MenuItem.new('old') }, ->(w, v) { w.label = v }, ->(w) { w.label }],
+      ['MenuItem.new', :label, nil, ->(_w, v) { g::MenuItem.new(v) }, ->(w) { w.label }],
+      ['CheckMenuItem.new', :new, nil, ->(_w, v) { g::CheckMenuItem.new(v) }, ->(w) { w.label }],
+      ['RadioMenuItem.new', :new, nil, ->(_w, v) { g::RadioMenuItem.new(v) }, ->(w) { w.label }],
+      ['SelectionData#set', :set, -> { g::SelectionData.new }, ->(w, v) { w.set(Lich::Common::ScriptScope::Gdk::Selection::TYPE_STRING, v) }, ->(w) { w.text }],
+      ['SelectionData#text=', :set, -> { g::SelectionData.new }, ->(w, v) { w.text = v }, ->(w) { w.text }],
+      ['SelectionData#set_text', :set, -> { g::SelectionData.new }, ->(w, v) { w.set_text(v) }, ->(w) { w.text }],
+      ['TreeViewColumn#title=', :title=, -> { g::TreeViewColumn.new('old') }, ->(w, v) { w.title = v }, ->(w) { w.title }],
+      ['TreeViewColumn#set_title', :title=, -> { g::TreeViewColumn.new('old') }, ->(w, v) { w.set_title(v) }, ->(w) { w.title }],
+      ['TreeViewColumn.new', :new, nil, ->(_w, v) { g::TreeViewColumn.new(v) }, ->(w) { w.title }],
+      ['Expander#set_label', :label=, -> { g::Expander.new('old') }, ->(w, v) { w.set_label(v) }, ->(w) { [w.label, w.label_widget.text] }],
+      ['Expander#label=', :label=, -> { g::Expander.new('old') }, ->(w, v) { w.label = v }, ->(w) { [w.label, w.label_widget.text] }],
+      ['Expander.new', :new, nil, ->(_w, v) { g::Expander.new(v) }, ->(w) { [w.label, w.label_widget.text] }]
+    ]
+
+    cases.each do |name, operation, build, apply, read|
+      it "#{name} refuses other non-UTF-8 text at the call and re-tags binary-tagged UTF-8" do
+        target = build&.call
+        before = target && read.call(target)
+
+        rejected.each do |text|
+          expect { apply.call(target, text) }.to raise_error(gtk::UnsupportedOperation, /operation=#{operation}/)
+        end
+        expect(read.call(target)).to eq(before) if target
+
+        result = target || apply.call(nil, cafe)
+        apply.call(target, cafe) if target
+        value = Array(read.call(result))
+        expect(value.map { |text| [text, text.encoding] }).to all(eq([utf8(cafe), Encoding::UTF_8]))
+      end
+    end
+
+    it 'publishes a re-tagged menu label and column title as UTF-8' do
+      item = gtk::MenuItem.new(cafe)
+      item.materialize
+      item.label = cafe
+      column = gtk::TreeViewColumn.new('Name', gtk::CellRendererText.new, text: 0)
+      column.title = cafe
+      store = gtk::ListStore.new(String)
+      view = gtk::TreeView.new(store)
+      view.append_column(column)
+      view.materialize
+
+      expect(port.sets.select { |property, _| property == :label }.map { |_, text| text.encoding }.uniq).to eq([Encoding::UTF_8])
+      expect(column.send(:definition)[:label]).to eq(utf8(cafe))
+      expect(column.send(:definition)[:label].encoding).to eq(Encoding::UTF_8)
+    end
+
+    it 'keeps the mnemonic refusal for a re-tagged menu label' do
+      expect { gtk::MenuItem.new('a_b'.b, true) }.to raise_error(gtk::UnsupportedOperation, /operation=mnemonic/)
+    end
+
+    it 'takes a notebook tab label only through a Label, which already normalizes text' do
+      # EventBox arrives with the layout layer; the header check only needs the constant.
+      stub_const('Lich::Common::ScriptScope::Gtk::EventBox', Class.new(gtk::Widget))
+      notebook = gtk::Notebook.new
+      label = gtk::Label.new('one')
+      notebook.append_page(gtk::Label.new('page'), label)
+
+      rejected.each { |text| expect { label.text = text }.to raise_error(gtk::UnsupportedOperation, /operation=text=/) }
+      expect(label.text).to eq('one')
+      label.text = cafe
+      expect([label.text, label.text.encoding]).to eq([utf8(cafe), Encoding::UTF_8])
+    end
+
+    it 'defines Gtk.wire_text once' do
+      expect(gtk.method(:wire_text).source_location.first).to end_with('gtk/widgets.rb')
+    end
   end
 end

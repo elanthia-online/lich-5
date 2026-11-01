@@ -133,13 +133,16 @@ module Lich
           private
 
           # Validates literal labels and retains the constructor's mnemonic policy.
-          # @return [String] unchanged label, never stripped or interpreted as markup
+          # Binary-tagged UTF-8 is re-tagged as UTF-8; other non-UTF-8 text is
+          # refused here, not later at publication (1844:RC13).
+          # @return [String] label as UTF-8, never stripped or interpreted as markup
           # @raise [UnsupportedOperation] for invalid input or requested mnemonic syntax
           def menu_label(label, underline)
-            session.refuse(self, :label) unless label.is_a?(String) && [true, false].include?(underline)
-            session.refuse(self, :mnemonic) if underline && label.include?('_')
+            text = Gtk.wire_text(label) if label.is_a?(String)
+            session.refuse(self, :label) unless text && [true, false].include?(underline)
+            session.refuse(self, :mnemonic) if underline && text.include?('_')
             @use_underline = underline
-            label
+            text
           end
         end
 
