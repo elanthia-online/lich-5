@@ -5,4 +5,5 @@ css-decoration.json -text
 # never convert their line endings on checkout or commit.
 *_setup.lic -text
 # css-decoration.json records this file's whole-file SHA-256 as audit_sha256.
+# Together with css-decoration.json above and *_setup.lic, these are all the -text files here.
 css-provenance.json -text
