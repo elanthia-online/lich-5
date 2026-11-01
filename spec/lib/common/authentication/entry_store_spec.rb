@@ -261,7 +261,10 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
   end
 
   describe 'encryption-mode publication and keychain rollback' do
-    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    # The injected provider. The real module stays stubbed to refuse writes (see the
+    # top-level before block), so any call that bypasses injection fails an example.
+    let(:real_manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:manager) { class_double(Lich::Common::GUI::MasterPasswordManager) }
     let(:keychain) { { password: 'PreviousSyntheticMaster123!' } }
     let(:new_master_password) { 'NewSyntheticMaster456!' }
     let(:passwords) { { 'SYNTHETIC_ALPHA' => 'SyntheticAlphaPassword123!', 'SYNTHETIC_BETA' => 'SyntheticBetaPassword456!' } }
@@ -276,7 +279,19 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         keychain[:password] = nil
         true
       end
+      allow(manager).to receive(:create_validation_test) { |password| real_manager.create_validation_test(password) }
+      allow(manager).to receive(:validate_master_password) do |password, test|
+        real_manager.validate_master_password(password, test)
+      end
       allow(Lich).to receive(:log)
+    end
+
+    # Loads saved accounts through EntryStore, whose read path resolves Enhanced
+    # passwords from the real module; only retrieval is routed to the synthetic keychain.
+    # @return [Hash{String => String}] decrypted passwords keyed by account
+    def loaded_passwords
+      allow(real_manager).to receive(:retrieve_master_password) { keychain[:password] }
+      described_class.load_saved_entries(data_dir, false).to_h { |entry| [entry[:user_id], entry[:password]] }
     end
 
     # Creates isolated synthetic accounts using the real existing cipher formats.
@@ -313,22 +328,22 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
     def expect_original_accounts(bytes)
       expect(File.binread(yaml_file)).to eq(bytes)
       expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
-      loaded = described_class.load_saved_entries(data_dir, false)
-      expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+      expect(loaded_passwords).to eq(passwords)
     end
 
     [[:plaintext, :standard], [:plaintext, :enhanced], [:standard, :plaintext], [:standard, :enhanced], [:enhanced, :plaintext], [:enhanced, :standard]].each do |old_mode, new_mode|
       it "publishes decryptable accounts when changing #{old_mode} to #{new_mode}" do
         write_synthetic_accounts(old_mode)
 
-        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password)).to be(true)
+        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password, manager: manager)).to be(true)
 
         data = YAML.safe_load_file(yaml_file)
         expect(data['encryption_mode']).to eq(new_mode.to_s)
-        loaded = described_class.load_saved_entries(data_dir, false)
-        expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+        expect(loaded_passwords).to eq(passwords)
         expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
         expect(File.exist?("#{yaml_file}.bak")).to be(false)
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
         if new_mode == :enhanced
           expect(keychain[:password]).to eq(new_master_password)
           expect(manager.validate_master_password(new_master_password, data['master_password_validation_test'])).to be(true)
@@ -344,7 +359,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         previous = keychain[:password]
         fail_entry_publication
 
-        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password)).to be(false)
+        expect(described_class.change_encryption_mode(data_dir, new_mode, new_master_password, manager: manager)).to be(false)
 
         expect(keychain[:password]).to eq(previous)
         expect_original_accounts(original)
@@ -354,12 +369,70 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       end
     end
 
+    describe 'required credential provider' do
+      before { write_synthetic_accounts(:enhanced) }
+
+      it 'raises ArgumentError when change_encryption_mode omits manager:' do
+        expect { described_class.change_encryption_mode(data_dir, :standard) }.to raise_error(ArgumentError, /manager/)
+        expect { described_class.change_encryption_mode(data_dir, :enhanced, new_master_password) }
+          .to raise_error(ArgumentError, /manager/)
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
+      end
+
+      it 'raises ArgumentError when write_yaml_with_master_password omits manager:' do
+        data = { 'encryption_mode' => 'enhanced', 'accounts' => {} }
+
+        expect { described_class.write_yaml_with_master_password(yaml_file, data, new_master_password) }
+          .to raise_error(ArgumentError, /manager/)
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
+      end
+
+      it 'raises ArgumentError when restore_master_password omits manager:' do
+        expect { described_class.send(:restore_master_password, keychain[:password]) }
+          .to raise_error(ArgumentError, /manager/)
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
+      end
+    end
+
+    describe '.write_yaml_with_master_password' do
+      let(:data) { YAML.safe_load_file(yaml_file) }
+
+      before { write_synthetic_accounts(:enhanced) }
+
+      it 'stores the new password through the injected provider only' do
+        described_class.write_yaml_with_master_password(yaml_file, data, new_master_password, manager: manager)
+
+        expect(keychain[:password]).to eq(new_master_password)
+        expect(YAML.safe_load_file(yaml_file)['encryption_mode']).to eq('enhanced')
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
+      end
+
+      it 'restores the previous password through the injected provider when publication fails' do
+        previous = keychain[:password]
+        original = File.binread(yaml_file)
+        fail_entry_publication
+
+        expect do
+          described_class.write_yaml_with_master_password(yaml_file, data, new_master_password, manager: manager)
+        end.to raise_error(IOError, /synthetic entry publication failure/)
+
+        expect(keychain[:password]).to eq(previous)
+        expect(File.binread(yaml_file)).to eq(original)
+        expect(real_manager).not_to have_received(:store_master_password)
+        expect(real_manager).not_to have_received(:delete_master_password)
+      end
+    end
+
     it 'restores keychain absence after a failed publication entering Enhanced' do
       keychain[:password] = nil
       original = write_synthetic_accounts(:standard)
       fail_entry_publication
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
       expect(keychain[:password]).to be_nil
       expect_original_accounts(original)
@@ -369,7 +442,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       original = write_synthetic_accounts(:standard)
       allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
       expect(manager).not_to have_received(:store_master_password)
       expect(manager).not_to have_received(:delete_master_password)
@@ -380,7 +453,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
     it 'reports unknown rollback state instead of treating a failed read as absence' do
       allow(manager).to receive(:retrieve_master_password).with(strict: true).and_raise(IOError, 'synthetic read failure')
 
-      expect(described_class.send(:restore_master_password, nil)).to be(false)
+      expect(described_class.send(:restore_master_password, nil, manager: manager)).to be(false)
 
       expect(manager).not_to have_received(:delete_master_password)
       expect(Lich).to have_received(:log).with(/manual keychain recovery is required/)
@@ -401,7 +474,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
           end
         end
 
-        expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+        expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
         expect(keychain[:password]).to eq(previous)
         expect_original_accounts(original)
@@ -417,7 +490,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
           false
         end
 
-        expect(described_class.change_encryption_mode(data_dir, :standard)).to be(false)
+        expect(described_class.change_encryption_mode(data_dir, :standard, manager: manager)).to be(false)
 
         expect(keychain[:password]).to eq(previous)
         expect_original_accounts(original)
@@ -429,7 +502,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       previous = keychain[:password]
       allow(described_class).to receive(:encrypt_password).and_return(nil)
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
       expect(keychain[:password]).to eq(previous)
       expect(manager).not_to have_received(:store_master_password)
@@ -441,7 +514,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       original = write_synthetic_accounts(:standard)
       allow(manager).to receive(:create_validation_test).and_return(nil)
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
       expect(manager).not_to have_received(:store_master_password)
       expect(manager).not_to have_received(:delete_master_password)
@@ -460,7 +533,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         end
       end
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(false)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(false)
 
       expect_original_accounts(original)
       expect(Lich).to have_received(:log).with(/manual keychain recovery is required/)
@@ -470,12 +543,11 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       write_synthetic_accounts(:standard)
       allow(FileUtils).to receive(:rm).with("#{yaml_file}.bak").and_raise(IOError, 'synthetic cleanup failure')
 
-      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password)).to be(true)
+      expect(described_class.change_encryption_mode(data_dir, :enhanced, new_master_password, manager: manager)).to be(true)
 
       expect(keychain[:password]).to eq(new_master_password)
       expect(YAML.safe_load_file(yaml_file)['encryption_mode']).to eq('enhanced')
-      loaded = described_class.load_saved_entries(data_dir, false)
-      expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
+      expect(loaded_passwords).to eq(passwords)
     end
 
     it 'keeps the original encrypted accounts and a secure backup when save publication fails' do
