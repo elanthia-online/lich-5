@@ -45,7 +45,7 @@ module Lich
           # @param value [Object] literal text converted with String before publication
           # @return [Entry] self
           def set_text(value)
-            text = String(value)
+            text = wire_literal(value, :text=)
             text = text[0, @props[:max_length]] if @props[:max_length]
             session.synchronize do
               previous = read(:value)
@@ -74,7 +74,7 @@ module Lich
           # @param value [Object] literal text converted with String before publication
           # @return [Entry] self
           def placeholder_text=(value)
-            write(:placeholder, String(value))
+            write(:placeholder, wire_literal(value, :placeholder_text=))
           end
           alias set_placeholder_text placeholder_text=
 

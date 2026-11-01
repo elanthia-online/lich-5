@@ -295,7 +295,7 @@ module Lich
           # @param value [String] literal caption, at most 512 characters
           # @return [Frame] self
           def set_label(value)
-            validate_caption!(value)
+            value = validate_caption!(value)
             write(:label, value)
             @frame_label ||= Label.new(value)
             @frame_label.caption_owner = self
@@ -383,13 +383,13 @@ module Lich
 
           # Applies the shared caption bound before any ownership or port change.
           # @param value [String] proposed literal heading
-          # @return [void]
-          # @raise [UnsupportedOperation] for malformed or oversized headings
+          # @return [String] heading as UTF-8 or ASCII text, binary-tagged UTF-8 re-tagged
+          # @raise [UnsupportedOperation] for malformed, non-UTF-8 or oversized headings
           # @api private
           def validate_caption!(value)
-            valid = value.is_a?(String) && value.valid_encoding? && value.encoding.ascii_compatible? &&
-                    value.length <= Lich::WebUI::Contract::BOUNDS[:short_text]
-            session.refuse(self, :label=) unless valid
+            text = Gtk.wire_text(value) if value.is_a?(String)
+            session.refuse(self, :label=) unless text && text.length <= Lich::WebUI::Contract::BOUNDS[:short_text]
+            text
           end
 
           # A frame aligns its child's natural height within its own allocation.

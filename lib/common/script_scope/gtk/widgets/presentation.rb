@@ -43,7 +43,7 @@ module Lich
           # @param value [Object] literal text converted with String before publication
           # @return [Widget] self
           def set_tooltip_text(value)
-            write(:tooltip, String(value))
+            write(:tooltip, wire_literal(value, :tooltip_text=))
           end
           alias tooltip_text= set_tooltip_text
 
@@ -247,8 +247,9 @@ module Lich
           # @return [void] result is not part of the supported script contract
           # @raise [UnsupportedOperation] when tags are present
           def tooltip_markup=(value)
-            session.refuse(self, :tooltip_markup=) if value.match?(/<[^>]*>/)
-            write(:tooltip, CGI.unescapeHTML(value))
+            text = Gtk.wire_text(value) if value.is_a?(String)
+            session.refuse(self, :tooltip_markup=) unless text && !text.match?(/<[^>]*>/)
+            write(:tooltip, CGI.unescapeHTML(text))
           end
 
           # Clears tooltip text when disabled; enabling does not invent tooltip content.
