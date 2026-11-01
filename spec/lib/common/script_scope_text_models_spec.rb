@@ -406,8 +406,6 @@ RSpec.describe 'script compatibility models, tables and text' do
     end
 
     it 'takes a notebook tab label only through a Label, which already normalizes text' do
-      # EventBox arrives with the layout layer; the header check only needs the constant.
-      stub_const('Lich::Common::ScriptScope::Gtk::EventBox', Class.new(gtk::Widget))
       notebook = gtk::Notebook.new
       label = gtk::Label.new('one')
       notebook.append_page(gtk::Label.new('page'), label)
@@ -420,6 +418,39 @@ RSpec.describe 'script compatibility models, tables and text' do
 
     it 'defines Gtk.wire_text once' do
       expect(gtk.method(:wire_text).source_location.first).to end_with('gtk/widgets.rb')
+    end
+  end
+
+  # Classes that a later layer first defines (images, style). hide_const makes any
+  # layer behave as P13 does, where none of them exist.
+  context 'without the classes a later layer defines (1844:RC14)' do
+    before do
+      %w[Gtk::Image Gtk::Color Gdk::RGBA Pango::FontDescription].each do |name|
+        hide_const("Lich::Common::ScriptScope::#{name}")
+      end
+    end
+
+    # [description, refused operation, call against fresh widgets]
+    [
+      ['MenuButton#set_image', 'set_image', ->(w) { w[:menu_button].set_image(Object.new) }],
+      ['TextView#override_font', 'override_font', ->(w) { w[:text_view].override_font(Object.new) }],
+      ['CellRenderer#background= with a color string', 'background=', ->(w) { w[:renderer].background = 'red' }],
+      ['CellRenderer#foreground_rgba=', 'foreground_rgba=', ->(w) { w[:renderer].foreground_rgba = Object.new }],
+      ['TreeView#override_background_color', 'override_background_color', ->(w) { w[:tree_view].override_background_color(:selected, Object.new) }]
+    ].each do |description, operation, call|
+      it "#{description} refuses instead of raising NameError" do
+        widgets = { menu_button: gtk::MenuButton.new, text_view: gtk::TextView.new, renderer: gtk::CellRendererText.new,
+                    tree_view: gtk::TreeView.new(gtk::ListStore.new(String)) }
+
+        expect { call.call(widgets) }.to raise_error(gtk::UnsupportedOperation, /operation=#{Regexp.escape(operation)}/)
+      end
+    end
+
+    it 'still clears a cell fill and foreground with nil' do
+      renderer = gtk::CellRendererText.new
+
+      expect { renderer.background = nil }.not_to raise_error
+      expect { renderer.foreground_rgba = nil }.not_to raise_error
     end
   end
 end
