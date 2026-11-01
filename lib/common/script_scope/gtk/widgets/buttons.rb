@@ -178,7 +178,11 @@ module Lich
           # @return [Button] self
           def set_image(value)
             session.synchronize do
-              valid = value.instance_of?(Image) && value.session.equal?(session) && !value.destroyed? && !value.parent &&
+              # Later-layer constants (Image; defined at P13 or P14) are absent from
+              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+              # Retirement: replace these guards with plain constant references once this
+              # file is no longer shipped or tested without the later layers.
+              valid = defined?(Image) && value.instance_of?(Image) && value.session.equal?(session) && !value.destroyed? && !value.parent &&
                       value.directional_caption && children.empty? && (label.empty? || @button_image)
               session.refuse(self, :image=) unless valid
               self.label = value.directional_caption
