@@ -241,7 +241,8 @@ module Lich
                     success = Lich::Common::Authentication::EntryStore.change_encryption_mode(
                       data_dir,
                       selected_mode,
-                      new_master_password
+                      new_master_password,
+                      manager: MasterPasswordManager
                     )
                     Lich.log "debug: change_encryption_mode returned #{success}"
 

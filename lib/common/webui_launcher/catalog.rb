@@ -370,7 +370,9 @@ module Lich
         def change_encryption_mode(mode, master_password: nil)
           @mutex.synchronize do
             writable_yaml_data
-            @entry_store.change_encryption_mode(data_dir, mode.to_sym, master_password)
+            @entry_store.change_encryption_mode(
+              data_dir, mode.to_sym, master_password, manager: @master_password_manager
+            )
           end
         end
 
