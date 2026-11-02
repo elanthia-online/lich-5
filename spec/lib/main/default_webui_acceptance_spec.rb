@@ -37,6 +37,10 @@ RSpec.describe 'default WebUI entrypoint acceptance' do
   end
 
   it 'prints a verdict when the entrypoint exits between the liveness check and the group signal' do
+    # The race is between the Unix process-group liveness check and a negative-PID
+    # TERM; Windows spawns without a group and stops the child by its PID with KILL.
+    skip 'process-group signalling is POSIX-only; Windows stops the child by PID' if OS.windows?
+
     Dir.mktmpdir('lich-acceptance-race') do |dir|
       # The entrypoint lingers after its report, so the supervisor reaches its
       # signal loop; the stubbed group kill delivers the signal, waits until the
