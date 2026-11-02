@@ -108,25 +108,32 @@ module Lich
         # hook has already run (or is running) and would never close another, so a
         # session created now, for example by a widget built in a destroy handler,
         # would stay held with a hook that never fires. The same holds for an owner
-        # that never used Gtk, whose core pre-terminate hooks have already run
-        # (Lich::WebUI.owner_terminate_hooks_done?): its first widget, built by a
-        # worker unwinding after the hooks, gets no session either (1836:RC22).
+        # that never used Gtk, whose core pre-terminate hooks have started or run:
+        # its first widget, built by a worker unwinding after them, gets no session
+        # either (1836:RC22). The hook is registered before the session is created,
+        # and the core refusal of a registration for an owner whose hooks have
+        # started is what is trusted; a check before registering would leave a
+        # window in which the owner starts between the check and the call.
         # Both refuse through the closed-owner error below. An owner that is merely
         # stopping, before its death close, still gets one (1845:RC12).
         # @return [Session]
         # @raise [UnsupportedOperation] when no Script owns the call, or the owner's
-        #   death close has begun or its pre-terminate hooks have run, and it has no session
+        #   death close or pre-terminate hooks have started, and it has no session
         def self.session
           owner = Script.current
           raise UnsupportedOperation, 'script owner is required for Gtk' unless owner
 
           current = @mutex.synchronize do
             @sessions[owner] ||= begin
-              if @closed_owners.key?(owner) || Lich::WebUI.owner_terminate_hooks_done?(owner)
-                raise UnsupportedOperation, "#{owner.name}: Gtk session is closed because the script is past its death close"
-              end
+              message = "#{owner.name}: Gtk session is closed because the script is past its death close"
+              raise UnsupportedOperation, message if @closed_owners.key?(owner)
 
-              Session.new(owner).tap { |created| close_on_death(owner, created) }
+              begin
+                close_on_death(owner)
+              rescue Lich::WebUI::Error
+                raise UnsupportedOperation, message
+              end
+              Session.new(owner)
             end
           end
           Thread.current.thread_variable_set(:lich_script_compatibility_session, current)
@@ -206,19 +213,23 @@ module Lich
         # so their destroy handlers run while the owner's pages are still
         # registered; a plain ScriptDeath handler would run after the core
         # retired them (1836:RC20). The hook is registered for this owner only,
-        # when its session is created: the hook runner costs a host thread and a
+        # just before its session is created: the hook runner costs a host thread and a
         # wait on the cleanup thread per hook, and scripts that never used Gtk
         # must not pay it. It runs on a host thread, bounded by
         # Lich::WebUI::BEFORE_TERMINATE_TIMEOUT. The hook marks the owner closed
         # before it drops the session, so no later call recreates one (1845:RC12).
+        # It closes whichever session the owner holds then, so it needs no session at
+        # registration time.
+        # @raise [Lich::WebUI::Error] when the owner's pre-terminate hooks have started
+        #   (the owner is dying: the caller must create no session for it)
         # @api private
-        def self.close_on_death(owner, session)
+        def self.close_on_death(owner)
           Lich::WebUI.before_owner_terminate(owner: owner) do |dying|
-            @mutex.synchronize do
+            session = @mutex.synchronize do
               @closed_owners[dying] = true
               @sessions.delete(dying)
             end
-            session.close_for_owner_death
+            session&.close_for_owner_death
           end
         end
         private_class_method :close_on_death
