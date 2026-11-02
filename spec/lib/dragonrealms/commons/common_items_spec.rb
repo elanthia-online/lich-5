@@ -114,6 +114,15 @@ RSpec.describe Lich::DragonRealms::DRCI do
       end
     end
 
+    describe 'LIFT_FAILURE_PATTERNS' do
+      subject(:patterns) { described_class::LIFT_FAILURE_PATTERNS }
+
+      it 'matches the both-hands-full refusal' do
+        expect(patterns.any? { |p| p.match?('You need a free hand to pick that up.') }).to be(true),
+                                                                                           'LIFT_FAILURE_PATTERNS should handle a lift with both hands full'
+      end
+    end
+
     describe 'UNTIE_ITEM_FAILURE_PATTERNS' do
       subject(:patterns) { described_class::UNTIE_ITEM_FAILURE_PATTERNS }
 
@@ -1009,6 +1018,31 @@ RSpec.describe Lich::DragonRealms::DRCI do
       it 'returns false when no items at feet' do
         stub_bput('There are no items lying at your feet.')
         expect(described_class.lift?('sword')).to be false
+      end
+
+      context 'with both hands full' do
+        let(:reply) { 'You need a free hand to pick that up.' }
+        let(:results) { [] }
+
+        # Mirrors bput: the reply comes back only if a matcher fits it;
+        # otherwise bput waits out its timeout and returns ''.
+        before do
+          allow(DRC).to receive(:bput) do |_command, *matchers|
+            results << (matchers.flatten.any? { |m| m.match?(reply) } ? reply : '')
+            results.last
+          end
+        end
+
+        it 'matches the free-hand reply instead of waiting out the timeout' do
+          described_class.lift?('cloth')
+          expect(DRC).to have_received(:bput).with('lift cloth', anything, anything).once
+          expect(results).to eq([reply])
+        end
+
+        it 'returns false and stows nothing' do
+          expect(described_class).not_to receive(:put_away_item?)
+          expect(described_class.lift?('cloth', 'pack')).to be false
+        end
       end
     end
 

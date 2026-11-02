@@ -604,7 +604,8 @@ module Lich
         /^There are no items lying at your feet/,
         /^What did you want to try and lift/,
         /can't quite lift it/,
-        /^You are not strong enough to pick that up/
+        /^You are not strong enough to pick that up/,
+        /^You need a free hand/
       ].freeze
 
       GIVE_ITEM_SUCCESS_PATTERNS = [
