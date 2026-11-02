@@ -13,12 +13,18 @@ require_relative 'native_host'
 module Lich
   module WebUI
     # Opens an authenticated loopback URL in a native helper or a
-    # dedicated browser app process. Automatic discovery finds Chrome (and Edge
-    # on Windows); an explicit browser path, such as the launcher Settings
-    # "Browser path", selects any other Chromium-based browser at the user's risk.
+    # dedicated browser app process. Automatic discovery finds Chrome (plus Edge
+    # on Windows and distro Chromium on Linux). Any other Chromium-based browser
+    # is chosen at the user's risk by an explicit path: the launcher Settings
+    # "Browser path", or LICH_WEBUI_BROWSER, which is read before any window
+    # exists so a host without Chrome can still reach one. Precedence: explicit
+    # argument, then LICH_WEBUI_BROWSER, then automatic discovery.
     module BrowserLauncher
+      # Environment variable naming a browser executable for every window.
+      ENVIRONMENT_VARIABLE = 'LICH_WEBUI_BROWSER'
       SETTING_HINT = 'set the Browser path in the launcher Settings'
-      private_constant :SETTING_HINT
+      ROUTES_HINT = "#{SETTING_HINT} or the #{ENVIRONMENT_VARIABLE} environment variable".freeze
+      private_constant :SETTING_HINT, :ROUTES_HINT
 
       MACOS_PATHS = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -29,6 +35,9 @@ module Lich
         '/usr/bin/google-chrome-stable',
         '/opt/google/chrome/google-chrome',
       ].freeze
+      # Distro Chromium, tried only after every Chrome path.
+      LINUX_CHROMIUM_PATHS = %w[/usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium].freeze
+      LINUX_CHROMIUM_NAMES = %w[chromium chromium-browser].freeze
 
       module_function
 
@@ -39,8 +48,10 @@ module Lich
       # @param url [String] authenticated loopback launch URL
       # @param spawn [#call] process creator accepting an argv array and options
       # @param platform [String, nil] discovery override; nil uses the current OS
-      # @param browser_path [String, nil] explicit browser, bypassing the native host
+      # @param browser_path [String, nil] explicit browser, bypassing the native host;
+      #   when absent a non-empty LICH_WEBUI_BROWSER takes its place
       # @param chrome_path [String, nil] legacy alias for browser_path
+      # @param environment [#[]] environment source for LICH_WEBUI_BROWSER
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
       # @param on_exit [#call, nil] callback after the owned process exits
       # @param on_start [#call, nil] callback receiving the spawned PID
@@ -50,15 +61,16 @@ module Lich
       # @param thread_factory [#call] factory for the host-owned monitor thread
       # @return [Boolean] whether spawn and monitor setup succeeded
       def open(url, spawn: Process.method(:spawn), platform: nil,
-               browser_path: nil, chrome_path: nil, geometry: nil, on_exit: nil,
+               browser_path: nil, chrome_path: nil, environment: ENV, geometry: nil, on_exit: nil,
                on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
-        verify_browser_path(browser_path || chrome_path)
-        native = native_host(platform, browser_path || chrome_path)
+        chosen, origin = browser_override(browser_path || chrome_path, environment)
+        verify_browser_path(chosen, origin: origin)
+        native = native_host(platform, chosen)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
         target = launch_file(url, profile_dir, native: native)
         command = command_for(
-          target, platform: platform, browser_path: browser_path || chrome_path,
+          target, platform: platform, browser_path: chosen, environment: environment,
           geometry: geometry, profile_dir: native ? nil : profile_dir
         )
         pid = spawn.call(*command, out: File::NULL, err: File::NULL)
@@ -93,22 +105,28 @@ module Lich
       # @param platform [String, nil] discovery override; nil uses the current OS
       # @param browser_path [String, nil] explicit browser, bypassing native selection
       # @param chrome_path [String, nil] legacy alias for browser_path
+      # @param environment [#[]] environment source for LICH_WEBUI_BROWSER
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
       # @param profile_dir [String, nil] isolated browser profile directory
       # @return [Array<String>] executable followed by its arguments
       # @raise [Error] if the required native helper or browser is unavailable
-      def command_for(url, platform: nil, browser_path: nil, chrome_path: nil, geometry: nil,
-                      profile_dir: nil)
-        if native_host(platform, browser_path || chrome_path)
-          return NativeHost.command_for(url, geometry: geometry)
-        end
+      def command_for(url, platform: nil, browser_path: nil, chrome_path: nil, environment: ENV,
+                      geometry: nil, profile_dir: nil)
+        override, = browser_override(browser_path || chrome_path, environment)
+        return NativeHost.command_for(url, geometry: geometry) if native_host(platform, override)
 
         platform ||= OS.host_os
-        executable = browser_path || chrome_path || app_browser_path(platform: platform)
+        executable = override || app_browser_path(platform: platform, environment: environment)
         unless executable
-          requirement = windows?(platform) ? 'Google Chrome or Microsoft Edge' : 'Google Chrome'
+          requirement = if windows?(platform)
+                          'Google Chrome or Microsoft Edge'
+                        elsif platform.match?(/darwin/i)
+                          'Google Chrome'
+                        else
+                          'Google Chrome or Chromium'
+                        end
           raise Error, "#{requirement} is required to open the WebUI launcher window; install it, " \
-                       "or #{SETTING_HINT} to another browser"
+                       "or #{ROUTES_HINT} to another browser"
         end
 
         profile_arguments = if profile_dir
@@ -119,16 +137,37 @@ module Lich
         [executable, '--new-window', *profile_arguments, *geometry_arguments(geometry), "--app=#{url}"]
       end
 
+      # Picks the explicit browser: the argument, else a non-empty LICH_WEBUI_BROWSER.
+      # @param argument [String, nil] explicit browser path (setting or caller)
+      # @param environment [#[]] environment source
+      # @return [Array(String, Symbol), Array(nil, nil)] path and :argument or
+      #   :environment; both nil means automatic discovery
+      def browser_override(argument, environment)
+        return [argument, :argument] unless argument.nil?
+
+        value = environment[ENVIRONMENT_VARIABLE].to_s.strip
+        value.empty? ? [nil, nil] : [value, :environment]
+      end
+
       # Refuses an explicit browser that is not an executable file, so a stale or
-      # mistyped setting fails with a message naming it instead of a generic launch
-      # error. File tests only: Windows decides executability by extension.
+      # mistyped setting or variable fails with a message naming it instead of a
+      # generic launch error. File tests only: Windows decides executability by extension.
       # @param path [String, nil] explicit browser path; nil means automatic discovery
+      # @param origin [Symbol, nil] :argument (setting) or :environment (LICH_WEBUI_BROWSER)
       # @return [void]
       # @raise [Error] if the path does not exist or is not an executable file
-      def verify_browser_path(path)
+      def verify_browser_path(path, origin: :argument)
         return if path.nil?
 
         shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
+        if origin == :environment
+          fix = "fix or unset #{ENVIRONMENT_VARIABLE}"
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which does not exist; #{fix}" unless File.exist?(path)
+          return if File.file?(path) && File.executable?(path)
+
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which is not an executable file; #{fix}"
+        end
+
         raise Error, "the configured browser '#{shown}' does not exist; #{SETTING_HINT} or clear it" unless File.exist?(path)
         return if File.file?(path) && File.executable?(path)
 
@@ -219,12 +258,14 @@ module Lich
         arguments
       end
 
-      # Selects the first executable Chrome candidate, then Edge on Windows.
-      # Injected platform/environment/probes allow discovery tests without launching a browser.
+      # Selects the first executable Chrome candidate, then Edge on Windows or
+      # distro Chromium on Linux. Injected platform/environment/probes allow
+      # discovery tests without launching a browser.
       # @return [String, nil] executable path
       def app_browser_path(platform: RUBY_PLATFORM, executable: File.method(:executable?), environment: ENV)
         candidates = chrome_candidates(platform: platform, environment: environment)
         candidates += edge_candidates(environment: environment) if windows?(platform)
+        candidates += chromium_candidates(platform: platform, environment: environment)
         candidates.find { |path| executable.call(path) }
       end
 
@@ -244,6 +285,19 @@ module Lich
           root = environment[variable]
           File.join(root, 'Google', 'Chrome', 'Application', 'chrome.exe') unless root.to_s.empty?
         end
+      end
+
+      # Lists Linux distro Chromium paths, then absolute PATH entries; none on
+      # macOS or Windows. Relative PATH entries are skipped so the working
+      # directory can never supply the browser.
+      # @return [Array<String>] ordered discovery candidates
+      def chromium_candidates(platform: RUBY_PLATFORM, environment: ENV)
+        return [] if platform.match?(/darwin/i) || windows?(platform)
+
+        directories = environment['PATH'].to_s.split(File::PATH_SEPARATOR).select do |directory|
+          directory.start_with?('/')
+        end
+        LINUX_CHROMIUM_PATHS + directories.product(LINUX_CHROMIUM_NAMES).map { |pair| File.join(*pair) }
       end
 
       # Lists Windows Edge paths beneath the available installation environment roots.
