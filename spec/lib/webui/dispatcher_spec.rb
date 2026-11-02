@@ -9,6 +9,30 @@ RSpec.describe Lich::WebUI::Dispatcher do
   let(:dispatcher) { described_class.new }
   let(:owner) { Object.new }
 
+  # Child processes get a deadline so a hung dispatcher fails by name, not by job timeout.
+  let(:child_deadline) { 60 }
+
+  # Runs Ruby code in a fresh process, killing it at the deadline.
+  # @param code [String] script passed to ruby -e
+  # @return [Array(String, String, Process::Status, nil)] output, errors, and status;
+  #   status is nil when the deadline killed the child
+  def run_ruby_with_deadline(code)
+    Open3.popen3(RbConfig.ruby, '-I', LIB_DIR, '-e', code) do |stdin, stdout, stderr, waiter|
+      stdin.close
+      readers = [Thread.new { stdout.read }, Thread.new { stderr.read }]
+      finished = waiter.join(child_deadline)
+      unless finished
+        begin
+          Process.kill('KILL', waiter.pid)
+        rescue Errno::ESRCH
+          nil
+        end
+        waiter.join
+      end
+      [readers.first.value, readers.last.value, (waiter.value if finished)]
+    end
+  end
+
   after { dispatcher.shutdown }
 
   it 'refuses a new owner after full dispatcher shutdown' do
@@ -261,7 +285,9 @@ RSpec.describe Lich::WebUI::Dispatcher do
       abort 'no exit diagnostic' unless messages.any? { |level, text| level == :warning && text.include?('status=3') }
       puts 'ready'
     RUBY_CODE
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    output, errors, status = run_ruby_with_deadline(code)
+    expect(status).not_to be_nil,
+                          "fresh-process dispatcher example exceeded #{child_deadline}s; a callback rescue regressed"
     expect(status.success?).to be(true), errors
     expect(output).to eq("ready\n")
   end
@@ -319,6 +345,32 @@ RSpec.describe Lich::WebUI::Dispatcher do
     end.to raise_error(Lich::WebUI::Error, /stopped/)
     expect(isolated.shutdown_owner(other)).to be(false)
   end
+
+  it 'shuts down every owner when one raises, then re-raises the first failure' do
+    first_failure = Class.new(Exception) # rubocop:disable Lint/InheritException
+    last_failure = Class.new(Exception) # rubocop:disable Lint/InheritException
+    dead = lambda do |failure|
+      thread = Thread.new do
+        Thread.current.report_on_exception = false
+        raise failure, 'worker died'
+      end
+      sleep 0.01 while thread.status
+      thread
+    end
+    workers = [dead.call(first_failure), double('live worker', join: nil, alive?: false), dead.call(last_failure)]
+    isolated = described_class.new(thread_factory: ->(&_block) { workers.shift })
+    disposed = []
+    owners = Array.new(3) { Object.new }
+    owners.each_with_index do |candidate, index|
+      isolated.enqueue(owner: candidate, page_id: 'page', viewer_id: 'viewer', cid: "button-#{index}",
+                       event: :activate, coalescable: false, cleanup: -> { disposed << index }) {}
+    end
+
+    expect { isolated.shutdown }.to raise_error(first_failure, 'worker died')
+    expect(disposed).to eq([0, 1, 2])
+    expect(owners.map { |candidate| isolated.shutdown_owner(candidate) }).to eq([false, false, false])
+  end
+
   describe 'bounded queue admission' do
     let(:worker) { double('held worker', join: nil, alive?: false) }
     let(:messages) { [] }
