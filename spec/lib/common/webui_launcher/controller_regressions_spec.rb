@@ -302,8 +302,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
 
       it 'tries a working saved path first and the variable once the saved path is stale' do
-        saved = executable_file('saved-browser')
-        variable = executable_file('variable-browser')
+        saved = executable_file('saved-browser.exe')
+        variable = executable_file('variable-browser.exe')
         spawned = []
         allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
           original.call(url, **arguments, platform: 'linux', environment: { 'LICH_WEBUI_BROWSER' => variable },
