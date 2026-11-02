@@ -50,6 +50,7 @@ module Lich
       GET_CRAFTING_PICKUP = /^You pick up/
       GET_CRAFTING_HEAVY = /can't quite lift it/
       GET_CRAFTING_TIED = /^You should untie/
+      GET_CRAFTING_NO_FREE_HAND = /^You need a free hand/
 
       UNTIE_SUCCESS = /^You (remove|untie)/
       UNTIE_NOT_FOUND = /^Untie what/
@@ -454,7 +455,7 @@ module Lich
         end
         command = "get my #{name}"
         command += " from my #{bag}" if bag_items && bag_items.include?(name)
-        case DRC.bput(command, GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE, GET_CRAFTING_PICKUP, GET_CRAFTING_HEAVY, GET_CRAFTING_TIED)
+        case DRC.bput(command, GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE, GET_CRAFTING_PICKUP, GET_CRAFTING_HEAVY, GET_CRAFTING_TIED, GET_CRAFTING_NO_FREE_HAND)
         when GET_CRAFTING_SUCCESS, GET_CRAFTING_ALREADY, GET_CRAFTING_PICKUP
           true
         when GET_CRAFTING_NOT_FOUND_WHAT, GET_CRAFTING_NOT_FOUND_WERE
@@ -465,6 +466,9 @@ module Lich
         when GET_CRAFTING_HEAVY
           # Final: GETting it again won't make it liftable.
           crafting_item_failed("DRCC: You can't quite lift: #{name}", skip_exit)
+        when GET_CRAFTING_NO_FREE_HAND
+          # Final: GETting it again won't empty a hand.
+          crafting_item_failed("DRCC: No free hand to get: #{name}", skip_exit)
         when GET_CRAFTING_TIED
           case untie_crafting_item(name, "untie my #{name}", UNTIE_WOUNDED, UNTIE_SUCCESS, UNTIE_NOT_FOUND)
           when UNTIE_SUCCESS

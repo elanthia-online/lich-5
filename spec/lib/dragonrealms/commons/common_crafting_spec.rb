@@ -1188,6 +1188,7 @@ describe DRCC do
     # Replies by reply class, worded as the GET/UNTIE patterns match them.
     let(:got) { 'You get' }
     let(:heavy) { "can't quite lift it" }
+    let(:no_free_hand) { 'You need a free hand' }
     let(:not_found) { 'What were you' }
     let(:tied) { 'You should untie' }
     let(:untied) { 'You untie' }
@@ -1299,6 +1300,37 @@ describe DRCC do
         reply_with(heavy, got)
 
         expect(DRCC.get_crafting_item('bronze ingot', 'backpack', ['bronze ingot'], nil, true)).to be false
+        expect(sent.size).to eq(1)
+      end
+    end
+
+    # Both hands full, e.g. an item a previous run left held. Without the
+    # pattern the GET waited out bput's 15 s timeout and returned false
+    # silently, and the caller failed later with a misleading message.
+    context 'when the game says "You need a free hand"' do
+      it 'stops the script after one GET when skip_exit is false' do
+        reply_with(no_free_hand)
+
+        expect { DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil) }.to raise_error(SystemExit)
+        expect(sent).to eq(['get my burlap cloth'])
+        expect(drc).to have_received(:beep)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No free hand to get: burlap cloth')
+        expect(Lich::Messaging).to have_received(:msg).with('bold', /Stopping script/)
+      end
+
+      it 'returns false after one GET when skip_exit is true' do
+        reply_with(no_free_hand)
+
+        expect(DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil, true)).to be false
+        expect(sent).to eq(['get my burlap cloth'])
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No free hand to get: burlap cloth')
+        expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Stopping script/)
+      end
+
+      it 'does not GET again even when the next reply would succeed' do
+        reply_with(no_free_hand, got)
+
+        expect(DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil, true)).to be false
         expect(sent.size).to eq(1)
       end
     end
@@ -1517,12 +1549,12 @@ describe DRCC do
     # method always ends with a boolean or, without skip_exit, an exit. It
     # sends each command at most twice (the GET once), and visits safe-room at
     # most once per untie command. With the item in hand, only a GET answered
-    # "can't quite lift it" ends in anything but true.
+    # "can't quite lift it" or "You need a free hand" ends in anything but true.
     context 'across every sequence of four replies' do
-      let(:replies) { [got, pickup, already, heavy, not_found, tied, untied, untie_what, wounded, ''] }
+      let(:replies) { [got, pickup, already, heavy, no_free_hand, not_found, tied, untied, untie_what, wounded, ''] }
 
       # Stubbed once, reading the loop's state, as re-stubbing in every one of
-      # the 80,000 iterations would dominate the run time.
+      # the 117,128 iterations would dominate the run time.
       it 'is bounded and honours skip_exit' do
         queue = []
         exchanges = []
@@ -1560,7 +1592,7 @@ describe DRCC do
                 expect(sent.count { |command| command.start_with?('get') }).to be <= 1, label
                 next unless held_after
 
-                lifted = exchanges.none? { |command, reply| command.start_with?('get') && reply == heavy }
+                lifted = exchanges.none? { |command, reply| command.start_with?('get') && [heavy, no_free_hand].include?(reply) }
                 expect(result == true).to eq(lifted), label
               end
             end
