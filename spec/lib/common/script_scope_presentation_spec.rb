@@ -47,7 +47,7 @@ RSpec.describe 'script compatibility and the core presentation policy' do
       owner = Struct.new(:name).new('visibility.lic')
       %i[current current_without_pause].each { |name| Lich::Common::Script.define_singleton_method(name) { owner } }
       bindings = [Lich::Common::TRUSTED_SCRIPT_BINDING.call, Lich::Common::Scripting.new.script]
-      seen = bindings.map { |scope| eval('defined?(Gtk)', scope) }
+      seen = bindings.map { |scope| %w[Gtk GLib Gdk].map { |name| eval("defined?(\#{name})", scope) } }
       required = bindings.map do |scope|
         eval("begin; require 'gtk3'; rescue LoadError => error; error.class.name; end", scope)
       end
@@ -58,16 +58,16 @@ RSpec.describe 'script compatibility and the core presentation policy' do
     output
   end
 
-  it 'hides Gtk from script scope when startup disabled presentation (1853:RC2@S7)' do
-    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: false)')).to eq('[[nil], ["LoadError"]]')
+  it 'hides Gtk, GLib and Gdk from script scope when startup disabled presentation (1853:RC2@S7)' do
+    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: false)')).to eq('[[[nil, nil, nil]], ["LoadError"]]')
   end
 
-  it 'shows Gtk to scripts when presentation is enabled' do
-    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: true)')).to eq('[["constant"], [false]]')
+  it 'shows Gtk, GLib and Gdk to scripts when presentation is enabled' do
+    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: true)')).to eq('[[["constant", "constant", "constant"]], [false]]')
   end
 
   it 'conceals nothing while the policy is unconfigured, which is no decision' do
-    expect(gtk_visibility_after('')).to eq('[["constant"], ["LoadError"]]')
+    expect(gtk_visibility_after('')).to eq('[[["constant", "constant", "constant"]], ["LoadError"]]')
   end
 
   context 'with the scope active' do
