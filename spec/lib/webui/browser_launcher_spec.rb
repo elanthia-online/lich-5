@@ -61,7 +61,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     allow(OS).to receive(:mac?).and_return(false)
     allow(OS).to receive(:windows?).and_return(false)
     allow(OS).to receive(:host_os).and_return('linux')
-    allow(described_class).to receive(:app_browser_path).with(platform: 'linux').and_return('/usr/bin/google-chrome')
+    allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'linux')).and_return('/usr/bin/google-chrome')
     expect(Lich::WebUI::NativeHost).not_to receive(:command_for)
     expect(described_class.command_for('http://127.0.0.1/')).to eq(
       ['/usr/bin/google-chrome', '--new-window', '--app=http://127.0.0.1/']
@@ -201,15 +201,15 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
   end
 
   it 'raises when Google Chrome is not installed' do
-    allow(described_class).to receive(:app_browser_path).with(platform: 'linux').and_return(nil)
+    allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'linux')).and_return(nil)
 
     expect do
       described_class.command_for('http://127.0.0.1/', platform: 'linux')
-    end.to raise_error(Lich::WebUI::Error, /Google Chrome is required/)
+    end.to raise_error(Lich::WebUI::Error, /Google Chrome or Chromium is required/)
   end
 
   it 'opens Windows app windows with Chrome or Edge and an isolated profile' do
-    allow(described_class).to receive(:app_browser_path).with(platform: 'mingw').and_return('C:/Edge/msedge.exe')
+    allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'mingw')).and_return('C:/Edge/msedge.exe')
     calls = []
     described_class.open('http://127.0.0.1/', platform: 'mingw',
                          spawn: ->(*argv, **_options) { calls << argv; 42 }, on_exit: proc {},
