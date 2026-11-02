@@ -75,6 +75,12 @@ module Lich
           # @raise [UnsupportedOperation] for unsupported native group APIs
           def method_missing(name, *, **, &) = session.refuse(self, name)
 
+          # Keeps implicit conversions such as Array() and flatten from reaching the refusal.
+          # @api private
+          def respond_to_missing?(*args)
+            super
+          end
+
           private
 
           # Refuses membership spanning multiple windows before publishing group identity.

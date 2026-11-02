@@ -7,9 +7,10 @@ require 'rbconfig'
 require_relative '../../../lib/common/script_scope/gtk/session'
 require_relative '../../../lib/common/script_scope/gtk/widgets'
 require_relative '../../../lib/common/script_scope/gtk/size_group'
+require_relative '../../../lib/common/script_scope/gtk/scheduling'
 
 # Shim callback, lifecycle and classification boundaries: the P12 shares of
-# 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC13, RC14, RC20 and RC21.
+# 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC12, RC13, RC14, RC20 and RC21.
 # Exit and LoadError paths run in a fresh process; the rest use a recording port.
 RSpec.describe 'script compatibility widget boundaries' do
   port_class = Class.new do
@@ -236,6 +237,20 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(keys.uniq.size).to eq(512)
     expect(keys.last).to eq('sizegroup-512')
     expect { gtk::SizeGroup.new(:horizontal) }.to raise_error(gtk::UnsupportedOperation, /class=\S*SizeGroup operation=new/)
+  end
+
+  it 'converts SizeGroup and the GLib boundary implicitly without a refusal (1843:RC12)' do
+    group = gtk::SizeGroup.new(:horizontal)
+    glib = Lich::Common::ScriptScope::GLib
+
+    [group, glib].each do |object|
+      expect(object.respond_to?(:to_ary)).to be(false)
+      expect(Array(object)).to eq([object])
+      expect([object].flatten).to eq([object])
+      expect([*object]).to eq([object])
+    end
+    expect { group.unsupported_native_call }.to raise_error(gtk::UnsupportedOperation, /operation=unsupported_native_call/)
+    expect { glib.unsupported_native_call }.to raise_error(gtk::UnsupportedOperation, /operation=unsupported_native_call/)
   end
 
   it 'ignores activation of a destroyed radio member without deselecting its group (1843:RC14)' do
