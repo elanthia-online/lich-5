@@ -100,6 +100,67 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     release&.push(true)
   end
 
+  it 'refuses an owner-bound registration once the owner\'s hooks have started, and still accepts an owner that has not (1836:RC22)' do
+    other = Object.new
+    attempts = []
+    register do |dying|
+      attempts << begin
+        Lich::WebUI.before_owner_terminate(owner: dying) { :never }
+      rescue Lich::WebUI::Error => error
+        error
+      end
+    end
+    seen = []
+    hooks << Lich::WebUI.before_owner_terminate(owner: other) { |dying| seen << dying }
+
+    Lich::Common::ScriptDeath.run(owner)
+
+    expect(attempts.map(&:class)).to eq([Lich::WebUI::Error])
+    expect(attempts.first.message).to match(/pre-terminate hooks have started/)
+    expect { Lich::WebUI.before_owner_terminate(owner: owner) { :never } }.to raise_error(Lich::WebUI::Error)
+
+    Lich::Common::ScriptDeath.run(other)
+    expect(seen).to eq([other])
+  end
+
+  it 'refuses a registration from the dying owner\'s own worker while its hooks are still running (1836:RC22)' do
+    started = Queue.new
+    release = Queue.new
+    late_attempt = Queue.new
+    register do
+      started << true
+      release.pop
+    end
+    worker = Thread.new do
+      started.pop
+      late_attempt << begin
+        Lich::WebUI.before_owner_terminate(owner: owner) { :never }
+        :registered
+      rescue Lich::WebUI::Error
+        :refused
+      end
+    end
+    runner = Thread.new { Lich::Common::ScriptDeath.run(owner) }
+
+    expect(late_attempt.pop(timeout: 5)).to eq(:refused)
+    expect(Lich::WebUI.owner_terminate_hooks_done?(owner)).to be(false)
+  ensure
+    release&.push(true)
+    runner&.join(10)
+    worker&.join(10)
+  end
+
+  it 'keeps registering owner-bound hooks for an owner that has not started, even after another owner died (1836:RC22)' do
+    Lich::Common::ScriptDeath.run(owner)
+    fresh = Object.new
+    seen = []
+
+    hooks << Lich::WebUI.before_owner_terminate(owner: fresh) { |dying| seen << dying }
+    Lich::Common::ScriptDeath.run(fresh)
+
+    expect(seen).to eq([fresh])
+  end
+
   it 'bounds a hook that does not finish and retires the owner anyway' do
     stub_const('Lich::WebUI::BEFORE_TERMINATE_TIMEOUT', 0.2)
     host = Lich::WebUI.service
