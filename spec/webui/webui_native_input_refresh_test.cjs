@@ -181,7 +181,7 @@ test('focusout or an Escape releases a held native select to the newest render',
   });
 });
 
-test('Space, F4 and Alt+Arrow on a select hold its page, and the same keys elsewhere do not', t => {
+test('Space, F4 and plain or Alt arrows on a select hold its page; modified arrows and the same keys elsewhere do not', t => {
   const { dom, receive, runTimers } = fixture(t);
   const { document } = dom.window;
   const select = () => document.querySelector('[data-cid="choice"] select');
@@ -205,10 +205,40 @@ test('Space, F4 and Alt+Arrow on a select hold its page, and the same keys elsew
   observed.space = press(select(), { key: ' ' });
   observed.f4 = press(select(), { key: 'F4' });
   observed.altArrow = press(select(), { key: 'ArrowDown', altKey: true });
+  // Plain arrows open the popup without a change on macOS; Ctrl, Meta and Shift arrows do not open it.
   observed.plainArrow = press(select(), { key: 'ArrowDown' });
+  observed.plainArrowUp = press(select(), { key: 'ArrowUp' });
+  observed.ctrlArrow = press(select(), { key: 'ArrowDown', ctrlKey: true });
+  observed.metaArrow = press(select(), { key: 'ArrowDown', metaKey: true });
+  observed.shiftArrow = press(select(), { key: 'ArrowDown', shiftKey: true });
   observed.spaceOnButton = press(document.querySelector('button[data-cid="save"]'), { key: ' ' });
-  assert.deepEqual(observed, { space: true, f4: true, altArrow: true, plainArrow: false, spaceOnButton: false });
+  assert.deepEqual(observed, {
+    space: true, f4: true, altArrow: true, plainArrow: true, plainArrowUp: true,
+    ctrlArrow: false, metaArrow: false, shiftArrow: false, spaceOnButton: false
+  });
   assert.equal(title(), `Render ${generation}`);
+});
+
+// Documents a known limit rather than a goal: on a non-macOS engine an arrow on the last
+// option changes nothing, so no change event releases the hold. It lasts until focus-out
+// or Escape; this pins that focus-out ends it.
+test('a plain arrow that fires no change keeps its hold until focus-out releases it', t => {
+  const { dom, receive, runTimers } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'One'));
+  const held = select();
+  held.focus();
+  keydown(dom, held, { key: 'ArrowDown' });
+  receive(choiceRender(2, 'Two'));
+  runTimers(0);
+  const observed = { whileHeld: [select() === held, title()] };
+  held.blur();
+  runTimers(0);
+  observed.afterFocusout = [select() === held, title()];
+  assert.deepEqual(observed, { whileHeld: [true, 'One'], afterFocusout: [false, 'Two'] });
 });
 
 test('with a pointer gesture still held, focusout of a native select re-defers until the release', t => {

@@ -87,6 +87,17 @@ test('Escape on a dialog with cancel_button sends that response on every press a
   assert.deepEqual(responses(sent).at(-1), ['confirm', 1, { button: 'keep' }]);
 });
 
+test('one Escape followed by three auto-repeat keydowns sends exactly one response', async t => {
+  const { dom, sent } = await open(t, true);
+  const { document, KeyboardEvent } = dom.window;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  for (let repeat = 1; repeat <= 3; repeat += 1) {
+    const held = new KeyboardEvent('keydown', { key: 'Escape', repeat: true, bubbles: true, cancelable: true });
+    document.dispatchEvent(held);
+  }
+  assert.equal(responses(sent).length, 1, 'auto-repeats of a held Escape send no further response');
+});
+
 for (const declared of [true, false]) {
   test(`the native cancel event is only prevented on a dialog ${declared ? 'with' : 'without'} cancel_button and never responds`, async t => {
     const { dom, dialog, sent } = await open(t, declared);
