@@ -460,8 +460,8 @@ module Lich
               end
             end
 
-            if new_password.length < 8
-              puts "error: Password must be at least 8 characters"
+            if new_password.length < Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
+              puts "error: Password must be at least #{Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH} characters"
               Lich.log "error: CLI change master password failed - password too short"
               return 1
             end
@@ -692,12 +692,8 @@ module Lich
               master_password = input.strip
             end
 
-            if master_password.length < 8
-              puts "error: Password must be at least 8 characters"
-              Lich.log "error: CLI recover master password failed - password too short"
-              return 1
-            end
-
+            # The validation test decides, not the length: a password created before
+            # the creation minimum existed must still be recoverable.
             # Validate password against validation test
             unless Lich::Common::GUI::MasterPasswordManager.validate_master_password(master_password, validation_test)
               puts "error: Password validation failed"
@@ -758,9 +754,10 @@ module Lich
             return nil
           end
 
-          if password.length < 8
-            puts "error: Password must be at least 8 characters"
-            Lich.log "error: Password too short (minimum 8 characters)"
+          minimum = Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
+          if password.length < minimum
+            puts "error: Password must be at least #{minimum} characters"
+            Lich.log "error: Password too short (minimum #{minimum} characters)"
             return nil
           end
 
