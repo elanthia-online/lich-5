@@ -18,7 +18,8 @@ module Lich
         POSITION_RANGE = (-65_536..65_536)
         # Windows refuses a rename over a file another process or store is replacing at
         # that moment (EACCES). The replacement is retried briefly; a save that still
-        # cannot land is skipped and logged, since the next window change saves again.
+        # cannot land is skipped and logged. The launcher saves once, when it closes,
+        # so a refused rename skips that close-time save.
         RENAME_ATTEMPTS = 3
         RENAME_RETRY_DELAY = 0.02
 

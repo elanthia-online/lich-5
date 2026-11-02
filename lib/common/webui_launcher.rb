@@ -34,13 +34,18 @@ module Lich
       # A refused submission whose message is authored, fixed and secret-free,
       # so it can be shown to the user as the reason.
       class ValidationRefused < StandardError; end
-      MASTER_PASSWORD_MIN_LENGTH = 8
+      # One minimum for every path that creates or replaces an Enhanced master
+      # password (launcher, CLI); an existing password is never length-checked.
+      MASTER_PASSWORD_MIN_LENGTH = Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
       MASTER_PASSWORD_LOCKED_HINT = 'The master password is locked. Choose Play on a saved character, enter the ' \
                                     'master password when asked, then retry.'
       LEGACY_CONVERSION_GUIDANCE = "#{Catalog::LEGACY_CONVERSION_NOTICE} " \
                                    'See the Lich release notes for conversion guidance.'
       BROWSER_SUPPORT_NOTE = 'Google Chrome and Microsoft Edge are supported. Another Chromium-based browser can be ' \
-                             'chosen here and is used at your own risk. Leave blank to detect Chrome or Edge automatically.'
+                             'chosen here and is used at your own risk. Leave blank to detect a browser automatically. ' \
+                             'This window cannot open without a browser: to name one before starting Lich, set the ' \
+                             'LICH_WEBUI_BROWSER environment variable to its full path. A path saved here is tried ' \
+                             'first and, if it no longer exists, skipped in favor of that variable and detection.'
       EXIT_CLEANUP_TIMEOUT = 2
       EXIT_CLEANUP_MUTEX = Mutex.new
       private_constant :EXIT_CLEANUP_MUTEX
@@ -98,8 +103,10 @@ module Lich
       # @param frontend_locator [Object] discovers supported frontend executables
       # @param viewer_expiry [#call, nil] schedules a block after a delay in seconds;
       #   nil uses a timer thread for the WebUI reconnect window
-      # @param browser_path [String, nil] browser executable for the app window; nil uses
-      #   the catalog's saved choice, then automatic Chrome or Edge detection
+      # @param browser_path [String, nil] browser executable for the app window; an
+      #   explicit path must exist or the window fails. nil uses the catalog's saved
+      #   choice (skipped with a notice if it no longer exists), then LICH_WEBUI_BROWSER,
+      #   then automatic detection
       def initialize(data_dir:, on_launch:, service: Lich::WebUI.service, catalog: nil,
                      authenticator: Authentication, launch_data: Authentication::LaunchData,
                      session_launcher: SessionLauncher, executor: SerialExecutor.new,
@@ -128,12 +135,14 @@ module Lich
         @browser_handle = nil
         @browser_terminate = browser_terminate
         @browser_failure = nil
+        @skipped_browser_path = nil
         @failure = nil
+        @browser_path_explicit = !browser_path.nil?
         @browser_path = browser_path || (@catalog.browser_path if @catalog.respond_to?(:browser_path))
         @browser_open = browser_open || lambda do |url|
           handle = Object.new
           Lich::WebUI::BrowserLauncher.open(
-            url, geometry: @window_geometry, browser_path: @mutex.synchronize { @browser_path },
+            url, geometry: @window_geometry, browser_path: launch_browser_path,
                  on_start: ->(pid) { browser_started(handle, pid) },
                  on_exit: -> { browser_exited(handle) },
                  on_failure: ->(message) { @mutex.synchronize { @browser_failure = message } }
@@ -206,7 +215,8 @@ module Lich
 
         detail = @mutex.synchronize { @browser_failure }
         raise Lich::WebUI::Error,
-              "#{detail || 'dedicated launcher window failed to open'}; check the configured WebUI host and debug log, then retry"
+              "#{detail || 'dedicated launcher window failed to open'}#{skipped_browser_recovery}; " \
+              'check the configured WebUI host and debug log, then retry'
       rescue Lich::WebUI::Error => error
         fail_launcher("ERROR: #{error.message}. The WebUI launcher has stopped.")
         close(reason: :browser_failure)
@@ -413,8 +423,11 @@ module Lich
         commit { stored = @catalog.respond_to?(:update_browser_path) && @catalog.update_browser_path(value) == true }
         return set_notice('The browser path could not be saved.', :error) unless stored
 
-        @mutex.synchronize { @browser_path = value.empty? ? nil : value }
-        set_notice(value.empty? ? 'Browser path cleared; Chrome or Edge is detected automatically.' :
+        @mutex.synchronize do
+          @browser_path = value.empty? ? nil : value
+          @browser_path_explicit = false
+        end
+        set_notice(value.empty? ? 'Browser path cleared; a browser is detected automatically.' :
                                   'Browser path saved. It is used the next time Lich opens this window.', :info)
       end
 
@@ -832,11 +845,29 @@ module Lich
         @accounts = @catalog.accounts
         @encryption_mode = @catalog.encryption_mode
         @catalog_error = nil
+        drop_stale_selection_locked
       rescue Catalog::InvalidCatalogError => error
         @entries = []
         @accounts = []
         @encryption_mode = :plaintext
         @catalog_error = error.message
+        drop_stale_selection_locked
+      end
+
+      # Clears each table selection key that no longer names a rendered row, so a
+      # row that disappears (the "(no characters)" row once its account has a
+      # character, or a removed character) cannot leave the table selecting a key
+      # the validator refuses. Callers hold the lifecycle mutex.
+      # @return [void]
+      # @api private
+      def drop_stale_selection_locked
+        @draft_entry_key = nil unless @entries.any? { |entry| entry.key == @draft_entry_key }
+        return if @draft_account_key.nil?
+
+        listed = @accounts.any? do |account|
+          Catalog.account_key(account) == @draft_account_key && @entries.none? { |entry| entry.user_id == account }
+        end
+        @draft_account_key = nil unless listed
       end
 
       # Refreshes an open page, preserving its prior screen on WebUI render errors.
@@ -1043,6 +1074,46 @@ module Lich
         { char_name: values[:char_name], game_code: values[:game_code], frontend: values[:frontend],
           custom_launch: values[:custom_launch], custom_launch_dir: values[:custom_launch_dir],
           data_dir: @data_dir, force_path_flags: true }
+      end
+
+      # Chooses the browser for the launcher window. A path given to the constructor
+      # is passed through as is and fails the launch if it is missing. The saved
+      # Settings path is used while it is an executable file; once it is not, it is
+      # skipped so LICH_WEBUI_BROWSER and automatic detection can still open the
+      # window that would be needed to change it.
+      # @return [String, nil] path for the launcher, or nil for variable and detection
+      # @api private
+      def launch_browser_path
+        path, explicit = @mutex.synchronize { [@browser_path, @browser_path_explicit] }
+        return path if path.nil? || explicit || (File.file?(path) && File.executable?(path))
+
+        skip_saved_browser_path(path)
+        nil
+      end
+
+      # Logs a stale saved browser path and queues a notice naming it for the first
+      # attached viewer. File tests only, as {Lich::WebUI::BrowserLauncher} does.
+      # @param path [String] saved path that is not an executable file
+      # @return [void]
+      # @api private
+      def skip_saved_browser_path(path)
+        shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
+        @mutex.synchronize { @skipped_browser_path = shown }
+        log_diagnostic(:warning, "saved browser path is not an executable file and was skipped path=#{shown}")
+        set_notice("The saved Browser path '#{shown}' no longer exists or is not an executable file, so it was " \
+                   'skipped. Save a new path in Settings, or clear it.', :warn)
+      end
+
+      # Names the skipped path and a recovery that needs no window, since the
+      # Settings that could change the path live in the window that failed to open.
+      # @return [String] clause for the launch failure message, empty when no path was skipped
+      # @api private
+      def skipped_browser_recovery
+        skipped = @mutex.synchronize { @skipped_browser_path }
+        return '' unless skipped
+
+        " (the saved Browser path '#{skipped}' was skipped; Settings cannot open without a window, so set " \
+          "#{Lich::WebUI::BrowserLauncher::ENVIRONMENT_VARIABLE} to the full path of a browser and restart)"
       end
 
       # Terminates the launcher's retained process with the OS-supported signal.

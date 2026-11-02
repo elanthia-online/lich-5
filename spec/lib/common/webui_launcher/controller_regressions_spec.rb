@@ -255,8 +255,134 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       opened
     end
 
+    let(:browser_directories) { [] }
+
+    after { browser_directories.each { |directory| FileUtils.remove_entry(directory, true) } }
+
+    def executable_file(name = 'chromium.exe', mode: 0o755)
+      directory = Dir.mktmpdir('webui-browser')
+      browser_directories << directory
+      File.join(directory, name).tap do |path|
+        File.write(path, '')
+        File.chmod(mode, path)
+      end
+    end
+
     it 'opens the window with the saved browser path' do
-      expect(start_with(saved: chromium).map { |arguments| arguments[:browser_path] }).to eq([chromium])
+      saved = executable_file
+      expect(start_with(saved: saved).map { |arguments| arguments[:browser_path] }).to eq([saved])
+    end
+
+    context 'when the saved browser path is stale' do
+      let(:missing) { File.join(Dir.mktmpdir('webui-browser').tap { |directory| browser_directories << directory }, 'gone', 'chromium') }
+
+      def delivered_notice(launcher)
+        launcher.viewer_attached('viewer-1')
+        launcher.send(:build_page).render.facilities[:notify]
+      end
+
+      it 'logs it, falls through to the variable and detection, and names the path in a notice' do
+        notice = nil
+        opened = start_with(saved: missing) { |configured| notice = configured }
+
+        expect(opened.map { |arguments| arguments[:browser_path] }).to eq([nil])
+        expect(messages).to include([:warning, a_string_including('saved browser path', missing)])
+        expect(delivered_notice(notice)).to eq(
+          text: "The saved Browser path '#{missing}' no longer exists or is not an executable file, so it was skipped. " \
+                'Save a new path in Settings, or clear it.', level: 'warn'
+        )
+      end
+
+      it 'skips a saved path that exists but is not an executable file' do
+        plain = executable_file('chromium', mode: 0o644)
+        directory = File.dirname(plain)
+
+        expect(start_with(saved: plain).map { |arguments| arguments[:browser_path] }).to eq([nil])
+        expect(start_with(saved: directory).map { |arguments| arguments[:browser_path] }).to eq([nil])
+      end
+
+      it 'tries a working saved path first and the variable once the saved path is stale' do
+        saved = executable_file('saved-browser')
+        variable = executable_file('variable-browser')
+        spawned = []
+        allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
+          original.call(url, **arguments, platform: 'linux', environment: { 'LICH_WEBUI_BROWSER' => variable },
+                                          spawn: ->(*argv, **_options) { spawned.push(argv).length + 4241 }, waitpid: ->(*) {},
+                                          thread_factory: ->(&_work) {})
+        end
+
+        [saved, missing].each do |path|
+          catalog.define_singleton_method(:browser_path) { path }
+          described_class.new(
+            data_dir: '/fixture', catalog: catalog, service: started_service, on_launch: proc {},
+            frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator, browser_terminate: ->(_signal, _pid) {},
+            recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }
+          ).start
+        end
+
+        expect(spawned.map(&:first)).to eq([saved, variable])
+      ensure
+        spawned.flatten.grep(/\A--user-data-dir=/).each { |argument| FileUtils.remove_entry(argument.delete_prefix('--user-data-dir='), true) }
+      end
+
+      it 'still fails hard for an explicit browser path passed by the caller' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
+          original.call(url, **arguments, platform: 'linux', spawn: ->(*) { raise 'must not spawn' })
+        end
+        configured = described_class.new(
+          data_dir: '/fixture', catalog: catalog, service: started_service, on_launch: proc {}, browser_path: missing,
+          frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator,
+          recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }
+        )
+
+        expect { configured.start }.to raise_error(Lich::WebUI::Error, /does not exist/)
+        expect(messages.map(&:last).join).not_to include('was skipped')
+      end
+
+      it 'recovers without a window when nothing else is found' do
+        stale = missing
+        catalog.define_singleton_method(:browser_path) { stale }
+        allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
+          original.call(url, **arguments, platform: 'linux', environment: {}, spawn: ->(*) { raise 'must not spawn' })
+        end
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).and_return(nil)
+        configured = described_class.new(
+          data_dir: '/fixture', catalog: catalog, service: started_service, on_launch: proc {},
+          frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator,
+          recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }
+        )
+
+        expect { configured.start }.to raise_error(Lich::WebUI::Error) do |error|
+          expect(error.message).to include("saved Browser path '#{missing}' was skipped", 'LICH_WEBUI_BROWSER', 'restart')
+        end
+      end
+    end
+
+    context 'on a Chromium-only Linux host' do
+      it 'reaches a launcher window through distro Chromium discovery' do
+        distro = '/usr/bin/chromium'
+        spawned = []
+        allow(File).to receive(:executable?) { |path| path == distro }
+        allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
+          original.call(url, **arguments, platform: 'x86_64-linux', environment: { 'PATH' => '/nonexistent/bin' },
+                                          spawn: ->(*argv, **_options) { spawned.push(argv).length + 4241 }, waitpid: ->(*) {},
+                                          thread_factory: ->(&_work) {})
+        end
+        configured = described_class.new(
+          data_dir: '/fixture', catalog: catalog, service: started_service, on_launch: proc {},
+          frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator, browser_terminate: ->(_signal, _pid) {},
+          recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }
+        )
+
+        expect(configured.start).to be(configured)
+        expect(spawned.length).to eq(1)
+        expect(spawned.first.first).to eq(distro)
+        expect(spawned.first).to include('--new-window')
+        expect(spawned.first.last.start_with?('--app=file://')).to be(true)
+        expect(feedback).to be_empty
+      ensure
+        spawned.flatten.grep(/\A--user-data-dir=/).each { |argument| FileUtils.remove_entry(argument.delete_prefix('--user-data-dir='), true) }
+      end
     end
 
     it 'lets an explicit browser path win over the saved one' do
@@ -333,6 +459,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         expect(find(rendered, 'text_input:browser-path').props[:value]).to eq(chromium)
         support = find(rendered, 'text:browser-support').props[:content]
         expect(support).to include('Google Chrome and Microsoft Edge are supported', 'at your own risk')
+        expect(support).to include('LICH_WEBUI_BROWSER')
       end
 
       it 'stores an executable path and uses it the next time the window opens' do
@@ -722,6 +849,65 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
       expect(launcher.send(:render_state)[:modal]).to be_nil
     end
+
+    context 'when the selected row disappears from the catalog' do
+      let(:added) { entry }
+
+      before do
+        gained = added
+        catalog.define_singleton_method(:add_character) do |_account, _character|
+          @entries_value = [gained]
+          true
+        end
+        catalog.define_singleton_method(:add_or_update_account) do |_account, _password, _characters, **_options|
+          @entries_value = [gained]
+          true
+        end
+      end
+
+      def selected = find(tree, 'table:accounts-table').props[:selected]
+
+      it 'drops the selected "(no characters)" row once Add Character gives the account a character' do
+        launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+        launcher.save_character(event({ 'text_input:character-name' => 'Aldor', 'select:character-game' => 'GS3',
+                                        'select:character-frontend' => 'stormfront', 'select:character-account' => 'DOUG' }))
+
+        expect(selected).to be_empty
+        expect(table_rows.map { |row| row[:key] }).to eq([entry.key])
+        expect(find(tree, 'button:accounts-change-password').props[:disabled]).to be(true)
+        expect(feedback).to be_empty
+      end
+
+      it 'drops it once re-adding the account imports characters' do
+        launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+        launcher.save_account(event({ 'text_input:account-name' => 'DOUG', 'select:account-frontend' => 'stormfront',
+                                      'password_input:account-password' => viewer_secret('synthetic-password') }))
+
+        expect(selected).to be_empty
+        expect(table_rows.map { |row| row[:key] }).to eq([entry.key])
+        expect(feedback).to be_empty
+      end
+
+      it 'drops a selected character that a reload no longer lists' do
+        catalog.entries_value = [entry]
+        launcher.send(:reload_catalog)
+        launcher.select_managed_entry(event({}, payload: { rows: [entry.key] }))
+        expect(selected).to eq([entry.key])
+
+        catalog.entries_value = []
+        launcher.send(:reload_catalog)
+
+        expect(selected).to be_empty
+        expect(find(tree, 'button:accounts-edit').props[:disabled]).to be(true)
+      end
+
+      it 'keeps a selection whose row is still listed' do
+        launcher.select_managed_entry(event({}, payload: { rows: [account_row] }))
+        launcher.send(:reload_catalog)
+
+        expect(selected).to eq([account_row])
+      end
+    end
   end
 
   describe 'persistent manual launch' do
@@ -836,6 +1022,76 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       expect(change('wrong-current', 'replacement', 'replacement'))
         .to eq('The current master password was not accepted, or the change could not be saved.')
       expect(messages.to_s).not_to include('current-pass', 'replacement', 'wrong-current', 'short')
+    end
+  end
+
+  describe 'encryption mode change reasons' do
+    def switch(mode, master, confirmation = master)
+      launcher.change_encryption(event({
+        'radio:encryption-mode'             => mode,
+        'password_input:encryption-master'  => viewer_secret(master),
+        'password_input:encryption-confirm' => viewer_secret(confirmation),
+      }))
+      launcher.send(:render_state)[:notice]
+    end
+
+    def changes = catalog.calls.select { |call| call.first == :change_encryption }
+
+    context 'when creating an Enhanced master password' do
+      it 'names empty, mismatched and too short passwords separately, writing nothing' do
+        expect(switch('enhanced', '')).to include(level: 'error', text: 'Master password cannot be empty.')
+        expect(switch('enhanced', 'eightchr', 'eightchs')).to include(level: 'error', text: 'New master passwords do not match.')
+        expect(switch('enhanced', 'seven77')).to include(
+          level: 'error', text: "New master password must be at least #{described_class::MASTER_PASSWORD_MIN_LENGTH} characters."
+        )
+
+        expect(changes).to be_empty
+        expect(messages.to_s).not_to include('eightchr', 'eightchs', 'seven77')
+      end
+
+      it 'refuses with the same text the replacement workflow uses' do
+        launcher.change_master_password(event({ 'password_input:master-current' => viewer_secret('current-pass'),
+                                                'password_input:master-new'     => viewer_secret('seven77'),
+                                                'password_input:master-confirm' => viewer_secret('seven77') }))
+        replacement = launcher.send(:render_state)[:notice][:text]
+
+        expect(switch('enhanced', 'seven77')[:text]).to eq(replacement)
+      end
+
+      it 'accepts exactly the minimum length' do
+        written = []
+        allow(catalog).to receive(:change_encryption_mode) do |mode, master_password:|
+          written << [mode, master_password.dup]
+          true
+        end
+
+        expect(switch('enhanced', 'eightchr')).to be_nil
+        expect(written).to eq([[:enhanced, 'eightchr']])
+      end
+
+      it 'keeps the generic message for a failure that is not a password refusal' do
+        allow(catalog).to receive(:change_encryption_mode).and_return(false)
+
+        expect(switch('enhanced', 'eightchr')).to include(text: 'Encryption mode change failed. Check the password and confirmation.')
+      end
+    end
+
+    context 'when leaving Enhanced mode' do
+      before { catalog.mode = :enhanced }
+
+      it 'names an empty and a refused current master password separately' do
+        expect(switch('standard', '')).to include(level: 'error', text: 'Master password cannot be empty.')
+        catalog.master_valid = false
+        expect(switch('standard', 'wrong-master')).to include(level: 'error', text: 'The current master password was not accepted.')
+
+        expect(changes).to be_empty
+        expect(messages.to_s).not_to include('wrong-master')
+      end
+
+      it 'applies no length rule to the existing master password' do
+        expect(switch('standard', 'old')).to be_nil
+        expect(changes).to eq([[:change_encryption, :standard, nil]])
+      end
     end
   end
 
