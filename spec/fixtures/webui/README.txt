@@ -58,11 +58,14 @@ CSS corpus scripts: see each record's `attribution` in `css-decoration.json`.
 - repository (EO 7fd0b971, lines 8-13): version 2.74; author elanthia-online;
   maintained by Tillmen, EO team, SpiffyJr. The scheduling source (EO c4a96840)
   is 2.76 with the same credits.
-- huntplan: author and version not established. The fixture retains no header,
-  the local lich_repo_mirror `lib/huntplan.lic` is empty at every revision that
-  touches it, no local EO scripts revision has the file, and no local copy matches
-  whole-script SHA-256 37a6af449da8f8bbf26cc63d8b714d52099c87fe994dabeddeac6f07a5fbd726,
+- huntplan (mirror 549e3350, lib/huntplan.lic, lines 10 and 13): version 1.0;
+  author Mertyn. The fixture retains no header. That mirror file has whole-script
+  SHA-256 37a6af449da8f8bbf26cc63d8b714d52099c87fe994dabeddeac6f07a5fbd726,
   which is the tested source identity.
+- nautical-charts (mirror 549e3350, lib/nautical-charts.lic, lines 69 and 89):
+  version 1.2.4, from the header title line "Nautical-Charts Version: 1.2.4"; no
+  author field; the header is signed ~Peggyanne, credited as author. The corpus
+  record in css-decoration.json carries the same credit.
 - tpick (mirror 2fa28f1e, lib/tpick.lic, lines 17-18): version 48; author Dreaven.
 - manatimer (mirror 2fa28f1e, lines 13-14): version 0.1; author Drafix.
 - sail2 (mirror 2fa28f1e, lines 2 and 30): version 1.0.8; no author field; the
@@ -75,8 +78,9 @@ CSS corpus scripts: see each record's `attribution` in `css-decoration.json`.
   (VERSION constant 1.6.11, line 109); authors Khaell, Ruseoffools.
 
 EO 7fd0b971 is 7fd0b971387492cfd81b4bc7ef94428413965071, EO c4a96840 is
-c4a96840ea2a29a445fd797c7baec0b012b0dd12 and mirror 2fa28f1e is
-2fa28f1e540e97c468af88bbc8c432d3cebf8755.
+c4a96840ea2a29a445fd797c7baec0b012b0dd12, mirror 2fa28f1e is
+2fa28f1e540e97c468af88bbc8c432d3cebf8755 and mirror 549e3350 is
+549e33506e121453e3c01cfe5df46a902f44fc5f.
 
 CSS decoration cohort (separate from the ten setup fixtures)
 
@@ -272,12 +276,18 @@ harness code.
   fixture 96f776df5e26ba41feac6d26e95717cf43999b48d7e3b6919537ba6c750d342b.
   Boundary edits: fixture line 2 drops the upstream two-space indent of
   `class Setup`, and the class-closing `end` is LF where upstream is CRLF.
-- huntplan: retained original, lines 1992-2112;
-  class 14d3be8481c1d1abc76cf7394c9dc7d7fb4aca8966b33fb4d3940f9bcabf92a5;
+- huntplan: retained original, mirror 549e3350 lib/huntplan.lic, lines 1992-2112;
+  class 45c8df7cdfac0d281f0b5746260c84c6af5a7f6153086df771cd7250476507ee
+  (upstream lines 1992-2112 less the final line terminator);
   whole script 37a6af449da8f8bbf26cc63d8b714d52099c87fe994dabeddeac6f07a5fbd726;
   fixture 9667d7039ea72d4d835673085406fc7f8efa03391efedaf59e58c90cd1c5ab07.
-  Boundary edit: the class-closing line 122 is LF inside a CRLF body. The
-  upstream source is not available locally, so its bytes were not re-compared.
+  The fixture's own retained-class hash (fixture lines 2-122 less the final
+  newline) is 14d3be8481c1d1abc76cf7394c9dc7d7fb4aca8966b33fb4d3940f9bcabf92a5;
+  it differs from the upstream class hash because of the boundary edit.
+  Boundary edits: upstream's class-closing line 2112 is "end # Setup" with CRLF;
+  fixture line 122 is a bare "end" with LF, so the " # Setup" comment is dropped
+  as well as the CRLF. Fixture lines 2-121 equal upstream lines 1992-2111 byte
+  for byte.
 
 Huntplan's original setup, input limits, invalid-slot refusal, Save & Exit and
 cleanup run in Ruby and Chrome with inert game data and in-memory persistence.
