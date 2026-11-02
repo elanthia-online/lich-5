@@ -326,7 +326,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
 
       it 'skips a saved snap-packaged Chromium path and names it as snap in the notice' do
-        snap = executable_file('chromium-browser')
+        # Windows decides executability by extension, so the stand-in carries .exe there.
+        snap = executable_file(OS.windows? ? 'chromium-browser.exe' : 'chromium-browser')
         File.write(snap, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
         notice = nil
         opened = start_with(saved: snap) { |configured| notice = configured }
