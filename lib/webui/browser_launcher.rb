@@ -18,7 +18,11 @@ module Lich
     # is chosen at the user's risk by an explicit path: the launcher Settings
     # "Browser path", or LICH_WEBUI_BROWSER, which is read before any window
     # exists so a host without Chrome can still reach one. Precedence: explicit
-    # argument, then LICH_WEBUI_BROWSER, then automatic discovery.
+    # argument, then LICH_WEBUI_BROWSER, then automatic discovery. Snap-packaged
+    # Chromium is never used: snap confinement gives it a private /tmp, so it
+    # cannot open the launch file. Discovery skips it, and an explicit path or
+    # LICH_WEBUI_BROWSER naming it is refused with a message asking for a
+    # non-snap Chrome or Chromium.
     module BrowserLauncher
       # Environment variable naming a browser executable for every window.
       ENVIRONMENT_VARIABLE = 'LICH_WEBUI_BROWSER'
@@ -35,9 +39,17 @@ module Lich
         '/usr/bin/google-chrome-stable',
         '/opt/google/chrome/google-chrome',
       ].freeze
-      # Distro Chromium, tried only after every Chrome path.
-      LINUX_CHROMIUM_PATHS = %w[/usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium].freeze
+      # Distro Chromium, tried only after every Chrome path. On Ubuntu
+      # /usr/bin/chromium-browser is a script that execs snap Chromium; the
+      # snap test below skips it.
+      LINUX_CHROMIUM_PATHS = %w[/usr/bin/chromium /usr/bin/chromium-browser].freeze
       LINUX_CHROMIUM_NAMES = %w[chromium chromium-browser].freeze
+      # Snap installs its applications under this root.
+      SNAP_ROOT = '/snap/'
+      # Every snap application command is a link to this launcher.
+      SNAP_LAUNCHER = '/usr/bin/snap'
+      # A wrapper script larger than this is not read when looking for snap.
+      SNAP_WRAPPER_LIMIT = 4096
 
       module_function
 
@@ -155,23 +167,71 @@ module Lich
       # @param path [String, nil] explicit browser path; nil means automatic discovery
       # @param origin [Symbol, nil] :argument (setting) or :environment (LICH_WEBUI_BROWSER)
       # @return [void]
-      # @raise [Error] if the path does not exist or is not an executable file
+      # @raise [Error] if the path does not exist, is not an executable file, or
+      #   is snap-packaged Chromium
       def verify_browser_path(path, origin: :argument)
         return if path.nil?
 
         shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
+        snap = 'snap-packaged Chromium cannot open the WebUI launch files'
         if origin == :environment
           fix = "fix or unset #{ENVIRONMENT_VARIABLE}"
           raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which does not exist; #{fix}" unless File.exist?(path)
-          return if File.file?(path) && File.executable?(path)
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which is not an executable file; #{fix}" unless executable_file?(path)
+          return unless snap_browser?(path)
 
-          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which is not an executable file; #{fix}"
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', but #{snap}; " \
+                       "point #{ENVIRONMENT_VARIABLE} at a non-snap Chrome or Chromium"
         end
 
         raise Error, "the configured browser '#{shown}' does not exist; #{SETTING_HINT} or clear it" unless File.exist?(path)
-        return if File.file?(path) && File.executable?(path)
+        raise Error, "the configured browser '#{shown}' is not an executable file; #{SETTING_HINT} or clear it" unless executable_file?(path)
+        return unless snap_browser?(path)
 
-        raise Error, "the configured browser '#{shown}' is not an executable file; #{SETTING_HINT} or clear it"
+        raise Error, "the configured browser '#{shown}' is unusable: #{snap}; #{SETTING_HINT} to a non-snap " \
+                     "Chrome or Chromium, or clear it and point #{ENVIRONMENT_VARIABLE} at one"
+      end
+
+      # Admits only an executable regular file; File.executable? alone is true
+      # for a searchable directory.
+      # @param path [String] candidate browser path
+      # @return [Boolean]
+      def executable_file?(path)
+        File.file?(path) && File.executable?(path)
+      end
+
+      # Recognizes snap-packaged Chromium: a path under /snap/, one resolving
+      # there or to the snap launcher, or a small script (such as Ubuntu's
+      # /usr/bin/chromium-browser) that execs a /snap/ path. Snap confinement
+      # gives the browser a private /tmp, so it cannot read the launch file.
+      # @param path [String] candidate browser path
+      # @param realpath [#call] resolves symbolic links; raises SystemCallError if absent
+      # @param read_wrapper [#call] returns a small regular file's bytes, or nil
+      # @return [Boolean]
+      def snap_browser?(path, realpath: File.method(:realpath), read_wrapper: method(:wrapper_text))
+        return true if path.to_s.start_with?(SNAP_ROOT)
+
+        resolved = begin
+          realpath.call(path)
+        rescue SystemCallError
+          nil
+        end
+        return true if resolved && (resolved.start_with?(SNAP_ROOT) || resolved == SNAP_LAUNCHER)
+
+        text = read_wrapper.call(path)
+        !text.nil? && text.start_with?('#!') && text.include?(SNAP_ROOT)
+      rescue SystemCallError
+        false
+      end
+
+      # Reads a regular file smaller than SNAP_WRAPPER_LIMIT, the size of a
+      # launcher script; a browser binary is never read.
+      # @param path [String] candidate browser path
+      # @return [String, nil] file bytes, or nil for anything else
+      def wrapper_text(path)
+        return nil unless File.file?(path) && File.size(path) < SNAP_WRAPPER_LIMIT
+
+        File.binread(path)
       end
 
       # An explicit platform is a test/discovery override; normal dispatch uses
@@ -259,19 +319,24 @@ module Lich
       end
 
       # Selects the first executable Chrome candidate, then Edge on Windows or
-      # distro Chromium on Linux. Injected platform/environment/probes allow
-      # discovery tests without launching a browser.
+      # distro Chromium on Linux, skipping snap-packaged Chromium. Injected
+      # platform/environment/probes allow discovery tests without launching a browser.
+      # @param platform [String] Ruby platform string selecting the candidate lists
+      # @param executable [#call] admits a candidate; defaults to an executable regular file
+      # @param environment [#[]] environment source for install roots and PATH
+      # @param snap [#call] flags a snap-packaged candidate to skip
       # @return [String, nil] executable path
-      def app_browser_path(platform: RUBY_PLATFORM, executable: File.method(:executable?), environment: ENV)
+      def app_browser_path(platform: RUBY_PLATFORM, executable: method(:executable_file?), environment: ENV,
+                           snap: method(:snap_browser?))
         candidates = chrome_candidates(platform: platform, environment: environment)
         candidates += edge_candidates(environment: environment) if windows?(platform)
         candidates += chromium_candidates(platform: platform, environment: environment)
-        candidates.find { |path| executable.call(path) }
+        candidates.find { |path| executable.call(path) && !snap.call(path) }
       end
 
       # Finds Chrome specifically for callers that require that browser.
       # @return [String, nil] executable path
-      def google_chrome_path(platform: RUBY_PLATFORM, executable: File.method(:executable?))
+      def google_chrome_path(platform: RUBY_PLATFORM, executable: method(:executable_file?))
         chrome_candidates(platform: platform).find { |path| executable.call(path) }
       end
 
@@ -290,6 +355,8 @@ module Lich
       # Lists Linux distro Chromium paths, then absolute PATH entries; none on
       # macOS or Windows. Relative PATH entries are skipped so the working
       # directory can never supply the browser.
+      # @param platform [String] Ruby platform string; only Linux yields candidates
+      # @param environment [#[]] environment source for PATH
       # @return [Array<String>] ordered discovery candidates
       def chromium_candidates(platform: RUBY_PLATFORM, environment: ENV)
         return [] if platform.match?(/darwin/i) || windows?(platform)

@@ -7,8 +7,10 @@ require 'webui/browser_launcher'
 # A user-set browser path (for example Chromium) is accepted and launched with an
 # isolated profile; a path that cannot run fails at open time with a message that
 # names the setting. LICH_WEBUI_BROWSER and Linux Chromium discovery give a host
-# without Chrome a route to a window. Environments are injected, never the real ENV.
-# File tests only, so the examples hold on Windows as well.
+# without Chrome a route to a window. Snap-packaged Chromium cannot read the launch
+# file in its private /tmp, so discovery skips it and an explicit path naming it is
+# refused. Environments are injected, never the real ENV. Snap browsers are
+# stand-in files in a tmpdir. File tests only, so the examples hold on Windows as well.
 RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
   let(:url) { "http://127.0.0.1:4567/auth?token=#{'f' * 64}&to=%2F" }
   let(:directory) { Dir.mktmpdir('webui-browser-path') }
@@ -21,7 +23,22 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     end
   end
 
+  let(:snap_wrapper) do
+    File.join(directory, 'chromium-browser').tap do |path|
+      File.write(path, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
+      File.chmod(0o755, path)
+    end
+  end
+
   before { allow(Lich).to receive(:log) { |message| logs << message } }
+
+  # Makes discovery see one conventional path as an installed browser file.
+  def pretend_installed(path)
+    allow(File).to receive(:executable?).and_call_original
+    allow(File).to receive(:executable?).with(path).and_return(true)
+    allow(File).to receive(:file?).and_call_original
+    allow(File).to receive(:file?).with(path).and_return(true)
+  end
 
   after { FileUtils.remove_entry(directory) if File.directory?(directory) }
 
@@ -91,10 +108,19 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
                                       'LICH_WEBUI_BROWSER')
   end
 
+  it 'refuses a snap-packaged browser path, naming the setting and LICH_WEBUI_BROWSER, without spawning' do
+    snap_wrapper # created before launch directories are watched
+    expect(Dir).not_to receive(:mktmpdir)
+
+    expect(open_with(browser_path: snap_wrapper, platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
+    expect(failures.size).to eq(1)
+    expect(failures.first).to include("'#{snap_wrapper}'", 'snap-packaged Chromium cannot open the WebUI launch files',
+                                      'Browser path', 'Settings', 'non-snap Chrome or Chromium', 'LICH_WEBUI_BROWSER')
+  end
+
   it 'leaves automatic discovery unchanged when no path is set' do
     detected = '/usr/bin/google-chrome'
-    allow(File).to receive(:executable?).and_call_original
-    allow(File).to receive(:executable?).with(detected).and_return(true)
+    pretend_installed(detected)
     argv = nil
 
     expect(open_with(platform: 'x86_64-linux', spawn: ->(*arguments, **) { (argv = arguments) && 7 })).to be(true)
@@ -107,13 +133,75 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
 
     def discover(present, platform: linux, environment: {})
       described_class.app_browser_path(platform: platform, environment: environment,
-                                       executable: ->(path) { present.include?(path) })
+                                       executable: ->(path) { present.include?(path) }, snap: ->(_path) { false })
+    end
+
+    # Discovery over stand-in files in the tmpdir only, with the real admission
+    # and snap probes, so browsers installed on the host cannot answer.
+    def discover_in_directory(environment)
+      described_class.app_browser_path(
+        platform: linux, environment: environment,
+        executable: ->(path) { path.start_with?(directory) && described_class.executable_file?(path) }
+      )
+    end
+
+    def stand_in(*parts, content: '')
+      File.join(directory, *parts).tap do |path|
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, content)
+        File.chmod(0o755, path)
+      end
     end
 
     it 'discovers distro Chromium on a Chromium-only host' do
-      %w[/usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium].each do |path|
+      %w[/usr/bin/chromium /usr/bin/chromium-browser].each do |path|
         expect(discover([path])).to eq(path)
       end
+    end
+
+    it 'never discovers /snap/bin/chromium, by list or by PATH' do
+      snap = '/snap/bin/chromium'
+      expect(described_class::LINUX_CHROMIUM_PATHS).not_to include(snap)
+      expect(described_class.snap_browser?(snap)).to be(true)
+      expect(described_class.app_browser_path(platform: linux, environment: { 'PATH' => '/snap/bin' },
+                                              executable: ->(path) { path == snap })).to be_nil
+    end
+
+    it 'skips a script wrapper that execs snap Chromium and finds a later non-snap Chromium' do
+      wrapper = stand_in('wrap', 'chromium', content: "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
+      real = stand_in('real', 'chromium', content: "\x7FELF")
+      path = [File.dirname(wrapper), File.dirname(real)].join(File::PATH_SEPARATOR)
+
+      expect(described_class.snap_browser?(wrapper)).to be(true)
+      expect(described_class.snap_browser?(real)).to be(false)
+      expect(discover_in_directory('PATH' => path)).to eq(real)
+      expect(discover_in_directory('PATH' => File.dirname(wrapper))).to be_nil
+    end
+
+    it 'flags a candidate that resolves under /snap/ or to the snap launcher' do
+      plain = stand_in('bin', 'chromium')
+
+      expect(described_class.snap_browser?(plain, realpath: ->(_) { '/snap/chromium/3000/usr/lib/chromium/chrome' }))
+        .to be(true)
+      expect(described_class.snap_browser?(plain, realpath: ->(_) { '/usr/bin/snap' })).to be(true)
+      expect(described_class.snap_browser?(plain, realpath: ->(_) { '/usr/lib/chromium/chromium' })).to be(false)
+    end
+
+    it 'does not read a large file or a script without a /snap/ path as a snap wrapper' do
+      large = stand_in('large', 'chromium', content: "#!/bin/sh\n# /snap/\n#{'x' * described_class::SNAP_WRAPPER_LIMIT}")
+      distro = stand_in('distro', 'chromium', content: "#!/bin/sh\nexec /usr/lib/chromium/chromium \"$@\"\n")
+
+      expect(described_class.snap_browser?(large)).to be(false)
+      expect(described_class.snap_browser?(distro)).to be(false)
+    end
+
+    it 'skips a directory named chromium on PATH and finds a later executable' do
+      FileUtils.mkdir_p(File.join(directory, 'dirs', 'chromium'))
+      real = stand_in('real', 'chromium')
+      path = [File.join(directory, 'dirs'), File.dirname(real)].join(File::PATH_SEPARATOR)
+
+      expect(described_class.executable_file?(File.join(directory, 'dirs', 'chromium'))).to be(false)
+      expect(discover_in_directory('PATH' => path)).to eq(real)
     end
 
     it 'falls back to a PATH lookup for chromium and chromium-browser' do
@@ -139,8 +227,8 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
 
     it 'launches a Chromium-only host through open' do
       chromium = '/usr/bin/chromium'
-      allow(File).to receive(:executable?).and_call_original
-      allow(File).to receive(:executable?).with(chromium).and_return(true)
+      pretend_installed(chromium)
+      allow(described_class).to receive(:snap_browser?).and_return(false)
       argv = nil
 
       expect(open_with(platform: linux, spawn: ->(*arguments, **) { (argv = arguments) && 7 })).to be(true)
@@ -165,8 +253,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     end
 
     it 'overrides automatic discovery' do
-      allow(File).to receive(:executable?).and_call_original
-      allow(File).to receive(:executable?).with('/usr/bin/google-chrome').and_return(true)
+      pretend_installed('/usr/bin/google-chrome')
 
       result, argv = spawned_argv(environment: { variable => chromium })
       expect(result).to be(true)
@@ -185,8 +272,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
 
     it 'ignores an empty or blank value and keeps automatic discovery' do
       detected = '/usr/bin/google-chrome'
-      allow(File).to receive(:executable?).and_call_original
-      allow(File).to receive(:executable?).with(detected).and_return(true)
+      pretend_installed(detected)
 
       ['', '  '].each do |value|
         _, argv = spawned_argv(environment: { variable => value })
@@ -222,6 +308,18 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
       open_with(platform: 'x86_64-linux', environment: { variable => "/nope/chro\nmium" }, spawn: ->(*) {})
       expect(failures.first).to include("'/nope/chro?mium'")
       expect(failures.first).not_to include("\n")
+    end
+
+    it 'refuses a snap-packaged value with a message naming the variable, without spawning' do
+      snap_wrapper # created before launch directories are watched
+      expect(Dir).not_to receive(:mktmpdir)
+
+      expect(open_with(platform: 'x86_64-linux', environment: { variable => snap_wrapper },
+                       spawn: ->(*) { raise 'must not spawn' })).to be(false)
+      expect(failures.first).to include(variable, "'#{snap_wrapper}'",
+                                        'snap-packaged Chromium cannot open the WebUI launch files',
+                                        "point #{variable} at a non-snap Chrome or Chromium")
+      expect(failures.first).not_to include('Settings')
     end
 
     it 'bypasses the native host like any explicit browser' do
