@@ -1216,6 +1216,15 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect { builder.add_from_string('<interface>') }.to raise_error(gtk::BuilderError, /malformed/)
   end
 
+  it 'accepts a document of exactly MAX_BYTES' do
+    open_tag = '<interface>'
+    close_tag = '</interface>'
+    padding = ' ' * (gtk::Builder::MAX_BYTES - open_tag.bytesize - close_tag.bytesize)
+    xml = "#{open_tag}#{padding}#{close_tag}"
+    expect(xml.bytesize).to eq(gtk::Builder::MAX_BYTES)
+    expect(builder.add_from_string(xml)).to equal(builder)
+  end
+
   it 'connects both combo choice signal spellings without replacing the edited text contract' do
     builder.add_from_string(<<~XML)
       <interface>
