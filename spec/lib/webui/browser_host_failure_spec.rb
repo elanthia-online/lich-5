@@ -26,7 +26,7 @@ RSpec.describe 'WebUI window host startup failure' do
     def open_with(**options)
       described_class.open(
         url, on_failure: ->(message) { failures << message },
-             thread_factory: ->(&_block) { raise 'no monitor expected' }, **options
+             thread_factory: ->(&_block) { raise 'no monitor expected' }, environment: {}, **options
       )
     end
 
@@ -34,8 +34,9 @@ RSpec.describe 'WebUI window host startup failure' do
       allow(File).to receive(:executable?).and_return(false)
 
       expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
-      message = 'unable to open WebUI window: Google Chrome is required to open the WebUI launcher window; ' \
-                'install it, or set the Browser path in the launcher Settings to another browser'
+      message = 'unable to open WebUI window: Google Chrome or Chromium is required to open the WebUI launcher ' \
+                'window; install it, or set the Browser path in the launcher Settings or the LICH_WEBUI_BROWSER ' \
+                'environment variable to another browser'
       expect(failures).to eq([message])
       expect(logs).to eq(["warning: #{message}"])
     end
