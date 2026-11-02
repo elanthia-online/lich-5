@@ -243,19 +243,29 @@ module Lich
       # example closing a session with slow destroy handlers) must therefore
       # tolerate its owner's pages being retired mid-run, and must not assume
       # its work is finished or cancelled when the owner's death completes.
-      # A hook registered for an owner whose hooks already ran never fires: the
-      # owner's workers can still be unwinding then (for example a killed
-      # worker's ensure), so a layer that registers a hook lazily must check
-      # owner_terminate_hooks_done? first and refuse instead (1836:RC22).
+      # An owner-bound registration is refused once the owner's hooks have
+      # started: the runner marks the owner under the same lock that guards
+      # registration when it snapshots the hooks, so a hook either joins that
+      # snapshot or is refused, never silently dropped. The owner's workers can
+      # still be unwinding then (for example a killed worker's ensure), so a
+      # layer that registers a hook lazily must treat the refusal as "this owner
+      # is dying" and create no resource that needs the hook (1836:RC22). A
+      # check before registering is not enough: the owner can start between the
+      # check and the call.
       # @param owner [Object, nil] script the hook is for, or nil for every script
       # @yieldparam owner [Object] the dying script
       # @return [Proc] the registered hook
       # @raise [ArgumentError] without a block
+      # @raise [Error] for an owner whose pre-terminate hooks have started or run
       def before_owner_terminate(owner: nil, &hook)
         raise ArgumentError, 'hook block is required' unless hook
 
         INITIALIZATION_MUTEX.synchronize do
           if owner
+            if @terminate_hooks_state&.key?(owner)
+              raise Error.new('owner pre-terminate hooks have started; hook not registered', owner: Diagnostics.owner_label(owner))
+            end
+
             ((@owner_terminate_hooks ||= {}.compare_by_identity)[owner] ||= []) << hook
           else
             (@before_terminate_hooks ||= []) << hook
@@ -264,23 +274,28 @@ module Lich
         hook
       end
 
-      # Whether the pre-terminate hooks for this owner have already run (or the
-      # runner was left by an error), so a hook registered now would never fire.
-      # False before the owner's death and for any object that never died. The
-      # record holds no strong reference to the owner.
+      # Whether the pre-terminate hooks for this owner have finished running (or
+      # the runner was left by an error). False before the owner's death, while
+      # its hooks are still running and for any object that never died; use the
+      # refusal from before_owner_terminate, not this, to guard a registration.
+      # The record holds no strong reference to the owner.
       # @param owner [Object] script to check, by identity
       # @return [Boolean]
       def owner_terminate_hooks_done?(owner)
-        INITIALIZATION_MUTEX.synchronize { @terminate_hooks_done&.key?(owner) == true }
+        INITIALIZATION_MUTEX.synchronize { @terminate_hooks_state&.[](owner) == :done }
       end
 
-      # Runs the registered pre-terminate hooks for one dying script, then
-      # records that they are done for it.
+      # Runs the registered pre-terminate hooks for one dying script. The owner
+      # is marked started under INITIALIZATION_MUTEX as its hooks are
+      # snapshotted, which closes owner-bound registration for it, and marked
+      # done once they have run.
       # @param owner [Object] the dying script
       # @return [void]
       # @api private
       def run_before_terminate_hooks(owner)
         hooks = INITIALIZATION_MUTEX.synchronize do
+          state = (@terminate_hooks_state ||= WeakIdentityMap.new)
+          state[owner] = :started unless state.key?(owner)
           Array(@before_terminate_hooks) + Array(@owner_terminate_hooks&.delete(owner))
         end
         hooks.each do |hook|
@@ -297,7 +312,7 @@ module Lich
           end
         end
       ensure
-        INITIALIZATION_MUTEX.synchronize { (@terminate_hooks_done ||= WeakIdentityMap.new)[owner] = true }
+        INITIALIZATION_MUTEX.synchronize { (@terminate_hooks_state ||= WeakIdentityMap.new)[owner] = :done }
       end
       private :run_before_terminate_hooks
 
