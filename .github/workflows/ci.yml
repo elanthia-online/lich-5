@@ -84,7 +84,7 @@ jobs:
   # Shared lint from elanthia-online/.github, pinned by full SHA. Tests run in
   # the repo-specific jobs below.
   ruby:
-    uses: elanthia-online/.github/.github/workflows/ruby-ci.yml@277eba54e8b75c7e235e459ea53076f6151a4db0
+    uses: elanthia-online/.github/.github/workflows/ruby-ci.yml@277eba54e8b75c7e235e459ea53076f6151a4db0 # v1.0.0
     with:
       lint-scope: repo
       run-tests: false
