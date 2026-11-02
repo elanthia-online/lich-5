@@ -245,6 +245,11 @@ RSpec.describe 'bounded script compatibility pilot' do
   it 'never fires delete_event or closes the window on a viewer detach alone' do
     window, _entry, _check, saved, page, connection, address = edited_close_window
     service.runtime.handle(connection, type: 'detach', page: address, generation: page.generation)
+    # A delete_event queued by detach runs on the owner dispatcher; the barrier
+    # waits behind it, so the negative checks cannot pass before it would run.
+    barrier = Queue.new
+    compatibility.queue { barrier << true }
+    expect(barrier.pop(timeout: 2)).to be(true)
     expect(saved.pop(timeout: 0.3)).to be_nil
     expect(window).not_to be_destroyed
   end
@@ -303,7 +308,7 @@ RSpec.describe 'bounded script compatibility pilot' do
     [scope.script_binding, scope.untrusted_binding].each do |binding|
       expect(eval('Gtk::Version::MAJOR', binding)).to eq(3)
       expect(eval("Gtk::Version::STRING.chr == '3'", binding)).to be(true)
-      # Availability follows the presentation policy read at first activation.
+      # The bindings resolve the lexical ScriptScope constant, whatever its value.
       expect(eval('HAVE_GTK', binding)).to be(scope::HAVE_GTK)
     end
     expect([true, false]).to include(scope::HAVE_GTK)

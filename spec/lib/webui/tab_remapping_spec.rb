@@ -50,10 +50,10 @@ RSpec.describe 'stable tab selection across structural edits' do
   context 'delivered viewer choices' do
     cases.each do |label, old_keys, index, headers, expected|
       it "preserves #{label} independently of the replacement authored default" do
-        # The viewer's own choice differs from the old authored default, and the
-        # replacement default differs from the expected remap wherever the new
-        # collection admits another index, so a reset to either default fails.
-        # An empty collection admits only index 0.
+        # The replacement default differs from the expected remap wherever the new
+        # collection admits another index, so a reset to the replacement default
+        # fails. An empty collection admits only index 0. The old authored default
+        # is 0, so the cases that expect 0 do not catch a reset to it.
         props = { names: old_keys || %w[a b c], selected: 0 }
         props[:headers] = old_keys.map { |key| { key: key } } if old_keys
         target = Lich::WebUI::Page.new(owner: owner, id: 'tabs', title: 'Tabs') { tabs(key: 'pages', **props) }
