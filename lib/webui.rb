@@ -57,6 +57,14 @@ module Lich
         INITIALIZATION_MUTEX.synchronize { @presentation_enabled == true }
       end
 
+      # Reports whether startup explicitly disabled presentation (--no-gui or
+      # --no-gtk). Unlike {.presentation_enabled?}, the unconfigured state is not
+      # a decision, so it reads false here. Same side-effect-free read.
+      # @return [Boolean]
+      def presentation_disabled?
+        INITIALIZATION_MUTEX.synchronize { @presentation_enabled == false }
+      end
+
       # Returns the current page registry without starting a listener.
       # @return [Registry] lazily initialized registry
       def registry

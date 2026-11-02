@@ -78,4 +78,76 @@ RSpec.describe 'Lich.msgbox without a graphical toolkit' do
     expect(stdout.strip).to eq('nil')
     expect(stderr.strip).to eq('Unavailable frontend')
   end
+
+  # Non-Windows errors reach a desktop launch through the GemCheck alert helpers
+  # (1853:RC4@S7). The helper is a recording stub here: no real dialog is ever shown.
+  describe 'with no terminal attached' do
+    def run_msgbox(setup, call)
+      source = <<~SOURCE
+        LICH_VERSION = 'test'
+        require ARGV[0]
+        #{setup}
+        puts "result=\#{#{call}.inspect}"
+      SOURCE
+      Open3.capture3(RbConfig.ruby, '-e', source, File.expand_path('../../lib/lich.rb', __dir__))
+    end
+
+    let(:recording_helper) do
+      <<~'SETUP'
+        module Lich; module GemCheck
+          def self.show_notice(body, title:) = puts("notice title=#{title} body=#{body}")
+        end; end
+      SETUP
+    end
+
+    it 'shows an error through the helper and keeps the terminal message and result' do
+      stdout, stderr, status = run_msgbox(recording_helper, "Lich.msgbox(message: 'Startup failed', icon: :error)")
+
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to eq("notice title=Lich vtest body=Startup failed\nresult=nil\n")
+      expect(stderr.strip).to eq('Startup failed')
+    end
+
+    it 'passes an explicit title to the helper' do
+      stdout, = run_msgbox(recording_helper, "Lich.msgbox(message: 'Startup failed', title: 'Custom', icon: :error)")
+
+      expect(stdout).to include('notice title=Custom body=Startup failed')
+    end
+
+    it 'does not call the helper for a message that is not an error' do
+      stdout, stderr, status = run_msgbox(recording_helper, "Lich.msgbox(message: 'Heads up', icon: :warning)")
+
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to eq("result=nil\n")
+      expect(stderr.strip).to eq('Heads up')
+    end
+
+    it 'does not call the helper when stdout or stderr is a terminal' do
+      %w[STDOUT STDERR].each do |stream|
+        setup = "#{recording_helper}\n#{stream}.define_singleton_method(:isatty) { true }"
+        stdout, stderr, status = run_msgbox(setup, "Lich.msgbox(message: 'Startup failed', icon: :error)")
+
+        expect(status.success?).to be(true), stderr
+        expect(stdout).to eq("result=nil\n")
+        expect(stderr.strip).to eq('Startup failed')
+      end
+    end
+
+    it 'falls back to the terminal and log output when no helper is loaded' do
+      stdout, stderr, status = run_msgbox('', "Lich.msgbox(message: 'Startup failed', icon: :error)")
+
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to eq("result=nil\n")
+      expect(stderr.strip).to eq('Startup failed')
+    end
+
+    it 'falls back to the terminal and log output when the helper fails' do
+      setup = 'module Lich; module GemCheck; def self.show_notice(*, **) = raise(IOError, "no display"); end; end'
+      stdout, stderr, status = run_msgbox(setup, "Lich.msgbox(message: 'Startup failed', icon: :error)")
+
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to eq("result=nil\n")
+      expect(stderr.strip).to eq('Startup failed')
+    end
+  end
 end

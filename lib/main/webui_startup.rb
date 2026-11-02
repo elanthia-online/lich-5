@@ -10,9 +10,11 @@ module Lich
       # Starts the launcher and waits for a selection. A launcher failure (a host
       # that could not start, or one that exited before any viewer connected) is
       # reported and ends startup with exit status 1; a user closing a connected
-      # launcher window is an ordinary cancellation. However this wait ends,
-      # including a thread kill during signal exit, the launcher's bounded and
-      # idempotent exit cleanup runs before startup continues or exits.
+      # launcher window is an ordinary cancellation. When the wait ends normally,
+      # fails or is killed, the launcher's bounded and idempotent exit cleanup runs
+      # before startup continues or exits. A real signal exit is not covered by
+      # this ensure: it is handled by the launcher's at_exit hook (see
+      # WebUILauncher.close_launchers_at_exit), which must stay.
       # @param launcher [Lich::Common::WebUILauncher] launcher that has not started
       # @return [Array<String>, nil] launch data, or nil when the user cancelled
       # @raise [SystemExit] status 1 when the launcher failed
@@ -37,11 +39,14 @@ module Lich
       end
 
       # Writes the fatal reason to the debug log and, when stderr was redirected
-      # to that log, to the terminal stream as well.
+      # to that log, to the terminal stream as well. With no terminal attached (a
+      # desktop launch) it is also shown through Lich.msgbox_alert, so a launcher
+      # that failed to start is not silent (1853:RC4).
       # @param message [String] authored, secret-free failure message
       # @return [void]
       def report_fatal(message)
         Lich.log "error: #{message}"
+        Lich.msgbox_alert(message: message, icon: :error) if Lich.respond_to?(:msgbox_alert)
         return if $stderr.equal?(STDERR)
 
         begin
