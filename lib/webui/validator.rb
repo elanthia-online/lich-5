@@ -240,7 +240,7 @@ module Lich
       def validate_enum(shape, value, context, path)
         normalized = value.is_a?(Symbol) ? value.to_s : value
         unless (normalized.is_a?(String) || normalized.is_a?(Integer)) && shape.fetch(:values).include?(normalized)
-          violation!("must be one of #{shape.fetch(:values).join(', ')}", context, path)
+          violation!("must be one of #{shape.fetch(:values).map(&:to_s).uniq.join(', ')}", context, path)
         end
         normalized.is_a?(String) ? normalized.dup.freeze : normalized
       end
@@ -412,10 +412,17 @@ module Lich
       def validate_step_alignment!(value, props, context, path)
         return if props[:snap_to_step] == false
 
-        steps = (value.to_r - props.fetch(:min).to_r) / props.fetch(:step, 1).to_r
+        steps = (decimal_rational(value) - decimal_rational(props.fetch(:min))) / decimal_rational(props.fetch(:step, 1))
         return if (steps - steps.round).abs <= Rational(1, 1_000_000_000)
 
         violation!('value must align with step from min', context, path)
+      end
+
+      # A Float converts through its shortest decimal spelling so that 0.01 is one
+      # hundredth, not its binary neighbour; the binary error would otherwise exceed
+      # the step tolerance once the step count is large. Finite values only.
+      def decimal_rational(number)
+        number.is_a?(Float) ? Rational(number.to_s) : number.to_r
       end
 
       def validate_log!(props, context)
