@@ -1956,10 +1956,10 @@ describe DRCC do
         expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
       end
 
-      it 'reports the study, one use fewer than the game counted, and the stow' do
+      it 'reports the study and one use fewer than the game counted' do
         result = study
 
-        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false, stowed?: true)
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
       end
 
       it 'prints nothing and does not beep' do
@@ -1991,10 +1991,10 @@ describe DRCC do
         expect(sent).to eq([get_instructions, study_instructions, study_instructions])
       end
 
-      it 'reports the study, the toss, no uses left and no stow' do
+      it 'reports the study, the toss and no uses left' do
         result = study
 
-        expect(result).to have_attributes(studied?: true, uses_left: 0, discarded?: true, stowed?: false)
+        expect(result).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
       end
 
       it 'deletes its discard flag' do
@@ -2012,7 +2012,7 @@ describe DRCC do
              put_instructions   => [put_away])
         flags[discard_flag] = true
 
-        expect(study).to have_attributes(discarded?: false, stowed?: true)
+        expect(study).to have_attributes(discarded?: false)
         expect(sent.last).to eq(put_instructions)
       end
     end
@@ -2028,13 +2028,45 @@ describe DRCC do
       expect(study.uses_left).to eq(9)
     end
 
-    it 'reads a singular "use" in the count' do
+    it 'reads a singular "use" in the count as the last use' do
       # Code-derived, unverified: the logs only show "1 uses" (.25:30340).
       play(get_instructions   => [got_instructions],
            study_instructions => [['[These instructions have only 1 use remaining.  Study them again to proceed.]'], study_complete],
+           put_instructions   => [what_were_you_referring_to])
+
+      expect(study).to have_attributes(uses_left: 0, discarded?: true)
+      expect(sent).not_to include(put_instructions)
+    end
+
+    context 'when the toss line comes after the study has waited out its roundtime' do
+      # Code-derived timing: in the logs the toss arrives in the same second as
+      # the Roundtime (.25:30349, .25:30352). Here it never reaches the Flag
+      # during the call; the "1 uses" prompt (.25:30340) is what is left.
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_one_use, study_complete],
+             # .25:30361: what the old stow got after the toss.
+             put_instructions   => [what_were_you_referring_to])
+      end
+
+      it 'still does not try to put away the instructions' do
+        study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions])
+      end
+
+      it 'reports the toss and no uses left' do
+        expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+      end
+    end
+
+    it 'does not count a "1 uses" prompt as a toss when the study after it gets no reply' do
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_one_use, ambient_only],
            put_instructions   => [put_away])
 
-      expect(study.uses_left).to eq(0)
+      expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: 1, discarded?: false)
+      expect(sent.last).to eq(put_instructions)
     end
 
     it 'reports no uses count when the game gives none' do
@@ -2044,7 +2076,7 @@ describe DRCC do
            study_instructions => [study_complete],
            put_instructions   => [put_away])
 
-      expect(study).to have_attributes(studied?: true, uses_left: nil, discarded?: false, stowed?: true)
+      expect(study).to have_attributes(studied?: true, uses_left: nil, discarded?: false)
       expect(sent).to eq([get_instructions, study_instructions, put_instructions])
     end
 
@@ -2063,7 +2095,7 @@ describe DRCC do
            study_instructions => [study_complete_then_tossed],
            put_instructions   => [what_were_you_referring_to])
 
-      expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true, stowed?: false)
+      expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
     end
 
     it 'counts a bare "Study them again" prompt as a prompt' do
@@ -2099,7 +2131,7 @@ describe DRCC do
         result = study(skip_exit: true)
 
         expect(sent.count(study_instructions)).to eq(DRCC::STUDY_INSTRUCTIONS_MAX_STUDIES)
-        expect(result).to have_attributes(studied?: false, uses_left: 5, discarded?: false, stowed?: true)
+        expect(result).to have_attributes(studied?: false, uses_left: 5, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg)
           .with('bold', 'DRCC: Still told to study liniment instructions again after 3 studies.')
         expect(drc).to have_received(:beep)
@@ -2124,7 +2156,7 @@ describe DRCC do
         result = study(skip_exit: true)
 
         expect(sent).to eq([get_instructions, study_instructions, put_instructions])
-        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false, stowed?: true)
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
       end
 
@@ -2153,7 +2185,7 @@ describe DRCC do
         result = study(skip_exit: true)
 
         expect(sent).to eq([get_instructions, study_instructions])
-        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false, stowed?: false)
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Could not find liniment instructions to study.')
       end
 
@@ -2175,7 +2207,7 @@ describe DRCC do
         result = study(skip_exit: true)
 
         expect(sent).to eq([get_instructions, study_instructions])
-        expect(result).to have_attributes(studied?: false, stowed?: false)
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
       end
     end
@@ -2196,7 +2228,7 @@ describe DRCC do
         result = study(skip_exit: true)
 
         expect(sent).to eq([get_instructions])
-        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false, stowed?: false)
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: You seem to be missing: liniment instructions').once
         expect(Lich::Messaging).not_to have_received(:msg).with('bold', /to study/)
         expect(drc).to have_received(:beep).once
@@ -2216,13 +2248,13 @@ describe DRCC do
       end
 
       it 'returns without studying when skip_exit is set' do
-        expect(study(skip_exit: true)).to have_attributes(studied?: false, stowed?: false)
+        expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(sent).to eq([get_instructions])
       end
     end
 
     context 'when the bag refuses the instructions' do
-      it 'reports the study but not the stow' do
+      it 'still reports the study, after trying the other bag' do
         play(get_instructions   => [got_instructions],
              study_instructions => [study_again_with_five_uses, study_complete],
              # Code-derived: stow_crafting_item's PUT_BAG_CANT_THERE; no log shows it.
@@ -2230,8 +2262,23 @@ describe DRCC do
 
         result = study
 
-        expect(result).to have_attributes(studied?: true, uses_left: 4, stowed?: false)
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
         expect(sent.last).to eq("put my liniment instructions in my other botanist's toolbag")
+      end
+    end
+
+    context 'when the name is nil or blank' do
+      let(:belt) { { 'name' => 'grass toolstrap', 'items' => %w[stamp bowl] } }
+
+      [nil, '', '   '].each do |blank|
+        it "raises ArgumentError for #{blank.inspect} before sending anything, belt or not" do
+          allow(drc).to receive(:bput) { |command, *| sent << command }
+
+          expect { DRCC.study_instructions(blank, "botanist's toolbag", nil, nil, true) }.to raise_error(ArgumentError)
+          expect { DRCC.study_instructions(blank, "botanist's toolbag", nil, belt, true) }.to raise_error(ArgumentError)
+          expect(sent).to be_empty
+          expect(flags[discard_flag]).to be_nil
+        end
       end
     end
 

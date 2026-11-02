@@ -85,6 +85,14 @@ module Lich
       STUDY_INSTRUCTIONS_DISCARDED = /The instructions have grown so smudged and faded from use that you can no longer make them out/
       # Flag that catches STUDY_INSTRUCTIONS_DISCARDED during one study_instructions call.
       STUDY_INSTRUCTIONS_DISCARDED_FLAG = 'drcc-study-instructions-discarded'
+      # The uses count in the prompt before the study that uses the last use.
+      # Every "1 uses" prompt in the logs is followed by the toss once that
+      # study completes (NawainDR_2026-10-25.log:30340 then 30352, 32923 then
+      # 32936; NawainDR_2026-10-26.log:49528 then 49540, 58534 then 58546),
+      # and no set is tossed without one. A completed study after this count
+      # is a toss even when the Flag missed the line, so the instructions are
+      # not put away after they are gone.
+      STUDY_INSTRUCTIONS_LAST_USE = 1
       # Most studies sent per study_instructions call. The game asks for one
       # more study, once (31 prompts in 62 studies in NawainDR_2026-10-25.log
       # and -26.log); the third is headroom, not an expected path.
@@ -642,13 +650,14 @@ module Lich
       #     count (instructions that do not wear out, or a failure first)
       # @!attribute [r] discarded
       #   @return [Boolean] true when the game tossed the worn-out
-      #     instructions away after the study
-      # @!attribute [r] stowed
-      #   @return [Boolean] true when stow_crafting_item reported the
-      #     instructions put away. false when they were tossed, never in hand,
-      #     or the stow failed. stow_crafting_item reports true for any put
-      #     reply but "You can't put that there", so true is its word, not proof.
-      StudyInstructionsResult = Data.define(:studied, :uses_left, :discarded, :stowed) do
+      #     instructions away after the study: the Flag caught the toss line,
+      #     or the study that completed followed a "1 uses" prompt
+      #     (STUDY_INSTRUCTIONS_LAST_USE)
+      #
+      # There is no stow field: stow_crafting_item answers true for a PUT that
+      # timed out or got "What were you referring to?", so it cannot tell
+      # whether the instructions were put away, and no caller reads it.
+      StudyInstructionsResult = Data.define(:studied, :uses_left, :discarded) do
         # @return [Boolean] see #studied
         def studied?
           studied
@@ -657,11 +666,6 @@ module Lich
         # @return [Boolean] see #discarded
         def discarded?
           discarded
-        end
-
-        # @return [Boolean] see #stowed
-        def stowed?
-          stowed
         end
       end
 
@@ -676,7 +680,8 @@ module Lich
       #    in all; the prompt's uses count is kept for +uses_left+.
       # 3. Waits out the study's roundtime, then checks a Flag for
       #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the Roundtime line
-      #    bput returned on.
+      #    bput returned on. A completed study after a "1 uses" prompt counts
+      #    as a toss even if the Flag missed the line.
       # 4. stow_crafting_item(+name+, +bag+, +belt+), unless the instructions
       #    were tossed or the study said they are not there or not in hand.
       #
@@ -698,34 +703,40 @@ module Lich
       # @param skip_exit [Boolean] return a result on a final failure instead
       #   of stopping the script
       # @return [StudyInstructionsResult]
+      # @raise [ArgumentError] when +name+ is nil or blank, before any command
+      #   is sent (a blank name would GET or untie nothing in particular)
       #
       # @example Prepare a remedy from instructions
       #   result = DRCC.study_instructions('liniment instructions', bag, bag_items, belt)
       #   DRC.message('Last use of these instructions.') if result.discarded?
       def study_instructions(name, bag, bag_items, belt, skip_exit = false)
+        raise ArgumentError, 'DRCC.study_instructions needs the name of the instructions' if name.to_s.strip.empty?
+
         unless get_crafting_item(name, bag, bag_items, belt, skip_exit)
           # A final GET failure has already reported (and without skip_exit
           # stopped); only a timed-out GET is left to report here.
           crafting_item_failed("DRCC: Could not get #{name} to study.", skip_exit) unless skip_exit
-          return StudyInstructionsResult.new(studied: false, uses_left: nil, discarded: false, stowed: false)
+          return StudyInstructionsResult.new(studied: false, uses_left: nil, discarded: false)
         end
 
         outcome, uses, discarded = study_held_instructions(name)
         studied = outcome == :studied
-        stowed = !discarded && !%i[not_found not_holding].include?(outcome) && stow_crafting_item(name, bag, belt) == true
+        stow_crafting_item(name, bag, belt) unless discarded || %i[not_found not_holding].include?(outcome)
         crafting_item_failed(study_instructions_failure(outcome, name), skip_exit) unless studied
         StudyInstructionsResult.new(
           studied: studied,
           uses_left: discarded ? 0 : instructions_uses_left(uses, studied),
-          discarded: discarded,
-          stowed: stowed
+          discarded: discarded
         )
       end
 
       # Sends `study my <name>` until a reply other than "Study them again",
       # or STUDY_INSTRUCTIONS_MAX_STUDIES studies, then waits out roundtime
       # and reads the discard Flag. The Flag is added before the first study
-      # and deleted on the way out, however the method leaves.
+      # and deleted on the way out, however the method leaves. A completed
+      # study after a STUDY_INSTRUCTIONS_LAST_USE count is a toss too, so a
+      # toss line that arrives after waitrt? cannot lead to a stow of
+      # instructions that are gone.
       #
       # @param name [String] the instructions, as study_instructions got them
       # @return [Array(Symbol, Integer, Boolean)] the outcome (:studied, :again,
@@ -743,7 +754,8 @@ module Lich
           uses = reply[STUDY_INSTRUCTIONS_AGAIN, :uses]&.to_i || uses
         end
         waitrt?
-        [outcome, uses, Flags[STUDY_INSTRUCTIONS_DISCARDED_FLAG] ? true : false]
+        tossed = Flags[STUDY_INSTRUCTIONS_DISCARDED_FLAG] || (outcome == :studied && uses == STUDY_INSTRUCTIONS_LAST_USE)
+        [outcome, uses, tossed ? true : false]
       ensure
         Flags.delete(STUDY_INSTRUCTIONS_DISCARDED_FLAG)
       end
