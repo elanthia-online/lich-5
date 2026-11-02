@@ -5,10 +5,10 @@ require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
 RSpec.describe 'progress provider lifecycle' do
-  # Settled B5: the staminabar2 example names the script, its pinned source
-  # revision and what its header states, from that script's css-decoration.json
-  # attribution record (spec/fixtures/webui/README.txt); the header states no
-  # version or author.
+  # Settled B5: every example that loads the staminabar2 stylesheet helper names
+  # the script, its pinned source revision and what its header states, from that
+  # script's css-decoration.json attribution record (spec/fixtures/webui/README.txt);
+  # the header states no version or author.
   attribution = '[staminabar2 version not established, mirror 549e33506e121453e3c01cfe5df46a902f44fc5f, author not established]'
 
   let(:scope) { Lich::Common::ScriptScope }
@@ -106,7 +106,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.send(:component_props)).to include(height: 24, fill_color: blue)
   end
 
-  it 'updates every attached live bar when loaded after attachment or reloaded positionally' do
+  it "updates every attached live bar when loaded after attachment or reloaded positionally #{attribution}" do
     handle = live_bar
     other = gtk.const_get(:ProgressBar).new
     other_handle = other.materialize
@@ -126,7 +126,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.materialize).to equal(handle)
   end
 
-  it 'restores omitted live properties without replacing the handle or disturbing fraction' do
+  it "restores omitted live properties without replacing the handle or disturbing fraction #{attribution}" do
     handle = live_bar
     provider.load(data: stylesheet)
     bar.style_context.add_provider(provider, user)
@@ -141,7 +141,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.send(:component_props)).not_to have_key(:height)
   end
 
-  it 'restores a height authored before attachment and preserves later explicit writes through reloads' do
+  it "restores a height authored before attachment and preserves later explicit writes through reloads #{attribution}" do
     bar.height_request = 31
     handle = live_bar
     provider.load(data: stylesheet)
@@ -157,7 +157,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.session.port.get(handle, :height)).to eq(42)
   end
 
-  it 'uses priority then attachment order and reveals the remaining provider on removal' do
+  it "uses priority then attachment order and reveals the remaining provider on removal #{attribution}" do
     provider.load(data: stylesheet)
     second = gtk.const_get(:CssProvider).new
     second.load(data: stylesheet('gold'))
@@ -172,7 +172,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.send(:component_props)).not_to have_key(:fill_color)
   end
 
-  it 'ignores unloaded higher-priority providers until successfully loaded' do
+  it "ignores unloaded higher-priority providers until successfully loaded #{attribution}" do
     provider.load(data: stylesheet)
     pending = gtk.const_get(:CssProvider).new
     bar.style_context.add_provider(provider, application)
@@ -182,7 +182,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.send(:component_props)[:fill_color][:r]).to eq(255)
   end
 
-  it 'refuses invalid input without changing the previous style' do
+  it "refuses invalid input without changing the previous style #{attribution}" do
     provider.load(data: stylesheet)
     handle = live_bar
     bar.style_context.add_provider(provider)
@@ -193,7 +193,7 @@ RSpec.describe 'progress provider lifecycle' do
     end
   end
 
-  it 'distinguishes unloaded, recognized and omitted providers without retaining source CSS' do
+  it "distinguishes unloaded, recognized and omitted providers without retaining source CSS #{attribution}" do
     expect(provider.state).to eq(:unloaded)
     expect(provider.loaded?).to be false
     expect(provider.load_from_data('button { color: red; }')).to be true
@@ -215,7 +215,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(Lich).not_to have_received(:log).with(/private\/secret|https:\/\/invalid/)
   end
 
-  it 'clears recognized effects on every live bar when reloaded as omitted and can restore them' do
+  it "clears recognized effects on every live bar when reloaded as omitted and can restore them #{attribution}" do
     handle = live_bar
     other = gtk.const_get(:ProgressBar).new
     other.height_request = 31
@@ -245,7 +245,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(bar.session.port.get(other_handle, :height)).to eq(42)
   end
 
-  it 'reveals another recognized provider when the higher priority one becomes omitted' do
+  it "reveals another recognized provider when the higher priority one becomes omitted #{attribution}" do
     provider.load(data: stylesheet)
     second = gtk.const_get(:CssProvider).new
     second.load(data: stylesheet('gold'))
@@ -274,7 +274,7 @@ RSpec.describe 'progress provider lifecycle' do
     end
   end
 
-  it 'attributes one omission notice per owner and keeps omitted providers isolated and detached' do
+  it "attributes one omission notice per owner and keeps omitted providers isolated and detached #{attribution}" do
     first_provider, first_bar = provider, bar
     first_bar.style_context.add_provider(first_provider)
     2.times { first_provider.instance_eval("load(data: 'label { color: red; }')", 'style.lic', 95) }
@@ -309,7 +309,7 @@ RSpec.describe 'progress provider lifecycle' do
       .to raise_error(gtk.const_get(:UnsupportedOperation), /source=style.lic:72/)
   end
 
-  it 'isolates owners and refuses cross-owner attachment and mutation' do
+  it "isolates owners and refuses cross-owner attachment and mutation #{attribution}" do
     first_provider, first_bar = provider, bar
     first_provider.load(data: stylesheet)
     first_bar.style_context.add_provider(first_provider)
@@ -323,7 +323,7 @@ RSpec.describe 'progress provider lifecycle' do
     expect(other.send(:component_props)).not_to have_key(:fill_color)
   end
 
-  it 'releases providers when a parent retires descendants and on owner death for unattached bars' do
+  it "releases providers when a parent retires descendants and on owner death for unattached bars #{attribution}" do
     parent = gtk.const_get(:Box).new(:vertical)
     parent.add(bar)
     bar.style_context.add_provider(provider)
@@ -341,7 +341,7 @@ RSpec.describe 'progress provider lifecycle' do
   end
 
   %i[bar window].each do |target_kind|
-    it "serializes #{target_kind} destruction with reloads of a shared provider" do
+    it "serializes #{target_kind} destruction with reloads of a shared provider #{attribution}" do
       window = gtk.const_get(:Window).new
       window.add(bar)
       window.materialize
