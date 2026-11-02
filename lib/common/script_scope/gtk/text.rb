@@ -262,6 +262,7 @@ module Lich
           # Applies the selected presentation's limits before any mutation.
           # Logs explicitly degrade history length; editors reject excess text.
           # Only retained lines are validated; a discarded prefix cannot refuse a valid tail.
+          # @param value [String] normalized candidate text to bound
           # @param log [Boolean] presentation to bound for; a view stages its next mode here
           # @param receiver [Object] object named in a refusal; a view names itself when it stages a mode
           # @param operation [Symbol] operation named in a refusal
