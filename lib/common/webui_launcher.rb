@@ -409,7 +409,7 @@ module Lich
       # Saves the browser used for the launcher window. The window is already open, so
       # the choice applies the next time the launcher opens. An empty value restores
       # automatic Chrome or Edge detection; anything else must be an absolute path to
-      # an executable file.
+      # an executable file that is not snap-packaged Chromium.
       # @param event [WebUI::Runtime::EventContext] submission holding the path field
       # @param path_cid [String] submitted browser-path field
       # @return [void]
@@ -417,6 +417,10 @@ module Lich
         value = event.submission.fetch(path_cid).to_s.strip
         unless value.empty? || (File.absolute_path?(value) && File.file?(value) && File.executable?(value))
           return set_notice('Browser path must be the full path of an executable file.', :error)
+        end
+        if !value.empty? && Lich::WebUI::BrowserLauncher.snap_browser?(value)
+          return set_notice('Browser path is snap-packaged Chromium, which cannot open the launcher. ' \
+                            'Choose a non-snap Chrome or Chromium.', :error)
         end
 
         stored = false
@@ -1078,27 +1082,39 @@ module Lich
 
       # Chooses the browser for the launcher window. A path given to the constructor
       # is passed through as is and fails the launch if it is missing. The saved
-      # Settings path is used while it is an executable file; once it is not, it is
-      # skipped so LICH_WEBUI_BROWSER and automatic detection can still open the
-      # window that would be needed to change it.
+      # Settings path is used while it is an executable file that is not
+      # snap-packaged Chromium; otherwise it is skipped so LICH_WEBUI_BROWSER and
+      # automatic detection can still open the window that would be needed to change it.
       # @return [String, nil] path for the launcher, or nil for variable and detection
       # @api private
       def launch_browser_path
         path, explicit = @mutex.synchronize { [@browser_path, @browser_path_explicit] }
-        return path if path.nil? || explicit || (File.file?(path) && File.executable?(path))
+        return path if path.nil? || explicit
 
-        skip_saved_browser_path(path)
+        executable = File.file?(path) && File.executable?(path)
+        snap = executable && Lich::WebUI::BrowserLauncher.snap_browser?(path)
+        return path if executable && !snap
+
+        skip_saved_browser_path(path, snap: snap)
         nil
       end
 
-      # Logs a stale saved browser path and queues a notice naming it for the first
-      # attached viewer. File tests only, as {Lich::WebUI::BrowserLauncher} does.
-      # @param path [String] saved path that is not an executable file
+      # Logs a stale or snap-packaged saved browser path and queues a notice naming
+      # it for the first attached viewer. File tests only, as
+      # {Lich::WebUI::BrowserLauncher} does.
+      # @param path [String] saved path that is not a usable executable file
+      # @param snap [Boolean] true when the path is snap-packaged Chromium
       # @return [void]
       # @api private
-      def skip_saved_browser_path(path)
+      def skip_saved_browser_path(path, snap: false)
         shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
         @mutex.synchronize { @skipped_browser_path = shown }
+        if snap
+          log_diagnostic(:warning, "saved browser path is snap-packaged Chromium and was skipped path=#{shown}")
+          return set_notice("The saved Browser path '#{shown}' is snap-packaged Chromium, which cannot open the " \
+                            'launcher, so it was skipped. Save a non-snap Chrome or Chromium in Settings, or clear it.', :warn)
+        end
+
         log_diagnostic(:warning, "saved browser path is not an executable file and was skipped path=#{shown}")
         set_notice("The saved Browser path '#{shown}' no longer exists or is not an executable file, so it was " \
                    'skipped. Save a new path in Settings, or clear it.', :warn)

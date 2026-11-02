@@ -4,11 +4,11 @@ module Lich
   module Common
     class WebUILauncher
       # Validates confirmed creation or an explicit plaintext acknowledgement before writing.
-      # Creating an Enhanced master password needs a nonempty, matching value of at
-      # least MASTER_PASSWORD_MIN_LENGTH characters, as replacement does. Leaving
-      # Enhanced asks for the current master password without a length rule, so
-      # passwords created before the minimum still unlock. Each refusal reason is
-      # a fixed message that never includes password contents.
+      # Creating an Enhanced master password needs a matching value that passes
+      # MasterPasswordManager.new_password_refusal, as replacement and the CLI do.
+      # Leaving Enhanced takes the current master password as typed, without a
+      # length rule, so passwords created before the minimum still unlock. Each
+      # refusal reason is a fixed message that never includes password contents.
       # @param event [WebUI::Runtime::EventContext] mode, master password and confirmations
       # @return [void]
       def change_encryption(event)
@@ -44,13 +44,11 @@ module Lich
         post_operation(operation, secrets: [secret, confirmed].compact) do
           secret.consume do |password|
             if mode == :enhanced
-              raise ValidationRefused, 'Master password cannot be empty.' if password.empty?
               confirmed.consume do |value|
                 raise ValidationRefused, 'New master passwords do not match.' unless secure_equal?(password, value)
               end
-              if password.length < MASTER_PASSWORD_MIN_LENGTH
-                raise ValidationRefused, "New master password must be at least #{MASTER_PASSWORD_MIN_LENGTH} characters."
-              end
+              refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(password)
+              raise ValidationRefused, refusal if refusal
             end
             commit(operation) do
               if @catalog.encryption_mode == :enhanced && mode != :enhanced
@@ -89,9 +87,8 @@ module Lich
         post_operation(operation, secrets: carriers) do
           consume_three(carriers) do |current, replacement, confirmation|
             raise ValidationRefused, 'New master passwords do not match.' unless secure_equal?(replacement, confirmation)
-            if replacement.length < MASTER_PASSWORD_MIN_LENGTH
-              raise ValidationRefused, "New master password must be at least #{MASTER_PASSWORD_MIN_LENGTH} characters."
-            end
+            refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(replacement)
+            raise ValidationRefused, refusal if refusal
             commit(operation) do
               unless @catalog.change_master_password(current, replacement)
                 raise ValidationRefused, 'The current master password was not accepted, or the change could not be saved.'

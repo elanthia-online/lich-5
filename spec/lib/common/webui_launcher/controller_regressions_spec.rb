@@ -325,6 +325,20 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         spawned.flatten.grep(/\A--user-data-dir=/).each { |argument| FileUtils.remove_entry(argument.delete_prefix('--user-data-dir='), true) }
       end
 
+      it 'skips a saved snap-packaged Chromium path and names it as snap in the notice' do
+        snap = executable_file('chromium-browser')
+        File.write(snap, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
+        notice = nil
+        opened = start_with(saved: snap) { |configured| notice = configured }
+
+        expect(opened.map { |arguments| arguments[:browser_path] }).to eq([nil])
+        expect(messages).to include([:warning, a_string_including('snap-packaged', snap)])
+        expect(delivered_notice(notice)).to eq(
+          text: "The saved Browser path '#{snap}' is snap-packaged Chromium, which cannot open the launcher, so it " \
+                'was skipped. Save a non-snap Chrome or Chromium in Settings, or clear it.', level: 'warn'
+        )
+      end
+
       it 'still fails hard for an explicit browser path passed by the caller' do
         allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
           original.call(url, **arguments, platform: 'linux', spawn: ->(*) { raise 'must not spawn' })
@@ -363,6 +377,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         distro = '/usr/bin/chromium'
         spawned = []
         allow(File).to receive(:executable?) { |path| path == distro }
+        allow(File).to receive(:file?) { |path| path == distro }
+        allow(Lich::WebUI::BrowserLauncher).to receive(:snap_browser?).and_return(false)
         allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
           original.call(url, **arguments, platform: 'x86_64-linux', environment: { 'PATH' => '/nonexistent/bin' },
                                           spawn: ->(*argv, **_options) { spawned.push(argv).length + 4241 }, waitpid: ->(*) {},
@@ -480,6 +496,19 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         expect(stored).to be_empty
         expect(launcher.send(:render_state)[:browser_path]).to be_nil
         expect(launcher.send(:render_state)[:notice]).to include(level: 'error')
+      end
+
+      it 'refuses a snap-packaged Chromium path, storing nothing' do
+        snap = browser_file
+        File.write(snap, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
+        save_browser(snap)
+
+        expect(stored).to be_empty
+        expect(launcher.send(:render_state)[:browser_path]).to be_nil
+        expect(launcher.send(:render_state)[:notice]).to include(
+          level: 'error', text: 'Browser path is snap-packaged Chromium, which cannot open the launcher. ' \
+                                'Choose a non-snap Chrome or Chromium.'
+        )
       end
 
       it 'clears the choice with an empty path' do
@@ -1023,6 +1052,19 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         .to eq('The current master password was not accepted, or the change could not be saved.')
       expect(messages.to_s).not_to include('current-pass', 'replacement', 'wrong-current', 'short')
     end
+
+    it 'refuses edge whitespace through the shared new-password check, saving nothing' do
+      checked = []
+      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:new_password_refusal).and_wrap_original do |original, password|
+        checked << password.dup
+        original.call(password)
+      end
+      expect(catalog).not_to receive(:change_master_password)
+
+      expect(change('current-pass', ' replacement-1', ' replacement-1'))
+        .to eq('New master password cannot begin or end with whitespace.')
+      expect(checked).to eq([' replacement-1'])
+    end
   end
 
   describe 'encryption mode change reasons' do
@@ -1047,6 +1089,20 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
         expect(changes).to be_empty
         expect(messages.to_s).not_to include('eightchr', 'eightchs', 'seven77')
+      end
+
+      it 'refuses edge whitespace through the shared new-password check, writing nothing' do
+        checked = []
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:new_password_refusal).and_wrap_original do |original, password|
+          checked << password.dup
+          original.call(password)
+        end
+
+        expect(switch('enhanced', 'new-secret ')).to include(
+          level: 'error', text: 'New master password cannot begin or end with whitespace.'
+        )
+        expect(checked).to eq(['new-secret '])
+        expect(changes).to be_empty
       end
 
       it 'refuses with the same text the replacement workflow uses' do
@@ -1091,6 +1147,14 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       it 'applies no length rule to the existing master password' do
         expect(switch('standard', 'old')).to be_nil
         expect(changes).to eq([[:change_encryption, :standard, nil]])
+      end
+
+      it 'checks an existing master password with edge spaces as typed' do
+        checked = []
+        catalog.define_singleton_method(:validate_master_password) { |password| checked << password.dup; true }
+
+        expect(switch('standard', ' padded ')).to be_nil
+        expect(checked).to eq([' padded '])
       end
     end
   end
