@@ -7,7 +7,8 @@ inherit_from: .rubocop/base.yml
 # bodies keep source formatting and the unused local. They are not exact
 # upstream bytes: module wrapper lines are synthetic LF, bigshot's class line
 # lost its indentation, and the class-closing lines of bigshot and huntplan are
-# LF inside CRLF bodies. Safety/ASCII and other lint cops run.
+# LF inside CRLF bodies (huntplan's upstream closing line, "end # Setup" with
+# CRLF, is a bare "end" with LF here). Safety/ASCII and other lint cops run.
 Layout:
   Exclude:
     - 'spec/fixtures/webui/bigshot_setup.lic'
