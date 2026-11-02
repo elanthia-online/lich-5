@@ -4,8 +4,11 @@ require_relative '../../spec_helper'
 require 'socket'
 require 'timeout'
 require 'webui/server'
+require_relative '../../support/webui_socket_buffer'
 
 RSpec.describe Lich::WebUI::Server::Connection do
+  include WebUISocketBuffer
+
   def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
   # Reassembles one unmasked, possibly fragmented server text message.
@@ -24,22 +27,6 @@ RSpec.describe Lich::WebUI::Server::Connection do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
     [sender, receiver]
-  end
-
-  # Writes until the kernel refuses more, so the next write stalls whatever the platform's
-  # socket buffer size. Windows AF_UNIX sockets absorb far more than SO_SNDBUF suggests, so a
-  # fixed message size does not reliably stall there. Bounded by time and by bytes.
-  def fill_send_buffer(sender, limit: 512 * 1024 * 1024)
-    chunk = 'f' * 65_536
-    total = 0
-    deadline = monotonic + 5
-    loop do
-      written = sender.write_nonblock(chunk, exception: false)
-      break if written == :wait_writable
-
-      total += written
-      raise "send buffer never filled (#{total} bytes)" if total > limit || monotonic > deadline
-    end
   end
 
   it 'returns to a broadcasting caller at once and still delivers to other viewers when one peer stops reading' do

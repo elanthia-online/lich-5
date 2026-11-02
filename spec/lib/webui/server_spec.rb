@@ -5,8 +5,11 @@ require 'socket'
 require 'timeout'
 require 'uri'
 require 'webui/server'
+require_relative '../../support/webui_socket_buffer'
 
 RSpec.describe Lich::WebUI::Server do
+  include WebUISocketBuffer
+
   def request(server, target, headers = {})
     socket = TCPSocket.new(server.host, server.port)
     request_headers = { 'Host' => "127.0.0.1:#{server.port}", 'Connection' => 'close' }.merge(headers)
@@ -278,13 +281,8 @@ RSpec.describe Lich::WebUI::Server do
     stub_const('Lich::WebUI::Server::Connection::WRITE_TIMEOUT', 0.05)
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
-    # Windows AF_UNIX sockets absorb far more than SO_SNDBUF suggests, so fill the
-    # buffer until the kernel refuses more (as connection_outbound_queue_spec does);
-    # the queued write then stalls on every platform.
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
-    until sender.write_nonblock('f' * 65_536, exception: false) == :wait_writable
-      raise 'send buffer never filled' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-    end
+    # Fill the buffer so the queued write stalls on every platform (see WebUISocketBuffer).
+    fill_send_buffer(sender)
     connection = described_class::Connection.new(sender)
 
     expect(Timeout.timeout(1) { connection.send_text('x' * (1024 * 1024)) }).to be(true)
@@ -298,10 +296,20 @@ RSpec.describe Lich::WebUI::Server do
 
   it 'retires a stream if its writer is killed partway through a frame' do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
-    sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
+    # Barrier independent of platform buffer size: the writer's first socket write sends
+    # part of the frame, then blocks until the test has read it and killed the writer.
+    wrote_part = Queue.new
+    release = Queue.new
+    allow(sender).to receive(:write_nonblock).and_wrap_original do |original, data, **options|
+      written = original.call(data.byteslice(0, 16), **options)
+      wrote_part << written
+      release.pop
+      written
+    end
     connection = described_class::Connection.new(sender)
     writer = connection.instance_variable_get(:@writer)
     expect(connection.send_text('x' * (1024 * 1024))).to be(true)
+    expect(Timeout.timeout(2) { wrote_part.pop }).to be >= 2
     expect(Timeout.timeout(2) { receiver.read(2) }.bytesize).to eq(2)
     expect(writer.kill.join(2)).to equal(writer)
 
