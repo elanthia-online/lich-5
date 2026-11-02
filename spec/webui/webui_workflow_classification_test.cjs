@@ -4,12 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/webui_tests.yaml'), 'utf8');
+// Normalized once so every marker and regex below sees LF, as on a CRLF
+// checkout (core.autocrlf) the raw text would break indexOf and $ anchors (1852:RC12).
+const lf = text => text.replace(/\r\n/g, '\n');
+const workflow = lf(fs.readFileSync(path.join(__dirname, '../../.github/workflows/webui_tests.yaml'), 'utf8'));
 
 // Execute the checkout-free production block; its YAML location is deliberately
 // narrow so a workflow rearrangement fails instead of testing a copied policy.
-function classifierSource() {
-  const lines = workflow.split(/\r?\n/);
+function classifierSource(text = workflow) {
+  const lines = text.split('\n');
   const anchors = lines.flatMap((line, index) => line === '      - &classify' ? [index] : []);
   assert.equal(anchors.length, 1, 'expected one shared classify step');
   const start = anchors[0];
@@ -105,11 +108,25 @@ for (const filename of [
 // Every helper that .rspec or .rspec_parallel loads into all examples (browser
 // ones included) must select WebUI jobs, so an edit to the next globally loaded
 // helper cannot skip the browser checks (1852:RC11).
+// Parses the require targets of an rspec options file. The space, `=` and
+// attached (`-r./path`) forms are accepted; any other line that starts with
+// --require or -r fails visibly instead of being skipped (1852:RC12).
+function rspecRequires(text) {
+  const required = [];
+  for (const line of lf(text).split('\n')) {
+    const trimmed = line.trim();
+    if (!/^(?:--require|-r)/.test(trimmed)) continue;
+    const match = /^(?:--require(?:[ =]+)|-r[ =]*)(\S+)$/.exec(trimmed);
+    assert.ok(match, `unparsed require-looking line: ${trimmed}`);
+    required.push(match[1]);
+  }
+  return required;
+}
+
 for (const rspecFile of ['.rspec', '.rspec_parallel']) {
   test(`every --require in ${rspecFile} selects WebUI jobs`, async () => {
     const root = path.join(__dirname, '../..');
-    const text = fs.readFileSync(path.join(root, rspecFile), 'utf8');
-    const required = [...text.matchAll(/^\s*(?:--require|-r)[ =]+(\S+)\s*$/gm)].map(match => match[1]);
+    const required = rspecRequires(fs.readFileSync(path.join(root, rspecFile), 'utf8'));
     assert.ok(required.length > 0, `expected --require lines in ${rspecFile}`);
     for (const target of required) {
       // Relative to the repo root (RSpec runs there); a bare name resolves on
@@ -123,13 +140,35 @@ for (const rspecFile of ['.rspec', '.rspec_parallel']) {
   });
 }
 
+test('require drift guard parses every spelling and rejects unparsed lines', () => {
+  assert.deepEqual(rspecRequires('--require ./a\n--require=./b\n-r ./c\n-r=./d\n-r./e\n--color\n'), ['./a', './b', './c', './d', './e']);
+  assert.deepEqual(rspecRequires('-r./a\r\n--require ./b\r\n'), ['./a', './b']);
+  assert.throws(() => rspecRequires('--require\n'), /unparsed require-looking line/);
+  assert.throws(() => rspecRequires('-r\n'), /unparsed require-looking line/);
+  assert.throws(() => rspecRequires('--require ./a ./b\n'), /unparsed require-looking line/);
+});
+
+function browserShardFiles(text) {
+  const browser = text.slice(text.indexOf('\n  browser:\n'));
+  return [...browser.matchAll(/^ {14}(spec\/\S+_spec\.rb)$/gm)].map(match => match[1]);
+}
+
 test('every browser shard spec file selects WebUI jobs', async () => {
-  const browser = workflow.slice(workflow.indexOf('\n  browser:\n'));
-  const shardFiles = [...browser.matchAll(/^ {14}(spec\/\S+_spec\.rb)$/gm)].map(match => match[1]);
+  const shardFiles = browserShardFiles(workflow);
   assert.ok(shardFiles.length > 0, 'expected browser shard spec files');
   for (const filename of shardFiles) {
     assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'true']], filename);
   }
+});
+
+test('a CRLF checkout of the workflow yields the same markers and shards', () => {
+  const crlf = workflow.replace(/\n/g, '\r\n');
+  assert.ok(crlf.includes('\r\n'));
+  const normalized = lf(crlf);
+  assert.equal(normalized, workflow);
+  assert.equal(classifierSource(normalized), classifierSource());
+  assert.deepEqual(browserShardFiles(normalized), browserShardFiles(workflow));
+  assert.ok(normalized.indexOf('\n  renderer:\n') >= 0 && normalized.indexOf('\n  browser:\n') >= 0);
 });
 
 for (const filename of [
