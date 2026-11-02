@@ -55,7 +55,7 @@ module CssDecorationCorpus
     'scripts[].samples[].lines'         => 'Source line range [first, last] of the string, or a list of ranges for an assembly sample.',
     'scripts[].samples[].kind'          => '"literal": unchanged source string. "interpolation sample": interpolations replaced by the fixed values in substitutions. "format sample": format() applied with the value in substitutions. "assembly sample": several source strings joined as described in assembly.',
     'scripts[].samples[].assembly'      => 'Assembly samples only: how the joined strings were chosen.',
-    'scripts[].samples[].substitutions' => 'Source expression to the fixed sample value used; diagnostic values, not user settings or defaults.',
+    'scripts[].samples[].substitutions' => 'Map of source expression to the fixed sample value used; diagnostic values, not user settings or defaults. Assembly samples hold a list of such maps, parallel to lines (one per range; {} for a range with nothing substituted).',
     'scripts[].samples[].css'           => 'The payload bytes. Byte-pinned; do not reformat.',
     'scripts[].samples[].characters'    => 'css length in characters (String#length).',
     'scripts[].samples[].bytes'         => 'css length in UTF-8 bytes.',
@@ -70,6 +70,11 @@ module CssDecorationCorpus
   }.freeze
   HEADER_FIELD = /\A[[:space:]]*#?[[:space:]]*(author|contributors|version)[[:space:]]*:[[:space:]]*(.+?)[[:space:]]*\z/i
   VERSION_CONSTANT = /\A[[:space:]]*VERSION[[:space:]]*=[[:space:]]*["']([^"']+)["']/
+  # Two header shapes used when the source has no author:/version: field line:
+  # a title line such as "Nautical-Charts Version: 1.2.4 (July 9, 2026)" (first
+  # token after the colon is the version) and a lone "~Name" signature line.
+  TITLE_VERSION = /\A[[:space:]]*[[:alnum:]_-]+[[:space:]]+Version[[:space:]]*:[[:space:]]*([[:alnum:]][^[:space:]]*)/i
+  SIGNATURE = /\A[[:space:]]*~[[:space:]]*([[:alpha:]][[:alnum:]_.-]*)[[:space:]]*\z/
   AI_TOOL = /\A(?:claude[[:space:]]*code|claudecode|claude|codex|chatgpt|copilot|gpt-?\d*)\b/i
   EMAIL = /[[:space:]]*\(?[^[:space:]()]+@[^[:space:]()]+\)?/
 
@@ -82,13 +87,18 @@ module CssDecorationCorpus
     names.empty? ? nil : names.join(', ')
   end
 
-  # Reads author/contributors/version from the first 130 header lines, then a
-  # VERSION constant for the version. Nothing is inferred when the source is silent.
+  # Reads author/contributors/version from the first 130 header lines, then the
+  # title-line version and ~Name signature shapes for a field still missing, then
+  # a VERSION constant for the version. Nothing is inferred when the source is silent.
   def self.attribution(source)
     lines = source.lines
     found = {}
     lines.first(130).each_with_index do |line, index|
       found[Regexp.last_match(1).downcase] ||= [Regexp.last_match(2), index + 1] if line =~ HEADER_FIELD
+    end
+    lines.first(130).each_with_index do |line, index|
+      found['version'] = [Regexp.last_match(1), index + 1] if !found['version'] && line =~ TITLE_VERSION
+      found['author'] = [Regexp.last_match(1), index + 1] if !found['author'] && line =~ SIGNATURE
     end
     unless found['version']
       lines.each_with_index do |line, index|

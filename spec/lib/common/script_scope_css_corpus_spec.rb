@@ -18,6 +18,28 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     author = [by['author'] ? "author #{by['author']}" : 'author not stated', by['contributors'] && "contributors #{by['contributors']}"].compact.join('; ')
     "[#{name} #{version}, #{record.fetch('source')} #{record.fetch('revision')}, #{author}]"
   end
+  # Credit values as recorded from each pinned source header: [author, contributors,
+  # version]. Pinned here so a changed credit fails a normal spec run; the opt-in
+  # rebuild below is the only other check. Update a row only with a header re-read.
+  expected_credits = {
+    'Combatical' => ['Kyrandos', nil, '1.3.1'], 'UberBarWiz' => ['Deathravin', nil, '2022.05'],
+    'as_audit' => ['RuseofFools', nil, '1.0.2'], 'bug-catcher' => ['Timbalt', nil, '1.5'],
+    'calibrate_creaturebar' => ['Elanthia Online', 'Nisugi', '1.0'], 'creaturebar' => ['Elanthia Online', 'Nisugi', '1.1'],
+    'creaturewindow' => ['RuseofFools (Very Little)', nil, '1.37.0'], 'exitwindow' => ['Phocosoen', nil, '1.3'],
+    'gemstone-tracker' => ['Dreaven', nil, '17'], 'gemstonev' => ['Dreaven', nil, '3'],
+    'generate-gemstone' => ['Dreaven', nil, '11'], 'grids' => ['Dreaven', nil, '5'],
+    'grinsawl' => ['Zedarius', nil, '0.5.19'], 'gshunting4all' => ['Falvicar', nil, '3.2.2'],
+    'hazardwindow' => ['Phocosoen', nil, '1.2.0'], 'jastev' => ['Dreaven', nil, '5'],
+    'manatimer' => ['Drafix', nil, '0.1'], 'manatimer-gtk3' => ['Drafix (with updates from Doug and Deysh)', nil, '0.12'],
+    'merchantical' => ['Kyrandos', nil, '1.6.0'], 'mission-gemstone' => ['Dreaven', nil, '8'],
+    'nautical-charts' => ['Peggyanne', nil, '1.2.4'], 'panelcontrol' => [nil, nil, '1.8.0'],
+    'playerwindow' => ['Phocosoen', nil, '2.4.0'], 'rafflewindow' => ['Phocosoen', nil, nil],
+    'spellson' => ['elanthia-online', 'Tillmen, Elanthia-Online', '1.0.0'], 'staminabar2' => [nil, nil, nil],
+    'stormsync' => ['LostRanger', nil, '0.0.3-PREVIEW (2022-03-07)'], 'test-tpick' => ['Dreaven', nil, '13'],
+    'thunder' => ['Dreaven', nil, '18'], 'timers' => ['Dreaven', nil, '5'],
+    'tpick' => ['Dreaven', nil, '48'], 'tpick2' => ['Dreaven', 'Renian', '33-beta1'],
+    'treasurewindow' => ['Phocosoen', nil, '1.6.1'],
+  }.freeze
   # Ruby-level file routes the grids image branch could use to read its image.
   # Bounded on purpose; the shim's image-file seam is checked separately.
   file_routes = {
@@ -83,6 +105,15 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
         expect(sample.fetch('characters')).to be <= corpus.fetch('bound')
       end
     end
+  end
+
+  it 'pins the credited author, contributors and version of every corpus script' do
+    recorded = corpus.fetch('scripts').to_h do |record|
+      by = record.fetch('attribution')
+      [record.fetch('name'), by.values_at('author', 'contributors', 'version')]
+    end
+    expect(recorded.keys).to match_array(expected_credits.keys)
+    expected_credits.each { |name, credits| expect(recorded.fetch(name)).to eq(credits), "credit changed for #{name}" }
   end
 
   it 'rebuilds the committed corpus byte for byte from the pinned EO and mirror sources' do
