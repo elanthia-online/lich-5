@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'webui/dispatcher'
 require 'webui/work_item'
 
 RSpec.describe Lich::WebUI::WorkItem do
