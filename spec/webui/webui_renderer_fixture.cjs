@@ -57,7 +57,11 @@ function fixture(target) {
   const elements = Object.fromEntries(['pages', 'status', 'notifications', 'announcer'].map(id => [id, new Element('div')]));
   const documentEvents = {};
   const document = { title: '', activeElement: null, body: new Element('body'), createElement: tag => new Element(tag),
-    getElementById: id => elements[id], addEventListener(name, callback) { documentEvents[name] = callback; },
+    getElementById: id => elements[id], addEventListener(name, callback) {
+      // Several document handlers may share an event; call each in registration order.
+      const prior = documentEvents[name];
+      documentEvents[name] = prior ? event => { prior(event); callback(event); } : callback;
+    },
     querySelectorAll: selector => elements.pages.querySelectorAll(selector) };
   const sent = [], resized = [], listeners = {}, windowEvents = {};
   let timer = 0;
