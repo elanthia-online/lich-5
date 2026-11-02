@@ -994,6 +994,204 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
   end
 
   # ---------------------------------------------------------------------------
+  # Instanced rooms (private forges) draw their UIDs from a pool several towns
+  # share, so the map can hold a live UID on another town's copy of the room.
+  # The live title tells them apart.
+  describe '.current with a UID whose room has another title' do
+    let(:desc)        { 'Thick walls struggle to contain the blistering heat of the workshop.' }
+    let(:exits)       { 'Obvious exits: none.' }
+    let(:fang_title)  { '[[Fang Cove Forging Society, A Private Forge]]' }
+    let(:cross_title) { '[[Crossing Forging Society, A Private Forge]]' }
+
+    # The Crossing hall, the Fang Cove forge stamped with the pooled UID, and
+    # the Crossing forge with none.
+    def build_forges(cross_tags: [])
+      build_room(10, title: '[[Crossing Forging Society, Hall]]', description: 'A busy hall.',
+                     exits: 'Obvious exits: none.', uid: [8775], wayto: { '30' => 'go stone doors' })
+      build_room(20, title: fang_title, description: desc, exits: exits, uid: [175001])
+      build_room(30, title: cross_title, description: desc, exits: exits, tags: cross_tags)
+      map_class.load_uids
+    end
+
+    # Resolve the hall, then enter a forge showing +title+ under the pooled UID.
+    def enter_forge(title:, description: desc, room_count: 2)
+      live_room(title: '[[Crossing Forging Society, Hall]]', description: 'A busy hall.',
+                exits: 'Obvious exits: none.', room_id: 8775, room_count: 1)
+      map_class.current
+      live_room(title: title, description: description, exits: exits, room_id: 175001, room_count: room_count)
+    end
+
+    context 'with a script running' do
+      before(:each) { Script.current = :test_script }
+
+      it 'resolves the room the title, description and exits match, not the UID room' do
+        build_forges
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(30)
+      end
+
+      it 'keeps the room it came from as the previous room' do
+        build_forges
+        enter_forge(title: cross_title)
+        map_class.current
+        expect(map_class.previous_room_id).to eq(10)
+      end
+
+      it 'resolves the UID room when the title matches it, even with a no-UID copy of its text' do
+        build_forges
+        build_room(40, title: fang_title, description: desc, exits: exits)
+        map_class.load_uids
+        enter_forge(title: fang_title)
+        expect(map_class).not_to receive(:match_current)
+        expect(map_class.current&.id).to eq(20)
+      end
+
+      it 'falls back to the UID room when no room matches the live text' do
+        build_forges
+        enter_forge(title: '[[Somewhere Unmapped]]')
+        expect(map_class.current&.id).to eq(20)
+        expect(map_class.previous_room_id).to eq(10)
+      end
+
+      it 'falls back to the UID room when the live text fits two no-UID rooms neither reachable' do
+        build_forges
+        build_room(40, title: cross_title, description: desc, exits: exits)
+        map_class.load_uids
+        XMLData.previous_nav_rm = 0
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(20)
+      end
+
+      it 'answers a repeat at the same room count from the cache' do
+        build_forges
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(30)
+        expect(map_class).not_to receive(:match_current)
+        XMLData.room_description = 'The display changed without a new room count.'
+        expect(map_class.current&.id).to eq(30)
+      end
+
+      it 'caches the UID room it fell back to for the same room count' do
+        build_forges
+        enter_forge(title: '[[Somewhere Unmapped]]')
+        expect(map_class.current&.id).to eq(20)
+        expect(map_class).not_to receive(:match_current)
+        expect(map_class.current&.id).to eq(20)
+      end
+
+      it 'matches again at the next room count' do
+        build_forges
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(30)
+        live_room(title: fang_title, description: desc, exits: exits, room_id: 175001, room_count: 3)
+        expect(map_class.current&.id).to eq(20)
+      end
+    end
+
+    context 'without a script' do
+      before(:each) { Script.current = nil }
+
+      it 'resolves the room the title, description and exits match, not the UID room' do
+        build_forges
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(30)
+        expect(map_class.previous_room_id).to eq(10)
+      end
+
+      it 'falls back to the UID room when no room matches the live text' do
+        build_forges
+        enter_forge(title: '[[Somewhere Unmapped]]')
+        expect(map_class.current&.id).to eq(20)
+      end
+
+      it 'falls back to the UID room when the matching room needs a peer' do
+        build_forges(cross_tags: ['peer out =~ /stone doors/'])
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(20)
+      end
+
+      it 'answers a repeat at the same room count from the cache' do
+        build_forges
+        enter_forge(title: cross_title)
+        expect(map_class.current&.id).to eq(30)
+        expect(map_class).not_to receive(:match_fuzzy)
+        expect(map_class.current&.id).to eq(30)
+      end
+    end
+
+    # The game thread can deliver the next room while the text match for the
+    # forge runs. The matchers retry against the new display; the UID room
+    # picked for the forge display must not be kept for it.
+    context 'when the next room arrives during the text match' do
+      let(:street_title) { '[[Crossing, Street]]' }
+
+      # A street room the next arrival's UID names, and a no-UID room with the
+      # street's live text that only a stale UID could let the text match win.
+      def build_street(copy: false)
+        build_room(40, title: street_title, description: 'A street as mapped.', exits: exits, uid: [900])
+        build_room(41, title: street_title, description: 'A street as shown.', exits: exits) if copy
+        map_class.load_uids
+      end
+
+      def arrive_at_street
+        live_room(title: street_title, description: 'A street as shown.', exits: exits, room_id: 900, room_count: 3)
+      end
+
+      # Deliver the street once, at the start of +matcher+.
+      def arrive_when_matching_starts(matcher)
+        allow(map_class).to receive(matcher).and_wrap_original do |original, *args|
+          arrive_at_street
+          original.call(*args)
+        end
+      end
+
+      # Deliver the street once, after the first text pass and before the
+      # matcher checks the room count.
+      def arrive_after_first_text_pass
+        arrived = false
+        allow(map_class).to receive(:match_live_text).and_wrap_original do |original, **kwargs|
+          result = original.call(**kwargs)
+          arrive_at_street unless arrived
+          arrived = true
+          result
+        end
+      end
+
+      [[:test_script, :match_current], [nil, :match_fuzzy]].each do |script, matcher|
+        context(script ? 'with a script running' : 'without a script') do
+          before(:each) { Script.current = script }
+
+          it 'resolves the newer UID room when the street arrives as matching starts' do
+            build_forges
+            build_street
+            enter_forge(title: cross_title)
+            arrive_when_matching_starts(matcher)
+            4.times { expect(map_class.current&.id).to eq(40) }
+            expect(map_class.previous_room_id).to eq(10)
+          end
+
+          it 'resolves the newer UID room when the street arrives after the first text pass' do
+            build_forges
+            build_street
+            enter_forge(title: cross_title)
+            arrive_after_first_text_pass
+            4.times { expect(map_class.current&.id).to eq(40) }
+            expect(map_class.previous_room_id).to eq(10)
+          end
+
+          it 'does not let a no-UID copy of the street win over its UID room' do
+            build_forges
+            build_street(copy: true)
+            enter_forge(title: cross_title)
+            arrive_when_matching_starts(matcher)
+            4.times { expect(map_class.current&.id).to eq(40) }
+          end
+        end
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Without a usable UID a room is identified by title, description and exits
   # together, and only when one room fits. Several rooms that fit are told apart
   # only by which one the last resolved room leads to; otherwise the room is
