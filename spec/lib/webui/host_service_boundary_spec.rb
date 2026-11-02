@@ -117,6 +117,15 @@ RSpec.describe 'WebUI host service boundaries' do
       expect { Lich::WebUI.configure_presentation(enabled: 'yes') }.to raise_error(ArgumentError)
     end
 
+    it 'reads an explicit disable apart from the unconfigured state' do
+      Lich::WebUI.configure_presentation(enabled: nil)
+      expect(Lich::WebUI.presentation_disabled?).to be(false)
+      Lich::WebUI.configure_presentation(enabled: true)
+      expect(Lich::WebUI.presentation_disabled?).to be(false)
+      Lich::WebUI.configure_presentation(enabled: false)
+      expect(Lich::WebUI.presentation_disabled?).to be(true)
+    end
+
     it 'refuses native and adapter presentation without spawning when the policy is not enabled' do
       expect(Lich::WebUI::BrowserLauncher).not_to receive(:open)
       host = Lich::WebUI.service

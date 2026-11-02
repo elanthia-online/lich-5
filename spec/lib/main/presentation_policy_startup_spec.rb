@@ -30,7 +30,7 @@ RSpec.describe 'WebUI presentation policy at startup' do
   # the ARGV normalization and option parser from lib/main/argv_options.rb, and the
   # policy statement from lich.rbw. HAVE_GTK is fixed at the script scope's first
   # activation, so every ARGV needs its own process.
-  def have_gtk_for(*argv)
+  def script_value_for(expression, *argv)
     source = <<~'RUBY'
       root = Dir.pwd
       lib = File.join(root, 'lib')
@@ -45,12 +45,16 @@ RSpec.describe 'WebUI presentation policy at startup' do
       Lich::Main::ArgNormalization.normalize!(ARGV)
       @argv_options = Lich::Main::ArgvOptions::OptionParser.execute
       eval(statement, TOPLEVEL_BINDING, 'lich.rbw')
-      values = [Lich::Common::TRUSTED_SCRIPT_BINDING.call, Lich::Common::Scripting.new.script].map { |scope| eval('HAVE_GTK', scope) }
+      values = [Lich::Common::TRUSTED_SCRIPT_BINDING.call, Lich::Common::Scripting.new.script].map { |scope| eval(ENV.fetch('PROBE'), scope) }
       print values.uniq.inspect
     RUBY
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-e', source, '--', *argv, chdir: root)
+    output, errors, status = Open3.capture3({ 'PROBE' => expression }, RbConfig.ruby, '-e', source, '--', *argv, chdir: root)
     expect(status).to be_success, errors
     output
+  end
+
+  def have_gtk_for(*argv)
+    script_value_for('HAVE_GTK', *argv)
   end
 
   it 'gives scripts HAVE_GTK true for no presentation option and for --gui' do
@@ -64,5 +68,12 @@ RSpec.describe 'WebUI presentation policy at startup' do
     expect(have_gtk_for('--no-gtk')).to eq('[false]')
     expect(have_gtk_for('--NO-GUI')).to eq('[false]')
     expect(have_gtk_for('--reconnect', '--no-gtk', '--game=GS3')).to eq('[false]')
+  end
+
+  it 'hides Gtk from script scope for --no-gui and --no-gtk only (1853:RC2@S7)' do
+    expect(script_value_for('defined?(Gtk)', '--no-gui')).to eq('[nil]')
+    expect(script_value_for('defined?(Gtk)', '--no-gtk')).to eq('[nil]')
+    expect(script_value_for('defined?(Gtk)')).to eq('["constant"]')
+    expect(script_value_for('defined?(Gtk)', '--gui')).to eq('["constant"]')
   end
 end

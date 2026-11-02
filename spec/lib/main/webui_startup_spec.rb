@@ -44,6 +44,21 @@ RSpec.describe Lich::Main::WebUIStartup do
 
   before do
     allow(Lich).to receive(:log)
+    # Never show a real desktop alert from a spec.
+    allow(Lich).to receive(:msgbox_alert).and_return(false) if Lich.respond_to?(:msgbox_alert)
+  end
+
+  it 'also offers a launcher failure to the desktop alert path (1853:RC4)' do
+    # lib/lich.rb is not loaded here; stand in for Lich.msgbox_alert for this example only.
+    standin = !Lich.respond_to?(:msgbox_alert)
+    Lich.define_singleton_method(:msgbox_alert) { |**| false } if standin
+    allow(Lich).to receive(:msgbox_alert).and_return(false)
+    launcher = launcher_class.new(failure: 'host exited')
+
+    expect { described_class.await(launcher) }.to raise_error(SystemExit)
+    expect(Lich).to have_received(:msgbox_alert).with(message: 'host exited', icon: :error)
+  ensure
+    Lich.singleton_class.send(:remove_method, :msgbox_alert) if standin
   end
 
   it 'returns launch data after a selection and still runs the bounded teardown' do
@@ -101,7 +116,9 @@ RSpec.describe Lich::Main::WebUIStartup do
     $stderr = original
   end
 
-  it 'tears the launcher down when the startup wait is killed, as on signal exit' do
+  # Thread#kill only simulates an abandoned wait in a live process. A real signal
+  # exit is handled by the launcher's at_exit hook, not by this ensure (1853:RC16).
+  it 'tears the launcher down when the startup wait thread is killed' do
     launcher = launcher_class.new(block: true)
     waiter = Thread.new { described_class.await(launcher) }
     expect(launcher.wait_until_waiting).to be(true)
