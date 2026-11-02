@@ -12,11 +12,12 @@ RSpec.describe 'remaining Builder setup families' do
   # Settled B5: each script-derived example names the script, the tested version
   # and pinned source revision, and the credited author, as the source header
   # writes them (spec/fixtures/webui/README.txt, Attribution). EO revision
-  # 7fd0b971 holds the setup fixtures; huntplan's source states neither.
+  # 7fd0b971 holds the setup fixtures; huntplan's source is mirror revision
+  # 549e3350 (lib/huntplan.lic header: version 1.0, author Mertyn).
   attribution = {
     'bigshot'    => '[bigshot version 5.16.1, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
     'go2'        => '[go2 version 2.4.0, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author Tillmen]',
-    'huntplan'   => '[huntplan version not established, revision not established, author not established]',
+    'huntplan'   => '[huntplan version 1.0, revision 549e33506e121453e3c01cfe5df46a902f44fc5f, author Mertyn]',
     'repository' => '[repository version 2.74, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
   }
 
