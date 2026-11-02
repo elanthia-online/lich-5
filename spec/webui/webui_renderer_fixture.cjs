@@ -49,7 +49,11 @@ function fixture(target) {
     setAttribute(name, value) { this.attributes[name] = value; }
     setPointerCapture() {}
     getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight }; }
-    addEventListener(name, callback) { this.listeners[name] = callback; }
+    addEventListener(name, callback) {
+      // Several element handlers may share an event; call each in registration order.
+      const prior = this.listeners[name];
+      this.listeners[name] = prior ? event => { prior(event); callback(event); } : callback;
+    }
     remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
     replaceWith(next) { const parent = this.parent; if (parent) { this.remove(); parent.append(next); } }
     showModal() { this.open = true; }
