@@ -263,18 +263,20 @@ module Lich
           # Logs explicitly degrade history length; editors reject excess text.
           # Only retained lines are validated; a discarded prefix cannot refuse a valid tail.
           # @param log [Boolean] presentation to bound for; a view stages its next mode here
+          # @param receiver [Object] object named in a refusal; a view names itself when it stages a mode
+          # @param operation [Symbol] operation named in a refusal
           # @return [String] original text or the retained log tail
           # @raise [UnsupportedOperation] for oversized retained lines or editor content
-          def bounded_text(value, log: @view&.send(:log?))
+          def bounded_text(value, log: @view&.send(:log?), receiver: self, operation: :text)
             if log
               lines = value.split("\n", -1)
               trimmed = lines.length > MAX_LINES
               lines = lines.last(MAX_LINES) if trimmed
-              session.refuse(self, :text) if lines.any? { |line| line.length > Lich::WebUI::Contract::BOUNDS[:log_line] }
+              session.refuse(receiver, operation) if lines.any? { |line| line.length > Lich::WebUI::Contract::BOUNDS[:log_line] }
               session.degrade(:text_history, 'compatibility text history retains the latest 1000 lines') if trimmed
               lines.join("\n")
             else
-              session.refuse(self, :text) if value.length > Lich::WebUI::Contract::BOUNDS[:multiline_text]
+              session.refuse(receiver, operation) if value.length > Lich::WebUI::Contract::BOUNDS[:multiline_text]
               value
             end
           end
@@ -346,7 +348,7 @@ module Lich
             session.refuse(self, :editable=) unless [true, false].include?(value)
             session.refuse(self, :editable=) if @handle && @log && value
             unless @handle
-              target = @buffer.send(:bounded_text, @buffer.text, log: !value)
+              target = @buffer.send(:bounded_text, @buffer.text, log: !value, receiver: self, operation: :editable=)
               previous = @log
               begin
                 @log = !value
