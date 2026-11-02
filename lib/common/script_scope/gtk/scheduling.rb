@@ -9,6 +9,13 @@ module Lich
         module Boundary
           # @raise [Gtk::UnsupportedOperation] for unimplemented GLib operations
           def method_missing(name, *, **, &) = Gtk.session.refuse(self, name)
+
+          # Keeps implicit conversions such as Array() and flatten from reaching the refusal.
+          # @api private
+          def respond_to_missing?(*args)
+            super
+          end
+
           # @raise [Gtk::UnsupportedOperation] for unimplemented GLib constants
           def const_missing(name) = Gtk.session.refuse(self, name)
         end
