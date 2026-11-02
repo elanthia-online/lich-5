@@ -102,6 +102,27 @@ for (const filename of [
   });
 }
 
+// Every helper that .rspec or .rspec_parallel loads into all examples (browser
+// ones included) must select WebUI jobs, so an edit to the next globally loaded
+// helper cannot skip the browser checks (1852:RC11).
+for (const rspecFile of ['.rspec', '.rspec_parallel']) {
+  test(`every --require in ${rspecFile} selects WebUI jobs`, async () => {
+    const root = path.join(__dirname, '../..');
+    const text = fs.readFileSync(path.join(root, rspecFile), 'utf8');
+    const required = [...text.matchAll(/^\s*(?:--require|-r)[ =]+(\S+)\s*$/gm)].map(match => match[1]);
+    assert.ok(required.length > 0, `expected --require lines in ${rspecFile}`);
+    for (const target of required) {
+      // Relative to the repo root (RSpec runs there); a bare name resolves on
+      // the load path, so only ./ paths can be classified here.
+      assert.ok(target.startsWith('./'), `${rspecFile}: --require ${target} must be a ./ path`);
+      const relative = target.slice(2);
+      const filename = path.extname(relative) ? relative : `${relative}.rb`;
+      assert.ok(fs.existsSync(path.join(root, filename)), `${rspecFile}: ${filename} does not exist`);
+      assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'true']], `${rspecFile}: ${filename}`);
+    }
+  });
+}
+
 test('every browser shard spec file selects WebUI jobs', async () => {
   const browser = workflow.slice(workflow.indexOf('\n  browser:\n'));
   const shardFiles = [...browser.matchAll(/^ {14}(spec\/\S+_spec\.rb)$/gm)].map(match => match[1]);
@@ -115,7 +136,7 @@ for (const filename of [
   'docs/unrelated.md',
   'lib/common/webui_launcher.rb.bak', 'lib/common/webui_launcher_extra.rb',
   'lib/common/webui_launcher_other/catalog.rb',
-  'spec/login_spec_helper.rb.bak', 'spec/support/frontend_mock.rb.bak',
+  'spec/login_spec_helper.rb.bak', 'spec/support/frontend_mock.rb.bak', 'spec/support/real_keychain_fence.rb.bak',
   'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
 ]) {
   test(`unrelated or near-prefix path does not select WebUI jobs: ${filename}`, async () => {
