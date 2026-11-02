@@ -1316,11 +1316,23 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         expect(exit_code).to eq(1)
       end
 
-      it 'returns 1 when password is too short' do
-        allow($stdin).to receive(:gets).and_return("short\n", "short\n")
+      it 'recovers a short existing master password that matches the validation test' do
+        allow($stdin).to receive(:gets).and_return("short\n")
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(true)
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password
-        expect(exit_code).to eq(1)
+
+        expect(exit_code).to eq(0)
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password).with('short')
+      end
+
+      it 'still refuses a short password the validation test rejects' do
+        allow($stdin).to receive(:gets).and_return("short\n")
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(false)
+        expect(Lich::Common::GUI::MasterPasswordManager).not_to receive(:store_master_password)
+
+        expect(Lich::Common::Authentication::CLIPassword.recover_master_password).to eq(1)
       end
 
       it 'returns 1 when stdin is unavailable' do
@@ -1414,9 +1426,21 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         Lich::Common::Authentication::CLIPassword.recover_master_password('directpassword')
       end
 
-      it 'returns 1 when direct password is too short' do
+      it 'recovers a short direct password that matches the validation test' do
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(true)
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
+
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password('short')
-        expect(exit_code).to eq(1)
+
+        expect(exit_code).to eq(0)
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password).with('short')
+      end
+
+      it 'returns 1 for a short direct password the validation test rejects' do
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(false)
+        expect(Lich::Common::GUI::MasterPasswordManager).not_to receive(:store_master_password)
+
+        expect(Lich::Common::Authentication::CLIPassword.recover_master_password('short')).to eq(1)
       end
 
       it 'returns 0 with valid direct password' do

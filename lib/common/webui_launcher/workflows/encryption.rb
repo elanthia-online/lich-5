@@ -4,8 +4,11 @@ module Lich
   module Common
     class WebUILauncher
       # Validates confirmed creation or an explicit plaintext acknowledgement before writing.
-      # Existing GTK creation policy requires nonempty matching values; the separate
-      # replacement-password workflow retains its existing minimum length.
+      # Creating an Enhanced master password needs a nonempty, matching value of at
+      # least MASTER_PASSWORD_MIN_LENGTH characters, as replacement does. Leaving
+      # Enhanced asks for the current master password without a length rule, so
+      # passwords created before the minimum still unlock. Each refusal reason is
+      # a fixed message that never includes password contents.
       # @param event [WebUI::Runtime::EventContext] mode, master password and confirmations
       # @return [void]
       def change_encryption(event)
@@ -41,19 +44,29 @@ module Lich
         post_operation(operation, secrets: [secret, confirmed].compact) do
           secret.consume do |password|
             if mode == :enhanced
-              raise 'password cannot be empty' if password.empty?
-              confirmed.consume { |value| raise 'passwords do not match' unless secure_equal?(password, value) }
+              raise ValidationRefused, 'Master password cannot be empty.' if password.empty?
+              confirmed.consume do |value|
+                raise ValidationRefused, 'New master passwords do not match.' unless secure_equal?(password, value)
+              end
+              if password.length < MASTER_PASSWORD_MIN_LENGTH
+                raise ValidationRefused, "New master password must be at least #{MASTER_PASSWORD_MIN_LENGTH} characters."
+              end
             end
             commit(operation) do
               if @catalog.encryption_mode == :enhanced && mode != :enhanced
-                raise 'current master password was not accepted' if password.empty? || !@catalog.validate_master_password(password)
+                raise ValidationRefused, 'Master password cannot be empty.' if password.empty?
+                unless @catalog.validate_master_password(password)
+                  raise ValidationRefused, 'The current master password was not accepted.'
+                end
               end
               raise 'encryption change failed' unless @catalog.change_encryption_mode(mode, master_password: mode == :enhanced ? password : nil)
             end
           end
           complete(operation) { reload_catalog_locked }
         rescue StandardError => error
-          fail_operation(operation, error, notice: 'Encryption mode change failed. Check the password and confirmation.')
+          fail_operation(operation, error,
+                         notice: error.is_a?(ValidationRefused) ? error.message :
+                                 'Encryption mode change failed. Check the password and confirmation.')
         end
       end
 

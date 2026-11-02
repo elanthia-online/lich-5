@@ -20,6 +20,10 @@ module Lich
         VALIDATION_ITERATIONS = 100_000
         VALIDATION_KEY_LENGTH = 32
         VALIDATION_SALT_PREFIX = 'lich5-master-password-validation-v1'
+        # Shortest master password accepted when one is created or replaced, by the
+        # launcher and the CLI alike. Applies to new passwords only: an existing
+        # password is checked against the stored validation test, never by length.
+        MIN_PASSWORD_LENGTH = 8
 
         def self.keychain_available?
           if OS.mac?
