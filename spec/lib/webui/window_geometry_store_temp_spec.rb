@@ -42,7 +42,9 @@ RSpec.describe Lich::WebUI::WindowGeometryStore do
       workers.each { |worker| expect { worker.value }.not_to raise_error }
 
       renamed = Array.new(sources.size) { sources.pop }
-      expect(renamed.size).to eq(2)
+      # Windows refuses a rename over a file another store is replacing (EACCES) and the
+      # store retries, so one temporary file may be renamed more than once there.
+      expect(renamed.size).to be_between(2, 2 * described_class::RENAME_ATTEMPTS)
       expect(renamed.uniq.size).to eq(2)
       expect(renamed.map { |path| File.dirname(path) }.uniq).to eq([directory])
       saved = Dir.children(directory)
