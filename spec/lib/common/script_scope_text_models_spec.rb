@@ -12,7 +12,7 @@ require_relative '../../../lib/common/script_scope/gtk/menus'
 require_relative '../../../lib/common/script_scope/gtk/transfers'
 
 # Model, table and text boundaries: the P13 share of 1831:RC27, plus 1844:RC1,
-# RC5, RC6, RC7, RC9, RC10, RC11, RC12 and RC13 and 1845:RC3 and RC5. A recording port stands in for core.
+# RC5, RC6, RC7, RC9, RC10, RC11, RC12, RC13, RC15 and RC16 and 1845:RC3 and RC5. A recording port stands in for core.
 RSpec.describe 'script compatibility models, tables and text' do
   port_class = Class.new do
     attr_reader :sets
@@ -102,7 +102,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     view = gtk::TextView.new
     view.buffer.text = "#{long_line}\nshort"
 
-    expect { view.set_editable(false) }.to raise_error(gtk::UnsupportedOperation, /operation=text/)
+    expect { view.set_editable(false) }.to raise_error(gtk::UnsupportedOperation, /class=\S*TextView operation=editable=/)
     expect([view.send(:log?), view.editable?, view.send(:component_type), view.buffer.text]).to eq([false, true, :textarea, "#{long_line}\nshort"])
 
     lines = Array.new(gtk::TextBuffer::MAX_LINES + 5) { |index| "line #{index}" }
@@ -313,6 +313,25 @@ RSpec.describe 'script compatibility models, tables and text' do
 
     combo.child.text = cafe
     expect(combo.child.text).to eq(utf8(cafe))
+  end
+
+  it 'selects a just-appended binary-tagged UTF-8 combo label by the same raw text (1844:RC15)' do
+    name = 'Grunwald'.b.sub('u', bytes(0xC3, 0xBC)) # u-umlaut, binary-tagged as game text arrives
+    combo = gtk::ComboBox.new
+    combo.append_text(name)
+    combo.append_text('other')
+
+    combo.set_active_text(name)
+    expect([combo.active, combo.active_text, combo.active_text.encoding]).to eq([0, utf8(name), Encoding::UTF_8])
+    combo.set_active_text('other')
+    expect(combo.active).to eq(1)
+    combo.active_text = name
+    expect(combo.active).to eq(0)
+
+    [bytes(0xFF), 'caf'.b + bytes(0xFF), name.dup.force_encoding(Encoding::ISO_8859_1)].each do |rejected|
+      expect { combo.set_active_text(rejected) }.to raise_error(gtk::UnsupportedOperation, /operation=active_text=/)
+    end
+    expect(combo.active).to eq(0)
   end
 
   it 'refuses non-UTF-8 column tooltips at the setter and re-tags binary-tagged UTF-8 (1844:RC12)' do

@@ -220,9 +220,12 @@ module Lich
 
           # Selects the first matching text row through the normal changed path.
           # This bounded convenience API never appends options or invents free text.
-          # @param text [String] existing label in a single-String-column model
+          # @param text [String] existing label in a single-String-column model;
+          #   binary-tagged UTF-8 is re-tagged before the length check and lookup,
+          #   as append_text stores it
           # @return [ComboBox] self
           def set_active_text(text)
+            text = Gtk.wire_text(text) if text.is_a?(String)
             session.refuse(self, :active_text=) unless text.is_a?(String) && text.length <= Lich::WebUI::Contract::BOUNDS[:short_text]
             session.synchronize do
               text_model!
