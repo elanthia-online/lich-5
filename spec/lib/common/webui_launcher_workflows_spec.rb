@@ -686,11 +686,21 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     expect(catalog.calls.map(&:first)).not_to include(:change_encryption)
   end
 
-  it 'preserves GTK creation policy for a nonempty confirmed password without imposing a new length limit' do
-    expect(catalog).to receive(:change_encryption_mode).with(:enhanced, master_password: 'x').and_call_original
+  it 'refuses a new enhanced master password shorter than the shared minimum and accepts one at the minimum' do
+    minimum = Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
+    short = 'x' * (minimum - 1)
     launcher.change_encryption(event({
-      'radio:encryption-mode' => 'enhanced', 'password_input:encryption-master' => viewer_secret('x'),
-      'password_input:encryption-confirm' => viewer_secret('x')
+      'radio:encryption-mode' => 'enhanced', 'password_input:encryption-master' => viewer_secret(short),
+      'password_input:encryption-confirm' => viewer_secret(short)
+    }))
+    expect(catalog.calls.map(&:first)).not_to include(:change_encryption)
+    expect(launcher.send(:render_state)[:notice][:text]).to eq("New master password must be at least #{minimum} characters.")
+
+    exact = 'x' * minimum
+    expect(catalog).to receive(:change_encryption_mode).with(:enhanced, master_password: exact).and_call_original
+    launcher.change_encryption(event({
+      'radio:encryption-mode' => 'enhanced', 'password_input:encryption-master' => viewer_secret(exact),
+      'password_input:encryption-confirm' => viewer_secret(exact)
     }))
     expect(catalog.mode).to eq(:enhanced)
   end
@@ -766,7 +776,8 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
           expect(changes).to eq([[:change_encryption, mode.to_sym, nil]])
         else
           expect(changes).to be_empty
-          expect(launcher.send(:render_state)[:notice][:text]).to match(/failed/)
+          notice = password.empty? ? 'Master password cannot be empty.' : 'The current master password was not accepted.'
+          expect(launcher.send(:render_state)[:notice][:text]).to eq(notice)
         end
         expect(secret).to be_consumed
       end
