@@ -956,7 +956,7 @@ test('an explicitly filling group passes spare vertical space to its child layou
 });
 
 
-test('an explicitly declared dialog dismissal sends its terminal response instead of hiding locally', () => {
+test('a declared dialog prevents native dismissal; its cancel_button answer comes from Escape keydown', () => {
   const f = fixture('form');
   f.receive({ type: 'hello', pages: [{ address: 'form', title: 'Form' }] });
   f.receive({ type: 'render', page: 'form', generation: 1, bindings: { dialog: ['response'] },
@@ -967,9 +967,12 @@ test('an explicitly declared dialog dismissal sends its terminal response instea
     ] } });
   const dialog = f.elements.pages.children[0].children[0];
   let prevented = false;
+  const before = f.sent.length;
   dialog.listeners.cancel({ preventDefault() { prevented = true; } });
   assert.equal(prevented, true);
-  assert.deepEqual(f.sent.at(-1).payload, { button: 'cancel' });
+  // The native cancel only stops dismissal; webui_dialog_escape_test covers the keydown answer.
+  assert.equal(f.sent.length, before);
+  assert.equal(dialog.attributes.closedby, 'none');
 });
 
 test('a dialog may keep its accessible title without adding an in-content heading', () => {
