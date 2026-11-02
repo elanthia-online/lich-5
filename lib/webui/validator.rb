@@ -421,6 +421,10 @@ module Lich
       # A Float converts through its shortest decimal spelling so that 0.01 is one
       # hundredth, not its binary neighbour; the binary error would otherwise exceed
       # the step tolerance once the step count is large. Finite values only.
+      #
+      # @param number [Numeric] a finite Integer, Float or Rational
+      # @return [Rational] the exact decimal value of +number+
+      # @api private
       def decimal_rational(number)
         number.is_a?(Float) ? Rational(number.to_s) : number.to_r
       end
