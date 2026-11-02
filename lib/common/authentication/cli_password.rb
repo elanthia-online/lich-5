@@ -441,7 +441,7 @@ module Lich
                 Lich.log 'error: CLI change master password failed - stdin unavailable'
                 return 1
               end
-              new_password = input.strip
+              new_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
               print "Confirm new master password: "
               input = $stdin.gets
@@ -451,7 +451,7 @@ module Lich
                 Lich.log 'error: CLI change master password failed - stdin unavailable'
                 return 1
               end
-              confirm_password = input.strip
+              confirm_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
               unless new_password == confirm_password
                 puts "error: Passwords do not match"
@@ -460,9 +460,10 @@ module Lich
               end
             end
 
-            if new_password.length < Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
-              puts "error: Password must be at least #{Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH} characters"
-              Lich.log "error: CLI change master password failed - password too short"
+            refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(new_password)
+            if refusal
+              puts "error: #{refusal}"
+              Lich.log "error: CLI change master password failed - #{refusal}"
               return 1
             end
 
@@ -689,7 +690,7 @@ module Lich
                 Lich.log 'error: CLI recover master password failed - stdin unavailable'
                 return 1
               end
-              master_password = input.strip
+              master_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
             end
 
             # The validation test decides, not the length: a password created before
@@ -736,7 +737,7 @@ module Lich
             Lich.log 'error: Password prompt failed - stdin unavailable'
             return nil
           end
-          password = input.strip
+          password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
           print "Confirm #{prompt.downcase}: "
           input = $stdin.gets
@@ -746,7 +747,7 @@ module Lich
             Lich.log 'error: Password confirmation failed - stdin unavailable'
             return nil
           end
-          confirm_password = input.strip
+          confirm_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
           unless password == confirm_password
             puts "error: Passwords do not match"
@@ -754,10 +755,10 @@ module Lich
             return nil
           end
 
-          minimum = Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
-          if password.length < minimum
-            puts "error: Password must be at least #{minimum} characters"
-            Lich.log "error: Password too short (minimum #{minimum} characters)"
+          refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(password)
+          if refusal
+            puts "error: #{refusal}"
+            Lich.log "error: New master password refused - #{refusal}"
             return nil
           end
 
@@ -795,7 +796,7 @@ module Lich
             Lich.log 'error: Master password prompt failed - stdin unavailable'
             return nil
           end
-          input.strip
+          Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
         rescue StandardError => e
           Lich.log "error: Master password prompt failed: #{e.message}"
           nil

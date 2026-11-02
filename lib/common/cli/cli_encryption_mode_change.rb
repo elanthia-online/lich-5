@@ -86,10 +86,10 @@ module Lich
 
           # If entering Enhanced mode, get/create master password
           if new_mode == :enhanced
-            minimum = Lich::Common::GUI::MasterPasswordManager::MIN_PASSWORD_LENGTH
-            if provided_password && provided_password.length < minimum
-              puts "error: Password must be at least #{minimum} characters"
-              Lich.log "error: CLI encryption mode change failed - master password too short"
+            refusal = provided_password && Lich::Common::GUI::MasterPasswordManager.new_password_refusal(provided_password)
+            if refusal
+              puts "error: #{refusal}"
+              Lich.log "error: CLI encryption mode change failed - #{refusal}"
               return 1
             end
 

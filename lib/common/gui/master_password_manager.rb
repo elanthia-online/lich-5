@@ -24,6 +24,32 @@ module Lich
         # launcher and the CLI alike. Applies to new passwords only: an existing
         # password is checked against the stored validation test, never by length.
         MIN_PASSWORD_LENGTH = 8
+        # Fixed refusals for a new master password; none includes the password.
+        NEW_PASSWORD_EMPTY = 'Master password cannot be empty.'
+        NEW_PASSWORD_TOO_SHORT = "New master password must be at least #{MIN_PASSWORD_LENGTH} characters."
+        NEW_PASSWORD_EDGE_WHITESPACE = 'New master password cannot begin or end with whitespace.'
+
+        # The one entry rule for every CLI master-password prompt: removes only the
+        # line terminator, never surrounding whitespace, so an existing password is
+        # checked exactly as typed.
+        # @param input [String] line read from the prompt
+        # @return [String] entered password
+        def self.normalize_entry(input)
+          input.chomp
+        end
+
+        # The one acceptance rule for a new master password (create and change), on
+        # the CLI and in the WebUI launcher alike. Existing passwords (unlock and
+        # recovery) are never checked here; the validation test decides them.
+        # @param password [String, nil] proposed new master password
+        # @return [String, nil] fixed refusal message, or nil when acceptable
+        def self.new_password_refusal(password)
+          return NEW_PASSWORD_EMPTY if password.nil? || password.empty?
+          return NEW_PASSWORD_TOO_SHORT if password.length < MIN_PASSWORD_LENGTH
+          return NEW_PASSWORD_EDGE_WHITESPACE if password.match?(/\A[[:space:]]|[[:space:]]\z/)
+
+          nil
+        end
 
         def self.keychain_available?
           if OS.mac?
@@ -102,9 +128,11 @@ module Lich
             raise IOError, "Unsupported keychain; previous master password state is unknown"
           end
 
-          raise IOError, "Keychain read failed; previous master password state is unknown" unless status.success? && !output.strip.empty?
+          # Remove only the tool's line terminator; the stored password is returned as stored.
+          password = normalize_entry(output)
+          raise IOError, "Keychain read failed; previous master password state is unknown" unless status.success? && !password.empty?
 
-          output.strip
+          password
         rescue StandardError
           # Never propagate command output or credential values into diagnostics.
           raise IOError, "Keychain read failed; previous master password state is unknown"
@@ -188,10 +216,18 @@ module Lich
         end
 
         private_class_method def self.retrieve_macos_keychain
-          output = `security find-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -w 2>/dev/null`.strip
-          output.empty? ? nil : output
+          stored_password(`security find-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -w 2>/dev/null`)
         rescue
           nil
+        end
+
+        # Reads a keychain tool's output as the stored password: only the line
+        # terminator the tool prints is removed, so edge whitespace survives.
+        # @param output [String] tool output
+        # @return [String, nil] stored password, or nil when the output is empty
+        private_class_method def self.stored_password(output)
+          password = normalize_entry(output)
+          password.empty? ? nil : password
         end
 
         private_class_method def self.delete_macos_keychain
@@ -217,8 +253,7 @@ module Lich
         end
 
         private_class_method def self.retrieve_linux_keychain
-          output = `secret-tool lookup service #{KEYCHAIN_SERVICE.shellescape} user lich5 2>/dev/null`.strip
-          output.empty? ? nil : output
+          stored_password(`secret-tool lookup service #{KEYCHAIN_SERVICE.shellescape} user lich5 2>/dev/null`)
         rescue
           nil
         end
