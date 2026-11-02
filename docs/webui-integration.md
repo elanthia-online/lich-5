@@ -132,7 +132,11 @@ launch failure. Developers can build it with
 build targets macOS 14 or later; that build target is not a substitute for the
 maintainers' supported-platform policy.
 
-Windows and Linux use dedicated Chrome app windows; Windows also supports Edge.
+Windows and Linux use dedicated browser app windows. Chrome and Edge are the
+supported defaults (Edge is discovered on Windows), and distro Chromium is
+discovered on Linux. Any other browser can be chosen with the launcher's Browser
+path setting or the `LICH_WEBUI_BROWSER` environment variable, at the user's own
+risk.
 Windows topmost/opacity support uses the existing Fiddle/user32 integration, not
 an additional WebView2 runtime. Browser and OS capabilities differ. Native focus,
 topmost, opacity, geometry and cleanup require platform beta acceptance.

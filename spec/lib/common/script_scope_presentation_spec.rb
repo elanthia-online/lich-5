@@ -37,6 +37,39 @@ RSpec.describe 'script compatibility and the core presentation policy' do
     expect(have_gtk_after(setup)).to eq('[false]')
   end
 
+  # Gtk visibility is fixed at the first activation, so each policy needs a fresh
+  # process. A stub owner lets require reach the policy check the way a script does.
+  def gtk_visibility_after(setup)
+    source = <<~RUBY
+      require_relative 'lib/webui'
+      require_relative 'lib/common/script'
+      #{setup}
+      owner = Struct.new(:name).new('visibility.lic')
+      %i[current current_without_pause].each { |name| Lich::Common::Script.define_singleton_method(name) { owner } }
+      bindings = [Lich::Common::TRUSTED_SCRIPT_BINDING.call, Lich::Common::Scripting.new.script]
+      seen = bindings.map { |scope| eval('defined?(Gtk)', scope) }
+      required = bindings.map do |scope|
+        eval("begin; require 'gtk3'; rescue LoadError => error; error.class.name; end", scope)
+      end
+      print [seen.uniq, required.uniq].inspect
+    RUBY
+    output, errors, status = Open3.capture3(RbConfig.ruby, '-e', source, chdir: root)
+    expect(status).to be_success, errors
+    output
+  end
+
+  it 'hides Gtk from script scope when startup disabled presentation (1853:RC2@S7)' do
+    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: false)')).to eq('[[nil], ["LoadError"]]')
+  end
+
+  it 'shows Gtk to scripts when presentation is enabled' do
+    expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: true)')).to eq('[["constant"], [false]]')
+  end
+
+  it 'conceals nothing while the policy is unconfigured, which is no decision' do
+    expect(gtk_visibility_after('')).to eq('[["constant"], ["LoadError"]]')
+  end
+
   context 'with the scope active' do
     before do
       scope.activate!

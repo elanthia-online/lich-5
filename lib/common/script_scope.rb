@@ -31,6 +31,7 @@ module Lich
       @legacy_notices = {}
       @plugin_names = []
       @plugin_modules = []
+      @concealed_names = []
 
       # Compatibility exports contain only script declarations, never plugins.
       # Retirement: migrate supported legacy consumers, verify zero bridge uses
@@ -147,6 +148,17 @@ module Lich
         LegacyConstants.const_set(name, value)
         @legacy_constants[name] = true
         legacy_notice(:constant, name)
+      end
+
+      # Lets a plugin's boot file declare constants that script code must not see
+      # in this activation. {.activate!} removes them from this scope once every
+      # plugin has booted, after the plugin name lists are captured, so they still
+      # count as plugin names for the legacy-export exclusions. Declarations are
+      # read once, at activation; later calls have no effect on an active scope.
+      # @param names [Array<Symbol>] constants defined directly on this scope
+      # @return [void]
+      def self.conceal(*names)
+        @concealed_names.concat(names)
       end
 
       # Keeps explicit removal and subsequent redefinition from leaving stale exports.
@@ -279,6 +291,7 @@ module Lich
             Dir[PLUGIN_GLOB].sort.each { |boot| require boot }
             @plugin_names = constants(false) - @core_aliases.keys
             @plugin_modules = @plugin_names.filter_map { |name| value = const_get(name, false); value if value.is_a?(Module) }
+            @concealed_names.each { |name| remove_const(name) if const_defined?(name, false) }
             sync_core_constants!
             Object.include(LegacyConstants)
             Object.prepend(LegacyHelpers)
