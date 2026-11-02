@@ -35,10 +35,10 @@ module Lich
       HAVE_GTK = Lich::WebUI.presentation_enabled?
 
       # With presentation explicitly disabled (--no-gui), script code must not
-      # see a Gtk constant, so a script's defined?(Gtk) takes its non-GUI branch
-      # as on main, where gtk3 never loaded. An unconfigured policy is no
-      # decision and conceals nothing.
-      conceal(:Gtk) if Lich::WebUI.presentation_disabled?
+      # see a Gtk, GLib or Gdk constant, so a script's defined?(Gtk) takes its
+      # non-GUI branch as on main, where gtk3 never loaded and none of the three
+      # existed. An unconfigured policy is no decision and conceals nothing.
+      conceal(:Gtk, :GLib, :Gdk) if Lich::WebUI.presentation_disabled?
 
       module Gtk
         # Legacy spelling for the existing browser-owned automatic scroll policy.
