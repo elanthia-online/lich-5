@@ -20,7 +20,7 @@
     "scripts[].samples[].lines": "Source line range [first, last] of the string, or a list of ranges for an assembly sample.",
     "scripts[].samples[].kind": "\"literal\": unchanged source string. \"interpolation sample\": interpolations replaced by the fixed values in substitutions. \"format sample\": format() applied with the value in substitutions. \"assembly sample\": several source strings joined as described in assembly.",
     "scripts[].samples[].assembly": "Assembly samples only: how the joined strings were chosen.",
-    "scripts[].samples[].substitutions": "Source expression to the fixed sample value used; diagnostic values, not user settings or defaults.",
+    "scripts[].samples[].substitutions": "Map of source expression to the fixed sample value used; diagnostic values, not user settings or defaults. Assembly samples hold a list of such maps, parallel to lines (one per range; {} for a range with nothing substituted).",
     "scripts[].samples[].css": "The payload bytes. Byte-pinned; do not reformat.",
     "scripts[].samples[].characters": "css length in characters (String#length).",
     "scripts[].samples[].bytes": "css length in UTF-8 bytes.",
@@ -3055,10 +3055,13 @@
     {
       "name": "nautical-charts",
       "attribution": {
-        "author": null,
+        "author": "Peggyanne",
         "contributors": null,
-        "version": null,
-        "lines": []
+        "version": "1.2.4",
+        "lines": [
+          69,
+          89
+        ]
       },
       "source": "mirror",
       "revision": "549e33506e121453e3c01cfe5df46a902f44fc5f",
