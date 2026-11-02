@@ -278,6 +278,13 @@ RSpec.describe Lich::WebUI::Server do
     stub_const('Lich::WebUI::Server::Connection::WRITE_TIMEOUT', 0.05)
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     sender.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 4096)
+    # Windows AF_UNIX sockets absorb far more than SO_SNDBUF suggests, so fill the
+    # buffer until the kernel refuses more (as connection_outbound_queue_spec does);
+    # the queued write then stalls on every platform.
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    until sender.write_nonblock('f' * 65_536, exception: false) == :wait_writable
+      raise 'send buffer never filled' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    end
     connection = described_class::Connection.new(sender)
 
     expect(Timeout.timeout(1) { connection.send_text('x' * (1024 * 1024)) }).to be(true)
