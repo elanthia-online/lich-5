@@ -516,6 +516,14 @@ RSpec.describe Lich::WebUI::Validator do
     end
   end
 
+  it 'G3 RC42 lists each enum choice once in the refusal message' do
+    expect { validator.validate_component!(:text, { content: '', rotation: 45 }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError) { |error|
+        expect(error.message).to include('must be one of 0, 90, 180, 270')
+        expect(error.message).not_to include('0, 0')
+      }
+  end
+
   it 'G3 RC17 copies enum strings before freezing the normalized result' do
     theme = +'dark'
     props = validator.validate_component!(:page, { title: 'Title', theme: theme }, **context)
@@ -564,6 +572,22 @@ RSpec.describe Lich::WebUI::Validator do
         expect { validator.validate_event!(type, :change, { value: value }, props: props, **context) }
           .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
         expect { validator.validate_input_value!(type, value, props: props, **context) }
+          .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
+      end
+    end
+  end
+
+  %i[slider number_input].each do |type|
+    it "G3 RC41 accepts step-aligned values at large step counts for #{type}" do
+      authored = { min: 0, max: 1e9, step: 0.01, value: 1_000_000 }
+      props = validator.validate_component!(type, authored, **context)
+      [1_000_000, 1_000_000.0, 999_999.99, 123_456_789.12].each do |value|
+        expect(validator.validate_component!(type, authored.merge(value: value), **context)[:value]).to eq(value)
+        expect(validator.validate_event!(type, :change, { value: value }, props: props, **context)).to eq(value: value)
+        expect(validator.validate_input_value!(type, value, props: props, **context)).to eq(value)
+      end
+      [1_000_000.005, 999_999.994].each do |value|
+        expect { validator.validate_component!(type, authored.merge(value: value), **context) }
           .to raise_error(Lich::WebUI::SchemaViolationError, /align with step from min/)
       end
     end
