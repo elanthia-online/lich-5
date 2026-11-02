@@ -22,7 +22,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
       allow(File).to receive(:executable?).and_return(true)
       url = 'http://127.0.0.1:1234/auth?token=synthetic-launch-secret&to=%2F'
       arguments = nil
-      result = described_class.open(url, platform: platform,
+      result = described_class.open(url, platform: platform, environment: {},
                                     browser_path: platform == 'darwin' ? nil : browser,
                                     spawn: ->(*argv, **_options) { arguments = argv; 42 },
                                     on_exit: proc {}, waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })
@@ -38,7 +38,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     contents = []
     started = []
     exited = []
-    result = described_class.open('http://127.0.0.1:1234/', geometry: { width: 500, height: 350 },
+    result = described_class.open('http://127.0.0.1:1234/', geometry: { width: 500, height: 350 }, environment: {},
                                   spawn: ->(*argv, **_options) { calls << argv; contents << File.read(argv[1]); 42 },
                                   on_start: ->(pid) { started << pid }, on_exit: -> { exited << true },
                                   waitpid: ->(pid, _flags) { pid }, thread_factory: ->(&work) { work.call })
@@ -54,7 +54,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     allow(OS).to receive(:mac?).and_return(true)
     allow(File).to receive(:executable?).with(Lich::WebUI::NativeHost::EXECUTABLE).and_return(false)
     expect(described_class).not_to receive(:app_browser_path)
-    expect { described_class.command_for('http://127.0.0.1:1234/') }.to raise_error(Lich::WebUI::Error, /helper is missing/)
+    expect { described_class.command_for('http://127.0.0.1:1234/', environment: {}) }.to raise_error(Lich::WebUI::Error, /helper is missing/)
   end
 
   it 'uses ordinary platform discovery off macOS without needing the native helper' do
@@ -63,9 +63,23 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     allow(OS).to receive(:host_os).and_return('linux')
     allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'linux')).and_return('/usr/bin/google-chrome')
     expect(Lich::WebUI::NativeHost).not_to receive(:command_for)
-    expect(described_class.command_for('http://127.0.0.1/')).to eq(
+    expect(described_class.command_for('http://127.0.0.1/', environment: {})).to eq(
       ['/usr/bin/google-chrome', '--new-window', '--app=http://127.0.0.1/']
     )
+  end
+
+  it 'keeps discovery examples independent of a LICH_WEBUI_BROWSER set in the process environment' do
+    variable = Lich::WebUI::BrowserLauncher::ENVIRONMENT_VARIABLE
+    saved = ENV.fetch(variable, nil)
+    ENV[variable] = browser
+    allow(OS).to receive(:mac?).and_return(false)
+    allow(OS).to receive(:windows?).and_return(false)
+    allow(OS).to receive(:host_os).and_return('linux')
+    expect(described_class).to receive(:app_browser_path).with(hash_including(platform: 'linux'))
+                                                         .and_return('/usr/bin/google-chrome')
+    expect(described_class.command_for('http://127.0.0.1/', environment: {}).first).to eq('/usr/bin/google-chrome')
+  ensure
+    saved.nil? ? ENV.delete(variable) : ENV[variable] = saved
   end
 
   it 'isolates and reaps a browser even without an exit callback' do
@@ -143,7 +157,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
 
     expect(described_class.google_chrome_path(platform: 'linux', executable: executable))
       .to eq('/usr/bin/google-chrome-stable')
-    expect(described_class.chrome_candidates(platform: 'linux'))
+    expect(described_class.chrome_candidates(platform: 'linux', environment: {}))
       .not_to include('/usr/bin/chromium', '/usr/bin/xdg-open')
   end
 
@@ -196,22 +210,22 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
   end
 
   it 'does not consider Microsoft Edge outside Windows' do
-    expect(described_class.app_browser_path(platform: 'darwin', executable: ->(*) { false })).to be_nil
-    expect(described_class.chrome_candidates(platform: 'darwin')).not_to include(/Microsoft Edge/)
+    expect(described_class.app_browser_path(platform: 'darwin', environment: {}, executable: ->(*) { false })).to be_nil
+    expect(described_class.chrome_candidates(platform: 'darwin', environment: {})).not_to include(/Microsoft Edge/)
   end
 
   it 'raises when Google Chrome is not installed' do
     allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'linux')).and_return(nil)
 
     expect do
-      described_class.command_for('http://127.0.0.1/', platform: 'linux')
+      described_class.command_for('http://127.0.0.1/', platform: 'linux', environment: {})
     end.to raise_error(Lich::WebUI::Error, /Google Chrome or Chromium is required/)
   end
 
   it 'opens Windows app windows with Chrome or Edge and an isolated profile' do
     allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'mingw')).and_return('C:/Edge/msedge.exe')
     calls = []
-    described_class.open('http://127.0.0.1/', platform: 'mingw',
+    described_class.open('http://127.0.0.1/', platform: 'mingw', environment: {},
                          spawn: ->(*argv, **_options) { calls << argv; 42 }, on_exit: proc {},
                          waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })
     expect(calls.first.first).to eq('C:/Edge/msedge.exe')
