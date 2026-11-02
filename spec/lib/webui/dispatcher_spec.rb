@@ -1,37 +1,14 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 require 'webui/dispatcher'
 
 RSpec.describe Lich::WebUI::Dispatcher do
   let(:dispatcher) { described_class.new }
   let(:owner) { Object.new }
 
-  # Child processes get a deadline so a hung dispatcher fails by name, not by job timeout.
-  let(:child_deadline) { 60 }
-
-  # Runs Ruby code in a fresh process, killing it at the deadline.
-  # @param code [String] script passed to ruby -e
-  # @return [Array(String, String, Process::Status, nil)] output, errors, and status;
-  #   status is nil when the deadline killed the child
-  def run_ruby_with_deadline(code)
-    Open3.popen3(RbConfig.ruby, '-I', LIB_DIR, '-e', code) do |stdin, stdout, stderr, waiter|
-      stdin.close
-      readers = [Thread.new { stdout.read }, Thread.new { stderr.read }]
-      finished = waiter.join(child_deadline)
-      unless finished
-        begin
-          Process.kill('KILL', waiter.pid)
-        rescue Errno::ESRCH
-          nil
-        end
-        waiter.join
-      end
-      [readers.first.value, readers.last.value, (waiter.value if finished)]
-    end
-  end
+  include WebUIFreshProcess
 
   after { dispatcher.shutdown }
 
@@ -286,8 +263,7 @@ RSpec.describe Lich::WebUI::Dispatcher do
       puts 'ready'
     RUBY_CODE
     output, errors, status = run_ruby_with_deadline(code)
-    expect(status).not_to be_nil,
-                          "fresh-process dispatcher example exceeded #{child_deadline}s; a callback rescue regressed"
+    expect_child_within_deadline(status, output, errors, 'fresh-process dispatcher example (a callback rescue regressed?)')
     expect(status.success?).to be(true), errors
     expect(output).to eq("ready\n")
   end

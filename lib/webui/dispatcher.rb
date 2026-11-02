@@ -12,10 +12,8 @@ module Lich
       PAGE_LIMIT = 1024
       SHUTDOWN_JOIN_TIMEOUT = 2
       THREAD_CONTEXT_KEY = :lich_webui_dispatch_context
-      # Script failures contained per callback, matching the script runner's set.
-      # SystemExit is handled apart (it stops the owner, never Lich) and fatal VM
-      # exceptions outside this set keep propagating.
-      CONTAINED_EXCEPTIONS = [ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError].freeze
+      # Public name for the shared list defined in errors.rb.
+      CONTAINED_EXCEPTIONS = Lich::WebUI::CONTAINED_EXCEPTIONS
 
       Event = Data.define(:owner, :page_id, :viewer_id, :cid, :event, :coalescable, :callable)
       Context = Data.define(:owner, :page_id, :viewer_id, :cid, :event)

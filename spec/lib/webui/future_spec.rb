@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 require 'webui/dispatcher'
 require 'webui/future'
 
 RSpec.describe Lich::WebUI::Future do
+  include WebUIFreshProcess
+
   it 'isolates failing callbacks registered both before and after completion' do
     logger = double('logger', call: nil)
     future = described_class.new(logger: logger)
@@ -77,7 +78,8 @@ RSpec.describe Lich::WebUI::Future do
       abort 'late exit escaped' unless logged.length == 4
       puts 'ready'
     RUBY_CODE
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    output, errors, status = run_ruby_with_deadline(code)
+    expect_child_within_deadline(status, output, errors, 'fresh-process future example')
     expect(status.success?).to be(true), errors
     expect(output).to eq("ready\n")
   end
