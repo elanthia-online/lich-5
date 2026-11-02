@@ -250,7 +250,9 @@ module Lich
 
   # Uses the native Windows message box; other hosts emit a diagnostic without a GUI prompt.
   # When stderr is the debug log, a terminal notice points to it. Non-Windows output
-  # does not supply consent or emulate Yes/No responses.
+  # does not supply consent or emulate Yes/No responses. An error (icon: :error) with
+  # no terminal attached is also shown through the GemCheck alert helpers, so a
+  # desktop launch does not fail silently; the terminal and debug-log output is kept.
   # @param args [Hash] message, optional title, buttons, and icon
   # @return [Symbol, nil] Windows response, or nil for diagnostic-only/failure paths
   def Lich.msgbox(args)
@@ -298,8 +300,27 @@ module Lich
           nil
         end
       end
+      Lich.msgbox_alert(args)
       return nil
     end
+  end
+
+  # Shows a non-Windows error through Lich::GemCheck.show_notice when no terminal
+  # could have shown it (a Finder or desktop-entry launch). Original stdout and
+  # stderr are probed because init.rb and main.rb redirect the $ variables. With
+  # no helper loaded or a helper failure, the terminal and debug-log output
+  # already written by Lich.msgbox stands.
+  # @param args [Hash] message, optional title and icon, as given to Lich.msgbox
+  # @return [Boolean] whether a helper was invoked
+  def Lich.msgbox_alert(args)
+    return false unless args[:icon] == :error
+    return false if STDOUT.isatty || STDERR.isatty
+    return false unless defined?(Lich::GemCheck) && Lich::GemCheck.respond_to?(:show_notice)
+
+    Lich::GemCheck.show_notice(args[:message].to_s, title: args[:title] || "Lich v#{LICH_VERSION}")
+    true
+  rescue StandardError
+    false
   end
 
   def Lich.get_simu_launcher

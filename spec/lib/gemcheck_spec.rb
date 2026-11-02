@@ -896,6 +896,51 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  # Lich.msgbox routes non-Windows startup errors here with its own title
+  # (1853:RC4@S7). Every dialog tool is a stub: no real dialog is shown.
+  describe '.show_notice titles' do
+    it 'defaults to the missing-gems title and dispatches by platform' do
+      stub_const('RUBY_PLATFORM', 'x86_64-darwin23')
+      expect(described_class).to receive(:alert_macos).with('body', title: described_class::TITLE)
+      described_class.show_notice('body')
+    end
+
+    it 'passes a caller title to the macOS dialog script' do
+      stub_const('RUBY_PLATFORM', 'x86_64-darwin23')
+      io = StringIO.new
+      allow(io).to receive(:close_write)
+      allow(IO).to receive(:popen).with(['osascript', '-'], 'r+').and_yield(io)
+
+      described_class.show_notice('body', title: 'Lich v1')
+
+      expect(io.string).to include('with title "Lich v1"')
+      expect(io.string).not_to include(described_class::TITLE)
+    end
+
+    it 'passes a caller title to the Linux dialog tool when no terminal is attached' do
+      stub_const('RUBY_PLATFORM', 'x86_64-linux')
+      allow($stdout).to receive(:isatty).and_return(false)
+      allow($stderr).to receive(:isatty).and_return(false)
+      allow(described_class).to receive(:warn)
+      allow(described_class).to receive(:cmd_available?).and_return(false)
+      allow(described_class).to receive(:cmd_available?).with('zenity').and_return(true)
+
+      expect(described_class).to receive(:run_with_timeout)
+        .with(['zenity', '--info', '--title', 'Lich v1', '--text', 'body'], described_class::ALERT_TIMEOUT_SECONDS)
+      described_class.show_notice('body', title: 'Lich v1')
+    end
+
+    it 'passes a caller title to the Windows notice' do
+      shell = double('WScript.Shell')
+      stub_const('WIN32OLE', Class.new)
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      allow(WIN32OLE).to receive(:new).with('WScript.Shell').and_return(shell)
+      expect(shell).to receive(:Popup).with('body', described_class::CONSENT_TIMEOUT_SECONDS, 'Lich v1', 64)
+
+      described_class.notice_windows('body', title: 'Lich v1')
+    end
+  end
+
   describe '.cmd_available?' do
     it 'returns true when `which` exits successfully' do
       allow(described_class).to receive(:system)
