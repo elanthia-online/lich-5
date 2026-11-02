@@ -60,6 +60,7 @@ function fixture(target) {
     getElementById: id => elements[id],
     querySelectorAll: selector => elements.pages.querySelectorAll(selector),
     addEventListener(name, callback) {
+      // Several document handlers may share an event; call each in registration order.
       (documentListeners[name] ||= []).push(callback);
       documentEvents[name] ||= event => documentListeners[name].forEach(listener => listener(event));
     } };
