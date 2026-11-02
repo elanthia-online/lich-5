@@ -87,7 +87,8 @@ RSpec.describe 'remaining Builder setup families' do
     script.define_singleton_method(:run) { |*args, **options| downloads << [args, options] }
     sandbox.const_set(:Script, script)
     path = File.expand_path("../../fixtures/webui/#{name}_setup.lic", __dir__)
-    source = File.read(path)
+    # Byte-pinned fixture: binary read so CRLF conversion on Windows cannot change the digest.
+    source = File.binread(path).force_encoding(Encoding::UTF_8)
     expected = { 'repository' => 'ac0107e3149a487f61cfd345a3b962b7673df65ec99921f4b9fdd74d47dd86e5',
                  'go2'        => '8bdcf8959473c59d9da2eba4dbc69a2dd13185acd9a3c556288b1bd8198862b2',
                  'bigshot'    => 'da564437b0eb893e8abd3757afdbbe35bd57b4b134d24e562e4f17d1af76ad34',
