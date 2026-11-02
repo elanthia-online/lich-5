@@ -20,6 +20,12 @@ module Lich
             session.refuse(self, name)
           end
 
+          # Keeps implicit conversions such as Array(), flatten and puts from reaching the refusal.
+          # @api private
+          def respond_to_missing?(*args)
+            super
+          end
+
           private
 
           # Preserves owner identity and refuses reuse after script teardown.
@@ -208,6 +214,13 @@ module Lich
         module DisplayClassBoundary
           # @raise [Gtk::UnsupportedOperation] for unsupported native constructors/helpers
           def method_missing(name, *, **, &) = Gtk.session.refuse(self, name)
+
+          # Keeps implicit conversions such as Array() and flatten from reaching the refusal.
+          # @api private
+          def respond_to_missing?(*args)
+            super
+          end
+
           # @raise [Gtk::UnsupportedOperation] for unsupported native constants
           def const_missing(name) = Gtk.session.refuse(self, name)
         end
