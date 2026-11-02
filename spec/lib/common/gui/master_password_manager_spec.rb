@@ -26,6 +26,35 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
     end
   end
 
+  describe '.normalize_entry' do
+    it 'removes only the line terminator, keeping edge whitespace' do
+      expect(described_class.normalize_entry("  padded secret \n")).to eq('  padded secret ')
+      expect(described_class.normalize_entry("padded secret \r\n")).to eq('padded secret ')
+      expect(described_class.normalize_entry('short')).to eq('short')
+    end
+  end
+
+  describe '.new_password_refusal' do
+    let(:minimum) { described_class::MIN_PASSWORD_LENGTH }
+
+    it 'accepts a password of exactly the minimum length with inner spaces' do
+      expect(described_class.new_password_refusal('a b c de')).to be_nil
+      expect(described_class.new_password_refusal('x' * minimum)).to be_nil
+    end
+
+    it 'refuses empty, short and edge-whitespace passwords with fixed messages' do
+      expect(described_class.new_password_refusal('')).to eq('Master password cannot be empty.')
+      expect(described_class.new_password_refusal(nil)).to eq('Master password cannot be empty.')
+      expect(described_class.new_password_refusal('x' * (minimum - 1)))
+        .to eq("New master password must be at least #{minimum} characters.")
+      [' leading-space', 'trailing-space ', "\ttabbed-secret", "secret-newline\n"].each do |password|
+        refusal = described_class.new_password_refusal(password)
+        expect(refusal).to eq('New master password cannot begin or end with whitespace.')
+        expect(refusal).not_to include(password.strip)
+      end
+    end
+  end
+
   describe '.keychain_available?' do
     context 'on macOS' do
       before do
@@ -320,6 +349,67 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
       it 'propagates native read failure as unknown state' do
         expect(windows).to receive(:retrieve_credential).with(keychain_service, strict: true).and_raise(IOError)
         expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
+      end
+    end
+  end
+
+  describe 'keychain reads return the stored password unchanged' do
+    let(:padded) { '  padded pass  ' }
+    let(:success) { instance_double(Process::Status, success?: true, exitstatus: 0) }
+    let(:windows) { Lich::Common::GUI::WindowsCredentialManager }
+
+    before do
+      allow(described_class).to receive(:keychain_available?).and_return(true)
+      allow(OS).to receive(:mac?).and_return(false)
+      allow(OS).to receive(:linux?).and_return(false)
+      allow(OS).to receive(:windows?).and_return(false)
+      # Command output is stubbed; no example may reach a real credential store.
+      allow(Open3).to receive(:capture3).and_raise('unexpected credential command')
+      allow(windows).to receive(:retrieve_credential).and_raise('unexpected credential command')
+    end
+
+    # The legacy macOS and Linux readers stay behind the real-keychain fence, so
+    # their shared output reader is exercised directly with stubbed tool output.
+    it 'reads legacy tool output with only the trailing line terminator removed' do
+      expect(described_class.send(:stored_password, "#{padded}\n")).to eq(padded)
+      expect(described_class.send(:stored_password, padded)).to eq(padded)
+      expect(described_class.send(:stored_password, "#{test_password}\n")).to eq(test_password)
+      expect(described_class.send(:stored_password, "\n")).to be_nil
+    end
+
+    context 'on macOS' do
+      before { allow(OS).to receive(:mac?).and_return(true) }
+
+      it 'removes only the trailing line terminator on the strict read' do
+        allow(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-w')
+                                          .and_return(["#{padded}\n", '', success], ["#{test_password}\n", '', success])
+
+        expect(described_class.retrieve_master_password(strict: true)).to eq(padded)
+        expect(described_class.retrieve_master_password(strict: true)).to eq(test_password)
+      end
+    end
+
+    context 'on Linux' do
+      before { allow(OS).to receive(:linux?).and_return(true) }
+
+      it 'removes only the trailing line terminator on the strict read' do
+        allow(Open3).to receive(:capture3).with('secret-tool', 'lookup', 'service', keychain_service, 'user', 'lich5')
+                                          .and_return([padded, '', success], ["#{test_password}\n", '', success])
+
+        expect(described_class.retrieve_master_password(strict: true)).to eq(padded)
+        expect(described_class.retrieve_master_password(strict: true)).to eq(test_password)
+      end
+    end
+
+    context 'on Windows' do
+      before { allow(OS).to receive(:windows?).and_return(true) }
+
+      it 'returns the native credential as stored on both reads' do
+        allow(windows).to receive(:retrieve_credential).with(keychain_service).and_return(padded)
+        allow(windows).to receive(:retrieve_credential).with(keychain_service, strict: true).and_return(padded)
+
+        expect(described_class.retrieve_master_password).to eq(padded)
+        expect(described_class.retrieve_master_password(strict: true)).to eq(padded)
       end
     end
   end
