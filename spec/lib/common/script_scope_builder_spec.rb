@@ -58,11 +58,19 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
   # fails the parent example instead of holding the suite.
   def production_nil_seconds = 120
 
-  # Runs a child in its own process group and waits at most `seconds`. On
-  # timeout or any error the group is stopped and the child reaped in ensure.
+  # Unix children run in their own process group and are signalled by negative
+  # PID. Windows Ruby rejects `pgroup:` and has no TERM, so there the child is
+  # spawned plainly and signalled by its own PID with KILL. Its own method so an
+  # example can choose either branch (the Windows branch is otherwise traced only).
+  def own_process_group? = !OS.windows?
+
+  # Runs a child (in its own process group on Unix) and waits at most `seconds`.
+  # On timeout or any error the child is stopped and reaped in ensure.
   # @return [Array(Process::Status, String)] status (nil after a timeout) and combined output
   def bounded_child(environment, command, directory, seconds)
-    stdin, stream, waiter = Open3.popen2e(environment, *command, chdir: directory, pgroup: true)
+    options = { chdir: directory }
+    options[:pgroup] = true if own_process_group?
+    stdin, stream, waiter = Open3.popen2e(environment, *command, **options)
     stdin.close
     reader = Thread.new { stream.read }
     reader.report_on_exception = false
@@ -75,13 +83,38 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     stream&.close
   end
 
-  # TERM lets a child run its own cleanup; KILL follows after a short grace.
+  # Unix: TERM lets the group run its own cleanup; KILL follows after a short
+  # grace. Windows: KILL the child PID at once (no TERM exists there).
   def stop_group(waiter)
-    Process.kill('TERM', -waiter.pid)
-    Process.kill('KILL', -waiter.pid) unless waiter.join(2)
+    if own_process_group?
+      Process.kill('TERM', -waiter.pid)
+      Process.kill('KILL', -waiter.pid) unless waiter.join(2)
+    else
+      Process.kill('KILL', waiter.pid)
+    end
     waiter.join
   rescue Errno::ESRCH
     waiter.join
+  end
+
+  describe 'bounded child supervision' do
+    let(:waiter) { double(:waiter, pid: 4242, join: nil) }
+
+    it 'signals the process group, TERM then KILL, where process groups exist' do
+      allow(self).to receive(:own_process_group?).and_return(true)
+      allow(Process).to receive(:kill)
+      stop_group(waiter)
+      expect(Process).to have_received(:kill).with('TERM', -4242).ordered
+      expect(Process).to have_received(:kill).with('KILL', -4242).ordered
+    end
+
+    it 'kills the child PID alone, without pgroup or TERM, on Windows' do
+      allow(self).to receive(:own_process_group?).and_return(false)
+      allow(Process).to receive(:kill)
+      stop_group(waiter)
+      expect(Process).to have_received(:kill).with('KILL', 4242)
+      expect(Process).not_to have_received(:kill).with('TERM', anything)
+    end
   end
 
   before do
@@ -170,7 +203,8 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     sandbox.const_set(:Room, double(:rooms, :[] => double(location: town)))
     sandbox.const_set(:UserVars, double(mapdb_fwi_trinket: false))
     path = File.expand_path("../../fixtures/webui/#{name}_setup.lic", __dir__)
-    source = File.read(path)
+    # Byte-pinned fixture: binary read so CRLF conversion on Windows cannot change the digest.
+    source = File.binread(path).force_encoding(Encoding::UTF_8)
     if name == 'eloot'
       expect(Digest::SHA256.hexdigest(source)).to eq('629e8f9f1b845f5348068a5ba75c42bd74006d5c59e45bf218c6cc2d5d4a00e0')
     end
