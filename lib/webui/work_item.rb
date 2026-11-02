@@ -48,6 +48,8 @@ module Lich
       private
 
       # Releases references under lock and invokes disposal outside the lock.
+      # Cleanup failures are contained with the dispatcher's list; dispatcher.rb loads
+      # this file, so Dispatcher is defined before any item can finish.
       # @api private
       # @param expected [Symbol] state this caller is allowed to finish
       # @return [void]
@@ -63,7 +65,7 @@ module Lich
         end
         cleanup&.call
         nil
-      rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+      rescue *Dispatcher::CONTAINED_EXCEPTIONS => error
         Diagnostics.log(@logger, :error, "WebUI callback cleanup failed error=#{error.class}")
         nil
       end
