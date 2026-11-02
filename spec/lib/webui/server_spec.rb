@@ -373,6 +373,11 @@ RSpec.describe Lich::WebUI::Server do
     control, control_head = upgrade(server, cookie, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'websocket')
     expect(control_head).to start_with('HTTP/1.1 101 Switching Protocols')
     control.close
+    # After the server closes a refused socket, a client read ends in EOF or a reset.
+    # Windows reports a closed-then-reset connection as ECONNABORTED; elsewhere that
+    # error stays a failure.
+    closed_by_server = [Errno::EPIPE, Errno::ECONNRESET]
+    closed_by_server << Errno::ECONNABORTED if Gem.win_platform?
     [
       { 'Sec-Fetch-Site' => 'cross-site', 'Sec-Fetch-Mode' => 'websocket' },
       { 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate' },
@@ -382,7 +387,7 @@ RSpec.describe Lich::WebUI::Server do
       rest = begin
         socket.write(Lich::WebUI::WebSocket.encode_client_frame(JSON.generate(type: 'attach', page: 'page-abc', version: '2.5.0')))
         Timeout.timeout(2) { socket.read }
-      rescue Errno::EPIPE, Errno::ECONNRESET
+      rescue *closed_by_server
         ''
       end
       expect(rest).not_to include('hello'), metadata.inspect
