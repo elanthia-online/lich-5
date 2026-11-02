@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 require 'webui/viewer_store'
 require 'webui/page'
 
 RSpec.describe 'ViewerStore boundaries' do
+  include WebUIFreshProcess
+
   let(:store) { Lich::WebUI::ViewerStore.new }
   let(:owner) { Object.new }
   let(:content) { { input: true } }
@@ -114,7 +115,8 @@ RSpec.describe 'ViewerStore boundaries' do
       require 'webui/viewer_store'
       puts 'ready'
     RUBY_CODE
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    output, errors, status = run_ruby_with_deadline(code)
+    expect_child_within_deadline(status, output, errors, 'fresh-process viewer store example')
     expect(status.success?).to be(true), errors
     expect(errors).to be_empty
     expect(output).to eq("ready\n")
