@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'webui/dispatcher'
+require_relative '../../support/webui_fresh_process'
 require 'webui/work_item'
 
 RSpec.describe Lich::WebUI::WorkItem do
+  include WebUIFreshProcess
+
   it 'cleans canceled work once without invoking its callback' do
     called = []
     disposed = []
@@ -63,5 +65,21 @@ RSpec.describe Lich::WebUI::WorkItem do
                                logger: ->(*entry) { messages << entry }) { raise ArgumentError, 'primary' }
     expect { item.call }.to raise_error(ArgumentError, 'primary')
     expect(messages).to eq([[:error, 'WebUI callback cleanup failed error=ScriptError']])
+  end
+
+  it 'contains a raising cleanup when required alone in a fresh Ruby process' do
+    code = <<~RUBY_CODE
+      require 'webui/work_item'
+      messages = []
+      item = Lich::WebUI::WorkItem.new(cleanup: -> { raise IOError, 'synthetic' },
+                                       logger: ->(*entry) { messages << entry }) { :result }
+      abort "unexpected result" unless item.call == :result
+      abort "not contained: \#{messages.inspect}" unless messages == [[:error, 'WebUI callback cleanup failed error=IOError']]
+      puts 'ready'
+    RUBY_CODE
+    output, errors, status = run_ruby_with_deadline(code)
+    expect_child_within_deadline(status, output, errors, 'fresh-process work item example')
+    expect(status.success?).to be(true), errors
+    expect(output).to eq("ready\n")
   end
 end
