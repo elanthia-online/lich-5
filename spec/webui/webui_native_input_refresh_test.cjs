@@ -1,7 +1,8 @@
 // Native input refresh regressions for the shipped renderer: a focused textarea keeps
-// its scroll offsets across a redraw, a focused native select keeps its DOM node and
-// only the newest deferred render until focusout rechecks gesture admission, and
-// socket loss retires that deferred render.
+// its scroll offsets across a redraw; a native select keeps its DOM node and only the
+// newest deferred render from the gesture that opens its option popup until its change,
+// focusout or an Escape, while focus alone never holds a page; and socket loss
+// retires that deferred render.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -42,7 +43,7 @@ function fixture(t) {
 }
 
 const choiceRender = (generation, title) => ({ type: 'render', page: 'form', generation,
-  bindings: { save: ['activate'] }, submissions: { save: ['choice'] },
+  bindings: { save: ['activate'], choice: ['change'] }, submissions: { save: ['choice'] },
   tree: { type: 'page', cid: 'root', props: { title }, children: [
     { type: 'select', cid: 'choice', props: { label: 'Choice', value: 'a',
       options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] } },
@@ -75,52 +76,171 @@ test('a focused textarea keeps its scroll offsets and selection across a redraw'
   }, { title: 'Notes (2)', replaced: true, focused: true, selection: [10, 14], scroll: [120, 36] });
 });
 
-test('a focused native select keeps its node and only the newest render until focusout rechecks gesture admission', t => {
-  const { dom, receive, sent, runTimers } = fixture(t);
-  const { document, MouseEvent } = dom.window;
+const pointerdown = (dom, target) => target.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, bubbles: true }));
+const pointerup = dom => dom.window.document.dispatchEvent(new dom.window.MouseEvent('pointerup', { button: 0, bubbles: true }));
+const keydown = (dom, target, init) => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+
+test('focus alone does not hold a native select, so renders replace it at once', t => {
+  const { dom, receive } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'One'));
+  const first = select();
+  first.focus();
+  receive(choiceRender(2, 'Two'));
+  assert.deepEqual([select() === first, first.isConnected, title()], [false, false, 'Two']);
+  assert.equal(document.activeElement, select(), 'focus follows the replacement');
+});
+
+test('a focused select receives the server answer to its change at once, with no pointer gesture', t => {
+  const { dom, receive, sent } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'Selected A'));
+  const picked = select();
+  picked.focus();
+  picked.value = 'b';
+  picked.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  assert.equal(sent.some(message => message.cid === 'choice' && message.event === 'change'), true, 'the change reached the server');
+  receive(choiceRender(2, 'Selected B'));
+  assert.deepEqual([title(), select() === picked, document.activeElement === select()], ['Selected B', false, true],
+    'the answer shows while the select still has focus');
+});
+
+test('a pointer-opened native select keeps its node and only the newest render until its change releases it', t => {
+  const { dom, receive, runTimers } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'One'));
+  const open = select();
+  open.focus();
+  pointerdown(dom, open);
+  pointerup(dom);
+  runTimers(0);
+  receive(choiceRender(2, 'Two'));
+  receive(choiceRender(3, 'Three'));
+  const observed = { whileOpen: [select() === open, open.isConnected, title()] };
+  open.value = 'b';
+  open.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  observed.beforeTimer = title();
+  runTimers(0);
+  observed.afterChange = [select() === open, title()];
+  receive(choiceRender(4, 'Four'));
+  observed.answer = title();
+  assert.deepEqual(observed, {
+    whileOpen: [true, true, 'One'],
+    beforeTimer: 'One',
+    afterChange: [false, 'Three'],
+    answer: 'Four'
+  });
+});
+
+test('focusout or an Escape releases a held native select to the newest render', t => {
+  const { dom, receive, runTimers } = fixture(t);
+  const { document } = dom.window;
   const select = () => document.querySelector('[data-cid="choice"] select');
   const title = () => document.querySelector('h1').textContent;
   receive({ type: 'hello', pages: [{ address: 'form' }] });
   receive(choiceRender(1, 'One'));
   const observed = {};
 
-  // Focusout alone admits the retained render.
   const first = select();
   first.focus();
-  receive(choiceRender(2, 'Two'));
-  observed.whileFocused = [select() === first, first.isConnected, title()];
-  first.blur();
-  observed.beforeTimer = title();
+  pointerdown(dom, first);
+  pointerup(dom);
   runTimers(0);
-  observed.afterFocusout = [title(), select() === first];
+  receive(choiceRender(2, 'Two'));
+  observed.heldByPointer = [select() === first, title()];
+  first.blur();
+  observed.beforeFocusoutTimer = title();
+  runTimers(0);
+  observed.afterFocusout = [select() === first, title()];
 
-  // With a pointer gesture still held, focusout re-defers until the release.
   const second = select();
   second.focus();
-  receive(choiceRender(3, 'Three'));
-  receive(choiceRender(4, 'Four'));
-  observed.newestOnly = [select() === second, title()];
-  document.querySelector('[data-page-address="form"]').dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
-  second.blur();
+  pointerdown(dom, second);
+  pointerup(dom);
   runTimers(0);
-  observed.heldGesture = [select() === second, title()];
-  document.dispatchEvent(new MouseEvent('pointerup', { button: 0, bubbles: true }));
+  receive(choiceRender(3, 'Three'));
+  observed.heldAgain = [select() === second, title()];
+  keydown(dom, second, { key: 'Escape' });
+  runTimers(0);
+  observed.afterEscape = [select() === second, title()];
+  assert.deepEqual(observed, {
+    heldByPointer: [true, 'One'],
+    beforeFocusoutTimer: 'One',
+    afterFocusout: [false, 'Two'],
+    heldAgain: [true, 'Two'],
+    afterEscape: [false, 'Three']
+  });
+});
+
+test('Space, F4 and Alt+Arrow on a select hold its page, and the same keys elsewhere do not', t => {
+  const { dom, receive, runTimers } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'Zero'));
+  const observed = {};
+  let generation = 1;
+  // Each key either holds the page (the select survives the next render) or does not;
+  // an Escape then ends any hold so the next case starts clean.
+  const press = (target, init) => {
+    const before = select();
+    target.focus();
+    keydown(dom, target, init);
+    receive(choiceRender(generation += 1, `Render ${generation}`));
+    const held = select() === before;
+    keydown(dom, document.activeElement, { key: 'Escape' });
+    runTimers(0);
+    return held;
+  };
+  observed.space = press(select(), { key: ' ' });
+  observed.f4 = press(select(), { key: 'F4' });
+  observed.altArrow = press(select(), { key: 'ArrowDown', altKey: true });
+  observed.plainArrow = press(select(), { key: 'ArrowDown' });
+  observed.spaceOnButton = press(document.querySelector('button[data-cid="save"]'), { key: ' ' });
+  assert.deepEqual(observed, { space: true, f4: true, altArrow: true, plainArrow: false, spaceOnButton: false });
+  assert.equal(title(), `Render ${generation}`);
+});
+
+test('with a pointer gesture still held, focusout of a native select re-defers until the release', t => {
+  const { dom, receive, sent, runTimers } = fixture(t);
+  const { document } = dom.window;
+  const select = () => document.querySelector('[data-cid="choice"] select');
+  const title = () => document.querySelector('h1').textContent;
+  receive({ type: 'hello', pages: [{ address: 'form' }] });
+  receive(choiceRender(1, 'One'));
+  const held = select();
+  held.focus();
+  pointerdown(dom, held);
+  receive(choiceRender(2, 'Two'));
+  receive(choiceRender(3, 'Three'));
+  const observed = { newestOnly: [select() === held, title()] };
+  held.blur();
+  runTimers(0);
+  observed.heldGesture = [select() === held, title()];
+  pointerup(dom);
   runTimers(0);
   observed.released = title();
   document.querySelector('button[data-cid="save"]').click();
   observed.save = [sent.at(-1).event, sent.at(-1).generation, sent.at(-1).submission];
   assert.deepEqual(observed, {
-    whileFocused: [true, true, 'One'],
-    beforeTimer: 'One',
-    afterFocusout: ['Two', false],
-    newestOnly: [true, 'Two'],
-    heldGesture: [true, 'Two'],
-    released: 'Four',
-    save: ['activate', 4, ['a']]
+    newestOnly: [true, 'One'],
+    heldGesture: [true, 'One'],
+    released: 'Three',
+    save: ['activate', 3, ['a']]
   });
 });
 
-test('socket loss retires a render deferred by a focused native select', t => {
+test('socket loss retires a render deferred by an open native select', t => {
   const { dom, receive, sent, runTimers, disconnect, reconnect } = fixture(t);
   const { document } = dom.window;
   const select = () => document.querySelector('[data-cid="choice"] select');
@@ -129,6 +249,9 @@ test('socket loss retires a render deferred by a focused native select', t => {
   receive(choiceRender(1, 'One'));
   const focused = select();
   focused.focus();
+  pointerdown(dom, focused);
+  pointerup(dom);
+  runTimers(0);
   receive(choiceRender(2, 'Two'));
   const observed = { deferred: [select() === focused, title()] };
   disconnect();
