@@ -23,8 +23,9 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     end
   end
 
+  # Windows decides executability by extension, so the stand-in carries .exe there.
   let(:snap_wrapper) do
-    File.join(directory, 'chromium-browser').tap do |path|
+    File.join(directory, OS.windows? ? 'chromium-browser.exe' : 'chromium-browser').tap do |path|
       File.write(path, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
       File.chmod(0o755, path)
     end
@@ -168,6 +169,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     end
 
     it 'skips a script wrapper that execs snap Chromium and finds a later non-snap Chromium' do
+      skip 'Linux PATH discovery: extensionless stand-ins are never executable on Windows' if OS.windows?
       wrapper = stand_in('wrap', 'chromium', content: "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
       real = stand_in('real', 'chromium', content: "\x7FELF")
       path = [File.dirname(wrapper), File.dirname(real)].join(File::PATH_SEPARATOR)
@@ -196,6 +198,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     end
 
     it 'skips a directory named chromium on PATH and finds a later executable' do
+      skip 'Linux PATH discovery: extensionless stand-ins are never executable on Windows' if OS.windows?
       FileUtils.mkdir_p(File.join(directory, 'dirs', 'chromium'))
       real = stand_in('real', 'chromium')
       path = [File.join(directory, 'dirs'), File.dirname(real)].join(File::PATH_SEPARATOR)
