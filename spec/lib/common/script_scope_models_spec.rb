@@ -2067,6 +2067,7 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     send_event(page, a, :button, 'activate', {}, submission: [second, 90])
     expect(events.pop(timeout: 2)).to eq([:spin, 90])
     expect(events.pop(timeout: 2)).to eq([:save, 'Second', 90])
+    drain_models
     expect(events).to be_empty
 
     # B still has its initial option and spin value. Reconciliation must compare
@@ -2074,6 +2075,7 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     send_event(page, b, :button, 'activate', {}, submission: [first, 75])
     expect(events.pop(timeout: 2)).to eq([:spin, 75])
     expect(events.pop(timeout: 2)).to eq([:save, 'First', 75])
+    drain_models
     expect(events).to be_empty
   end
 
