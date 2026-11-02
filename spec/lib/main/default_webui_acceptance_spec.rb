@@ -11,6 +11,7 @@ RSpec.describe 'default WebUI entrypoint acceptance' do
   let(:script) { File.join(root, 'spec/support/default_webui_acceptance_check.rb') }
 
   it 'authenticates the real page, exercises it, and shuts down without GTK' do
+    skip 'the check passes an inherited pipe descriptor (LICH_CI_DEFAULT_WEBUI_FD); Windows spawn cannot' if OS.windows?
     stdout, stderr, status = Open3.capture3(RbConfig.ruby, script, chdir: root)
 
     expect(status).to be_success, stderr
