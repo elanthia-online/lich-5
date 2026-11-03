@@ -61,7 +61,8 @@ module Lich
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
       PUT_BAG_NOT_FOUND = 'What were you referring to'
-      PUT_BAG_TOO_BIG = /is too \w+ to (?:fit|hold)/
+      # Kept off quoted text, like the refusals below.
+      PUT_BAG_TOO_BIG = /^[^"]*?is too \w+ to (?:fit|hold)/
       # "You just can't get the small brazier to fit in the leather satchel,
       # no matter how you arrange it." (DR enchanting, 2026-11).
       PUT_BAG_WONT_FIT = /^You just can't get .* to fit/

@@ -1745,6 +1745,7 @@ describe DRCC do
       "There isn't any more room in the backpack for that.",
       "That's too heavy to go in there!",
       'The tongs is too heavy to go in there!',
+      'The tongs is too long to fit in the backpack.',
       'The backpack is too small to hold that.',
       "You can't fit the tongs in the backpack, even after stuffing it.",
       'The backpack is completely full.',
@@ -1760,11 +1761,16 @@ describe DRCC do
       end
     end
 
-    context "when another player says the bag is full" do
-      let(:bag_put_reply) { 'Bob says, "My backpack is completely full, even after stuffing it."' }
+    [
+      'Bob says, "My backpack is completely full, even after stuffing it."',
+      'Bob says, "The brazier is too small to hold that."'
+    ].each do |speech|
+      context "when another player says #{speech.inspect}" do
+        let(:bag_put_reply) { speech }
 
-      it "doesn't take the speech for a refusal" do
-        expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+        it "doesn't take the speech for a refusal" do
+          expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+        end
       end
     end
 
