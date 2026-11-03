@@ -58,6 +58,54 @@ module Lich
 
       TIE_BELT_WOUNDED = UNTIE_WOUNDED
 
+      # The first study of instructions that wear out asks for a second one,
+      # on one line that also gives the uses left before this study:
+      #   [These instructions have only 5 uses remaining.  Study them again to proceed.]
+      # (2026-10-25 game log:10812). The uses part is optional so that a
+      # bare "Study them again" prompt (what forge, sew, shape and tinker
+      # wait for) still counts as a prompt. The game says "1 uses" for the
+      # last use (2026-10-25 game log:30340); the singular "use" is
+      # accepted but has not been seen. bput returns the matched text, from
+      # which +uses+ is read with this same pattern.
+      STUDY_INSTRUCTIONS_AGAIN = /(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
+      # Ends a completed study: "Roundtime: 7 sec." (2026-10-25 game log:10825).
+      STUDY_INSTRUCTIONS_SUCCESS = /^Roundtime/
+      # Code-derived, not seen after a study in the logs: the reply to a
+      # `<verb> my <name>` that names nothing on the character, as a GET of
+      # missing instructions gets (2026-10-26 game log:60708).
+      STUDY_INSTRUCTIONS_NOT_FOUND = /^What were you referring to/
+      # A study when the game does not see the instructions in hand. "You
+      # must be holding the instructions to study them." is the real reply to
+      # `study instruc` in a 2026-11 enchanting log (enchant.lic in
+      # elanthia-online/dr-scripts#7891 matches it too). "But you're not
+      # holding" is code-derived: the logs show it only as the reply to a book
+      # command without the book in hand (2026-10-25 game log:10805).
+      STUDY_INSTRUCTIONS_NOT_HOLDING = /^(?:But you're not holding|You must be holding the instructions)/
+      # Sent after the Roundtime of the study that used the last use, so bput
+      # has already returned when it arrives and a Flag has to catch it
+      # (2026-10-25 game log:30349 then 30352; same order at
+      # 2026-10-25 game log:32936 and 2026-10-26 game log:49540,
+      # 58546). Anchored like DRParser's spoof-guarded patterns (StatLine,
+      # TDPValue): only tags or whitespace may come before the text, so
+      # another player's speech or ESP that quotes it (e.g.
+      # Name says, "The instructions have grown so smudged...") does not
+      # count as a toss and skip the stow of instructions still in hand.
+      STUDY_INSTRUCTIONS_DISCARDED = /^(?:<[^>]*>|\s)*The instructions have grown so smudged and faded from use that you can no longer make them out/
+      # Flag that catches STUDY_INSTRUCTIONS_DISCARDED during one study_instructions call.
+      STUDY_INSTRUCTIONS_DISCARDED_FLAG = 'drcc-study-instructions-discarded'
+      # The uses count in the prompt before the study that uses the last use.
+      # Every "1 uses" prompt in the logs is followed by the toss once that
+      # study completes (2026-10-25 game log:30340 then 30352, 32923 then
+      # 32936; 2026-10-26 game log:49528 then 49540, 58534 then 58546),
+      # and no set is tossed without one. A completed study after this count
+      # is a toss even when the Flag missed the line, so the instructions are
+      # not put away after they are gone.
+      STUDY_INSTRUCTIONS_LAST_USE = 1
+      # Most studies sent per study_instructions call. The game asks for one
+      # more study, once (31 prompts in 62 studies in the 2026-10-25
+      # and 2026-10-26 game logs); the third is headroom, not an expected path.
+      STUDY_INSTRUCTIONS_MAX_STUDIES = 3
+
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
       PUT_BAG_NOT_FOUND = 'What were you referring to'
@@ -594,6 +642,177 @@ module Lich
         DRCI::TIE_ITEM_SUCCESS_PATTERNS.any? { |pattern| result.match?(pattern) }
       end
       private_class_method :tie_to_crafting_belt?
+
+      # What one study_instructions call did.
+      #
+      # @!attribute [r] studied
+      #   @return [Boolean] true when a study ended in Roundtime, so the
+      #     design is learned and crafting can start
+      # @!attribute [r] uses_left
+      #   @return [Integer, nil] uses the instructions have after this call:
+      #     0 when they were tossed; the game's count minus one after a
+      #     completed study (its count is taken before the study uses one:
+      #     5 at 2026-10-25 game log:10812, 4 on the next set at 11657,
+      #     and "1 uses" is followed by the toss at 30340/30352); the game's
+      #     count when the study did not complete; nil when the game gave no
+      #     count (instructions that do not wear out, or a failure first)
+      # @!attribute [r] discarded
+      #   @return [Boolean] true when the game tossed the worn-out
+      #     instructions away after the study: the Flag caught the toss line,
+      #     or the study that completed followed a "1 uses" prompt
+      #     (STUDY_INSTRUCTIONS_LAST_USE)
+      #
+      # There is no stow field: stow_crafting_item answers true for a PUT that
+      # timed out or got "What were you referring to?", so it cannot tell
+      # whether the instructions were put away, and no caller reads it.
+      StudyInstructionsResult = Data.define(:studied, :uses_left, :discarded) do
+        # @return [Boolean] see #studied
+        def studied?
+          studied
+        end
+
+        # @return [Boolean] see #discarded
+        def discarded?
+          discarded
+        end
+      end
+
+      # Gets crafting instructions, studies them until the game is ready to
+      # craft, and puts them away again unless the game tossed them.
+      #
+      # Steps:
+      # 1. get_crafting_item(+name+, +bag+, +bag_items+, +belt+, +skip_exit+).
+      # 2. `study my <name>`, by full name so a second set of instructions or
+      #    another "instructions" item cannot answer it. A "Study them again"
+      #    prompt sends it again, up to STUDY_INSTRUCTIONS_MAX_STUDIES studies
+      #    in all; the prompt's uses count is kept for +uses_left+.
+      # 3. Waits out the study's roundtime, then checks a Flag for
+      #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the Roundtime line
+      #    bput returned on. A completed study after a "1 uses" prompt counts
+      #    as a toss even if the Flag missed the line.
+      # 4. stow_crafting_item(+name+, +bag+, +belt+), unless the instructions
+      #    were tossed. A study that says they are not there or not in hand
+      #    still comes after a GET that got them, so they are put away too; if
+      #    they really are gone, the PUT only gets "What were you referring
+      #    to?" (2026-10-25 game log:30361).
+      #
+      # A study that does not end in Roundtime (not found, not holding, a
+      # timeout, or still "Study them again" after the last study) is a final
+      # failure: it beeps, prints a bold line and stops the script, or returns
+      # with +studied+ false when +skip_exit+ is set. The instructions are put
+      # away first, so a stop does not leave them in hand. A GET that fails
+      # without stopping (its timeout, or any final failure with +skip_exit+)
+      # returns +studied+ false; without +skip_exit+ the timeout also stops the
+      # script, since crafting cannot start without the design.
+      #
+      # @param name [String] the instructions, as `get my`/`study my` take
+      #   them, e.g. "liniment instructions"
+      # @param bag [String] container that holds +bag_items+ and takes the
+      #   instructions back
+      # @param bag_items [Array<String>, nil] items kept in +bag+
+      # @param belt [Hash, nil] crafting belt settings ('name', 'items')
+      # @param skip_exit [Boolean] return a result on a final failure instead
+      #   of stopping the script
+      # @return [StudyInstructionsResult]
+      # @raise [ArgumentError] when +name+ is nil or blank, before any command
+      #   is sent (a blank name would GET or untie nothing in particular)
+      #
+      # @example Prepare a remedy from instructions
+      #   result = DRCC.study_instructions('liniment instructions', bag, bag_items, belt)
+      #   DRC.message('Last use of these instructions.') if result.discarded?
+      def study_instructions(name, bag, bag_items, belt, skip_exit = false)
+        raise ArgumentError, 'DRCC.study_instructions needs the name of the instructions' if name.to_s.strip.empty?
+
+        unless get_crafting_item(name, bag, bag_items, belt, skip_exit)
+          # A final GET failure has already reported (and without skip_exit
+          # stopped); only a timed-out GET is left to report here.
+          crafting_item_failed("DRCC: Could not get #{name} to study.", skip_exit) unless skip_exit
+          return StudyInstructionsResult.new(studied: false, uses_left: nil, discarded: false)
+        end
+
+        outcome, uses, discarded = study_held_instructions(name)
+        studied = outcome == :studied
+        stow_crafting_item(name, bag, belt) unless discarded
+        crafting_item_failed(study_instructions_failure(outcome, name), skip_exit) unless studied
+        StudyInstructionsResult.new(
+          studied: studied,
+          uses_left: discarded ? 0 : instructions_uses_left(uses, studied),
+          discarded: discarded
+        )
+      end
+
+      # Sends `study my <name>` until a reply other than "Study them again",
+      # or STUDY_INSTRUCTIONS_MAX_STUDIES studies, then waits out roundtime
+      # and reads the discard Flag. The Flag is added before the first study
+      # and deleted on the way out, however the method leaves. A completed
+      # study after a STUDY_INSTRUCTIONS_LAST_USE count is a toss too, so a
+      # toss line that arrives after waitrt? cannot lead to a stow of
+      # instructions that are gone.
+      #
+      # @param name [String] the instructions, as study_instructions got them
+      # @return [Array(Symbol, Integer, Boolean)] the outcome (:studied, :again,
+      #   :not_found, :not_holding or :timeout), the last uses count the game
+      #   gave (nil if none), and whether the instructions were tossed
+      def study_held_instructions(name)
+        Flags.add(STUDY_INSTRUCTIONS_DISCARDED_FLAG, STUDY_INSTRUCTIONS_DISCARDED)
+        outcome = :again
+        uses = nil
+        STUDY_INSTRUCTIONS_MAX_STUDIES.times do
+          reply = DRC.bput("study my #{name}", STUDY_INSTRUCTIONS_AGAIN, STUDY_INSTRUCTIONS_SUCCESS, STUDY_INSTRUCTIONS_NOT_FOUND, STUDY_INSTRUCTIONS_NOT_HOLDING)
+          outcome = study_instructions_outcome(reply)
+          break unless outcome == :again
+
+          uses = reply[STUDY_INSTRUCTIONS_AGAIN, :uses]&.to_i || uses
+        end
+        waitrt?
+        tossed = Flags[STUDY_INSTRUCTIONS_DISCARDED_FLAG] || (outcome == :studied && uses == STUDY_INSTRUCTIONS_LAST_USE)
+        [outcome, uses, tossed ? true : false]
+      ensure
+        Flags.delete(STUDY_INSTRUCTIONS_DISCARDED_FLAG)
+      end
+
+      # Classifies one study reply.
+      #
+      # @param reply [String] text bput matched ('' on a timeout)
+      # @return [Symbol] :again, :studied, :not_found, :not_holding or :timeout
+      def study_instructions_outcome(reply)
+        case reply
+        when STUDY_INSTRUCTIONS_AGAIN then :again
+        when STUDY_INSTRUCTIONS_SUCCESS then :studied
+        when STUDY_INSTRUCTIONS_NOT_FOUND then :not_found
+        when STUDY_INSTRUCTIONS_NOT_HOLDING then :not_holding
+        else :timeout
+        end
+      end
+
+      # The bold line for a study that did not end in Roundtime.
+      #
+      # @param outcome [Symbol] a study_instructions_outcome other than :studied
+      # @param name [String] the instructions
+      # @return [String]
+      def study_instructions_failure(outcome, name)
+        case outcome
+        when :again then "DRCC: Still told to study #{name} again after #{STUDY_INSTRUCTIONS_MAX_STUDIES} studies."
+        when :not_found then "DRCC: Could not find #{name} to study."
+        when :not_holding then "DRCC: Not holding #{name} to study."
+        else "DRCC: No reply to studying #{name}."
+        end
+      end
+
+      # Uses left after a study_instructions call that kept the instructions.
+      #
+      # @param uses [Integer, nil] the game's count, taken before the study
+      # @param studied [Boolean] whether the study completed (and so used one)
+      # @return [Integer, nil] nil when the game gave no count
+      def instructions_uses_left(uses, studied)
+        return nil unless uses
+
+        studied ? uses - 1 : uses
+      end
+
+      # Internal to study_instructions; kept off the public DRCC API.
+      private_class_method :study_held_instructions, :study_instructions_outcome,
+                           :study_instructions_failure, :instructions_uses_left
 
       def crafting_cost(recipe, hometown, parts, quantity, material)
         # To use this method, you'll need to pass:
