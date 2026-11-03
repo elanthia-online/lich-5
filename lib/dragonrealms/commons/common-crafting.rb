@@ -61,26 +61,30 @@ module Lich
       # The first study of instructions that wear out asks for a second one,
       # on one line that also gives the uses left before this study:
       #   [These instructions have only 5 uses remaining.  Study them again to proceed.]
-      # (NawainDR_2026-10-25.log:10812). The uses part is optional so that a
+      # (2026-10-25 game log:10812). The uses part is optional so that a
       # bare "Study them again" prompt (what forge, sew, shape and tinker
       # wait for) still counts as a prompt. The game says "1 uses" for the
-      # last use (NawainDR_2026-10-25.log:30340); the singular "use" is
+      # last use (2026-10-25 game log:30340); the singular "use" is
       # accepted but has not been seen. bput returns the matched text, from
       # which +uses+ is read with this same pattern.
       STUDY_INSTRUCTIONS_AGAIN = /(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
-      # Ends a completed study: "Roundtime: 7 sec." (NawainDR_2026-10-25.log:10825).
+      # Ends a completed study: "Roundtime: 7 sec." (2026-10-25 game log:10825).
       STUDY_INSTRUCTIONS_SUCCESS = /^Roundtime/
       # Code-derived, not seen after a study in the logs: the reply to a
       # `<verb> my <name>` that names nothing on the character, as a GET of
-      # missing instructions gets (NawainDR_2026-10-26.log:60708).
+      # missing instructions gets (2026-10-26 game log:60708).
       STUDY_INSTRUCTIONS_NOT_FOUND = /^What were you referring to/
-      # Code-derived, not seen after a study in the logs: the reply to a book
-      # command when the book is not in hand (NawainDR_2026-10-25.log:10805).
-      STUDY_INSTRUCTIONS_NOT_HOLDING = /^But you're not holding/
+      # A study when the game does not see the instructions in hand. "You
+      # must be holding the instructions to study them." is the real reply to
+      # `study instruc` in a 2026-11 enchanting log (dr-scripts enchant.lic
+      # matches it too). "But you're not holding" is code-derived: the logs
+      # show it only as the reply to a book command without the book in hand
+      # (2026-10-25 game log:10805).
+      STUDY_INSTRUCTIONS_NOT_HOLDING = /^(?:But you're not holding|You must be holding the instructions)/
       # Sent after the Roundtime of the study that used the last use, so bput
       # has already returned when it arrives and a Flag has to catch it
-      # (NawainDR_2026-10-25.log:30349 then 30352; same order at
-      # NawainDR_2026-10-25.log:32936 and NawainDR_2026-10-26.log:49540,
+      # (2026-10-25 game log:30349 then 30352; same order at
+      # 2026-10-25 game log:32936 and 2026-10-26 game log:49540,
       # 58546). Anchored like DRParser's spoof-guarded patterns (StatLine,
       # TDPValue): only tags or whitespace may come before the text, so
       # another player's speech or ESP that quotes it (e.g.
@@ -91,15 +95,15 @@ module Lich
       STUDY_INSTRUCTIONS_DISCARDED_FLAG = 'drcc-study-instructions-discarded'
       # The uses count in the prompt before the study that uses the last use.
       # Every "1 uses" prompt in the logs is followed by the toss once that
-      # study completes (NawainDR_2026-10-25.log:30340 then 30352, 32923 then
-      # 32936; NawainDR_2026-10-26.log:49528 then 49540, 58534 then 58546),
+      # study completes (2026-10-25 game log:30340 then 30352, 32923 then
+      # 32936; 2026-10-26 game log:49528 then 49540, 58534 then 58546),
       # and no set is tossed without one. A completed study after this count
       # is a toss even when the Flag missed the line, so the instructions are
       # not put away after they are gone.
       STUDY_INSTRUCTIONS_LAST_USE = 1
       # Most studies sent per study_instructions call. The game asks for one
-      # more study, once (31 prompts in 62 studies in NawainDR_2026-10-25.log
-      # and -26.log); the third is headroom, not an expected path.
+      # more study, once (31 prompts in 62 studies in the 2026-10-25
+      # and 2026-10-26 game logs); the third is headroom, not an expected path.
       STUDY_INSTRUCTIONS_MAX_STUDIES = 3
 
       PUT_BAG_TUCK = 'You tuck'
@@ -648,7 +652,7 @@ module Lich
       #   @return [Integer, nil] uses the instructions have after this call:
       #     0 when they were tossed; the game's count minus one after a
       #     completed study (its count is taken before the study uses one:
-      #     5 at NawainDR_2026-10-25.log:10812, 4 on the next set at 11657,
+      #     5 at 2026-10-25 game log:10812, 4 on the next set at 11657,
       #     and "1 uses" is followed by the toss at 30340/30352); the game's
       #     count when the study did not complete; nil when the game gave no
       #     count (instructions that do not wear out, or a failure first)
@@ -690,7 +694,7 @@ module Lich
       #    were tossed. A study that says they are not there or not in hand
       #    still comes after a GET that got them, so they are put away too; if
       #    they really are gone, the PUT only gets "What were you referring
-      #    to?" (NawainDR_2026-10-25.log:30361).
+      #    to?" (2026-10-25 game log:30361).
       #
       # A study that does not end in Roundtime (not found, not holding, a
       # timeout, or still "Study them again" after the last study) is a final

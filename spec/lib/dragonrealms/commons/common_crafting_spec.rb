@@ -1829,10 +1829,9 @@ describe DRCC do
     let(:study_instructions) { 'study my liniment instructions' }
     let(:put_instructions) { "put my liniment instructions in my botanist's toolbag" }
 
-    # Game lines, copied from the timestamped copy of each line in
-    # /Users/grocha/audits/remedy-2026-11-03/inputs/NawainDR_2026-10-25.log
-    # (".25:N") and NawainDR_2026-10-26.log (".26:N") unless a comment says
-    # the line is code-derived.
+    # Game lines, copied from the timestamped copy of each line in two days
+    # of real game logs, 2026-10-25 (".25:N") and 2026-10-26 (".26:N"),
+    # unless a comment says the line is code-derived.
     let(:got_instructions) do
       # .25:10795
       ["You get some shining clubmoss liniment instructions from inside your botanist's toolbag."]
@@ -2236,6 +2235,24 @@ describe DRCC do
       it 'puts the instructions away before stopping the script without skip_exit' do
         expect { study }.to raise_error(SystemExit)
         expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+      end
+    end
+
+    context 'when the study says the instructions must be held' do
+      before do
+        # Real reply to `study instruc` in a 2026-11 enchanting log.
+        play(get_instructions   => [got_instructions],
+             study_instructions => [['You must be holding the instructions to study them.']],
+             put_instructions   => [put_away])
+      end
+
+      it 'reports not holding at once, without waiting out a timeout, and puts the instructions away' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+        expect(Lich::Messaging).not_to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
       end
     end
 
