@@ -1098,3 +1098,190 @@ RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
     end
   end
 end
+
+RSpec.describe Lich::Gemstone::Infomon, "when the database is busy" do
+  let(:infomon) { Lich::Gemstone::Infomon }
+
+  before(:each) do
+    infomon.reset!
+    allow(Lich).to receive(:log)
+    allow(infomon).to receive(:respond)
+  end
+
+  # Polls for a condition for up to `seconds`; the writer thread runs async.
+  def wait_until(seconds = 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    until yield
+      return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      sleep 0.01
+    end
+    true
+  end
+
+  # Another connection holding the write lock, as another Lich process would.
+  def hold_write_lock(file, seconds)
+    ready = Queue.new
+    holder = Thread.new do
+      conn = SQLite3::Database.new(file)
+      conn.execute('BEGIN IMMEDIATE')
+      ready << true
+      sleep seconds
+      conn.execute('COMMIT')
+    ensure
+      conn&.close
+    end
+    ready.pop
+    holder
+  end
+
+  def row(key)
+    infomon.table[key: key]
+  end
+
+  it "opens infomon.db with the Ruby busy handler used for lich.db3" do
+    expect(infomon.db).to be_a(Lich::SQLiteBusyWait::Transactions)
+  end
+
+  it "keeps the process running while a write waits for another connection's lock" do
+    holder = hold_write_lock(infomon.file, 0.6)
+    ticks = 0
+    stop = false
+    ticker = Thread.new do
+      until stop
+        sleep 0.01
+        ticks += 1
+      end
+    end
+    infomon.set("busy.wait", 1)
+    expect(wait_until { row("busy.wait") }).to be(true)
+    stop = true
+    ticker.join
+    holder.join
+    # a C busy timeout holds the GVL for the whole wait: no ticks at all
+    expect(ticks).to be > 20
+  end
+
+  context "with a short busy timeout" do
+    # Infomon.db is opened once at load with the default 5 s timeout; a second
+    # connection to the same file with a short one stands in for it.
+    let(:short_db) do
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(150)
+      Lich.open_sequel_sqlite(infomon.file)
+    end
+
+    before do
+      stub_const("#{described_class}::BUSY_BACKOFF_START_S", 0.2)
+      allow(infomon).to receive(:db).and_return(short_db)
+    end
+
+    it "tells a busy database from other write errors" do
+      busy = begin
+        begin
+          raise SQLite3::BusyException, 'database is locked'
+        rescue SQLite3::Exception
+          raise Sequel::DatabaseError, 'wrapped'
+        end
+      rescue Sequel::DatabaseError => e
+        e
+      end
+      expect(infomon.busy_error?(busy)).to be_truthy
+      expect(infomon.busy_error?(Sequel::DatabaseError.new('constraint'))).to be_falsey
+      expect(infomon.busy_error?(RuntimeError.new('other'))).to be_falsey
+    end
+
+    it "retries queued writes in order once the lock frees, with one lock wait per backoff" do
+      busy_failures = 0
+      allow(Lich).to receive(:log) { |msg| busy_failures += 1 if msg.to_s.include?('write deferred (database busy)') }
+      holder = hold_write_lock(infomon.file, 1.0)
+      infomon.set("busy.a", 1)
+      infomon.set("busy.a", 2)
+      (1..8).each { |i| infomon.set("busy.k#{i}", i) }
+      expect(wait_until { row("busy.k8") }).to be(true)
+      holder.join
+      # without the backoff the writer keeps waiting out a 150 ms timeout per queued
+      # write for the whole second (6-7 failures); with it, a few probes of the lock
+      expect(busy_failures).to be_between(1, 4)
+      expect(row("busy.a")[:value]).to eq(2) # replayed in queue order: the later value wins
+      (1..8).each { |i| expect(row("busy.k#{i}")[:value]).to eq(i) }
+      expect(infomon.instance_variable_get(:@unpersisted)).to be_empty
+    end
+
+    it "does not hold the Infomon mutex while writes back off" do
+      holder = hold_write_lock(infomon.file, 1.0)
+      (1..5).each { |i| infomon.set("busy.m#{i}", i) }
+      # the first attempt waits 150 ms for the lock and fails; the backoff starts
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      infomon.mutex.synchronize { nil }
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.1
+      expect(wait_until { row("busy.m5") }).to be(true)
+      holder.join
+    end
+
+    it "reports one in-game line for a busy streak and logs each failure" do
+      holder = hold_write_lock(infomon.file, 0.9)
+      infomon.set("busy.r", 1)
+      expect(wait_until { row("busy.r") }).to be(true)
+      holder.join
+      expect(infomon).to have_received(:respond).with(/database is busy/).once
+      expect(Lich).to have_received(:log).with(/write deferred \(database busy\) for busy.r/).at_least(:once)
+    end
+
+    it "drops the oldest pending writes past the cap and marks their keys unpersisted" do
+      stub_const("#{described_class}::MAX_DEFERRED_WRITES", 2)
+      pending = infomon.instance_variable_get(:@deferred)
+      begin
+        4.times { |i| infomon.defer_write(["SELECT 1", ["cap.#{i}"]]) }
+        expect(pending.size).to eq(2)
+        expect(infomon.instance_variable_get(:@unpersisted).keys).to include("cap.0", "cap.1")
+        expect(Lich).to have_received(:log).with(/dropped 1 pending write/).twice
+      ensure
+        pending.clear
+      end
+    end
+
+    it "forgets pending writes on reset!" do
+      pending = infomon.instance_variable_get(:@deferred)
+      pending << ["SELECT 1", ["reset.key"]]
+      infomon.reset!
+      expect(pending).to be_empty
+    end
+  end
+
+  describe "setup! and reset! locking" do
+    after { infomon.mutex_unlock }
+
+    it "releases the Infomon mutex when a database call raises" do
+      raw = infomon.instance_variable_get(:@db)
+      allow(raw).to receive(:table_exists?).and_raise(Sequel::DatabaseError, "database is locked")
+      expect { infomon.setup! }.to raise_error(Sequel::DatabaseError)
+      expect(infomon.mutex.locked?).to be(false)
+    end
+
+    it "leaves a lock the caller already holds in place" do
+      infomon.mutex_lock
+      infomon.setup!
+      expect(infomon.mutex.owned?).to be(true)
+      infomon.reset!
+      expect(infomon.mutex.owned?).to be(true)
+
+      raw = infomon.instance_variable_get(:@db)
+      allow(raw).to receive(:table_exists?).and_raise(Sequel::DatabaseError, "database is locked")
+      expect { infomon.setup! }.to raise_error(Sequel::DatabaseError)
+      expect(infomon.mutex.owned?).to be(true)
+    end
+
+    it "returns the table when it has to rebuild an old schema" do
+      raw = infomon.instance_variable_get(:@db)
+      raw.drop_table?(infomon.table_name)
+      raw.create_table(infomon.table_name) do
+        text :key, primary_key: true
+        any :value
+      end
+      expect(infomon.setup!).to be_a(Sequel::Dataset)
+      expect(raw.schema(infomon.table_name).map(&:first)).to include(:updated_at)
+      expect(infomon.mutex.locked?).to be(false)
+    end
+  end
+end
