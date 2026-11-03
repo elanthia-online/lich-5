@@ -76,10 +76,10 @@ module Lich
       STUDY_INSTRUCTIONS_NOT_FOUND = /^What were you referring to/
       # A study when the game does not see the instructions in hand. "You
       # must be holding the instructions to study them." is the real reply to
-      # `study instruc` in a 2026-11 enchanting log (dr-scripts enchant.lic
-      # matches it too). "But you're not holding" is code-derived: the logs
-      # show it only as the reply to a book command without the book in hand
-      # (2026-10-25 game log:10805).
+      # `study instruc` in a 2026-11 enchanting log (enchant.lic in
+      # elanthia-online/dr-scripts#7891 matches it too). "But you're not
+      # holding" is code-derived: the logs show it only as the reply to a book
+      # command without the book in hand (2026-10-25 game log:10805).
       STUDY_INSTRUCTIONS_NOT_HOLDING = /^(?:But you're not holding|You must be holding the instructions)/
       # Sent after the Roundtime of the study that used the last use, so bput
       # has already returned when it arrives and a Flag has to catch it
