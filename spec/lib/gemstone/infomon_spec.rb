@@ -1290,6 +1290,23 @@ RSpec.describe Lich::Gemstone::Infomon, "when the database is busy" do
       end
     end
 
+    it "does not run a pending write the writer picked up before reset! cleared it" do
+      holder = hold_write_lock(infomon.file, 0.3)
+      infomon.set("busy.reset", 1)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      infomon.mutex.synchronize do
+        # the 0.2 s backoff runs out while this thread holds the mutex, so the writer
+        # takes the pending write and waits here for the mutex, as it does behind
+        # reset!'s own lock wait on a busy file
+        holder.join
+        sleep 0.4
+        infomon.reset!
+      end
+      expect(infomon.flush).to be(true)
+      expect(wait_until(0.5) { row("busy.reset") }).to be(false)
+      expect(infomon.instance_variable_get(:@deferred)).to be_empty
+    end
+
     it "forgets pending writes on reset!" do
       pending = infomon.instance_variable_get(:@deferred)
       pending << ["SELECT 1", ["reset.key"]]

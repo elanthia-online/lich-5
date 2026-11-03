@@ -359,20 +359,29 @@ module Lich
           item = @deferred_lock.synchronize { @deferred.first }
           return unless item
 
-          outcome = self.attempt_write(*item)
+          outcome = self.attempt_write(item)
           return if outcome == :busy
 
           @deferred_lock.synchronize { @deferred.shift if @deferred.first.equal?(item) }
         end
       end
 
-      # One attempt at one queued statement. Returns :ok, :busy (keep it pending, back off)
-      # or :failed (drop it; its keys are marked unpersisted so a later set retries).
-      def self.attempt_write(sql, keys)
+      # One attempt at one pending write (the head of @deferred). Returns :ok, :busy (keep
+      # it pending, back off), :failed (drop it; its keys are marked unpersisted so a later
+      # set retries) or :stale (reset! cleared it while this thread waited for the mutex).
+      def self.attempt_write(item)
+        sql, keys = item
         write_error = nil
         report_in_game = false
         busy = false
+        stale = false
         Infomon.mutex.synchronize do
+          # reset! clears @deferred and rebuilds the table under this mutex. If it ran
+          # while this thread waited here, the write was for the dropped table and must
+          # not land in the new one.
+          stale = !@deferred_lock.synchronize { @deferred.first.equal?(item) }
+          next if stale
+
           begin
             Infomon.db.run(sql)
             # Safe to clear: the queue is FIFO, so any later write for these keys
@@ -396,6 +405,7 @@ module Lich
             end
           end
         end
+        return :stale if stale
         return :ok unless write_error
 
         # Reported after releasing the DB mutex so a slow client write can't hold it.
