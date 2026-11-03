@@ -1193,6 +1193,21 @@ RSpec.describe Lich::Gemstone::Infomon, "when the database is busy" do
       expect(infomon.instance_variable_get(:@busy_backoff)).to be_nil
     end
 
+    it "keeps values whose writes are deferred when the cache first loads" do
+      infomon.set("busy.load", 1)
+      expect(wait_until { row("busy.load") }).to be(true)
+      # a fresh session: nothing cached, the first get loads the table
+      infomon.cache.clear
+      infomon.instance_variable_set(:@cache_loaded, false)
+      holder = hold_write_lock(infomon.file, 0.6)
+      infomon.set("busy.load", 2)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      expect(infomon.get("busy.load")).to eq(2)
+      holder.join
+      expect(wait_until { row("busy.load")[:value] == 2 }).to be(true)
+      expect(infomon.get("busy.load")).to eq(2)
+    end
+
     it "does not cache a row whose delete! is still deferred" do
       infomon.set("busy.del", 5)
       expect(wait_until { row("busy.del") }).to be(true)

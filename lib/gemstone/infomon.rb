@@ -159,7 +159,12 @@ module Lich
         sleep(0.01) if XMLData.name.empty?
         dataset = Infomon.table
         h = dataset.map(:key).zip(dataset.map(:value)).to_h
-        self.cache.merge!(h)
+        # Disk only fills keys this session hasn't touched. A cached value was set this
+        # session, so it is newer than the row, even if its write is still queued or held
+        # back while the database is busy; a key with a deferred write and no cached
+        # value is a pending delete!.
+        pending = @deferred_lock.synchronize { @deferred.flat_map { |_sql, keys| keys } }.to_h { |key| [key, true] }
+        h.each { |key, value| self.cache.put(key, value) unless self.cache.include?(key) || pending.key?(key) }
         @cache_loaded = true
       end
 
