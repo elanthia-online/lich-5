@@ -67,15 +67,20 @@ module Lich
           title = titles.shift
           id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
           text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
-          if id_effects.length != text_effects.length
-            # has spell names disabled
-            text_effects = id_effects
-          end
+          # Names and ids pair up by position only when every effect has its
+          # own name. Spell names disabled leaves no names; two effects with
+          # the same name (two Sword Hymns) share one name key. Either way the
+          # name has to come from the spell list instead.
+          names_paired = id_effects.length == text_effects.length
           if id_effects.length == 0
             effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
           else
             id_effects.each { |sn, end_time|
-              stext = text_effects.shift[0]
+              stext = if names_paired
+                        text_effects.shift[0]
+                      else
+                        Spell[sn]&.name || sn.to_s
+                      end
               duration = ((end_time - Time.now) / 60.to_f)
               if duration < 0
                 next
@@ -84,7 +89,7 @@ module Lich
               else
                 duration = duration.as_time
               end
-              if Spell[sn].circlename && circle != Spell[sn].circlename && title == 'Spells'
+              if Spell[sn]&.circlename && circle != Spell[sn].circlename && title == 'Spells'
                 circle = Spell[sn].circlename
               end
               effect_out.add_row [sn, title, stext, duration]
