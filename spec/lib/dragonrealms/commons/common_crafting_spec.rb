@@ -2060,6 +2060,50 @@ describe DRCC do
       end
     end
 
+    context 'when another player quotes the toss line during the study' do
+      # The quoted lines are CONSTRUCTED: the toss text is .25:30352; the
+      # speech shape is .25:21765 (Etasia says, "...") and the ESP shape is
+      # .25:13356 ([General][Xalak] "..."). Neither was seen carrying it.
+      let(:toss_text) { 'The instructions have grown so smudged and faded from use that you can no longer make them out, so you toss them away.' }
+      let(:speech_quoting_toss) { %(Etasia says, "#{toss_text}") }
+      let(:esp_quoting_toss) { %([General][Xalak] "#{toss_text}") }
+
+      it 'still puts away a set with uses left when the speech comes before the Roundtime' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, [speech_quoting_toss, *study_complete]],
+             put_instructions   => [put_away])
+
+        result = study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+      end
+
+      it 'still puts away a set with uses left when the ESP comes after the Roundtime' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, [*study_complete, esp_quoting_toss]],
+             put_instructions   => [put_away])
+
+        result = study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+      end
+    end
+
+    it 'counts the toss line as a toss when the stream puts tags or spaces before it' do
+      # Code-derived prefix: the logs strip tags, so this is the
+      # (?:<[^>]*>|\s)* prefix DRParser allows (drparser.rb StatLine), not a
+      # seen line. The toss text is .25:30352.
+      tagged_toss = "<pushBold/>  #{study_complete_then_tossed.last}"
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_five_uses, [*study_complete, tagged_toss]],
+           put_instructions   => [put_away])
+
+      expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+      expect(sent).not_to include(put_instructions)
+    end
+
     it 'does not count a "1 uses" prompt as a toss when the study after it gets no reply' do
       play(get_instructions   => [got_instructions],
            study_instructions => [study_again_with_one_use, ambient_only],
@@ -2181,17 +2225,17 @@ describe DRCC do
              put_instructions   => [put_away])
       end
 
-      it 'does not try to put them away and returns the failure with skip_exit' do
+      it 'puts away the instructions the GET got and returns the failure with skip_exit' do
         result = study(skip_exit: true)
 
-        expect(sent).to eq([get_instructions, study_instructions])
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
         expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Could not find liniment instructions to study.')
       end
 
-      it 'stops the script without skip_exit' do
+      it 'puts the instructions away before stopping the script without skip_exit' do
         expect { study }.to raise_error(SystemExit)
-        expect(sent).not_to include(put_instructions)
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
       end
     end
 
@@ -2203,12 +2247,17 @@ describe DRCC do
              put_instructions   => [put_away])
       end
 
-      it 'does not try to put them away and returns the failure with skip_exit' do
+      it 'puts away the instructions the GET got and returns the failure with skip_exit' do
         result = study(skip_exit: true)
 
-        expect(sent).to eq([get_instructions, study_instructions])
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
         expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
         expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+      end
+
+      it 'puts the instructions away before stopping the script without skip_exit' do
+        expect { study }.to raise_error(SystemExit)
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
       end
     end
 

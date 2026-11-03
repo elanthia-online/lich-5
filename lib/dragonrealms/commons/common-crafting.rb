@@ -81,8 +81,12 @@ module Lich
       # has already returned when it arrives and a Flag has to catch it
       # (NawainDR_2026-10-25.log:30349 then 30352; same order at
       # NawainDR_2026-10-25.log:32936 and NawainDR_2026-10-26.log:49540,
-      # 58546). Unanchored, because Flags see the whole server line.
-      STUDY_INSTRUCTIONS_DISCARDED = /The instructions have grown so smudged and faded from use that you can no longer make them out/
+      # 58546). Anchored like DRParser's spoof-guarded patterns (StatLine,
+      # TDPValue): only tags or whitespace may come before the text, so
+      # another player's speech or ESP that quotes it (e.g.
+      # Name says, "The instructions have grown so smudged...") does not
+      # count as a toss and skip the stow of instructions still in hand.
+      STUDY_INSTRUCTIONS_DISCARDED = /^(?:<[^>]*>|\s)*The instructions have grown so smudged and faded from use that you can no longer make them out/
       # Flag that catches STUDY_INSTRUCTIONS_DISCARDED during one study_instructions call.
       STUDY_INSTRUCTIONS_DISCARDED_FLAG = 'drcc-study-instructions-discarded'
       # The uses count in the prompt before the study that uses the last use.
@@ -683,7 +687,10 @@ module Lich
       #    bput returned on. A completed study after a "1 uses" prompt counts
       #    as a toss even if the Flag missed the line.
       # 4. stow_crafting_item(+name+, +bag+, +belt+), unless the instructions
-      #    were tossed or the study said they are not there or not in hand.
+      #    were tossed. A study that says they are not there or not in hand
+      #    still comes after a GET that got them, so they are put away too; if
+      #    they really are gone, the PUT only gets "What were you referring
+      #    to?" (NawainDR_2026-10-25.log:30361).
       #
       # A study that does not end in Roundtime (not found, not holding, a
       # timeout, or still "Study them again" after the last study) is a final
@@ -721,7 +728,7 @@ module Lich
 
         outcome, uses, discarded = study_held_instructions(name)
         studied = outcome == :studied
-        stow_crafting_item(name, bag, belt) unless discarded || %i[not_found not_holding].include?(outcome)
+        stow_crafting_item(name, bag, belt) unless discarded
         crafting_item_failed(study_instructions_failure(outcome, name), skip_exit) unless studied
         StudyInstructionsResult.new(
           studied: studied,
