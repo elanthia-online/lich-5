@@ -1175,6 +1175,40 @@ RSpec.describe Lich::Gemstone::Infomon, "when the database is busy" do
       allow(infomon).to receive(:db).and_return(short_db)
     end
 
+    after { short_db.disconnect }
+
+    it "starts each busy streak at the configured backoff, also after reset!" do
+      holder = hold_write_lock(infomon.file, 0.5)
+      infomon.set("busy.s", 1)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      # 0.2 s from the stubbed constant, not a backoff left over from load or an earlier streak
+      expect(infomon.instance_variable_get(:@busy_until) - infomon.monotonic_now).to be <= 0.2
+      expect(wait_until { row("busy.s") }).to be(true)
+      holder.join
+
+      infomon.instance_variable_set(:@busy_until, infomon.monotonic_now + 30)
+      infomon.instance_variable_set(:@busy_backoff, 30.0)
+      infomon.reset!
+      expect(infomon.write_cooling_down?).to be(false)
+      expect(infomon.instance_variable_get(:@busy_backoff)).to be_nil
+    end
+
+    it "does not cache a row whose delete! is still deferred" do
+      infomon.set("busy.del", 5)
+      expect(wait_until { row("busy.del") }).to be(true)
+      infomon.get("busy.del") # loads the cache once, as at login (reset! unloaded it)
+      holder = hold_write_lock(infomon.file, 0.6)
+      infomon.delete!("busy.del")
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      # the DELETE has not landed: the row is still on disk
+      expect(row("busy.del")).not_to be_nil
+      expect(infomon.get("busy.del")).to be_nil
+      expect(infomon.cache.include?("busy.del")).to be(false)
+      holder.join
+      expect(wait_until { row("busy.del").nil? }).to be(true)
+      expect(infomon.get("busy.del")).to be_nil
+    end
+
     it "tells a busy database from other write errors" do
       busy = begin
         begin

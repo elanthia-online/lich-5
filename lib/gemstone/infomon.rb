@@ -49,7 +49,7 @@ module Lich
       @deferred ||= []
       @deferred_lock ||= Mutex.new
       @busy_until = nil # CLOCK_MONOTONIC time before which no write is attempted
-      @busy_backoff = BUSY_BACKOFF_START_S
+      @busy_backoff = nil # next backoff in seconds; nil = BUSY_BACKOFF_START_S (no busy streak)
 
       def self.cache
         @cache
@@ -119,6 +119,9 @@ module Lich
           @unpersisted.clear
           # pending writes were for the table just dropped
           @deferred_lock.synchronize { @deferred.clear }
+          # the drop above just wrote to the file, so any busy streak is over
+          @busy_until = nil
+          @busy_backoff = nil
           @failure_reported = false
           @cache_loaded = false
           Infomon.setup!
@@ -182,6 +185,11 @@ module Lich
         val = self.cache.get(key) {
           # Flush queue before reading from DB to ensure we see latest writes
           self.flush
+          # A write for this key is still deferred (database busy). A pending set keeps the
+          # key cached, so this is a pending delete!: the row on disk is about to go, and
+          # caching it would outlive the DELETE.
+          next nil if self.pending_write?(key)
+
           begin
             self.mutex.synchronize do
               begin
@@ -256,8 +264,10 @@ module Lich
       end
 
       # Flush all pending SQL operations and wait for completion.
-      # This is a barrier that ensures all queued writes have been executed.
-      # Returns true on success, false on timeout.
+      # This is a barrier: when it returns, every write queued before it has run,
+      # except while the database is busy, when some may still be held back for
+      # retry and have not landed yet (see drain_writes).
+      # Returns true once the barrier is reached, false on timeout.
       def self.flush(timeout_seconds: 5)
         return true if self.queue.empty?
 
@@ -298,6 +308,13 @@ module Lich
 
       def self.monotonic_now
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+
+      # True when a write for `key` is held back while the database is busy.
+      def self.pending_write?(key)
+        @deferred_lock.synchronize do
+          @deferred.any? { |_sql, keys| keys.include?(key) }
+        end
       end
 
       def self.write_cooling_down?
@@ -358,7 +375,7 @@ module Lich
             keys.each { |key| @unpersisted.delete(key) }
             @failure_reported = false
             @busy_until = nil
-            @busy_backoff = BUSY_BACKOFF_START_S
+            @busy_backoff = nil
           rescue StandardError => e
             # Keep the cached value (Infomon's view of the game) and mark the keys so
             # the next set/upsert_batch of the same value is retried instead of a :noop.
@@ -368,8 +385,9 @@ module Lich
             write_error = e
             if self.busy_error?(e)
               busy = true
-              @busy_until = self.monotonic_now + @busy_backoff
-              @busy_backoff = [@busy_backoff * 2, BUSY_BACKOFF_MAX_S].min
+              backoff = @busy_backoff || BUSY_BACKOFF_START_S
+              @busy_until = self.monotonic_now + backoff
+              @busy_backoff = [backoff * 2, BUSY_BACKOFF_MAX_S].min
             end
           end
         end
