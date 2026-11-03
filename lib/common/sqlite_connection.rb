@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# SQLite connection helpers for lich.db3. Loaded by lib/lich.rb before sqlite3
-# and sequel are required, so nothing here touches SQLite3 or Sequel at load
-# time.
+# SQLite connection helpers for lich.db3 and infomon.db (Lich::Gemstone::Infomon
+# opens infomon.db with Lich.open_sequel_sqlite). Loaded by lib/lich.rb before
+# sqlite3 and sequel are required, so nothing here touches SQLite3 or Sequel at
+# load time.
 
 require 'monitor'
 
@@ -63,7 +64,8 @@ module Lich
     SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS * sqlite_busy_timeout_ms.to_i / 1000.0
   end
 
-  # Opens lich.db3 through Sequel. Sequel's pool hands each thread its own
+  # Opens lich.db3, and infomon.db (lib/gemstone/infomon.rb), through Sequel.
+  # Pool or pragma changes here apply to both files. Sequel's pool hands each thread its own
   # connection, and every connection it creates gets a busy handler that waits
   # with Ruby's sleep (see SQLiteBusyWait). `timeout:` is the C busy timeout
   # Sequel sets first; it stays in force if the Ruby handler can't be installed.
