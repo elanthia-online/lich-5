@@ -61,11 +61,28 @@ module Lich
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
       PUT_BAG_NOT_FOUND = 'What were you referring to'
-      PUT_BAG_TOO_BIG = /is too \w+ to fit/
+      # Kept off quoted text, like the refusals below.
+      PUT_BAG_TOO_BIG = /^[^"]*?is too \w+ to (?:fit|hold)/
+      # "You just can't get the small brazier to fit in the leather satchel,
+      # no matter how you arrange it." (DR enchanting, 2026-11).
+      PUT_BAG_WONT_FIT = /^You just can't get .* to fit/
       PUT_BAG_WEIRD = "Weirdly, you can't manage"
       PUT_BAG_NO_ROOM = "There's no room"
+      # Further refusals from DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, anchored
+      # (or kept off quoted text) so another player's speech can't match.
+      PUT_BAG_FULL = /^There isn't any more room in/
+      PUT_BAG_TOO_HEAVY = /^(?:The|That).* too heavy to go in there/
+      PUT_BAG_STUFFED = /^[^"]*?even after stuffing/
+      PUT_BAG_COMPLETELY_FULL = /^[^"]*?completely full/
+      PUT_BAG_CANT_DO = /^You can't do that/
       PUT_BAG_CANT_THERE = "You can't put that there"
       PUT_BAG_COMBINE = 'You combine'
+      # PUT replies that leave the tool in hand; stow_crafting_item falls back
+      # to STOW for each.
+      PUT_BAG_STOW_INSTEAD = [
+        PUT_BAG_TOO_BIG, PUT_BAG_WONT_FIT, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_FULL,
+        PUT_BAG_TOO_HEAVY, PUT_BAG_STUFFED, PUT_BAG_COMPLETELY_FULL, PUT_BAG_CANT_DO
+      ].freeze
 
       # Parts that cannot be purchased from crafting shops
       PARTS_CANNOT_PURCHASE = %w[
@@ -525,6 +542,15 @@ module Lich
       # Internal to get_crafting_item; kept off the public DRCC API.
       private_class_method :untie_crafting_item, :crafting_item_failed
 
+      # Puts a crafting tool away: ties it to the crafting belt when the belt
+      # lists it, otherwise (or when the tie fails) puts it in +bag+. A bag
+      # that won't take it falls back to STOW.
+      #
+      # @param name [String, nil] tool noun; nil sends nothing
+      # @param bag [String] container noun for tools off the belt
+      # @param belt [Hash, nil] crafting belt settings ('name', 'items')
+      # @return [Boolean, nil] false when +bag+ refuses the tool and it goes to
+      #   the other +bag+; nil without a +name+; true otherwise
       def stow_crafting_item(name, bag, belt)
         return unless name
 
@@ -538,8 +564,8 @@ module Lich
           Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
         end
 
-        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
-        when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
+        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, *PUT_BAG_STOW_INSTEAD, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
+        when *PUT_BAG_STOW_INSTEAD
           fput("stow my #{name}")
         when PUT_BAG_CANT_THERE
           fput("put my #{name} in my other #{bag}")
