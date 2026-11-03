@@ -34,10 +34,16 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
   before { allow(Lich).to receive(:log) { |message| logs << message } }
 
   # Makes discovery see one conventional path as an installed browser file.
+  # Only the named browser exists: every other fixed candidate reads as absent, so a
+  # browser installed on the host (CI images ship Chrome) cannot answer discovery.
   def pretend_installed(path)
     allow(File).to receive(:executable?).and_call_original
-    allow(File).to receive(:executable?).with(path).and_return(true)
     allow(File).to receive(:file?).and_call_original
+    (described_class::MACOS_PATHS + described_class::LINUX_PATHS + described_class::LINUX_CHROMIUM_PATHS).each do |candidate|
+      allow(File).to receive(:executable?).with(candidate).and_return(candidate == path)
+      allow(File).to receive(:file?).with(candidate).and_return(candidate == path)
+    end
+    allow(File).to receive(:executable?).with(path).and_return(true)
     allow(File).to receive(:file?).with(path).and_return(true)
   end
 
