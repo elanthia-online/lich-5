@@ -10,3 +10,7 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    # PR titles must carry a scope Lint PR accepts. Without this, Dependabot
+    # copies whatever commit style it sees in recent history (chore(deps)).
+    commit-message:
+      prefix: "chore(all)"
