@@ -1726,6 +1726,17 @@ describe DRCC do
       end
     end
 
+    context 'when the tool will not fit in the bag' do
+      # Enchanting, November 2026: a brazier that would not go in a satchel.
+      let(:bag_put) { 'put my brazier in my leather satchel' }
+      let(:bag_put_reply) { "You just can't get the small brazier to fit in the leather satchel, no matter how you arrange it." }
+
+      it 'stows the tool instead of waiting out the PUT, and returns true' do
+        expect(DRCC.stow_crafting_item('brazier', 'leather satchel', nil)).to be(true)
+        expect(sent).to eq([bag_put, 'stow my brazier'])
+      end
+    end
+
     context 'when the bag refuses the tool' do
       let(:bag_put_reply) { "You can't put that there." }
 

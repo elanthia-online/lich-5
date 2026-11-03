@@ -62,6 +62,9 @@ module Lich
       PUT_BAG_PUT = 'You put your'
       PUT_BAG_NOT_FOUND = 'What were you referring to'
       PUT_BAG_TOO_BIG = /is too \w+ to fit/
+      # "You just can't get the small brazier to fit in the leather satchel,
+      # no matter how you arrange it." (DR enchanting, 2026-11).
+      PUT_BAG_WONT_FIT = /^You just can't get .* to fit/
       PUT_BAG_WEIRD = "Weirdly, you can't manage"
       PUT_BAG_NO_ROOM = "There's no room"
       PUT_BAG_CANT_THERE = "You can't put that there"
@@ -538,8 +541,8 @@ module Lich
           Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
         end
 
-        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
-        when PUT_BAG_TOO_BIG, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
+        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_TOO_BIG, PUT_BAG_WONT_FIT, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
+        when PUT_BAG_TOO_BIG, PUT_BAG_WONT_FIT, PUT_BAG_WEIRD, PUT_BAG_NO_ROOM
           fput("stow my #{name}")
         when PUT_BAG_CANT_THERE
           fput("put my #{name} in my other #{bag}")
