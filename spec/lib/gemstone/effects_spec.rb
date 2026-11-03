@@ -99,3 +99,66 @@ RSpec.describe Lich::Gemstone::Effects::Registry do
     end
   end
 end
+
+RSpec.describe Lich::Gemstone::Effects, '.display' do
+  before do
+    require 'terminal-table'
+    require 'common/class_exts/numeric'
+    load_spell_data
+    stub_const('Spell', Lich::Common::Spell)
+    XMLData.reset_dialogs
+    stub_const('Spells', Module.new)
+    allow(Spells).to receive(:get_circle_name).and_return('Minor Spirit')
+    allow(Lich::Common::Spell).to receive(:active).and_return([])
+  end
+  after { XMLData.reset_dialogs }
+
+  # The table ;magic printed, as one string.
+  def display_output
+    out = nil
+    allow(Lich::Messaging).to receive(:mono) { |text| out = text }
+    described_class.display
+    out
+  end
+
+  it 'names each effect from the dialog when ids and names pair up' do
+    soon = Time.now + 60
+    XMLData.save_dialogs('Buffs', { 'Spirit Warding I' => soon, 101 => soon, 'Spirit Warding II' => soon, 107 => soon })
+
+    out = display_output
+
+    expect(out).to match(/101 .*Spirit Warding I /)
+    expect(out).to match(/107 .*Spirit Warding II /)
+  end
+
+  it 'shows both effects when two share one name' do
+    # The registry keys by id and by name, so two Spirit Warding I casts leave
+    # one name key for two id keys. Regression for elanthia-online/lich-5#2248.
+    soon = Time.now + 60
+    XMLData.save_dialogs('Buffs', { 'Spirit Warding I' => soon, 101 => soon, 107 => soon })
+
+    out = nil
+    expect { out = display_output }.not_to raise_error
+    expect(out).to match(/101 .*Spirit Warding I /)
+    expect(out).to match(/107 .*Spirit Warding II /)
+  end
+
+  it 'names effects from the spell list when the dialog carries only ids' do
+    soon = Time.now + 60
+    XMLData.save_dialogs('Buffs', { 101 => soon, 107 => soon })
+
+    out = display_output
+
+    expect(out).to match(/101 .*Spirit Warding I /)
+    expect(out).to match(/107 .*Spirit Warding II /)
+  end
+
+  it 'falls back to the id for an effect the spell list does not know' do
+    soon = Time.now + 60
+    XMLData.save_dialogs('Buffs', { 99_999 => soon, 101 => soon })
+
+    out = nil
+    expect { out = display_output }.not_to raise_error
+    expect(out).to match(/99999 .*Buffs .*99999 /)
+  end
+end
