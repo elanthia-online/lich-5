@@ -18,6 +18,15 @@ module Lich
           live.dup
         end
 
+        # The dialog's progress bar id => text. Unlike {#to_h}, two effects
+        # sharing one name keep separate entries here, and the id is the
+        # game's bar id, which is not always a Lich spell number.
+        #
+        # @return [Hash{Integer => String}]
+        def names
+          XMLData.dialog_names.fetch(@dialog, {}).dup
+        end
+
         def each()
           to_h.each { |k, v| yield(k, v) }
         end
@@ -67,20 +76,18 @@ module Lich
           title = titles.shift
           id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
           text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
-          # Names and ids pair up by position only when every effect has its
-          # own name. Spell names disabled leaves no names; two effects with
-          # the same name (two Sword Hymns) share one name key. Either way the
-          # name has to come from the spell list instead.
-          names_paired = id_effects.length == text_effects.length
+          # The parser records each bar's text by id. Failing that, names and
+          # ids pair up by position only when every effect has its own name:
+          # spell names disabled leaves no names, and two effects sharing a
+          # name (two Sword Hymns) share one name key. Then the spell list is
+          # the last resort, and the bar id is not always a spell number.
+          names = effect.names
+          positional = id_effects.length == text_effects.length ? text_effects.keys : []
           if id_effects.length == 0
             effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
           else
-            id_effects.each { |sn, end_time|
-              stext = if names_paired
-                        text_effects.shift[0]
-                      else
-                        Spell[sn]&.name || sn.to_s
-                      end
+            id_effects.each_with_index { |(sn, end_time), i|
+              stext = names[sn] || positional[i] || Spell[sn]&.name || sn.to_s
               duration = ((end_time - Time.now) / 60.to_f)
               if duration < 0
                 next

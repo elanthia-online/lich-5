@@ -709,8 +709,19 @@ module XMLData
       @dialogs[kind] = attributes
     end
 
+    # Progress bar id => text per dialog, as the parser records it.
+    def dialog_names
+      @dialog_names ||= {}
+    end
+
+    def save_dialog_names(kind, names)
+      @dialog_names ||= {}
+      @dialog_names[kind] = names
+    end
+
     def reset_dialogs
       @dialogs = {}
+      @dialog_names = {}
     end
 
     def injuries
@@ -725,6 +736,7 @@ module XMLData
       @game = "rspec"
       @name = "testing"
       @dialogs = {}
+      @dialog_names = {}
       @injuries = {}
       @room_id = 0
       @previous_nav_rm = nil
