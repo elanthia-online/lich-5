@@ -1737,6 +1737,37 @@ describe DRCC do
       end
     end
 
+    # The other refusals DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS knows that leave
+    # the tool in hand; each used to wait out bput and return with it held.
+    # Only the phrase is on record for "even after stuffing" and "completely
+    # full", so those two lines are built around it.
+    [
+      "There isn't any more room in the backpack for that.",
+      "That's too heavy to go in there!",
+      'The tongs is too heavy to go in there!',
+      'The backpack is too small to hold that.',
+      "You can't fit the tongs in the backpack, even after stuffing it.",
+      'The backpack is completely full.',
+      "You can't do that."
+    ].each do |reply|
+      context "when the PUT reply is #{reply.inspect}" do
+        let(:bag_put_reply) { reply }
+
+        it 'stows the tool instead of waiting out the PUT, and returns true' do
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+          expect(sent).to eq([bag_put, 'stow my tongs'])
+        end
+      end
+    end
+
+    context "when another player says the bag is full" do
+      let(:bag_put_reply) { 'Bob says, "My backpack is completely full, even after stuffing it."' }
+
+      it "doesn't take the speech for a refusal" do
+        expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+      end
+    end
+
     context 'when the bag refuses the tool' do
       let(:bag_put_reply) { "You can't put that there." }
 
