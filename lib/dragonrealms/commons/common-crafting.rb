@@ -112,7 +112,9 @@ module Lich
 
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
-      PUT_BAG_NOT_FOUND = 'What were you referring to'
+      # Anchored: it leads to the still-held check, so another player saying
+      # it before the real PUT reply must not end the wait.
+      PUT_BAG_NOT_FOUND = /^What were you referring to/
       # The other not-found reply in DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS.
       PUT_BAG_COULD_NOT_FIND = /^I could not find what you were referring to/
       # "Perhaps you should be holding that first." The PUT found an item by
@@ -156,7 +158,9 @@ module Lich
       REPAIR_POUR_WHAT = 'Pour what'
 
       # Anchored so another player's speech can't start a trip to the shop.
-      CONSUMABLE_GET_SUCCESS = /^You get/
+      # The second form is the GET while invisible, from
+      # DRCI::GET_ITEM_SUCCESS_PATTERNS ("You fade in for a moment as you ...").
+      CONSUMABLE_GET_SUCCESS = /^(?:You get|You fade in for a moment as you)/
       CONSUMABLE_GET_NOT_FOUND = /^What were you referring to/
       # The other not-found reply to GET; also means none are left.
       CONSUMABLE_GET_COULD_NOT_FIND = /^I could not find what you were referring to/
@@ -968,8 +972,11 @@ module Lich
       #   gets "You need a free hand to pick that up." or no reply. false,
       #   with nothing put away, when DRCT.order_item returns nil or '' (no
       #   coins, full hands, an unreachable shop or a timeout); it still walks
-      #   back. true otherwise, even when stow_crafting_item reports a
-      #   failure (it prints its own line).
+      #   back. false, after walking back, when stow_crafting_item returns
+      #   false for the kept or bought consumable: it is still in a hand, or
+      #   +bag+ refused it and it went into the other +bag+ (stow_crafting_item
+      #   prints its own line). A worn-out one returns the replacing call's
+      #   result. true otherwise.
       def check_consumables(name, room, number, bag, bag_items, belt, count = 3)
         current = Room.current.id
         result = DRC.bput("get my #{name} from my #{bag}", CONSUMABLE_GET_SUCCESS, CONSUMABLE_GET_NOT_FOUND,
@@ -983,21 +990,21 @@ module Lich
             # The call below gets, buys, stows and walks back on its own.
             return DRCC.check_consumables(name, room, number, bag, bag_items, belt, count)
           end
-          DRCC.stow_crafting_item(name, bag, belt)
+          stowed = DRCC.stow_crafting_item(name, bag, belt)
         when CONSUMABLE_GET_NOT_FOUND, CONSUMABLE_GET_COULD_NOT_FIND
           if DRCT.order_item(room, number).to_s.empty?
             Lich::Messaging.msg('bold', "DRCC: Could not buy #{name} (order #{number} at #{room}). Not putting anything away.")
             DRCT.walk_to(current)
             return false
           end
-          DRCC.stow_crafting_item(name, bag, belt)
+          stowed = DRCC.stow_crafting_item(name, bag, belt)
         else
           reason = result.match?(CONSUMABLE_GET_NO_FREE_HAND) ? 'no free hand' : 'no reply'
           Lich::Messaging.msg('bold', "DRCC: Could not get #{name} from #{bag} to check it (#{reason}). Not buying more.")
           return false
         end
         DRCT.walk_to(current)
-        true
+        stowed != false
       end
 
       def get_adjust_tongs?(usage, bag, bag_items, belt, adjustable_tongs = false)

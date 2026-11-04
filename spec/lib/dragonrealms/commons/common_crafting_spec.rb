@@ -1886,11 +1886,22 @@ describe DRCC do
       end
     end
 
-    context 'when another player says "Perhaps you should be holding that first."' do
-      let(:bag_put_reply) { 'Bob says, "Perhaps you should be holding that first."' }
+    # Speech that arrives before the real PUT reply, with the tool still in
+    # hand because the game has not answered yet: taking it for the reply
+    # would return false for a PUT that then succeeds (spin.lic:38 would
+    # switch bags, forge.lic:1621 would log "Failed to stow").
+    [
+      'Bob says, "Perhaps you should be holding that first."',
+      'Bob says, "What were you referring to?"',
+      'Bob says, "I could not find what you were referring to."'
+    ].each do |speech|
+      context "when another player says #{speech.inspect} with the tool held" do
+        let(:bag_put_reply) { speech }
 
-      it "doesn't take the speech for the refusal" do
-        expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+        it "doesn't take the speech for the PUT reply" do
+          expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
       end
     end
 
@@ -2087,14 +2098,54 @@ describe DRCC do
       expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
     end
 
-    it 'returns true even when the PUT of kept pins fails (stow_crafting_item reports it)' do
+    # GET while invisible: DRCI::GET_ITEM_SUCCESS_PATTERNS lists the
+    # /^You fade in for a moment as you/ prefix. The rest of this line is
+    # code-derived (no game log of it in this repo).
+    it 'counts and keeps pins got while invisible ("You fade in for a moment as you ...")' do
+      replies[get_pins] = ['You fade in for a moment as you get some straight iron pins from inside your battered black duffel bag.']
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = [put_away]
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
+    end
+
+    it 'returns false after walking back when the PUT of kept pins leaves them in hand' do
       replies[get_pins] = [got_pins]
       replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
       replies[put_pins] = ['Perhaps you should be holding that first.']
-      expect(check).to be(true)
+      expect(check).to be(false)
       expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
       expect(Lich::Messaging).to have_received(:msg)
         .with('bold', 'DRCC: Could not put pins in duffel bag. It is still in your hands.').once
+    end
+
+    it 'returns false after walking back when the bought pins cannot be put away' do
+      replies[get_pins] = ['What were you referring to?']
+      replies[put_pins] = ["There isn't any more room in the duffel bag for that."]
+      replies['stow my pins'] = ['You need a free hand to do that.']
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, 'order 5 at tool-room', put_pins, 'stow my pins', 'walk 8775'])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', 'DRCC: duffel bag would not take pins, and stowing it failed too. It is still in your hands.').once
+    end
+
+    it 'returns true when the bought pins go to the stow container after a full bag' do
+      replies[get_pins] = ['What were you referring to?']
+      replies[put_pins] = ["There isn't any more room in the duffel bag for that."]
+      replies['stow my pins'] = ['You put your pins in your rucksack.']
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, 'order 5 at tool-room', put_pins, 'stow my pins', 'walk 8775'])
+    end
+
+    # stow_crafting_item answers false here too: the pins are not in the
+    # duffel bag that the next check_consumables will GET from.
+    it 'returns false when the duffel bag refuses the pins and they go to the other one' do
+      replies[get_pins] = [got_pins]
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = ["You can't put that there."]
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'put my pins in my other duffel bag', 'walk 8775'])
     end
 
     it 'replaces worn pins with one put and one walk back, not two' do
