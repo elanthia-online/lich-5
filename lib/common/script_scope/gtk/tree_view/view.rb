@@ -286,6 +286,24 @@ module Lich
             end
           end
 
+          # Checks only the inserted or changed rows of a coalesced script-thread
+          # write, so the write is still refused at its call. The model already
+          # bounds rows and depth and keeps identities unique and parents live,
+          # and viewer state is reconciled when the change is published; the
+          # whole-table check runs then (1844:RC4).
+          # @param keys [Array<String>] identities of rows the mutation inserted or wrote
+          # @return [void]
+          # @api private
+          def model_rows_will_change!(keys)
+            return model_will_change! unless @handle
+
+            validate_columns(model)
+            rows = keys.filter_map { |key| (iter = model&.find_key(key)) && row_definition(iter).except(:parent) }
+            props = @props.merge(columns: column_definitions, rows: rows, sortable: visible_columns.any?(&:sort_column_id),
+                                 selected: [], expanded: [], cursor: {}).merge(search_props)
+            Lich::WebUI::Validator.new.validate_component!(:table, props, owner: 'shim', page_id: nil, cid: nil)
+          end
+
           # Validates renderer configuration before updating live column definitions.
           # @return [void]
           # @api private
@@ -449,23 +467,29 @@ module Lich
           # @api private
           def row_definitions
             return [] unless model
-            model.rows.map do |iter|
-              foregrounds = []
-              cells = visible_columns.to_h do |column|
-                value, foreground = column.project_cell(model, iter)
-                foregrounds << { column: column.key, color: foreground } if foreground
-                [column.key, value.nil? ? '' : value]
-              end
-              row = { key: iter.key, cells: cells }
-              row[:cell_foregrounds] = foregrounds unless foregrounds.empty?
-              disabled_cells = visible_columns.reject { |column| column.sensitive_for?(iter) }.map(&:key)
-              row[:cell_disabled] = disabled_cells unless disabled_cells.empty?
-              disabled = visible_columns.reject { |column| column.background_enabled?(iter) }.map(&:key)
-              row[:background_disabled] = disabled unless disabled.empty?
-              parent = model.iter_parent(iter)
-              row[:parent] = parent.key if parent
-              row
+            model.rows.map { |iter| row_definition(iter) }
+          end
+
+          # Serializes one live row of the current model.
+          # @param iter [TreeIter] live row
+          # @return [Hash] shared row
+          # @api private
+          def row_definition(iter)
+            foregrounds = []
+            cells = visible_columns.to_h do |column|
+              value, foreground = column.project_cell(model, iter)
+              foregrounds << { column: column.key, color: foreground } if foreground
+              [column.key, value.nil? ? '' : value]
             end
+            row = { key: iter.key, cells: cells }
+            row[:cell_foregrounds] = foregrounds unless foregrounds.empty?
+            disabled_cells = visible_columns.reject { |column| column.sensitive_for?(iter) }.map(&:key)
+            row[:cell_disabled] = disabled_cells unless disabled_cells.empty?
+            disabled = visible_columns.reject { |column| column.background_enabled?(iter) }.map(&:key)
+            row[:background_disabled] = disabled unless disabled.empty?
+            parent = model.iter_parent(iter)
+            row[:parent] = parent.key if parent
+            row
           end
 
           # Keeps expanded/collapsed handlers distinct although they share one wire event.
