@@ -421,6 +421,42 @@ RSpec.describe 'DRCI.put_away_item_result' do
       expect(sent).to eq(['put #1739939 in #758550', 'open #758550'])
     end
 
+    it 'drops whitespace around a #<id> item, so the lost-reply rule still applies' do
+      game(put: [nil]) { |_| hands }
+      expect(result('#1739939 ', bucket_ref)).to eq(:put)
+      expect(sent).to eq(['put #1739939 in #758550'])
+    end
+
+    it 'drops whitespace around the item and container, in the put and the open' do
+      game(put: ['That is closed.', dropped], open: ['You open the bucket.']) { |_| hands }
+      expect(result(" #1739939\t", " #{bucket_ref} ")).to eq(:put)
+      expect(sent).to eq(['put #1739939 in #758550', 'open #758550', 'put #1739939 in #758550'])
+    end
+
+    it 'drops whitespace around the item on stow' do
+      game(put: [pack_full])
+      expect(result('  my leather  ')).to eq(:no_room)
+      expect(sent).to eq(['stow my leather'])
+    end
+
+    # held_id gives the id without "#". As a String it is sent as written, a
+    # name to the game, so no lost-reply rule; the caller writes "#<id>".
+    it 'sends a digits-only String as written, not as an id' do
+      hands(right: leather)
+      id = drci.held_id('leather')
+      expect(id).to eq('1739939')
+      game(put: [nil]) { |_| hands }
+      expect(result(id, bucket_ref)).to eq(:timeout)
+      expect(sent).to eq(['put 1739939 in #758550'])
+    end
+
+    it 'puts by id when the caller adds "#" to held_id\'s result' do
+      hands(right: leather)
+      game(put: [nil]) { |_| hands }
+      expect(result("##{drci.held_id('leather')}", bucket_ref)).to eq(:put)
+      expect(sent).to eq(['put #1739939 in #758550'])
+    end
+
     [nil, '', '   '].each do |item|
       it "gives :missing and sends nothing for item #{item.inspect}" do
         expect(result(item, bucket_ref)).to eq(:missing)

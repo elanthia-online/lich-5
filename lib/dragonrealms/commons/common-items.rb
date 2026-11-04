@@ -2140,9 +2140,13 @@ module Lich
       # rule: the reply was lost, the item is gone).
       #
       # @param item [String, Integer] item to put away, e.g. "#41234567" or
-      #   "my leather"; an Integer is an id, sent as "#<id>"
+      #   "my leather"; surrounding whitespace is dropped. An Integer is an
+      #   id, sent as "#<id>". A String is sent as written, so a digits-only
+      #   String such as {.held_id}'s result is a name to the game, not an
+      #   id: pass "##{DRCI.held_id('leather')}" (or the id as an Integer).
       # @param container [String, Integer, nil] container, e.g. "#758550",
-      #   "my bucket" or "bin"; an Integer is an id; nil stows
+      #   "my bucket" or "bin"; surrounding whitespace is dropped. An Integer
+      #   is an id; nil stows
       # @param preposition [String] "in", "on", "under", etc.
       # @param retries [Integer] attempts left; at 0 or below nothing is sent
       # @return [Symbol]
@@ -2167,9 +2171,9 @@ module Lich
       #
       # @see .put_away_item_unsafe?
       def put_away_item_result(item, container = nil, preposition: 'in', retries: 3)
-        item = "##{item}" if item.is_a?(Integer)
-        container = "##{container}" if container.is_a?(Integer)
-        return :missing if item.to_s.strip.empty?
+        item = item.is_a?(Integer) ? "##{item}" : item.to_s.strip
+        container = container.is_a?(Integer) ? "##{container}" : container&.to_s&.strip
+        return :missing if item.empty?
 
         if retries <= 0
           Lich::Messaging.msg("bold", "DRCI: put_away_item_result exceeded max retries")
