@@ -16,11 +16,11 @@ file's own SHA-256.
 
 Byte-pinned files and line endings
 
-`.gitattributes` in this directory marks `*_setup.lic`, `css-decoration.json` and
-`css-provenance.json` `-text`, so Git never converts their line endings on checkout
-or commit. The setup fixtures are digest-checked as stored bytes (LF, CRLF or mixed),
-`css-decoration.json` is compared byte for byte with its rebuild, and it records the
-whole-file SHA-256 of `css-provenance.json`.
+`.gitattributes` in this directory marks `*_setup.lic`, `css-decoration.json`,
+`css-decoration-excerpts.json` and `css-provenance.json` `-text`, so Git never converts
+their line endings on checkout or commit. The setup fixtures are digest-checked as stored
+bytes (LF, CRLF or mixed), `css-decoration.json` is compared byte for byte with its
+rebuild, and it records the whole-file SHA-256 of `css-provenance.json`.
 The other JSON fixtures escape CR inside their strings, so their parsed block
 hashes do not depend on checkout line endings.
 
@@ -96,15 +96,24 @@ the full pinned commit. `audit_sha256` is the SHA-256 of `css-provenance.json`,
 which the corpus spec asserts.
 
 `spec/support/build_css_decoration_corpus.rb` rebuilds it from only those pinned
-Git blobs, including `fields`, `source` and each record's `attribution` (read from
-the pinned source header). Its output must equal the committed file byte for
-byte. With local clones of elanthia-online/scripts and lich_repo_mirror, run
+Git blobs and `css-decoration-excerpts.json`, including `fields`, `source` and each
+record's `attribution` (read from the pinned source header). Its output must equal the
+committed file byte for byte. With local clones of elanthia-online/scripts and lich_repo_mirror, run
 `ruby spec/support/build_css_decoration_corpus.rb EO_REPO MIRROR_REPO | cmp - spec/fixtures/webui/css-decoration.json`,
 or set CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO for the corpus spec's
 rebuild example (skipped otherwise).
 Prism decodes selected strings; extraction never evaluates source Ruby.
-The corpus spec uses only this retained artifact and runs reviewed CSS-only
-excerpts from eleven sources, with explicit test widget/settings bindings. It
+Each record's `excerpts` are synthetic: hand-written Ruby slices, kept in
+`css-decoration-excerpts.json` by script name and the first line of the original
+range, that exercise the same shim paths (provider construction and load, screen
+and context attachment, class changes, progress fractions, border tiers, HeaderBar
+and geometry calls) with CSS of the same shapes. They carry no verbatim script
+text. `line` and `end_line` keep the original range, `original_sha256` the hash of
+those original lines at the pinned revision (provenance only, the text is not
+retained) and `sha256` the hash of the synthetic text. The stylesheet `samples` and
+the `calls` remain measured from the pinned sources. The corpus spec uses only this
+retained artifact and runs the 19 synthetic excerpts from eleven sources, with
+explicit test widget/settings bindings. It
 does not execute game loops, downloads, persistence, or excluded Builder setup.
 The original tpick HeaderBar constructor and manatimer Display chain now succeed.
 The CSS evidence remains separate from setup acceptance below.

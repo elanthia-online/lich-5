@@ -1,5 +1,5 @@
 {
-  "description": "Pinned source CSS evidence. No original script executed. Dynamic samples are not runtime maxima.",
+  "description": "Pinned source CSS evidence. Samples and calls are measured from the pinned sources; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.",
   "audit_sha256": "251c4a826f214610722e883fe1b7f3a86519a2900e31f653c11723e6f0ca1d38",
   "bound": 8192,
   "fields": {
@@ -27,7 +27,9 @@
     "scripts[].samples[].sha256": "SHA-256 of css.",
     "scripts[].samples[].loader_line": "Line of the load or load_from_data call that receives the payload.",
     "scripts[].samples[].loader_method": "load (keyword data:) or load_from_data.",
-    "scripts[].excerpts": "Reviewed CSS-only source slices the specs may evaluate: first line, end_line, exact source text and its SHA-256.",
+    "scripts[].excerpts": "Synthetic, hand-written Ruby slices the specs may evaluate; they exercise the same shim paths as the original source lines and carry no verbatim script text. line and end_line give the original range each stands in for, source the synthetic text (read from css-decoration-excerpts.json), original_sha256 the SHA-256 of the original lines at revision (provenance only; the original text is not retained) and sha256 the SHA-256 of source.",
+    "scripts[].excerpts[].source": "The synthetic slice text, not script source.",
+    "scripts[].excerpts[].sha256": "SHA-256 of source (the synthetic text), never of script text.",
     "scripts[].max_measured_characters": "Largest characters value among samples. A measured sample, not a runtime maximum unless runtime_maximum_proven.",
     "scripts[].runtime_maximum_proven": "true only when every sample is a literal, so the measured size is the runtime size.",
     "scripts[].whole_setup_rendered": "Always false: no whole script setup is rendered from this fixture.",
@@ -290,20 +292,23 @@
         {
           "line": 2342,
           "end_line": 2447,
-          "source": "    @css_provider = Gtk::CssProvider.new\r\n    css_data = <<-CSS\r\n      .combatical-window {\r\n        background-color: #{s[:bg]};\r\n        color: #{s[:fg]};\r\n      }\r\n      .combatical-section-header {\r\n        background-color: #{s[:bg3]};\r\n        color: #{s[:fg]};\r\n        padding: 5px 10px;\r\n        font-weight: bold;\r\n        border-radius: 3px;\r\n      }\r\n      .combatical-box-frame {\r\n        border: 1px solid #{s[:border]};\r\n        border-radius: 3px;\r\n      }\r\n      .combatical-drop-indicator {\r\n        border-bottom: 2px solid #4488FF;\r\n      }\r\n      .combatical-pool-frame {\r\n        border: 2px solid transparent;\r\n      }\r\n      .combatical-pool-hover {\r\n        border-color: #44BB44;\r\n      }\r\n      .combatical-box-scroll {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport box {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport grid {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport eventbox {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport eventbox box {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport flowbox {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-scroll viewport flowbox flowboxchild {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n        padding: 0;\r\n      }\r\n      .combatical-box-scroll viewport flowbox flowboxchild eventbox {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-target-bg {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-box-bg {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-ability-row {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n      }\r\n      .combatical-ability-label-shadow {\r\n        text-shadow: 0px 0px 2px rgba(0,0,0,0.9);\r\n      }\r\n      .combatical-box-scroll scrollbar,\r\n      .combatical-box-scroll scrollbar contents,\r\n      .combatical-box-scroll scrollbar trough,\r\n      .combatical-box-scroll scrollbar button,\r\n      .combatical-box-scroll scrollbar button image {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n        border: none;\r\n        outline: none;\r\n        box-shadow: none;\r\n        min-width: 0;\r\n        min-height: 0;\r\n      }\r\n      .combatical-box-scroll scrollbar slider {\r\n        background-color: #{s[:border] || '#383838'};\r\n        border: none;\r\n        outline: none;\r\n        box-shadow: none;\r\n        border-radius: 4px;\r\n        min-width: 6px;\r\n        min-height: 6px;\r\n      }\r\n      .combatical-box-scroll junction {\r\n        background-color: #{s[:box_bg] || 'black'};\r\n        border: none;\r\n      }\r\n      .combatical-lock-flash {\r\n        border: 3px solid #FF2222;\r\n        margin: -3px;\r\n        background-color: rgba(255, 0, 0, 0.25);\r\n        border-radius: 4px;\r\n      }\r\n    CSS\r\n\r\n    @css_provider.load(data: css_data)\r\n\r\n    Gtk::StyleContext.add_provider_for_screen(\r\n      Gdk::Screen.default,\r\n      @css_provider,\r\n      Gtk::StyleProvider::PRIORITY_APPLICATION\r\n    )\r\n",
-          "sha256": "be1ca6f1de6f721921652404c0c3cf4ae0bbe499211d3958056cc4234054cfba"
+          "source": "@css_provider = Gtk::CssProvider.new\nsheet_text = <<-CSS\n  .demo-window {\n    background-color: #{s[:bg]};\n    color: #{s[:fg]};\n  }\n  .demo-heading {\n    background-color: #{s[:bg3]};\n    color: #{s[:fg]};\n    padding: 4px 8px;\n    font-weight: bold;\n    border-radius: 2px;\n  }\n  .demo-frame {\n    border: 1px solid #{s[:border]};\n    border-radius: 2px;\n  }\n  .demo-marker {\n    border-bottom: 2px solid #3377DD;\n  }\n  .demo-slot {\n    border: 2px solid transparent;\n  }\n  .demo-slot-hover {\n    border-color: #33AA33;\n  }\n  .demo-pane {\n    background-color: #{s[:pane_bg] || 'black'};\n  }\n  .demo-pane viewport box {\n    background-color: #{s[:pane_bg] || 'black'};\n  }\n  .demo-pane viewport eventbox box {\n    background-color: #{s[:pane_bg] || 'black'};\n  }\n  .demo-pane viewport flowbox flowboxchild {\n    background-color: #{s[:pane_bg] || 'black'};\n    padding: 0;\n  }\n  .demo-pane scrollbar,\n  .demo-pane scrollbar trough,\n  .demo-pane scrollbar button {\n    background-color: #{s[:pane_bg] || 'black'};\n    border: none;\n    box-shadow: none;\n    min-width: 0;\n    min-height: 0;\n  }\n  .demo-pane scrollbar slider {\n    background-color: #{s[:border] || '#404040'};\n    border: none;\n    border-radius: 3px;\n    min-width: 5px;\n    min-height: 5px;\n  }\n  .demo-flash {\n    border: 3px solid #EE2222;\n    margin: -3px;\n    background-color: rgba(255, 0, 0, 0.2);\n    border-radius: 3px;\n  }\n  .demo-label-shadow {\n    text-shadow: 0px 0px 2px rgba(0,0,0,0.8);\n  }\nCSS\n\n@css_provider.load(data: sheet_text)\nGtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, @css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "be1ca6f1de6f721921652404c0c3cf4ae0bbe499211d3958056cc4234054cfba",
+          "sha256": "5d945991ad503c011bc138513e40671eb320fec66cc418dd4b8f51648ffd59e3"
         },
         {
           "line": 2192,
           "end_line": 2192,
-          "source": "              new_child.style_context.add_class('combatical-drop-indicator')\r\n",
-          "sha256": "966c591bd9672f821f88f42aa843d6ca86cf8143e177bbd943889de9096953fc"
+          "source": "target_row.style_context.add_class('demo-marker')\n",
+          "original_sha256": "966c591bd9672f821f88f42aa843d6ca86cf8143e177bbd943889de9096953fc",
+          "sha256": "ebe295b802a2688e0e0ca8826990ca9816305ed65f56ddc875f756cf46befdae"
         },
         {
           "line": 2127,
           "end_line": 2127,
-          "source": "        @drop_indicator_child.style_context.remove_class('combatical-drop-indicator') unless @drop_indicator_child.destroyed?\r\n",
-          "sha256": "06719cd155c9b31b22b42be62eb58266bbf9c70e665ca5ee551ad88bb442df39"
+          "source": "@marker_row.style_context.remove_class('demo-marker') unless @marker_row.destroyed?\n",
+          "original_sha256": "06719cd155c9b31b22b42be62eb58266bbf9c70e665ca5ee551ad88bb442df39",
+          "sha256": "d794ec592572ca7b932c4acf63cb08e1f14fcbcdae631f3b9f1a4c9eaed8f9ba"
         }
       ],
       "max_measured_characters": 2690,
@@ -845,8 +850,9 @@
         {
           "line": 2245,
           "end_line": 2259,
-          "source": "        css = Gtk::CssProvider.new\n        css.load(data: <<~CSS)\n          textview, textview text {\n            background-color: #{palette[:bg]};\n            color: #{palette[:fg]};\n            font-size: #{aw[\"font_size\"]}pt;\n            font-family: Consolas, Menlo, monospace;\n          }\n          window {\n            background-color: #{palette[:bg]};\n            color: #{palette[:fg]};\n          }\n        CSS\n        @window.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)\n        @textview.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
-          "sha256": "11c408ab9362a23e88391f7b891fc75be2296d487e46fbbd55660ec4f2e913fd"
+          "source": "sheet = Gtk::CssProvider.new\nsheet.load(data: <<~CSS)\n  textview, textview text {\n    background-color: #{theme[:bg]};\n    color: #{theme[:fg]};\n    font-size: #{prefs[\"font_size\"]}pt;\n    font-family: Menlo, monospace;\n  }\n  window {\n    background-color: #{theme[:bg]};\n    color: #{theme[:fg]};\n  }\nCSS\n@window.style_context.add_provider(sheet, Gtk::StyleProvider::PRIORITY_APPLICATION)\n@textview.style_context.add_provider(sheet, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "11c408ab9362a23e88391f7b891fc75be2296d487e46fbbd55660ec4f2e913fd",
+          "sha256": "45a25d6ece25c110f47b96907ab1d7442e3beedeec98c6a047293af9b99bdea4"
         }
       ],
       "max_measured_characters": 195,
@@ -2155,8 +2161,9 @@
         {
           "line": 1731,
           "end_line": 1781,
-          "source": "\t\t\tprovider = Gtk::CssProvider.new\r\n\t\t\tif needed_settings[\"Widget Background\"] == \"None\"\r\n\t\t\t\tcss = <<~CSS\r\n\t\t\t\t\t#{css_name} {\r\n\t\t\t\t\t\tbackground: none;\r\n\t\t\t\t\t}\r\n\t\t\t\tCSS\r\n\t\t\telsif needed_settings[\"Widget Background\"] == \"Solid Color\"\r\n\t\t\t\tcss = <<~CSS\r\n\t\t\t\t\t#{css_name} {\r\n\t\t\t\t\t\tbackground: none;\r\n\t\t\t\t\t\tbackground-color: #{needed_settings[\"Widget Background Color\"]};\r\n\t\t\t\t\t}\r\n\t\t\t\tCSS\r\n\t\t\telsif needed_settings[\"Widget Background\"] == \"Image\"\r\n\t\t\t\tcss = <<~CSS\r\n\t\t\t\t\t#{css_name} {\r\n\t\t\t\t\t\tbackground: none;\r\n\t\t\t\t\t\tbackground-color: #{needed_settings[\"Image Background Color\"]};\r\n\t\t\t\t\t\tbackground-image: url(\"file:///#{needed_settings[\"Image Location\"]}\");\r\n\t\t\t\t\t\tbackground-size: #{needed_settings[\"Image Horizontal Size\"]}% #{needed_settings[\"Image Vertical Size\"]}%;\r\n\t\t\t\t\t\tbackground-position: #{needed_settings[\"Image Horizontal Position\"]}% #{needed_settings[\"Image Vertical Position\"]}%;\r\n\t\t\t\t\t\tbackground-repeat: no-repeat;\r\n\t\t\t\t\t}\r\n\t\t\t\tCSS\r\n\t\t\telsif needed_settings[\"Widget Background\"] == \"Radial\"\r\n\t\t\t\tcolors = \"#{needed_settings[\"Radial Color 1\"]}, #{needed_settings[\"Radial Color 2\"]}\"\r\n\t\t\t\tcolors += \", #{needed_settings[\"Radial Color 3\"]}\" if needed_settings[\"Radial Color 3\"].length > 0\r\n\t\t\t\tcolors += \", #{needed_settings[\"Radial Color 4\"]}\" if needed_settings[\"Radial Color 4\"].length > 0\r\n\t\t\t\tcolors += \", #{needed_settings[\"Radial Color 5\"]}\" if needed_settings[\"Radial Color 5\"].length > 0\r\n\t\t\t\t\t\r\n\t\t\t\tcss = <<~CSS\r\n\t\t\t\t\t#{css_name} {\r\n\t\t\t\t\t\tbackground: radial-gradient(#{needed_settings[\"Radial Shape\"]} at #{needed_settings[\"Radial Horizontal Position\"]}% #{needed_settings[\"Radial Vertical Position\"]}%, #{colors});\r\n\t\t\t\t\t}\r\n\t\t\t\tCSS\r\n\t\t\telsif needed_settings[\"Widget Background\"] == \"Linear\"\r\n\t\t\t\tcolors = \"#{needed_settings[\"Linear Color 1\"]}, #{needed_settings[\"Linear Color 2\"]}\"\r\n\t\t\t\tcolors += \", #{needed_settings[\"Linear Color 3\"]}\" if needed_settings[\"Linear Color 3\"].length > 0\r\n\t\t\t\tcolors += \", #{needed_settings[\"Linear Color 4\"]}\" if needed_settings[\"Linear Color 4\"].length > 0\r\n\t\t\t\tcolors += \", #{needed_settings[\"Linear Color 5\"]}\" if needed_settings[\"Linear Color 5\"].length > 0\r\n\t\t\t\t\t\r\n\t\t\t\tcss = <<~CSS\r\n\t\t\t\t\t#{css_name} {\r\n\t\t\t\t\t\tbackground: linear-gradient(#{needed_settings[\"Linear Degrees\"]}deg, #{colors});\r\n\t\t\t\t\t}\r\n\t\t\t\tCSS\r\n\t\t\tend\r\n\t\t\tprovider.load_from_data(css)\r\n\t\t\tcontext = widget.style_context\r\n\t\t\tcontext.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n",
-          "sha256": "3c04bfa60c910a6bec533afb407235471fe1362cdbd38e99c7158ec91b2157e5"
+          "source": "bg_provider = Gtk::CssProvider.new\nsheet = case opts[\"Widget Background\"]\n        when \"None\"\n          \"#{selector} { background: none; }\"\n        when \"Solid Color\"\n          \"#{selector} { background: none; background-color: #{opts[\"Widget Background Color\"]}; }\"\n        when \"Image\"\n          <<~CSS\n            #{selector} {\n              background: none;\n              background-color: #{opts[\"Image Background Color\"]};\n              background-image: url(\"file:///#{opts[\"Image Location\"]}\");\n              background-size: #{opts[\"Image Horizontal Size\"]}% #{opts[\"Image Vertical Size\"]}%;\n              background-position: #{opts[\"Image Horizontal Position\"]}% #{opts[\"Image Vertical Position\"]}%;\n              background-repeat: no-repeat;\n            }\n          CSS\n        when \"Radial\"\n          stops = (1..5).map { |n| opts[\"Radial Color #{n}\"] }.reject { |c| c.to_s.empty? }.join(\", \")\n          \"#{selector} { background: radial-gradient(#{opts[\"Radial Shape\"]} at #{opts[\"Radial Horizontal Position\"]}% #{opts[\"Radial Vertical Position\"]}%, #{stops}); }\"\n        when \"Linear\"\n          stops = (1..5).map { |n| opts[\"Linear Color #{n}\"] }.reject { |c| c.to_s.empty? }.join(\", \")\n          \"#{selector} { background: linear-gradient(#{opts[\"Linear Degrees\"]}deg, #{stops}); }\"\n        else\n          \"\"\n        end\nbg_provider.load_from_data(sheet)\nwidget.style_context.add_provider(bg_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "3c04bfa60c910a6bec533afb407235471fe1362cdbd38e99c7158ec91b2157e5",
+          "sha256": "3baee907871560402c2321cb6f9005b6a702138733b2bc55f22148a29956ea45"
         }
       ],
       "max_measured_characters": 516,
@@ -2294,8 +2301,9 @@
         {
           "line": 2491,
           "end_line": 2499,
-          "source": "          css = +'.grinsawl-slot { border-width: 3px; border-style: solid; border-radius: 4px; }'\n          { 'gold' => Grinsawl::FOIL_COLORS[:gold], 'silver' => Grinsawl::FOIL_COLORS[:silver],\n            'bronze' => Grinsawl::FOIL_COLORS[:bronze], 'none' => '#888888', 'empty' => '#555555' }.each do |k, c|\n            style = k == 'empty' ? 'dashed' : 'solid'\n            css << \" .grinsawl-slot.foil-#{k} { border-color: #{c}; border-style: #{style}; }\"\n          end\n          provider = Gtk::CssProvider.new\n          provider.load(data: css)\n          Gtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
-          "sha256": "6b36f2a36c014b46786af0568dda4454607d92fbfec81db0521c6961683a7924"
+          "source": "sheet = +'.demo-slot { border-width: 3px; border-style: solid; border-radius: 4px; }'\n{ 'gold' => TierPalette::TIER_COLORS[:gold], 'silver' => TierPalette::TIER_COLORS[:silver],\n  'bronze' => TierPalette::TIER_COLORS[:bronze], 'none' => '#808080', 'empty' => '#505050' }.each do |tier, tint|\n  edge = tier == 'empty' ? 'dashed' : 'solid'\n  sheet << \" .demo-slot.tier-#{tier} { border-color: #{tint}; border-style: #{edge}; }\"\nend\nprovider = Gtk::CssProvider.new\nprovider.load(data: sheet)\nGtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "6b36f2a36c014b46786af0568dda4454607d92fbfec81db0521c6961683a7924",
+          "sha256": "d37493a105e182d33e41bb36eb93e85722a1bcabe5ebae86e1ad329b751c6f7d"
         }
       ],
       "max_measured_characters": 449,
@@ -2642,14 +2650,16 @@
         {
           "line": 83,
           "end_line": 94,
-          "source": "  \tcss_provider = Gtk::CssProvider.new\r\n  \tbar.style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n  \t# min-height + padding:0 keep the trough/fill from being squashed by GTK3 theme defaults.\r\n  \t_bar_base = \"progressbar { padding: 0; min-height: 18px; } progressbar trough { min-height: 18px; padding: 0; border-width: 0; } progressbar progress { background-image: none; min-height: 18px; \"\r\n  \tnormal_bar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #06b025; }\") }\r\n  \tbar_style = proc { css_provider.load_from_data(\"#{_bar_base} background-color: #b02506; }\") }\r\n  \tbar_style.call\r\n\r\n  \t# Keep the overlaid label legible on top of the colored fill.\r\n  \tlabel_css = Gtk::CssProvider.new\r\n  \tlabel_css.load_from_data(\"label { color: #000000; font-weight: bold; padding: 0; margin: 0; min-height: 0; }\")\r\n  \tlabel.style_context.add_provider(label_css, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n",
-          "sha256": "ff84d280f1fd17ddb6a1e3cf837b7fa0a93d2448b88fee7ca5eb1a6e97f42466"
+          "source": "bar_sheet = Gtk::CssProvider.new\nbar.style_context.add_provider(bar_sheet, Gtk::StyleProvider::PRIORITY_APPLICATION)\n# Fixed minimum heights and zero padding stop theme defaults from squashing the bar.\nbase_rules = 'progressbar { padding: 0; min-height: 16px; } progressbar trough { min-height: 16px; padding: 0; border-width: 0; } progressbar progress { background-image: none; min-height: 16px;'\ncalm_style = proc { bar_sheet.load_from_data(\"#{base_rules} background-color: #109030; }\") }\nalarm_style = proc { bar_sheet.load_from_data(\"#{base_rules} background-color: #a02010; }\") }\nalarm_style.call\n\noverlay_sheet = Gtk::CssProvider.new\noverlay_sheet.load_from_data('label { color: #101010; font-weight: bold; padding: 0; margin: 0; min-height: 0; }')\nlabel.style_context.add_provider(overlay_sheet, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "ff84d280f1fd17ddb6a1e3cf837b7fa0a93d2448b88fee7ca5eb1a6e97f42466",
+          "sha256": "1025ae7c3a5d554ff78f631538b7ca27cbf7ff0608eb31318d77c36d62682de8"
         },
         {
           "line": 76,
           "end_line": 76,
-          "source": "\t_geometry = Gdk::Display.default.default_screen.get_monitor_geometry(Gdk::Display.default.default_screen.get_monitor_at_point(window_position[0].to_i, window_position[1].to_i))\r\n",
-          "sha256": "7815df068604070b8cb5c1fc429ad1904a5ea98593671152a9469c5df8fa3f61"
+          "source": "display_screen = Gdk::Display.default.default_screen\nmonitor_box = display_screen.get_monitor_geometry(display_screen.get_monitor_at_point(pos[0].to_i, pos[1].to_i))\n",
+          "original_sha256": "7815df068604070b8cb5c1fc429ad1904a5ea98593671152a9469c5df8fa3f61",
+          "sha256": "675091929d25003b7bab6ea1748c153555e086162d2e7ad642f5330e415debd0"
         }
       ],
       "max_measured_characters": 210,
@@ -3198,8 +3208,9 @@
         {
           "line": 565,
           "end_line": 644,
-          "source": "    css = <<~CSS\n      window#panelcontrol {\n        background-color: #{colors[:bg]};\n        color:            #{colors[:fg]};\n        font-size:        #{@font_size}px;\n      }\n      window#panelcontrol headerbar,\n      window#panelcontrol headerbar:backdrop,\n      window#panelcontrol .titlebar,\n      window#panelcontrol .titlebar:backdrop {\n        background-image: none;\n        background-color: #{colors[:bg]};\n        color:            #{colors[:fg]};\n        box-shadow:        none;\n        border:            none;\n      }\n      window#panelcontrol headerbar .title {\n        color: #{colors[:fg]};\n      }\n      window#panelcontrol headerbar .header-toggle {\n        margin:            0 2px;\n        padding:           2px 6px;\n        background-image:  none;\n        background-color:  transparent;\n        color:             #{colors[:fg]};\n        border:            none;\n        box-shadow:        none;\n      }\n      window#panelcontrol notebook,\n      window#panelcontrol notebook header,\n      window#panelcontrol notebook tab,\n      window#panelcontrol notebook stack {\n        background-color: #{colors[:bg]};\n        color:            #{colors[:fg]};\n      }\n      window#panelcontrol label {\n        color: #{colors[:fg]};\n      }\n      window#panelcontrol frame {\n        background-color: #{colors[:bg]};\n        color:            #{colors[:fg]};\n      }\n      window#panelcontrol frame > label {\n        color: #{colors[:fg]};\n      }\n      window#panelcontrol scrolledwindow,\n      window#panelcontrol viewport,\n      window#panelcontrol box {\n        background-color: #{colors[:bg]};\n        color:            #{colors[:fg]};\n      }\n      window#panelcontrol entry,\n      window#panelcontrol combobox,\n      window#panelcontrol combobox window,\n      window#panelcontrol combobox menu,\n      window#panelcontrol spinbutton,\n      window#panelcontrol popover {\n        background-color: #{colors[:btn]};\n        color:            #{colors[:fg]};\n        border-color:     #{colors[:border]};\n      }\n      window#panelcontrol button {\n        background-image: none;\n        background-color: #{colors[:btn]};\n        color:            #{colors[:fg]};\n        border-color:     #{colors[:border]};\n      }\n      window#panelcontrol button:hover {\n        background-color: shade(#{colors[:btn]}, 1.15);\n      }\n      window#panelcontrol button:active {\n        background-color: shade(#{colors[:btn]}, 0.85);\n      }\n      window#panelcontrol button:disabled {\n        background-color: #{colors[:btn]};\n        color:            shade(#{colors[:fg]}, 0.7);\n      }\n    CSS\n\n    @css_provider.load(data: css)\n",
-          "sha256": "1d8c9fd876e109d4253ef63e018a222efd7d9e0e5f151e3cddce36a6ce821ce7"
+          "source": "sheet = <<~CSS\n  window#ctl {\n    background-color: #{colors[:bg]};\n    color: #{colors[:fg]};\n    font-size: #{@font_size}px;\n  }\n  window#ctl headerbar,\n  window#ctl headerbar:backdrop,\n  window#ctl .titlebar {\n    background-image: none;\n    background-color: #{colors[:bg]};\n    color: #{colors[:fg]};\n    box-shadow: none;\n    border: none;\n  }\n  window#ctl headerbar .title {\n    color: #{colors[:fg]};\n  }\n  window#ctl headerbar .toggle {\n    margin: 0 2px;\n    padding: 2px 6px;\n    background-image: none;\n    background-color: transparent;\n    border: none;\n  }\n  window#ctl notebook,\n  window#ctl notebook header,\n  window#ctl notebook tab,\n  window#ctl notebook stack {\n    background-color: #{colors[:bg]};\n    color: #{colors[:fg]};\n  }\n  window#ctl frame > label {\n    color: #{colors[:fg]};\n  }\n  window#ctl scrolledwindow,\n  window#ctl viewport,\n  window#ctl box {\n    background-color: #{colors[:bg]};\n  }\n  window#ctl entry,\n  window#ctl combobox menu,\n  window#ctl spinbutton,\n  window#ctl popover {\n    background-color: #{colors[:btn]};\n    color: #{colors[:fg]};\n    border-color: #{colors[:border]};\n  }\n  window#ctl button {\n    background-image: none;\n    background-color: #{colors[:btn]};\n    color: #{colors[:fg]};\n    border-color: #{colors[:border]};\n  }\n  window#ctl button:hover {\n    background-color: shade(#{colors[:btn]}, 1.1);\n  }\n  window#ctl button:active {\n    background-color: shade(#{colors[:btn]}, 0.9);\n  }\n  window#ctl button:disabled {\n    background-color: #{colors[:btn]};\n    color: shade(#{colors[:fg]}, 0.6);\n  }\nCSS\n\n@css_provider.load(data: sheet)\n",
+          "original_sha256": "1d8c9fd876e109d4253ef63e018a222efd7d9e0e5f151e3cddce36a6ce821ce7",
+          "sha256": "a6db83b782d5c1ee68ad29cd032933477cc118db7470af36367a2326f0c725e3"
         }
       ],
       "max_measured_characters": 1937,
@@ -3572,8 +3583,9 @@
         {
           "line": 116,
           "end_line": 120,
-          "source": "        provider = Gtk::CssProvider.new\n        provider.load(data: \"label { font-weight: bold; }\\\n                            trough {font-weight: bold; min-height: 22px; }\\\n                            progress {font-weight: bold; min-height: 20px; background-image: none; background-color: %s;}\" % @circle_color)\n        @spell_p_bar[spell.num].style_context.add_provider(provider, Gtk::StyleProvider::PRIORITY_USER)\n",
-          "sha256": "7ffea23482bf26e5c00bbeb705c2cbec04d4e51009ae57d7ab154199eb658001"
+          "source": "fill_provider = Gtk::CssProvider.new\nfill_provider.load(data: format(\n  'label { font-weight: bold; } trough { font-weight: bold; min-height: 22px; } ' \\\n  'progress { font-weight: bold; min-height: 20px; background-image: none; background-color: %<fill>s; }',\n  fill: @circle_color\n))\n@spell_p_bar[spell.num].style_context.add_provider(fill_provider, Gtk::StyleProvider::PRIORITY_USER)\n",
+          "original_sha256": "7ffea23482bf26e5c00bbeb705c2cbec04d4e51009ae57d7ab154199eb658001",
+          "sha256": "f42174dfda5860d852d623869db17a3cd18763c18bc663bcb4b7b84a04c57540"
         }
       ],
       "max_measured_characters": 231,
@@ -3633,8 +3645,9 @@
         {
           "line": 32,
           "end_line": 37,
-          "source": "\tprovider = Gtk::CssProvider.new\n\t#; background-image: image(snow)}\\\n\tprovider.load(data: \"label { font-weight: bold; }\\\n\t\t\t\t\t\t\t\t\t\t\ttrough {font-weight: bold; min-height: 22px; }\\\n\t\t\t\t\t\t\t\t\t\t\tprogress {font-weight: bold; min-height: 20px; background-image: none; background-color: blue}\" )\n\t@bar.style_context.add_provider(provider, Gtk::StyleProvider::PRIORITY_USER)\n",
-          "sha256": "7e2032f073534d0a8937f9b5347db8be6fe5b595a253878def173e4286332361"
+          "source": "fill_provider = Gtk::CssProvider.new\nfill_provider.load(data: [\n  'label { font-weight: bold; }',\n  'trough { font-weight: bold; min-height: 22px; }',\n  'progress { font-weight: bold; min-height: 20px; background-image: none; background-color: #2255aa; }'\n].join(' '))\n@bar.style_context.add_provider(fill_provider, Gtk::StyleProvider::PRIORITY_USER)\n",
+          "original_sha256": "7e2032f073534d0a8937f9b5347db8be6fe5b595a253878def173e4286332361",
+          "sha256": "61eb86277a21dee50f3b3f1fb2d528af421e0ee183967395993db0ebc38fee4c"
         }
       ],
       "max_measured_characters": 190,
@@ -5205,8 +5218,9 @@
         {
           "line": 3572,
           "end_line": 3579,
-          "source": "                @css[:selected_fg] = t = Gtk::CssProvider.new\n                t.load(data: \"* { border: 2px solid #ffff00; margin: 0px; }\")\n                @css[:selected_bg] = t = Gtk::CssProvider.new\n                t.load(data: \"* { border: 2px solid #3333ff; margin: 0px; }\")\n\n                @css[:editor_colors] = t = Gtk::CssProvider.new\n                self[\"ssyMWEditColor\"].style_context.add_provider(t)\n                self[\"ssyMWEditBGColor\"].style_context.add_provider(t)\n",
-          "sha256": "4c74df04086f0c88b5c919ca72c16411919df6867004e4d4aa4f8107ac471fcb"
+          "source": "@css[:hit_fg] = pv = Gtk::CssProvider.new\npv.load(data: \"* { outline: 2px solid #ffee00; margin: 0px; }\")\n@css[:hit_bg] = pv = Gtk::CssProvider.new\npv.load(data: \"* { outline: 2px solid #3355ff; margin: 0px; }\")\n\n@css[:edit_tint] = pv = Gtk::CssProvider.new\nself[\"entry_fg\"].style_context.add_provider(pv)\nself[\"entry_bg\"].style_context.add_provider(pv)\n",
+          "original_sha256": "4c74df04086f0c88b5c919ca72c16411919df6867004e4d4aa4f8107ac471fcb",
+          "sha256": "0266dac4b774b7bc8eda1d3bd783b00ed28003a527dd50ace45834acec451ff9"
         }
       ],
       "max_measured_characters": 6230,
@@ -5509,20 +5523,23 @@
         {
           "line": 378,
           "end_line": 390,
-          "source": "\t\tprovider = Gtk::CssProvider.new\r\n\t\tcss = <<~CSS\r\n\t\t\tprogressbar progress {\r\n\t\t\t\tmin-height: #{settings[\"Bar Height\"]}px;\r\n\t\t\t\tbackground-color: #{settings[\"Bar Color\"]};\r\n\t\t\t}\r\n\r\n\t\t\tprogressbar trough {\r\n\t\t\t\tmin-height: #{settings[\"Bar Height\"]}px;\r\n\t\t\t\tbackground-color: #{settings[\"Trough Color\"]};\r\n\t\t\t}\r\n\t\tCSS\r\n\r\n",
-          "sha256": "f78e931f7e5103c2bcef72df7510d8481856b4e8b37c2fb6d48afd3a53f4fbbd"
+          "source": "bar_provider = Gtk::CssProvider.new\nsheet = <<~CSS\n  progressbar progress {\n    min-height: #{opts[\"Bar Height\"]}px;\n    background-color: #{opts[\"Bar Color\"]};\n  }\n\n  progressbar trough {\n    min-height: #{opts[\"Bar Height\"]}px;\n    background-color: #{opts[\"Trough Color\"]};\n  }\nCSS\n",
+          "original_sha256": "f78e931f7e5103c2bcef72df7510d8481856b4e8b37c2fb6d48afd3a53f4fbbd",
+          "sha256": "52e6f09f8bdb82eeeead951dd0e46c31f0324e88f62b320c28d11f1302e45d93"
         },
         {
           "line": 392,
           "end_line": 392,
-          "source": "\t\t\tprovider.load_from_data(css)\r\n",
-          "sha256": "3410d64c506a3fcd08490b68442c795fe03755768517b85a2bf23349afea0cf8"
+          "source": "bar_provider.load_from_data(sheet)\n",
+          "original_sha256": "3410d64c506a3fcd08490b68442c795fe03755768517b85a2bf23349afea0cf8",
+          "sha256": "47c1d40af2d2c938014231517493bb7d5b6f7fda37dd899a5abbcddafdb30256"
         },
         {
           "line": 410,
           "end_line": 410,
-          "source": "\t\tcontext.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\r\n",
-          "sha256": "5ac9cfed48a2771fc818569019091ba83d713e70707db7c4aedc0d5e8ca69720"
+          "source": "ctx.add_provider(bar_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)\n",
+          "original_sha256": "5ac9cfed48a2771fc818569019091ba83d713e70707db7c4aedc0d5e8ca69720",
+          "sha256": "4bcf93d70dbfdf59fa5f96b310881dffaa5c63a78a99a10ffa35695f3cfce39a"
         }
       ],
       "max_measured_characters": 143,
@@ -5625,26 +5642,30 @@
         {
           "line": 94,
           "end_line": 291,
-          "source": "tpick_style_provider = Gtk::CssProvider.new\r\ntpick_style_provider.load(data: <<-CSS)\r\n  #tpick_window, \r\n  #tpick_window grid,\r\n  #tpick_window notebook stack,\r\n  #tpick_window notebook stack grid,\r\n  #tpick_window notebook > stack {\r\n    background-color: #12131a;\r\n  }\r\n\r\n  #tpick_window label,\r\n  #tpick_window grid label,\r\n  #tpick_window notebook label,\r\n  #tpick_window checkbutton, \r\n  #tpick_window radiobutton,\r\n  #tpick_window entry,\r\n  #tpick_window entry text,\r\n  #tpick_window button,\r\n  #tpick_window textview,\r\n  #tpick_window textview text,\r\n  #tpick_window combobox,\r\n  #tpick_window spinbutton,\r\n  #tpick_window spinbutton entry,\r\n  #tpick_window spinbutton entry text,\r\n  #tpick_window spinbutton button {\r\n    font-family: 'Courier New', monospace;\r\n    font-weight: bold;\r\n    font-size: 10.5pt;\r\n    text-shadow: none;\r\n  }\r\n\r\n  #tpick_window label,\r\n  #tpick_window grid label,\r\n  #tpick_window notebook label,\r\n  #tpick_window checkbutton, \r\n  #tpick_window radiobutton {\r\n    color: #ffffff;\r\n  }\r\n\r\n  #tpick_window grid label.required-setting,\r\n  #tpick_window label.required-setting {\r\n    color: #ff4d4d;\r\n  }\r\n\r\n  #tpick_window entry,\r\n  #tpick_window entry text,\r\n  #tpick_window textview text {\r\n    background-color: #1a1b26; \r\n    color: #ffffff;\r\n    border: 1px solid #3d3e54;\r\n    border-radius: 4px;\r\n    padding: 4px;\r\n  }\r\n\r\n  #tpick_window spinbutton entry,\r\n  #tpick_window spinbutton entry text,\r\n  #tpick_window spinbutton button,\r\n  #tpick_window spinbutton {\r\n    background-color: #1a1b26;\r\n    color: #ffffff;\r\n  }\r\n\r\n  #tpick_window button {\r\n    background-color: #252632;\r\n    background-image: none;\r\n    border-radius: 4px;\r\n    padding: 6px 12px;\r\n    border: 1px solid #3d3e54;\r\n  }\r\n  #tpick_window button:hover {\r\n    background-color: #2f3142;\r\n    background-image: none;\r\n  }\r\n  \r\n  #tpick_window button label,\r\n  #tpick_window button:hover label {\r\n    color: #ffffff;\r\n  }\r\n\r\n  #tpick_window combobox,\r\n  #tpick_window combobox button,\r\n  #tpick_window combobox > box {\r\n    background-color: #252632;\r\n    background-image: none;\r\n    border-radius: 4px;\r\n    border: 1px solid #3d3e54;\r\n  }\r\n  #tpick_window combobox button:hover {\r\n    background-color: #2f3142;\r\n    background-image: none;\r\n  }\r\n  \r\n  #tpick_window combobox cellview,\r\n  #tpick_window combobox cellview label,\r\n  #tpick_window combobox > box > cellview label,\r\n  #tpick_window combobox > text {\r\n    color: #ffffff;\r\n  }\r\n\r\n  #tpick_window combobox window.popup,\r\n  #tpick_window combobox window.popup menu,\r\n  #tpick_window combobox menu {\r\n    background-color: #1a1b26; \r\n    border: 1px solid #00ffcc;\r\n  }\r\n\r\n  #tpick_window combobox window.popup menuitem label,\r\n  #tpick_window combobox menuitem label,\r\n  #tpick_window combobox window.popup cellview {\r\n    color: #ffffff;\r\n  }\r\n\r\n  #tpick_window combobox window.popup menuitem:hover,\r\n  #tpick_window combobox window.popup menuitem:selected,\r\n  #tpick_window combobox menuitem:hover,\r\n  #tpick_window combobox menuitem:selected {\r\n    background-color: #11998e;\r\n  }\r\n  #tpick_window combobox window.popup menuitem:hover label,\r\n  #tpick_window combobox window.popup menuitem:selected label,\r\n  #tpick_window combobox menuitem:hover label,\r\n  #tpick_window combobox menuitem:selected label {\r\n    color: #12131a;\r\n  }\r\n\r\n  #tpick_window notebook,\r\n  #tpick_window notebook header {\r\n    background-color: #1a1b26;\r\n    border: none;\r\n  }\r\n  #tpick_window notebook stack,\r\n  #tpick_window notebook > grid {\r\n    padding-top: 10px;\r\n  }\r\n  #tpick_window notebook tab {\r\n    background-color: #12131a; \r\n    border: 1px solid #3d3e54;\r\n    border-bottom: none;\r\n    border-radius: 4px 4px 0 0;\r\n    padding: 6px 12px;\r\n  }\r\n  #tpick_window notebook tab label {\r\n    color: #a5afc4; \r\n    font-size: 10pt;\r\n  }\r\n  #tpick_window notebook tab:checked {\r\n    background-color: #12131a; \r\n    border-color: #00ffcc;     \r\n  }\r\n  #tpick_window notebook tab:checked label {\r\n    color: #00ffcc; \r\n  }\r\n\r\n  #tpick_window headerbar {\r\n    background-color: #12131a;\r\n    background-image: none;\r\n    border-bottom: 1px solid #00ffcc;\r\n    box-shadow: none;\r\n    padding: 6px;\r\n    min-height: 54px;\r\n  }\r\n  #tpick_window headerbar label {\r\n    font-family: 'Courier New', monospace;\r\n    font-weight: bold;\r\n    color: #ffffff;\r\n    font-size: 11pt;\r\n  }\r\n  #tpick_window headerbar button.titlebutton {\r\n    background: #1a1b26;\r\n    border: 1px solid #3d3e54;\r\n    color: #ffffff;\r\n    border-radius: 4px;\r\n  }\r\n  #tpick_window headerbar button.titlebutton:hover {\r\n    background: #ff4d4d;\r\n  }\r\n\r\n  #tpick_window tooltip, \r\n  #tpick_window .tooltip,\r\n  tooltip,\r\n  .tooltip {\r\n    background-color: #1a1b26;\r\n    background-image: none;\r\n    opacity: 1.0;\r\n    border: 1px solid #00ffcc;\r\n    border-radius: 4px;\r\n  }\r\n  #tpick_window tooltip label, \r\n  #tpick_window .tooltip label,\r\n  tooltip label,\r\n  .tooltip label {\r\n    font-family: 'Courier New', monospace;\r\n    font-weight: bold;\r\n    font-size: 10pt;\r\n    color: #ffffff;\r\n  }\r\nCSS\r\nGtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, tpick_style_provider, Gtk::StyleProvider::PRIORITY_USER)\r\n",
-          "sha256": "fe364225df761a1a0bb0857cf16ce54634aa15a43ff74d81a3c78edb7f5e4b4c"
+          "source": "window_provider = Gtk::CssProvider.new\nwindow_provider.load(data: <<-CSS)\n  #demo_window,\n  #demo_window grid,\n  #demo_window notebook stack,\n  #demo_window notebook > stack {\n    background-color: #101820;\n  }\n\n  #demo_window label,\n  #demo_window grid label,\n  #demo_window checkbutton,\n  #demo_window entry,\n  #demo_window entry text,\n  #demo_window textview text,\n  #demo_window combobox,\n  #demo_window spinbutton entry text,\n  #demo_window spinbutton button {\n    font-family: monospace;\n    font-weight: bold;\n    font-size: 10pt;\n    text-shadow: none;\n  }\n\n  #demo_window label,\n  #demo_window grid label,\n  #demo_window checkbutton {\n    color: #eeeeee;\n  }\n\n  #demo_window grid label.needs-value,\n  #demo_window label.needs-value {\n    color: #ee5555;\n  }\n\n  #demo_window entry,\n  #demo_window entry text,\n  #demo_window textview text {\n    background-color: #182030;\n    color: #eeeeee;\n    border: 1px solid #404860;\n    border-radius: 3px;\n    padding: 3px;\n  }\n\n  #demo_window button {\n    background-color: #202838;\n    background-image: none;\n    border-radius: 3px;\n    padding: 5px 10px;\n    border: 1px solid #404860;\n  }\n  #demo_window button:hover {\n    background-color: #303a50;\n    background-image: none;\n  }\n\n  #demo_window combobox window.popup,\n  #demo_window combobox window.popup menu,\n  #demo_window combobox menu {\n    background-color: #182030;\n    border: 1px solid #22ddbb;\n  }\n  #demo_window combobox menuitem:hover,\n  #demo_window combobox menuitem:selected {\n    background-color: #118877;\n  }\n\n  #demo_window notebook,\n  #demo_window notebook header {\n    background-color: #182030;\n    border: none;\n  }\n  #demo_window notebook tab {\n    background-color: #101820;\n    border: 1px solid #404860;\n    border-bottom: none;\n    border-radius: 3px 3px 0 0;\n    padding: 5px 10px;\n  }\n  #demo_window notebook tab:checked {\n    background-color: #101820;\n    border-color: #22ddbb;\n  }\n\n  #demo_window headerbar {\n    background-color: #101820;\n    background-image: none;\n    border-bottom: 1px solid #22ddbb;\n    box-shadow: none;\n    padding: 5px;\n    min-height: 48px;\n  }\n  #demo_window headerbar button.titlebutton:hover {\n    background: #ee5555;\n  }\n\n  #demo_window tooltip,\n  tooltip,\n  .tooltip {\n    background-color: #182030;\n    background-image: none;\n    opacity: 1.0;\n    border: 1px solid #22ddbb;\n    border-radius: 3px;\n  }\nCSS\nGtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, window_provider, Gtk::StyleProvider::PRIORITY_USER)\n",
+          "original_sha256": "fe364225df761a1a0bb0857cf16ce54634aa15a43ff74d81a3c78edb7f5e4b4c",
+          "sha256": "9e1190b6c5f5898219893939566f18e4fe1d612a5326734b7e7b64ba7f3f6efd"
         },
         {
           "line": 2557,
           "end_line": 2564,
-          "source": "        css_provider = Gtk::CssProvider.new\r\n        css_provider.load(data: <<-CSS)\r\n          label {\r\n            font-family: Courier New;\r\n            font-size: 10pt;\r\n          }\r\n        CSS\r\n        @labels[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)\r\n",
-          "sha256": "65218af019f0aca80fba27ad31f89641c12db3b11c2f9229579729dce6f7d972"
+          "source": "local_provider = Gtk::CssProvider.new\nlocal_provider.load(data: <<-CSS)\n  label {\n    font-family: monospace;\n    font-size: 11pt;\n  }\nCSS\n@labels[name].style_context.add_provider(local_provider, Gtk::StyleProvider::PRIORITY_USER)\n",
+          "original_sha256": "65218af019f0aca80fba27ad31f89641c12db3b11c2f9229579729dce6f7d972",
+          "sha256": "b263435a628494dfc8cbda8bd3df24d276d57640f2958bc9c69b41dcd05e3f24"
         },
         {
           "line": 2939,
           "end_line": 2939,
-          "source": "        label.style_context.add_class(\"required-setting\")\r\n",
-          "sha256": "88a5e5fc57b26765d1a139964110e7279b9c947ddf04b407f88b13fb23a17d8f"
+          "source": "flagged_label.style_context.add_class(\"needs-value\")\n",
+          "original_sha256": "88a5e5fc57b26765d1a139964110e7279b9c947ddf04b407f88b13fb23a17d8f",
+          "sha256": "e12e3b61b2bd9d0ebc289cc915779f472ed1c4a9ee74d2c6af6c49692930070b"
         },
         {
           "line": 2084,
           "end_line": 2084,
-          "source": "    welcome_titlebar = Gtk::HeaderBar.new\r\n",
-          "sha256": "40f30acad2a229761f843a1de2198dd8d9d1db93522560ce365f13bf50662db8"
+          "source": "title_bar = Gtk::HeaderBar.new\n",
+          "original_sha256": "40f30acad2a229761f843a1de2198dd8d9d1db93522560ce365f13bf50662db8",
+          "sha256": "1585e72756498608b165c96201e0f473dd9fd0daefa5d566742ccc546703313a"
         }
       ],
       "max_measured_characters": 4742,

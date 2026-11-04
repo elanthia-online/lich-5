@@ -8,6 +8,7 @@ require_relative '../../../lib/common/script_scope'
 RSpec.describe 'source-derived CSS decoration acceptance' do
   corpus_path = File.expand_path('../../fixtures/webui/css-decoration.json', __dir__)
   audit_path = File.expand_path('../../fixtures/webui/css-provenance.json', __dir__)
+  excerpts_path = File.expand_path('../../fixtures/webui/css-decoration-excerpts.json', __dir__)
   corpus = JSON.parse(File.read(corpus_path))
   # Test-level attribution (settled B5): script, tested version or exact source
   # revision, and credited author exactly as recorded from the pinned source header.
@@ -77,8 +78,9 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     service.stop
   end
 
-  # Only reviewed, pinned CSS-only excerpts are executable. Game setup, persistence,
-  # downloads and excluded Builder construction are never included in this fixture.
+  # Only the synthetic CSS-only excerpts are executable; they carry no verbatim script
+  # text. Game setup, persistence, downloads and excluded Builder construction are never
+  # included in this fixture.
   def run_excerpt(record, line, locals = {})
     excerpt = record.fetch('excerpts').find { |entry| entry.fetch('line') == line }
     expect(Digest::SHA256.hexdigest(excerpt.fetch('source'))).to eq(excerpt.fetch('sha256'))
@@ -114,6 +116,27 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     end
     expect(recorded.keys).to match_array(expected_credits.keys)
     expected_credits.each { |name, credits| expect(recorded.fetch(name)).to eq(credits), "credit changed for #{name}" }
+  end
+
+  it 'carries only the synthetic excerpt text, with the original range and hash kept as provenance' do
+    synthetic = JSON.parse(File.read(excerpts_path)).fetch('excerpts')
+    records = corpus.fetch('scripts').reject { |record| record.fetch('excerpts').empty? }
+    expect(corpus.fetch('description')).to match(/synthetic.*no verbatim script text/)
+    expect(records.map { |record| record.fetch('name') }).to match_array(synthetic.keys)
+    expect(records.sum { |record| record.fetch('excerpts').size }).to eq(19)
+    records.each do |record|
+      expect(record.fetch('excerpts').map { |entry| entry.fetch('line').to_s }).to match_array(synthetic.fetch(record.fetch('name')).keys)
+      record.fetch('excerpts').each do |entry|
+        text = "#{synthetic.fetch(record.fetch('name')).fetch(entry.fetch('line').to_s).join("\n")}\n"
+        expect(entry.keys).to eq(%w[line end_line source original_sha256 sha256])
+        expect(entry.fetch('end_line')).to be >= entry.fetch('line')
+        expect(entry.fetch('source')).to eq(text)
+        expect(text).to be_ascii_only
+        expect(entry.fetch('sha256')).to eq(Digest::SHA256.hexdigest(text))
+        expect(entry.fetch('original_sha256')).to match(/\A\h{64}\z/)
+        expect(entry.fetch('original_sha256')).not_to eq(entry.fetch('sha256'))
+      end
+    end
   end
 
   it 'rebuilds the committed corpus byte for byte from the pinned EO and mirror sources' do
@@ -180,29 +203,29 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     target.instance_variable_set(:@labels, { 'field' => label })
     run_excerpt(record, 94)
     run_excerpt(record, 2557, name: 'field')
-    run_excerpt(record, 2939, label: label)
-    expect(label.style_context.has_class?('required-setting')).to be true
+    run_excerpt(record, 2939, flagged_label: label)
+    expect(label.style_context.has_class?('needs-value')).to be true
     expect(label.send(:component_props)[:content]).to eq('Retained text')
     run_excerpt(record, 2084)
-    expect(source_binding.local_variable_get(:welcome_titlebar)).to be_a(gtk.const_get(:HeaderBar))
+    expect(source_binding.local_variable_get(:title_bar)).to be_a(gtk.const_get(:HeaderBar))
     expect(Lich).to have_received(:log).with(/operation=css_decoration source=tpick.lic:95/).once
   end
 
-  it "executes manatimer attach-before-load and original proc reloads with inert decoration #{credit.call('manatimer')}" do
+  it "executes manatimer attach-before-load and proc reloads with inert decoration #{credit.call('manatimer')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'manatimer' }
     bar.set_fraction(0.5)
     run_excerpt(record, 83, bar: bar, label: label)
-    source_binding.local_variable_get(:normal_bar_style).call
-    source_binding.local_variable_get(:bar_style).call
+    source_binding.local_variable_get(:calm_style).call
+    source_binding.local_variable_get(:alarm_style).call
     expect(bar.send(:component_props)[:value]).to eq(0.5)
     expect(bar.send(:component_props)).not_to have_key(:fill_color)
-    # Display is now supported; the original geometry excerpt still owns its position input.
+    # Display is now supported; the geometry excerpt still owns its position input.
     allow(service).to receive(:monitor_geometry).and_return(x: 0, y: 0, width: 1280, height: 800, source: 'native', fallback: false)
-    expect { run_excerpt(record, 76, window_position: [20, 20]) }.not_to raise_error
+    expect { run_excerpt(record, 76, pos: [20, 20]) }.not_to raise_error
   end
 
   %w[spellson staminabar2].each do |name|
-    it "preserves recognized progress from the original #{name} load/attach excerpt #{credit.call(name)}" do
+    it "preserves recognized progress from the #{name} load/attach excerpt #{credit.call(name)}" do
       record = corpus.fetch('scripts').find { |r| r['name'] == name }
       target.instance_variable_set(:@bar, bar)
       target.instance_variable_set(:@spell_p_bar, { 1 => bar })
@@ -219,7 +242,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     text = gtk.const_get(:TextView).new
     target.instance_variable_set(:@textview, text)
     before = text.send(:component_props).dup
-    run_excerpt(record, 2245, palette: { bg: '#112233', fg: '#ffffff' }, aw: { 'font_size' => 12 })
+    run_excerpt(record, 2245, theme: { bg: '#112233', fg: '#ffffff' }, prefs: { 'font_size' => 12 })
     expect(text.send(:component_props)).to eq(before)
   end
 
@@ -237,22 +260,25 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
   it "executes Combatical screen registration and drag/drop class changes as omitted metadata #{credit.call('Combatical')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'Combatical' }
     run_excerpt(record, 2342, s: Hash.new('#112233'))
-    run_excerpt(record, 2192, new_child: label)
-    expect(label.style_context.has_class?('combatical-drop-indicator')).to be true
-    target.instance_variable_set(:@drop_indicator_child, label)
+    run_excerpt(record, 2192, target_row: label)
+    expect(label.style_context.has_class?('demo-marker')).to be true
+    target.instance_variable_set(:@marker_row, label)
     run_excerpt(record, 2127)
     expect(label.style_context.list_classes).to be_empty
   end
 
-  it "executes all five grinsawl border tiers without relying on its blanket rescue #{credit.call('grinsawl')}" do
+  it "executes all five grinsawl border tiers without relying on a blanket rescue #{credit.call('grinsawl')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'grinsawl' }
     palette = Module.new
-    palette.const_set(:FOIL_COLORS, { gold: '#d4af37', silver: '#c0c0c0', bronze: '#cd7f32' })
-    target.const_set(:Grinsawl, palette)
+    palette.const_set(:TIER_COLORS, { gold: '#d4af37', silver: '#c0c0c0', bronze: '#cd7f32' })
+    target.const_set(:TierPalette, palette)
     run_excerpt(record, 2491)
     provider = source_binding.local_variable_get(:provider)
     expect(provider.state).to eq(:omitted)
-    expect(source_binding.local_variable_get(:css)).to eq(record.fetch('samples').first.fetch('css'))
+    tiers = { 'gold' => '#d4af37', 'silver' => '#c0c0c0', 'bronze' => '#cd7f32', 'none' => '#808080', 'empty' => '#505050' }
+    expected = ['.demo-slot { border-width: 3px; border-style: solid; border-radius: 4px; }'] +
+               tiers.map { |tier, tint| ".demo-slot.tier-#{tier} { border-color: #{tint}; border-style: #{tier == 'empty' ? 'dashed' : 'solid'}; }" }
+    expect(source_binding.local_variable_get(:sheet)).to eq(expected.join(' '))
   end
 
   it "executes stormsync selection CSS and omitted-priority attachments without running Builder #{credit.call('stormsync')}" do
@@ -268,9 +294,9 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
   it "executes timers progress CSS while preserving the control fraction #{credit.call('timers')}" do
     record = corpus.fetch('scripts').find { |r| r['name'] == 'timers' }
     bar.set_fraction(0.6)
-    run_excerpt(record, 378, settings: { 'Bar Height' => 22, 'Bar Color' => '#112233', 'Trough Color' => '#445566' })
+    run_excerpt(record, 378, opts: { 'Bar Height' => 22, 'Bar Color' => '#112233', 'Trough Color' => '#445566' })
     run_excerpt(record, 392)
-    run_excerpt(record, 410, context: bar.style_context)
+    run_excerpt(record, 410, ctx: bar.style_context)
     expect(bar.send(:component_props)[:value]).to eq(0.6)
     expect(bar.send(:component_props)).not_to have_key(:height)
   end
@@ -294,7 +320,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     end
     %w[Image Radial Linear].each do |kind|
       settings = Hash.new('12').merge('Widget Background' => kind, 'Image Location' => 'missing-css-image.png')
-      run_excerpt(record, 1731, needed_settings: settings, css_name: 'label', widget: label)
+      run_excerpt(record, 1731, opts: settings, selector: 'label', widget: label)
     end
     expect(accessed).to be_empty
     expect(label.send(:component_props)[:content]).to eq('Retained text')
