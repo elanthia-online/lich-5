@@ -235,6 +235,9 @@ RSpec.configure do |config|
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
+    # DRCC remembers crafting item ids for the whole process; an id one
+    # example stowed would turn the next example's by-name GET into "get #id".
+    Lich::DragonRealms::DRCC::CRAFTING_ITEM_IDS.clear if defined?(Lich::DragonRealms::DRCC::CRAFTING_ITEM_IDS)
 
     # Game objects - clear registries via class_variable_set (no test methods in production)
     # NOTE: class_variable_set used because GameObj is a production class with no reset! method

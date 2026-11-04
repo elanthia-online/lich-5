@@ -1181,6 +1181,40 @@ module Lich
         ids.size == 1 ? "##{ids.first}" : item_ref(name)
       end
 
+      # The id of the one item directly in a container that a name means,
+      # read from an Inventory feed snapshot ({Lich::Common::Inventory}). Uses
+      # the {.held_id} rule (noun equal to the name's last word, ignoring
+      # case; each other word a word of the item's name; a leading "my "
+      # dropped; an ordinal or "other" first word never matches). Sends no
+      # game command and reads only the snapshot given, so the answer is as
+      # old as that snapshot: the caller must expect the id to name nothing
+      # any more, or a different item.
+      #
+      # @param name [String, Integer, nil] noun phrase, e.g. "pins" or
+      #   "sepia pins"; an Integer is an id, as in {.held_id}
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives nil
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives nil
+      # @return [String, nil] the id, without "#"; nil when the snapshot, the
+      #   container or a matching item is missing, when two different items
+      #   in it match, or when the container is locked (contents unknown)
+      #
+      # @example Some sepia pins 4101800 in the worn duffel bag 2391122
+      #   DRCI.stored_id('pins', '#2391122', snapshot: Lich::Common::Inventory.current) #=> "4101800"
+      def stored_id(name, container, snapshot:)
+        return nil if snapshot.nil? || name.nil?
+
+        container_id = container.to_s.strip.delete_prefix('#')
+        return nil unless container_id.match?(/\A\d+\z/)
+
+        bag = snapshot[container_id]
+        return nil unless bag
+
+        ids = bag.contents(:in).select { |item| held_obj_matches?(item, name) }.filter_map { |item| held_obj_id(item) }.uniq
+        ids.size == 1 ? ids.first : nil
+      end
+
       # Whether a worn GameObj is the one these words name (see {.worn_ref}).
       #
       # @param obj [GameObj] a worn item
