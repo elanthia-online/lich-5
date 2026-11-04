@@ -173,10 +173,15 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'with a name starting with an ordinal or "other"' do
-      before { hands(right: leather) }
-
-      ['second leather', 'Second leather', 'other leather', 'my other leather', 'first leather', 'twentieth leather'].each do |name|
-        it "never resolves #{name.inspect}, leaving the game's ordering" do
+      # Synthetic names: the held item's name contains the ordinal word, so
+      # the adjective rule alone would resolve the name; only the ordinal rule
+      # keeps it from resolving.
+      { 'second leather' => 'second leather', 'Second leather' => 'second leather',
+        'other leather' => 'some other leather', 'my other leather' => 'some other leather',
+        'first leather' => 'first leather', 'twentieth leather' => 'twentieth leather' }.each do |name, held_name|
+        it "never resolves #{name.inspect} when holding #{held_name.inspect}, leaving the game's ordering" do
+          hands(right: ['4243', 'leather', held_name])
+          expect(described_class.held_id('leather')).to eq('4243')
           expect(described_class.held_id(name)).to be_nil
         end
       end
@@ -398,6 +403,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(described_class).to have_received(:sleep).exactly(10).times
     end
 
+    [Float::INFINITY, Float::NAN].each do |bad|
+      it "raises ArgumentError for timeout #{bad.inspect} before running the block" do
+        ran = false
+        expect { described_class.id_into_hand(timeout: bad) { ran = true } }.to raise_error(ArgumentError, /finite timeout/)
+        expect(ran).to be false
+      end
+    end
+
+    [nil, 'abc'].each do |odd|
+      it "looks once for timeout #{odd.inspect} (coerced to 0)" do
+        expect(described_class.id_into_hand(timeout: odd) { hands(left: leather) && true }).to eq('2222485')
+        expect(described_class).not_to have_received(:sleep)
+      end
+    end
+
     it 'raises ArgumentError without a block' do
       expect { described_class.id_into_hand(name: 'leather') }.to raise_error(ArgumentError, /block/)
     end
@@ -473,6 +493,41 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(described_class.worn_ref('my duffel bag')).to eq('my duffel bag')
       expect(described_class.worn_ref('My duffel bag')).to eq('My duffel bag')
       expect(described_class.worn_ref(nil)).to be_nil
+    end
+
+    context 'with a held item and a worn item whose name ends in its name' do
+      before do
+        worn(['501', 'harness', 'weapon harness with a leather pouch'])
+        hands(right: ['777', 'pouch', 'leather pouch'])
+      end
+
+      it 'does not take the harness (noun harness) for "leather pouch"' do
+        expect(described_class.held_id('leather pouch')).to eq('777')
+        expect(described_class.worn_ref('leather pouch')).to eq('my leather pouch')
+      end
+
+      # Its name does not end in its noun, so no name resolves it: worn_ref
+      # gives today's "my harness".
+      it 'falls back to item_ref for "harness"' do
+        expect(described_class.worn_ref('harness')).to eq('my harness')
+      end
+    end
+
+    it 'does not match part of a hyphenated word ("pelt" in "rat-pelt pack")' do
+      worn(['31338', 'pack', 'rat-pelt pack'])
+      expect(described_class.worn_ref('rat-pelt pack')).to eq('#31338')
+      expect(described_class.worn_ref('pelt pack')).to eq('my pelt pack')
+    end
+
+    it 'drops surrounding whitespace, never giving "my  #id" or "my  my ..."' do
+      expect(described_class.worn_ref(' #123')).to eq('#123')
+      expect(described_class.worn_ref(' my bag ')).to eq('my bag')
+      expect(described_class.worn_ref('  duffel bag ')).to eq('#758689')
+      expect(described_class.worn_ref(' backpack ')).to eq('my backpack')
+    end
+
+    it 'falls back to item_ref for a blank name' do
+      expect(described_class.worn_ref('   ')).to eq('my ')
     end
 
     it 'returns a String "#id" for an Integer GameObj id' do

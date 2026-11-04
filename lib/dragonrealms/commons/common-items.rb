@@ -1083,17 +1083,21 @@ module Lich
       # @return [String, nil] the new id, without "#"; nil when the block was
       #   falsy (no looking), nothing new and matching arrived in time, or two
       #   new items matched
-      # @raise [ArgumentError] without a block
+      # @raise [ArgumentError] without a block, or for a non-finite timeout
+      #   (Float::INFINITY, NaN); raised before the block runs
       #
       # @example Id of the leather just bought
       #   DRCI.id_into_hand(name: 'leather') { DRCT.order_item(room, 3) == 'takes some coins from you' }
       def id_into_hand(name: nil, except: [], timeout: 1)
         raise ArgumentError, 'DRCI.id_into_hand needs a block' unless block_given?
 
+        seconds = timeout.to_f
+        raise ArgumentError, "DRCI.id_into_hand needs a finite timeout, got #{timeout.inspect}" unless seconds.finite?
+
+        looks = [(seconds / ID_INTO_HAND_POLL_INTERVAL).ceil, 0].max
         skip = held_ids + held_except(except)
         return nil unless yield
 
-        looks = [(timeout.to_f / ID_INTO_HAND_POLL_INTERVAL).ceil, 0].max
         found = matching_held_ids(skip, name)
         looks.times do
           break unless found.empty?
@@ -1105,14 +1109,20 @@ module Lich
       end
 
       # A reference to a worn container for a command: its "#<id>" when
-      # exactly one worn item (GameObj.inv) has a name ending in the given
-      # name, so a held or stowed item of the same noun can't be picked
-      # instead. Sends no game command.
+      # exactly one worn item (GameObj.inv) matches the given name, so a held
+      # or stowed item of the same noun can't be picked instead. Sends no game
+      # command.
+      #
+      # A worn item matches when its noun equals the name's last word and its
+      # name ends in the name's words, whole words only, ignoring case. So
+      # "leather pouch" is not the "weapon harness with a leather pouch"
+      # (noun harness), and "pelt pack" is not the "rat-pelt pack".
       #
       # Not for DRCC crafting methods on Lich versions that prepend "my " to
       # the container (that gives "my #123").
       #
-      # @param name [String, nil] container name, e.g. "duffel bag"
+      # @param name [String, nil] container name, e.g. "duffel bag";
+      #   surrounding whitespace is dropped
       # @return [String, nil] "#<id>" for one match; {.item_ref}(name) ("my
       #   duffel bag") for zero or several matches, no worn list, or a name
       #   starting with an ordinal or "other"; "#..." and "my ..." unchanged;
@@ -1121,15 +1131,30 @@ module Lich
       # @example One worn duffel bag 758573
       #   DRCI.worn_ref('duffel bag') #=> "#758573"
       def worn_ref(name)
-        return name if name.nil? || name =~ /\A(my |#)/i
+        return nil if name.nil?
 
-        words = name.strip.downcase.split
+        name = name.strip
+        return name if name =~ /\A(my |#)/i
+
+        words = name.downcase.split
         inv = GameObj.inv
         return item_ref(name) if words.empty? || held_ref_ordinal?(words.first) || inv.nil?
 
-        pattern = /\b#{Regexp.escape(name.strip)}\z/i
-        ids = inv.select { |item| item.name.to_s =~ pattern }.filter_map { |item| held_obj_id(item) }.uniq
+        ids = inv.select { |item| worn_obj_matches?(item, words) }.filter_map { |item| held_obj_id(item) }.uniq
         ids.size == 1 ? "##{ids.first}" : item_ref(name)
+      end
+
+      # Whether a worn GameObj is the one these words name (see {.worn_ref}).
+      #
+      # @param obj [GameObj] a worn item
+      # @param words [Array<String>] the name's words, downcased, non-empty
+      # @return [Boolean]
+      # @api private
+      def worn_obj_matches?(obj, words)
+        return false unless obj.noun.to_s.casecmp?(words.last)
+
+        name_words = obj.name.to_s.downcase.split
+        name_words.size >= words.size && name_words.last(words.size) == words
       end
 
       # Whether a name means this held GameObj (see {.held_id} for the rule).
@@ -1186,7 +1211,7 @@ module Lich
         end.uniq
       end
 
-      private_class_method :held_obj_matches?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
+      private_class_method :held_obj_matches?, :worn_obj_matches?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #
