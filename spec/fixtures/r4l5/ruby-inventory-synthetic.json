@@ -1,0 +1,122 @@
+{
+  "_fixture": "Synthetic supplied versions matching the repository lock; not a measured Windows execution.",
+  "ruby_version": "4.0.9",
+  "ruby_abi": "4.0",
+  "platform": "x64-mingw-ucrt",
+  "gems": {
+    "base64": {
+      "version": "0.3.0",
+      "dependencies": {}
+    },
+    "benchmark": {
+      "version": "0.5.0",
+      "dependencies": {}
+    },
+    "bigdecimal": {
+      "version": "4.1.3",
+      "dependencies": {}
+    },
+    "date": {
+      "version": "3.6.0",
+      "dependencies": {}
+    },
+    "digest": {
+      "version": "3.3.0",
+      "dependencies": {}
+    },
+    "drb": {
+      "version": "2.2.3",
+      "dependencies": {}
+    },
+    "fiddle": {
+      "version": "1.1.8",
+      "dependencies": {}
+    },
+    "fileutils": {
+      "version": "1.8.1",
+      "dependencies": {}
+    },
+    "json": {
+      "version": "3.1.0",
+      "dependencies": {}
+    },
+    "logger": {
+      "version": "1.7.0",
+      "dependencies": {}
+    },
+    "openssl": {
+      "version": "4.0.2",
+      "dependencies": {}
+    },
+    "open-uri": {
+      "version": "0.5.0",
+      "dependencies": {
+        "stringio": [
+          ">= 0"
+        ],
+        "time": [
+          ">= 0"
+        ],
+        "uri": [
+          ">= 0"
+        ]
+      }
+    },
+    "ostruct": {
+      "version": "0.6.3",
+      "dependencies": {}
+    },
+    "rake": {
+      "version": "13.4.2",
+      "dependencies": {}
+    },
+    "resolv": {
+      "version": "0.8.1",
+      "dependencies": {}
+    },
+    "rexml": {
+      "version": "3.4.4",
+      "dependencies": {}
+    },
+    "stringio": {
+      "version": "3.2.0",
+      "dependencies": {}
+    },
+    "tempfile": {
+      "version": "0.3.2",
+      "dependencies": {}
+    },
+    "time": {
+      "version": "0.5.0",
+      "dependencies": {
+        "date": [
+          ">= 0"
+        ]
+      }
+    },
+    "tmpdir": {
+      "version": "0.3.2",
+      "dependencies": {
+        "fileutils": [
+          ">= 0"
+        ]
+      }
+    },
+    "uri": {
+      "version": "1.1.2",
+      "dependencies": {}
+    },
+    "win32ole": {
+      "version": "1.9.3",
+      "dependencies": {}
+    },
+    "yaml": {
+      "version": "0.4.0",
+      "dependencies": {}
+    },
+    "zlib": {
+      "version": "3.2.4",
+      "dependencies": {}
+    }
+  }
+}

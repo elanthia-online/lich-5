@@ -50,6 +50,12 @@ jobs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
+      - name: Checkout consumer contract before release writes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/check-r4l5-contract
+
       # 1) Release Please for stable branch (creates public release, we convert to draft immediately).
       #    The release is created with the built-in token, as before, so it doesn't
       #    trigger other workflows.
@@ -106,7 +112,7 @@ jobs:
           manifest-file: .release-please-manifest.json
           target-branch: ${{ github.ref_name }}
           skip-github-pull-request: false
-          
+
       # --- FAST-PATH: finalize title/body before packaging ---
       - name: Derive release vars from tag (no REST)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
@@ -273,36 +279,36 @@ jobs:
             const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
             const dd = String(dt.getUTCDate()).padStart(2,'0');
             const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
-            
+
             // Split into lines and replace first non-empty line with header
             const lines = seed.split(/\r?\n/);
-            let i = 0; 
+            let i = 0;
             while (i < lines.length && /^\s*$/.test(lines[i])) i++;
-            if (i >= lines.length) lines.push(headerLine); 
+            if (i >= lines.length) lines.push(headerLine);
             else lines[i] = headerLine;
-            
+
             let body = lines.join('\n');
-            
+
             // Strip Release Please boilerplate (everything after "---" or "This PR was generated")
             body = body.replace(/^---\s*\n[\s\S]*$/m, '');
             body = body.replace(/^This PR was generated with[\s\S]*$/m, '');
-            
+
             // Strip HTML comments
             body = body.replace(/<!--[\s\S]*?-->/g, '');
-            
+
             // Strip Co-authored-by footer
             body = body.replace(/^Co-authored-by:.*$/gm, '');
-            
+
             // Convert [#123](...) -> #123
             body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1');
-            
+
             // Clean up multiple blank lines
             body = body.replace(/\n{3,}/g, '\n\n').trim();
-            
+
             // Keep fast-path body concise. Custom install footer is owned by
             // format-release-notes.yaml to avoid duplicate footer blocks.
             body = body.replace(/\n+$/, '') + '\n';
-            
+
             core.setOutput('final', body);
 
       - name: Apply formatted title/body to draft release
@@ -392,7 +398,7 @@ jobs:
             | [ .merged_at, .number ] | @tsv
           ' | sort -r | head -n1)"
           pr="$(printf '%s' "$best" | awk '{print $2}')"
-          
+
           # Fallback to Search (if REST scan found nothing)
           if [ -z "${pr:-}" ]; then
             q="repo:${repo} is:pr is:merged in:title \"${ver}\" base:${branch}"
@@ -405,7 +411,7 @@ jobs:
               pr="$(printf '%s' "$best" | awk '{print $2}')"
             fi
           fi
-          
+
           echo "Gate trace: matched PR #${pr:-<none>}"
           if [ -n "${pr:-}" ]; then
             labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
@@ -432,6 +438,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag_name }}
+          persist-credentials: false
       - name: Download latest Ruby4Lich5 installer
         shell: bash
         run: |
@@ -440,6 +450,10 @@ jobs:
             --output Ruby4Lich5.exe \
             https://github.com/elanthia-online/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
           test -s Ruby4Lich5.exe
+
+      - uses: ./.github/actions/check-r4l5-contract
+        with:
+          installer: Ruby4Lich5.exe
 
       - name: Upload installer to release
         env:
