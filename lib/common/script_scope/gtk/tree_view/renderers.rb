@@ -302,6 +302,14 @@ module Lich
             @columns.each { |column| column.view&.model_will_change! }
           end
 
+          # A coalesced choice-model write changes only column editors, never table rows.
+          # @param _keys [Array<String>] changed choice rows; the editor is rebuilt whole
+          # @return [void]
+          # @api private
+          def model_rows_will_change!(_keys)
+            @columns.each { |column| column.view&.model_rows_will_change!([]) }
+          end
+
           # Serializes labels as text values, deduplicating identical text choices only.
           # @return [Hash, nil] shared closed-choice editor
           # @api private
