@@ -5,6 +5,8 @@ require 'digest'
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
+# Retirement: This corpus and its consumers exist to validate the GTK3 compatibility shim so script authors can convert to WebUI before GTK3 support ends explicitly.
+# They are removed with the shim and its consumers.
 RSpec.describe 'source-derived CSS decoration acceptance' do
   corpus_path = File.expand_path('../../fixtures/webui/css-decoration.json', __dir__)
   audit_path = File.expand_path('../../fixtures/webui/css-provenance.json', __dir__)
@@ -98,6 +100,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
       expect(record.fetch('source')).to eq(record.fetch('path').start_with?('scripts/') ? 'eo' : 'mirror')
       expect(record.fetch('revision')).to match(/\A\h{40}\z/)
       expect(record.fetch('attribution').keys).to eq(%w[author contributors version lines])
+      expect(record.fetch('calls').flat_map(&:keys).uniq - %w[line method arguments]).to be_empty
       loads = record.fetch('calls').select { |call| %w[load load_from_data].include?(call['method']) }.map { |call| call['line'] }
       expect(record.fetch('samples').map { |sample| sample['loader_line'] }.uniq.sort).to eq(loads.uniq.sort)
       record.fetch('samples').each do |sample|
@@ -182,7 +185,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
     calls = corpus.fetch('scripts').flat_map { |r| r.fetch('calls') }
     calls.select { |c| %w[add_provider add_provider_for_screen].include?(c['method']) }.each do |call|
       prefix = call['method'] == 'add_provider' ? 1 : 2
-      priority = call.fetch('arguments').drop(prefix).map do |source|
+      priority = call.fetch('arguments').map do |source|
         expect(source).to match(/\AGtk::StyleProvider::PRIORITY_(USER|APPLICATION)\z/)
         gtk.const_get(:StyleProvider).const_get(source.split('::').last, false)
       end

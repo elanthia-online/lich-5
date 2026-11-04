@@ -1,5 +1,5 @@
 {
-  "description": "Pinned source CSS evidence. Samples and calls are measured from the pinned sources; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.",
+  "description": "Pinned source CSS evidence. Samples are measured acceptance inputs and size evidence from the pinned sources, credited per record under settled direction B5, not redistributed works; calls carry only line, method and priority constants; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.",
   "audit_sha256": "251c4a826f214610722e883fe1b7f3a86519a2900e31f653c11723e6f0ca1d38",
   "bound": 8192,
   "fields": {
@@ -15,7 +15,7 @@
     "scripts[].path": "Path of the script inside that repository at revision.",
     "scripts[].source_sha256": "SHA-256 of the whole original script file at revision.",
     "scripts[].remaining_exposure": "Analysis status only: true unless css-provenance.json marks the script converted or the script is spellson. Not a runtime guarantee, security measure or permission finding.",
-    "scripts[].calls": "Every CSS provider/class call in the source: 1-based line, method, call source text and argument source texts.",
+    "scripts[].calls": "Every CSS provider/class call in the source: 1-based line, method and arguments. arguments holds only the Gtk::StyleProvider::PRIORITY_USER or PRIORITY_APPLICATION constant names that follow the provider arguments of add_provider and add_provider_for_screen, and is empty for other methods. Call expression text is not retained.",
     "scripts[].samples": "Stylesheet payloads passed to a provider load call.",
     "scripts[].samples[].lines": "Source line range [first, last] of the string, or a list of ranges for an assembly sample.",
     "scripts[].samples[].kind": "\"literal\": unchanged source string. \"interpolation sample\": interpolations replaced by the fixed values in substitutions. \"format sample\": format() applied with the value in substitutions. \"assembly sample\": several source strings joined as described in assembly.",
@@ -56,213 +56,134 @@
         {
           "line": 1506,
           "method": "add_class",
-          "source": "@lock_button.style_context.add_class('combatical-lock-flash')",
-          "arguments": [
-            "'combatical-lock-flash'"
-          ]
+          "arguments": []
         },
         {
           "line": 1508,
           "method": "remove_class",
-          "source": "@lock_button.style_context.remove_class('combatical-lock-flash')",
-          "arguments": [
-            "'combatical-lock-flash'"
-          ]
+          "arguments": []
         },
         {
           "line": 1699,
           "method": "add_class",
-          "source": "@window.style_context.add_class('combatical-window')",
-          "arguments": [
-            "'combatical-window'"
-          ]
+          "arguments": []
         },
         {
           "line": 1868,
           "method": "add_class",
-          "source": "enemy_frame.label_widget.style_context.add_class('combatical-section-header')",
-          "arguments": [
-            "'combatical-section-header'"
-          ]
+          "arguments": []
         },
         {
           "line": 1871,
           "method": "add_class",
-          "source": "enemy_scroll.style_context.add_class('combatical-box-scroll')",
-          "arguments": [
-            "'combatical-box-scroll'"
-          ]
+          "arguments": []
         },
         {
           "line": 1886,
           "method": "add_class",
-          "source": "player_frame.label_widget.style_context.add_class('combatical-section-header')",
-          "arguments": [
-            "'combatical-section-header'"
-          ]
+          "arguments": []
         },
         {
           "line": 1889,
           "method": "add_class",
-          "source": "player_scroll.style_context.add_class('combatical-box-scroll')",
-          "arguments": [
-            "'combatical-box-scroll'"
-          ]
+          "arguments": []
         },
         {
           "line": 1906,
           "method": "add_class",
-          "source": "target_frame.label_widget.style_context.add_class('combatical-section-header')",
-          "arguments": [
-            "'combatical-section-header'"
-          ]
+          "arguments": []
         },
         {
           "line": 1908,
           "method": "add_class",
-          "source": "target_eventbox.style_context.add_class('combatical-target-bg')",
-          "arguments": [
-            "'combatical-target-bg'"
-          ]
+          "arguments": []
         },
         {
           "line": 1989,
           "method": "add_class",
-          "source": "label.style_context.add_class('combatical-ability-label-shadow')",
-          "arguments": [
-            "'combatical-ability-label-shadow'"
-          ]
+          "arguments": []
         },
         {
           "line": 2015,
           "method": "add_class",
-          "source": "note_ebox.style_context.add_class('combatical-ability-row')",
-          "arguments": [
-            "'combatical-ability-row'"
-          ]
+          "arguments": []
         },
         {
           "line": 2040,
           "method": "add_class",
-          "source": "event_box.style_context.add_class('combatical-ability-row')",
-          "arguments": [
-            "'combatical-ability-row'"
-          ]
+          "arguments": []
         },
         {
           "line": 2127,
           "method": "remove_class",
-          "source": "@drop_indicator_child.style_context.remove_class('combatical-drop-indicator')",
-          "arguments": [
-            "'combatical-drop-indicator'"
-          ]
+          "arguments": []
         },
         {
           "line": 2157,
           "method": "add_class",
-          "source": "@pool_frame.style_context.add_class('combatical-pool-hover')",
-          "arguments": [
-            "'combatical-pool-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2162,
           "method": "remove_class",
-          "source": "@pool_frame.style_context.remove_class('combatical-pool-hover')",
-          "arguments": [
-            "'combatical-pool-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2192,
           "method": "add_class",
-          "source": "new_child.style_context.add_class('combatical-drop-indicator')",
-          "arguments": [
-            "'combatical-drop-indicator'"
-          ]
+          "arguments": []
         },
         {
           "line": 2339,
           "method": "remove_provider_for_screen",
-          "source": "Gtk::StyleContext.remove_provider_for_screen(Gdk::Screen.default, @css_provider)",
-          "arguments": [
-            "Gdk::Screen.default",
-            "@css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 2441,
           "method": "load",
-          "source": "@css_provider.load(data: css_data)",
-          "arguments": [
-            "data: css_data"
-          ]
+          "arguments": []
         },
         {
           "line": 2443,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n      Gdk::Screen.default,\r\n      @css_provider,\r\n      Gtk::StyleProvider::PRIORITY_APPLICATION\r\n    )",
           "arguments": [
-            "Gdk::Screen.default",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 3024,
           "method": "add_class",
-          "source": "box_frame.style_context.add_class('combatical-box-frame')",
-          "arguments": [
-            "'combatical-box-frame'"
-          ]
+          "arguments": []
         },
         {
           "line": 3035,
           "method": "add_class",
-          "source": "header_label.style_context.add_class('combatical-section-header')",
-          "arguments": [
-            "'combatical-section-header'"
-          ]
+          "arguments": []
         },
         {
           "line": 3057,
           "method": "add_class",
-          "source": "box_vbox.style_context.add_class('combatical-box-bg')",
-          "arguments": [
-            "'combatical-box-bg'"
-          ]
+          "arguments": []
         },
         {
           "line": 3185,
           "method": "add_class",
-          "source": "pool_outer_frame.style_context.add_class('combatical-pool-frame')",
-          "arguments": [
-            "'combatical-pool-frame'"
-          ]
+          "arguments": []
         },
         {
           "line": 3193,
           "method": "add_class",
-          "source": "@pool_header_label.style_context.add_class('combatical-section-header')",
-          "arguments": [
-            "'combatical-section-header'"
-          ]
+          "arguments": []
         },
         {
           "line": 3224,
           "method": "add_class",
-          "source": "pool_scroll.style_context.add_class('combatical-box-scroll')",
-          "arguments": [
-            "'combatical-box-scroll'"
-          ]
+          "arguments": []
         },
         {
           "line": 3232,
           "method": "add_class",
-          "source": "@pool_container.style_context.add_class('combatical-box-bg')",
-          "arguments": [
-            "'combatical-box-bg'"
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -336,286 +257,209 @@
         {
           "line": 553,
           "method": "load",
-          "source": "uberBar_progress_rthard_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 65px; } progress { min-height: 14px; background-color: #cf0000; } label { font-weight: bold; font-size: 12; min-width: 65px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 65px; } progress { min-height: 14px; background-color: #cf0000; } label { font-weight: bold; font-size: 12; min-width: 65px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 554,
           "method": "add_provider",
-          "source": "@uberBar_progress_rthard.style_context.add_provider(uberBar_progress_rthard_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_rthard_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 555,
           "method": "add_provider",
-          "source": "@uberBar_progress_rthard_label.style_context.add_provider(uberBar_progress_rthard_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_rthard_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 562,
           "method": "load",
-          "source": "uberBar_progress_rtcast_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 27px; } progress { min-height: 14px; background-color: #739fcf; } label { font-weight: bold; font-size: 12; min-width: 27px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 27px; } progress { min-height: 14px; background-color: #739fcf; } label { font-weight: bold; font-size: 12; min-width: 27px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 563,
           "method": "add_provider",
-          "source": "@uberBar_progress_rtcast.style_context.add_provider(uberBar_progress_rtcast_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_rtcast_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 564,
           "method": "add_provider",
-          "source": "@uberBar_progress_rtcast_label.style_context.add_provider(uberBar_progress_rtcast_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_rtcast_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 571,
           "method": "load",
-          "source": "uberBar_progress_health_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #800000; } label { font-weight: bold; font-size: 12; min-width: 90px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #800000; } label { font-weight: bold; font-size: 12; min-width: 90px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 572,
           "method": "add_provider",
-          "source": "@uberBar_progress_health.style_context.add_provider(uberBar_progress_health_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_health_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 573,
           "method": "add_provider",
-          "source": "@uberBar_progress_health_label.style_context.add_provider(uberBar_progress_health_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_health_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 580,
           "method": "load",
-          "source": "uberBar_progress_mana_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #000061; } label { font-weight: bold; font-size: 12; min-width: 90px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #000061; } label { font-weight: bold; font-size: 12; min-width: 90px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 581,
           "method": "add_provider",
-          "source": "@uberBar_progress_mana.style_context.add_provider(uberBar_progress_mana_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_mana_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 582,
           "method": "add_provider",
-          "source": "@uberBar_progress_mana_label.style_context.add_provider(uberBar_progress_mana_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_mana_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 589,
           "method": "load",
-          "source": "uberBar_progress_stamina_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #404000; } label { font-weight: bold; font-size: 12; min-width: 90px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #404000; } label { font-weight: bold; font-size: 12; min-width: 90px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 590,
           "method": "add_provider",
-          "source": "@uberBar_progress_stamina.style_context.add_provider(uberBar_progress_stamina_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_stamina_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 591,
           "method": "add_provider",
-          "source": "@uberBar_progress_stamina_label.style_context.add_provider(uberBar_progress_stamina_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_stamina_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 598,
           "method": "load",
-          "source": "uberBar_progress_spirit_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #404040; } label { font-weight: bold; font-size: 12; min-width: 90px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 90px; } progress { min-height: 14px; background-color: #404040; } label { font-weight: bold; font-size: 12; min-width: 90px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 599,
           "method": "add_provider",
-          "source": "@uberBar_progress_spirit.style_context.add_provider(uberBar_progress_spirit_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_spirit_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 600,
           "method": "add_provider",
-          "source": "@uberBar_progress_spirit_label.style_context.add_provider(uberBar_progress_spirit_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_spirit_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 607,
           "method": "load",
-          "source": "uberBar_progress_exp_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 608,
           "method": "add_provider",
-          "source": "@uberBar_progress_exp.style_context.add_provider(uberBar_progress_exp_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_exp_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 609,
           "method": "add_provider",
-          "source": "@uberBar_progress_exp_label.style_context.add_provider(uberBar_progress_exp_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_exp_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 616,
           "method": "load",
-          "source": "uberBar_progress_asc_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 617,
           "method": "add_provider",
-          "source": "@uberBar_progress_asc.style_context.add_provider(uberBar_progress_asc_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_asc_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 618,
           "method": "add_provider",
-          "source": "@uberBar_progress_asc_label.style_context.add_provider(uberBar_progress_asc_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_asc_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 625,
           "method": "load",
-          "source": "uberBar_progress_mind_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 626,
           "method": "add_provider",
-          "source": "@uberBar_progress_mind.style_context.add_provider(uberBar_progress_mind_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_mind_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 627,
           "method": "add_provider",
-          "source": "@uberBar_progress_mind_label.style_context.add_provider(uberBar_progress_mind_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_mind_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 634,
           "method": "load",
-          "source": "uberBar_progress_stance_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 635,
           "method": "add_provider",
-          "source": "@uberBar_progress_stance.style_context.add_provider(uberBar_progress_stance_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_stance_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 636,
           "method": "add_provider",
-          "source": "@uberBar_progress_stance_label.style_context.add_provider(uberBar_progress_stance_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_stance_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 643,
           "method": "load",
-          "source": "uberBar_progress_encumb_provider.load(data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\")",
-          "arguments": [
-            "data: \"progressbar > trough { min-height: 15px; min-width: 170px; } progress { min-height: 14px; background-color: #004000; } label { font-weight: bold; font-size: 12; min-width: 170px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 644,
           "method": "add_provider",
-          "source": "@uberBar_progress_encumb.style_context.add_provider(uberBar_progress_encumb_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_encumb_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 645,
           "method": "add_provider",
-          "source": "@uberBar_progress_encumb_label.style_context.add_provider(uberBar_progress_encumb_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "uberBar_progress_encumb_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -802,26 +646,19 @@
         {
           "line": 2246,
           "method": "load",
-          "source": "css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 2258,
           "method": "add_provider",
-          "source": "@window.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 2259,
           "method": "add_provider",
-          "source": "@textview.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -880,36 +717,24 @@
         {
           "line": 267,
           "method": "load",
-          "source": "provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 268,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n      Gdk::Screen.default,\r\n      provider,\r\n      Gtk::StyleProvider::PRIORITY_APPLICATION\r\n    )",
           "arguments": [
-            "Gdk::Screen.default",
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 403,
           "method": "add_class",
-          "source": "result_label.style_context.add_class(\"monospace-labels\")",
-          "arguments": [
-            "\"monospace-labels\""
-          ]
+          "arguments": []
         },
         {
           "line": 517,
           "method": "add_class",
-          "source": "settings_result_label.style_context.add_class(\"monospace-labels\")",
-          "arguments": [
-            "\"monospace-labels\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -955,18 +780,12 @@
         {
           "line": 449,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 558,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n        Gdk::Screen.default,\n        css_provider,\n        Gtk::StyleProvider::PRIORITY_USER\n      )",
           "arguments": [
-            "Gdk::Screen.default",
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -1016,64 +835,43 @@
         {
           "line": 832,
           "method": "load",
-          "source": "@@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 837,
           "method": "add_provider",
-          "source": "widget.style_context.add_provider(@@css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "@@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 2609,
           "method": "has_class?",
-          "source": "panel[:frame].style_context.has_class?('current_target')",
-          "arguments": [
-            "'current_target'"
-          ]
+          "arguments": []
         },
         {
           "line": 2617,
           "method": "has_class?",
-          "source": "style_context.has_class?('current_target')",
-          "arguments": [
-            "'current_target'"
-          ]
+          "arguments": []
         },
         {
           "line": 2617,
           "method": "add_class",
-          "source": "style_context.add_class('current_target')",
-          "arguments": [
-            "'current_target'"
-          ]
+          "arguments": []
         },
         {
           "line": 2619,
           "method": "has_class?",
-          "source": "style_context.has_class?('current_target')",
-          "arguments": [
-            "'current_target'"
-          ]
+          "arguments": []
         },
         {
           "line": 2619,
           "method": "remove_class",
-          "source": "style_context.remove_class('current_target')",
-          "arguments": [
-            "'current_target'"
-          ]
+          "arguments": []
         },
         {
           "line": 2623,
           "method": "list_classes",
-          "source": "style_context.list_classes",
           "arguments": []
         }
       ],
@@ -1127,68 +925,44 @@
         {
           "line": 1080,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 1107,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 1128,
           "method": "add_class",
-          "source": "palette_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 1144,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 1145,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"palette-btn\")",
-          "arguments": [
-            "\"palette-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 1172,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n      screen,\n      @css_provider,\n      Gtk::StyleProvider::PRIORITY_APPLICATION\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1295,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"creature-btn\")",
-          "arguments": [
-            "\"creature-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 1344,
           "method": "add_class",
-          "source": "action_btn.style_context.add_class(\"creature-btn\")",
-          "arguments": [
-            "\"creature-btn\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -1237,68 +1011,44 @@
         {
           "line": 636,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 662,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 677,
           "method": "add_class",
-          "source": "@window.style_context.add_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 680,
           "method": "add_class",
-          "source": "@window.style_context.add_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 682,
           "method": "remove_class",
-          "source": "@window.style_context.remove_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 695,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n      screen,\r\n      @css_provider,\r\n      Gtk::StyleProvider::PRIORITY_APPLICATION\r\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 775,
           "method": "add_class",
-          "source": "room_info.style_context.add_class(\"room-info\")",
-          "arguments": [
-            "\"room-info\""
-          ]
+          "arguments": []
         },
         {
           "line": 776,
           "method": "add_class",
-          "source": "room_info.style_context.add_class(\"room-info-link\")",
-          "arguments": [
-            "\"room-info-link\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -1347,28 +1097,19 @@
         {
           "line": 1176,
           "method": "load",
-          "source": "provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 1177,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n\t\t  Gdk::Screen.default,\r\n\t\t  provider,\r\n\t\t  Gtk::StyleProvider::PRIORITY_APPLICATION\r\n\t\t)",
           "arguments": [
-            "Gdk::Screen.default",
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1393,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"monospace-labels\")",
-          "arguments": [
-            "\"monospace-labels\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -1413,200 +1154,128 @@
         {
           "line": 90,
           "method": "load",
-          "source": "@static_css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 171,
           "method": "load",
-          "source": "@window_css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 177,
           "method": "load",
-          "source": "@text_css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 211,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n\t\tGdk::Screen.default,\r\n\t\t@static_css,\r\n\t\tGtk::StyleProvider::PRIORITY_APPLICATION\r\n\t)",
           "arguments": [
-            "Gdk::Screen.default",
-            "@static_css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 217,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n\t\tGdk::Screen.default,\r\n\t\t@window_css,\r\n\t\tGtk::StyleProvider::PRIORITY_APPLICATION\r\n\t)",
           "arguments": [
-            "Gdk::Screen.default",
-            "@window_css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 223,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n\t\tGdk::Screen.default,\r\n\t\t@text_css,\r\n\t\tGtk::StyleProvider::PRIORITY_APPLICATION\r\n\t)",
           "arguments": [
-            "Gdk::Screen.default",
-            "@text_css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 625,
           "method": "load",
-          "source": "@text_css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 718,
           "method": "load",
-          "source": "@window_css.load(data: \"\r\n\t\t\t#main_window{\r\n\t\t\t\tbackground-color: #{color};\r\n\t\t\t}\r\n\t\t\")",
-          "arguments": [
-            "data: \"\r\n\t\t\t#main_window{\r\n\t\t\t\tbackground-color: #{color};\r\n\t\t\t}\r\n\t\t\""
-          ]
+          "arguments": []
         },
         {
           "line": 872,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"top_label\")",
-          "arguments": [
-            "\"top_label\""
-          ]
+          "arguments": []
         },
         {
           "line": 877,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"card_1001_center_label\")",
-          "arguments": [
-            "\"card_1001_center_label\""
-          ]
+          "arguments": []
         },
         {
           "line": 880,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"center_label\")",
-          "arguments": [
-            "\"center_label\""
-          ]
+          "arguments": []
         },
         {
           "line": 885,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"bottom_label\")",
-          "arguments": [
-            "\"bottom_label\""
-          ]
+          "arguments": []
         },
         {
           "line": 901,
           "method": "add_class",
-          "source": "value[:widget].style_context.add_class(value[:class])",
-          "arguments": [
-            "value[:class]"
-          ]
+          "arguments": []
         },
         {
           "line": 919,
           "method": "add_class",
-          "source": "check_label.style_context.add_class(\"#{name}_check\")",
-          "arguments": [
-            "\"#{name}_check\""
-          ]
+          "arguments": []
         },
         {
           "line": 930,
           "method": "add_class",
-          "source": "check_label.style_context.add_class(\"red_check\")",
-          "arguments": [
-            "\"red_check\""
-          ]
+          "arguments": []
         },
         {
           "line": 940,
           "method": "add_class",
-          "source": "check_label.style_context.add_class(\"gold_check\")",
-          "arguments": [
-            "\"gold_check\""
-          ]
+          "arguments": []
         },
         {
           "line": 950,
           "method": "add_class",
-          "source": "check_label.style_context.add_class(\"gold_check\")",
-          "arguments": [
-            "\"gold_check\""
-          ]
+          "arguments": []
         },
         {
           "line": 965,
           "method": "add_class",
-          "source": "card_num[box_name].style_context.add_class(\"white_border\")",
-          "arguments": [
-            "\"white_border\""
-          ]
+          "arguments": []
         },
         {
           "line": 1222,
           "method": "add_class",
-          "source": "window.style_context.add_class(\"help_windows\")",
-          "arguments": [
-            "\"help_windows\""
-          ]
+          "arguments": []
         },
         {
           "line": 1255,
           "method": "add_class",
-          "source": "@info_label.style_context.add_class(\"help_labels\")",
-          "arguments": [
-            "\"help_labels\""
-          ]
+          "arguments": []
         },
         {
           "line": 1316,
           "method": "add_class",
-          "source": "window.style_context.add_class(\"help_windows\")",
-          "arguments": [
-            "\"help_windows\""
-          ]
+          "arguments": []
         },
         {
           "line": 1356,
           "method": "add_class",
-          "source": "@help_label.style_context.add_class(\"help_labels\")",
-          "arguments": [
-            "\"help_labels\""
-          ]
+          "arguments": []
         },
         {
           "line": 1376,
           "method": "add_class",
-          "source": "window.style_context.add_class(\"help_windows\")",
-          "arguments": [
-            "\"help_windows\""
-          ]
+          "arguments": []
         },
         {
           "line": 1771,
           "method": "add_class",
-          "source": "buttons[name].style_context.add_class(\"difficulty_buttons\")",
-          "arguments": [
-            "\"difficulty_buttons\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -1714,18 +1383,12 @@
         {
           "line": 415,
           "method": "load",
-          "source": "provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 416,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n\t\t  Gdk::Screen.default,\r\n\t\t  provider,\r\n\t\t  Gtk::StyleProvider::PRIORITY_APPLICATION\r\n\t\t)",
           "arguments": [
-            "Gdk::Screen.default",
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -1772,136 +1435,96 @@
         {
           "line": 1725,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1727,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1779,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1781,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1899,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1901,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1948,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1951,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1975,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1977,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 1998,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 2000,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 2345,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 2348,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 2385,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 2388,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2191,42 +1814,27 @@
         {
           "line": 2434,
           "method": "add_class",
-          "source": "style_context.add_class('grinsawl-slot')",
-          "arguments": [
-            "'grinsawl-slot'"
-          ]
+          "arguments": []
         },
         {
           "line": 2459,
           "method": "remove_class",
-          "source": "ctx.remove_class(\"foil-#{c}\")",
-          "arguments": [
-            "\"foil-#{c}\""
-          ]
+          "arguments": []
         },
         {
           "line": 2460,
           "method": "add_class",
-          "source": "ctx.add_class(\"foil-#{tier}\")",
-          "arguments": [
-            "\"foil-#{tier}\""
-          ]
+          "arguments": []
         },
         {
           "line": 2498,
           "method": "load",
-          "source": "provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 2499,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "Gdk::Screen.default",
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2331,18 +1939,12 @@
         {
           "line": 2305,
           "method": "load",
-          "source": "_css.load(data: <<~CSS)",
-          "arguments": [
-            "data: <<~CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 2314,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n        Gdk::Screen.default, _css, Gtk::StyleProvider::PRIORITY_APPLICATION\n      )",
           "arguments": [
-            "Gdk::Screen.default",
-            "_css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2389,50 +1991,32 @@
         {
           "line": 249,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 272,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 286,
           "method": "add_class",
-          "source": "@window.style_context.add_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 289,
           "method": "add_class",
-          "source": "@window.style_context.add_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 291,
           "method": "remove_class",
-          "source": "@window.style_context.remove_class(\"dark\")",
-          "arguments": [
-            "\"dark\""
-          ]
+          "arguments": []
         },
         {
           "line": 303,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n      screen,\n      @css_provider,\n      Gtk::StyleProvider::PRIORITY_APPLICATION\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2483,17 +2067,12 @@
         {
           "line": 88,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 90,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2558,42 +2137,29 @@
         {
           "line": 84,
           "method": "add_provider",
-          "source": "bar.style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 87,
           "method": "load_from_data",
-          "source": "css_provider.load_from_data(\"#{_bar_base} background-color: #06b025; }\")",
-          "arguments": [
-            "\"#{_bar_base} background-color: #06b025; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 88,
           "method": "load_from_data",
-          "source": "css_provider.load_from_data(\"#{_bar_base} background-color: #b02506; }\")",
-          "arguments": [
-            "\"#{_bar_base} background-color: #b02506; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 93,
           "method": "load_from_data",
-          "source": "label_css.load_from_data(\"label { color: #000000; font-weight: bold; padding: 0; margin: 0; min-height: 0; }\")",
-          "arguments": [
-            "\"label { color: #000000; font-weight: bold; padding: 0; margin: 0; min-height: 0; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 94,
           "method": "add_provider",
-          "source": "label.style_context.add_provider(label_css, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "label_css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -2687,17 +2253,12 @@
         {
           "line": 58,
           "method": "load",
-          "source": "provider.load(data: \"label { font-weight: bold; }\\\r\n\t\t\t\t\t\t\t\t\t\t\ttrough {font-weight: bold; min-height: 22px; background-image: image(snow)}\\\r\n\t\t\t\t\t\t\t\t\t\t\tprogress {font-weight: bold; min-height: 20px; background-image: none; background-color: %s;}\" % @circle_color )",
-          "arguments": [
-            "data: \"label { font-weight: bold; }\\\r\n\t\t\t\t\t\t\t\t\t\t\ttrough {font-weight: bold; min-height: 22px; background-image: image(snow)}\\\r\n\t\t\t\t\t\t\t\t\t\t\tprogress {font-weight: bold; min-height: 20px; background-image: none; background-color: %s;}\" % @circle_color"
-          ]
+          "arguments": []
         },
         {
           "line": 61,
           "method": "add_provider",
-          "source": "@p_bar.style_context.add_provider(provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -2746,229 +2307,144 @@
         {
           "line": 1162,
           "method": "add_class",
-          "source": "bulk_x_btn.style_context.add_class('mc-x-btn')",
-          "arguments": [
-            "'mc-x-btn'"
-          ]
+          "arguments": []
         },
         {
           "line": 1187,
           "method": "add_class",
-          "source": "@removal_commit_btn.style_context.add_class('mc-primary-btn')",
-          "arguments": [
-            "'mc-primary-btn'"
-          ]
+          "arguments": []
         },
         {
           "line": 1238,
           "method": "add_class",
-          "source": "@list_sale_btn.style_context.add_class('mc-primary-btn')",
-          "arguments": [
-            "'mc-primary-btn'"
-          ]
+          "arguments": []
         },
         {
           "line": 1743,
           "method": "add_class",
-          "source": "item_row.style_context.add_class('mc-item-row-selected')",
-          "arguments": [
-            "'mc-item-row-selected'"
-          ]
+          "arguments": []
         },
         {
           "line": 1764,
           "method": "add_class",
-          "source": "item_row.style_context.add_class('mc-item-row-hover')",
-          "arguments": [
-            "'mc-item-row-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 1768,
           "method": "remove_class",
-          "source": "item_row.style_context.remove_class('mc-item-row-hover')",
-          "arguments": [
-            "'mc-item-row-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 1840,
           "method": "add_class",
-          "source": "price_entry.style_context.add_class('mc-item-price-entry')",
-          "arguments": [
-            "'mc-item-price-entry'"
-          ]
+          "arguments": []
         },
         {
           "line": 1841,
           "method": "add_class",
-          "source": "price_entry.style_context.add_class('mc-item-row-selected')",
-          "arguments": [
-            "'mc-item-row-selected'"
-          ]
+          "arguments": []
         },
         {
           "line": 1844,
           "method": "add_class",
-          "source": "price_entry.style_context.add_class('mc-price-edited')",
-          "arguments": [
-            "'mc-price-edited'"
-          ]
+          "arguments": []
         },
         {
           "line": 1849,
           "method": "remove_class",
-          "source": "price_entry.style_context.remove_class('mc-price-edited')",
-          "arguments": [
-            "'mc-price-edited'"
-          ]
+          "arguments": []
         },
         {
           "line": 1857,
           "method": "add_class",
-          "source": "price_entry.style_context.add_class('mc-price-edited')",
-          "arguments": [
-            "'mc-price-edited'"
-          ]
+          "arguments": []
         },
         {
           "line": 1868,
           "method": "add_class",
-          "source": "x_btn.style_context.add_class('mc-x-btn')",
-          "arguments": [
-            "'mc-x-btn'"
-          ]
+          "arguments": []
         },
         {
           "line": 2020,
           "method": "add_class",
-          "source": "row.style_context.add_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2030,
           "method": "add_class",
-          "source": "row.style_context.add_class('mc-sq-hover')",
-          "arguments": [
-            "'mc-sq-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2031,
           "method": "remove_class",
-          "source": "row.style_context.remove_class('mc-sq-hover')",
-          "arguments": [
-            "'mc-sq-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2035,
           "method": "add_class",
-          "source": "row.style_context.add_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2037,
           "method": "remove_class",
-          "source": "row.style_context.remove_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2176,
           "method": "add_class",
-          "source": "header.style_context.add_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2183,
           "method": "add_class",
-          "source": "header.style_context.add_class('mc-sq-hover')",
-          "arguments": [
-            "'mc-sq-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2184,
           "method": "remove_class",
-          "source": "header.style_context.remove_class('mc-sq-hover')",
-          "arguments": [
-            "'mc-sq-hover'"
-          ]
+          "arguments": []
         },
         {
           "line": 2334,
           "method": "add_class",
-          "source": "header.style_context.add_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2336,
           "method": "remove_class",
-          "source": "header.style_context.remove_class('mc-sq-ready')",
-          "arguments": [
-            "'mc-sq-ready'"
-          ]
+          "arguments": []
         },
         {
           "line": 2389,
           "method": "remove_provider_for_screen",
-          "source": "Gtk::StyleContext.remove_provider_for_screen(screen, @css_provider)",
-          "arguments": [
-            "screen",
-            "@css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 2391,
           "method": "load_from_data",
-          "source": "@css_provider.load_from_data(Merchantical.generate_css(scheme_id))",
-          "arguments": [
-            "Merchantical.generate_css(scheme_id)"
-          ]
+          "arguments": []
         },
         {
           "line": 2392,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n        screen, @css_provider,\n        Gtk::StyleProvider::PRIORITY_APPLICATION\n      )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 2892,
           "method": "add_class",
-          "source": "@locked_list.style_context.add_class('mc-list')",
-          "arguments": [
-            "'mc-list'"
-          ]
+          "arguments": []
         },
         {
           "line": 2983,
           "method": "add_class",
-          "source": "@unlocked_list.style_context.add_class('mc-list')",
-          "arguments": [
-            "'mc-list'"
-          ]
+          "arguments": []
         },
         {
           "line": 3001,
           "method": "add_class",
-          "source": "row.style_context.add_class('mc-row')",
-          "arguments": [
-            "'mc-row'"
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -3025,17 +2501,12 @@
         {
           "line": 637,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 639,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -3082,26 +2553,19 @@
         {
           "line": 382,
           "method": "load_from_data",
-          "source": "css.load_from_data(\"\r\n\t\t\t* { background-color: #{bg_color}; }\r\n\t\t\")",
-          "arguments": [
-            "\"\r\n\t\t\t* { background-color: #{bg_color}; }\r\n\t\t\""
-          ]
+          "arguments": []
         },
         {
           "line": 387,
           "method": "add_provider",
-          "source": "widget.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 390,
           "method": "add_provider",
-          "source": "$scroller.child.style_context.add_provider(css, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "css",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -3150,34 +2614,22 @@
         {
           "line": 644,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 677,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 680,
           "method": "add_class",
-          "source": "close_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 707,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n      Gdk::Screen.default,\n      @css_provider,\n      Gtk::StyleProvider::PRIORITY_APPLICATION\n    )",
           "arguments": [
-            "Gdk::Screen.default",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -3238,108 +2690,69 @@
         {
           "line": 576,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 605,
           "method": "add_class",
-          "source": "spam_toggle.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 617,
           "method": "add_class",
-          "source": "flare_toggle.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 635,
           "method": "add_class",
-          "source": "combat_math_toggle.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 647,
           "method": "add_class",
-          "source": "animal_toggle.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 661,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 678,
           "method": "add_class",
-          "source": "palette_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 694,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 695,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"palette-btn\")",
-          "arguments": [
-            "\"palette-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 721,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n      screen,\n      @css_provider,\n      Gtk::StyleProvider::PRIORITY_APPLICATION\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 733,
           "method": "add_class",
-          "source": "@group_label.style_context.add_class(\"group-label\")",
-          "arguments": [
-            "\"group-label\""
-          ]
+          "arguments": []
         },
         {
           "line": 827,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"player-btn\")",
-          "arguments": [
-            "\"player-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 845,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"player-btn\")",
-          "arguments": [
-            "\"player-btn\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -3387,116 +2800,74 @@
         {
           "line": 676,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 697,
           "method": "add_class",
-          "source": "refresh_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 704,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 719,
           "method": "add_class",
-          "source": "palette_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 733,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 734,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"palette-btn\")",
-          "arguments": [
-            "\"palette-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 755,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\n      screen,\n      @css_provider,\n      Gtk::StyleProvider::PRIORITY_APPLICATION\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 804,
           "method": "add_class",
-          "source": "container.style_context.add_class(raffle[:expired] ? \"raffle-expired\" : \"raffle-purchased\")",
-          "arguments": [
-            "raffle[:expired] ? \"raffle-expired\" : \"raffle-purchased\""
-          ]
+          "arguments": []
         },
         {
           "line": 811,
           "method": "add_class",
-          "source": "title_box.style_context.add_class(\"raffle-title\")",
-          "arguments": [
-            "\"raffle-title\""
-          ]
+          "arguments": []
         },
         {
           "line": 814,
           "method": "add_class",
-          "source": "show_btn.style_context.add_class(\"raffle-btn\")",
-          "arguments": [
-            "\"raffle-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 826,
           "method": "add_class",
-          "source": "won_lbl.style_context.add_class(\"raffle-won-label\")",
-          "arguments": [
-            "\"raffle-won-label\""
-          ]
+          "arguments": []
         },
         {
           "line": 830,
           "method": "add_class",
-          "source": "purchased_lbl.style_context.add_class(\"raffle-purchased-label\")",
-          "arguments": [
-            "\"raffle-purchased-label\""
-          ]
+          "arguments": []
         },
         {
           "line": 872,
           "method": "add_class",
-          "source": "info_btn.style_context.add_class(\"raffle-btn\")",
-          "arguments": [
-            "\"raffle-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 877,
           "method": "add_class",
-          "source": "guide_btn.style_context.add_class(\"raffle-btn\")",
-          "arguments": [
-            "\"raffle-btn\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -3546,17 +2917,12 @@
         {
           "line": 117,
           "method": "load",
-          "source": "provider.load(data: \"label { font-weight: bold; }\\\n                            trough {font-weight: bold; min-height: 22px; }\\\n                            progress {font-weight: bold; min-height: 20px; background-image: none; background-color: %s;}\" % @circle_color)",
-          "arguments": [
-            "data: \"label { font-weight: bold; }\\\n                            trough {font-weight: bold; min-height: 22px; }\\\n                            progress {font-weight: bold; min-height: 20px; background-image: none; background-color: %s;}\" % @circle_color"
-          ]
+          "arguments": []
         },
         {
           "line": 120,
           "method": "add_provider",
-          "source": "@spell_p_bar[spell.num].style_context.add_provider(provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -3610,17 +2976,12 @@
         {
           "line": 34,
           "method": "load",
-          "source": "provider.load(data: \"label { font-weight: bold; }\\\n\t\t\t\t\t\t\t\t\t\t\ttrough {font-weight: bold; min-height: 22px; }\\\n\t\t\t\t\t\t\t\t\t\t\tprogress {font-weight: bold; min-height: 20px; background-image: none; background-color: blue}\" )",
-          "arguments": [
-            "data: \"label { font-weight: bold; }\\\n\t\t\t\t\t\t\t\t\t\t\ttrough {font-weight: bold; min-height: 22px; }\\\n\t\t\t\t\t\t\t\t\t\t\tprogress {font-weight: bold; min-height: 20px; background-image: none; background-color: blue}\""
-          ]
+          "arguments": []
         },
         {
           "line": 37,
           "method": "add_provider",
-          "source": "@bar.style_context.add_provider(provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -3675,178 +3036,112 @@
         {
           "line": 3317,
           "method": "load",
-          "source": "@css[:colorgrid].load(data: css.join)",
-          "arguments": [
-            "data: css.join"
-          ]
+          "arguments": []
         },
         {
           "line": 3340,
           "method": "remove_provider",
-          "source": "@color_buttons[ix].style_context.remove_provider(prev)",
-          "arguments": [
-            "prev"
-          ]
+          "arguments": []
         },
         {
           "line": 3341,
           "method": "add_provider",
-          "source": "@color_buttons[ix].style_context.add_provider(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 3348,
           "method": "add_provider",
-          "source": "self[\"ssyMWColorDefault\"].style_context.add_provider(@css[:selected_fg])",
-          "arguments": [
-            "@css[:selected_fg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3349,
           "method": "remove_provider",
-          "source": "self[\"ssyMWColorTransparent\"].style_context.remove_provider(@css[:selected_bg])",
-          "arguments": [
-            "@css[:selected_bg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3351,
           "method": "remove_provider",
-          "source": "self[\"ssyMWColorDefault\"].style_context.remove_provider(@css[:selected_fg])",
-          "arguments": [
-            "@css[:selected_fg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3352,
           "method": "add_provider",
-          "source": "self[\"ssyMWColorTransparent\"].style_context.add_provider(@css[:selected_bg])",
-          "arguments": [
-            "@css[:selected_bg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3354,
           "method": "remove_provider",
-          "source": "self[\"ssyMWColorDefault\"].style_context.remove_provider(@css[:selected_fg])",
-          "arguments": [
-            "@css[:selected_fg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3355,
           "method": "remove_provider",
-          "source": "self[\"ssyMWColorTransparent\"].style_context.remove_provider(@css[:selected_bg])",
-          "arguments": [
-            "@css[:selected_bg]"
-          ]
+          "arguments": []
         },
         {
           "line": 3417,
           "method": "add_provider",
-          "source": "self[\"ssyMWColorTransparent\"].style_context.add_provider(@css[:colorgrid])",
-          "arguments": [
-            "@css[:colorgrid]"
-          ]
+          "arguments": []
         },
         {
           "line": 3418,
           "method": "add_provider",
-          "source": "self[\"ssyMWColorDefault\"].style_context.add_provider(@css[:colorgrid])",
-          "arguments": [
-            "@css[:colorgrid]"
-          ]
+          "arguments": []
         },
         {
           "line": 3428,
           "method": "add_provider",
-          "source": "button.style_context.add_provider(@css[:colorgrid])",
-          "arguments": [
-            "@css[:colorgrid]"
-          ]
+          "arguments": []
         },
         {
           "line": 3573,
           "method": "load",
-          "source": "t.load(data: \"* { border: 2px solid #ffff00; margin: 0px; }\")",
-          "arguments": [
-            "data: \"* { border: 2px solid #ffff00; margin: 0px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 3575,
           "method": "load",
-          "source": "t.load(data: \"* { border: 2px solid #3333ff; margin: 0px; }\")",
-          "arguments": [
-            "data: \"* { border: 2px solid #3333ff; margin: 0px; }\""
-          ]
+          "arguments": []
         },
         {
           "line": 3578,
           "method": "add_provider",
-          "source": "self[\"ssyMWEditColor\"].style_context.add_provider(t)",
-          "arguments": [
-            "t"
-          ]
+          "arguments": []
         },
         {
           "line": 3579,
           "method": "add_provider",
-          "source": "self[\"ssyMWEditBGColor\"].style_context.add_provider(t)",
-          "arguments": [
-            "t"
-          ]
+          "arguments": []
         },
         {
           "line": 3772,
           "method": "load",
-          "source": "@css[:editor_colors].load(data: css.join(\"\\n\"))",
-          "arguments": [
-            "data: css.join(\"\\n\")"
-          ]
+          "arguments": []
         },
         {
           "line": 4677,
           "method": "add_provider",
-          "source": "self[\"#{prefix}Color0\"].style_context.add_provider(css_provider)",
-          "arguments": [
-            "css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 4678,
           "method": "add_provider",
-          "source": "self[\"#{prefix}Color1\"].style_context.add_provider(css_provider)",
-          "arguments": [
-            "css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 4679,
           "method": "add_provider",
-          "source": "self[\"#{prefix}BGColor0\"].style_context.add_provider(css_provider)",
-          "arguments": [
-            "css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 4680,
           "method": "add_provider",
-          "source": "self[\"#{prefix}BGColor1\"].style_context.add_provider(css_provider)",
-          "arguments": [
-            "css_provider"
-          ]
+          "arguments": []
         },
         {
           "line": 4760,
           "method": "load",
-          "source": "css_provider.load(data: css.join)",
-          "arguments": [
-            "data: css.join"
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -5248,34 +4543,24 @@
         {
           "line": 564,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 570,
           "method": "add_provider",
-          "source": "@all_textviews[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 952,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 958,
           "method": "add_provider",
-          "source": "@labels[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -5336,17 +4621,12 @@
         {
           "line": 1005,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 1007,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -5397,50 +4677,34 @@
         {
           "line": 392,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 406,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 410,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         },
         {
           "line": 441,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 451,
           "method": "load_from_data",
-          "source": "provider.load_from_data(css)",
-          "arguments": [
-            "css"
-          ]
+          "arguments": []
         },
         {
           "line": 455,
           "method": "add_provider",
-          "source": "context.add_provider(provider, Gtk::StyleProvider::PRIORITY_APPLICATION)",
           "arguments": [
-            "provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
@@ -5567,45 +4831,31 @@
         {
           "line": 95,
           "method": "load",
-          "source": "tpick_style_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 291,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(Gdk::Screen.default, tpick_style_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "Gdk::Screen.default",
-            "tpick_style_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 2558,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 2564,
           "method": "add_provider",
-          "source": "@labels[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 2939,
           "method": "add_class",
-          "source": "label.style_context.add_class(\"required-setting\")",
-          "arguments": [
-            "\"required-setting\""
-          ]
+          "arguments": []
         }
       ],
       "samples": [
@@ -5694,34 +4944,24 @@
         {
           "line": 862,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 868,
           "method": "add_provider",
-          "source": "@all_textviews[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         },
         {
           "line": 1253,
           "method": "load",
-          "source": "css_provider.load(data: <<-CSS)",
-          "arguments": [
-            "data: <<-CSS"
-          ]
+          "arguments": []
         },
         {
           "line": 1259,
           "method": "add_provider",
-          "source": "@labels[name].style_context.add_provider(css_provider, Gtk::StyleProvider::PRIORITY_USER)",
           "arguments": [
-            "css_provider",
             "Gtk::StyleProvider::PRIORITY_USER"
           ]
         }
@@ -5782,50 +5022,32 @@
         {
           "line": 268,
           "method": "load",
-          "source": "@css_provider.load(data: css)",
-          "arguments": [
-            "data: css"
-          ]
+          "arguments": []
         },
         {
           "line": 295,
           "method": "add_class",
-          "source": "b.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 318,
           "method": "add_class",
-          "source": "palette_btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 334,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"header-toggle\")",
-          "arguments": [
-            "\"header-toggle\""
-          ]
+          "arguments": []
         },
         {
           "line": 335,
           "method": "add_class",
-          "source": "btn.style_context.add_class(\"palette-btn\")",
-          "arguments": [
-            "\"palette-btn\""
-          ]
+          "arguments": []
         },
         {
           "line": 361,
           "method": "add_provider_for_screen",
-          "source": "Gtk::StyleContext.add_provider_for_screen(\r\n      screen,\r\n      @css_provider,\r\n      Gtk::StyleProvider::PRIORITY_APPLICATION\r\n    )",
           "arguments": [
-            "screen",
-            "@css_provider",
             "Gtk::StyleProvider::PRIORITY_APPLICATION"
           ]
         }
