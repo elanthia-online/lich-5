@@ -2090,6 +2090,58 @@ describe DRCC do
       end
     end
 
+    context 'when another player quotes the study-again prompt during the study' do
+      # The quoted lines are CONSTRUCTED: the prompt text is .25:30340; the
+      # speech shape is .25:21765 (Etasia says, "..."), the whisper shape is
+      # 2026-11-01 game log:29234 (Name whispers, "...") and the ESP shape is
+      # .25:13356 ([General][Xalak] "..."). None was seen carrying it.
+      let(:prompt_text) { 'These instructions have only 1 uses remaining.  Study them again to proceed.' }
+      let(:speech_quoting_prompt) { %(Mallory says, "#{prompt_text}") }
+      let(:whisper_quoting_prompt) { %(Mallory whispers, "#{prompt_text}") }
+      let(:esp_quoting_prompt) { %([General][Mallory] "#{prompt_text}") }
+      let(:quoted_prompts) { [speech_quoting_prompt, whisper_quoting_prompt, esp_quoting_prompt] }
+
+      it 'matches the real prompt lines and reads their uses count' do
+        # 2026-11-03 game log:9162 (9 uses) and 2026-11-02 game log:8789 (1 uses).
+        expect('[These instructions have only 9 uses remaining.  Study them again to proceed.]'[DRCC::STUDY_INSTRUCTIONS_AGAIN, :uses]).to eq('9')
+        expect('[These instructions have only 1 uses remaining.  Study them again to proceed.]'[DRCC::STUDY_INSTRUCTIONS_AGAIN, :uses]).to eq('1')
+      end
+
+      it 'does not match the prompt quoted in speech, a whisper or ESP' do
+        quoted_prompts.each do |line|
+          expect(line).not_to match(DRCC::STUDY_INSTRUCTIONS_AGAIN), "matched #{line.inspect}"
+        end
+      end
+
+      it 'does not take the quote as a prompt before the second study completes' do
+        quoted_prompts.each do |line|
+          sent.clear
+          play(get_instructions   => [got_instructions],
+               study_instructions => [study_again_with_five_uses, [line, *study_complete]],
+               put_instructions   => [put_away])
+
+          result = study(skip_exit: true)
+
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions]), "after #{line.inspect}"
+          expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        end
+      end
+
+      it 'does not take the quoted uses count over the real prompt after it' do
+        quoted_prompts.each do |line|
+          sent.clear
+          play(get_instructions   => [got_instructions],
+               study_instructions => [[line, *study_again_with_five_uses], study_complete],
+               put_instructions   => [put_away])
+
+          result = study(skip_exit: true)
+
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions]), "after #{line.inspect}"
+          expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        end
+      end
+    end
+
     it 'counts the toss line as a toss when the stream puts tags or spaces before it' do
       # Code-derived prefix: the logs strip tags, so this is the
       # (?:<[^>]*>|\s)* prefix DRParser allows (drparser.rb StatLine), not a
