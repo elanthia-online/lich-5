@@ -5,6 +5,9 @@ require_relative '../../../spec_helper'
 # Load production code. common-items is loaded so DRCC reaches the real DRCI
 # (and its pattern constants) whether this file runs alone or in the suite;
 # common-travel likewise for the real DRCT.order_item in .check_consumables.
+# common gives the real DRC.right_hand / DRC.left_hand (GameObj 'Empty' ->
+# nil) in place of spec_helper's accessors, also whatever the load order.
+require 'dragonrealms/commons/common'
 require 'dragonrealms/commons/common-items'
 require 'dragonrealms/commons/common-travel'
 require 'dragonrealms/commons/common-crafting'
@@ -1834,6 +1837,63 @@ describe DRCC do
 
         it 'returns false' do
           expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+        end
+      end
+    end
+
+    # The hands as the game feed leaves them: GameObj hand objects, an empty
+    # one with id nil and name 'Empty', read through the real DRC.right_hand /
+    # DRC.left_hand (which turn 'Empty' into nil) and the real DRCI.in_hands?.
+    context 'with the real DRC hand readers over GameObj hands' do
+      let(:game_right) { MockGameObj.new(id: nil, name: 'Empty') }
+      let(:game_left) { MockGameObj.new(id: nil, name: 'Empty') }
+
+      before(:each) do
+        allow(DRC).to receive(:right_hand).and_call_original
+        allow(DRC).to receive(:left_hand).and_call_original
+        allow(Lich::Common::GameObj).to receive(:right_hand) { game_right }
+        allow(Lich::Common::GameObj).to receive(:left_hand) { game_left }
+      end
+
+      ['What were you referring to?', 'Perhaps you should be holding that first.', ''].each do |reply|
+        label = reply.empty? ? 'no reply' : reply.inspect
+        context "when the PUT gets #{label} with both hands Empty" do
+          let(:bag_put_reply) { reply }
+
+          it 'returns true and stays quiet: nothing is left to put away' do
+            expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+            expect(sent).to eq([bag_put])
+            expect(DRC).to have_received(:right_hand).at_least(:once)
+            expect(Lich::Messaging).not_to have_received(:msg)
+          end
+        end
+      end
+
+      context 'when the PUT gets "Perhaps you should be holding that first." with the leather held' do
+        let(:bag_put) { 'put my leather in my bucket' }
+        let(:bag_put_reply) { 'Perhaps you should be holding that first.' }
+        let(:game_left) { MockGameObj.new(id: '412345', noun: 'leather', name: 'rat-pelt leather') }
+
+        it 'returns false and says the tool is still held' do
+          expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not put leather in bucket. It is still in your hands.').once
+        end
+      end
+
+      # Pins today's DRCI.in_hands? word-prefix match (/\bleather/i): a held
+      # "leather backpack" counts as the leather, so the result is false and
+      # the line says it is still held. DESIGN.md L2 names DRCI.in_hands?;
+      # the noun-exact check is a later layer, and this example flips then.
+      context 'when the PUT gets "What were you referring to?" and a different held item starts with the noun' do
+        let(:bag_put) { 'put my leather in my bucket' }
+        let(:bag_put_reply) { 'What were you referring to?' }
+        let(:game_left) { MockGameObj.new(id: '3', noun: 'backpack', name: 'leather backpack') }
+
+        it 'returns false: the prefix match takes the backpack for the leather' do
+          expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not put leather in bucket. It is still in your hands.').once
         end
       end
     end
