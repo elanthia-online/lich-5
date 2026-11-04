@@ -360,7 +360,11 @@ module Lich
       def appimages_in(directory, names)
         paths = names.flat_map do |name|
           Dir.glob(name, base: directory).map { |file| File.join(directory, file) }
-        end.uniq
+        end
+        # Dir.glob returns dangling symlinks (e.g. a stable Saga.AppImage link
+        # whose versioned target an update renamed); File.mtime would raise on
+        # them and drop the whole directory. executable? requires a file anyway.
+        paths = paths.uniq.select { |path| File.file?(path) }
         paths.sort_by { |path| [appimage_version(path), File.mtime(path)] }.reverse
       rescue SystemCallError => e
         log_discovery_error(directory, e)

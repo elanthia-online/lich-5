@@ -541,8 +541,21 @@ RSpec.describe Lich::Common::FrontendLocator do
       end
     end
 
+    it 'ignores a dangling symlink left beside the renamed AppImage' do
+      Dir.mktmpdir do |home|
+        directory = File.join(home, 'Applications')
+        updated = appimage(directory, 'Saga-0.10.8-x86_64.AppImage')
+        File.symlink(File.join(directory, 'Saga-0.10.7-x86_64.AppImage'), File.join(directory, 'Saga.AppImage'))
+
+        expect(linux_locator(home).resolve('saga')&.executable_path).to eq(File.realpath(updated))
+      end
+    end
+
     it 'ignores differently cased names that may belong to SAGA GIS' do
       Dir.mktmpdir do |home|
+        # Default macOS APFS is case-insensitive; the names would be one file.
+        File.write(File.join(home, 'case-probe'), '')
+        skip 'needs a case-sensitive filesystem' if File.exist?(File.join(home, 'CASE-PROBE'))
         appimage(File.join(home, '.local', 'bin'), 'SAGA-9.1.0-x86_64.AppImage')
         appimage(File.join(home, '.local', 'bin'), 'saga-9.1.0-x86_64.AppImage')
 
