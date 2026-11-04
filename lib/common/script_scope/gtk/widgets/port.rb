@@ -172,13 +172,14 @@ module Lich
           end
 
           # Reads current viewer input only inside a live callback; otherwise uses committed/default shadow state.
+          # A widget in its owner's destroy sequence never reads live: its handle is retired (1844:RC8).
           # @param property [Symbol] shared shadow or port property name
           # @return [Object] synchronous script-visible value
           # @api private
           def read(property)
             session.synchronize do
               session.flush_models!
-              if property == input_property && @handle && !@destroyed && session.in_callback?
+              if property == input_property && @handle && !@destroyed && !retiring? && session.in_callback?
                 session.with_widget(self) { session.port.get(@handle, property) }
               else
                 @committed.fetch(property, @props[property])
