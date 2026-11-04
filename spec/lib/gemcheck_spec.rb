@@ -803,5 +803,30 @@ RSpec.describe Lich::GemCheck do
       end
       expect(elapsed).to be < 5
     end
+
+    it 'leaves no child behind once it has timed out' do
+      pid = nil
+      allow(Process).to(receive(:spawn).and_wrap_original { |m, *args, **kw| pid = m.call(*args, **kw) })
+      expect(described_class.run_with_timeout(['sleep', '30'], 1)).to be(false)
+      expect { Process.kill(0, pid) }.to raise_error(Errno::ESRCH)
+    end
+
+    it 'ends the child with KILL on Windows, where TERM raises Errno::EINVAL' do
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      expect(Process).to receive(:kill).with('KILL', kind_of(Integer)).and_call_original
+      expect(described_class.run_with_timeout(['sleep', '30'], 1)).to be(false)
+    end
+
+    it 'ends the child with TERM off Windows' do
+      skip 'Windows Ruby cannot deliver TERM to a real child' if Gem.win_platform?
+      allow(Gem).to receive(:win_platform?).and_return(false)
+      expect(Process).to receive(:kill).with('TERM', kind_of(Integer)).and_call_original
+      expect(described_class.run_with_timeout(['sleep', '30'], 1)).to be(false)
+    end
+
+    it 'does not signal a child that exits before the timeout' do
+      expect(Process).not_to receive(:kill)
+      expect(described_class.run_with_timeout(['true'], 5)).to be(true)
+    end
   end
 end
