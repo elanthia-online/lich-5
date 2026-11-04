@@ -239,6 +239,22 @@ RSpec.describe Lich::DragonRealms::DRCI do
       end
     end
 
+    context 'with an Integer name' do
+      it 'is an id, as "#<id>", not a noun' do
+        hands(left: leather)
+        expect(described_class.held_id(2_222_485)).to eq('2222485')
+        expect(described_class.held_id(758_574)).to be_nil
+      end
+
+      it 'is an id for id_into_hand too' do
+        result = described_class.id_into_hand(name: 2_222_485, timeout: 0) do
+          hands(left: leather)
+          true
+        end
+        expect(result).to eq('2222485')
+      end
+    end
+
     it 'is nil for an empty or blank name' do
       hands(right: leather)
       expect(['', '   ', 'my '].map { |n| described_class.held_id(n) }).to all(be_nil)
@@ -444,7 +460,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(described_class.worn_ref("traveler's pack")).to eq('#758573')
     end
 
-    it "escapes regex metacharacters: \"traveler's.pack\" is not \"traveler's pack\"" do
+    it "does not match \"traveler's.pack\" (one word, not the noun pack)" do
       expect(described_class.worn_ref("traveler's.pack")).to eq("my traveler's.pack")
     end
 
@@ -493,6 +509,10 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(described_class.worn_ref('my duffel bag')).to eq('my duffel bag')
       expect(described_class.worn_ref('My duffel bag')).to eq('My duffel bag')
       expect(described_class.worn_ref(nil)).to be_nil
+    end
+
+    it 'gives an Integer back as "#<id>", not raising on strip' do
+      expect(described_class.worn_ref(758_573)).to eq('#758573')
     end
 
     context 'with a held item and a worn item whose name ends in its name' do

@@ -1049,8 +1049,9 @@ module Lich
       # shortened {DRC.right_hand} name "heavy bag" matches "heavy silk duffel
       # bag"). A name starting with an ordinal or "other" never matches.
       #
-      # @param name [String, nil] noun phrase, or "#<id>"; nil matches any held
-      #   item (so it gives nil when both hands hold something)
+      # @param name [String, Integer, nil] noun phrase, or "#<id>"; an Integer
+      #   is an id, as "#<id>"; nil matches any held item (so it gives nil when
+      #   both hands hold something)
       # @param except [String, Integer, Array<String, Integer>] ids never
       #   returned (e.g. a sack being held)
       # @return [String, nil] the id, without "#"; nil when no held item
@@ -1074,8 +1075,8 @@ module Lich
       # On DR the hand tag arrives before the reply text, so a bput-based block
       # resolves at the first look; an fput-based one may need the poll.
       #
-      # @param name [String, nil] when given, the new item must match it as in
-      #   {.held_id}; nil means any new item
+      # @param name [String, Integer, nil] when given, the new item must match
+      #   it as in {.held_id}; nil means any new item
       # @param except [String, Integer, Array<String, Integer>] ids never returned
       # @param timeout [Numeric] seconds to keep looking after a truthy block,
       #   every {ID_INTO_HAND_POLL_INTERVAL}; 0 looks once
@@ -1121,8 +1122,9 @@ module Lich
       # Not for DRCC crafting methods on Lich versions that prepend "my " to
       # the container (that gives "my #123").
       #
-      # @param name [String, nil] container name, e.g. "duffel bag";
-      #   surrounding whitespace is dropped
+      # @param name [String, Integer, nil] container name, e.g. "duffel bag";
+      #   surrounding whitespace is dropped. An Integer is an id, given back
+      #   as "#<id>".
       # @return [String, nil] "#<id>" for one match; {.item_ref}(name) ("my
       #   duffel bag") for zero or several matches, no worn list, or a name
       #   starting with an ordinal or "other"; "#..." and "my ..." unchanged;
@@ -1133,7 +1135,7 @@ module Lich
       def worn_ref(name)
         return nil if name.nil?
 
-        name = name.strip
+        name = name.is_a?(Integer) ? "##{name}" : name.to_s.strip
         return name if name =~ /\A(my |#)/i
 
         words = name.downcase.split
@@ -1160,10 +1162,12 @@ module Lich
       # Whether a name means this held GameObj (see {.held_id} for the rule).
       #
       # @param obj [GameObj] a hand object
-      # @param name [String] noun phrase, optionally "my ..." or "#<id>"
+      # @param name [String, Integer] noun phrase, optionally "my ..." or
+      #   "#<id>"; an Integer is an id
       # @return [Boolean]
       # @api private
       def held_obj_matches?(obj, name)
+        name = "##{name}" if name.is_a?(Integer)
         words = name.to_s.strip.sub(/\Amy\s+/i, '').downcase.split
         return false if words.empty? || held_ref_ordinal?(words.first)
 
