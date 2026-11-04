@@ -17,6 +17,7 @@
 # - **Wearing**: {.wear_item?}, {.remove_item?}
 # - **Tying**: {.tie_item?}, {.untie_item?}
 # - **Queries**: {.in_hands?}, {.in_left_hand?}, {.in_right_hand?}, {.in_hand?}
+# - **Item ids**: {.held_ids}, {.held_id}, {.id_into_hand}, {.worn_ref}
 # - **Existence**: {.exists?}, {.wearing?}, {.inside?}, {.search?}
 # - **Counting**: {.count_items}, {.count_item_parts}, {.count_items_in_container}
 # - **Containers**: {.open_container?}, {.close_container?}, {.look_in_container}, {.rummage_container}
@@ -1018,6 +1019,174 @@ module Lich
           false
         end
       end
+
+      # How long {.id_into_hand} waits between looks at the hands, in seconds.
+      ID_INTO_HAND_POLL_INTERVAL = 0.1
+
+      # Words that, like the ordinals in +$ORDINALS+ ("second"), make a name
+      # pick one of several items by the game's own ordering. A name starting
+      # with one is never resolved to an id (see {.held_obj_matches?}).
+      HELD_REF_ORDINAL_WORDS = ['other'].freeze
+
+      # The ids of the items in hand, right hand first. An empty hand (the
+      # GameObj placeholder named "Empty", whose id is nil) is skipped. Reads
+      # the GameObj hands only; sends no game command.
+      #
+      # @return [Array<String>] zero, one or two ids, without the leading "#"
+      #
+      # @example Right hand holds 41234567, left hand empty
+      #   DRCI.held_ids #=> ["41234567"]
+      def held_ids
+        [GameObj.right_hand, GameObj.left_hand].filter_map { |obj| held_obj_id(obj) }.uniq
+      end
+
+      # The id of the one held item a name means. Reads the GameObj hands
+      # only; sends no game command, so it is safe in roundtime.
+      #
+      # A name matches a held item when, after a leading "my " is dropped, its
+      # last word equals the item's noun (ignoring case, so "leather" is not
+      # "leathers") and each other word is a word of the item's name (so the
+      # shortened {DRC.right_hand} name "heavy bag" matches "heavy silk duffel
+      # bag"). A name starting with an ordinal or "other" never matches.
+      #
+      # @param name [String, nil] noun phrase, or "#<id>"; nil matches any held
+      #   item (so it gives nil when both hands hold something)
+      # @param except [String, Integer, Array<String, Integer>] ids never
+      #   returned (e.g. a sack being held)
+      # @return [String, nil] the id, without "#"; nil when no held item
+      #   matches or when two different held items match. For "#<id>", the id
+      #   when that item is in either hand, else nil.
+      #
+      # @example Left hand "rat-pelt leather" 63721991, worn "sinuous leathers"
+      #   DRCI.held_id('leather') #=> "63721991"
+      #
+      # @example Both hands hold leather
+      #   DRCI.held_id('leather') #=> nil
+      def held_id(name = nil, except: [])
+        ids = matching_held_ids(held_except(except), name)
+        ids.size == 1 ? ids.first : nil
+      end
+
+      # Runs a block that should put an item in hand, and returns the id of the
+      # item it put there. The hands are read before the block; the id must be
+      # one not held then. Sends no game command itself, only the block does.
+      #
+      # On DR the hand tag arrives before the reply text, so a bput-based block
+      # resolves at the first look; an fput-based one may need the poll.
+      #
+      # @param name [String, nil] when given, the new item must match it as in
+      #   {.held_id}; nil means any new item
+      # @param except [String, Integer, Array<String, Integer>] ids never returned
+      # @param timeout [Numeric] seconds to keep looking after a truthy block,
+      #   every {ID_INTO_HAND_POLL_INTERVAL}; 0 looks once
+      # @yieldreturn [Object] truthy if the command worked
+      # @return [String, nil] the new id, without "#"; nil when the block was
+      #   falsy (no looking), nothing new and matching arrived in time, or two
+      #   new items matched
+      # @raise [ArgumentError] without a block
+      #
+      # @example Id of the leather just bought
+      #   DRCI.id_into_hand(name: 'leather') { DRCT.order_item(room, 3) == 'takes some coins from you' }
+      def id_into_hand(name: nil, except: [], timeout: 1)
+        raise ArgumentError, 'DRCI.id_into_hand needs a block' unless block_given?
+
+        skip = held_ids + held_except(except)
+        return nil unless yield
+
+        looks = [(timeout.to_f / ID_INTO_HAND_POLL_INTERVAL).ceil, 0].max
+        found = matching_held_ids(skip, name)
+        looks.times do
+          break unless found.empty?
+
+          sleep ID_INTO_HAND_POLL_INTERVAL
+          found = matching_held_ids(skip, name)
+        end
+        found.size == 1 ? found.first : nil
+      end
+
+      # A reference to a worn container for a command: its "#<id>" when
+      # exactly one worn item (GameObj.inv) has a name ending in the given
+      # name, so a held or stowed item of the same noun can't be picked
+      # instead. Sends no game command.
+      #
+      # Not for DRCC crafting methods on Lich versions that prepend "my " to
+      # the container (that gives "my #123").
+      #
+      # @param name [String, nil] container name, e.g. "duffel bag"
+      # @return [String, nil] "#<id>" for one match; {.item_ref}(name) ("my
+      #   duffel bag") for zero or several matches, no worn list, or a name
+      #   starting with an ordinal or "other"; "#..." and "my ..." unchanged;
+      #   nil for nil
+      #
+      # @example One worn duffel bag 758573
+      #   DRCI.worn_ref('duffel bag') #=> "#758573"
+      def worn_ref(name)
+        return name if name.nil? || name =~ /\A(my |#)/i
+
+        words = name.strip.downcase.split
+        inv = GameObj.inv
+        return item_ref(name) if words.empty? || held_ref_ordinal?(words.first) || inv.nil?
+
+        pattern = /\b#{Regexp.escape(name.strip)}\z/i
+        ids = inv.select { |item| item.name.to_s =~ pattern }.filter_map { |item| held_obj_id(item) }.uniq
+        ids.size == 1 ? "##{ids.first}" : item_ref(name)
+      end
+
+      # Whether a name means this held GameObj (see {.held_id} for the rule).
+      #
+      # @param obj [GameObj] a hand object
+      # @param name [String] noun phrase, optionally "my ..." or "#<id>"
+      # @return [Boolean]
+      # @api private
+      def held_obj_matches?(obj, name)
+        words = name.to_s.strip.sub(/\Amy\s+/i, '').downcase.split
+        return false if words.empty? || held_ref_ordinal?(words.first)
+
+        if (id = words.first[ITEM_ID_REF_PATTERN, 1]) && words.size == 1
+          return held_obj_id(obj) == id
+        end
+
+        return false unless obj.noun.to_s.casecmp?(words.last)
+
+        name_words = obj.name.to_s.downcase.split
+        words[0...-1].all? { |word| name_words.include?(word) }
+      end
+
+      # @param word [String] the first word of a name, downcased
+      # @return [Boolean] whether it is an ordinal ("second") or "other"
+      # @api private
+      def held_ref_ordinal?(word)
+        HELD_REF_ORDINAL_WORDS.include?(word) || Array($ORDINALS).include?(word)
+      end
+
+      # @param obj [GameObj, nil] a hand or worn object
+      # @return [String, nil] its id as a String, or nil for an empty hand
+      # @api private
+      def held_obj_id(obj)
+        id = obj&.id
+        id.nil? || id.to_s.empty? ? nil : id.to_s
+      end
+
+      # @param except [String, Integer, Array, nil]
+      # @return [Array<String>] the ids as Strings, any leading "#" dropped
+      # @api private
+      def held_except(except)
+        Array(except).map { |id| id.to_s.delete_prefix('#') }.reject(&:empty?)
+      end
+
+      # @param skip [Array<String>] ids not to return
+      # @param name [String, nil] name the item must match, or nil for any
+      # @return [Array<String>] distinct held ids, right hand first, not in
+      #   skip and matching name
+      # @api private
+      def matching_held_ids(skip, name)
+        [GameObj.right_hand, GameObj.left_hand].filter_map do |obj|
+          id = held_obj_id(obj)
+          id if id && !skip.include?(id) && (name.nil? || held_obj_matches?(obj, name))
+        end.uniq
+      end
+
+      private_class_method :held_obj_matches?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #
