@@ -167,11 +167,14 @@ module Lich
       # free.
       #
       # Differences from {.order_item}, which is unchanged: the up-front hands
-      # check; no paying ORDER after the first ORDER timed out (order_item
-      # sends one); and the not-enough-coins reply is also matched on the
-      # paying ORDER, so it fails at once rather than after bput's timeout.
-      # Otherwise +:bought+ is exactly when order_item returns
-      # 'takes some coins from you'.
+      # check, and no paying ORDER after the first ORDER timed out (order_item
+      # sends one). Otherwise both ORDERs wait for the same replies, so
+      # +:bought+ is exactly when order_item returns
+      # 'takes some coins from you'. Like order_item, the paying ORDER does
+      # not wait for "you don't have enough coins": that text is matched
+      # anywhere in a line, so speech quoting it could hide a sale that went
+      # through. Coins that run short between the two ORDERs give +:timeout+
+      # after bput's timeout.
       #
       # To get the id of the item bought, run it inside {DRCI.id_into_hand}.
       #
@@ -183,8 +186,8 @@ module Lich
       #   or {ORDER_HANDS_FULL_PATTERN} on either ORDER (no paying ORDER after
       #   the first);
       #   +:unreachable+ the walk to +room+ failed (nothing sent);
-      #   +:no_coins+ "you don't have enough coins", ignoring case, on either
-      #   ORDER;
+      #   +:no_coins+ "you don't have enough coins", ignoring case, on the
+      #   first ORDER (no paying ORDER);
       #   +:timeout+ no matching reply to either ORDER (no paying ORDER after
       #   the first)
       #
@@ -206,7 +209,7 @@ module Lich
         quote = DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins', ORDER_HANDS_FULL_PATTERN)
         return order_reply_result(quote) unless quote.to_s.match?(/just order it again/i)
 
-        order_reply_result(DRC.bput("order #{item_number}", 'takes some coins from you', 'you don\'t have enough coins', ORDER_HANDS_FULL_PATTERN))
+        order_reply_result(DRC.bput("order #{item_number}", 'takes some coins from you', ORDER_HANDS_FULL_PATTERN))
       end
 
       # Internal to {.order_item_result}: the Symbol for the text bput

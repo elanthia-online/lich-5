@@ -176,9 +176,12 @@ RSpec.describe 'DRCT.order_item_result' do
       expect(sent).to eq(['order 8'])
     end
 
-    it 'returns :no_coins at once when the paying order finds the coins short' do
-      game([quote], ["You don't have enough coins"])
-      expect(result).to eq(:no_coins)
+    # The paying ORDER waits only for the sale or the anchored hands-full
+    # refusal, as order_item does: the coins text is unanchored, so on the
+    # paying ORDER speech quoting it could hide a sale that went through.
+    it 'is not stopped by the coins reply quoted in speech on the paying order' do
+      game([quote], ['Bob says, "you don\'t have enough coins"', "The clerk #{sold}."])
+      expect(result).to eq(:bought)
       expect(sent).to eq(['order 8', 'order 8'])
     end
 
@@ -209,10 +212,16 @@ RSpec.describe 'DRCT.order_item_result' do
         expect(result).to eq(:timeout)
         expect(sent).to eq(['order 8', 'order 8'])
       end
+
+      it 'returns :timeout, like order_item, when the paying order finds the coins short' do
+        game([quote], ["You don't have enough coins"])
+        expect(result).to eq(:timeout)
+        expect(sent).to eq(['order 8', 'order 8'])
+      end
     end
 
     it 'returns only the documented Symbols' do
-      replies = [[[quote], [sold]], [[quote], [hands_full]], [[hands_full]], [[no_coins]], [[quote], [no_coins]]]
+      replies = [[[quote], [sold]], [[quote], [hands_full]], [[hands_full]], [[no_coins]]]
       replies.each do |script|
         buffer.clear
         sent.clear
@@ -245,7 +254,8 @@ RSpec.describe 'DRCT.order_item_result' do
       'coins short, capitalized'        => [["You don't have enough coins"]],
       'coins short on the paying order' => [['Just order it again'], ["You don't have enough coins"]],
       'paying order silent'             => [['Just order it again'], nil],
-      'speech, then sale'               => [['Just order it again'], ['Mahtra says, "You realize your hands are full, and stop."', 'takes some coins from you']]
+      'speech, then sale'               => [['Just order it again'], ['Mahtra says, "You realize your hands are full, and stop."', 'takes some coins from you']],
+      'coins speech, then sale'         => [['Just order it again'], ['Bob says, "you don\'t have enough coins"', 'The clerk takes some coins from you.']]
     }
 
     table.each do |label, script|
@@ -285,6 +295,14 @@ RSpec.describe 'DRCT.order_item_result' do
       hands(right: leather)
       game([quote], [sold]) { |n| hands(right: leather, left: bought_leather) if n == 2 }
       expect(buy_id(name: 'leather')).to eq('63721991')
+    end
+
+    it 'gives the id when speech quoting the coins reply comes before the sale' do
+      hands(right: leather)
+      game([quote], ['Bob says, "you don\'t have enough coins"', "The clerk #{sold}."]) do |n|
+        hands(right: leather, left: bought_cloth) if n == 2
+      end
+      expect(buy_id).to eq('2161092')
     end
 
     it 'gives nil without walking or ordering when both hands are full' do
