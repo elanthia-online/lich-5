@@ -331,6 +331,7 @@ module Lich
                                                expected: type.name, actual: actual,
                                                length: value.is_a?(String) ? value.length : nil, limit: MAX_STRING_LENGTH)
               end
+              @mutation_log&.push([row, column, row.cells[column]])
               row.cells[column] = value.is_a?(String) ? value.dup.freeze : value
             end
             self
@@ -406,6 +407,16 @@ module Lich
             rebuild_indexes
           end
 
+          # Publishes a coalesced script-thread change to the observers that deferred it,
+          # validating their whole projections first as a callback flush does.
+          # @return [void]
+          # @api private
+          def publish_script_changes!
+            observers = @observers.select { |observer| coalescing_observer?(observer) }
+            observers.each(&:model_will_change!)
+            observers.each(&:model_changed!)
+          end
+
           protected
 
           # Inserts in sibling order without exposing mutable row objects.
@@ -429,6 +440,7 @@ module Lich
               row = Row.new("r#{@prefix}-#{@serial}".freeze, parent_key, defaults)
               before = peers[position] unless position == -1
               before ? @rows.insert(@insertion_rank.fetch(before.key), row) : @rows << row
+              @mutation_log&.push([row])
               TreeIter.new(self, row.key)
             end
           end
@@ -516,6 +528,12 @@ module Lich
 
           # Validates every projection before publishing a changed model to any view.
           # Failed schema/choice bounds restore data, ordering and row identities.
+          # Outside a callback the first write publishes at once. While its
+          # session fence is queued, later writes check only their own rows with
+          # observers that support it (tables and cell combos) and publish to
+          # them together at the next session barrier; other observers stay
+          # immediate (1844:RC4). The restore snapshot is the row list plus the
+          # cells this mutation overwrote, never a copy of every row.
           # @yield model mutation under the reentrant session monitor
           # @return [Object] mutation result
           # @api private
@@ -526,21 +544,43 @@ module Lich
                 structural ? rebuild_indexes : invalidate_order
                 return result
               end
-              previous_rows = @rows.map { |row| Row.new(row.key, row.parent, row.cells.dup) }
-              previous_sort = @sort
+              previous_rows, previous_sort = @rows.dup, @sort
+              coalesce = session.coalesce_model?(self)
+              # Entries are [row] for an insertion or [row, column, old value] for a cell write.
+              outer_log, log = @mutation_log, []
+              @mutation_log = log
               begin
                 result = yield
                 structural ? rebuild_indexes : invalidate_order
-                @observers.dup.each(&:model_will_change!)
+                deferred, immediate = @observers.partition { |observer| coalesce && coalescing_observer?(observer) }
+                unless deferred.empty?
+                  keys = log.map { |row, *| row.key }.uniq
+                  deferred.each { |observer| observer.model_rows_will_change!(keys) }
+                end
+                immediate.each(&:model_will_change!)
               rescue StandardError
+                log.reverse_each { |row, column, value| row.cells[column] = value if column }
                 @rows, @sort = previous_rows, previous_sort
                 rebuild_indexes
                 raise
+              ensure
+                @mutation_log = outer_log
               end
-              @observers.dup.each(&:model_changed!)
+              immediate.each(&:model_changed!)
+              if coalesce
+                session.defer_model_publication(self) unless deferred.empty?
+              else
+                session.model_published(self, fence: @observers.any? { |observer| coalescing_observer?(observer) })
+              end
               result
             end
           end
+
+          # Observers that can check only the changed rows may defer publication.
+          # @param observer [Object] registered model observer
+          # @return [Boolean]
+          # @api private
+          def coalescing_observer?(observer) = observer.respond_to?(:model_rows_will_change!)
 
           # Scalar edits cannot change row identity or parent indexes. Sorting
           # snapshots still expire so reads inside the callback see current values.
