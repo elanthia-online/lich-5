@@ -42,6 +42,19 @@ saga_lich_launch_environment = {
       mac_bundle_ids: %w[com.auchand.saga],
       # Do not search PATH: `saga` also names the unrelated SAGA GIS executable.
       path_lookup: false,
+      # Saga's electron-builder NSIS installer records $INSTDIR as
+      # InstallLocation under Software\<APP_GUID> in HKCU (per-user install)
+      # or HKLM (elevated all-users install), so a custom directory is still
+      # found. APP_GUID is uuid5 of the com.auchand.saga appId, stable across
+      # releases. Per-user wins when both installs are present.
+      registry_keys: %i[current_user local_machine].map do |hive|
+        {
+          hive: hive,
+          key: 'Software\\3f78e0da-1d8f-570d-9cef-2ff34b0efe1a',
+          value: 'InstallLocation',
+          view: 64
+        }
+      end,
       paths: {
         windows: [
           '%LOCALAPPDATA%/Programs/Saga/Saga.exe',

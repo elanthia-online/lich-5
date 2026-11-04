@@ -265,14 +265,24 @@ module Lich
         end
       end
 
+      # Registry hives a catalog registry entry may name.
+      REGISTRY_HIVES = {
+        local_machine: :HKEY_LOCAL_MACHINE,
+        current_user: :HKEY_CURRENT_USER
+      }.freeze
+      # Win32 KEY_WOW64_64KEY access flag. win32/registry does not define it.
+      # It selects the 64-bit view from a 32-bit Ruby; it is a no-op otherwise.
+      KEY_WOW64_64KEY = 0x0100
+      private_constant :REGISTRY_HIVES, :KEY_WOW64_64KEY
+
       def registry_candidates(definition)
-        keys = definition.dig(:metadata, :discovery, :registry_keys) || []
-        return [] if keys.empty?
+        entries = registry_entries(definition)
+        return [] if entries.empty?
 
         directories = if windows?
-                        windows_registry_directories(keys)
-                      elsif @wine
-                        wine_registry_directories(keys)
+                        windows_registry_directories(entries)
+                      elsif wine_managed?(definition)
+                        wine_registry_directories(entries)
                       else
                         []
                       end
@@ -280,16 +290,43 @@ module Lich
         directories.product(executables).map { |directory, executable| File.join(directory, executable) }
       end
 
-      def windows_registry_directories(keys)
-        require 'win32/registry'
-        keys.filter_map do |key|
-          Win32::Registry::HKEY_LOCAL_MACHINE.open(key, Win32::Registry::KEY_READ) do |registry|
-            registry['Directory']
+      # Normalizes catalog registry entries. A String entry is an
+      # HKEY_LOCAL_MACHINE key whose 'Directory' value holds the install
+      # directory; a Hash entry may name another hive, value, and view.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @return [Array<Hash>] entries with :hive, :key, :value, and :view
+      # @api private
+      def registry_entries(definition)
+        entries = definition.dig(:metadata, :discovery, :registry_keys) || []
+        entries.map do |entry|
+          if entry.is_a?(String)
+            { hive: :local_machine, key: entry, value: 'Directory', view: nil }
+          else
+            {
+              hive: entry.fetch(:hive, :local_machine),
+              key: entry.fetch(:key),
+              value: entry.fetch(:value, 'Directory'),
+              view: entry[:view]
+            }
           end
+        end
+      end
+
+      def windows_registry_directories(entries)
+        require 'win32/registry'
+        entries.filter_map do |entry|
+          hive = Win32::Registry.const_get(REGISTRY_HIVES.fetch(entry[:hive]))
+          access = Win32::Registry::KEY_READ
+          access |= KEY_WOW64_64KEY if entry[:view] == 64
+          directory = hive.open(entry[:key], access) do |registry|
+            registry[entry[:value]]
+          end
+          directory unless directory.to_s.strip.empty?
         rescue Win32::Registry::Error
           nil
         rescue SystemCallError => e
-          log_discovery_error(key, e)
+          log_discovery_error(entry[:key], e)
           nil
         end
       rescue LoadError => e
@@ -297,12 +334,17 @@ module Lich
         []
       end
 
-      def wine_registry_directories(keys)
-        keys.filter_map do |key|
-          value = @wine.registry_gets("HKEY_LOCAL_MACHINE\\#{key}\\Directory")
+      # Wine registry discovery only serves frontends Lich launches through
+      # Wine. Others (e.g. Saga) have native non-Windows builds, so a Windows
+      # copy inside a Wine prefix must not become their launch target.
+      def wine_registry_directories(entries)
+        entries.filter_map do |entry|
+          next unless entry[:hive] == :local_machine
+
+          value = @wine.registry_gets("HKEY_LOCAL_MACHINE\\#{entry[:key]}\\#{entry[:value]}")
           wine_path(value) if value
         rescue SystemCallError => e
-          log_discovery_error(key, e)
+          log_discovery_error(entry[:key], e)
           nil
         end
       end
@@ -397,9 +439,12 @@ module Lich
 
       def wine_managed_executable?(path, definition)
         platform_key == :linux &&
-          @wine &&
-          definition.dig(:metadata, :launcher_adapter) == :simutronics &&
+          wine_managed?(definition) &&
           File.extname(path).casecmp?('.exe')
+      end
+
+      def wine_managed?(definition)
+        !@wine.nil? && definition.dig(:metadata, :launcher_adapter) == :simutronics
       end
 
       def resolution(definition, path, source)

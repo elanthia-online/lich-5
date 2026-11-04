@@ -15,6 +15,36 @@ RSpec.describe Lich::Common::FrontendLocator do
     path
   end
 
+  # Stubs Win32::Registry with hives mapping key => { value_name => data }.
+  # Opening a missing key raises Registry::Error, as the real binding does.
+  # Returns the [hive, key, access] tuples each open received.
+  def stub_windows_registry(hives)
+    opened = []
+    error = Class.new(StandardError)
+    registry = Module.new
+    registry.const_set(:KEY_READ, 1)
+    registry.const_set(:Error, error)
+    hives.each do |hive_name, keys|
+      hkey = Object.new
+      hkey.define_singleton_method(:open) do |key, access, &block|
+        opened << [hive_name, key, access]
+        values = keys.fetch(key) { raise error, "missing #{key}" }
+        block.call(values)
+      end
+      registry.const_set(hive_name, hkey)
+    end
+    win32 = Module.new
+    win32.const_set(:Registry, registry)
+    stub_const('Win32', win32)
+    opened
+  end
+
+  def windows_locator
+    locator = described_class.new(platform_key: :windows, environment: { 'PATH' => '' })
+    allow(locator).to receive(:require).with('win32/registry').and_return(true)
+    locator
+  end
+
   def mac_application(applications, name:, bundle_id:, executable_name:)
     bundle = File.join(applications, "#{name}.app")
     executable_path = executable(File.join(bundle, 'Contents', 'MacOS', executable_name))
@@ -366,6 +396,98 @@ RSpec.describe Lich::Common::FrontendLocator do
           source: :registry
         )
       )
+    end
+  end
+
+  context 'when Saga is registered by its NSIS installer' do
+    let(:saga_key) { 'Software\\3f78e0da-1d8f-570d-9cef-2ff34b0efe1a' }
+
+    it 'resolves a per-user install from HKEY_CURRENT_USER' do
+      Dir.mktmpdir do |directory|
+        saga = executable(File.join(directory, 'Saga.exe'))
+        opened = stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => directory } },
+          HKEY_LOCAL_MACHINE: {}
+        )
+
+        expect(windows_locator.resolve('saga')).to eq(
+          described_class::Resolution.new(
+            frontend_id: 'saga',
+            executable_path: File.realpath(saga),
+            source: :registry
+          )
+        )
+        expect(opened.first).to eq([:HKEY_CURRENT_USER, saga_key, 1 | 0x0100])
+      end
+    end
+
+    it 'resolves an elevated all-users install from HKEY_LOCAL_MACHINE' do
+      Dir.mktmpdir do |directory|
+        saga = executable(File.join(directory, 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: {},
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => directory } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(saga))
+      end
+    end
+
+    it 'falls through a stale per-user entry to the all-users install' do
+      Dir.mktmpdir do |directory|
+        stale = File.join(directory, 'removed')
+        machine = File.join(directory, 'machine')
+        saga = executable(File.join(machine, 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => stale } },
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => machine } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(saga))
+      end
+    end
+
+    it 'prefers the per-user install when both are present' do
+      Dir.mktmpdir do |directory|
+        user = executable(File.join(directory, 'user', 'Saga.exe'))
+        executable(File.join(directory, 'machine', 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => File.dirname(user) } },
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => File.join(directory, 'machine') } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(user))
+      end
+    end
+
+    it 'ignores a blank InstallLocation' do
+      stub_windows_registry(
+        HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => '' } },
+        HKEY_LOCAL_MACHINE: {}
+      )
+
+      expect(windows_locator.resolve('saga')).to be_nil
+    end
+
+    it 'does not resolve Saga through the Wine registry on Linux' do
+      wine = Module.new
+      wine.const_set(:PREFIX, '/nonexistent-prefix')
+      wine.define_singleton_method(:registry_gets) { |_key| raise 'Wine registry consulted for Saga' }
+      locator = described_class.new(platform_key: :linux, environment: { 'PATH' => '' }, wine: wine)
+
+      expect(locator.resolve('saga')).to be_nil
+    end
+  end
+
+  it 'keeps reading Simutronics frontends from HKEY_LOCAL_MACHINE Directory values' do
+    Dir.mktmpdir do |directory|
+      wrayth = executable(File.join(directory, 'Wrayth.exe'))
+      opened = stub_windows_registry(
+        HKEY_LOCAL_MACHINE: { 'SOFTWARE\\Simutronics\\STORM32' => { 'Directory' => directory } }
+      )
+
+      expect(windows_locator.resolve('stormfront')&.executable_path).to eq(File.realpath(wrayth))
+      expect(opened.first).to eq([:HKEY_LOCAL_MACHINE, 'SOFTWARE\\Simutronics\\STORM32', 1])
     end
   end
 
