@@ -306,6 +306,20 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(sent).to eq(['put #999 in #758700'])
       end
 
+      [' #999', "#999 \n"].each do |name|
+        it "strips #{name.inspect} to the id, never \"my  #999\", and skips the belt" do
+          game('put #999 in #758700', 'What were you referring to?')
+          expect(described_class.stow_crafting_item(name, 'bucket', belt)).to be(true)
+          expect(sent).to eq(['put #999 in #758700'])
+        end
+      end
+
+      it 'puts a held " #2222485" away by id' do
+        game('put #2222485 in #758700', 'You put your leather in your portable silversteel bucket.') { hands }
+        expect(described_class.stow_crafting_item(' #2222485 ', 'bucket', belt)).to be(true)
+        expect(sent).to eq(['put #2222485 in #758700'])
+      end
+
       it 'checks the hands by id after a STOW fallback fails' do
         game('put #2222485 in #758700', "There isn't any more room in the bucket for that.")
         game('stow #2222485', "There isn't any more room in the pack for that.")
@@ -380,6 +394,12 @@ RSpec.describe Lich::DragonRealms::DRCC do
           expect(described_class.get_crafting_item(name, 'duffel bag', ['leather'], belt)).to be(true)
           expect(sent).to eq(['get #2222485'])
         end
+      end
+
+      it 'strips " #2222485" to the id and skips the belt' do
+        game('get #2222485', 'You get a rat-pelt leather from inside your heavy silk duffel bag.')
+        expect(described_class.get_crafting_item(' #2222485', 'duffel bag', ['leather'], belt)).to be(true)
+        expect(sent).to eq(['get #2222485'])
       end
 
       it 'adds the bag by id when bag_items lists the "#<id>"' do
@@ -590,33 +610,72 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'put #5550002 in #758689', 'walk 8775'])
       end
 
-      # The disposed id names nothing any more: the replacement goes by noun,
-      # and the bought pins are put away by their own id.
-      it 'disposes a worn-out id, then replaces it by noun and stows the new id' do
+      # The disposed id names nothing any more: the replacement goes by the
+      # hand name, shortened as DRC.fix_dr_bullshit shortens it ("straight
+      # iron pins" gives "straight pins"), and the bought pins are put away
+      # by their own id.
+      it 'disposes a worn-out id, then replaces it by its shortened name and stows the new id' do
         game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
         game('count #5550002', 'The straight iron pins has 1 uses remaining.')
-        game('get my pins from #758689', 'What were you referring to?')
+        game('get my straight pins from #758689', 'What were you referring to?')
         game('put #5550001 in #758689', put_away) { hands }
         expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(true)
         expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'dispose #5550002',
-                            'get my pins from #758689', 'order 5 at tool-room', 'put #5550001 in #758689', 'walk 8775'])
+                            'get my straight pins from #758689', 'order 5 at tool-room', 'put #5550001 in #758689', 'walk 8775'])
         expect(gameobj.right_hand.id).to be_nil
+      end
+
+      # A bare noun would GET (and count, and keep) another brush in the bag
+      # and never buy the wire brush that was thrown away.
+      context 'with a worn-out "stiff wire brush" and a "sanding brush" in the bag' do
+        let(:wire_brush) { ['5550010', 'brush', 'stiff wire brush'] }
+        let(:new_wire_brush) { ['5550011', 'brush', 'stiff wire brush'] }
+        let(:sanding_brush) { ['5550020', 'brush', 'sanding brush'] }
+
+        before(:each) do
+          allow(drct).to receive(:order_item) do |room, number|
+            sent << "order #{number} at #{room}"
+            hands(right: new_wire_brush)
+            order_result
+          end
+        end
+
+        it 'GETs "my stiff brush", which the sanding brush does not answer, and buys a wire brush' do
+          game('get #5550010 from #758689', 'You get a stiff wire brush from inside your heavy silk duffel bag.') { hands(right: wire_brush) }
+          game('count #5550010', 'The stiff wire brush has 1 uses remaining.')
+          game('get my stiff brush from #758689', 'What were you referring to?')
+          game('get my brush from #758689', 'You get a sanding brush from inside your heavy silk duffel bag.') { hands(right: sanding_brush) }
+          game('put #5550011 in #758689', 'You put your brush in your heavy silk duffel bag.') { hands }
+          expect(described_class.check_consumables(5_550_010, 'tool-room', 7, 'duffel bag', [], nil, 5)).to be(true)
+          expect(sent).to eq(['get #5550010 from #758689', 'count #5550010', 'dispose #5550010',
+                              'get my stiff brush from #758689', 'order 7 at tool-room', 'put #5550011 in #758689', 'walk 8775'])
+        end
       end
 
       it 'returns false with the bought pins still held when the replacement PUT fails' do
         game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
         game('count #5550002', 'The straight iron pins has 1 uses remaining.')
-        game('get my pins from #758689', 'What were you referring to?')
+        game('get my straight pins from #758689', 'What were you referring to?')
         game('put #5550001 in #758689', 'Perhaps you should be holding that first.')
         expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
         expect(gameobj.right_hand.id).to eq('5550001')
       end
 
-      it 'returns false after the dispose when the id it got is not in hand to read a noun from' do
+      it 'returns false after the dispose when the id it got is not in hand to read a name from' do
         game('get #5550002 from #758689', got_pins)
         game('count #5550002', 'The straight iron pins has 1 uses remaining.')
         expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
         expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'dispose #5550002'])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: Disposed of worn-out #5550002 but could not tell its name. Not buying more.')
+      end
+
+      it 'strips " #5550002" to the id: GET, COUNT and PUT by id, never "my  #5550002"' do
+        game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
+        game('count #5550002', 'The straight iron pins has 12 uses remaining.')
+        game('put #5550002 in #758689', put_away) { hands }
+        expect(described_class.check_consumables(' #5550002 ', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(true)
+        expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'put #5550002 in #758689', 'walk 8775'])
       end
     end
 
