@@ -24,14 +24,17 @@ module Lich
     module ScriptScope
       extend self
 
-      @adopt_nested_constants = false
-      @core_aliases = {}
-      @legacy_constants = {}
-      @legacy_helpers = {}
-      @legacy_notices = {}
-      @plugin_names = []
-      @plugin_modules = []
-      @concealed_names = []
+      # This module is the receiver of {.script_binding}, so a script's top-level
+      # instance variables land here too. Module state therefore carries the
+      # @__script_scope_ prefix, a name no script uses.
+      @__script_scope_adopt_nested_constants = false
+      @__script_scope_core_aliases = {}
+      @__script_scope_legacy_constants = {}
+      @__script_scope_legacy_helpers = {}
+      @__script_scope_legacy_notices = {}
+      @__script_scope_plugin_names = []
+      @__script_scope_plugin_modules = []
+      @__script_scope_concealed_names = []
 
       # Compatibility exports contain only script declarations, never plugins.
       # Retirement: migrate supported legacy consumers, verify zero bridge uses
@@ -80,7 +83,7 @@ module Lich
       # @param name [Symbol] newly defined instance method
       # @return [void]
       def self.method_added(name)
-        @legacy_helpers[name] = true if @adopt_nested_constants
+        @__script_scope_legacy_helpers[name] = true if @__script_scope_adopt_nested_constants
         super
       end
 
@@ -88,7 +91,7 @@ module Lich
       # @param name [Symbol] requested helper name
       # @return [Boolean] whether the helper can be forwarded
       def self.legacy_helper?(name)
-        @legacy_helpers.key?(name) && public_instance_methods(false).include?(name)
+        @__script_scope_legacy_helpers.key?(name) && public_instance_methods(false).include?(name)
       end
 
       # Emits one migration notice per kind/name, without script values.
@@ -98,9 +101,9 @@ module Lich
       # @return [void]
       def self.legacy_notice(kind, name)
         key = [kind, name]
-        return if @legacy_notices[key]
+        return if @__script_scope_legacy_notices[key]
 
-        @legacy_notices[key] = true
+        @__script_scope_legacy_notices[key] = true
         source = caller_locations.find { |location| location.path.end_with?('.lic') }
         location = source ? "#{File.basename(source.path)}:#{source.lineno}" : 'script scope'
         Lich.log("warning: legacy script #{kind}=#{name} source=#{location}; migrate to ScriptScope lookup") if Lich.respond_to?(:log)
@@ -113,17 +116,17 @@ module Lich
       # @return [void]
       def self.sync_core_constants!
         public_names = Lich::Common.constants(false) - [:ScriptScope]
-        @core_aliases.keys.each do |name|
-          next if public_names.include?(name) && Lich::Common.const_get(name, false).equal?(@core_aliases[name])
+        @__script_scope_core_aliases.keys.each do |name|
+          next if public_names.include?(name) && Lich::Common.const_get(name, false).equal?(@__script_scope_core_aliases[name])
 
-          remove_const(name) if const_defined?(name, false) && const_get(name, false).equal?(@core_aliases[name])
-          @core_aliases.delete(name)
+          remove_const(name) if const_defined?(name, false) && const_get(name, false).equal?(@__script_scope_core_aliases[name])
+          @__script_scope_core_aliases.delete(name)
         end
         public_names.each do |name|
           next if const_defined?(name, false) || Lich::Common.autoload?(name)
 
           value = Lich::Common.const_get(name, false)
-          @core_aliases[name] = value
+          @__script_scope_core_aliases[name] = value
           const_set(name, value)
         end
       end
@@ -135,18 +138,18 @@ module Lich
       # @param value [Object] current constant value
       # @return [void]
       def self.export_legacy_constant(name, value)
-        if @legacy_constants.delete(name)
+        if @__script_scope_legacy_constants.delete(name)
           LegacyConstants.send(:remove_const, name)
         end
-        return if @core_aliases.key?(name) || @plugin_names.include?(name)
+        return if @__script_scope_core_aliases.key?(name) || @__script_scope_plugin_names.include?(name)
         if value.is_a?(Module)
           module_name = Module.instance_method(:name).bind_call(value).to_s
-          return if @plugin_modules.any? { |plugin| value.equal?(plugin) || module_name.start_with?("#{plugin.name}::") }
+          return if @__script_scope_plugin_modules.any? { |plugin| value.equal?(plugin) || module_name.start_with?("#{plugin.name}::") }
         end
         return if Object.const_defined?(name)
 
         LegacyConstants.const_set(name, value)
-        @legacy_constants[name] = true
+        @__script_scope_legacy_constants[name] = true
         legacy_notice(:constant, name)
       end
 
@@ -158,7 +161,7 @@ module Lich
       # @param names [Array<Symbol>] constants defined directly on this scope
       # @return [void]
       def self.conceal(*names)
-        @concealed_names.concat(names)
+        @__script_scope_concealed_names.concat(names)
       end
 
       # Keeps explicit removal and subsequent redefinition from leaving stale exports.
@@ -167,7 +170,7 @@ module Lich
       # @raise [NameError] when the constant is not defined directly on this scope
       def self.remove_const(name)
         value = super
-        if @legacy_constants.delete(name.to_sym)
+        if @__script_scope_legacy_constants.delete(name.to_sym)
           LegacyConstants.send(:remove_const, name)
         end
         value
@@ -177,7 +180,7 @@ module Lich
       # Reports whether script-owned nested classes/modules receive scoped helpers.
       # @return [Boolean] whether new constants belong to scripts rather than plugins loaded by {.activate!}
       def self.adopt_nested_constants?
-        @adopt_nested_constants
+        @__script_scope_adopt_nested_constants
       end
 
       # Gives every module and class a script defines inside ScriptScope the
@@ -268,9 +271,9 @@ module Lich
       # when the underlying failure was a ScriptError such as LoadError.
       class ScopeActivationError < StandardError; end
 
-      @active = false
-      @activation_failure = nil
-      @activation_mutex = Mutex.new
+      @__script_scope_active = false
+      @__script_scope_activation_failure = nil
+      @__script_scope_activation_mutex = Mutex.new
 
       # Loads every plugin and routes trusted scripts through this scope.
       # Idempotent. Scripts already running keep the binding they started with.
@@ -282,33 +285,33 @@ module Lich
       # @return [Boolean] true once active
       # @raise [ScopeActivationError] when activation fails now or failed earlier
       def self.activate!
-        @activation_mutex.synchronize do
-          return true if @active
-          raise ScopeActivationError, "#{@activation_failure}; not retried, restart Lich" if @activation_failure
+        @__script_scope_activation_mutex.synchronize do
+          return true if @__script_scope_active
+          raise ScopeActivationError, "#{@__script_scope_activation_failure}; not retried, restart Lich" if @__script_scope_activation_failure
 
           begin
-            @legacy_helpers = public_instance_methods(false).to_h { |name| [name, true] }
+            @__script_scope_legacy_helpers = public_instance_methods(false).to_h { |name| [name, true] }
             Dir[PLUGIN_GLOB].sort.each { |boot| require boot }
-            @plugin_names = constants(false) - @core_aliases.keys
-            @plugin_modules = @plugin_names.filter_map { |name| value = const_get(name, false); value if value.is_a?(Module) }
-            @concealed_names.each { |name| remove_const(name) if const_defined?(name, false) }
+            @__script_scope_plugin_names = constants(false) - @__script_scope_core_aliases.keys
+            @__script_scope_plugin_modules = @__script_scope_plugin_names.filter_map { |name| value = const_get(name, false); value if value.is_a?(Module) }
+            @__script_scope_concealed_names.each { |name| remove_const(name) if const_defined?(name, false) }
             sync_core_constants!
             Object.include(LegacyConstants)
             Object.prepend(LegacyHelpers)
             Lich::Common.singleton_class.prepend(CoreConstants)
           rescue StandardError, ScriptError => error
-            @activation_failure = "script scope activation failed: #{error.class}: #{error.message}"
-            raise ScopeActivationError, @activation_failure
+            @__script_scope_activation_failure = "script scope activation failed: #{error.class}: #{error.message}"
+            raise ScopeActivationError, @__script_scope_activation_failure
           end
-          @adopt_nested_constants = true
-          @active = true
+          @__script_scope_adopt_nested_constants = true
+          @__script_scope_active = true
         end
       end
 
       # Reports whether script-scope activation has occurred.
       # @return [Boolean] whether new trusted scripts get a ScriptScope binding
       def self.active?
-        @active
+        @__script_scope_active
       end
 
       # A fresh binding whose constant lookup starts in this module. Created by
