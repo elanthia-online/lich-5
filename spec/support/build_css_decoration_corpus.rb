@@ -12,6 +12,8 @@ require 'open3'
 # Usage: ruby spec/support/build_css_decoration_corpus.rb EO_REPO MIRROR_REPO > fixture.json
 # The output must equal spec/fixtures/webui/css-decoration.json byte for byte; the
 # corpus spec checks this when CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO are set.
+# Retirement: This corpus and its consumers exist to validate the GTK3 compatibility shim so script authors can convert to WebUI before GTK3 support ends explicitly.
+# They are removed with the shim and its consumers.
 module CssDecorationCorpus
   LINES = {
     'Combatical' => [2343], 'UberBarWiz' => [553, 562, 571, 580, 589, 598, 607, 616, 625, 634, 643],
@@ -56,7 +58,7 @@ module CssDecorationCorpus
     'scripts[].path'                    => 'Path of the script inside that repository at revision.',
     'scripts[].source_sha256'           => 'SHA-256 of the whole original script file at revision.',
     'scripts[].remaining_exposure'      => 'Analysis status only: true unless css-provenance.json marks the script converted or the script is spellson. Not a runtime guarantee, security measure or permission finding.',
-    'scripts[].calls'                   => 'Every CSS provider/class call in the source: 1-based line, method, call source text and argument source texts.',
+    'scripts[].calls'                   => 'Every CSS provider/class call in the source: 1-based line, method and arguments. arguments holds only the Gtk::StyleProvider::PRIORITY_USER or PRIORITY_APPLICATION constant names that follow the provider arguments of add_provider and add_provider_for_screen, and is empty for other methods. Call expression text is not retained.',
     'scripts[].samples'                 => 'Stylesheet payloads passed to a provider load call.',
     'scripts[].samples[].lines'         => 'Source line range [first, last] of the string, or a list of ranges for an assembly sample.',
     'scripts[].samples[].kind'          => '"literal": unchanged source string. "interpolation sample": interpolations replaced by the fixed values in substitutions. "format sample": format() applied with the value in substitutions. "assembly sample": several source strings joined as described in assembly.',
@@ -196,6 +198,17 @@ module CssDecorationCorpus
     result
   end
 
+  PRIORITY_CONSTANT = /\AGtk::StyleProvider::PRIORITY_(USER|APPLICATION)\z/
+  PROVIDER_ARGUMENT_COUNT = { add_provider: 1, add_provider_for_screen: 2 }.freeze
+
+  # Priority constant names that follow the provider arguments; nothing else is kept.
+  def self.priorities(node, arguments)
+    prefix = PROVIDER_ARGUMENT_COUNT[node.name]
+    return [] unless prefix
+
+    arguments.drop(prefix).map(&:location).map(&:slice).select { |text| PRIORITY_CONSTANT.match?(text) }
+  end
+
   def self.calls(nodes)
     nodes.filter_map do |node|
       next unless node.is_a?(Prism::CallNode) && METHODS.include?(node.name)
@@ -203,8 +216,7 @@ module CssDecorationCorpus
       if node.name == :load
         next unless arguments.any? { |arg| arg.is_a?(Prism::KeywordHashNode) && arg.elements.any? { |pair| pair.is_a?(Prism::AssocNode) && pair.key.is_a?(Prism::SymbolNode) && pair.key.unescaped == 'data' } }
       end
-      { 'line' => node.location.start_line, 'method' => node.name.to_s, 'source' => node.location.slice,
-        'arguments' => arguments.map { |arg| arg.location.slice } }
+      { 'line' => node.location.start_line, 'method' => node.name.to_s, 'arguments' => priorities(node, arguments) }
     end.sort_by { |call| call['line'] }
   end
 
@@ -269,7 +281,7 @@ module CssDecorationCorpus
                                   else 'Not determined: CSS excerpts only.'
                                   end }
     end
-    { 'description' => 'Pinned source CSS evidence. Samples and calls are measured from the pinned sources; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.',
+    { 'description' => 'Pinned source CSS evidence. Samples are measured acceptance inputs and size evidence from the pinned sources, credited per record under settled direction B5, not redistributed works; calls carry only line, method and priority constants; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.',
       'audit_sha256' => Digest::SHA256.file(audit_path).hexdigest, 'bound' => 8192, 'fields' => FIELDS, 'scripts' => records }
   end
 end

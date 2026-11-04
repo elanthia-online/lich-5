@@ -90,6 +90,13 @@ All source hashes match `css-provenance.json`, using EO revision
 `7fd0b971387492cfd81b4bc7ef94428413965071` and mirror revision
 `549e33506e121453e3c01cfe5df46a902f44fc5f`. Paths, line ranges, raw call shapes,
 payload hashes and all interpolation/assembly substitutions are recorded inside.
+The stylesheet `samples` are measured acceptance inputs and size evidence from the
+pinned sources, credited per record under settled direction B5; they are not
+redistributed works. Each record's `calls` carry only line, method and, for
+add_provider and add_provider_for_screen, the Gtk::StyleProvider::PRIORITY_*
+constant names; call expression text is not retained.
+This corpus and its consumers exist to validate the GTK3 compatibility shim so script authors can convert to WebUI before GTK3 support ends explicitly.
+They are removed with the shim and its consumers.
 Its top-level `fields` object documents every key, unit and status value;
 `source` is the stable repository identifier ("eo" or "mirror") and `revision`
 the full pinned commit. `audit_sha256` is the SHA-256 of `css-provenance.json`,
