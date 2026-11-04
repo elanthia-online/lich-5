@@ -175,6 +175,16 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(sent).to eq(['put #2222485 in #758700', 'put #2222485 in my other bucket'])
       end
 
+      ['#758700', 758_700].each do |bag|
+        it "sends no \"my other\" PUT for a bag given as #{bag.inspect}: false while the leather is held" do
+          game('put #2222485 in #758700', "You can't put that there.")
+          expect(described_class.stow_crafting_item('leather', bag, nil)).to be(false)
+          expect(sent).to eq(['put #2222485 in #758700'])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRCC: #{bag} would not take leather. It is still in your hands.").once
+        end
+      end
+
       it 'ties a belt-listed tool by name first, as before, and sends no PUT when the tie works' do
         belt = { 'name' => 'toolbelt', 'items' => ['leather'] }
         game('tie my leather to my toolbelt', 'You attach the leather to your toolbelt.') { hands(right: cloth) }
@@ -343,9 +353,11 @@ RSpec.describe Lich::DragonRealms::DRCC do
       expect(sent).to eq(['get my mallet'])
     end
 
-    # GETting the held item by id would fetch nothing; "get my leather from
-    # my bag" while holding one fetches a second (stock to combine).
-    it 'does not swap the item for a held id: a second one can still be fetched' do
+    # held_id would name the leather already in hand, so a call fetching a
+    # second one (stock to combine) would GET the held one; the GET keeps
+    # the caller's name. What the game answers a GET of a held item is not
+    # verified, so only the string is pinned.
+    it 'does not swap the item for a held id: the GET keeps "my leather"' do
       hands(left: leather)
       game('get my leather from #758689', 'You get a rat-pelt leather from inside your heavy silk duffel bag.')
       expect(described_class.get_crafting_item('leather', 'duffel bag', ['leather'], nil)).to be(true)
@@ -405,6 +417,40 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(described_class.get_crafting_item(2_222_485, 'duffel bag', nil, nil, true)).to be(false)
         expect(sent).to eq(['get #2222485'])
       end
+
+      # A GET by id can reach a tied item; the untie must name it by id too.
+      ['#2222485', 2_222_485].each do |name|
+        it "unties #{name.inspect} as \"untie #2222485\" after \"You should untie\"" do
+          game('get #2222485', 'You should untie the leather first.')
+          game('untie #2222485', 'You untie the leather.') { hands(left: leather) }
+          expect(described_class.get_crafting_item(name, 'duffel bag', nil, nil, true)).to be(true)
+          expect(sent).to eq(['get #2222485', 'untie #2222485'])
+        end
+      end
+
+      it 'resends "untie #2222485" after the safe-room trip when wounds hinder it' do
+        game('get #2222485', 'You should untie the leather first.')
+        game('untie #2222485', 'Your wounds hinder your ability to do that.', 'You untie the leather.')
+        expect(described_class.get_crafting_item('#2222485', 'duffel bag', nil, nil, true)).to be(true)
+        expect(sent).to eq(['get #2222485', 'untie #2222485', 'walk 8775', 'untie #2222485'])
+        expect(drc).to have_received(:wait_for_script_to_complete).with('safe-room', ['force']).once
+      end
+
+      it 'checks the id in hand when the untie by id finds nothing' do
+        hands(right: other_leather)
+        game('get #2222485', 'You should untie the leather first.')
+        game('untie #2222485', 'Untie what?')
+        expect(described_class.get_crafting_item('#2222485', 'duffel bag', nil, nil, true)).to be(false)
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: Told to untie it, but found nothing to untie: #2222485')
+      end
+    end
+
+    it 'still unties a name as "untie my <name>" after "You should untie"' do
+      game('get my mallet', 'You should untie the mallet first.')
+      game('untie my mallet', 'You untie the mallet.')
+      expect(described_class.get_crafting_item('mallet', 'duffel bag', nil, nil, true)).to be(true)
+      expect(sent).to eq(['get my mallet', 'untie my mallet'])
     end
   end
 
@@ -523,6 +569,55 @@ RSpec.describe Lich::DragonRealms::DRCC do
       game('count my ', 'The straight iron pins has 12 uses remaining.')
       expect(described_class.check_consumables(nil, 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(true)
       expect(sent).to eq(['get my  from #758689', 'count my ', 'walk 8775'])
+    end
+
+    context 'with a "#<id>" or Integer name' do
+      ['#5550002', 5_550_002].each do |name|
+        it "returns false for #{name.inspect} without ordering when the GET finds no such item" do
+          game('get #5550002 from #758689', 'What were you referring to?')
+          expect(described_class.check_consumables(name, 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
+          expect(sent).to eq(['get #5550002 from #758689'])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', "DRCC: #5550002 is not in duffel bag, and an id can't be ordered. Not buying more.")
+        end
+      end
+
+      it 'counts and puts back the id it got' do
+        game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
+        game('count #5550002', 'The straight iron pins has 12 uses remaining.')
+        game('put #5550002 in #758689', put_away) { hands }
+        expect(described_class.check_consumables(5_550_002, 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(true)
+        expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'put #5550002 in #758689', 'walk 8775'])
+      end
+
+      # The disposed id names nothing any more: the replacement goes by noun,
+      # and the bought pins are put away by their own id.
+      it 'disposes a worn-out id, then replaces it by noun and stows the new id' do
+        game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
+        game('count #5550002', 'The straight iron pins has 1 uses remaining.')
+        game('get my pins from #758689', 'What were you referring to?')
+        game('put #5550001 in #758689', put_away) { hands }
+        expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(true)
+        expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'dispose #5550002',
+                            'get my pins from #758689', 'order 5 at tool-room', 'put #5550001 in #758689', 'walk 8775'])
+        expect(gameobj.right_hand.id).to be_nil
+      end
+
+      it 'returns false with the bought pins still held when the replacement PUT fails' do
+        game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
+        game('count #5550002', 'The straight iron pins has 1 uses remaining.')
+        game('get my pins from #758689', 'What were you referring to?')
+        game('put #5550001 in #758689', 'Perhaps you should be holding that first.')
+        expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
+        expect(gameobj.right_hand.id).to eq('5550001')
+      end
+
+      it 'returns false after the dispose when the id it got is not in hand to read a noun from' do
+        game('get #5550002 from #758689', got_pins)
+        game('count #5550002', 'The straight iron pins has 1 uses remaining.')
+        expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
+        expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'dispose #5550002'])
+      end
     end
 
     it 'keeps "my duffel bag" when nothing is worn' do

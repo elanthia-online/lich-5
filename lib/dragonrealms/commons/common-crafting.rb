@@ -502,10 +502,14 @@ module Lich
       # The GET names +bag+ by its id when exactly one worn item matches it
       # ({DRCI.worn_ref}), so a held or stowed item of the same noun can't be
       # searched instead; otherwise it says `my <bag>` as before. The item
-      # itself is never swapped for a held id: GETting the held item fetches
-      # nothing, while `get my <name>` can fetch a second one. A "#<id>"
-      # +name+ (or an Integer id) goes by id: `get #<id>`, never `my #<id>`,
-      # with no belt untie, and the in-hand checks compare ids.
+      # itself is deliberately not looked up with {DRCI.held_id}: when one of
+      # +name+ is already in hand, held_id would name that held one, so a call
+      # fetching a second one (stock to combine) would GET the item it
+      # already holds. `get my <name>` stays as callers send it today. (What
+      # the game answers a GET of a held item is not verified.) A "#<id>"
+      # +name+ (or an Integer id) goes by id: `get #<id>`, and after "You
+      # should untie" `untie #<id>`, never `my #<id>`; it gets no belt untie,
+      # and the in-hand checks compare ids.
       #
       # When wounds hinder an untie, visits safe-room once and sends that
       # untie once more. The belt untie and the plain untie each get their
@@ -565,7 +569,7 @@ module Lich
           # Final: GETting it again won't empty a hand.
           crafting_item_failed("DRCC: No free hand to get: #{name}", skip_exit)
         when GET_CRAFTING_TIED
-          case untie_crafting_item(name, "untie my #{name}", UNTIE_WOUNDED, UNTIE_SUCCESS, UNTIE_NOT_FOUND)
+          case untie_crafting_item(name, "untie #{DRCI.item_ref(name.to_s)}", UNTIE_WOUNDED, UNTIE_SUCCESS, UNTIE_NOT_FOUND)
           when UNTIE_SUCCESS
             true
           when UNTIE_WOUNDED
@@ -652,7 +656,26 @@ module Lich
         id = DRCI.held_id(name.to_s)
         id ? "##{id}" : DRCI.item_ref(name.to_s)
       end
-      private_class_method :crafting_id_ref?, :crafting_bag_ref, :crafting_held_ref
+
+      # Whether +bag+ is given as an id ("#<id>" or an Integer) rather than a
+      # name. Such a bag has no "other" one to fall back to.
+      #
+      # @param bag [String, Integer, nil] container name or id
+      # @return [Boolean]
+      def crafting_id_bag?(bag)
+        bag.is_a?(Integer) || bag.to_s.strip.start_with?('#')
+      end
+
+      # The noun of the held item whose id is +ref+ ("#<id>"), so a worn-out
+      # consumable named by id can be replaced by noun. Reads the GameObj
+      # hands only.
+      #
+      # @param ref [String] "#<id>"
+      # @return [String, nil] the noun; nil when no hand holds that id
+      def crafting_held_noun(ref)
+        [GameObj.right_hand, GameObj.left_hand].find { |obj| obj&.id && "##{obj.id}" == ref }&.noun
+      end
+      private_class_method :crafting_id_ref?, :crafting_bag_ref, :crafting_held_ref, :crafting_id_bag?, :crafting_held_noun
 
       # Puts a crafting tool away: ties it to the crafting belt when the belt
       # lists it, otherwise (or when the tie fails) puts it in +bag+. A bag
@@ -666,18 +689,20 @@ module Lich
       # ({DRCI.worn_ref}). No match, two matches, or an ordinal or "other"
       # name sends `put my <name> in my <bag>` as before. A "#<id>" +name+
       # (or an Integer id) skips the belt and is sent as "#<id>", never
-      # "my #<id>".
+      # "my #<id>". A +bag+ given as an id gets no "my other" fallback.
       #
       # @param name [String, Integer, nil] tool noun, or "#<id>"; an Integer
       #   is an id; nil sends nothing
-      # @param bag [String] container noun for tools off the belt
+      # @param bag [String, Integer] container noun for tools off the belt,
+      #   or "#<id>" (an Integer is an id)
       # @param belt [Hash, nil] crafting belt settings ('name', 'items')
       # @return [Boolean, nil] nil without a +name+. false when the tool is
       #   still in a hand after the PUT and any STOW fallback: the PUT got
       #   "Perhaps you should be holding that first." (it matched an item
       #   that isn't held), a not-found reply, or no reply, or +bag+ refused
       #   the tool and the STOW failed too. Also false when +bag+ answers
-      #   "You can't put that there" and the tool goes to the other +bag+.
+      #   "You can't put that there" and the tool goes to the other +bag+
+      #   (for a +bag+ given by id: when the tool is still in a hand).
       #   true otherwise, including a not-found reply or a timeout with no
       #   matching item in either hand (nothing left to put away).
       def stow_crafting_item(name, bag, belt)
@@ -705,9 +730,15 @@ module Lich
 
           failure = "#{bag} would not take #{name}, and stowing it failed too."
         when PUT_BAG_CANT_THERE
-          # "other" picks the bag by the game's ordering, so it stays a name.
-          fput("put #{item} in my other #{bag}")
-          return false
+          # A bag given by id has no "other" one: "my other #<id>" names
+          # nothing. The hands then say whether the tool is still out.
+          if crafting_id_bag?(bag)
+            failure = "#{bag} would not take #{name}."
+          else
+            # "other" picks the bag by the game's ordering, so it stays a name.
+            fput("put #{item} in my other #{bag}")
+            return false
+          end
         when PUT_BAG_NOT_FOUND, PUT_BAG_COULD_NOT_FIND, PUT_BAG_NOT_HELD, ''
           failure = "Could not put #{name} in #{bag}."
         else
@@ -1029,6 +1060,12 @@ module Lich
       # name to dispose) as before. The puts go through stow_crafting_item,
       # which resolves the held id itself.
       #
+      # A "#<id>" +name+ (or an Integer id) names that one item, and no shop
+      # sells it. So it is never ordered: a GET that finds no such item
+      # returns false. A worn-out one is disposed of by id and replaced by a
+      # call with its noun (read from the hand before the dispose), which
+      # can fetch or order another as for any noun.
+      #
       # @param name [String, Integer] consumable noun, e.g. 'oil', 'wire
       #   brush', or "#<id>"; an Integer is an id
       # @param room [Integer, String] shop room id or map tag for the order
@@ -1038,7 +1075,9 @@ module Lich
       # @param belt [Hash, nil] crafting belt settings for stow_crafting_item
       # @param count [Integer] fewest uses to keep
       # @return [Boolean] false, without walking or ordering, when the GET
-      #   gets "You need a free hand to pick that up." or no reply. false,
+      #   gets "You need a free hand to pick that up." or no reply, or when
+      #   a "#<id>" +name+ is not found (or, worn out, its noun can't be
+      #   read from the hand, after it is disposed of). false,
       #   with nothing put away, when DRCT.order_item returns nil or '' (no
       #   coins, full hands, an unreachable shop or a timeout); it still walks
       #   back. false, after walking back, when stow_crafting_item returns
@@ -1057,12 +1096,22 @@ module Lich
           count_result = DRC.bput("count #{held}", *COUNT_USES_MESSAGES)
           match = count_result.match(COUNT_USES_PATTERN)
           if match && match[1].to_i < count
+            # The disposed id names nothing any more; replace it by noun.
+            replacement = crafting_id_ref?(name) ? crafting_held_noun(held) : name
             DRCT.dispose(crafting_id_ref?(held) ? held : name)
+            unless replacement
+              Lich::Messaging.msg('bold', "DRCC: Disposed of worn-out #{name} but could not tell its noun. Not buying more.")
+              return false
+            end
             # The call below gets, buys, stows and walks back on its own.
-            return DRCC.check_consumables(name, room, number, bag, bag_items, belt, count)
+            return DRCC.check_consumables(replacement, room, number, bag, bag_items, belt, count)
           end
           stowed = DRCC.stow_crafting_item(name, bag, belt)
         when CONSUMABLE_GET_NOT_FOUND, CONSUMABLE_GET_COULD_NOT_FIND
+          if crafting_id_ref?(name)
+            Lich::Messaging.msg('bold', "DRCC: #{name} is not in #{bag}, and an id can't be ordered. Not buying more.")
+            return false
+          end
           if DRCT.order_item(room, number).to_s.empty?
             Lich::Messaging.msg('bold', "DRCC: Could not buy #{name} (order #{number} at #{room}). Not putting anything away.")
             DRCT.walk_to(current)
