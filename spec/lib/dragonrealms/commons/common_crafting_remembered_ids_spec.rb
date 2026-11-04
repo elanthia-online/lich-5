@@ -86,11 +86,13 @@ RSpec.describe Lich::DragonRealms::DRCC do
   end
 
   # Mahtra stows the pins she holds next to the half-made bag: the PUT goes
-  # by both ids, and DRCC remembers the pins' id.
-  def stow_pins(pins_obj = pins)
+  # by both ids, and DRCC remembers the pins' id. +as+ is the name the
+  # script stows by; sew (like carve, forge, shape, smelt and tinker) passes
+  # DRC.right_hand, the shortened hand name "sepia pins".
+  def stow_pins(pins_obj = pins, as: 'pins')
     hands(right: pins_obj, left: half_made)
     game("put ##{pins_obj[0]} in #2391122", put_pins) { hands(left: half_made) }
-    expect(described_class.stow_crafting_item('pins', 'duffel bag', nil)).to be(true)
+    expect(described_class.stow_crafting_item(as == :right_hand ? drc.right_hand : as, 'duffel bag', nil)).to be(true)
     sent.clear
   end
 
@@ -150,14 +152,63 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(sent).to eq(['get #4101800'])
       end
 
-      it 'keeps going by id across a whole sew loop' do
-        3.times do
-          stow_pins
-          game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+      # sew.lic swap_tool, verbatim: DRCC.stow_crafting_item(DRC.right_hand,
+      # @bag, @belt), then DRCC.get_crafting_item('pins', ...). The stow
+      # names the pins "sepia pins", the GET asks for "pins".
+      it 'goes by id from the second GET of a sew loop that stows by DRC.right_hand' do
+        game('get my pins from #2391122', got_pins) { hands(right: pins, left: half_made) }
+        game('get #4101800', got_pins, got_pins, got_pins)
+        game('put #4101800 in #2391122', put_pins, put_pins, put_pins, put_pins)
+        4.times do |i|
           expect(get_pins).to be(true)
-          expect(sent).to eq(['get #4101800'])
-          sent.clear
+          hands(right: pins, left: half_made)
+          expect(drc.right_hand).to eq('sepia pins')
+          expect(described_class.stow_crafting_item(drc.right_hand, 'duffel bag', nil)).to be(true)
+          hands(left: half_made)
+          game('get #4101800', got_pins) { hands(right: pins, left: half_made) } if i < 3
         end
+        expect(sent).to eq(['get my pins from #2391122', 'put #4101800 in #2391122'] +
+                           (['get #4101800', 'put #4101800 in #2391122'] * 3))
+      end
+
+      it 'GETs "pins" by the id stowed as "sepia pins"' do
+        stow_pins(as: :right_hand)
+        game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get #4101800'])
+      end
+
+      it 'GETs "sepia pins" by the id the "pins" GET remembered' do
+        game('get my pins from #2391122', got_pins) { hands(right: pins, left: half_made) }
+        get_pins
+        hands(left: half_made)
+        sent.clear
+        game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+        expect(described_class.get_crafting_item('sepia pins', 'duffel bag', ['sepia pins'], nil)).to be(true)
+        expect(sent).to eq(['get #4101800'])
+      end
+
+      it 'never gives the sepia pins to a GET of "iron pins"' do
+        stow_pins(as: :right_hand)
+        game('get my iron pins from #2391122', 'You get some straight iron pins from inside your heavy silk duffel bag.') do
+          hands(right: iron_pins, left: half_made)
+        end
+        expect(described_class.get_crafting_item('iron pins', 'duffel bag', ['iron pins'], nil)).to be(true)
+        expect(sent).to eq(['get my iron pins from #2391122'])
+      end
+
+      # Two kept pins in the bag: "pins" means either, so no id, and the
+      # by-name GET's pick becomes the one kept for "pins".
+      it 'GETs by name while two kept pins match, then by the id the game picked' do
+        stow_pins(iron_pins, as: :right_hand)
+        stow_pins(as: :right_hand)
+        hands(left: half_made)
+        game('get my pins from #2391122', got_pins) { hands(right: pins, left: half_made) }
+        expect(get_pins).to be(true)
+        hands(left: half_made)
+        game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get my pins from #2391122', 'get #4101800'])
       end
     end
 
@@ -352,6 +403,28 @@ RSpec.describe Lich::DragonRealms::DRCC do
       game('get #4101800', 'You get some sepia pins from inside your scuffed traveler\'s pack.') { hands(right: pins, left: half_made) }
       expect(get_pins).to be(true)
       expect(sent).to eq(['get #4101800'])
+    end
+
+    it 'forgets every kept pins in the bag when "sepia pins" combine' do
+      stow_pins(as: :right_hand)
+      hands(right: new_pins, left: half_made)
+      game('put #4101801 in #2391122', 'You combine your pins with the pins in your heavy silk duffel bag.') { hands(left: half_made) }
+      expect(described_class.stow_crafting_item(drc.right_hand, 'duffel bag', nil)).to be(true)
+      expect(memo.size).to eq(0)
+      expect([memo.dead?('4101800'), memo.dead?('4101801')]).to eq([true, true])
+    end
+
+    it 'keeps at most CRAFTING_ITEM_IDS_MAX ids through the real PUT path, oldest out first' do
+      max = described_class::CRAFTING_ITEM_IDS_MAX
+      (max + 8).times do |i|
+        id = (5_000_000 + i).to_s
+        hands(right: [id, "tool#{i}", "steel tool#{i}"])
+        game("put ##{id} in #2391122", 'You put your tool in your heavy silk duffel bag.') { hands }
+        described_class.stow_crafting_item("steel tool#{i}", 'duffel bag', nil)
+      end
+      expect(memo.size).to eq(max)
+      expect(memo.fetch('#2391122', 'tool0')).to be_nil
+      expect(memo.fetch('#2391122', "tool#{max + 7}")).to eq((5_000_000 + max + 7).to_s)
     end
 
     it 'remembers nothing for a failed PUT' do
@@ -559,6 +632,47 @@ RSpec.describe Lich::DragonRealms::DRCC do
       expect(sent).to eq(['get #4101800', 'count #4101800', 'put my pins in #2391122', 'walk 8775'])
     end
 
+    # A remembered id reaches the pins wherever they are, so the GET by id
+    # can get replies a GET from the bag never gets. None may leave bput
+    # waiting its 15 s.
+    it 'forgets the id and GETs from the bag by name on "You should untie" (pins on the belt)' do
+      stow_pins
+      game('get #4101800', 'You should untie the pins from your tool belt first.')
+      game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+      game('count #4101801', count_ok)
+      game('put #4101801 in #2391122', put_pins) { hands(left: half_made) }
+      expect(check).to be(true)
+      expect(sent).to eq(['get #4101800', 'get my pins from #2391122', 'count #4101801', 'put #4101801 in #2391122', 'walk 8775'])
+      expect(memo.dead?('4101800')).to be(true)
+    end
+
+    it 'counts and puts away pins the GET by id picked up off the floor ("You pick up")' do
+      stow_pins
+      game('get #4101800', 'You pick up some sepia pins.') { hands(right: pins, left: half_made) }
+      game('count #4101800', count_ok)
+      game('put #4101800 in #2391122', put_pins) { hands(left: half_made) }
+      expect(check).to be(true)
+      expect(sent).to eq(['get #4101800', 'count #4101800', 'put #4101800 in #2391122', 'walk 8775'])
+    end
+
+    it 'counts pins the GET by id finds already held ("You are already holding that.")' do
+      stow_pins
+      game('get #4101800', 'You are already holding that.') { hands(right: pins, left: half_made) }
+      game('count #4101800', count_ok)
+      game('put #4101800 in #2391122', put_pins) { hands(left: half_made) }
+      expect(check).to be(true)
+      expect(sent).to eq(['get #4101800', 'count #4101800', 'put #4101800 in #2391122', 'walk 8775'])
+    end
+
+    it 'GETs by the id stowed as "sepia pins"' do
+      stow_pins(as: :right_hand)
+      game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+      game('count #4101800', count_ok)
+      game('put #4101800 in #2391122', put_pins) { hands(left: half_made) }
+      expect(check).to be(true)
+      expect(sent).to eq(['get #4101800', 'count #4101800', 'put #4101800 in #2391122', 'walk 8775'])
+    end
+
     it 'takes the first GET from the feed' do
       hands
       feed([%w[4101800 some,sepia,pins]])
@@ -613,33 +727,66 @@ RSpec.describe Lich::DragonRealms::DRCC do
 
     let(:memo_class) { described_class.const_get(:ItemIdMemo) }
 
-    it 'drops the oldest pair past the cap' do
-      4.times { |i| ids.remember(['#1', "item#{i}"], i.to_s) }
+    def keep(memo_obj, id, noun, item_name = noun, bag: '#1', as: nil)
+      memo_obj.remember(bag, id, noun: noun, item_name: item_name, as: as)
+    end
+
+    it 'finds an item by any name that means it, by the held_id rule' do
+      keep(ids, '4101800', 'pins', 'sepia pins')
+      expect(['pins', 'sepia pins', 'my Sepia PINS'].map { |name| ids.fetch('#1', name) }).to eq(%w[4101800] * 3)
+      expect(['pin', 'iron pins', 'sepia', 'other pins', 'second pins', '#4101801'].map { |name| ids.fetch('#1', name) }).to all(be_nil)
+      expect(ids.fetch('#1', '#4101800')).to eq('4101800')
+      expect(ids.fetch('#2', 'pins')).to be_nil
+    end
+
+    it 'gives no id when two kept items in the bag match, and both to matching' do
+      keep(ids, '4101800', 'pins', 'sepia pins')
+      keep(ids, '4101802', 'pins', 'straight iron pins')
+      expect(ids.fetch('#1', 'pins')).to be_nil
+      expect(ids.matching('#1', 'pins')).to eq(%w[4101800 4101802])
+      expect(ids.fetch('#1', 'iron pins')).to eq('4101802')
+    end
+
+    it 'drops the other kept items in the bag the name it moved by means (as:)' do
+      keep(ids, '4101800', 'pins', 'sepia pins')
+      keep(ids, '4101802', 'pins', 'straight iron pins')
+      keep(ids, '9', 'pins', 'sepia pins', bag: '#2')
+      keep(ids, '4101800', 'pins', 'sepia pins', as: 'pins')
+      expect(ids.fetch('#1', 'pins')).to eq('4101800')
+      expect(ids.size).to eq(2)
+      expect(ids.dead?('4101802')).to be(false)
+      expect(ids.fetch('#2', 'pins')).to eq('9')
+    end
+
+    it 'keeps an id once, with its latest bag, noun and name' do
+      keep(ids, '7', 'cloth', 'linen cloth')
+      keep(ids, '7', 'bag', 'duffel bag', bag: '#2')
+      expect(ids.size).to eq(1)
+      expect(ids.fetch('#1', 'cloth')).to be_nil
+      expect(ids.fetch('#2', 'cloth')).to be_nil
+      expect(ids.fetch('#2', 'duffel bag')).to eq('7')
+    end
+
+    it 'drops the oldest item past the cap' do
+      4.times { |i| keep(ids, i.to_s, "item#{i}") }
       expect(ids.size).to eq(3)
-      expect(ids.fetch(['#1', 'item0'])).to be_nil
-      expect(ids.fetch(['#1', 'item3'])).to eq('3')
+      expect(ids.fetch('#1', 'item0')).to be_nil
+      expect(ids.fetch('#1', 'item3')).to eq('3')
     end
 
-    it 'counts a re-remembered key as newest' do
-      3.times { |i| ids.remember(['#1', "item#{i}"], i.to_s) }
-      ids.remember(['#1', 'item0'], '0')
-      ids.remember(['#1', 'item3'], '3')
-      expect(ids.fetch(['#1', 'item0'])).to eq('0')
-      expect(ids.fetch(['#1', 'item1'])).to be_nil
-    end
-
-    it 'keeps an id under its latest key only' do
-      ids.remember(['#1', 'leather'], '7')
-      ids.remember(['#1', 'duffel bag'], '7')
-      expect(ids.fetch(['#1', 'leather'])).to be_nil
-      expect(ids.fetch(['#1', 'duffel bag'])).to eq('7')
+    it 'counts a re-remembered id as newest' do
+      3.times { |i| keep(ids, i.to_s, "item#{i}") }
+      keep(ids, '0', 'item0')
+      keep(ids, '3', 'item3')
+      expect(ids.fetch('#1', 'item0')).to eq('0')
+      expect(ids.fetch('#1', 'item1')).to be_nil
     end
 
     it 'bounds the dead ids too, and un-deads a remembered one' do
       5.times { |i| ids.forget(i.to_s) }
       expect(ids.dead?('0')).to be(false)
       expect(ids.dead?('4')).to be(true)
-      ids.remember(['#1', 'pins'], '4')
+      keep(ids, '4', 'pins')
       expect(ids.dead?('4')).to be(false)
     end
 
@@ -649,11 +796,12 @@ RSpec.describe Lich::DragonRealms::DRCC do
       threads = Array.new(8) do |t|
         Thread.new do
           500.times do |i|
-            key = ['#2391122', "item#{t}-#{i % 40}"]
-            shared.remember(key, "#{t}#{i % 40}")
-            value = shared.fetch(key)
-            errors << [key, value] unless value.nil? || value == "#{t}#{i % 40}"
+            noun = "item#{t}x#{i % 40}"
+            keep(shared, "#{t}#{i % 40}", noun, "sepia #{noun}", bag: '#2391122', as: i.even? ? noun : nil)
+            value = shared.fetch('#2391122', noun)
+            errors << [noun, value] unless value.nil? || value == "#{t}#{i % 40}"
             shared.forget("#{t}#{(i + 7) % 40}") if i.odd?
+            shared.matching('#2391122', "sepia #{noun}")
             shared.dead?("#{t}#{i % 40}")
           end
         rescue StandardError => e

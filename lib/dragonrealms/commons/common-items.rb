@@ -1215,6 +1215,27 @@ module Lich
         ids.size == 1 ? ids.first : nil
       end
 
+      # Whether a name means an item, by the {.held_id} rule (noun equal to
+      # the name's last word, ignoring case; each other word a word of the
+      # item's name; a leading "my " dropped; an ordinal or "other" first
+      # word never matches; a lone "#<id>" matches that id only). For items
+      # that are no longer at hand, such as the ones {DRCC} remembers, so
+      # every caller asks the same question {.held_id} asks of the hands.
+      # Sends no game command.
+      #
+      # @param item [#id, #noun, #name] a GameObj, or anything with the same
+      #   readers
+      # @param name [String, Integer, nil] noun phrase, or "#<id>"; an
+      #   Integer is an id
+      # @return [Boolean]
+      #
+      # @example The shortened hand name of some sepia pins
+      #   DRCI.item_named?(GameObj.right_hand, 'pins')       #=> true
+      #   DRCI.item_named?(GameObj.right_hand, 'iron pins')  #=> false
+      def item_named?(item, name)
+        !item.nil? && !name.nil? && held_obj_matches?(item, name)
+      end
+
       # Whether a worn GameObj is the one these words name (see {.worn_ref}).
       #
       # @param obj [GameObj] a worn item
