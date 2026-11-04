@@ -224,6 +224,12 @@ RSpec.describe DRCT do
       DRCT.order_item(100, 5)
     end
 
+    it 'returns nil without a second order when the coins reply is capitalized' do
+      allow(DRC).to receive(:bput).and_return("You don't have enough coins")
+      expect(DRCT.order_item(100, 5)).to be_nil
+      expect(DRC).to have_received(:bput).once
+    end
+
     it 'orders twice on "Just order it again"' do
       allow(DRC).to receive(:bput).and_return('Just order it again', 'takes some coins from you')
       expect(DRC).to receive(:bput).twice

@@ -70,4 +70,12 @@ RSpec.describe 'DRCT.order_item through the real DRC.bput' do
     expect(order(8)).to be_nil
     expect(sent).to eq(['order 8'])
   end
+
+  # bput matches its String patterns case-insensitively, so a capitalized
+  # reply still ends the first wait; order_item must not then confirm.
+  it 'returns nil without confirming when the coins reply is capitalized' do
+    game(["You don't have enough coins"])
+    expect(order(8)).to be_nil
+    expect(sent).to eq(['order 8'])
+  end
 end
