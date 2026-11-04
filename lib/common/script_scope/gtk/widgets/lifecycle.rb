@@ -107,6 +107,9 @@ module Lich
               # Keep handle retirement and provider detachment atomic with reloads.
               @dialogs&.dup&.each { |dialog| session.cleanup(dialog) { dialog.destroy } }
               @tab_owner&.send(:retire_header, self)
+              # From here until mark_destroyed finishes, a destroy handler may read a
+              # sibling that is not yet marked; reads in this subtree stay on shadow state.
+              @retiring = true
               begin
                 session.port.destroy(@handle) if @handle
               ensure
@@ -122,6 +125,13 @@ module Lich
               self
             end
           end
+
+          # Reports whether this widget or an ancestor is inside its owner's destroy
+          # sequence: from the start of port teardown until the shadow subtree is
+          # marked destroyed. Reads in that window use shadow state only (1844:RC8).
+          # @return [Boolean]
+          # @api private
+          def retiring? = @retiring == true || (!parent.nil? && parent.retiring?)
 
           # Marks the shadow subtree retired while preserving script-readable metadata.
           # @return [void]
