@@ -68,9 +68,12 @@ module Lich
       # scripts' sets; the oldest goes first.
       CRAFTING_ITEM_IDS_MAX = 32
 
-      # Seconds {DRCC} waits for the one Inventory refresh it may send, only
+      # The timeout {DRCC} gives the one Inventory refresh it may send, only
       # when the feed is known to answer but no snapshot is held (a refresh
-      # whose paginated exchange stalled after its first part).
+      # whose paginated exchange stalled after its first part). This is the
+      # refresh's own wait for the feed: {Lich::Common::Inventory.refresh}
+      # first waits for a refresh another script is running and for
+      # roundtime, and neither counts against it, so the GET can wait longer.
       CRAFTING_FEED_REFRESH_TIMEOUT = 2
 
       # Fewest seconds between two such refreshes, so a feed that keeps
@@ -321,7 +324,10 @@ module Lich
       # Replies to check_consumables' GET by a remembered or feed id that
       # leave the consumable in hand: a remembered id reaches the item
       # wherever it is, so it may be picked up from the floor ("You pick
-      # up") or be held already, as well as got from the bag. "You should
+      # up") or be held already, as well as got from the bag. "You are
+      # already ..." counts only while the id is in hand; otherwise
+      # (e.g. "You are already wearing that.") the id is forgotten and the
+      # by-name GET follows ({crafting_get_by_known_id}). "You should
       # untie" (tied to the belt, not in the bag) is a miss instead: the id
       # is forgotten and the by-name GET from the bag follows, as before.
       CONSUMABLE_ID_GET_IN_HAND = [CONSUMABLE_GET_SUCCESS, GET_CRAFTING_PICKUP, GET_CRAFTING_ALREADY].freeze
@@ -676,7 +682,12 @@ module Lich
       # from my duffel bag` can no longer find a half-made "duffel bag" in
       # hand, or other pins. "What were you referring to?", "I could not find
       # what you were referring to." or "What do you" forgets that id and
-      # sends today's by-name GET: one extra command, never a timeout. A GET
+      # sends today's by-name GET: one extra command, never a timeout; so
+      # does "You are already ..." while the id is not in hand. No id is
+      # used while the feed snapshot shows two or more items in +bag+ that
+      # the name means: the game picks, as before. Without a snapshot, a
+      # remembered id makes a GET of stock or material ("cotton cloth")
+      # take the piece DRCC moved last, e.g. an offcut sew stowed. A GET
       # by id that puts in hand an item the name no longer matches forgets
       # the id and puts the item back before the by-name GET. Otherwise
       # `get my <name>` stays as callers send it today. A "#<id>"
@@ -904,11 +915,20 @@ module Lich
       # The id a GET of +name+ from +bag+ can go by: the one item DRCC last
       # moved in or out of +bag+ that +name+ means ({CRAFTING_ITEM_IDS}),
       # else the one item in +bag+ the Inventory feed says +name+ means
-      # ({crafting_feed_id}), unless DRCC found that id dead since
+      # ({crafting_feed_ids}), unless DRCC found that id dead since
       # ({ItemIdMemo#dead?}). An id already in a hand is never given (the
       # caller wants another one, and a GET of a held item stays by name).
+      #
+      # When the feed snapshot already held shows the game a choice (two or
+      # more items in +bag+ that +name+ means, not counting held or dead
+      # ids), no id is given, not even a remembered one: the by-name GET
+      # lets the game pick, as before. This keeps a material GET ("cotton
+      # cloth") from always taking the piece DRCC moved last, such as an
+      # offcut. Without a snapshot the memo can't see a choice, and a
+      # remembered id is the piece moved last.
+      #
       # Sends no game command, except the one feed refresh
-      # {crafting_feed_id} may send.
+      # {crafting_feed_ids} may send when nothing is remembered.
       #
       # @param name [String, nil] item name, already through {crafting_name}
       # @param bag [String, Integer, nil] crafting container
@@ -918,41 +938,64 @@ module Lich
         return nil unless memo_bag
 
         held = DRCI.held_ids
+        usable = ->(ids) { ids.reject { |id| held.include?(id) || CRAFTING_ITEM_IDS.dead?(id) } }
         id = CRAFTING_ITEM_IDS.fetch(memo_bag, name)
-        return id if id && !held.include?(id)
+        if id && !held.include?(id)
+          # A remembered id sends no refresh: only a snapshot already held.
+          return usable.call(crafting_feed_ids(name, memo_bag, refresh: false)).size > 1 ? nil : id
+        end
 
-        id = crafting_feed_id(name, memo_bag)
-        id && !held.include?(id) && !CRAFTING_ITEM_IDS.dead?(id) ? id : nil
+        ids = usable.call(crafting_feed_ids(name, memo_bag, refresh: true))
+        ids.size == 1 ? ids.first : nil
       end
 
-      # The id of the one item directly in the crafting bag that +name+
-      # means, from the Inventory feed ({DRCI.stored_id}). Only when the
-      # feed is already known to answer ({Lich::Common::Inventory.feed_available?}):
-      # it reads the snapshot already held, and sends one short refresh only
-      # when there is none, at most once per {CRAFTING_FEED_REFRESH_INTERVAL}.
-      # A bag not named by id (no single worn match) has nothing to look in.
+      # The ids of the items directly in the crafting bag that +name+ means,
+      # from the Inventory feed ({DRCI.stored_ids}). Only when the feed is
+      # already known to answer ({Lich::Common::Inventory.feed_available?}):
+      # it reads the snapshot already held, and with +refresh+ sends one
+      # short refresh when there is none, at most once per
+      # {CRAFTING_FEED_REFRESH_INTERVAL}. A bag not named by id (no single
+      # worn match) has nothing to look in. A script interruption
+      # ({Lich::Common::ScriptExecutionGuard::Interrupted}) raised by the
+      # refresh is raised on; any other error gives [].
       #
       # @param name [String] item name
       # @param bag_ref [String] the bag as {crafting_bag_ref} names it
-      # @return [String, nil] the id, without "#"
-      def crafting_feed_id(name, bag_ref)
+      # @param refresh [Boolean] whether a missing snapshot may be refreshed
+      # @return [Array<String>] the ids, without "#"; [] when unknown
+      def crafting_feed_ids(name, bag_ref, refresh:)
         bag_id = bag_ref[DRCI::ITEM_ID_REF_PATTERN, 1]
-        return nil unless bag_id && defined?(Lich::Common::Inventory)
+        return [] unless bag_id && defined?(Lich::Common::Inventory)
 
         inventory = Lich::Common::Inventory
-        return nil unless inventory.feed_available?
+        return [] unless inventory.feed_available?
 
         snapshot = inventory.current
-        snapshot = inventory.refresh(timeout: CRAFTING_FEED_REFRESH_TIMEOUT) if snapshot.nil? && CRAFTING_ITEM_IDS.feed_refresh_due?(CRAFTING_FEED_REFRESH_INTERVAL)
-        DRCI.stored_id(name, bag_id, snapshot: snapshot)
+        snapshot = inventory.refresh(timeout: CRAFTING_FEED_REFRESH_TIMEOUT) if snapshot.nil? && refresh && CRAFTING_ITEM_IDS.feed_refresh_due?(CRAFTING_FEED_REFRESH_INTERVAL)
+        DRCI.stored_ids(name, bag_id, snapshot: snapshot)
       rescue StandardError => e
+        raise if crafting_interrupted?(e)
+
         Lich.log("DRCC: Inventory feed lookup for #{name} failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
-        nil
+        []
+      end
+
+      # Whether +error+ is a script interruption, which must reach the
+      # script, not be taken for a failed lookup.
+      #
+      # @param error [StandardError]
+      # @return [Boolean]
+      def crafting_interrupted?(error)
+        defined?(Lich::Common::ScriptExecutionGuard::Interrupted) ? error.is_a?(Lich::Common::ScriptExecutionGuard::Interrupted) : false
       end
 
       # GETs +name+ by a known id ({crafting_known_id}) instead of by name.
       # Replies in {CRAFTING_ID_GET_MISSING} or +misses+ forget the id and
-      # give nil, so the caller sends its by-name GET: one extra command. A
+      # give nil, so the caller sends its by-name GET: one extra command.
+      # So does a "You are already ..." reply ({GET_CRAFTING_ALREADY}) while
+      # the id is not in a hand: a known id is never a held one, so the
+      # reply can't mean the item is held (e.g. "You are already wearing
+      # that.": the id names a worn item, not the one in the bag). A
       # GET that works but puts in hand an item +name+ no longer means (the
       # id now names a different item) forgets the id, puts that item back
       # in +bag+ (STOW without a bag) and gives nil too.
@@ -972,7 +1015,7 @@ module Lich
         ref = "##{id}"
         missed = CRAFTING_ID_GET_MISSING + misses
         result = DRC.bput("get #{ref}", *successes, *others, *missed)
-        if missed.any? { |pattern| result.match?(pattern) }
+        if missed.any? { |pattern| result.match?(pattern) } || (result.match?(GET_CRAFTING_ALREADY) && !DRCI.in_hand?(ref))
           CRAFTING_ITEM_IDS.forget(id)
           return nil
         end
@@ -1041,7 +1084,7 @@ module Lich
         memo_bag = crafting_memo_bag(name, bag)
         CRAFTING_ITEM_IDS.matching(memo_bag, name).each { |id| CRAFTING_ITEM_IDS.forget(id) } if memo_bag
       end
-      private_class_method :crafting_memo_bag, :crafting_known_id, :crafting_feed_id, :crafting_get_by_known_id,
+      private_class_method :crafting_memo_bag, :crafting_known_id, :crafting_feed_ids, :crafting_interrupted?, :crafting_get_by_known_id,
                            :remember_got_crafting_item, :remember_crafting_id, :crafting_hand_obj, :forget_combined_crafting_ids
 
       # Puts a crafting tool away: ties it to the crafting belt when the belt

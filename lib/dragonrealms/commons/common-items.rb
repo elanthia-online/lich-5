@@ -1203,16 +1203,37 @@ module Lich
       # @example Some sepia pins 4101800 in the worn duffel bag 2391122
       #   DRCI.stored_id('pins', '#2391122', snapshot: Lich::Common::Inventory.current) #=> "4101800"
       def stored_id(name, container, snapshot:)
-        return nil if snapshot.nil? || name.nil?
+        ids = stored_ids(name, container, snapshot: snapshot)
+        ids.size == 1 ? ids.first : nil
+      end
+
+      # The ids of every item directly in a container that a name means, read
+      # from an Inventory feed snapshot, by the same rule as {.stored_id}.
+      # For a caller that must tell "one match" from "several" itself, e.g.
+      # to drop an id it already holds while the snapshot shows the game a
+      # choice. Sends no game command; as old as the snapshot given.
+      #
+      # @param name [String, Integer, nil] noun phrase; an Integer is an id
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives []
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives []
+      # @return [Array<String>] the ids, without "#", in snapshot order; []
+      #   when the snapshot, the container or a matching item is missing, or
+      #   when the container is locked (contents unknown)
+      #
+      # @example Two pins in the worn duffel bag 2391122
+      #   DRCI.stored_ids('pins', 2391122, snapshot: Lich::Common::Inventory.current) #=> ["4101800", "4101802"]
+      def stored_ids(name, container, snapshot:)
+        return [] if snapshot.nil? || name.nil?
 
         container_id = container.to_s.strip.delete_prefix('#')
-        return nil unless container_id.match?(/\A\d+\z/)
+        return [] unless container_id.match?(/\A\d+\z/)
 
         bag = snapshot[container_id]
-        return nil unless bag
+        return [] unless bag
 
-        ids = bag.contents(:in).select { |item| held_obj_matches?(item, name) }.filter_map { |item| held_obj_id(item) }.uniq
-        ids.size == 1 ? ids.first : nil
+        bag.contents(:in).select { |item| held_obj_matches?(item, name) }.filter_map { |item| held_obj_id(item) }.uniq
       end
 
       # Whether a name means an item, by the {.held_id} rule (noun equal to

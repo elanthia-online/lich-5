@@ -3,6 +3,7 @@
 require_relative '../../../spec_helper'
 require 'common/gameobj'
 require 'common/inventory'
+require 'common/script_execution_guard'
 require 'dragonrealms/commons/common'
 require 'dragonrealms/commons/common-items'
 require 'dragonrealms/commons/common-travel'
@@ -272,6 +273,24 @@ RSpec.describe Lich::DragonRealms::DRCC do
         expect(sent).to eq(['get #4101800'])
       end
 
+      # A known id is never held, so "You are already ..." can't mean the
+      # pins are in hand: the id names something else now (worn here).
+      it 'forgets it after "You are already wearing that." with the id not in hand, and GETs by name' do
+        game('get #4101800', 'You are already wearing that.')
+        game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get #4101800', 'get my pins from #2391122'])
+        expect(drci.in_hand?('#4101801')).to be(true)
+        expect(memo.dead?('4101800')).to be(true)
+      end
+
+      it 'is a final failure after "You are already wearing that." when the by-name GET finds nothing' do
+        game('get #4101800', 'You are already wearing that.')
+        game('get my pins from #2391122', not_found)
+        expect(get_pins).to be(false)
+        expect(sent).to eq(['get #4101800', 'get my pins from #2391122'])
+      end
+
       it 'unties by id after "You should untie"' do
         game('get #4101800', 'You should untie the pins first.')
         game('untie #4101800', 'You untie the pins.') { hands(right: pins, left: half_made) }
@@ -526,10 +545,82 @@ RSpec.describe Lich::DragonRealms::DRCC do
       expect(sent).to eq(['get #4101801'])
     end
 
+    context 'when the snapshot shows the game a choice' do
+      let(:cloth) { ['4101850', 'cloth', 'cotton cloth'] }
+      let(:offcut) { ['4101851', 'cloth', 'cotton cloth'] }
+
+      def get_cloth
+        described_class.get_crafting_item('cotton cloth', 'duffel bag', ['cotton cloth'], nil)
+      end
+
+      # sew stows the offcut by DRC.right_hand (a PUT by id) and then GETs
+      # "cotton cloth" for the next piece. With two pieces in the bag, the
+      # game picks, as before; the memo does not force the offcut.
+      it "GETs stock by name while two pieces match, even after stowing one by id (sew's offcut)" do
+        feed([%w[4101850 some,cotton,cloth], %w[4101851 some,cotton,cloth]])
+        hands(right: offcut, left: half_made)
+        game('put #4101851 in #2391122', 'You put your cloth in your heavy silk duffel bag.') { hands(left: half_made) }
+        expect(described_class.stow_crafting_item('cotton cloth', 'duffel bag', nil)).to be(true)
+        hands
+        sent.clear
+        game('get my cotton cloth from #2391122', 'You get some cotton cloth from inside your heavy silk duffel bag.') { hands(right: cloth) }
+        expect(get_cloth).to be(true)
+        expect(sent).to eq(['get my cotton cloth from #2391122'])
+      end
+
+      it 'gives the pins to a GET of "pins" by name while two pins are listed in the bag, the remembered one too' do
+        feed([%w[4101800 some,sepia,pins], %w[4101801 some,sepia,pins]])
+        stow_pins(new_pins)
+        game('get my pins from #2391122', got_pins) { hands(right: pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get my pins from #2391122'])
+      end
+
+      it 'still GETs by the remembered id when the other listed match is in hand' do
+        feed([%w[4101800 some,sepia,pins], %w[4101801 some,sepia,pins]])
+        stow_pins(new_pins)
+        hands(right: pins, left: half_made)
+        game('get #4101801', got_pins) { hands(right: pins, left: new_pins) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get #4101801'])
+      end
+
+      # A snapshot that still lists pins DRCC found dead (an older
+      # snapshot than the miss) shows no choice.
+      it 'still GETs by the remembered id when the other listed match is dead' do
+        feed([%w[4101800 some,sepia,pins]])
+        game('get #4101800', not_found)
+        game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+        expect(get_pins).to be(true)
+        feed([%w[4101800 some,sepia,pins], %w[4101801 some,sepia,pins]])
+        stow_pins(new_pins)
+        game('get #4101801', got_pins) { hands(right: new_pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get #4101801'])
+      end
+    end
+
     context 'when the feed answered but no snapshot is held' do
       before(:each) do
         allow(inventory).to receive(:feed_available?).and_return(true)
         allow(inventory).to receive(:current).and_return(nil)
+      end
+
+      it 'sends no refresh for a remembered id' do
+        allow(inventory).to receive(:refresh)
+        stow_pins
+        game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
+        expect(get_pins).to be(true)
+        expect(sent).to eq(['get #4101800'])
+        expect(inventory).not_to have_received(:refresh)
+      end
+
+      it 'raises a script interruption from the refresh on, sending no GET and logging no lookup failure' do
+        interrupted = Lich::Common::ScriptExecutionGuard::Interrupted
+        allow(inventory).to receive(:refresh).and_raise(interrupted.new(:killed))
+        expect { get_pins }.to raise_error(interrupted)
+        expect(sent).to be_empty
+        expect(Lich).not_to have_received(:log)
       end
 
       it 'sends one short refresh, then none within the interval' do
@@ -664,6 +755,17 @@ RSpec.describe Lich::DragonRealms::DRCC do
       expect(sent).to eq(['get #4101800', 'count #4101800', 'put #4101800 in #2391122', 'walk 8775'])
     end
 
+    it 'forgets the id on "You are already wearing that." with the id not in hand, then GETs and counts by name' do
+      stow_pins
+      game('get #4101800', 'You are already wearing that.')
+      game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+      game('count #4101801', count_ok)
+      game('put #4101801 in #2391122', put_pins) { hands(left: half_made) }
+      expect(check).to be(true)
+      expect(sent).to eq(['get #4101800', 'get my pins from #2391122', 'count #4101801', 'put #4101801 in #2391122', 'walk 8775'])
+      expect(memo.dead?('4101800')).to be(true)
+    end
+
     it 'GETs by the id stowed as "sepia pins"' do
       stow_pins(as: :right_hand)
       game('get #4101800', got_pins) { hands(right: pins, left: half_made) }
@@ -717,6 +819,22 @@ RSpec.describe Lich::DragonRealms::DRCC do
                         '</inventoryManager>')
       expect(inventory.current['2391122']).to be_locked
       expect(drci.stored_id('pins', '#2391122', snapshot: inventory.current)).to be_nil
+    end
+  end
+
+  describe 'DRCI.stored_ids' do
+    before(:each) { feed([%w[4101800 some,sepia,pins], ['4101802', 'some straight,iron,pins'], %w[4101850 a,linen,cloth]]) }
+
+    it 'gives every match in the container, in snapshot order' do
+      expect(drci.stored_ids('pins', 2_391_122, snapshot: inventory.current)).to eq(%w[4101800 4101802])
+      expect(drci.stored_ids('iron pins', '#2391122', snapshot: inventory.current)).to eq(%w[4101802])
+    end
+
+    it 'gives [] for a nil snapshot, a nil name, a name container, or no match' do
+      expect(drci.stored_ids('pins', '#2391122', snapshot: nil)).to eq([])
+      expect(drci.stored_ids(nil, '#2391122', snapshot: inventory.current)).to eq([])
+      expect(drci.stored_ids('pins', 'duffel bag', snapshot: inventory.current)).to eq([])
+      expect(drci.stored_ids('wax', '#2391122', snapshot: inventory.current)).to eq([])
     end
   end
 
