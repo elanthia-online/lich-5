@@ -6,8 +6,9 @@ require 'digest'
 require 'open3'
 
 # Offline evidence builder for the cached 33-script cohort, not a script runner.
-# Reads only pinned Git blobs, checks the audit hashes, and decodes selected Prism
-# string nodes. Interpolation is substituted as data; no source Ruby is evaluated.
+# Reads only pinned Git blobs and the committed synthetic excerpt text, checks the
+# audit hashes, and decodes selected Prism string nodes. Interpolation is
+# substituted as data; no source Ruby is evaluated.
 # Usage: ruby spec/support/build_css_decoration_corpus.rb EO_REPO MIRROR_REPO > fixture.json
 # The output must equal spec/fixtures/webui/css-decoration.json byte for byte; the
 # corpus spec checks this when CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO are set.
@@ -26,7 +27,12 @@ module CssDecorationCorpus
     'timers' => [379, 395, 432, 444], 'tpick' => [95, 2558], 'tpick2' => [862, 1253], 'treasurewindow' => [211],
   }.freeze
   METHODS = %i[load load_from_data add_provider remove_provider add_provider_for_screen remove_provider_for_screen add_class remove_class has_class? list_classes].freeze
-  # Reviewed CSS-only source slices. Dependencies are explicitly rebound in specs.
+  # Synthetic, hand-written excerpt text, keyed by script name and the first line of
+  # the original range it stands in for. The corpus carries no verbatim script text
+  # in excerpts[].source; the pinned original lines are only hashed (original_sha256).
+  EXCERPTS_PATH = File.expand_path('../fixtures/webui/css-decoration-excerpts.json', __dir__)
+  # Original line ranges [first, last] that the synthetic excerpts stand in for.
+  # Dependencies are explicitly rebound in specs.
   EXCERPTS = {
     'tpick' => [[94, 291], [2557, 2564], [2939, 2939], [2084, 2084]],
     'manatimer' => [[83, 94], [76, 76]], 'staminabar2' => [[32, 37]], 'spellson' => [[116, 120]],
@@ -62,7 +68,9 @@ module CssDecorationCorpus
     'scripts[].samples[].sha256'        => 'SHA-256 of css.',
     'scripts[].samples[].loader_line'   => 'Line of the load or load_from_data call that receives the payload.',
     'scripts[].samples[].loader_method' => 'load (keyword data:) or load_from_data.',
-    'scripts[].excerpts'                => 'Reviewed CSS-only source slices the specs may evaluate: first line, end_line, exact source text and its SHA-256.',
+    'scripts[].excerpts'                => 'Synthetic, hand-written Ruby slices the specs may evaluate; they exercise the same shim paths as the original source lines and carry no verbatim script text. line and end_line give the original range each stands in for, source the synthetic text (read from css-decoration-excerpts.json), original_sha256 the SHA-256 of the original lines at revision (provenance only; the original text is not retained) and sha256 the SHA-256 of source.',
+    'scripts[].excerpts[].source'       => 'The synthetic slice text, not script source.',
+    'scripts[].excerpts[].sha256'       => 'SHA-256 of source (the synthetic text), never of script text.',
     'scripts[].max_measured_characters' => 'Largest characters value among samples. A measured sample, not a runtime maximum unless runtime_maximum_proven.',
     'scripts[].runtime_maximum_proven'  => 'true only when every sample is a literal, so the measured size is the runtime size.',
     'scripts[].whole_setup_rendered'    => 'Always false: no whole script setup is rendered from this fixture.',
@@ -200,7 +208,25 @@ module CssDecorationCorpus
     end.sort_by { |call| call['line'] }
   end
 
+  # Synthetic excerpt text per script and original first line. Fails unless the
+  # file covers exactly the EXCERPTS ranges and every text is ASCII.
+  def self.synthetic_excerpts
+    data = JSON.parse(File.read(EXCERPTS_PATH)).fetch('excerpts')
+    wanted = EXCERPTS.transform_values { |ranges| ranges.map { |first, _last| first.to_s }.sort }
+    raise "#{EXCERPTS_PATH} does not match EXCERPTS" unless data.transform_values { |entries| entries.keys.sort } == wanted
+
+    data.transform_values do |entries|
+      entries.transform_values do |lines|
+        text = "#{lines.join("\n")}\n"
+        raise 'Synthetic excerpt is not ASCII' unless text.ascii_only?
+
+        text
+      end
+    end
+  end
+
   def self.build(eo_repo, mirror_repo)
+    synthetic = synthetic_excerpts
     audit_path = File.expand_path('../fixtures/webui/css-provenance.json', __dir__)
     audit = JSON.parse(File.read(audit_path))
     records = audit.fetch('whole_corpus_provider_references').map do |record|
@@ -223,8 +249,12 @@ module CssDecorationCorpus
         payload['loader_method'] = loader['method']
       end
       excerpts = EXCERPTS.fetch(record.fetch('name'), []).map do |first, last|
-        text = source.lines[(first - 1)..(last - 1)].join
-        { 'line' => first, 'end_line' => last, 'source' => text, 'sha256' => Digest::SHA256.hexdigest(text) }
+        original = source.lines[(first - 1)..(last - 1)].join
+        text = synthetic.fetch(record.fetch('name')).fetch(first.to_s)
+        raise "Excerpt #{path}:#{first} repeats the original text" if text == original
+
+        { 'line' => first, 'end_line' => last, 'source' => text,
+          'original_sha256' => Digest::SHA256.hexdigest(original), 'sha256' => Digest::SHA256.hexdigest(text) }
       end
       { 'name' => record.fetch('name'), 'attribution' => attribution(source), 'source' => eo ? 'eo' : 'mirror',
         'revision' => revision, 'path' => path,
@@ -239,7 +269,7 @@ module CssDecorationCorpus
                                   else 'Not determined: CSS excerpts only.'
                                   end }
     end
-    { 'description' => 'Pinned source CSS evidence. No original script executed. Dynamic samples are not runtime maxima.',
+    { 'description' => 'Pinned source CSS evidence. Samples and calls are measured from the pinned sources; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.',
       'audit_sha256' => Digest::SHA256.file(audit_path).hexdigest, 'bound' => 8192, 'fields' => FIELDS, 'scripts' => records }
   end
 end
