@@ -66,8 +66,12 @@ module Lich
       # wait for) still counts as a prompt. The game says "1 uses" for the
       # last use (2026-10-25 game log:30340); the singular "use" is
       # accepted but has not been seen. bput returns the matched text, from
-      # which +uses+ is read with this same pattern.
-      STUDY_INSTRUCTIONS_AGAIN = /(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
+      # which +uses+ is read with this same pattern. No double quote may come
+      # before the prompt, so another player's speech, whisper or ESP that
+      # quotes it (e.g. Name says, "These instructions have only 1 uses
+      # remaining.  Study them again to proceed.") is not taken as the game
+      # asking for another study, with its uses count.
+      STUDY_INSTRUCTIONS_AGAIN = /^[^"]*?(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
       # Ends a completed study: "Roundtime: 7 sec." (2026-10-25 game log:10825).
       STUDY_INSTRUCTIONS_SUCCESS = /^Roundtime/
       # Code-derived, not seen after a study in the logs: the reply to a
