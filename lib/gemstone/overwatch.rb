@@ -158,6 +158,8 @@ module Lich
           REVEALED_YOU_REVEAL = /You reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> from hiding\!/
           REVEALED_WALL_THORNS = /The thorny barrier surrounding you blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_FLAMING_AURA = /The flaming aura surrounding you lashes out at <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who is forced into view!/
+          # Order of Voln Symbol of Sleep reveals hidden creatures before putting them to sleep
+          REVEALED_VOLN_SLEEP = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed by the pattern!/
           REVEALED_EXPLODES = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> explodes from the shadows!  <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> shining eyes agleam with cunning, <pushBold\/>\w+ <a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> lashes out at you with <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a>\!/
 
           # Animal companion reveals
@@ -193,6 +195,7 @@ module Lich
             REVEALED_WALL_THORNS,
             REVEALED_FLAMING_AURA,
             REVEALED_EXPLODES,
+            REVEALED_VOLN_SLEEP,
             REVEALED_AC_CAT,
             REVEALED_AC_CANINE,
             REVEALED_AC_AVIAN,
