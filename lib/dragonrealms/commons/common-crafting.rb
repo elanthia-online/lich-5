@@ -113,6 +113,12 @@ module Lich
       PUT_BAG_TUCK = 'You tuck'
       PUT_BAG_PUT = 'You put your'
       PUT_BAG_NOT_FOUND = 'What were you referring to'
+      # The other not-found reply in DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS.
+      PUT_BAG_COULD_NOT_FIND = /^I could not find what you were referring to/
+      # "Perhaps you should be holding that first." The PUT found an item by
+      # that name that isn't in a hand, e.g. worn "leathers" for "my leather",
+      # so the held one was not put away.
+      PUT_BAG_NOT_HELD = /^Perhaps you should be holding that first/
       # Kept off quoted text, like the refusals below.
       PUT_BAG_TOO_BIG = /^[^"]*?is too \w+ to (?:fit|hold)/
       # "You just can't get the small brazier to fit in the leather satchel,
@@ -149,8 +155,14 @@ module Lich
       REPAIR_CONFUSED = 'cannot figure out how'
       REPAIR_POUR_WHAT = 'Pour what'
 
-      CONSUMABLE_GET_SUCCESS = 'You get'
-      CONSUMABLE_GET_NOT_FOUND = 'What were'
+      # Anchored so another player's speech can't start a trip to the shop.
+      CONSUMABLE_GET_SUCCESS = /^You get/
+      CONSUMABLE_GET_NOT_FOUND = /^What were you referring to/
+      # The other not-found reply to GET; also means none are left.
+      CONSUMABLE_GET_COULD_NOT_FIND = /^I could not find what you were referring to/
+      # "You need a free hand to pick that up." The consumable may still be in
+      # the bag, and an order would fail with both hands full.
+      CONSUMABLE_GET_NO_FREE_HAND = /^You need a free hand/
       COUNT_USES_PATTERN = /(\d+)/.freeze
       COUNT_USES_MESSAGES = [
         'The .* has (\d+) uses remaining',
@@ -601,8 +613,14 @@ module Lich
       # @param name [String, nil] tool noun; nil sends nothing
       # @param bag [String] container noun for tools off the belt
       # @param belt [Hash, nil] crafting belt settings ('name', 'items')
-      # @return [Boolean, nil] false when +bag+ refuses the tool and it goes to
-      #   the other +bag+; nil without a +name+; true otherwise
+      # @return [Boolean, nil] nil without a +name+. false when the tool is
+      #   still in a hand after the PUT and any STOW fallback: the PUT got
+      #   "Perhaps you should be holding that first." (it matched an item
+      #   that isn't held), a not-found reply, or no reply, or +bag+ refused
+      #   the tool and the STOW failed too. Also false when +bag+ answers
+      #   "You can't put that there" and the tool goes to the other +bag+.
+      #   true otherwise, including a not-found reply or a timeout with no
+      #   matching item in either hand (nothing left to put away).
       def stow_crafting_item(name, bag, belt)
         return unless name
 
@@ -616,14 +634,26 @@ module Lich
           Lich::Messaging.msg('bold', "DRCC: Failed to tie #{name} to #{belt['name']}. Stowing it off the belt instead.")
         end
 
-        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, *PUT_BAG_STOW_INSTEAD, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
+        case DRC.bput("put my #{name} in my #{bag}", PUT_BAG_TUCK, PUT_BAG_PUT, PUT_BAG_NOT_FOUND, PUT_BAG_COULD_NOT_FIND, PUT_BAG_NOT_HELD,
+                      *PUT_BAG_STOW_INSTEAD, PUT_BAG_CANT_THERE, PUT_BAG_COMBINE)
         when *PUT_BAG_STOW_INSTEAD
-          fput("stow my #{name}")
+          return true if DRCI.stow_item?(name)
+
+          failure = "#{bag} would not take #{name}, and stowing it failed too."
         when PUT_BAG_CANT_THERE
           fput("put my #{name} in my other #{bag}")
           return false
+        when PUT_BAG_NOT_FOUND, PUT_BAG_COULD_NOT_FIND, PUT_BAG_NOT_HELD, ''
+          failure = "Could not put #{name} in #{bag}."
+        else
+          return true
         end
-        true
+        # A failed PUT or STOW leaves the hands as they were, so they say
+        # whether anything is left to put away.
+        return true unless DRCI.in_hands?(name)
+
+        Lich::Messaging.msg('bold', "DRCC: #{failure} It is still in your hands.")
+        false
       end
 
       # Ties a crafting tool to the belt. When wounds hinder the tie, visits
@@ -667,8 +697,9 @@ module Lich
       #     (STUDY_INSTRUCTIONS_LAST_USE)
       #
       # There is no stow field: stow_crafting_item answers true for a PUT that
-      # timed out or got "What were you referring to?", so it cannot tell
-      # whether the instructions were put away, and no caller reads it.
+      # timed out or got "What were you referring to?" when no instructions
+      # are in a hand, so it cannot tell whether they were put away, and no
+      # caller reads it.
       StudyInstructionsResult = Data.define(:studied, :uses_left, :discarded) do
         # @return [Boolean] see #studied
         def studied?
@@ -919,22 +950,54 @@ module Lich
         nil
       end
 
+      # Makes sure +bag+ holds a consumable with at least +count+ uses. Gets
+      # it from +bag+ and counts it; one with too few uses is disposed of and
+      # replaced by a fresh call. Orders one at +room+ only when the GET says
+      # there is none ("What were you referring to?" or "I could not find
+      # what you were referring to."), puts it away, then walks back to the
+      # room it started in.
+      #
+      # @param name [String] consumable noun, e.g. 'oil', 'wire brush'
+      # @param room [Integer, String] shop room id or map tag for the order
+      # @param number [Integer, String] the shop's ORDER number
+      # @param bag [String] container noun the consumable is kept in
+      # @param bag_items [Array<String>, nil] passed on to the replacing call
+      # @param belt [Hash, nil] crafting belt settings for stow_crafting_item
+      # @param count [Integer] fewest uses to keep
+      # @return [Boolean] false, without walking or ordering, when the GET
+      #   gets "You need a free hand to pick that up." or no reply. false,
+      #   with nothing put away, when DRCT.order_item returns nil or '' (no
+      #   coins, full hands, an unreachable shop or a timeout); it still walks
+      #   back. true otherwise, even when stow_crafting_item reports a
+      #   failure (it prints its own line).
       def check_consumables(name, room, number, bag, bag_items, belt, count = 3)
         current = Room.current.id
-        case DRC.bput("get my #{name} from my #{bag}", CONSUMABLE_GET_SUCCESS, CONSUMABLE_GET_NOT_FOUND)
+        result = DRC.bput("get my #{name} from my #{bag}", CONSUMABLE_GET_SUCCESS, CONSUMABLE_GET_NOT_FOUND,
+                          CONSUMABLE_GET_COULD_NOT_FIND, CONSUMABLE_GET_NO_FREE_HAND)
+        case result
         when CONSUMABLE_GET_SUCCESS
           count_result = DRC.bput("count my #{name}", *COUNT_USES_MESSAGES)
           match = count_result.match(COUNT_USES_PATTERN)
           if match && match[1].to_i < count
             DRCT.dispose(name)
-            DRCC.check_consumables(name, room, number, bag, bag_items, belt, count)
+            # The call below gets, buys, stows and walks back on its own.
+            return DRCC.check_consumables(name, room, number, bag, bag_items, belt, count)
+          end
+          DRCC.stow_crafting_item(name, bag, belt)
+        when CONSUMABLE_GET_NOT_FOUND, CONSUMABLE_GET_COULD_NOT_FIND
+          if DRCT.order_item(room, number).to_s.empty?
+            Lich::Messaging.msg('bold', "DRCC: Could not buy #{name} (order #{number} at #{room}). Not putting anything away.")
+            DRCT.walk_to(current)
+            return false
           end
           DRCC.stow_crafting_item(name, bag, belt)
         else
-          DRCT.order_item(room, number)
-          DRCC.stow_crafting_item(name, bag, belt)
+          reason = result.match?(CONSUMABLE_GET_NO_FREE_HAND) ? 'no free hand' : 'no reply'
+          Lich::Messaging.msg('bold', "DRCC: Could not get #{name} from #{bag} to check it (#{reason}). Not buying more.")
+          return false
         end
         DRCT.walk_to(current)
+        true
       end
 
       def get_adjust_tongs?(usage, bag, bag_items, belt, adjustable_tongs = false)
