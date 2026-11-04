@@ -62,9 +62,23 @@ saga_lich_launch_environment = {
           '%PROGRAMFILES%/Saga/Saga.exe',
           '%PROGRAMFILES(X86)%/Saga/Saga.exe'
         ],
-        # Saga's Linux AppImage location is user-selected; /opt is one known
-        # convention pending desktop/AppImage discovery.
+        # electron-builder's deb/rpm install path. Saga has only ever shipped
+        # an AppImage on Linux (see appimage below); kept for manual installs.
         linux: ['/opt/Saga/saga']
+      },
+      # Linux releases are a single versioned AppImage with no installer.
+      # Integrator desktop entries are matched by the embedded desktop file's
+      # StartupWMClass, then these case-sensitive names (SAGA GIS also uses
+      # `saga`) are searched in those and the usual AppImage directories.
+      appimage: {
+        startup_wm_class: 'Saga',
+        names: %w[Saga-[0-9]*.AppImage Saga.AppImage],
+        directories: %w[
+          %HOME%/Applications
+          %HOME%/AppImages
+          %HOME%/.local/bin
+          %HOME%/Downloads
+        ]
       }
     }
   }

@@ -2,6 +2,7 @@
 
 require 'rexml/document'
 require 'open3'
+require 'shellwords'
 
 module Lich
   module Common
@@ -85,18 +86,22 @@ module Lich
       # @param logger [#call, nil] receives handled discovery warning strings
       # @param application_roots [Array<String>] macOS application directories
       # @param wine [Module, nil] injected Wine integration provider
+      # @param spotlight [#call, nil] macOS bundle-id search returning bundle
+      #   paths; nil uses mdfind
       def initialize(
         platform_key: Frontend.platform_key,
         environment: ENV,
         logger: nil,
         application_roots: ['/Applications', '~/Applications'],
-        wine: (defined?(Wine) ? Wine : nil)
+        wine: (defined?(Wine) ? Wine : nil),
+        spotlight: nil
       )
         @platform_key = Frontend.validate_platform_key!(platform_key)
         @environment = environment
         @logger = logger || method(:default_log)
         @application_roots = application_roots
         @wine = wine
+        @spotlight = spotlight || method(:spotlight_search)
         @cache = {}
         # Always acquire the cache mutex before the application-index mutex
         # when both are needed. resolve(refresh: true) relies on this order.
@@ -170,6 +175,7 @@ module Lich
       def discover(definition)
         candidates = registry_candidates(definition).map { |path| [path, :registry] }
         candidates.concat(application_candidates(definition).map { |path| [path, :application] })
+        candidates.concat(appimage_candidates(definition))
         candidates.concat(conventional_candidates(definition).map { |path| [path, :conventional] })
         candidates.concat(path_candidates(definition).map { |path| [path, :path] })
 
@@ -229,9 +235,140 @@ module Lich
         return [] if bundle_ids.empty?
 
         bundles = bundle_ids.flat_map { |bundle_id| application_index.fetch(bundle_id, []) }.uniq
+        bundles = bundle_ids.flat_map { |bundle_id| spotlight_bundles(bundle_id) }.uniq if bundles.empty?
         bundles.product(executables).map do |bundle, executable|
           File.join(bundle, 'Contents', 'MacOS', executable)
         end
+      end
+
+      SPOTLIGHT_TIMEOUT = 2
+      # Copies Spotlight also indexes that must not become the launch target:
+      # a mounted dmg, the Trash, or a Gatekeeper-translocated read-only copy.
+      SPOTLIGHT_EXCLUDED = %r{\A/Volumes/|/\.Trash/|/AppTranslocation/}
+      private_constant :SPOTLIGHT_TIMEOUT, :SPOTLIGHT_EXCLUDED
+
+      # Finds application bundles outside the scanned application roots via
+      # Spotlight. Each hit is re-checked against its Info.plist bundle id.
+      #
+      # @param bundle_id [String] CFBundleIdentifier to search for
+      # @return [Array<String>] matching bundle paths; empty when Spotlight
+      #   is disabled, slow, or unavailable
+      # @api private
+      def spotlight_bundles(bundle_id)
+        return [] unless bundle_id.match?(/\A[A-Za-z0-9.-]+\z/)
+
+        Array(@spotlight.call(bundle_id)).filter_map do |path|
+          path = path.to_s.strip
+          next unless path.end_with?('.app') && absolute_path?(path)
+          next if path.match?(SPOTLIGHT_EXCLUDED)
+
+          path if mac_bundle_id(path) == bundle_id
+        end
+      rescue SystemCallError, IOError => e
+        log_discovery_error("Spotlight #{bundle_id}", e)
+        []
+      end
+
+      # Runs mdfind for a bundle id with a hard timeout; Spotlight can stall
+      # while indexing and discovery runs while the GUI builds its list.
+      def spotlight_search(bundle_id)
+        query = "kMDItemCFBundleIdentifier == '#{bundle_id}'"
+        Open3.popen3('/usr/bin/mdfind', query) do |stdin, stdout, stderr, wait|
+          stdin.close
+          stderr.close
+          reader = Thread.new { stdout.read }
+          unless wait.join(SPOTLIGHT_TIMEOUT)
+            begin
+              Process.kill('KILL', wait.pid)
+            rescue SystemCallError
+              nil
+            end
+            reader.kill
+            return []
+          end
+          wait.value.success? ? reader.value.to_s.lines(chomp: true) : []
+        end
+      rescue SystemCallError
+        []
+      end
+
+      # Finds a Linux AppImage. Releases ship only a versioned AppImage
+      # (Saga-0.10.8-x86_64.AppImage) that the user places anywhere and that
+      # electron-updater renames to the new version when it updates. Desktop
+      # entries written by AppImage integrators (AppImageLauncher, Gear Lever)
+      # point at custom locations; their directories are then searched by the
+      # catalog name patterns so a renamed post-update file is still found.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @return [Array<Array(String, Symbol)>] candidate paths and sources
+      # @api private
+      def appimage_candidates(definition)
+        return [] unless platform_key == :linux
+
+        appimage = definition.dig(:metadata, :discovery, :appimage)
+        return [] unless appimage
+
+        entries = desktop_entry_appimages(appimage[:startup_wm_class])
+        directories = entries.map { |path| File.dirname(path) }
+        directories.concat((appimage[:directories] || []).filter_map { |path| expand_path(path) })
+        globbed = directories.uniq.flat_map do |directory|
+          appimages_in(directory, appimage[:names] || [])
+        end
+        entries.map { |path| [path, :desktop_entry] } + globbed.uniq.map { |path| [path, :appimage] }
+      end
+
+      # @return [Array<String>] AppImage paths named by matching desktop entries
+      def desktop_entry_appimages(startup_wm_class)
+        return [] if startup_wm_class.to_s.empty?
+
+        data_home = environment_value('XDG_DATA_HOME')
+        data_home = File.join(environment_value('HOME').to_s, '.local', 'share') if data_home.to_s.empty?
+        return [] unless absolute_path?(data_home)
+
+        applications = File.join(data_home, 'applications')
+        Dir.glob('*.desktop', base: applications).sort.filter_map do |name|
+          file = File.join(applications, name)
+          desktop_entry_appimage(file, startup_wm_class)
+        end
+      rescue SystemCallError => e
+        log_discovery_error('desktop entries', e)
+        []
+      end
+
+      def desktop_entry_appimage(file, startup_wm_class)
+        fields = {}
+        section = nil
+        File.foreach(file, encoding: 'UTF-8') do |line|
+          line = line.strip
+          if line.start_with?('[')
+            section = line
+          elsif section == '[Desktop Entry]' && (match = line.match(/\A(StartupWMClass|Exec)\s*=\s*(.*)\z/))
+            fields[match[1]] ||= match[2]
+          end
+        end
+        return nil unless fields['StartupWMClass'] == startup_wm_class
+
+        command = Shellwords.split(fields['Exec'].to_s).first.to_s
+        command if command.start_with?('/') && File.extname(command).casecmp?('.AppImage')
+      rescue SystemCallError, ArgumentError, EncodingError => e
+        log_discovery_error(file, e)
+        nil
+      end
+
+      # Globs catalog AppImage names (case-sensitive) in a directory, newest
+      # release first: highest embedded version, then most recent mtime.
+      def appimages_in(directory, names)
+        paths = names.flat_map do |name|
+          Dir.glob(name, base: directory).map { |file| File.join(directory, file) }
+        end.uniq
+        paths.sort_by { |path| [appimage_version(path), File.mtime(path)] }.reverse
+      rescue SystemCallError => e
+        log_discovery_error(directory, e)
+        []
+      end
+
+      def appimage_version(path)
+        Gem::Version.new(File.basename(path)[/\d+(?:\.\d+)+/] || '0')
       end
 
       def application_index
