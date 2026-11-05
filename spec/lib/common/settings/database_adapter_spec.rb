@@ -847,6 +847,34 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       end
     end
 
+    it 'lets update_settings keep a kill held back until on_stored has returned, when on_stored waits for the version connection' do
+      @adapter.data_version # opens the version connection
+      lock = @adapter.instance_variable_get(:@version_call_lock)
+      release = Queue.new
+      holder = Thread.new { lock.synchronize { release.pop } } # another thread inside the pragma
+      Timeout.timeout(5) { Thread.pass until holder.status == 'sleep' }
+      in_on_stored = Queue.new
+      on_stored_finished = false
+      writer = Thread.new do
+        @adapter.update_settings('go2', 'DR', on_stored: lambda do |_row|
+          in_on_stored << true
+          @adapter.data_version # what Settings' on_stored does (settings.rb cache_stored_row_for)
+          on_stored_finished = true
+        end) { |row| row.merge('k' => 1) }
+      end
+      writer.report_on_exception = false
+      in_on_stored.pop
+      Timeout.timeout(5) { Thread.pass until writer.status == 'sleep' }
+      writer.kill # Script#kill while the writer waits inside on_stored
+      release << true
+      holder.join
+      writer.join(5)
+
+      expect(writer).not_to be_alive
+      expect(on_stored_finished).to be(true)
+      expect(@adapter.get_settings('go2', 'DR')).to eq('k' => 1)
+    end
+
     describe 'closing the version connection' do
       before { @adapter.data_version } # opens the version connection
 
@@ -1253,18 +1281,43 @@ RSpec.describe Lich::Common::DatabaseAdapter::HandoffLock do
     expect(waited).to be < 0.5
   end
 
-  it 'is not stranded by a waiter that is killed while it waits' do
+  it 'holds back a kill to a waiting thread until it has had its turn, and is not stranded by it' do
     release = Queue.new
     holder = Thread.new { lock.synchronize { release.pop } }
     wait_until_blocked(holder)
-    doomed = Thread.new { lock.synchronize { :never_runs } }
-    wait_until_blocked(doomed)
-    doomed.kill
-    doomed.join
+    ran = false
+    waiter = Thread.new { lock.synchronize { ran = true } }
+    wait_until_blocked(waiter)
+    waiter.kill
+    expect(waiter.join(0.2)).to be_nil # the kill waits for the waiter's turn
+    release << true
+    holder.join
+    waiter.join(5)
+
+    expect(waiter).not_to be_alive
+    expect(ran).to be(true)
+    expect(Thread.new { lock.synchronize { :ok } }.join(5)&.value).to eq(:ok)
+  end
+
+  it "keeps a caller's own interrupt deferral while it waits" do
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    after_wait = false
+    caller_thread = Thread.new do
+      Thread.handle_interrupt(Object => :never) do
+        lock.synchronize { nil }
+        after_wait = true # still inside the caller's deferral
+      end
+    end
+    caller_thread.report_on_exception = false
+    wait_until_blocked(caller_thread)
+    caller_thread.raise(RuntimeError, 'script killed')
     release << true
     holder.join
 
-    expect(Thread.new { lock.synchronize { :ok } }.join(5)&.value).to eq(:ok)
+    expect { caller_thread.join(5) }.to raise_error(RuntimeError, 'script killed')
+    expect(after_wait).to be(true)
   end
 
   it 'passes itself on when a waiter is killed just after it was handed the lock' do
@@ -1275,7 +1328,6 @@ RSpec.describe Lich::Common::DatabaseAdapter::HandoffLock do
     wait_until_blocked(first)
     second = Thread.new { lock.synchronize { :second } }
     wait_until_blocked(second)
-    # Hand the lock to first while it cannot run, then kill it before it does.
     Thread.handle_interrupt(Object => :never) do
       holder.join
       first.kill

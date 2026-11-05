@@ -119,7 +119,9 @@ module Lich
   # scope it was meant for (a Timeout::ExitException after its Timeout block
   # has returned), and a killed script's write can land after the writes its
   # cleanup makes once the kill returns. With the C busy timeout none of this
-  # could happen, because nothing else ran until the wait ended.
+  # could happen, because nothing else ran until the wait ended (except on
+  # Windows, where the C busy timeout's sleeps release the GVL and can deliver
+  # interrupts too; see shared connections below).
   #
   # Two exceptions keep waiting until the lock frees or the busy timeout
   # expires, and deliver the interrupt afterwards:

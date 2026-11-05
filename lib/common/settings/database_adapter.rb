@@ -9,10 +9,14 @@ module Lich
       # On release this lock passes ownership straight to the first waiter, so
       # a thread that calls in a tight loop cannot keep others out.
       #
-      # The block runs with interrupts deferred (Thread.handle_interrupt), and
-      # they are delivered once the lock is released. A thread interrupted
-      # while waiting leaves the queue, or, if the lock was handed to it in the
-      # meantime, passes it on, so a killed waiter never strands the lock. Not
+      # Interrupts (Thread#kill, Thread#raise, Timeout) are deferred for the
+      # whole call: while the thread waits for its turn, while it holds the
+      # lock, and until it has released it. None is ever delivered inside, so
+      # a caller's own deferral (update_settings holds a kill back until
+      # on_stored has returned) is never overridden, and a waiter can never
+      # be interrupted out of the queue and strand the lock. The cost is that
+      # a thread waiting here can't be interrupted until its turn has come and
+      # gone; the wait is bounded by the calls queued ahead of it. Not
       # re-entrant.
       class HandoffLock
         def initialize
@@ -34,31 +38,19 @@ module Lich
 
         private
 
+        # Takes the lock, or joins the queue and waits until release hands
+        # it over. With interrupts deferred the wait can't be cut short, so
+        # once pop returns this thread owns the lock.
         def acquire
-          ticket = nil
-          @mutex.synchronize do
+          ticket = @mutex.synchronize do
             if @held
-              ticket = Thread::Queue.new
-              @waiters << ticket
+              Thread::Queue.new.tap { |queue| @waiters << queue }
             else
               @held = true
+              nil
             end
           end
-          return unless ticket
-
-          acquired = false
-          begin
-            Thread.handle_interrupt(Object => :immediate) { ticket.pop }
-            acquired = true
-          ensure
-            # Interrupted while waiting (Thread#kill runs only ensure clauses).
-            # Still queued: leave the queue. Already shifted off it: the lock
-            # was handed to this thread, so hand it on.
-            unless acquired
-              handed = @mutex.synchronize { @waiters.delete(ticket).nil? }
-              release if handed
-            end
-          end
+          ticket&.pop
         end
 
         # The lock stays held while it is handed over, so no thread arriving
@@ -140,7 +132,9 @@ module Lich
       # rb_w32_Sleep also delivers pending interrupts. A Thread#kill or
       # Timeout landing in that sleep would unwind through SQLite's C frames
       # and leave the connection's mutex locked, with the same result for the
-      # next caller. The lock defers interrupts until the call has returned.
+      # next caller. The lock defers interrupts until the call has returned,
+      # and while a thread waits for its turn, so a caller that defers them
+      # itself (update_settings around on_stored) keeps that guarantee.
       #
       # The pragma counts per connection, starting again from 1 on a new one,
       # so after an error has closed the connection the reopened one could
