@@ -219,4 +219,69 @@ RSpec.describe Lich::Common::ScriptListFeed do
       $_CLIENT_ = saved_client
     end
   end
+
+  describe '.window' do
+    let(:window_lines) do
+      ['<streamWindow id="scripts" title="Lich Scripts" ifClosed="" resident="true"/>',
+       '<clearStream id="scripts"/>']
+    end
+
+    it 'defines the window, clears it, and lists each script with links that send the usual commands' do
+      expect(described_class.window(scripts, ';').split("\r\n")).to eq(
+        window_lines + [
+          '<pushStream id="scripts"/>bigshot  <d cmd=";pause bigshot">pause</d> <d cmd=";kill bigshot">kill</d>',
+          'go2 (paused)  <d cmd=";unpause go2">unpause</d> <d cmd=";kill go2">kill</d>',
+          '<popStream/>'
+        ]
+      )
+    end
+
+    it 'says so when nothing runs' do
+      expect(described_class.window([], ';').split("\r\n")).to eq(
+        window_lines + ['<pushStream id="scripts"/>No scripts running.', '<popStream/>']
+      )
+    end
+
+    it 'uses the session command character and escapes what would break the markup' do
+      odd = [fake_script.new(%(a&b<c>"d), false)]
+      line = described_class.window(odd, ',').split("\r\n")[2]
+      expect(line).to eq('<pushStream id="scripts"/>a&amp;b&lt;c&gt;&quot;d  ' \
+                         '<d cmd=",pause a&amp;b&lt;c&gt;&quot;d">pause</d> <d cmd=",kill a&amp;b&lt;c&gt;&quot;d">kill</d>')
+    end
+  end
+
+  describe 'forms per client' do
+    let(:window_client) { client_class.new(%i[script_window]) }
+    let(:both_client) { client_class.new(%i[script_list script_window]) }
+
+    it 'gives each client only the forms in its feed set, data first' do
+      expect(described_class.forms_for(subscriber)).to eq([:script_list])
+      expect(described_class.forms_for(window_client)).to eq([:script_window])
+      expect(described_class.forms_for(both_client)).to eq(%i[script_list script_window])
+      expect(described_class.forms_for(bystander)).to eq([])
+    end
+
+    it 'sends the window to a window client on ready' do
+      allow(described_class).to receive(:start)
+      described_class.client_ready(window_client)
+      expect(window_client.written.size).to eq(1)
+      expect(window_client.written.first).to start_with('<streamWindow id="scripts"')
+    end
+
+    it 'publishes each client its own forms' do
+      allow(described_class).to receive(:subscribers).and_return([subscriber, window_client, both_client])
+      described_class.publish(Time.at(1_000))
+      expect(subscriber.written).to eq([described_class.tag(scripts, ';')])
+      expect(window_client.written).to eq([described_class.window(scripts, ';')])
+      expect(both_client.written).to eq([described_class.tag(scripts, ';'), described_class.window(scripts, ';')])
+    end
+
+    it 'redraws the window when a script is paused' do
+      allow(described_class).to receive(:subscribers).and_return([window_client])
+      described_class.publish(Time.at(1_000))
+      scripts.first.paused = true
+      described_class.publish(Time.at(1_001))
+      expect(window_client.written.last).to include('bigshot (paused)  <d cmd=";unpause bigshot">unpause</d>')
+    end
+  end
 end

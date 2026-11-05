@@ -40,7 +40,7 @@ module Lich
       DECLARABLE = %i[room_element game_links double_bold].freeze
 
       # The feeds a client can ask for, in canonical order.
-      FEEDS = %i[script_list].freeze
+      FEEDS = %i[script_list script_window].freeze
 
       # The client-to-Lich control line. Lich consumes it and never sends it
       # to the game. The command is case-sensitive, like SET_FRONTEND_PID; the

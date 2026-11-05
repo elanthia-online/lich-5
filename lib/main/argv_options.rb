@@ -181,8 +181,8 @@ module Lich
         # unless it declares its own with SET_FRONTEND_CAPS, in place of the
         # catalog's for the frontend (see Lich::Common::ClientCapabilities).
         # An empty LIST (or one with no known name) gives every client the
-        # legacy rewrites. Feeds in LIST (script_list) are added for every
-        # client; a LIST of feeds alone leaves the catalog's rewrites in place.
+        # legacy rewrites. Feeds in LIST (script_list, script_window) replace
+        # the catalog's feeds; a LIST of feeds alone leaves its rewrites alone.
         def self.handle_frontend_caps(argv_options)
           return unless argv_options.key?(:frontend_caps)
 

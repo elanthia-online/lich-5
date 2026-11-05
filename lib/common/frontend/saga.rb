@@ -9,7 +9,7 @@ saga_lich_launch_environment = {
 
 {
   id: :saga,
-  capabilities: %i[xml streams mono room_window sentinel room_element game_links double_bold],
+  capabilities: %i[xml streams mono room_window sentinel room_element game_links double_bold script_window],
   metadata: {
     display_name: 'Saga',
     gui_selectable: true,

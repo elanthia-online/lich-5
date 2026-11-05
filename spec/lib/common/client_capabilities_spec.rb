@@ -248,7 +248,7 @@ RSpec.describe Lich::Common::ClientCapabilities do
 
     describe '.feeds_for' do
       it 'is what the client asked for, else the session feeds' do
-        $frontend = 'saga'
+        $frontend = 'genie'
         expect(described_class.feeds_for(client)).to eq([])
         described_class.launch_feeds = [:script_list]
         expect(described_class.feeds_for(client)).to eq([:script_list])
@@ -256,10 +256,27 @@ RSpec.describe Lich::Common::ClientCapabilities do
         expect(described_class.feeds_for(client)).to eq([])
       end
 
-      it 'gives no built-in front end a feed by default' do
-        %w[saga genie profanity wrayth wizard].each do |frontend|
+      # The stream window goes, by default, to the front ends whose catalog
+      # entry says they render it; nothing gets the data feed by default.
+      it 'gives the stream window to Saga and Wrayth by default, and nothing else a feed' do
+        expect(described_class.session_feeds('saga')).to eq([:script_window])
+        expect(described_class.session_feeds('stormfront')).to eq([:script_window])
+        expect(described_class.session_feeds('wrayth')).to eq([:script_window])
+        %w[genie profanity frostbite wizard avalon].each do |frontend|
           expect(described_class.session_feeds(frontend)).to eq([])
         end
+      end
+
+      it 'replaces the default window with the data feed for a client that declares script_list' do
+        $frontend = 'saga'
+        expect(described_class.feeds_for(client)).to eq([:script_window])
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
+        expect(described_class.feeds_for(client)).to eq([:script_list])
+      end
+
+      it 'gives both to a client that declares both' do
+        described_class.declare(client, "SET_FRONTEND_CAPS script_window script_list\n")
+        expect(described_class.feeds_for(client)).to eq(%i[script_list script_window])
       end
 
       it 'honours a GSL session client\'s own feeds' do
