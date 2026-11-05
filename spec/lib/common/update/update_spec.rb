@@ -183,6 +183,34 @@ RSpec.describe 'Lich::Util::Update.request while a revert is running' do
       expect_revert_refused
     end
   end
+
+  # The archive downloads follow GitHub's redirects, so they use open-uri
+  # rather than GitHubClient, but with its timeouts instead of Net::HTTP's
+  # 60-second defaults.
+  describe 'archive downloads' do
+    let(:timeouts) do
+      { open_timeout: Lich::Util::Update::GitHubClient::OPEN_TIMEOUT,
+        read_timeout: Lich::Util::Update::GitHubClient::READ_TIMEOUT }
+    end
+
+    before do
+      stub_const('TEMP_DIR', File.join(root, 'tmp')).tap { FileUtils.mkdir_p(TEMP_DIR) }
+      allow(OpenURI).to receive(:open_uri).and_raise(SocketError, 'offline')
+    end
+
+    it '--update passes the GitHubClient timeouts to open-uri' do
+      expect { Lich::Util::Update.request('--update') }.to raise_error(SocketError)
+
+      expect(OpenURI).to have_received(:open_uri).with(URI('https://example.invalid/lich5.tar.gz'), timeouts).once
+    end
+
+    it '--branch passes the GitHubClient timeouts to open-uri' do
+      Lich::Util::Update.request('--branch=main')
+
+      expect(OpenURI).to have_received(:open_uri)
+        .with(URI("https://github.com/#{Lich::Util::Update::GITHUB_REPO}/archive/refs/heads/main.tar.gz"), timeouts).once
+    end
+  end
 end
 
 RSpec.describe 'Lich::Util::Update.request beta routing' do

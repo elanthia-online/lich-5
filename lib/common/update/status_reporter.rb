@@ -31,9 +31,10 @@ module Lich
         # @param error [FetchError, nil] the client's last_error (nil = unclassified)
         # @param consequence [String] what did not happen, e.g. "No scripts have been updated this run."
         # @param subject [String, nil] what was being fetched, named in the not-found message
+        # @param retried_by [Symbol] :login or :user, see #github_failure_message
         # @return [void]
-        def self.respond_github_failure(error, consequence, subject: nil)
-          respond_mono("[lich5-update: #{github_failure_message(error, consequence, subject: subject)}]")
+        def self.respond_github_failure(error, consequence, subject: nil, retried_by: :login)
+          respond_mono("[lich5-update: #{github_failure_message(error, consequence, subject: subject, retried_by: retried_by)}]")
         end
 
         # Builds the text #respond_github_failure prints, for callers that

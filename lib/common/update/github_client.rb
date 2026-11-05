@@ -48,6 +48,22 @@ module Lich
         # connection itself.
         READ_TIMEOUT = 30
 
+        # Timeout options for the release and branch archive downloads. They
+        # go through open-uri instead of perform_get because GitHub answers
+        # them with a redirect (to codeload or the release-asset host), which
+        # open-uri follows and perform_get does not. open-uri applies these
+        # to every hop.
+        #
+        # open-uri cannot turn off Net::HTTP's retry, so a server that stalls
+        # before sending response headers costs two READ_TIMEOUTs. Net::HTTP
+        # never retries once the body has started, so a download that stalls
+        # partway fails instead of being restarted into the same buffer.
+        #
+        # @return [Hash{Symbol=>Numeric}] options for URI::HTTP#open
+        def self.open_uri_timeouts
+          { open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT }
+        end
+
         attr_reader :http_cache
 
         # @param cache_ttl [Integer] cache TTL in seconds (default: 60)

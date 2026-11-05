@@ -66,7 +66,7 @@ module Lich
               respond
               tarball_path = File.join(TEMP_DIR, "#{filename}.tar.gz")
               File.open(tarball_path, "wb") do |file|
-                file.write URI.parse(tarball_url).open.read
+                file.write URI.parse(tarball_url).open(**GitHubClient.open_uri_timeouts).read
               end
 
               extract_dir = File.join(TEMP_DIR, filename)
