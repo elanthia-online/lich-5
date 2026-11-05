@@ -17,6 +17,10 @@ RSpec.describe Lich::Common::ClientCapabilities do
   after do
     client.close rescue nil
     described_class.launch_capabilities, described_class.launch_feeds, $frontend = @saved
+    # A real declare hands the client to the script list feed, which may
+    # start its thread (a saga session gets script_window by default). Stop
+    # it so it cannot outlive this example.
+    Lich::Common::ScriptListFeed.reset!
   end
 
   describe '.declaration?' do

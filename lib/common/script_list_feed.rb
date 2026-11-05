@@ -24,12 +24,21 @@ module Lich
     # A client that declares +script_list+ replaces its feed set with that,
     # so it stops getting the window; one that declares both gets both.
     #
-    # The tag goes to a client as soon as it declares the capability, again
-    # whenever the list changes, and every HEARTBEAT seconds, so a client that
-    # reloads without re-attaching relearns it. Script lifecycle code calls
+    # The list goes to a client as soon as it gets a feed, and again only
+    # when the list changes: nothing is resent on a timer. A client that
+    # loses its copy (a view reload without re-attaching) sends its
+    # SET_FRONTEND_CAPS line again to be sent the current list. The command
+    # character is set once at startup (lib/main/main.rb), so it never
+    # changes the list on its own. Script lifecycle code calls
     # +changed!+, which only flags the change: the send happens on this
     # module's own thread, so no socket write runs under a script registry
-    # lock, and a burst of changes (a ;kill all) goes out as one tag.
+    # lock, and a burst of changes (a ;kill all) goes out as one update.
+    #
+    # What each client was last sent is recorded per client, and every send
+    # (the attach-time one and the thread's) takes the snapshot and writes it
+    # under one lock. So a client that joins mid-change is compared with what
+    # it actually got, and an older snapshot can never land after a newer
+    # one.
     #
     # The tag is written to the client sockets directly, never through
     # +_respond+, so scripts that watch script output never see it.
@@ -47,8 +56,6 @@ module Lich
       # Every form, in the order they are sent to a client that gets both.
       FORMS = [LIST, WINDOW].freeze
 
-      # Seconds between unconditional resends.
-      HEARTBEAT = 30
       # Seconds to wait after a change before sending, to fold a burst into one tag.
       SETTLE = 0.1
 
@@ -60,8 +67,12 @@ module Lich
       @wakeup = ConditionVariable.new
       @dirty = false
       @thread = nil
-      @last_tag = nil
-      @last_sent_at = nil
+      # Held while a snapshot is taken and written, by client_ready and by
+      # publish. Lock order: this, then the script registry (Script.running);
+      # nothing that holds the registry lock ever takes this.
+      @send_mutex = Mutex.new
+      # Each client's last data tag sent, keyed by the client object itself.
+      @sent = {}.compare_by_identity
 
       class << self
         # Percent-encodes every byte outside A-Z, a-z, 0-9 and _ . / -.
@@ -140,10 +151,12 @@ module Lich
         def client_ready(client)
           return false unless wants?(client)
 
-          scripts = Script.running
-          lich_char = $clean_lich_char
-          start(tag(scripts, lich_char))
-          deliver(client, scripts, lich_char)
+          start
+          @send_mutex.synchronize do
+            scripts = Script.running
+            lich_char = $clean_lich_char
+            send_to(client, scripts, lich_char, tag(scripts, lich_char))
+          end
         rescue StandardError => e
           log("error: script list feed: #{e}\n\t#{e.backtrace&.first}")
           false
@@ -182,41 +195,33 @@ module Lich
         # Starts the change thread if it is not running. Called lazily, so a
         # session where no client asks for the feed never starts it.
         #
-        # @param sent_tag [String, nil] the list the first subscriber is being
-        #   sent, so the thread does not send that subscriber the same list
-        #   again on a change ;list does not show (a hidden script starting)
         # @return [Thread]
-        def start(sent_tag = nil)
+        def start
           @mutex.synchronize do
             return @thread if @thread&.alive?
 
-            # Seeded before the thread exists, so nothing reads these yet.
-            @last_tag = sent_tag
-            @last_sent_at = sent_tag && Time.now
             @thread = Thread.new { run }
             @thread.name = 'lich-script-list-feed' if @thread.respond_to?(:name=)
             @thread
           end
         end
 
-        # Sends the list to the subscribers, each in its own forms, when it
-        # changed or the heartbeat is due, and records what was sent. The data
-        # tag stands for the list: both forms are built from the same scripts
-        # and command character.
+        # Sends the list to each subscriber, in its own forms, whose last
+        # list differs from the current one. The data tag stands for the list:
+        # both forms are built from the same scripts and command character.
         #
-        # @param now [Time]
         # @return [Boolean] whether anything was sent
-        def publish(now = Time.now)
-          scripts = Script.running
-          lich_char = $clean_lich_char
-          tag = tag(scripts, lich_char)
-          due = @last_sent_at.nil? || now - @last_sent_at >= HEARTBEAT
-          return false if tag == @last_tag && !due
-
-          subscribers.each { |client| deliver(client, scripts, lich_char) }
-          @last_tag = tag
-          @last_sent_at = now
-          true
+        def publish
+          @send_mutex.synchronize do
+            clients = subscribers
+            # Forget clients that left or stopped getting a feed.
+            @sent.keep_if { |client, _tag| clients.any? { |current| current.equal?(client) } }
+            scripts = Script.running
+            lich_char = $clean_lich_char
+            tag = tag(scripts, lich_char)
+            sent = clients.select { |client| @sent[client] != tag && send_to(client, scripts, lich_char, tag) }
+            !sent.empty?
+          end
         end
 
         # Stops the change thread and forgets what was sent. For specs and
@@ -233,8 +238,7 @@ module Lich
           end
           thread&.kill
           thread&.join(1)
-          @last_tag = nil
-          @last_sent_at = nil
+          @send_mutex.synchronize { @sent.clear }
           nil
         end
 
@@ -243,7 +247,7 @@ module Lich
         def run
           loop do
             @mutex.synchronize do
-              @wakeup.wait(@mutex, HEARTBEAT) unless @dirty
+              @wakeup.wait(@mutex) until @dirty
               @dirty = false
             end
             sleep SETTLE
@@ -257,6 +261,16 @@ module Lich
 
         def link(lich_char, verb, name)
           %(<d cmd="#{xml_escape("#{lich_char}#{verb} #{name}")}">#{verb}</d>)
+        end
+
+        # Writes the list to a client and records it as that client's last
+        # list. Called with @send_mutex held. Not recorded when the write
+        # failed, so the next publish tries again.
+        def send_to(client, scripts, lich_char, tag)
+          return false unless deliver(client, scripts, lich_char)
+
+          @sent[client] = tag
+          true
         end
 
         # Writes the list to one client in each form it gets.

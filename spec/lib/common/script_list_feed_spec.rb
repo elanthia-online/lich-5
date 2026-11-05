@@ -123,32 +123,51 @@ RSpec.describe Lich::Common::ScriptListFeed do
   end
 
   describe '.publish' do
-    let(:now) { Time.at(1_000) }
-
     it 'sends to the subscribers only' do
-      expect(described_class.publish(now)).to be true
+      expect(described_class.publish).to be true
       expect(subscriber.written.size).to eq(1)
       expect(bystander.written).to be_empty
     end
 
-    it 'skips an unchanged list until the heartbeat is due' do
-      described_class.publish(now)
-      expect(described_class.publish(now + 1)).to be false
-      expect(described_class.publish(now + described_class::HEARTBEAT)).to be true
-      expect(subscriber.written.size).to eq(2)
+    # Nothing is resent on a timer: an unchanged list is never sent again.
+    it 'never resends an unchanged list' do
+      described_class.publish
+      3.times { expect(described_class.publish).to be false }
+      expect(subscriber.written.size).to eq(1)
+    end
+
+    it 'sends only to the subscribers whose last list differs' do
+      late = client_class.new(%i[script_list])
+      allow(described_class).to receive(:subscribers).and_return([subscriber])
+      described_class.publish
+      allow(described_class).to receive(:subscribers).and_return([subscriber, late])
+      described_class.publish
+      expect(subscriber.written.size).to eq(1)
+      expect(late.written.size).to eq(1)
+    end
+
+    it 'retries a client whose write failed' do
+      flaky = client_class.new(%i[script_list])
+      calls = 0
+      flaky.define_singleton_method(:puts_main_stream) { |line| (calls += 1) == 1 ? raise(IOError, 'busy') : (written << line; true) }
+      allow(described_class).to receive(:subscribers).and_return([flaky])
+      described_class.publish
+      expect(flaky.written).to be_empty
+      expect(described_class.publish).to be true
+      expect(flaky.written.size).to eq(1)
     end
 
     it 'sends a changed list at once' do
-      described_class.publish(now)
+      described_class.publish
       scripts.first.paused = true
-      expect(described_class.publish(now + 1)).to be true
+      expect(described_class.publish).to be true
       expect(subscriber.written.last).to eq('<lichScripts v="1" char="%3B" list="bigshot:1,go2:1"/>')
     end
 
     it 'resends when only the command character changed' do
-      described_class.publish(now)
+      described_class.publish
       $clean_lich_char = ','
-      expect(described_class.publish(now + 1)).to be true
+      expect(described_class.publish).to be true
       expect(subscriber.written.last).to include('char="%2C"')
     end
 
@@ -156,7 +175,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
       broken = client_class.new(%i[script_list])
       def broken.puts_main_stream(_line) = raise(IOError, 'gone')
       allow(described_class).to receive(:subscribers).and_return([broken, subscriber])
-      expect { described_class.publish(now) }.not_to raise_error
+      expect { described_class.publish }.not_to raise_error
       expect(subscriber.written.size).to eq(1)
     end
   end
@@ -189,6 +208,31 @@ RSpec.describe Lich::Common::ScriptListFeed do
       described_class.changed! # e.g. a hidden script starting: ;list is unchanged
       sleep 0.2
       expect(subscriber.written.size).to eq(1)
+    end
+
+    # The review's stale-joiner case: a client joins while a short script
+    # runs and is sent that list directly; the script stops before the
+    # thread publishes. The joiner must still converge on the empty list,
+    # although the thread's last module-wide publish was also empty.
+    it 'brings a client that joined mid-change up to date' do
+      stub_const("#{described_class}::SETTLE", 0.05)
+      scripts.clear
+      described_class.client_ready(subscriber)
+      deadline = Time.now + 2
+      sleep 0.01 until subscriber.written.size >= 1 || Time.now > deadline
+
+      scripts << fake_script.new('s5', false)
+      described_class.changed!
+      late = client_class.new(%i[script_list])
+      allow(described_class).to receive(:subscribers).and_return([subscriber, late])
+      described_class.client_ready(late)
+      scripts.clear
+      described_class.changed!
+
+      empty = '<lichScripts v="1" char="%3B" list=""/>'
+      deadline = Time.now + 2
+      sleep 0.01 until late.written.last == empty || Time.now > deadline
+      expect(late.written).to eq(['<lichScripts v="1" char="%3B" list="s5:0"/>', empty])
     end
 
     it 'folds a burst of changes into one send' do
@@ -270,7 +314,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
 
     it 'publishes each client its own forms' do
       allow(described_class).to receive(:subscribers).and_return([subscriber, window_client, both_client])
-      described_class.publish(Time.at(1_000))
+      described_class.publish
       expect(subscriber.written).to eq([described_class.tag(scripts, ';')])
       expect(window_client.written).to eq([described_class.window(scripts, ';')])
       expect(both_client.written).to eq([described_class.tag(scripts, ';'), described_class.window(scripts, ';')])
@@ -278,9 +322,9 @@ RSpec.describe Lich::Common::ScriptListFeed do
 
     it 'redraws the window when a script is paused' do
       allow(described_class).to receive(:subscribers).and_return([window_client])
-      described_class.publish(Time.at(1_000))
+      described_class.publish
       scripts.first.paused = true
-      described_class.publish(Time.at(1_001))
+      described_class.publish
       expect(window_client.written.last).to include('bigshot (paused)  <d cmd=";unpause bigshot">unpause</d>')
     end
   end

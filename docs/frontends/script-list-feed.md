@@ -67,7 +67,8 @@ go2 (paused)  <d cmd=";unpause go2">unpause</d> <d cmd=";kill go2">kill</d>
 
 - **Which scripts.** Exactly those `;list` shows, in the same order: hidden scripts (`hide_me`) are left out.
 - **Never in the game stream.** Lich writes the feeds straight to each client that gets them, at the next point where no stream is open. Scripts do not see them: they do not go through `respond`/`_respond`, downstream hooks or script output.
-- **When.** When the client starts getting a feed (on attach, or right after its declaration); when the list changes (a script starts or stops, is paused or unpaused, or hides or unhides itself), with changes within about 0.1 seconds folded into one update, so a `;kill all` sends one; and every 30 seconds regardless, so a client that reloads without re-attaching relearns the list and a change of the command character reaches it.
+- **When.** When the client starts getting a feed (on attach, or right after its declaration), and again only when the list changes: a script starts or stops, is paused or unpaused, or hides or unhides itself. Changes within about 0.1 seconds of each other go out as one update, so a `;kill all` sends one. Nothing is resent on a timer, so a window is redrawn only when its contents differ. Lich records what it last sent each client, so a client that attaches in the middle of a change is still brought up to date.
+- **Getting the list again.** A client that loses its copy without re-attaching (it reloads its view, say) sends its `SET_FRONTEND_CAPS` line again; Lich answers with the current list at once.
 - **No "stopped" state.** The feeds run inside Lich, so they end only when the session does, which the client sees as the connection closing.
 
 ## Code
