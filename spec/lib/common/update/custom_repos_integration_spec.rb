@@ -4,9 +4,21 @@ require_relative 'update_spec_helper'
 
 RSpec.describe 'Custom repos integration with TrackedScripts' do
   let(:tmpdir) { Dir.mktmpdir('custom-int-test') }
-  let(:tracker) { Lich::Util::Update::TrackedScripts.new }
+  let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
+  let(:tracker) { Lich::Util::Update::TrackedScripts.new(client) }
+
+  # DR, where DR Scripts syncs, so a custom track that wrongly consulted
+  # it would reach the client double and fail. Set in before, because
+  # spec_helper resets XMLData before each example.
+  around do |example|
+    saved = XMLData.game
+    example.run
+  ensure
+    XMLData.game = saved
+  end
 
   before do
+    XMLData.game = 'DR'
     stub_const('SCRIPT_DIR', tmpdir)
     UserVars.custom_repos = nil
     UserVars.tracked_scripts = nil
@@ -95,12 +107,33 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
   end
 
   describe '#check_collision' do
+    it 'blocks a custom track over any script in scripts/, from the disk alone' do
+      client = instance_double(Lich::Util::Update::GitHubClient)
+      tracker = Lich::Util::Update::TrackedScripts.new(client)
+      File.binwrite(File.join(tmpdir, 'lnet.lic'), '# from Core Scripts, not DR Scripts')
+
+      result = tracker.check_collision('lnet.lic', 'MahtraDR/custom')
+
+      expect(result).to match(/Error:.*'lnet\.lic' is already installed in scripts\/.*shadow/)
+      expect(result).not_to match(/DR Scripts/)
+    end
+
+    it 'never reads the DR Scripts file list for a custom track, even in DR' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
+      allow(client).to receive(:fetch_github_json)
+
+      tracker.track_script('MahtraDR/test', 'alchemy.lic')
+
+      expect(client).not_to have_received(:fetch_github_json)
+      expect(UserVars.tracked_scripts['MahtraDR/test']).to include('alchemy.lic')
+    end
+
     it 'blocks collision with :all tracking mode repo when file is installed' do
       File.binwrite(File.join(tmpdir, 'anything.lic'), '# existing')
 
       result = tracker.check_collision('anything.lic', 'MahtraDR/custom')
 
-      expect(result).to match(/Error:.*already installed from.*DR Scripts/)
+      expect(result).to match(/Error:.*already installed in scripts\//)
     end
 
     it 'allows tracking when :all repo file is not installed locally' do
@@ -140,7 +173,7 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
 
       result = tracker.check_collision('common.lic', 'MahtraDR/custom')
 
-      expect(result).to match(/Error:.*already installed from.*DR Scripts/)
+      expect(result).to match(/Error:.*already installed in scripts\//)
       expect(result).to match(/shadow/)
     end
 
@@ -151,7 +184,7 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       tracker.track_script('MahtraDR/test', 'something.lic')
 
       expect(UserVars.tracked_scripts['MahtraDR/test']).not_to include('something.lic')
-      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already installed from.*DR Scripts/)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already installed in scripts\//)
     end
 
     it 'allows tracking when script is not installed from :all mode repo' do

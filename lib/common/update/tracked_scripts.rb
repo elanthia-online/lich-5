@@ -12,6 +12,13 @@ module Lich
   module Util
     module Update
       class TrackedScripts
+        # @param client [GitHubClient, nil] used to read an :all-mode repo's
+        #   file list when checking a built-in --track for a clash; built on
+        #   first use when not given
+        def initialize(client = nil)
+          @client = client
+        end
+
         # Returns all tracked scripts for a repository config.
         #
         # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
@@ -40,18 +47,35 @@ module Lich
 
         # Checks for filename collisions across all repos.
         #
+        # A custom repo installs into scripts/custom/<owner-repo>/, which Lich
+        # searches before scripts/, so any script already in scripts/ would be
+        # shadowed whatever repo it came from. A built-in repo installs into
+        # scripts/ itself, so the only clash with an :all-mode repo is a file
+        # that repo really ships: both syncs would then write the same path.
+        # That is read from the :all repo's GitHub file list. A built-in repo
+        # that does not sync for the current game installs nothing here, so
+        # it cannot clash and is skipped.
+        #
         # @param script_name [String] script filename to check
-        # @param exclude_repo [String] repo key to exclude from check
-        # @return [String, nil] warning message if collision found, nil otherwise
+        # @param exclude_repo [String] repo key to exclude from check (the target repo)
+        # @return [String, nil] error message if collision found, nil otherwise
         def check_collision(script_name, exclude_repo)
+          custom_target = !SCRIPT_REPOS.key?(exclude_repo)
+          if custom_target && File.exist?(File.join(SCRIPT_DIR, script_name))
+            return "Error: '#{script_name}' is already installed in scripts/. The custom version would shadow it at runtime."
+          end
+
           # Check built-in repos
           SCRIPT_REPOS.each do |key, config|
             next if key == exclude_repo
+            next unless syncs_for_this_game?(config)
 
             if config[:tracking_mode] == :all
-              if File.exist?(File.join(SCRIPT_DIR, script_name))
-                return "Error: '#{script_name}' is already installed from #{config[:display_name]}. The custom version would shadow it at runtime."
-              end
+              next if custom_target
+
+              clash = all_mode_clash(config, script_name)
+              return clash if clash
+
               next
             end
 
@@ -85,10 +109,10 @@ module Lich
             respond "[lich5-update: Unknown repository '#{repo_key}'.]"
             return
           end
+          name = config[:display_name] || repo_key
           UserVars.tracked_scripts ||= {}
           UserVars.tracked_scripts[repo_key] ||= []
-          name = config[:display_name] || repo_key
-          if UserVars.tracked_scripts[repo_key].include?(script_name)
+          if tracked_scripts(config, repo_key: repo_key).include?(script_name)
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
           else
             collision = check_collision(script_name, repo_key)
@@ -213,6 +237,40 @@ module Lich
 
           table = Terminal::Table.new(rows: table_rows, title: 'Tracked Scripts')
           StatusReporter.respond_mono(table.to_s)
+        end
+
+        private
+
+        # @param config [Hash] repository config
+        # @return [Boolean] whether the sync installs this repo for the current game
+        def syncs_for_this_game?(config)
+          filter = config[:game_filter]
+          filter.nil? || filter.match?(XMLData.game.to_s)
+        end
+
+        # Reports whether an :all-mode repo ships +script_name+, which would
+        # make it and a built-in tracked copy overwrite each other in scripts/.
+        #
+        # @param config [Hash] the :all-mode repo's config
+        # @param script_name [String] script filename
+        # @return [String, nil] error message, or nil when there is no clash
+        def all_mode_clash(config, script_name)
+          name = config[:display_name]
+          tree_data = client.fetch_github_json(config[:api_url])
+          unless tree_data && tree_data['tree']
+            consequence = "Could not check whether #{name} also contains '#{script_name}', so nothing was added."
+            return StatusReporter.github_failure_message(client.last_error, consequence, subject: name, retried_by: :user)
+          end
+
+          synced = ScriptSync.new(client).filter_syncable_scripts(tree_data['tree'], config)
+          return nil unless synced.any? { |entry| File.basename(entry['path']) == script_name }
+
+          "Error: '#{script_name}' is also in #{name}, which syncs it automatically. Tracking it here would make the two overwrite each other."
+        end
+
+        # @return [GitHubClient]
+        def client
+          @client ||= GitHubClient.new
         end
       end
     end

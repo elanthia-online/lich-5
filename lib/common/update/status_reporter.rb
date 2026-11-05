@@ -33,18 +33,35 @@ module Lich
         # @param subject [String, nil] what was being fetched, named in the not-found message
         # @return [void]
         def self.respond_github_failure(error, consequence, subject: nil)
-          message = case error&.kind
-                    when :rate_limited
-                      reset = error.reset_at ? ", resets at #{error.reset_at.strftime('%H:%M')}" : ''
-                      "GitHub check failed (rate limit reached#{reset}). #{consequence} This is temporary and will clear once the limit resets."
-                    when :not_found
-                      "GitHub check failed (#{subject || 'repository'} not found). #{consequence} Check that the repository and branch exist."
-                    when :rejected
-                      "GitHub check failed (GitHub refused access to #{subject || 'the repository'}). #{consequence} Check that the repository and branch exist and are public."
-                    else
-                      "GitHub check failed. #{consequence} This is a temporary error that should resolve itself by your next login."
-                    end
-          respond_mono("[lich5-update: #{message}]")
+          respond_mono("[lich5-update: #{github_failure_message(error, consequence, subject: subject)}]")
+        end
+
+        # Builds the text #respond_github_failure prints, for callers that
+        # hand the message on instead of printing it themselves.
+        #
+        # A refused command is not retried at login the way the login sync
+        # is, so +retried_by: :user+ tells the user to run it again instead.
+        #
+        # @param error [FetchError, nil] the client's last_error (nil = unclassified)
+        # @param consequence [String] what did not happen
+        # @param subject [String, nil] what was being fetched, named in the not-found message
+        # @param retried_by [Symbol] :login (the next login sync retries it) or :user (the user re-runs the command)
+        # @return [String]
+        def self.github_failure_message(error, consequence, subject: nil, retried_by: :login)
+          command = retried_by == :user
+          case error&.kind
+          when :rate_limited
+            reset = error.reset_at ? ", resets at #{error.reset_at.strftime('%H:%M')}" : ''
+            tail = command ? 'Run the command again once the limit resets.' : 'This is temporary and will clear once the limit resets.'
+            "GitHub check failed (rate limit reached#{reset}). #{consequence} #{tail}"
+          when :not_found
+            "GitHub check failed (#{subject || 'repository'} not found). #{consequence} Check that the repository and branch exist."
+          when :rejected
+            "GitHub check failed (GitHub refused access to #{subject || 'the repository'}). #{consequence} Check that the repository and branch exist and are public."
+          else
+            tail = command ? 'This is usually temporary; run the command again in a few minutes.' : 'This is a temporary error that should resolve itself by your next login.'
+            "GitHub check failed. #{consequence} #{tail}"
+          end
         end
 
         # Renders sync results as Terminal::Table.
