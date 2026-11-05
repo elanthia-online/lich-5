@@ -22,6 +22,9 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
   before do
     XMLData.game = 'DR'
     allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] })
+    # Every custom repo here has these top-level scripts.
+    custom_tree = { 'tree' => %w[foo.lic alchemy.lic tool.lic new-script.lic something.lic conflict.lic].map { |f| { 'path' => f, 'type' => 'blob' } } }
+    allow(client).to receive(:fetch_github_json).with(%r{/repos/(?!elanthia-online/)[^/]+/[^/]+/git/trees/}).and_return(custom_tree)
     stub_const('SCRIPT_DIR', tmpdir)
     UserVars.custom_repos = nil
     UserVars.tracked_scripts = nil
@@ -138,7 +141,7 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
 
       tracker.track_script('MahtraDR/test', 'alchemy.lic')
 
-      expect(client).not_to have_received(:fetch_github_json)
+      expect(client).not_to have_received(:fetch_github_json).with(dr_api)
       expect(UserVars.tracked_scripts['MahtraDR/test']).to eq(['alchemy.lic'])
     end
 

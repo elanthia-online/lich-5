@@ -280,7 +280,10 @@ module Lich
         end
 
         # Why a repo that does install tracked scripts here cannot take this
-        # one: it is already tracked, or it collides with another repo.
+        # one: it is already tracked, the repo does not contain it, or it
+        # collides with another repo. The repo's own file list is checked
+        # before the collision check, so a name the repo lacks is reported
+        # as missing, not as a clash it could never cause.
         #
         # @param config [Hash] config of the repo being tracked from
         # @param repo_key [String] its key
@@ -294,7 +297,7 @@ module Lich
           name = config[:display_name] || repo_key
           return "'#{script_name}' is already tracked in #{name}." if tracked_scripts(config, repo_key: repo_key).include?(script_name)
 
-          check_collision(script_name, repo_key)
+          missing_from_repo(config, repo_key, script_name) || check_collision(script_name, repo_key)
         end
 
         # Points a refused track at a built-in repo that syncs here and reads
@@ -451,6 +454,52 @@ module Lich
 
           synced = ScriptSync.auto_synced_entries(tree_data['tree'], config)
           synced.any? { |entry| File.basename(entry['path']) == script_name }
+        end
+
+        # Reports a script the repo being tracked from does not contain.
+        # The sync only installs tracked names it finds in the repo, so a
+        # misspelt or missing name would otherwise be kept and never installed.
+        #
+        # @param config [Hash] config of the repo being tracked from
+        # @param repo_key [String] its key
+        # @param script_name [String] script filename
+        # @return [String, nil] nil when the repo has the script; otherwise an
+        #   "Error: ..." refusal, or a GitHub-failure sentence when the file
+        #   list could not be read
+        # @api private
+        def missing_from_repo(config, repo_key, script_name)
+          name = config[:display_name] || repo_key
+          tree_data = client.fetch_github_json(config[:api_url])
+          unless tree_data && tree_data['tree']
+            consequence = "Could not check that #{name} contains '#{script_name}', so nothing was added."
+            return StatusReporter.github_failure_message(client.last_error, consequence, subject: name, retried_by: :user)
+          end
+
+          names = ScriptSync.script_entries(tree_data['tree'], config).map { |entry| File.basename(entry['path']) }
+          return nil if names.include?(script_name)
+
+          guess = names.find { |n| n.casecmp?(script_name) || n.casecmp?("#{script_name}.lic") }
+          advice = guess ? " #{guess_advice(config, repo_key, guess)}" : ''
+          layout = config[:custom] ? ' Only .lic files at the top level of a custom repo can be tracked.' : ''
+          "Error: '#{script_name}' is not in #{name}.#{advice}#{layout}"
+        end
+
+        # What to tell the user about the repo's file whose name differs from
+        # the one typed only in case or the .lic suffix. Suggesting it is only
+        # useful when tracking it would be accepted.
+        #
+        # @param config [Hash] config of the repo being tracked from
+        # @param repo_key [String] its key
+        # @param guess [String] the repo's filename
+        # @return [String]
+        # @api private
+        def guess_advice(config, repo_key, guess)
+          refusal = install_refusal(config, repo_key, guess)
+          return "Did you mean '#{guess}'?" if refusal.nil?
+          return "It has '#{guess}', which is already tracked there." if tracked_scripts(config, repo_key: repo_key).include?(guess)
+          return "It has '#{guess}', but that cannot be tracked either: #{refusal.delete_prefix('Error: ')}" if refusal.start_with?('Error: ')
+
+          "Did you mean '#{guess}'?"
         end
 
         # Built on first use when none was given: ScriptSync builds a
