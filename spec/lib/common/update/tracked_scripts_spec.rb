@@ -404,7 +404,7 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       tracker.show_tracked('dr-scripts')
 
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
-        .with(a_string_including('All .lic files synced automatically', 'Ignored leftover entries: lnet.lic, zeta.lic', 'Remove with --untrack=dr-scripts:<script>'))
+        .with(a_string_including('Scripts synced automatically (all except -setup files)', 'Ignored leftover entries: lnet.lic, zeta.lic', 'Remove with --untrack=dr-scripts:<script>'))
     end
 
     it 'shows no leftover row when there are none' do
@@ -417,11 +417,11 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       tracker.show_tracked
 
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
-        .with(a_string_including('Not synced for DR characters', 'All .lic files synced automatically'))
+        .with(a_string_including('Not synced for DR characters', 'Scripts synced automatically (all except -setup files)'))
       XMLData.game = 'GSIV'
       tracker.show_tracked('dr-scripts')
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
-        .with(satisfy { |t| t.include?('Not synced for GSIV characters') && !t.include?('All .lic files synced') })
+        .with(satisfy { |t| t.include?('Not synced for GSIV characters') && !t.include?('Scripts synced automatically') })
     end
 
     it 'tells a GemStone character a leftover DR Scripts entry did nothing because DR Scripts is not synced' do

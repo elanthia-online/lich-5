@@ -11,6 +11,10 @@
   already in scripts/, other tracked lists, and the GitHub file list of an
   :all-mode repo (DR Scripts) that syncs for the current game. Those reads
   go through the shared GitHubClient and its short cache.
+
+  It also cleans up after the older --track, which accepted entries the
+  sync never reads: --untrack removes a leftover entry stored under an
+  :all-mode repo, and --tracked lists such leftovers.
 =end
 
 module Lich
@@ -184,7 +188,7 @@ module Lich
 
             not_synced = [{ value: "Not synced for #{game_label}", colspan: 3 }] unless syncs_for_this_game?(config)
             if config[:tracking_mode] == :all
-              table_rows << (not_synced || [{ value: "All .lic files synced automatically", colspan: 3 }])
+              table_rows << (not_synced || [{ value: "Scripts synced automatically (all except -setup files)", colspan: 3 }])
               leftover = (UserVars.tracked_scripts&.dig(key) || [] rescue [])
               unless leftover.empty?
                 table_rows << [{ value: "Ignored leftover entries: #{leftover.sort.join(', ')}", colspan: 3 }]
