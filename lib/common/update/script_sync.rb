@@ -162,6 +162,26 @@ module Lich
           [downloaded, failed]
         end
 
+        # Tree entries that are scripts of this repo, before any tracking
+        # filter: the files a --track for this repo may name.
+        #
+        # @param tree [Array<Hash>] GitHub tree API response
+        # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
+        # @return [Array<Hash>] script blob entries
+        def self.script_entries(tree, config)
+          tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }
+        end
+
+        # Tree entries an :all-mode repo's sync installs: every script except
+        # -setup files.
+        #
+        # @param tree [Array<Hash>] GitHub tree API response
+        # @param config [Hash] the :all-mode repo's config
+        # @return [Array<Hash>] script blob entries
+        def self.auto_synced_entries(tree, config)
+          script_entries(tree, config).reject { |e| File.basename(e['path']).include?('-setup') }
+        end
+
         # Filters tree entries to syncable scripts based on tracking mode.
         #
         # @param tree [Array<Hash>] GitHub tree API response
@@ -169,11 +189,11 @@ module Lich
         # @param repo_key [String, nil] repository key for tracked script lookup
         # @return [Array<Hash>] filtered tree entries
         def filter_syncable_scripts(tree, config, repo_key = nil)
-          candidates = tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }
+          candidates = self.class.script_entries(tree, config)
 
           case config[:tracking_mode]
           when :all
-            candidates.reject { |e| File.basename(e['path']).include?('-setup') }
+            self.class.auto_synced_entries(tree, config)
           when :explicit
             tracked = TrackedScripts.new.tracked_scripts(config, repo_key: repo_key)
             candidates.select { |e| tracked.include?(File.basename(e['path'])) }

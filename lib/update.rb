@@ -343,7 +343,7 @@ module Lich
       end
 
       def self.tracked_scripts_manager
-        @tracked_scripts_manager ||= TrackedScripts.new
+        @tracked_scripts_manager ||= TrackedScripts.new(client)
       end
 
       def self.custom_repos_manager
