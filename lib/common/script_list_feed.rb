@@ -2,12 +2,13 @@
 
 module Lich
   module Common
-    # Pushes the list of running scripts to every front end that gets it
-    # (docs/frontends/script-list-feed.md), in one of two forms, each a feed
-    # in ClientCapabilities (declared with +SET_FRONTEND_CAPS+, from
-    # +--frontend-caps=+, or from the frontend catalog):
+    # Pushes the list of running scripts to every front end that can take it
+    # (docs/frontends/script-list-feed.md), in exactly one of two forms:
     #
-    # * +script_list+, data for a front end that draws its own panel:
+    # * the +lichScripts+ data element, to a client whose feeds include
+    #   +script_list+ (declared with +SET_FRONTEND_CAPS+, or from
+    #   +--frontend-caps=+ or the frontend catalog), for a front end that
+    #   draws its own panel:
     #
     #     <lichScripts v="1" char="%3B" list="bigshot:0,go2:1"/>
     #
@@ -16,13 +17,12 @@ module Lich
     #   or 0. Both are percent-encoded, so no script name can break the tag. A
     #   front end replaces its whole list with each tag it gets.
     #
-    # * +script_window+, a StormFront-style stream window (WINDOW_ID) that
-    #   Lich fills itself: each script on a line with pause/unpause and kill
-    #   links. Any front end that renders stream windows shows it with no
-    #   change of its own; the catalog turns it on for those that do.
+    # * otherwise, when the session's front end has the +streams+ capability
+    #   (Frontend.supports_streams?), a StormFront-style stream window
+    #   (WINDOW_ID) that Lich fills itself: each script on a line with
+    #   pause/unpause and kill links, shown with no change to the front end.
     #
-    # A client that declares +script_list+ replaces its feed set with that,
-    # so it stops getting the window; one that declares both gets both.
+    # A client with neither gets nothing.
     #
     # The list goes to a client as soon as it gets a feed, and again only
     # when the list changes: nothing is resent on a timer. A client that
@@ -43,18 +43,15 @@ module Lich
     # The tag is written to the client sockets directly, never through
     # +_respond+, so scripts that watch script output never see it.
     module ScriptListFeed
-      # The data feed and its element.
+      # The data form: the feed capability that asks for it, and its element.
       LIST = :script_list
       ELEMENT = 'lichScripts'
       VERSION = 1
 
-      # The stream-window feed, its stream id and its title.
-      WINDOW = :script_window
+      # The stream-window form, its stream id and its title.
+      WINDOW = :window
       WINDOW_ID = 'scripts'
       WINDOW_TITLE = 'Lich Scripts'
-
-      # Every form, in the order they are sent to a client that gets both.
-      FORMS = [LIST, WINDOW].freeze
 
       # Seconds to wait after a change before sending, to fold a burst into one tag.
       SETTLE = 0.1
@@ -162,15 +159,18 @@ module Lich
           false
         end
 
-        # The forms a client gets, in FORMS order: none for a dead client.
+        # The form a client gets, as a one-element list, or an empty one:
+        # the data element when its feeds include script_list, else the
+        # window when the session's front end renders streams, else nothing.
+        # A dead client gets nothing.
         #
         # @param client [Object, nil]
-        # @return [Array<Symbol>]
+        # @return [Array<Symbol>] [LIST], [WINDOW] or []
         def forms_for(client)
           return [] unless client.respond_to?(:alive?) && client.alive?
+          return [LIST] if ClientCapabilities.feeds_for(client).include?(LIST)
 
-          feeds = ClientCapabilities.feeds_for(client)
-          FORMS.select { |form| feeds.include?(form) }
+          Frontend.supports_streams? ? [WINDOW] : []
         end
 
         # Whether a client gets the list in any form.

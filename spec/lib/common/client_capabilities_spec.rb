@@ -18,7 +18,7 @@ RSpec.describe Lich::Common::ClientCapabilities do
     client.close rescue nil
     described_class.launch_capabilities, described_class.launch_feeds, $frontend = @saved
     # A real declare hands the client to the script list feed, which may
-    # start its thread (a saga session gets script_window by default). Stop
+    # start its thread (a streams session gets the window by default). Stop
     # it so it cannot outlive this example.
     Lich::Common::ScriptListFeed.reset!
   end
@@ -260,27 +260,16 @@ RSpec.describe Lich::Common::ClientCapabilities do
         expect(described_class.feeds_for(client)).to eq([])
       end
 
-      # The stream window goes, by default, to the front ends whose catalog
-      # entry says they render it; nothing gets the data feed by default.
-      it 'gives the stream window to Saga and Wrayth by default, and nothing else a feed' do
-        expect(described_class.session_feeds('saga')).to eq([:script_window])
-        expect(described_class.session_feeds('stormfront')).to eq([:script_window])
-        expect(described_class.session_feeds('wrayth')).to eq([:script_window])
-        %w[genie profanity frostbite wizard avalon].each do |frontend|
+      # The stream window follows the streams capability (ScriptListFeed);
+      # the only feed is the data element, which no catalog entry has.
+      it 'gives no built-in front end a feed by default' do
+        %w[saga stormfront wrayth genie profanity frostbite wizard avalon].each do |frontend|
           expect(described_class.session_feeds(frontend)).to eq([])
         end
       end
 
-      it 'replaces the default window with the data feed for a client that declares script_list' do
-        $frontend = 'saga'
-        expect(described_class.feeds_for(client)).to eq([:script_window])
-        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
-        expect(described_class.feeds_for(client)).to eq([:script_list])
-      end
-
-      it 'gives both to a client that declares both' do
-        described_class.declare(client, "SET_FRONTEND_CAPS script_window script_list\n")
-        expect(described_class.feeds_for(client)).to eq(%i[script_list script_window])
+      it 'does not know script_window: the window is not a capability' do
+        expect(described_class.parse_all('script_window')).to eq([[], [], ['script_window']])
       end
 
       it 'honours a GSL session client\'s own feeds' do

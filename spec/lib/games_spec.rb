@@ -2480,6 +2480,10 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with per-client 
     allow(Lich).to receive(:hide_uid_flag).and_return(false)
     stub_const('DownstreamHook', Lich::Common::DownstreamHook)
     stub_const('Frontend', Lich::Common::Frontend)
+    # A declaration hands the client to the script list feed, which would
+    # start its thread on a streams session and write its own lines to these
+    # recording clients. This block is about the game stream only.
+    allow(Lich::Common::ScriptListFeed).to receive(:client_ready)
     # Saved and restored, never left nil (spec_helper sets some of them once).
     @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend, $sftowiz_multiline,
                       Lich::Common::ClientCapabilities.launch_capabilities, described_class.instance_variable_get(:@game_instance)]

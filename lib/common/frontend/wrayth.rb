@@ -2,7 +2,7 @@
 
 {
   id: :stormfront,
-  capabilities: %i[xml streams mono room_window script_window],
+  capabilities: %i[xml streams mono room_window],
   metadata: {
     display_name: 'Wrayth',
     aliases: %w[wrayth],

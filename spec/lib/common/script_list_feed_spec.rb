@@ -47,6 +47,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
     allow(Lich).to receive(:log)
     @saved = [Lich::Common::ClientCapabilities.launch_feeds, $frontend, $clean_lich_char]
     $clean_lich_char = ';'
+    $frontend = 'genie' # no streams: a client without script_list gets nothing
     # Script is stubbed rather than loaded: lib/common/script.rb drags in the
     # whole runtime, and the feed reads only Script.running.
     running = -> { scripts }
@@ -294,15 +295,32 @@ RSpec.describe Lich::Common::ScriptListFeed do
     end
   end
 
-  describe 'forms per client' do
-    let(:window_client) { client_class.new(%i[script_window]) }
-    let(:both_client) { client_class.new(%i[script_list script_window]) }
+  # script_list gets the data element; otherwise a front end with the
+  # streams capability gets the window; otherwise nothing.
+  describe 'which form a client gets' do
+    let(:window_client) { client_class.new(nil) }
 
-    it 'gives each client only the forms in its feed set, data first' do
-      expect(described_class.forms_for(subscriber)).to eq([:script_list])
-      expect(described_class.forms_for(window_client)).to eq([:script_window])
-      expect(described_class.forms_for(both_client)).to eq(%i[script_list script_window])
-      expect(described_class.forms_for(bystander)).to eq([])
+    before { $frontend = 'stormfront' }
+
+    it 'gives the data element to a client with script_list, whatever the front end' do
+      %w[stormfront saga profanity genie wizard].each do |frontend|
+        $frontend = frontend
+        expect(described_class.forms_for(subscriber)).to eq([:script_list])
+      end
+    end
+
+    it 'gives the window to any other client when the front end has streams' do
+      %w[stormfront wrayth saga profanity].each do |frontend|
+        $frontend = frontend
+        expect(described_class.forms_for(window_client)).to eq([:window])
+      end
+    end
+
+    it 'gives nothing to any other client when the front end has no streams' do
+      %w[genie frostbite wizard avalon].each do |frontend|
+        $frontend = frontend
+        expect(described_class.forms_for(window_client)).to eq([])
+      end
     end
 
     it 'sends the window to a window client on ready' do
@@ -312,12 +330,11 @@ RSpec.describe Lich::Common::ScriptListFeed do
       expect(window_client.written.first).to start_with('<streamWindow id="scripts"')
     end
 
-    it 'publishes each client its own forms' do
-      allow(described_class).to receive(:subscribers).and_return([subscriber, window_client, both_client])
+    it 'publishes each client its own form' do
+      allow(described_class).to receive(:subscribers).and_return([subscriber, window_client])
       described_class.publish
       expect(subscriber.written).to eq([described_class.tag(scripts, ';')])
       expect(window_client.written).to eq([described_class.window(scripts, ';')])
-      expect(both_client.written).to eq([described_class.tag(scripts, ';'), described_class.window(scripts, ';')])
     end
 
     it 'redraws the window when a script is paused' do
