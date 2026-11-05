@@ -628,14 +628,42 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       UserVars.custom_repos = nil
     end
 
-    it 'refuses on a collision before reading the repo file list' do
+    it 'reports a name the repo lacks as missing, not as a clash with DR Scripts' do
+      XMLData.game = 'DR'
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [{ 'path' => 'combat-trainer.lic', 'type' => 'blob' }] })
+
+      tracker.track_script('scripts', 'combat-trainer.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Error: 'combat-trainer.lic' is not in Core Scripts.]")
+      expect(client).not_to have_received(:fetch_github_json).with(dr_api)
+    end
+
+    it 'still refuses a custom track over a file in scripts/ once the repo has the name' do
       UserVars.custom_repos = { 'Someone/scripts' => { 'branch' => 'main' } }
+      custom_api = Lich::Util::Update::CustomRepos.build_config('Someone/scripts', { 'branch' => 'main' })[:api_url]
+      allow(client).to receive(:fetch_github_json).with(custom_api).and_return({ 'tree' => [{ 'path' => 'lnet.lic', 'type' => 'blob' }] })
       File.binwrite(File.join(tmpdir, 'lnet.lic'), '# installed')
 
       tracker.track_script('Someone/scripts', 'lnet.lic')
 
-      expect(client).not_to have_received(:fetch_github_json)
+      expect(UserVars.tracked_scripts).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/already installed in scripts\//)
+    ensure
+      UserVars.custom_repos = nil
+    end
+
+    it 'tells the user only top-level .lic files of a custom repo can be tracked' do
+      UserVars.custom_repos = { 'Someone/scripts' => { 'branch' => 'main' } }
+      custom_api = Lich::Util::Update::CustomRepos.build_config('Someone/scripts', { 'branch' => 'main' })[:api_url]
+      allow(client).to receive(:fetch_github_json).with(custom_api).and_return({ 'tree' => [{ 'path' => 'scripts/tool.lic', 'type' => 'blob' }] })
+
+      tracker.track_script('Someone/scripts', 'tool.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        "[lich5-update: Error: 'tool.lic' is not in Custom: Someone/scripts. Only .lic files at the top level of a custom repo can be tracked.]"
+      )
     ensure
       UserVars.custom_repos = nil
     end

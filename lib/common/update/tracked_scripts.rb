@@ -280,8 +280,10 @@ module Lich
         end
 
         # Why a repo that does install tracked scripts here cannot take this
-        # one: it is already tracked, it collides with another repo, or the
-        # repo does not contain it.
+        # one: it is already tracked, the repo does not contain it, or it
+        # collides with another repo. The repo's own file list is checked
+        # before the collision check, so a name the repo lacks is reported
+        # as missing, not as a clash it could never cause.
         #
         # @param config [Hash] config of the repo being tracked from
         # @param repo_key [String] its key
@@ -295,7 +297,7 @@ module Lich
           name = config[:display_name] || repo_key
           return "'#{script_name}' is already tracked in #{name}." if tracked_scripts(config, repo_key: repo_key).include?(script_name)
 
-          check_collision(script_name, repo_key) || missing_from_repo(config, repo_key, script_name)
+          missing_from_repo(config, repo_key, script_name) || check_collision(script_name, repo_key)
         end
 
         # Points a refused track at a built-in repo that syncs here and reads
@@ -478,7 +480,8 @@ module Lich
 
           guess = names.find { |n| n.casecmp?(script_name) || n.casecmp?("#{script_name}.lic") }
           advice = guess ? " #{guess_advice(config, repo_key, guess)}" : ''
-          "Error: '#{script_name}' is not in #{name}.#{advice}"
+          layout = config[:custom] ? ' Only .lic files at the top level of a custom repo can be tracked.' : ''
+          "Error: '#{script_name}' is not in #{name}.#{advice}#{layout}"
         end
 
         # What to tell the user about the repo's file whose name differs from
