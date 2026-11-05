@@ -277,7 +277,7 @@ module Lich
               respond
               filename = "lich5-#{@update_to}"
               File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-                file.write URI.parse(@zipfile).open.read
+                file.write URI.parse(@zipfile).open(**GitHubClient.open_uri_timeouts).read
               end
 
               FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
@@ -432,16 +432,19 @@ module Lich
           ref = @resolver.resolve_channel_ref(:beta)
           if ref.nil?
             if @resolver.last_error
-              StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
+              StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.', retried_by: :user)
             else
               respond 'No viable beta found. Aborting beta update.'
             end
             return
           end
 
-          releases_url = "https://api.github.com/repos/#{GITHUB_REPO}/releases"
-          update_info = URI.parse(releases_url).open.read
-          releases = JSON.parse(update_info)
+          releases = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases")
+          unless releases.is_a?(Array)
+            StatusReporter.respond_github_failure(@client.last_error, 'No beta update was installed.', retried_by: :user)
+            return
+          end
+
           record = releases.find { |r| r['prerelease'] && r['tag_name'] == (ref.start_with?('v') ? ref : "v#{ref}") }
 
           if record
