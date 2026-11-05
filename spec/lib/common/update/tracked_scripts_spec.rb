@@ -110,8 +110,15 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
         { 'path' => 'profiles/lnet.lic', 'type' => 'blob' }
       ] }
     end
+    let(:core_api) { Lich::Util::Update::SCRIPT_REPOS['scripts'][:api_url] }
+    let(:core_tree) do
+      { 'tree' => %w[lnet.lic alchemy.lic foo-setup.lic ewaggle.lic].map { |f| { 'path' => "scripts/#{f}", 'type' => 'blob' } } }
+    end
 
-    before { XMLData.game = 'DR' }
+    before do
+      XMLData.game = 'DR'
+      allow(client).to receive(:fetch_github_json).with(core_api).and_return(core_tree)
+    end
 
     it 'tracks a Core Scripts script already in scripts/ that DR Scripts does not ship' do
       File.binwrite(File.join(tmpdir, 'lnet.lic'), '# lnet from EO/scripts')
@@ -153,18 +160,19 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
     it 'does not consult DR Scripts at all outside DR' do
       XMLData.game = 'GSIV'
       File.binwrite(File.join(tmpdir, 'alchemy.lic'), '# on disk')
-      allow(client).to receive(:fetch_github_json)
+      allow(client).to receive(:fetch_github_json).with(dr_api)
 
       tracker.track_script('scripts', 'alchemy.lic')
 
-      expect(client).not_to have_received(:fetch_github_json)
+      expect(client).not_to have_received(:fetch_github_json).with(dr_api)
       expect(UserVars.tracked_scripts['scripts']).to eq(['alchemy.lic'])
     end
 
     it 'adds nothing and says why when the DR Scripts file list cannot be read' do
       reset = Time.new(2026, 11, 5, 14, 30, 0)
       error = Lich::Util::Update::FetchError.new(kind: :rate_limited, reset_at: reset)
-      allow(client).to receive_messages(fetch_github_json: nil, last_error: error)
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(nil)
+      allow(client).to receive(:last_error).and_return(error)
 
       tracker.track_script('scripts', 'lnet.lic')
 
@@ -240,8 +248,28 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
   describe 'tracks into a repo that never installs a tracked script here' do
     let(:dr_api) { Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url] }
     let(:dr_tree) { { 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] } }
+    let(:core_api) { Lich::Util::Update::SCRIPT_REPOS['scripts'][:api_url] }
 
-    before { XMLData.game = 'DR' }
+    before do
+      XMLData.game = 'DR'
+      allow(client).to receive(:fetch_github_json).with(core_api)
+                                                  .and_return({ 'tree' => %w[lnet.lic alchemy.lic].map { |f| { 'path' => "scripts/#{f}", 'type' => 'blob' } } })
+    end
+
+    it 'does not point at Core Scripts for a name Core Scripts does not contain' do
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(dr_tree)
+
+      tracker.track_script('gs-scripts', 'nosuch.lic')
+      tracker.track_script('gs-scripts', 'LNET.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        '[lich5-update: GS Scripts is not synced for DR characters, so tracking it here would never install anything. Nothing was added. ' \
+        "Core Scripts, which reads the same repository, cannot track it either: 'nosuch.lic' is not in Core Scripts.]"
+      )
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with(/cannot track it either: 'LNET\.lic' is not in Core Scripts\. Did you mean 'lnet\.lic'\?\]/)
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/--track=scripts/)
+    end
 
     it 'refuses DR Scripts, which syncs everything and ignores a tracked list' do
       tracker.track_script('dr-scripts', 'lnet.lic')
@@ -313,6 +341,8 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
 
     it 'still tracks GS Scripts on a GemStone character' do
       XMLData.game = 'GSIV'
+      allow(client).to receive(:fetch_github_json).with(Lich::Util::Update::SCRIPT_REPOS['gs-scripts'][:api_url])
+                                                  .and_return({ 'tree' => [{ 'path' => 'scripts/lnet.lic', 'type' => 'blob' }] })
 
       tracker.track_script('gs-scripts', 'lnet.lic')
 
@@ -471,6 +501,143 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
         .with('[lich5-update: GS Scripts is not synced for DR characters, so that entry never installed anything here.]')
       expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Delete manually/)
+    end
+  end
+
+  describe '#track_script refuses a script the repo does not contain' do
+    let(:core_api) { Lich::Util::Update::SCRIPT_REPOS['scripts'][:api_url] }
+    let(:dr_api) { Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url] }
+    let(:core_tree) do
+      { 'tree' => [
+        { 'path' => 'scripts/lnet.lic', 'type' => 'blob' },
+        { 'path' => 'scripts/go2.lic', 'type' => 'blob' },
+        { 'path' => 'scripts/alchemy.lic', 'type' => 'blob' },
+        { 'path' => 'scripts/lich', 'type' => 'tree' },
+        { 'path' => 'scripts/lich/nested.lic', 'type' => 'blob' },
+        { 'path' => 'docs/readme.lic', 'type' => 'blob' }
+      ] }
+    end
+
+    before do
+      XMLData.game = 'GSIV'
+      allow(client).to receive(:fetch_github_json).with(core_api).and_return(core_tree)
+    end
+
+    it 'refuses a misspelt name, so the sync is not left with a name it never installs' do
+      tracker.track_script('scripts', 'lnte.lic')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Vars).not_to have_received(:save)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Error: 'lnte.lic' is not in Core Scripts.]")
+    end
+
+    it 'suggests the .lic name when the extension was left off' do
+      tracker.track_script('scripts', 'lnet')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Error: 'lnet' is not in Core Scripts. Did you mean 'lnet.lic'?]")
+    end
+
+    it 'suggests the real name when only the case differs, and does not add the wrong case' do
+      tracker.track_script('scripts', 'LNet.lic')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Did you mean 'lnet\.lic'\?/)
+    end
+
+    it 'does not suggest a name that is already tracked' do
+      tracker.track_script('scripts', 'Go2.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Error: 'Go2.lic' is not in Core Scripts. It has 'go2.lic', which is already tracked there.]")
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Did you mean/)
+    end
+
+    it 'does not suggest a name the next --track would refuse' do
+      XMLData.game = 'DR'
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] })
+
+      tracker.track_script('scripts', 'alchemy')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        "[lich5-update: Error: 'alchemy' is not in Core Scripts. It has 'alchemy.lic', but that cannot be tracked either: " \
+        "'alchemy.lic' is also in DR Scripts, which syncs it automatically. Tracking it here would make the two overwrite each other.]"
+      )
+    end
+
+    it 'still suggests the name when the clash check for it cannot reach GitHub' do
+      XMLData.game = 'DR'
+      calls = 0
+      allow(client).to receive(:fetch_github_json).with(dr_api) { (calls += 1) == 1 ? { 'tree' => [] } : nil }
+      allow(client).to receive(:last_error).and_return(nil)
+
+      tracker.track_script('scripts', 'lnet')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Error: 'lnet' is not in Core Scripts. Did you mean 'lnet.lic'?]")
+    end
+
+    it 'does not count a file outside the repo script folder, or a subfolder, as present' do
+      tracker.track_script('scripts', 'nested.lic')
+      tracker.track_script('scripts', 'readme.lic')
+      tracker.track_script('scripts', 'lich')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'nested\.lic' is not in Core Scripts/)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'readme\.lic' is not in Core Scripts/)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'lich' is not in Core Scripts/)
+    end
+
+    it 'adds a script the repo does contain' do
+      tracker.track_script('scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts['scripts']).to eq(['lnet.lic'])
+      expect(Vars).to have_received(:save)
+    end
+
+    it 'adds nothing when the repo file list cannot be read, and says to run it again' do
+      error = Lich::Util::Update::FetchError.new(kind: :network)
+      allow(client).to receive(:fetch_github_json).with(core_api).and_return(nil)
+      allow(client).to receive(:last_error).and_return(error)
+
+      tracker.track_script('scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
+      expect(Vars).not_to have_received(:save)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        "[lich5-update: GitHub check failed. Could not check that Core Scripts contains 'lnet.lic', so nothing was added. " \
+        'This is usually temporary; run the command again in a few minutes.]'
+      )
+    end
+
+    it 'names a custom repo whose branch GitHub cannot find' do
+      UserVars.custom_repos = { 'Someone/scripts' => { 'branch' => 'gone' } }
+      custom_api = Lich::Util::Update::CustomRepos.build_config('Someone/scripts', { 'branch' => 'gone' })[:api_url]
+      allow(client).to receive(:fetch_github_json).with(custom_api).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :not_found, status: 404))
+
+      tracker.track_script('Someone/scripts', 'tool.lic')
+
+      expect(UserVars.tracked_scripts&.dig('Someone/scripts')).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with(/GitHub check failed \(Custom: Someone\/scripts not found\)\. Could not check that Custom: Someone\/scripts contains 'tool\.lic'/)
+    ensure
+      UserVars.custom_repos = nil
+    end
+
+    it 'refuses on a collision before reading the repo file list' do
+      UserVars.custom_repos = { 'Someone/scripts' => { 'branch' => 'main' } }
+      File.binwrite(File.join(tmpdir, 'lnet.lic'), '# installed')
+
+      tracker.track_script('Someone/scripts', 'lnet.lic')
+
+      expect(client).not_to have_received(:fetch_github_json)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/already installed in scripts\//)
+    ensure
+      UserVars.custom_repos = nil
     end
   end
 end
