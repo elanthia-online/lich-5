@@ -88,7 +88,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       expect(File.exist?(File.join(tmpdir, 'will-succeed.lic'))).to be true
       expect(call_count).to eq(2)
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Test', 2, ['will-succeed.lic'], {}, [], ['will-fail.lic'], {}, []
+        'Test', 2, ['will-succeed.lic'], {}, [], ['will-fail.lic'], {}, [], missing_tracked: []
       )
     end
   end
@@ -121,7 +121,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       expect(File.exist?(File.join(tmpdir, 'net-ok.lic'))).to be true
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Mixed', 2, ['net-ok.lic'], {}, [], ['net-fail.lic'], {}, []
+        'Mixed', 2, ['net-ok.lic'], {}, [], ['net-fail.lic'], {}, [], missing_tracked: []
       )
     end
   end
@@ -303,7 +303,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       expect(Lich::Util::Update::FileWriter).not_to receive(:safe_write)
       sync.sync_repo('req')
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']]
+        'Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']], missing_tracked: []
       )
     end
 
@@ -323,6 +323,66 @@ RSpec.describe Lich::Util::Update::ScriptSync do
     end
   end
 
+  describe '#sync_repo reports tracked names the repo does not contain' do
+    let(:tree) { { 'tree' => [{ 'path' => 'scripts/kept.lic', 'type' => 'blob', 'sha' => 'aaa' }] } }
+    let(:config) do
+      {
+        display_name: 'Test', api_url: 'https://api.example.com/tree',
+        raw_base_url: 'https://raw.example.com', tracking_mode: :explicit,
+        script_pattern: /^scripts\/[^\/]+\.lic$/, game_filter: nil, subdirs: {},
+        default_tracked: %w[kept.lic gone-default.lic].freeze
+      }
+    end
+
+    before do
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'test' => config })
+      UserVars.tracked_scripts = { 'test' => ['typo.lic'] }
+      allow(client).to receive(:fetch_github_json).and_return(tree)
+      allow(client).to receive(:http_get).and_return('# kept')
+      allow(Lich::Util::Update::FileWriter).to receive(:safe_write)
+    end
+
+    after { UserVars.tracked_scripts = nil }
+
+    it 'passes each missing name with how to remove it, without an extra GitHub read' do
+      sync.sync_repo('test')
+
+      expect(client).to have_received(:fetch_github_json).once
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
+        'Test', 1, ['kept.lic'], {}, [], [], {}, [],
+        missing_tracked: [
+          ['gone-default.lic', 'not in repo, not synced (default script)'],
+          ['typo.lic', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:typo.lic)"]
+        ]
+      )
+    end
+
+    it 'names the repo file an old entry meant when only case or .lic differs' do
+      UserVars.tracked_scripts = { 'test' => ['Kept.lic', 'kept'] }
+
+      sync.sync_repo('test')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
+        'Test', 1, ['kept.lic'], {}, [], [], {}, [],
+        missing_tracked: [
+          ['gone-default.lic', 'not in repo, not synced (default script)'],
+          ['Kept.lic', "not in repo, not synced (the repo has 'kept.lic'; remove with #{$clean_lich_char}lich5-update --untrack=test:Kept.lic)"],
+          ['kept', "not in repo, not synced (the repo has 'kept.lic'; remove with #{$clean_lich_char}lich5-update --untrack=test:kept)"]
+        ]
+      )
+    end
+
+    it 'reports nothing missing for an :all-mode repo' do
+      config[:tracking_mode] = :all
+      UserVars.tracked_scripts = { 'test' => ['leftover.lic'] }
+
+      sync.sync_repo('test')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary)
+        .with(anything, anything, anything, anything, anything, anything, anything, anything, missing_tracked: [])
+    end
+  end
+
   describe Lich::Util::Update::StatusReporter, '.render_sync_summary' do
     it 'lists a held-back script instead of reporting everything up to date' do
       allow(described_class).to receive(:render_sync_summary).and_call_original
@@ -332,6 +392,17 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       described_class.render_sync_summary('Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']])
 
       expect(output).to include('needy.lic', 'needs Lich 5.23.0+ (not updated)', '1 need newer Lich')
+      expect(output).not_to include('all up to date')
+    end
+
+    it 'lists tracked names missing from the repo instead of reporting everything up to date' do
+      allow(described_class).to receive(:render_sync_summary).and_call_original
+      output = nil
+      allow(described_class).to receive(:respond_mono) { |text| output = text }
+
+      described_class.render_sync_summary('Core', 3, [], {}, [], [], {}, [], missing_tracked: [['typo.lic', 'not in repo, not synced (x)']])
+
+      expect(output).to include('typo.lic', 'not in repo, not synced (x)', '1 tracked but not in repo', '3 found, up to date')
       expect(output).not_to include('all up to date')
     end
   end

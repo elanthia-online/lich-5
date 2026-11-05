@@ -73,6 +73,7 @@ module Lich
           tree = tree_data['tree']
 
           syncable = filter_syncable_scripts(tree, config, repo_key)
+          missing = missing_tracked(tree, config, repo_key)
           StatusReporter.respond_mono("[lich5-update: Syncing #{name} (#{syncable.length} scripts)...]")
 
           # Custom repos write to their per-repo subdir; built-in repos to SCRIPT_DIR
@@ -118,7 +119,8 @@ module Lich
             failed_other[subdir_name] = failures unless failures.empty?
           end
 
-          StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other, held_scripts)
+          StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other, held_scripts,
+                                             missing_tracked: missing)
           :synced
         end
 
@@ -180,6 +182,33 @@ module Lich
         # @return [Array<Hash>] script blob entries
         def self.auto_synced_entries(tree, config)
           script_entries(tree, config).reject { |e| File.basename(e['path']).include?('-setup') }
+        end
+
+        # Tracked names of an :explicit repo that its file list does not
+        # contain, so the sync can never install them: entries stored before
+        # --track checked the repo, and scripts later renamed or removed
+        # upstream. Each comes with the status line the summary shows.
+        #
+        # The status says the script is not synced rather than never installed,
+        # since a script removed upstream may still be on disk from an earlier
+        # sync. An entry that differs from a repo file only in case or the .lic
+        # suffix also names that file.
+        #
+        # @param tree [Array<Hash>] GitHub tree API response
+        # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
+        # @param repo_key [String] repository key, used in the --untrack hint
+        # @return [Array<Array(String, String)>] [filename, status] pairs
+        def missing_tracked(tree, config, repo_key)
+          return [] unless config[:tracking_mode] == :explicit
+
+          names = self.class.script_entries(tree, config).map { |e| File.basename(e['path']) }
+          defaults = config[:default_tracked] || []
+          TrackedScripts.new.tracked_scripts(config, repo_key: repo_key).reject { |f| names.include?(f) }.map do |f|
+            how = defaults.include?(f) ? 'default script' : "remove with #{$clean_lich_char}lich5-update --untrack=#{repo_key}:#{f}"
+            guess = names.find { |n| n.casecmp?(f) || n.casecmp?("#{f}.lic") }
+            how = "the repo has '#{guess}'; #{how}" if guess
+            [f, "not in repo, not synced (#{how})"]
+          end
         end
 
         # Filters tree entries to syncable scripts based on tracking mode.
