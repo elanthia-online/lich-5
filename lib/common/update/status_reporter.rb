@@ -76,7 +76,7 @@ module Lich
         # @param held_scripts [Array<Array(String, String)>] [file, required Lich version] pairs
         #   not installed because the running Lich is too old (default: [])
         # @param missing_tracked [Array<Array(String, String)>] [file, status] pairs for
-        #   tracked names the repo does not contain, so never installed (default: [])
+        #   tracked names the repo does not contain, so the sync does not update them (default: [])
         # @return [void]
         def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {}, held_scripts = [],
                                      missing_tracked: [])

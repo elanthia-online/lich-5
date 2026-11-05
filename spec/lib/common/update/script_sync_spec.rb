@@ -351,8 +351,23 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
         'Test', 1, ['kept.lic'], {}, [], [], {}, [],
         missing_tracked: [
-          ['gone-default.lic', 'not in repo, never installed (default script)'],
-          ['typo.lic', "not in repo, never installed (remove with #{$clean_lich_char}lich5-update --untrack=test:typo.lic)"]
+          ['gone-default.lic', 'not in repo, not synced (default script)'],
+          ['typo.lic', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:typo.lic)"]
+        ]
+      )
+    end
+
+    it 'names the repo file an old entry meant when only case or .lic differs' do
+      UserVars.tracked_scripts = { 'test' => ['Kept.lic', 'kept'] }
+
+      sync.sync_repo('test')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
+        'Test', 1, ['kept.lic'], {}, [], [], {}, [],
+        missing_tracked: [
+          ['gone-default.lic', 'not in repo, not synced (default script)'],
+          ['Kept.lic', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:Kept.lic; the repo has 'kept.lic')"],
+          ['kept', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:kept; the repo has 'kept.lic')"]
         ]
       )
     end
@@ -385,9 +400,9 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       output = nil
       allow(described_class).to receive(:respond_mono) { |text| output = text }
 
-      described_class.render_sync_summary('Core', 3, [], {}, [], [], {}, [], missing_tracked: [['typo.lic', 'not in repo, never installed (x)']])
+      described_class.render_sync_summary('Core', 3, [], {}, [], [], {}, [], missing_tracked: [['typo.lic', 'not in repo, not synced (x)']])
 
-      expect(output).to include('typo.lic', 'not in repo, never installed (x)', '1 tracked but not in repo', '3 found, up to date')
+      expect(output).to include('typo.lic', 'not in repo, not synced (x)', '1 tracked but not in repo', '3 found, up to date')
       expect(output).not_to include('all up to date')
     end
   end

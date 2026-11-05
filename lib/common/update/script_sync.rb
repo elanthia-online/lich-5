@@ -191,16 +191,23 @@ module Lich
         #
         # @param tree [Array<Hash>] GitHub tree API response
         # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
-        # @param repo_key [String, nil] repository key for tracked script lookup
+        # The status says "not synced", not "never installed": a script removed
+        # or renamed upstream was installed by earlier syncs and is still on
+        # disk. An entry that differs from a repo file only in case or the .lic
+        # suffix also names that file, so the user learns what they meant.
+        #
+        # @param repo_key [String] repository key, used in the --untrack hint
         # @return [Array<Array(String, String)>] [filename, status] pairs
-        def missing_tracked(tree, config, repo_key = nil)
+        def missing_tracked(tree, config, repo_key)
           return [] unless config[:tracking_mode] == :explicit
 
           names = self.class.script_entries(tree, config).map { |e| File.basename(e['path']) }
           defaults = config[:default_tracked] || []
           TrackedScripts.new.tracked_scripts(config, repo_key: repo_key).reject { |f| names.include?(f) }.map do |f|
             how = defaults.include?(f) ? 'default script' : "remove with #{$clean_lich_char}lich5-update --untrack=#{repo_key}:#{f}"
-            [f, "not in repo, never installed (#{how})"]
+            guess = names.find { |n| n.casecmp?(f) || n.casecmp?("#{f}.lic") }
+            how += "; the repo has '#{guess}'" if guess
+            [f, "not in repo, not synced (#{how})"]
           end
         end
 
