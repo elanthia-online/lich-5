@@ -767,6 +767,10 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
 
       ARGV.replace(%w[--without-frontend --detachable-client=8000])
       Frontend.define_singleton_method(:client) { 'genie' }
+      Frontend.define_singleton_method(:has_capability?) { |*| false }
+      # Each script list feed hand-off, with the feeds the client had then.
+      $ready = []
+      Lich::Common::ScriptListFeed.define_singleton_method(:client_ready) { |c| $ready << c.declared_feeds }
       Object.send(:define_method, :detachable_client_send_init) { |_client| nil }
       Object.send(:define_method, :detachable_client_send_player_id) { |_client| nil }
       $dispatched = []
@@ -791,12 +795,13 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
       (Thread.list - before).each { |thread| thread.join(5) }
       puts "DISPATCHED=\#{$dispatched.inspect}"
       puts "DECLARED=\#{client.declared_capabilities.inspect}"
+      puts "READY=\#{$ready.inspect}"
     RUBY
     stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
     # Bundler's notes about gems built for another Ruby are not errors.
     expect(stderr.lines.reject { |line| line.include?('Bundler::StubSpecification') }.join).to be_empty
     expect(status).to be_success
-    [stdout[/^DISPATCHED=(.*)$/, 1], stdout[/^DECLARED=(.*)$/, 1]]
+    [stdout[/^DISPATCHED=(.*)$/, 1], stdout[/^DECLARED=(.*)$/, 1], stdout[/^READY=(.*)$/, 1]]
   end
 
   it 'records the declaration on that client and never sends it to the game' do
@@ -809,6 +814,15 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
     dispatched, declared = run_handler(["SET_FRONTEND_CAPS game_links\n", "look\n", "SET_FRONTEND_CAPS\n"])
     expect(dispatched).to eq('["<c>look\\n"]')
     expect(declared).to eq('[]')
+  end
+
+  # The script list feed (docs/frontends/script-list-feed.md) is handed the
+  # client on attach, for a session whose own set includes script_list, and
+  # again after each declaration, which may ask for it.
+  it 'hands the client to the script list feed on attach and after each declaration' do
+    _dispatched, declared, ready = run_handler(["SET_FRONTEND_CAPS script_list\n", "look\n"])
+    expect(ready).to eq('[nil, [:script_list]]')
+    expect(declared).to eq('nil')
   end
 
   it 'leaves a client that never declares undeclared' do

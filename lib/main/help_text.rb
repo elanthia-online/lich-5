@@ -276,7 +276,9 @@ module Lich
             --frontend-caps=LIST names the DragonRealms rich-stream features every attached
             client renders itself (room_element, game_links, double_bold; comma-separated),
             in place of the frontend's defaults. Lich rewrites the rest to the legacy
-            stream. A client's own SET_FRONTEND_CAPS line takes precedence.
+            stream. script_list in LIST also sends every client the running-script list
+            (docs/frontends/script-list-feed.md). A client's own SET_FRONTEND_CAPS line
+            takes precedence.
             --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1.

@@ -870,6 +870,10 @@ reconnect_if_wanted = proc {
       # conditional, so no other reader can still be pending.
       game_key = nil
 
+      # A client that gets the script list from the session's set (no
+      # declaration of its own) is sent it now; a declaring one, on declaring.
+      Lich::Common::ScriptListFeed.client_ready($_CLIENT_)
+
       begin
         while (client_string = $_CLIENT_.gets)
           # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles

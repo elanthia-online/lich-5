@@ -50,6 +50,25 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
+  # declared_feeds -- the feeds (script_list) the client asked for
+  # ===========================================================================
+  describe '#declared_feeds' do
+    it 'starts unset, apart from the rewrite set' do
+      expect(socket.declared_feeds).to be_nil
+      socket.declared_capabilities = [:game_links]
+      expect(socket.declared_feeds).to be_nil
+    end
+
+    it 'keeps a frozen copy' do
+      feeds = [:script_list]
+      socket.declared_feeds = feeds
+      feeds.clear
+      expect(socket.declared_feeds).to eq([:script_list])
+      expect(socket.declared_feeds).to be_frozen
+    end
+  end
+
+  # ===========================================================================
   # declared_capabilities -- the client's SET_FRONTEND_CAPS set
   # ===========================================================================
   describe '#declared_capabilities' do
