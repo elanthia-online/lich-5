@@ -156,6 +156,24 @@ RSpec.describe Lich::Util::Update::GitHubClient do
       server&.close
     end
 
+    it 'retries once when the connection drops, then returns the body' do
+      serve(Errno::ECONNRESET.new, response(200, body: '{}'))
+
+      expect(client.http_get(url)).to eq('{}')
+      expect(client.last_error).to be_nil
+      expect(sent.size).to eq(2)
+      expect(printed).to be_empty
+    end
+
+    it 'gives up after a second dropped connection, as a network failure' do
+      serve(EOFError.new, Errno::ECONNRESET.new, response(200, body: '{}'))
+
+      expect(client.http_get(url)).to be_nil
+      expect(client.last_error.kind).to eq(:network)
+      expect(sent.size).to eq(2)
+      expect(printed).to be_empty
+    end
+
     it 'classifies a 401 without a token as a temporary outage, prints nothing, and does not retry' do
       serve(response(401, body: '{"message":"Requires authentication"}'))
 
