@@ -961,7 +961,15 @@ RSpec.describe Lich::Common::DatabaseAdapter do
         closer = nil
         allow(@old).to receive(:execute_batch2).and_wrap_original do |original, *args|
           closer = Thread.new { @adapter.send(:close_version_connection, @old) }
-          sleep 0.05
+          # Wait (with a deadline; Timeout can't fire here, the lock defers
+          # interrupts) until the closer has detached the connection and is
+          # blocked on the call lock this thread holds.
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+          until !@adapter.instance_variable_get(:@version_db).equal?(@old) && closer.status == 'sleep'
+            raise 'closer did not detach the version connection and wait for the call lock' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+            Thread.pass
+          end
           expect(@old).not_to be_closed
           original.call(*args)
         end
@@ -1320,21 +1328,23 @@ RSpec.describe Lich::Common::DatabaseAdapter::HandoffLock do
     expect(after_wait).to be(true)
   end
 
-  it 'passes itself on when a waiter is killed just after it was handed the lock' do
-    holder_in = Queue.new
-    holder = Thread.new { lock.synchronize { holder_in << true; sleep 0.05 } }
-    holder_in.pop
-    first = Thread.new { lock.synchronize { :first } }
+  it 'hands itself on, in order, after a waiter killed in the queue has had its turn' do
+    release = Queue.new
+    order = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    first = Thread.new { lock.synchronize { order << :first } }
     wait_until_blocked(first)
-    second = Thread.new { lock.synchronize { :second } }
+    second = Thread.new { lock.synchronize { order << :second } }
     wait_until_blocked(second)
-    Thread.handle_interrupt(Object => :never) do
-      holder.join
-      first.kill
-    end
-    first.join
+    first.kill # still queued behind holder
+    release << true
+    holder.join
 
-    expect(second.join(5)&.value).to eq(:second)
+    expect(second.join(5)).to eq(second)
+    expect(first.join(5)).to eq(first)
+    expect(first).not_to be_alive
+    expect(Array.new(order.size) { order.pop }).to eq(%i[first second])
   end
 
   it 'defers an interrupt to its holder until it has released the lock' do
