@@ -36,6 +36,18 @@ module Lich
       end
 
       class GitHubClient
+        # Seconds to wait for the TCP connect, and again for the TLS
+        # handshake. lich5-update commands run on the client input thread,
+        # so a stalled GitHub would otherwise hold typed game commands for
+        # Net::HTTP's 60 s defaults.
+        OPEN_TIMEOUT = 10
+        # Seconds to wait for each read. Bodies here are API JSON and single
+        # script files, so a read that stalls this long has failed. Net::HTTP
+        # would otherwise retry a timed-out GET once, doubling the wait, so
+        # perform_get turns that retry off and retries only a dropped
+        # connection itself.
+        READ_TIMEOUT = 30
+
         attr_reader :http_cache
 
         # @param cache_ttl [Integer] cache TTL in seconds (default: 60)
@@ -140,17 +152,34 @@ module Lich
           Thread.current[@last_error_key] = error
         end
 
+        # Errors after which a GET is retried once, on a new connection.
+        DROPPED_CONNECTION_ERRORS = [EOFError, Errno::ECONNRESET, Errno::ECONNABORTED, Errno::EPIPE].freeze
+
+        # Net::HTTP's own retry is off, so a timeout costs one READ_TIMEOUT,
+        # not two. A dropped connection is still retried once on a new
+        # connection, as Net::HTTP would have done; a timeout is not.
+        #
         # @param uri [URI::Generic] target URI
         # @param token [String, nil] Authorization header value, or nil for anonymous
         # @return [Net::HTTPResponse]
         def perform_get(uri, token)
-          http = Net::HTTP.new(uri.host, uri.port)
-          http.use_ssl = (uri.scheme == 'https')
-          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+          attempts = 0
+          begin
+            attempts += 1
+            http = Net::HTTP.new(uri.host, uri.port)
+            http.use_ssl = (uri.scheme == 'https')
+            http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+            http.open_timeout = OPEN_TIMEOUT
+            http.read_timeout = READ_TIMEOUT
+            http.max_retries = 0
 
-          request = Net::HTTP::Get.new(uri.request_uri)
-          request['Authorization'] = token if token
-          http.request(request)
+            request = Net::HTTP::Get.new(uri.request_uri)
+            request['Authorization'] = token if token
+            http.request(request)
+          rescue *DROPPED_CONNECTION_ERRORS
+            retry if attempts < 2
+            raise
+          end
         end
 
         # Maps a non-200 response to a FetchError.

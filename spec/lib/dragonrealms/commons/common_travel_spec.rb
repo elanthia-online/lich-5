@@ -224,10 +224,64 @@ RSpec.describe DRCT do
       DRCT.order_item(100, 5)
     end
 
+    it 'returns nil without a second order when the coins reply is capitalized' do
+      allow(DRC).to receive(:bput).and_return("You don't have enough coins")
+      expect(DRCT.order_item(100, 5)).to be_nil
+      expect(DRC).to have_received(:bput).once
+    end
+
     it 'orders twice on "Just order it again"' do
       allow(DRC).to receive(:bput).and_return('Just order it again', 'takes some coins from you')
       expect(DRC).to receive(:bput).twice
       DRCT.order_item(100, 5)
+    end
+
+    # The game's refusal when there is no free hand for the ordered item.
+    hands_full = 'You realize your hands are full, and stop.'
+
+    it 'returns the success match unchanged' do
+      allow(DRC).to receive(:bput).and_return('Just order it again', 'takes some coins from you')
+      expect(DRCT.order_item(100, 5)).to eq('takes some coins from you')
+    end
+
+    it 'listens for the hands-full refusal on both orders' do
+      allow(DRC).to receive(:bput).and_return('Just order it again', 'takes some coins from you')
+      DRCT.order_item(100, 5)
+      expect(DRC).to have_received(:bput)
+        .with('order 5', 'Just order it again', "you don't have enough coins", DRCT::ORDER_HANDS_FULL_PATTERN).ordered
+      expect(DRC).to have_received(:bput)
+        .with('order 5', 'takes some coins from you', DRCT::ORDER_HANDS_FULL_PATTERN).ordered
+    end
+
+    it 'returns nil, not the refusal or a timeout, when the confirming order finds the hands full' do
+      allow(DRC).to receive(:bput).and_return('Just order it again', hands_full)
+      expect(DRCT.order_item(100, 5)).to be_nil
+      expect(DRC).to have_received(:bput).twice
+    end
+
+    it 'returns nil without confirming when the first order finds the hands full' do
+      allow(DRC).to receive(:bput).and_return(hands_full)
+      expect(DRCT.order_item(100, 5)).to be_nil
+      expect(DRC).to have_received(:bput).once
+    end
+
+    it "still returns '' when the confirming order times out" do
+      allow(DRC).to receive(:bput).and_return('Just order it again', '')
+      expect(DRCT.order_item(100, 5)).to eq('')
+    end
+  end
+
+  describe 'ORDER_HANDS_FULL_PATTERN' do
+    it 'matches the verbatim refusal' do
+      expect(DRCT::ORDER_HANDS_FULL_PATTERN).to match('You realize your hands are full, and stop.')
+    end
+
+    it 'does not match the different refusal ACCEPT gives' do
+      expect(DRCT::ORDER_HANDS_FULL_PATTERN).not_to match('Both of your hands are full.')
+    end
+
+    it 'does not match the refusal quoted in speech' do
+      expect(DRCT::ORDER_HANDS_FULL_PATTERN).not_to match('Mahtra says, "You realize your hands are full, and stop."')
     end
   end
 

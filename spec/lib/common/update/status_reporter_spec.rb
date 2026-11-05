@@ -62,4 +62,36 @@ RSpec.describe Lich::Util::Update::StatusReporter do
       expect(printed.first).not_to match(%r{401|/repos/|prep_update})
     end
   end
+
+  describe '.github_failure_message' do
+    let(:fetch_error) { Lich::Util::Update::FetchError }
+
+    it 'keeps the next-login wording by default, for the login sync' do
+      message = described_class.github_failure_message(fetch_error.new(kind: :network), 'X.')
+
+      expect(message).to eq('GitHub check failed. X. This is a temporary error that should resolve itself by your next login.')
+    end
+
+    it 'tells a refused command to run again, since login does not retry it' do
+      message = described_class.github_failure_message(fetch_error.new(kind: :network), 'X.', retried_by: :user)
+
+      expect(message).to eq('GitHub check failed. X. This is usually temporary; run the command again in a few minutes.')
+      expect(message).not_to include('login')
+    end
+
+    it 'tells a rate-limited command to run again after the reset' do
+      reset = Time.new(2026, 11, 5, 9, 5, 0)
+      message = described_class.github_failure_message(fetch_error.new(kind: :rate_limited, reset_at: reset), 'X.', retried_by: :user)
+
+      expect(message).to eq('GitHub check failed (rate limit reached, resets at 09:05). X. Run the command again once the limit resets.')
+    end
+
+    it 'leaves the not-found and refused wording alone for a command' do
+      not_found = described_class.github_failure_message(fetch_error.new(kind: :not_found), 'X.', subject: 'me/repo', retried_by: :user)
+      rejected = described_class.github_failure_message(fetch_error.new(kind: :rejected), 'X.', subject: 'me/repo', retried_by: :user)
+
+      expect(not_found).to eq('GitHub check failed (me/repo not found). X. Check that the repository and branch exist.')
+      expect(rejected).to eq('GitHub check failed (GitHub refused access to me/repo). X. Check that the repository and branch exist and are public.')
+    end
+  end
 end
