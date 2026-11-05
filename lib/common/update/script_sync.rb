@@ -189,13 +189,13 @@ module Lich
         # --track checked the repo, and scripts later renamed or removed
         # upstream. Each comes with the status line the summary shows.
         #
+        # The status says the script is not synced rather than never installed,
+        # since a script removed upstream may still be on disk from an earlier
+        # sync. An entry that differs from a repo file only in case or the .lic
+        # suffix also names that file.
+        #
         # @param tree [Array<Hash>] GitHub tree API response
         # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
-        # The status says "not synced", not "never installed": a script removed
-        # or renamed upstream was installed by earlier syncs and is still on
-        # disk. An entry that differs from a repo file only in case or the .lic
-        # suffix also names that file, so the user learns what they meant.
-        #
         # @param repo_key [String] repository key, used in the --untrack hint
         # @return [Array<Array(String, String)>] [filename, status] pairs
         def missing_tracked(tree, config, repo_key)
@@ -206,7 +206,7 @@ module Lich
           TrackedScripts.new.tracked_scripts(config, repo_key: repo_key).reject { |f| names.include?(f) }.map do |f|
             how = defaults.include?(f) ? 'default script' : "remove with #{$clean_lich_char}lich5-update --untrack=#{repo_key}:#{f}"
             guess = names.find { |n| n.casecmp?(f) || n.casecmp?("#{f}.lic") }
-            how += "; the repo has '#{guess}'" if guess
+            how = "the repo has '#{guess}'; #{how}" if guess
             [f, "not in repo, not synced (#{how})"]
           end
         end

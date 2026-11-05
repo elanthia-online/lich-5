@@ -366,8 +366,8 @@ RSpec.describe Lich::Util::Update::ScriptSync do
         'Test', 1, ['kept.lic'], {}, [], [], {}, [],
         missing_tracked: [
           ['gone-default.lic', 'not in repo, not synced (default script)'],
-          ['Kept.lic', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:Kept.lic; the repo has 'kept.lic')"],
-          ['kept', "not in repo, not synced (remove with #{$clean_lich_char}lich5-update --untrack=test:kept; the repo has 'kept.lic')"]
+          ['Kept.lic', "not in repo, not synced (the repo has 'kept.lic'; remove with #{$clean_lich_char}lich5-update --untrack=test:Kept.lic)"],
+          ['kept', "not in repo, not synced (the repo has 'kept.lic'; remove with #{$clean_lich_char}lich5-update --untrack=test:kept)"]
         ]
       )
     end
