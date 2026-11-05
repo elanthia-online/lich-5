@@ -118,13 +118,9 @@ module Lich
             return
           end
           name = config[:display_name] || repo_key
-          if tracked_scripts(config, repo_key: repo_key).include?(script_name)
-            StatusReporter.respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
-            return
-          end
-          collision = check_collision(script_name, repo_key)
-          if collision
-            StatusReporter.respond_mono("[lich5-update: #{collision}]")
+          refusal = never_installs_here(config, repo_key, script_name) || install_refusal(config, repo_key, script_name)
+          if refusal
+            StatusReporter.respond_mono("[lich5-update: #{refusal}]")
             return
           end
           # Created only now: the autosave thread would otherwise persist an
@@ -148,6 +144,10 @@ module Lich
             return
           end
           name = config[:display_name] || repo_key
+          if config[:tracking_mode] == :all
+            untrack_leftover(config, repo_key, script_name)
+            return
+          end
           if (config[:default_tracked] || []).include?(script_name)
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' is a default script and cannot be removed.]")
             return
@@ -155,16 +155,8 @@ module Lich
           if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
             Vars.save
             StatusReporter.respond_mono("[lich5-update: Removed '#{script_name}' from #{name} tracked list.]")
-
-            # Check the appropriate directory for the installed file
-            if config[:custom]
-              install_path = File.join(config[:dest_dir], script_name)
-            else
-              install_path = File.join(SCRIPT_DIR, script_name)
-            end
-            if File.exist?(install_path)
-              StatusReporter.respond_mono("[lich5-update: Note: #{script_name} is still installed. Delete manually if no longer needed.]")
-            end
+            note = installed_file_note(config, repo_key, script_name)
+            StatusReporter.respond_mono("[lich5-update: #{note}]") if note
           else
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' was not in your #{name} tracked list.]")
           end
@@ -189,9 +181,16 @@ module Lich
             table_rows << [{ value: "#{name} (#{key})", colspan: 3, alignment: :center }]
             table_rows << :separator
 
+            not_synced = [{ value: "Not synced for #{game_label}", colspan: 3 }] unless syncs_for_this_game?(config)
             if config[:tracking_mode] == :all
-              table_rows << [{ value: "All .lic files synced automatically", colspan: 3 }]
+              table_rows << (not_synced || [{ value: "All .lic files synced automatically", colspan: 3 }])
+              leftover = (UserVars.tracked_scripts&.dig(key) || [] rescue [])
+              unless leftover.empty?
+                table_rows << [{ value: "Ignored leftover entries: #{leftover.sort.join(', ')}", colspan: 3 }]
+                table_rows << [{ value: "Remove with --untrack=#{key}:<script>", colspan: 3 }]
+              end
             else
+              table_rows << not_synced if not_synced
               table_rows << ['Script', 'Type', 'Status']
               table_rows << :separator
               scripts = tracked_scripts(config)
@@ -251,6 +250,130 @@ module Lich
 
         private
 
+        # Explains why a track into this repo could never install anything
+        # on this character: a repo whose game filter does not match is
+        # never synced here (vars are kept per game and character, so another
+        # game never reads the entry), and an :all-mode repo ignores a
+        # tracked list.
+        #
+        # @param config [Hash] config of the repo being tracked from
+        # @param repo_key [String] its key
+        # @param script_name [String] script filename
+        # @return [String, nil] refusal message, or nil when the track can work
+        def never_installs_here(config, repo_key, script_name)
+          name = config[:display_name] || repo_key
+          unless syncs_for_this_game?(config)
+            hint = sibling_hint(config, repo_key, script_name)
+            return "#{name} is not synced for #{game_label}, so tracking it here would never install anything. Nothing was added.#{hint}"
+          end
+          return "#{name} syncs every script it contains automatically, so it has no tracked list. Nothing was added." if config[:tracking_mode] == :all
+
+          nil
+        end
+
+        # Why a repo that does install tracked scripts here cannot take this
+        # one: it is already tracked, or it collides with another repo.
+        #
+        # @param config [Hash] config of the repo being tracked from
+        # @param repo_key [String] its key
+        # @param script_name [String] script filename
+        # @return [String, nil] refusal message, or nil when it can be added
+        def install_refusal(config, repo_key, script_name)
+          name = config[:display_name] || repo_key
+          return "'#{script_name}' is already tracked in #{name}." if tracked_scripts(config, repo_key: repo_key).include?(script_name)
+
+          check_collision(script_name, repo_key)
+        end
+
+        # Points a refused track at a repo that syncs here and reads the same
+        # files (Core Scripts for GS Scripts), but only says to track it there
+        # when that command would be accepted.
+        #
+        # @return [String] text to append to the refusal, possibly empty
+        def sibling_hint(config, repo_key, script_name)
+          sibling = SCRIPT_REPOS.find do |key, other|
+            key != repo_key && other[:api_url] == config[:api_url] &&
+              other[:tracking_mode] == :explicit && syncs_for_this_game?(other)
+          end&.first
+          return '' unless sibling
+
+          other = SCRIPT_REPOS[sibling]
+          other_name = other[:display_name]
+          if tracked_scripts(other, repo_key: sibling).include?(script_name)
+            return " #{other_name}, which reads the same repository, already tracks '#{script_name}' on this character."
+          end
+
+          refusal = install_refusal(other, sibling, script_name)
+          return " To track it from the same repository, use #{$clean_lich_char}lich5-update --track=#{sibling}:#{script_name}" if refusal.nil?
+          return " #{other_name}, which reads the same repository, cannot track it either: #{refusal.delete_prefix('Error: ')}" if refusal.start_with?('Error: ')
+
+          ''
+        end
+
+        # Removes an entry stored under an :all-mode repo before --track
+        # refused them. The sync never read it.
+        #
+        # @return [void]
+        def untrack_leftover(config, repo_key, script_name)
+          name = config[:display_name] || repo_key
+          if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
+            Vars.save
+            why = syncs_for_this_game?(config) ? "#{name} syncs every script it contains" : "#{name} is not synced for #{game_label}"
+            StatusReporter.respond_mono("[lich5-update: Removed the leftover '#{script_name}' entry from #{name}. #{why}, so the entry did nothing.]")
+          else
+            StatusReporter.respond_mono("[lich5-update: #{name} has no tracked list, and '#{script_name}' was not a leftover entry there.]")
+          end
+        end
+
+        # What to say about the file after its entry is removed. Telling the
+        # user to delete it by hand is only right when nothing else installs
+        # it here: another built-in repo that tracks it, or DR Scripts, which
+        # would write it back at the next sync.
+        #
+        # @return [String, nil] note to print, or nil for none
+        def installed_file_note(config, repo_key, script_name)
+          name = config[:display_name] || repo_key
+          delete_note = "Note: #{script_name} is still installed. Delete manually if no longer needed."
+          if config[:custom]
+            return File.exist?(File.join(config[:dest_dir], script_name)) ? delete_note : nil
+          end
+          return "#{name} is not synced for #{game_label}, so that entry never installed anything here." unless syncs_for_this_game?(config)
+
+          owner = other_builtin_owner(repo_key, script_name)
+          return "#{script_name} stays installed, because #{owner} still tracks it." if owner
+          return nil unless File.exist?(File.join(SCRIPT_DIR, script_name))
+
+          SCRIPT_REPOS.each_value do |other|
+            next unless other[:tracking_mode] == :all && syncs_for_this_game?(other)
+
+            case all_mode_ships?(other, script_name)
+            when true
+              return "#{script_name} stays installed, because #{other[:display_name]} syncs it automatically."
+            when nil
+              return "Note: #{script_name} is still installed. Could not check whether #{other[:display_name]} also syncs it, so delete it by hand only if it does not."
+            end
+          end
+          delete_note
+        end
+
+        # A built-in :explicit repo, other than +repo_key+, that syncs for
+        # this game and tracks +script_name+, so it keeps the file in scripts/.
+        #
+        # @return [String, nil] its display name
+        def other_builtin_owner(repo_key, script_name)
+          SCRIPT_REPOS.each do |key, config|
+            next if key == repo_key || config[:tracking_mode] != :explicit || !syncs_for_this_game?(config)
+            return config[:display_name] if tracked_scripts(config, repo_key: key).include?(script_name)
+          end
+          nil
+        end
+
+        # @return [String] the current game for messages, e.g. "DR characters"
+        def game_label
+          game = XMLData.game.to_s
+          game.empty? ? 'this game' : "#{game} characters"
+        end
+
         # @param config [Hash] repository config
         # @return [Boolean] whether the sync installs this repo for the current game
         # @api private
@@ -284,17 +407,27 @@ module Lich
         # @api private
         def all_mode_clash(config, script_name, custom_target:)
           name = config[:display_name]
-          tree_data = client.fetch_github_json(config[:api_url])
-          unless tree_data && tree_data['tree']
+          case all_mode_ships?(config, script_name)
+          when nil
             consequence = "Could not check whether #{name} also contains '#{script_name}', so nothing was added."
-            return StatusReporter.github_failure_message(client.last_error, consequence, subject: name, retried_by: :user)
+            StatusReporter.github_failure_message(client.last_error, consequence, subject: name, retried_by: :user)
+          when true
+            consequence = custom_target ? 'The custom version would shadow it at runtime.' : 'Tracking it here would make the two overwrite each other.'
+            "Error: '#{script_name}' is also in #{name}, which syncs it automatically. #{consequence}"
           end
+        end
+
+        # @param config [Hash] an :all-mode repo's config
+        # @param script_name [String] script filename
+        # @return [Boolean, nil] whether its sync installs +script_name+; nil
+        #   when its GitHub file list could not be read
+        # @api private
+        def all_mode_ships?(config, script_name)
+          tree_data = client.fetch_github_json(config[:api_url])
+          return nil unless tree_data && tree_data['tree']
 
           synced = ScriptSync.auto_synced_entries(tree_data['tree'], config)
-          return nil unless synced.any? { |entry| File.basename(entry['path']) == script_name }
-
-          consequence = custom_target ? 'The custom version would shadow it at runtime.' : 'Tracking it here would make the two overwrite each other.'
-          "Error: '#{script_name}' is also in #{name}, which syncs it automatically. #{consequence}"
+          synced.any? { |entry| File.basename(entry['path']) == script_name }
         end
 
         # Built on first use when none was given: ScriptSync builds a

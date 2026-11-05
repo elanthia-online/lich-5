@@ -7,7 +7,18 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
   let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
   let(:tracker) { described_class.new(client) }
 
+  # A game no built-in repo filters for, so examples that do not set one
+  # behave the same alone and in the full suite. Examples that need DR or
+  # GemStone set it in their own before.
+  around do |example|
+    saved = XMLData.game
+    example.run
+  ensure
+    XMLData.game = saved
+  end
+
   before do
+    XMLData.game = 'rspec'
     stub_const('SCRIPT_DIR', tmpdir)
     UserVars.tracked_scripts = nil
     allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono)
@@ -229,6 +240,257 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       expect(client).not_to have_received(:fetch_github_json)
       expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'go2\.lic' is already tracked in Core Scripts/)
+    end
+  end
+
+  describe 'tracks into a repo that never installs a tracked script here' do
+    let(:dr_api) { Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url] }
+    let(:dr_tree) { { 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] } }
+
+    around do |example|
+      saved = XMLData.game
+      example.run
+    ensure
+      XMLData.game = saved
+    end
+
+    before { XMLData.game = 'DR' }
+
+    it 'refuses DR Scripts, which syncs everything and ignores a tracked list' do
+      tracker.track_script('dr-scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Vars).not_to have_received(:save)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: DR Scripts syncs every script it contains automatically, so it has no tracked list. Nothing was added.]')
+    end
+
+    it 'refuses GS Scripts on a DR character and points at Core Scripts' do
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(dr_tree)
+
+      tracker.track_script('gs-scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        '[lich5-update: GS Scripts is not synced for DR characters, so tracking it here would never install anything. ' \
+        "Nothing was added. To track it from the same repository, use #{$clean_lich_char}lich5-update --track=scripts:lnet.lic]"
+      )
+    end
+
+    it 'does not point at Core Scripts for a file DR Scripts also ships, and says why' do
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(dr_tree)
+
+      tracker.track_script('gs-scripts', 'alchemy.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        '[lich5-update: GS Scripts is not synced for DR characters, so tracking it here would never install anything. Nothing was added. ' \
+        "Core Scripts, which reads the same repository, cannot track it either: 'alchemy.lic' is also in DR Scripts, which syncs it " \
+        'automatically. Tracking it here would make the two overwrite each other.]'
+      )
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/--track=scripts/)
+    end
+
+    it 'says Core Scripts already tracks a default instead of suggesting a track it refuses' do
+      allow(client).to receive(:fetch_github_json)
+
+      tracker.track_script('gs-scripts', 'go2.lic')
+
+      expect(client).not_to have_received(:fetch_github_json)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        '[lich5-update: GS Scripts is not synced for DR characters, so tracking it here would never install anything. Nothing was added. ' \
+        "Core Scripts, which reads the same repository, already tracks 'go2.lic' on this character.]"
+      )
+    end
+
+    it 'gives no hint at all when the check for Core Scripts cannot reach GitHub' do
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(nil)
+      allow(client).to receive(:last_error).and_return(nil)
+
+      tracker.track_script('gs-scripts', 'lnet.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: GS Scripts is not synced for DR characters, so tracking it here would never install anything. Nothing was added.]')
+    end
+
+    it 'tells a GemStone character DR Scripts is not synced, not that it syncs everything' do
+      XMLData.game = 'GSIV'
+
+      tracker.track_script('dr-scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: DR Scripts is not synced for GSIV characters, so tracking it here would never install anything. Nothing was added.]')
+    end
+
+    it 'still tracks GS Scripts on a GemStone character' do
+      XMLData.game = 'GSIV'
+
+      tracker.track_script('gs-scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts['gs-scripts']).to eq(['lnet.lic'])
+    end
+
+    it 'gives no hint when no repo that syncs here reads the same files' do
+      repos = Lich::Util::Update::SCRIPT_REPOS.merge(
+        'odd' => { display_name: 'Odd', api_url: 'https://example.invalid/odd', tracking_mode: :explicit, game_filter: /^GS/, default_tracked: [] }
+      )
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', repos)
+
+      tracker.track_script('odd', 'x.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: Odd is not synced for DR characters, so tracking it here would never install anything. Nothing was added.]')
+    end
+
+    it 'does not break when the game is not known yet' do
+      XMLData.game = nil
+
+      tracker.track_script('gs-scripts', 'lnet.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/GS Scripts is not synced for this game,/)
+    end
+  end
+
+  describe 'cleaning up after the old --track' do
+    let(:dr_api) { Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url] }
+    around do |example|
+      saved = XMLData.game
+      example.run
+    ensure
+      XMLData.game = saved
+    end
+
+    before { XMLData.game = 'DR' }
+
+    it 'removes a leftover DR Scripts entry and does not tell the user to delete the file' do
+      UserVars.tracked_scripts = { 'dr-scripts' => ['lnet.lic'], 'scripts' => ['lnet.lic'] }
+      File.binwrite(File.join(tmpdir, 'lnet.lic'), '# synced by Core Scripts')
+
+      tracker.untrack_script('dr-scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts['dr-scripts']).to eq([])
+      expect(UserVars.tracked_scripts['scripts']).to eq(['lnet.lic'])
+      expect(Vars).to have_received(:save)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Removed the leftover 'lnet.lic' entry from DR Scripts. DR Scripts syncs every script it contains, so the entry did nothing.]")
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/still installed|Delete manually|tracked list\.\]/)
+    end
+
+    it 'says so when there is no such leftover entry' do
+      tracker.untrack_script('dr-scripts', 'lnet.lic')
+
+      expect(Vars).not_to have_received(:save)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: DR Scripts has no tracked list, and 'lnet.lic' was not a leftover entry there.]")
+    end
+
+    it 'keeps the file note quiet when another built-in repo still tracks the file' do
+      XMLData.game = 'GSIV'
+      UserVars.tracked_scripts = { 'gs-scripts' => ['lnet.lic'], 'scripts' => ['lnet.lic'] }
+      File.binwrite(File.join(tmpdir, 'lnet.lic'), '# synced')
+
+      tracker.untrack_script('gs-scripts', 'lnet.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: lnet.lic stays installed, because Core Scripts still tracks it.]')
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Delete manually/)
+    end
+
+    it 'does not count a repo that does not sync here as keeping the file' do
+      UserVars.tracked_scripts = { 'scripts' => ['ewaggle.lic'] }
+      File.binwrite(File.join(tmpdir, 'ewaggle.lic'), '# installed')
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [] })
+
+      tracker.untrack_script('scripts', 'ewaggle.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/ewaggle\.lic is still installed\. Delete manually/)
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/stays installed/)
+    end
+
+    it 'shows leftover DR Scripts entries in --tracked, so they can be found' do
+      UserVars.tracked_scripts = { 'dr-scripts' => ['zeta.lic', 'lnet.lic'] }
+
+      tracker.show_tracked('dr-scripts')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with(a_string_including('All .lic files synced automatically', 'Ignored leftover entries: lnet.lic, zeta.lic', 'Remove with --untrack=dr-scripts:<script>'))
+    end
+
+    it 'shows no leftover row when there are none' do
+      tracker.show_tracked('dr-scripts')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(satisfy { |t| !t.include?('leftover') })
+    end
+
+    it 'marks a repo that does not sync here instead of claiming it syncs' do
+      tracker.show_tracked
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with(a_string_including('Not synced for DR characters', 'All .lic files synced automatically'))
+      XMLData.game = 'GSIV'
+      tracker.show_tracked('dr-scripts')
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with(satisfy { |t| t.include?('Not synced for GSIV characters') && !t.include?('All .lic files synced') })
+    end
+
+    it 'tells a GemStone character a leftover DR Scripts entry did nothing because DR Scripts is not synced' do
+      XMLData.game = 'GSIV'
+      UserVars.tracked_scripts = { 'dr-scripts' => ['lnet.lic'] }
+
+      tracker.untrack_script('dr-scripts', 'lnet.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with("[lich5-update: Removed the leftover 'lnet.lic' entry from DR Scripts. DR Scripts is not synced for GSIV characters, so the entry did nothing.]")
+    end
+
+    it 'does not tell the user to delete a file DR Scripts would write back' do
+      UserVars.tracked_scripts = { 'scripts' => ['alchemy.lic'] }
+      File.binwrite(File.join(tmpdir, 'alchemy.lic'), '# from DR Scripts')
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] })
+
+      tracker.untrack_script('scripts', 'alchemy.lic')
+
+      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: alchemy.lic stays installed, because DR Scripts syncs it automatically.]')
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Delete manually/)
+    end
+
+    it 'hedges the note when it cannot check DR Scripts' do
+      UserVars.tracked_scripts = { 'scripts' => ['alchemy.lic'] }
+      File.binwrite(File.join(tmpdir, 'alchemy.lic'), '# installed')
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(nil)
+
+      tracker.untrack_script('scripts', 'alchemy.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        '[lich5-update: Note: alchemy.lic is still installed. Could not check whether DR Scripts also syncs it, so delete it by hand only if it does not.]'
+      )
+    end
+
+    it 'does not ask GitHub when the file is not on disk' do
+      UserVars.tracked_scripts = { 'scripts' => ['gone.lic'] }
+      allow(client).to receive(:fetch_github_json)
+
+      tracker.untrack_script('scripts', 'gone.lic')
+
+      expect(client).not_to have_received(:fetch_github_json)
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Note|stays installed/)
+    end
+
+    it 'says an entry for a repo not synced here never installed anything, instead of a delete note' do
+      UserVars.tracked_scripts = { 'gs-scripts' => ['alchemy.lic'] }
+      File.binwrite(File.join(tmpdir, 'alchemy.lic'), '# from DR Scripts')
+      allow(client).to receive(:fetch_github_json)
+
+      tracker.untrack_script('gs-scripts', 'alchemy.lic')
+
+      expect(client).not_to have_received(:fetch_github_json)
+      expect(UserVars.tracked_scripts['gs-scripts']).to eq([])
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
+        .with('[lich5-update: GS Scripts is not synced for DR characters, so that entry never installed anything here.]')
+      expect(Lich::Util::Update::StatusReporter).not_to have_received(:respond_mono).with(/Delete manually/)
     end
   end
 end
