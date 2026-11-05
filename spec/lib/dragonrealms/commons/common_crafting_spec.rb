@@ -7,6 +7,9 @@ require_relative '../../../spec_helper'
 # common-travel likewise for the real DRCT.order_item in .check_consumables.
 # common gives the real DRC.right_hand / DRC.left_hand (GameObj 'Empty' ->
 # nil) in place of spec_helper's accessors, also whatever the load order.
+# common/gameobj gives the real GameObj hands and worn list that DRCI.held_id
+# and DRCI.worn_ref read (spec_helper's GameObj double has no inv).
+require 'common/gameobj'
 require 'dragonrealms/commons/common'
 require 'dragonrealms/commons/common-items'
 require 'dragonrealms/commons/common-travel'
@@ -1881,10 +1884,11 @@ describe DRCC do
         end
       end
 
-      # Pins today's DRCI.in_hands? word-prefix match (/\bleather/i): a held
-      # "leather backpack" counts as the leather, so the result is false and
-      # the line says it is still held. DESIGN.md L2 names DRCI.in_hands?;
-      # the noun-exact check is a later layer, and this example flips then.
+      # Pins DRCI.in_hands?'s word-prefix match (/\bleather/i) for a name
+      # that held_id does not resolve: no held item has the noun "leather",
+      # so the PUT and the still-held check go by name, and a held "leather
+      # backpack" counts as the leather. When held_id does resolve, the check
+      # goes by id instead (common_crafting_by_held_id_spec.rb).
       context 'when the PUT gets "What were you referring to?" and a different held item starts with the noun' do
         let(:bag_put) { 'put my leather in my bucket' }
         let(:bag_put_reply) { 'What were you referring to?' }
