@@ -92,7 +92,7 @@ RSpec.describe Lich::Util::Update::GitHubClient do
 
     # Each request pops the next response; raises when one is an exception.
     def serve(*responses)
-      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil)
+      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil, 'open_timeout=': nil, 'read_timeout=': nil)
       allow(http).to receive(:request) do |req|
         sent << req['Authorization']
         nxt = responses.shift
@@ -114,6 +114,30 @@ RSpec.describe Lich::Util::Update::GitHubClient do
     end
 
     after { FileUtils.remove_entry(data_dir, true) }
+
+    it 'sets open and read timeouts on every connection' do
+      conns = []
+      allow(Net::HTTP).to receive(:new).and_wrap_original do |original, *args|
+        conn = original.call(*args)
+        allow(conn).to receive(:request).and_return(response(200, body: '{}'))
+        conns << conn
+        conn
+      end
+
+      expect(client.http_get(url)).to eq('{}')
+      expect(conns.map(&:open_timeout)).to eq([described_class::OPEN_TIMEOUT])
+      expect(conns.map(&:read_timeout)).to eq([described_class::READ_TIMEOUT])
+      expect(described_class::OPEN_TIMEOUT).to be < 60
+      expect(described_class::READ_TIMEOUT).to be < 60
+    end
+
+    it 'reports a stalled read as a network failure without printing' do
+      serve(Net::ReadTimeout.new)
+
+      expect(client.http_get(url)).to be_nil
+      expect(client.last_error.kind).to eq(:network)
+      expect(printed).to be_empty
+    end
 
     it 'classifies a 401 without a token as a temporary outage, prints nothing, and does not retry' do
       serve(response(401, body: '{"message":"Requires authentication"}'))
