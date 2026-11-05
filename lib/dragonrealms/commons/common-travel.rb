@@ -77,6 +77,9 @@ module Lich
         /Usage: ASK/
       ].freeze unless defined?(ASK_FAILURE_PATTERNS)
 
+      # ORDER refusal when the character has no free hand for the item
+      ORDER_HANDS_FULL_PATTERN = /^You realize your hands are full, and stop\./ unless defined?(ORDER_HANDS_FULL_PATTERN)
+
       # Visit a merchant and sell an item.
       # Usually to sell junk at pawn shops.
       #
@@ -133,12 +136,24 @@ module Lich
       #
       # Returns nil without ordering when the walk to +room+ fails: ORDER takes
       # a menu number, so the same ORDER in another shop could buy another item.
+      #
+      # Also returns nil when the character cannot pay (that reply is matched
+      # ignoring case, as bput matches it), or when either ORDER
+      # gets "You realize your hands are full, and stop." That refusal is
+      # matched so it returns at once instead of waiting out bput's timeout.
+      # On success it returns bput's match, 'takes some coins from you'.
+      #
+      # A timeout on either ORDER returns '' (bput's timeout value), which is
+      # truthy. Test the result with +.to_s.empty?+ or compare it with the
+      # success text; a plain truthiness check counts a timeout as a purchase.
       def order_item(room, item_number)
         return unless walk_to_merchant(room, "ordering #{item_number}")
 
-        return if DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins') == 'you don\'t have enough coins'
+        quote = DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins', ORDER_HANDS_FULL_PATTERN)
+        return if quote.match?(/you don't have enough coins/i) || quote.match?(ORDER_HANDS_FULL_PATTERN)
 
-        DRC.bput("order #{item_number}", 'takes some coins from you')
+        result = DRC.bput("order #{item_number}", 'takes some coins from you', ORDER_HANDS_FULL_PATTERN)
+        result unless result.match?(ORDER_HANDS_FULL_PATTERN)
       end
 
       # Internal to the merchant helpers above; not meant for scripts.
