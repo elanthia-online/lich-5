@@ -124,7 +124,7 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
 
       tracker.track_script('scripts', 'alchemy.lic')
 
-      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
         .with(/Error: 'alchemy\.lic' is also in DR Scripts, which syncs it automatically/)
     end
@@ -163,7 +163,7 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
 
       tracker.track_script('scripts', 'lnet.lic')
 
-      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Vars).not_to have_received(:save)
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono)
         .with(/rate limit reached, resets at 14:30\).*Could not check whether DR Scripts also contains 'lnet\.lic', so nothing was added\. Run the command again once the limit resets\./)
@@ -175,7 +175,7 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
 
       tracker.track_script('scripts', 'alchemy.lic')
 
-      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
         "[lich5-update: GitHub check failed. Could not check whether DR Scripts also contains 'alchemy.lic', so nothing was added. " \
         'This is usually temporary; run the command again in a few minutes.]'
@@ -196,8 +196,29 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
 
       tracker.track_script('scripts', 'ewaggle.lic')
 
-      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'ewaggle\.lic' is already tracked in GS Scripts/)
+    end
+
+    it 'says the next sync replaces a file already in scripts/' do
+      File.binwrite(File.join(tmpdir, 'lnet.lic'), '# hand-edited copy')
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(dr_tree)
+
+      tracker.track_script('scripts', 'lnet.lic')
+
+      expect(UserVars.tracked_scripts['scripts']).to eq(['lnet.lic'])
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        "[lich5-update: Added 'lnet.lic' to Core Scripts tracked list. scripts/lnet.lic already exists; " \
+        'the next sync replaces it with the Core Scripts copy if they differ.]'
+      )
+    end
+
+    it 'adds no such note when the file is not in scripts/' do
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(dr_tree)
+
+      tracker.track_script('scripts', 'lnet.lic')
+
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with("[lich5-update: Added 'lnet.lic' to Core Scripts tracked list.]")
     end
 
     it 'reports a default script as already tracked instead of adding a duplicate' do
@@ -206,7 +227,7 @@ RSpec.describe Lich::Util::Update::TrackedScripts do
       tracker.track_script('scripts', 'go2.lic')
 
       expect(client).not_to have_received(:fetch_github_json)
-      expect(UserVars.tracked_scripts['scripts']).to eq([])
+      expect(UserVars.tracked_scripts&.dig('scripts')).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/'go2\.lic' is already tracked in Core Scripts/)
     end
   end

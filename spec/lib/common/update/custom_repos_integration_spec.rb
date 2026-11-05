@@ -7,9 +7,9 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
   let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
   let(:tracker) { Lich::Util::Update::TrackedScripts.new(client) }
 
-  # DR, where DR Scripts syncs, so a custom track that wrongly consulted
-  # it would reach the client double and fail. Set in before, because
-  # spec_helper resets XMLData before each example.
+  # DR, where DR Scripts syncs and a custom track also checks its file
+  # list. Set in before, because spec_helper resets XMLData before each
+  # example.
   around do |example|
     saved = XMLData.game
     example.run
@@ -17,8 +17,11 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
     XMLData.game = saved
   end
 
+  let(:dr_api) { Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url] }
+
   before do
     XMLData.game = 'DR'
+    allow(client).to receive(:fetch_github_json).with(dr_api).and_return({ 'tree' => [{ 'path' => 'alchemy.lic', 'type' => 'blob' }] })
     stub_const('SCRIPT_DIR', tmpdir)
     UserVars.custom_repos = nil
     UserVars.tracked_scripts = nil
@@ -118,17 +121,39 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       expect(result).not_to match(/DR Scripts/)
     end
 
-    it 'never reads the DR Scripts file list for a custom track, even in DR' do
+    it 'refuses a custom track of a script DR Scripts ships, before the sync has installed it' do
       UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
-      allow(client).to receive(:fetch_github_json)
+
+      tracker.track_script('MahtraDR/test', 'alchemy.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        "[lich5-update: Error: 'alchemy.lic' is also in DR Scripts, which syncs it automatically. The custom version would shadow it at runtime.]"
+      )
+    end
+
+    it 'does not read the DR Scripts file list for a custom track outside DR' do
+      XMLData.game = 'GSIV'
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
 
       tracker.track_script('MahtraDR/test', 'alchemy.lic')
 
       expect(client).not_to have_received(:fetch_github_json)
-      expect(UserVars.tracked_scripts['MahtraDR/test']).to include('alchemy.lic')
+      expect(UserVars.tracked_scripts['MahtraDR/test']).to eq(['alchemy.lic'])
     end
 
-    it 'blocks collision with :all tracking mode repo when file is installed' do
+    it 'refuses a custom track when the DR Scripts file list cannot be read' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
+      allow(client).to receive(:fetch_github_json).with(dr_api).and_return(nil)
+      allow(client).to receive(:last_error).and_return(nil)
+
+      tracker.track_script('MahtraDR/test', 'tool.lic')
+
+      expect(UserVars.tracked_scripts).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Could not check whether DR Scripts also contains 'tool\.lic'/)
+    end
+
+    it 'blocks a custom track over a file already in scripts/' do
       File.binwrite(File.join(tmpdir, 'anything.lic'), '# existing')
 
       result = tracker.check_collision('anything.lic', 'MahtraDR/custom')
@@ -136,7 +161,7 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       expect(result).to match(/Error:.*already installed in scripts\//)
     end
 
-    it 'allows tracking when :all repo file is not installed locally' do
+    it 'allows a custom track when the name is not in scripts/ and DR Scripts does not ship it' do
       result = tracker.check_collision('not-installed.lic', 'MahtraDR/custom')
 
       expect(result).to be_nil
@@ -168,8 +193,8 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       expect(result).to be_nil
     end
 
-    it 'checks the right directory for :all repo installed files' do
-      File.binwrite(File.join(tmpdir, 'common.lic'), '# dr-scripts version')
+    it 'looks for the shadowed file in scripts/ itself' do
+      File.binwrite(File.join(tmpdir, 'common.lic'), '# installed in scripts/')
 
       result = tracker.check_collision('common.lic', 'MahtraDR/custom')
 
@@ -177,17 +202,17 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       expect(result).to match(/shadow/)
     end
 
-    it 'blocks track when script is already installed from :all mode repo' do
+    it 'refuses a custom track over a file already in scripts/' do
       UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
-      File.binwrite(File.join(tmpdir, 'something.lic'), '# existing dr-scripts version')
+      File.binwrite(File.join(tmpdir, 'something.lic'), '# installed in scripts/')
 
       tracker.track_script('MahtraDR/test', 'something.lic')
 
-      expect(UserVars.tracked_scripts['MahtraDR/test']).not_to include('something.lic')
+      expect(UserVars.tracked_scripts).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already installed in scripts\//)
     end
 
-    it 'allows tracking when script is not installed from :all mode repo' do
+    it 'adds a custom track when the name is not in scripts/' do
       UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
 
       tracker.track_script('MahtraDR/test', 'new-script.lic')
@@ -204,7 +229,7 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
 
       tracker.track_script('Repo2/scripts', 'conflict.lic')
 
-      expect(UserVars.tracked_scripts['Repo2/scripts']).not_to include('conflict.lic')
+      expect(UserVars.tracked_scripts['Repo2/scripts']).to be_nil
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already tracked.*Repo1/)
     end
   end

@@ -6,6 +6,11 @@
   Combines default_tracked scripts from config with user-added scripts from
   UserVars. Provides CLI for adding/removing tracked scripts.
   Supports both built-in SCRIPT_REPOS and user-registered custom repos.
+
+  Before adding a script, --track checks it against the other repos: files
+  already in scripts/, other tracked lists, and the GitHub file list of an
+  :all-mode repo (DR Scripts) that syncs for the current game. Those reads
+  go through the shared GitHubClient and its short cache.
 =end
 
 module Lich
@@ -48,17 +53,22 @@ module Lich
         # Checks for filename collisions across all repos.
         #
         # A custom repo installs into scripts/custom/<owner-repo>/, which Lich
-        # searches before scripts/, so any script already in scripts/ would be
-        # shadowed whatever repo it came from. A built-in repo installs into
-        # scripts/ itself, so the only clash with an :all-mode repo is a file
+        # searches before scripts/, so it would shadow any script in scripts/:
+        # one already there, whatever repo it came from, or one an :all-mode
+        # repo will install at its next sync. A built-in repo installs into
+        # scripts/ itself, so its only clash with an :all-mode repo is a file
         # that repo really ships: both syncs would then write the same path.
-        # That is read from the :all repo's GitHub file list. A built-in repo
-        # that does not sync for the current game installs nothing here, so
-        # it cannot clash and is skipped.
+        # What an :all-mode repo ships is read from its GitHub file list. A
+        # built-in repo that does not sync for the current game installs
+        # nothing here, so it cannot clash and is skipped.
         #
         # @param script_name [String] script filename to check
         # @param exclude_repo [String] repo key to exclude from check (the target repo)
-        # @return [String, nil] error message if collision found, nil otherwise
+        # @return [String, nil] a refusal, or nil when the name can be added.
+        #   A refusal is either an "Error: ..." collision message or, when an
+        #   :all-mode repo's file list could not be read, a GitHub-failure
+        #   sentence (StatusReporter.github_failure_message). Callers that
+        #   need to tell the two apart check for the "Error: " prefix.
         def check_collision(script_name, exclude_repo)
           custom_target = !SCRIPT_REPOS.key?(exclude_repo)
           if custom_target && File.exist?(File.join(SCRIPT_DIR, script_name))
@@ -71,9 +81,7 @@ module Lich
             next unless syncs_for_this_game?(config)
 
             if config[:tracking_mode] == :all
-              next if custom_target
-
-              clash = all_mode_clash(config, script_name)
+              clash = all_mode_clash(config, script_name, custom_target: custom_target)
               return clash if clash
 
               next
@@ -110,20 +118,22 @@ module Lich
             return
           end
           name = config[:display_name] || repo_key
-          UserVars.tracked_scripts ||= {}
-          UserVars.tracked_scripts[repo_key] ||= []
           if tracked_scripts(config, repo_key: repo_key).include?(script_name)
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
-          else
-            collision = check_collision(script_name, repo_key)
-            if collision
-              StatusReporter.respond_mono("[lich5-update: #{collision}]")
-              return
-            end
-            UserVars.tracked_scripts[repo_key].push(script_name)
-            Vars.save
-            StatusReporter.respond_mono("[lich5-update: Added '#{script_name}' to #{name} tracked list.]")
+            return
           end
+          collision = check_collision(script_name, repo_key)
+          if collision
+            StatusReporter.respond_mono("[lich5-update: #{collision}]")
+            return
+          end
+          # Created only now: the autosave thread would otherwise persist an
+          # empty list for a refused track.
+          UserVars.tracked_scripts ||= {}
+          UserVars.tracked_scripts[repo_key] ||= []
+          UserVars.tracked_scripts[repo_key].push(script_name)
+          Vars.save
+          StatusReporter.respond_mono("[lich5-update: Added '#{script_name}' to #{name} tracked list.#{replaces_local_note(config, script_name)}]")
         end
 
         # Removes a script from user's tracked list for a repository.
@@ -243,18 +253,36 @@ module Lich
 
         # @param config [Hash] repository config
         # @return [Boolean] whether the sync installs this repo for the current game
+        # @api private
         def syncs_for_this_game?(config)
           filter = config[:game_filter]
           filter.nil? || filter.match?(XMLData.game.to_s)
         end
 
-        # Reports whether an :all-mode repo ships +script_name+, which would
-        # make it and a built-in tracked copy overwrite each other in scripts/.
+        # Tells the user that a built-in track replaces a file already in
+        # scripts/: the sync overwrites any local copy whose content differs.
+        #
+        # @param config [Hash] config of the repo tracked from
+        # @param script_name [String] script filename
+        # @return [String] text to append to the Added message, possibly empty
+        # @api private
+        def replaces_local_note(config, script_name)
+          return '' if config[:custom] || !File.exist?(File.join(SCRIPT_DIR, script_name))
+
+          " scripts/#{script_name} already exists; the next sync replaces it with the #{config[:display_name]} copy if they differ."
+        end
+
+        # Reports whether an :all-mode repo ships +script_name+. For a built-in
+        # target both syncs would write the same file in scripts/; for a custom
+        # target the custom copy would shadow the synced one.
         #
         # @param config [Hash] the :all-mode repo's config
         # @param script_name [String] script filename
-        # @return [String, nil] error message, or nil when there is no clash
-        def all_mode_clash(config, script_name)
+        # @param custom_target [Boolean] whether the track is for a custom repo
+        # @return [String, nil] "Error: ..." when it ships the script, a
+        #   GitHub-failure sentence when its file list could not be read, or nil
+        # @api private
+        def all_mode_clash(config, script_name, custom_target:)
           name = config[:display_name]
           tree_data = client.fetch_github_json(config[:api_url])
           unless tree_data && tree_data['tree']
@@ -262,13 +290,18 @@ module Lich
             return StatusReporter.github_failure_message(client.last_error, consequence, subject: name, retried_by: :user)
           end
 
-          synced = ScriptSync.new(client).filter_syncable_scripts(tree_data['tree'], config)
+          synced = ScriptSync.auto_synced_entries(tree_data['tree'], config)
           return nil unless synced.any? { |entry| File.basename(entry['path']) == script_name }
 
-          "Error: '#{script_name}' is also in #{name}, which syncs it automatically. Tracking it here would make the two overwrite each other."
+          consequence = custom_target ? 'The custom version would shadow it at runtime.' : 'Tracking it here would make the two overwrite each other.'
+          "Error: '#{script_name}' is also in #{name}, which syncs it automatically. #{consequence}"
         end
 
+        # Built on first use when none was given: ScriptSync builds a
+        # TrackedScripts without one to read tracked lists, which never fetch.
+        #
         # @return [GitHubClient]
+        # @api private
         def client
           @client ||= GitHubClient.new
         end
