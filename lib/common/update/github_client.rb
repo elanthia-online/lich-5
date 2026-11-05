@@ -36,12 +36,15 @@ module Lich
       end
 
       class GitHubClient
-        # Seconds to wait for the connection to open. lich5-update commands
-        # run on the client input thread, so a stalled GitHub would otherwise
-        # hold typed game commands for Net::HTTP's 60 s defaults.
+        # Seconds to wait for the TCP connect, and again for the TLS
+        # handshake. lich5-update commands run on the client input thread,
+        # so a stalled GitHub would otherwise hold typed game commands for
+        # Net::HTTP's 60 s defaults.
         OPEN_TIMEOUT = 10
         # Seconds to wait for each read. Bodies here are API JSON and single
-        # script files, so a read that stalls this long has failed.
+        # script files, so a read that stalls this long has failed. Net::HTTP
+        # would otherwise retry a timed-out GET once, doubling the wait, so
+        # perform_get turns that retry off.
         READ_TIMEOUT = 30
 
         attr_reader :http_cache
@@ -157,6 +160,9 @@ module Lich
           http.verify_mode = OpenSSL::SSL::VERIFY_PEER
           http.open_timeout = OPEN_TIMEOUT
           http.read_timeout = READ_TIMEOUT
+          # Each call opens a fresh connection, so the stale keep-alive socket
+          # Net::HTTP's GET retry exists for cannot occur here.
+          http.max_retries = 0
 
           request = Net::HTTP::Get.new(uri.request_uri)
           request['Authorization'] = token if token

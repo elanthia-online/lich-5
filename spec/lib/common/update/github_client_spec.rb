@@ -92,7 +92,7 @@ RSpec.describe Lich::Util::Update::GitHubClient do
 
     # Each request pops the next response; raises when one is an exception.
     def serve(*responses)
-      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil, 'open_timeout=': nil, 'read_timeout=': nil)
+      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil, 'open_timeout=': nil, 'read_timeout=': nil, 'max_retries=': nil)
       allow(http).to receive(:request) do |req|
         sent << req['Authorization']
         nxt = responses.shift
@@ -127,16 +127,33 @@ RSpec.describe Lich::Util::Update::GitHubClient do
       expect(client.http_get(url)).to eq('{}')
       expect(conns.map(&:open_timeout)).to eq([described_class::OPEN_TIMEOUT])
       expect(conns.map(&:read_timeout)).to eq([described_class::READ_TIMEOUT])
+      expect(conns.map(&:max_retries)).to eq([0])
       expect(described_class::OPEN_TIMEOUT).to be < 60
       expect(described_class::READ_TIMEOUT).to be < 60
     end
 
-    it 'reports a stalled read as a network failure without printing' do
-      serve(Net::ReadTimeout.new)
+    # A real Net::HTTP against a local server that accepts and never
+    # replies, with the read timeout cut short: one connection, one wait.
+    it 'gives up on a stalled read after one READ_TIMEOUT, without retrying or printing' do
+      stub_const("#{described_class}::READ_TIMEOUT", 0.3)
+      server = TCPServer.new('127.0.0.1', 0)
+      accepted = Queue.new
+      held = []
+      acceptor = Thread.new { loop { held << server.accept; accepted << true } }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-      expect(client.http_get(url)).to be_nil
+      result = client.http_get("http://127.0.0.1:#{server.addr[1]}/stall", auth: false)
+
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      expect(result).to be_nil
       expect(client.last_error.kind).to eq(:network)
+      expect(accepted.size).to eq(1)
+      expect(elapsed).to be < 0.55
       expect(printed).to be_empty
+    ensure
+      acceptor&.kill
+      held&.each(&:close)
+      server&.close
     end
 
     it 'classifies a 401 without a token as a temporary outage, prints nothing, and does not retry' do
