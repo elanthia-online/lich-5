@@ -407,6 +407,41 @@ module Lich
         /perhaps try doing that again/
       ].freeze
 
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the item is not
+      # in hand: {.put_away_item_result} gives +:not_holding+. Each grouping
+      # below is selected from that array by source, so it holds the same
+      # Regexp objects; the array itself is unchanged.
+      PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        ['^Perhaps you should be holding that first'].include?(pattern.source)
+      end.freeze
+
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the game found no
+      # such item or container: {.put_away_item_result} gives +:missing+.
+      PUT_AWAY_ITEM_MISSING_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        [
+          '^What were you referring to',
+          '^I could not find what you were referring to',
+          '^Stow what',
+          "^I can't find your container for stowing things in"
+        ].include?(pattern.source)
+      end.freeze
+
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the container is
+      # full, or the item is too big or heavy for it: {.put_away_item_result}
+      # gives +:no_room+.
+      PUT_AWAY_ITEM_NO_ROOM_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        [
+          "^There isn't any more room in",
+          "^There's no room",
+          'completely full',
+          '^(The|That).* too heavy to go in there',
+          'is too .* to (fit|hold)',
+          "^Weirdly, you can't manage .* to fit",
+          'even after stuffing it',
+          'no matter how you arrange it'
+        ].include?(pattern.source)
+      end.freeze
+
       STOW_ITEM_SUCCESS_PATTERNS = [
         *GET_ITEM_SUCCESS_PATTERNS,
         *PUT_AWAY_ITEM_SUCCESS_PATTERNS
@@ -2085,6 +2120,99 @@ module Lich
           return false
         else
           return false
+        end
+      end
+
+      # Puts away a held item and reports what happened, where
+      # {.put_away_item_unsafe?} only says whether it worked.
+      #
+      # Sends the command {.put_away_item_unsafe?} sends for the same
+      # arguments: "put <item> <preposition> <container>", or "stow <item>"
+      # without a container. Names are sent as given, with no "my " added, so
+      # "bin" is a bin in the room; pass "#<id>", {.worn_ref}, or
+      # {.item_ref} for an item of yours. A closed container is opened and the
+      # put tried again, and a retry reply sends it again, as there, each
+      # using up one of +retries+.
+      #
+      # +:put+ is exactly when {.put_away_item_unsafe?} would return true, with
+      # one addition: a "#<id>" item that was in hand when the command went
+      # out and is in neither hand when no reply came (the {.dispose_trash}
+      # rule: the reply was lost, the item is gone).
+      #
+      # @param item [String, Integer] item to put away, e.g. "#41234567" or
+      #   "my leather"; surrounding whitespace is dropped. An Integer is an
+      #   id, sent as "#<id>". A String is sent as written, so a digits-only
+      #   String such as {.held_id}'s result is a name to the game, not an
+      #   id: pass "##{DRCI.held_id('leather')}" (or the id as an Integer).
+      # @param container [String, Integer, nil] container, e.g. "#758550",
+      #   "my bucket" or "bin"; surrounding whitespace is dropped. An Integer
+      #   is an id; nil stows
+      # @param preposition [String] "in", "on", "under", etc.
+      # @param retries [Integer] attempts left; at 0 or below nothing is sent
+      # @return [Symbol]
+      #   +:put+ a {PUT_AWAY_ITEM_SUCCESS_PATTERNS} reply, or the lost-reply
+      #   case above;
+      #   +:not_holding+ a {PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS} reply;
+      #   +:missing+ a {PUT_AWAY_ITEM_MISSING_PATTERNS} reply, or no item
+      #   given (nothing sent);
+      #   +:no_room+ a {PUT_AWAY_ITEM_NO_ROOM_PATTERNS} reply;
+      #   +:closed+ the container is closed and could not be opened (or there
+      #   is no container to open);
+      #   +:refused+ any other {PUT_AWAY_ITEM_FAILURE_PATTERNS} reply, or
+      #   retries used up;
+      #   +:timeout+ no reply matched, unless the lost-reply case applies
+      #   (the item is still held, was not held, or is not a "#<id>")
+      #
+      # @example "my leather" named the worn "sinuous leathers", not the held leather
+      #   DRCI.put_away_item_result('my leather', '#758550') #=> :not_holding
+      #
+      # @example By id, into a room bin
+      #   DRCI.put_away_item_result('#2222485', 'bin') #=> :put
+      #
+      # @see .put_away_item_unsafe?
+      def put_away_item_result(item, container = nil, preposition: 'in', retries: 3)
+        item = item.is_a?(Integer) ? "##{item}" : item.to_s.strip
+        container = container.is_a?(Integer) ? "##{container}" : container&.to_s&.strip
+        return :missing if item.empty?
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: put_away_item_result exceeded max retries")
+          return :refused
+        end
+
+        command = container ? "put #{item} #{preposition} #{container}" : "stow #{item}"
+        id = item.to_s[ITEM_ID_REF_PATTERN, 1]
+        held_before = id && id_in_hand?(id, 'either')
+        # The same patterns as put_away_item_unsafe?, so the same line ends the
+        # wait. The failure groupings go before the rest of the failures
+        # because bput returns only the part of the line its first matching
+        # pattern matched: "You just can't get the brazier to fit in the
+        # satchel, no matter how you arrange it." must come back as "no
+        # matter how you arrange it", not "You just can't get".
+        case DRC.bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+                      PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS, PUT_AWAY_ITEM_MISSING_PATTERNS, PUT_AWAY_ITEM_NO_ROOM_PATTERNS,
+                      PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
+        when *CONTAINER_IS_CLOSED_PATTERNS
+          return :closed unless container && open_container?(container)
+
+          put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
+        when *PUT_AWAY_ITEM_RETRY_PATTERNS
+          put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
+        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
+          :put
+        when *PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS
+          :not_holding
+        when *PUT_AWAY_ITEM_MISSING_PATTERNS
+          :missing
+        when *PUT_AWAY_ITEM_NO_ROOM_PATTERNS
+          :no_room
+        when *PUT_AWAY_ITEM_FAILURE_PATTERNS
+          :refused
+        else
+          return :timeout unless held_before && !id_in_hand?(id, 'either')
+
+          Lich::Messaging.msg("bold", "DRCI: No reply to '#{command}', but '#{item}' has left your hands; treating it as put away.")
+          :put
         end
       end
 
