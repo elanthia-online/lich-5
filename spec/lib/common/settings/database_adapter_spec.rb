@@ -965,7 +965,8 @@ RSpec.describe Lich::Common::DatabaseAdapter do
           # interrupts) until the closer has detached the connection and is
           # blocked on the call lock this thread holds.
           deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
-          until !@adapter.instance_variable_get(:@version_db).equal?(@old) && closer.status == 'sleep'
+          waiters = @adapter.instance_variable_get(:@version_call_lock).instance_variable_get(:@waiters)
+          until !@adapter.instance_variable_get(:@version_db).equal?(@old) && !waiters.empty?
             raise 'closer did not detach the version connection and wait for the call lock' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
             Thread.pass
