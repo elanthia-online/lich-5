@@ -1181,6 +1181,82 @@ module Lich
         ids.size == 1 ? "##{ids.first}" : item_ref(name)
       end
 
+      # The id of the one item directly in a container that a name means,
+      # read from an Inventory feed snapshot ({Lich::Common::Inventory}). Uses
+      # the {.held_id} rule (noun equal to the name's last word, ignoring
+      # case; each other word a word of the item's name; a leading "my "
+      # dropped; an ordinal or "other" first word never matches). Sends no
+      # game command and reads only the snapshot given, so the answer is as
+      # old as that snapshot: the caller must expect the id to name nothing
+      # any more, or a different item.
+      #
+      # @param name [String, Integer, nil] noun phrase, e.g. "pins" or
+      #   "sepia pins"; an Integer is an id, as in {.held_id}
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives nil
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives nil
+      # @return [String, nil] the id, without "#"; nil when the snapshot, the
+      #   container or a matching item is missing, when two different items
+      #   in it match, or when the container is locked (contents unknown)
+      #
+      # @example Some sepia pins 4101800 in the worn duffel bag 2391122
+      #   DRCI.stored_id('pins', '#2391122', snapshot: Lich::Common::Inventory.current) #=> "4101800"
+      def stored_id(name, container, snapshot:)
+        ids = stored_ids(name, container, snapshot: snapshot)
+        ids.size == 1 ? ids.first : nil
+      end
+
+      # The ids of every item directly in a container that a name means, read
+      # from an Inventory feed snapshot, by the same rule as {.stored_id}.
+      # For a caller that must tell "one match" from "several" itself, e.g.
+      # to drop an id it already holds while the snapshot shows the game a
+      # choice. Sends no game command; as old as the snapshot given.
+      #
+      # @param name [String, Integer, nil] noun phrase; an Integer is an id
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives []
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives []
+      # @return [Array<String>] the ids, without "#", in snapshot order; []
+      #   when the snapshot, the container or a matching item is missing, or
+      #   when the container is locked (contents unknown)
+      #
+      # @example Two pins in the worn duffel bag 2391122
+      #   DRCI.stored_ids('pins', 2391122, snapshot: Lich::Common::Inventory.current) #=> ["4101800", "4101802"]
+      def stored_ids(name, container, snapshot:)
+        return [] if snapshot.nil? || name.nil?
+
+        container_id = container.to_s.strip.delete_prefix('#')
+        return [] unless container_id.match?(/\A\d+\z/)
+
+        bag = snapshot[container_id]
+        return [] unless bag
+
+        bag.contents(:in).select { |item| held_obj_matches?(item, name) }.filter_map { |item| held_obj_id(item) }.uniq
+      end
+
+      # Whether a name means an item, by the {.held_id} rule (noun equal to
+      # the name's last word, ignoring case; each other word a word of the
+      # item's name; a leading "my " dropped; an ordinal or "other" first
+      # word never matches; a lone "#<id>" matches that id only). For items
+      # that are no longer at hand, such as the ones {DRCC} remembers, so
+      # every caller asks the same question {.held_id} asks of the hands.
+      # Sends no game command.
+      #
+      # @param item [#id, #noun, #name] a GameObj, or anything with the same
+      #   readers
+      # @param name [String, Integer, nil] noun phrase, or "#<id>"; an
+      #   Integer is an id
+      # @return [Boolean]
+      #
+      # @example The shortened hand name of some sepia pins
+      #   DRCI.item_named?(GameObj.right_hand, 'pins')       #=> true
+      #   DRCI.item_named?(GameObj.right_hand, 'iron pins')  #=> false
+      def item_named?(item, name)
+        !item.nil? && !name.nil? && held_obj_matches?(item, name)
+      end
+
       # Whether a worn GameObj is the one these words name (see {.worn_ref}).
       #
       # @param obj [GameObj] a worn item
