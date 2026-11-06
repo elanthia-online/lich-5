@@ -17,10 +17,12 @@ module Lich
     #   or 0. Both are percent-encoded, so no script name can break the tag. A
     #   front end replaces its whole list with each tag it gets.
     #
-    # * otherwise, when the session's front end has the +streams+ capability
-    #   (Frontend.supports_streams?), a StormFront-style stream window
-    #   (WINDOW_ID) that Lich fills itself: each script on a line with
-    #   pause/unpause and kill links, shown with no change to the front end.
+    # * otherwise, when the user turned it on with ";display scriptwindow"
+    #   (Lich.display_script_window, off by default) and the session's front
+    #   end has the +streams+ capability (Frontend.supports_streams?), a
+    #   StormFront-style stream window (WINDOW_ID) that Lich fills itself:
+    #   each script on a line with pause/unpause and kill links, shown with
+    #   no change to the front end.
     #
     # A client with neither gets nothing.
     #
@@ -95,6 +97,13 @@ module Lich
         # the same ;pause, ;unpause and ;kill a user would type. ifClosed=''
         # keeps the lines out of the main window when the window is closed.
         #
+        # Wrayth shows a window id it has never seen; nothing in the tag can
+        # create it closed. location='right' docks that first showing in the
+        # right panel, as the game's own optional windows (Bounties, Loot) do,
+        # instead of a floating window at the mouse. resident='true' makes
+        # Wrayth remember when the user closes it, so it stays closed after.
+        # Re-sending the tag for an existing window only updates its title.
+        #
         # @param scripts [Array<#name, #paused?>] the scripts to list, in order
         # @param lich_char [String] the Lich command character
         # @return [String] several lines joined with CRLF
@@ -105,7 +114,7 @@ module Lich
               "#{link(lich_char, toggle, script.name)} #{link(lich_char, 'kill', script.name)}"
           end
           lines = ['No scripts running.'] if lines.empty?
-          [%(<streamWindow id="#{WINDOW_ID}" title="#{WINDOW_TITLE}" ifClosed="" resident="true"/>),
+          [%(<streamWindow id="#{WINDOW_ID}" title="#{WINDOW_TITLE}" location="right" ifClosed="" resident="true"/>),
            %(<clearStream id="#{WINDOW_ID}"/>),
            %(<pushStream id="#{WINDOW_ID}"/>#{lines.join("\r\n")}),
            '<popStream/>'].join("\r\n")
@@ -161,8 +170,8 @@ module Lich
 
         # The form a client gets, as a one-element list, or an empty one:
         # the data element when its feeds include script_list, else the
-        # window when the session's front end renders streams, else nothing.
-        # A dead client gets nothing.
+        # window when ;display scriptwindow is on and the session's front end
+        # renders streams, else nothing. A dead client gets nothing.
         #
         # @param client [Object, nil]
         # @return [Array<Symbol>] [LIST], [WINDOW] or []
@@ -170,7 +179,45 @@ module Lich
           return [] unless client.respond_to?(:alive?) && client.alive?
           return [LIST] if ClientCapabilities.feeds_for(client).include?(LIST)
 
-          Frontend.supports_streams? ? [WINDOW] : []
+          window_enabled? && Frontend.supports_streams? ? [WINDOW] : []
+        end
+
+        # Whether ;display scriptwindow is on. Off when the setting cannot be
+        # read, so a settings failure never puts a window in front of anyone.
+        #
+        # @return [Boolean]
+        def window_enabled?
+          Lich.respond_to?(:display_script_window) && Lich.display_script_window == true
+        rescue StandardError
+          false
+        end
+
+        # Called after ;display scriptwindow changes. Turned on: starts the
+        # feed and draws the window for every client that now gets it.
+        # Turned off: replaces the window's contents in each client that had
+        # it with a line saying how to turn it back on, and forgets those
+        # clients. Never raises.
+        #
+        # @param enabled [Boolean] the new setting
+        # @return [nil]
+        def window_setting_changed(enabled)
+          if enabled
+            start
+            changed!
+          else
+            @send_mutex.synchronize do
+              @sent.keys.each do |client|
+                next unless forms_for(client).empty?
+
+                @sent.delete(client)
+                write_off_notice(client)
+              end
+            end
+          end
+          nil
+        rescue StandardError => e
+          log("error: script list feed: #{e}\n\t#{e.backtrace&.first}")
+          nil
         end
 
         # Whether a client gets the list in any form.
@@ -257,6 +304,18 @@ module Lich
               log("error: script list feed: #{e}\n\t#{e.backtrace&.first}")
             end
           end
+        end
+
+        # Called with @send_mutex held, for a client that had the window.
+        def write_off_notice(client)
+          return unless client.alive?
+
+          client.puts_main_stream([%(<clearStream id="#{WINDOW_ID}"/>),
+                                   %(<pushStream id="#{WINDOW_ID}"/>The Lich Scripts window is off. ) +
+                                     %(Turn it on with #{xml_escape("#{$clean_lich_char}display scriptwindow")}.),
+                                   '<popStream/>'].join("\r\n"))
+        rescue StandardError => e
+          log("warning: script list feed: #{e}")
         end
 
         def link(lich_char, verb, name)

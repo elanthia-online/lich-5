@@ -277,9 +277,9 @@ module Lich
             client renders itself (room_element, game_links, double_bold; comma-separated),
             in place of the frontend's defaults. Lich rewrites the rest to the legacy
             stream. script_list may be listed too: every client then gets the running
-            scripts as data in place of the Lich-drawn scripts window
-            (docs/frontends/script-list-feed.md). A client's own SET_FRONTEND_CAPS line
-            takes precedence.
+            scripts as data (docs/frontends/script-list-feed.md); the Lich-drawn
+            scripts window is the separate ;display scriptwindow setting. A client's
+            own SET_FRONTEND_CAPS line takes precedence.
             --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1.

@@ -267,7 +267,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
 
   describe '.window' do
     let(:window_lines) do
-      ['<streamWindow id="scripts" title="Lich Scripts" ifClosed="" resident="true"/>',
+      ['<streamWindow id="scripts" title="Lich Scripts" location="right" ifClosed="" resident="true"/>',
        '<clearStream id="scripts"/>']
     end
 
@@ -295,12 +295,33 @@ RSpec.describe Lich::Common::ScriptListFeed do
     end
   end
 
-  # script_list gets the data element; otherwise a front end with the
-  # streams capability gets the window; otherwise nothing.
+  # script_list gets the data element; otherwise, with ;display
+  # scriptwindow on, a front end with the streams capability gets the
+  # window; otherwise nothing.
   describe 'which form a client gets' do
     let(:window_client) { client_class.new(nil) }
 
-    before { $frontend = 'stormfront' }
+    before do
+      $frontend = 'stormfront'
+      allow(Lich).to receive(:display_script_window).and_return(true)
+    end
+
+    it 'gives nothing to a streams client while ;display scriptwindow is off, the default' do
+      [false, nil].each do |setting|
+        allow(Lich).to receive(:display_script_window).and_return(setting)
+        expect(described_class.forms_for(window_client)).to eq([])
+      end
+    end
+
+    it 'treats an unreadable setting as off' do
+      allow(Lich).to receive(:display_script_window).and_raise(StandardError, 'db gone')
+      expect(described_class.forms_for(window_client)).to eq([])
+    end
+
+    it 'gives the data element to a script_list client even with the setting off' do
+      allow(Lich).to receive(:display_script_window).and_return(false)
+      expect(described_class.forms_for(subscriber)).to eq([:script_list])
+    end
 
     it 'gives the data element to a client with script_list, whatever the front end' do
       %w[stormfront saga profanity genie wizard].each do |frontend|
@@ -335,6 +356,36 @@ RSpec.describe Lich::Common::ScriptListFeed do
       described_class.publish
       expect(subscriber.written).to eq([described_class.tag(scripts, ';')])
       expect(window_client.written).to eq([described_class.window(scripts, ';')])
+    end
+
+    describe '.window_setting_changed' do
+      it 'draws the window for streams clients when turned on' do
+        stub_const("#{described_class}::SETTLE", 0)
+        allow(described_class).to receive(:subscribers) { [window_client].select { |c| described_class.wants?(c) } }
+        described_class.window_setting_changed(true)
+        deadline = Time.now + 2
+        sleep 0.01 until window_client.written.any? || Time.now > deadline
+        expect(window_client.written).to eq([described_class.window(scripts, ';')])
+      end
+
+      it 'replaces the window with an off notice when turned off, once' do
+        allow(described_class).to receive(:subscribers).and_return([window_client, subscriber])
+        described_class.publish
+        allow(Lich).to receive(:display_script_window).and_return(false)
+        described_class.window_setting_changed(false)
+        described_class.window_setting_changed(false)
+        expect(window_client.written.size).to eq(2)
+        expect(window_client.written.last).to eq(
+          %(<clearStream id="scripts"/>\r\n<pushStream id="scripts"/>The Lich Scripts window is off. ) +
+          %(Turn it on with ;display scriptwindow.\r\n<popStream/>)
+        )
+        expect(subscriber.written.size).to eq(1) # the data client is untouched
+      end
+
+      it 'never raises' do
+        allow(described_class).to receive(:start).and_raise(ThreadError, 'no threads')
+        expect(described_class.window_setting_changed(true)).to be_nil
+      end
     end
 
     it 'redraws the window when a script is paused' do
