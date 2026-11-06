@@ -1,0 +1,30 @@
+name: Check R4L5 runtime contract
+description: Require accepted recovery and a matching installer for this Windows lock
+inputs:
+  gemfile:
+    default: Gemfile
+    description: Consumer Gemfile path
+  lockfile:
+    default: Gemfile.lock
+    description: Consumer lockfile path
+  installer:
+    default: ''
+    description: Optional downloaded installer whose bytes must match provenance
+runs:
+  using: composite
+  steps:
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        bundler-cache: false
+    - name: Compare served recovery, lock and installer predecessor
+      shell: bash
+      env:
+        CONTRACT_GEMFILE: ${{ inputs.gemfile }}
+        CONTRACT_LOCKFILE: ${{ inputs.lockfile }}
+        CONTRACT_INSTALLER: ${{ inputs.installer }}
+      run: |
+        args=(--gemfile "$CONTRACT_GEMFILE" --lockfile "$CONTRACT_LOCKFILE")
+        if [ -n "$CONTRACT_INSTALLER" ]; then
+          args+=(--installer "$CONTRACT_INSTALLER")
+        fi
+        ruby .github/scripts/check_r4l5_contract.rb "${args[@]}"
