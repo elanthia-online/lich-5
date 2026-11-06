@@ -304,7 +304,8 @@ module Lich
           respond "--- Lich: could not update display settings: #{e.message}"
         end
 
-        # The uniform six, in the positions the chain had them. ;display roomid
+        # The uniform toggles, in the positions the chain had them (the later
+        # scriptwindow last). ;display roomid
         # (DR) is registered between uid and exits to keep its original place.
         DISPLAY_TOGGLES.each_with_index do |(word, accessor, description), index|
           command(/^display #{word}(?: (true|false))?/i) do |m|

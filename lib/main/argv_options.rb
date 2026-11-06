@@ -181,13 +181,13 @@ module Lich
         # unless it declares its own with SET_FRONTEND_CAPS, in place of the
         # catalog's for the frontend (see Lich::Common::ClientCapabilities).
         # An empty LIST (or one with no known name) gives every client the
-        # legacy rewrites.
+        # legacy rewrites. Feeds in LIST (script_list) replace the catalog's
+        # feeds; a LIST of feeds alone leaves its rewrites alone.
         def self.handle_frontend_caps(argv_options)
           return unless argv_options.key?(:frontend_caps)
 
-          capabilities, unknown = Lich::Common::ClientCapabilities.parse(argv_options[:frontend_caps])
+          unknown = Lich::Common::ClientCapabilities.apply_launch_list(argv_options[:frontend_caps])
           announce('warning', "--frontend-caps: ignoring unknown capabilities: #{unknown.join(', ')}") unless unknown.empty?
-          Lich::Common::ClientCapabilities.launch_capabilities = capabilities
         end
 
         # Surface a message on both channels every bind handler uses.

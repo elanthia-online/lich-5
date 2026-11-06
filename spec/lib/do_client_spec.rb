@@ -31,12 +31,13 @@ require_relative '../spec_helper'
 # its exact message and accessor. Defined at file scope rather than inside the
 # example group so before(:context) can reach it.
 UNIFORM_DISPLAY_TOGGLES = {
-  'lichid'      => ['display_lichid',      'Changing Lich to display Lich ID#s to'],
-  'uid'         => ['display_uid',         'Changing Lich to display RealID#s to'],
-  'exits'       => ['display_exits',       'Changing Lich to display Room Exits of non-StringProc/Obvious exits to'],
-  'stringprocs' => ['display_stringprocs', 'Changing Lich to display Room Exits of StringProcs to'],
-  'roomlinks'   => ['display_room_links',  'Changing Lich to display room exits as clickable command links to'],
-  'roommono'    => ['display_room_mono',   'Changing Lich to display room information in monospace font to']
+  'lichid'       => ['display_lichid',      'Changing Lich to display Lich ID#s to'],
+  'uid'          => ['display_uid',         'Changing Lich to display RealID#s to'],
+  'exits'        => ['display_exits',       'Changing Lich to display Room Exits of non-StringProc/Obvious exits to'],
+  'stringprocs'  => ['display_stringprocs', 'Changing Lich to display Room Exits of StringProcs to'],
+  'roomlinks'    => ['display_room_links',  'Changing Lich to display room exits as clickable command links to'],
+  'roommono'     => ['display_room_mono',   'Changing Lich to display room information in monospace font to'],
+  'scriptwindow' => ['display_script_window', 'Changing Lich to display the Lich Scripts window to']
 }.freeze
 
 # Runs do_client probes in a child process, never in the RSpec process.
@@ -1001,6 +1002,7 @@ RSpec.describe 'do_client command dispatch' do
           'lichid' => :display_lichid, 'uid' => :display_uid,
           'exits' => :display_exits, 'stringprocs' => :display_stringprocs,
           'roomlinks' => :display_room_links, 'roommono' => :display_room_mono,
+          'scriptwindow' => :display_script_window,
           'flaguid' => :hide_uid_flag, 'descflag' => :follow_description_flag,
           'expgains' => :display_expgains, 'roomid' => :display_roomid_location
         }
@@ -1033,9 +1035,9 @@ RSpec.describe 'do_client command dispatch' do
         Script.define_singleton_method(:running) { [] }
         do_client(';list')
       RUBY
-      expect(out.scan('R:--- Lich: could not update display settings: database is locked').length).to eq(11)
-      expect(out.scan('ATTEMPTS 2').length).to eq(10)
-      expect(out.scan(/^CACHE .*=(?:false|line)$/).length).to eq(10)
+      expect(out.scan('R:--- Lich: could not update display settings: database is locked').length).to eq(12)
+      expect(out.scan('ATTEMPTS 2').length).to eq(11)
+      expect(out.scan(/^CACHE .*=(?:false|line)$/).length).to eq(11)
       expect(out).to include('SAVED 0', 'R:--- Lich: no active scripts')
       expect(out).not_to match(/R:Changing|R:Enabling|R:Disabling|MON START|MON STOP/)
     end
@@ -1061,10 +1063,10 @@ RSpec.describe 'do_client command dispatch' do
         puts "PUBLIC \#{Lich.display_uid}"
         puts "STRICT_RESTORED \#{Thread.current[:lich_strict_display_reads].nil?}"
       RUBY
-      expect(out.scan('could not update display settings: database is locked').length).to eq(9)
+      expect(out.scan('could not update display settings: database is locked').length).to eq(10)
       expect(out.scan('could not read display settings: database is locked').length).to eq(2)
-      expect(out.scan('ATTEMPTS 2').length).to eq(10)
-      expect(out.scan('UNRESOLVED true').length).to eq(10)
+      expect(out.scan('ATTEMPTS 2').length).to eq(11)
+      expect(out.scan('UNRESOLVED true').length).to eq(11)
       expect(out).to include('PUBLIC false', 'STRICT_RESTORED true')
       expect(out).not_to match(/R:Changing|R:Enabling|R:Disabling|MON START|MON STOP|Monitor Status:/)
     end
@@ -1085,7 +1087,7 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';display expgains off')
       RUBY
       segments = out.split(/^COMMAND /).drop(1)
-      expect(segments.length).to eq(11)
+      expect(segments.length).to eq(12)
       segments.each do |segment|
         expect(segment).to match(/SAVED .*\nR:(?:Changing|Enabling|Disabling)/)
       end
@@ -1100,6 +1102,7 @@ RSpec.describe 'do_client command dispatch' do
       expect(out).to include('R:Lich vtest')
       expect(out).to include('built-in commands:')
       expect(out).to include(';kd')
+      expect(out).to include(';display scriptwindow      toggle the Lich Scripts window')
     end
   end
 

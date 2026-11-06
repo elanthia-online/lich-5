@@ -2233,6 +2233,9 @@ def handle_detachable_client(client)
     Thread.new { detachable_client_send_init(client) }
   end
   Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
+  # The script list goes out now when the session's set includes it, or once
+  # the client declares script_list (docs/frontends/script-list-feed.md).
+  Lich::Common::ScriptListFeed.client_ready(client)
 
   while (client_string = client.gets)
     # match, not match?: match? never sets the capture, which read back as PID 0.

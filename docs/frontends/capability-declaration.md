@@ -12,6 +12,16 @@ Lich identifies to the game as Saga, so DragonRealms sends it the Saga-identity 
 
 `game_links` and `double_bold` apply only to DragonRealms; Lich leaves GemStone lines alone whatever the client declares. GemStone sends links under both client identities. Doubled bold appears only in GemStone captures recorded under the Saga identity (2,293 doubled against 33,775 single in 15 sessions); the legacy-identity `benchmark/fixtures/gs_sample.xml` has none, and whether it depends on the identity is not known. `room_element` matters only where the game sends `<room>`, which today means DragonRealms.
 
+## Feeds
+
+The same line also asks for feeds: extra lines Lich sends the client, which never change the game stream.
+
+| Capability | Lich sends the client |
+|---|---|
+| `script_list` | the running-script list as data, `<lichScripts …/>`, on attach and whenever it changes ([script-list-feed.md](script-list-feed.md)) |
+
+Feeds and rewrites are resolved separately. A line replaces the client's rewrite set only when it names at least one rewrite, and its feed set only when it names at least one feed, so `SET_FRONTEND_CAPS script_list` adds the feed and leaves the rewrites alone. A Lich from before feeds (5.23.0, for one) treats `script_list` as an unknown name, so on it that same line declares the empty rewrite set; a client that wants its rewrites kept everywhere names them on the line with the feed (`SET_FRONTEND_CAPS room_element game_links double_bold script_list`). A line that names nothing Lich knows, including a bare `SET_FRONTEND_CAPS`, sets both to the empty set; for the rewrites that is exactly what it did before feeds existed. `--frontend-caps=` follows the same rule, and feeds otherwise follow the precedence below. No built-in catalog entry has `script_list`, so a client gets it only by asking. (A client without it, on a front end with the `streams` capability, can get the list as a Lich-drawn `scripts` window instead once the user turns on `;display scriptwindow`; that window is a setting, not a capability, see [script-list-feed.md](script-list-feed.md).) A Wizard/Avalon (GSL) session honours a client's feeds, though not its rewrites.
+
 ## The line
 
 The client sends it to Lich on its connection, terminated like any other command line:
@@ -25,7 +35,7 @@ SET_FRONTEND_CAPS room_element game_links double_bold
 - Names Lich does not know are ignored and logged, so a newer client can declare capabilities an older Lich lacks.
 - A bare `SET_FRONTEND_CAPS` declares the empty set: the client gets every rewrite, the full legacy stream. A line whose names are all unknown declares the empty set too, but logs each name as unknown, so send the bare line.
 - Lich consumes the line. It never reaches the game, scripts or upstream hooks.
-- A later declaration replaces the earlier one from the same client. It takes effect from the next server line Lich sends.
+- A later declaration replaces the earlier one from the same client (for feeds, see [Feeds](#feeds): each category is replaced only when the line names it). It takes effect from the next server line Lich sends.
 - Lich sends no reply.
 
 Send it once, as early as possible. On a detachable connection (`--detachable-client`), send it straight after connecting; anything the game sends before Lich reads the line is rewritten by the next rule down. On the primary connection, send it after the two handshake lines (the key and the client string), which Lich forwards to the game unread.
