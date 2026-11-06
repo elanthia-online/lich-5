@@ -213,6 +213,36 @@ RSpec.describe Lich::Stash, 'stash_hands' do
     end
   end
 
+  it 'stops the right hand walk when a fallback drag lands but cannot be confirmed' do
+    hold(:right, handaxe)
+    allow(described_class).to receive(:fput) do |command|
+      sent << command
+      hold(:right, empty) if command == '_drag #27021754 #22255205'
+    end
+
+    described_class.stash_hands(right: true)
+    expect(drags).to eq(['_drag #27021754 #22255243', '_drag #27021754 #22255205'])
+  end
+
+  { left: :right, right: :left }.each do |hand, other_hand|
+    it "keeps dragging the original when it moved to the #{other_hand} hand and another item took the #{hand}" do
+      hold(hand, handaxe)
+      allow(described_class).to receive(:fput) do |command|
+        sent << command
+        hold(other_hand, handaxe)
+        hold(hand, other_item)
+      end
+
+      described_class.stash_hands(hand => true)
+      expect(drags).to eq([
+                            '_drag #27021754 #22255243',
+                            '_drag #27021754 #22255205',
+                            '_drag #27021754 #22255243',
+                            '_drag #27021754 #22255278'
+                          ])
+    end
+  end
+
   describe '.add_to_bag' do
     it 'sends nothing and looks in nothing for an empty hand' do
       bag.contents = nil
