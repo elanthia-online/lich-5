@@ -131,8 +131,8 @@ module Lich
 
         # Notes that the list may have changed. Cheap and safe to call while
         # holding script registry or lifecycle locks: it takes only this
-        # module's own lock, does no I/O, and does nothing at all until some
-        # client has asked for the feed.
+        # module's own lock, does no I/O, and does nothing at all until the
+        # change thread has started (see start).
         #
         # @return [nil]
         def changed!
@@ -152,9 +152,19 @@ module Lich
         # Never raises: it runs on the client's own read loop, and a feed
         # failure must not take that client's session down with it.
         #
+        # A session whose front end renders streams starts the change thread
+        # even when this client gets nothing yet. The window setting can read
+        # off here and on later: on a busy settings database a non-strict
+        # read returns the default (off) for 30 s while the stored value is
+        # on. With the thread running, the next script change re-reads it and
+        # draws the window; without it, changed! does nothing and the window
+        # would never appear that session. The cost is an idle thread in a
+        # streams session with the window off, woken by each script change.
+        #
         # @param client [#alive?, #puts_main_stream] the client
         # @return [Boolean] whether anything was sent
         def client_ready(client)
+          start if streams_session?
           return false unless wants?(client)
 
           start
@@ -180,6 +190,16 @@ module Lich
           return [LIST] if ClientCapabilities.feeds_for(client).include?(LIST)
 
           window_enabled? && Frontend.supports_streams? ? [WINDOW] : []
+        end
+
+        # Whether the session's front end renders streams, so it could get
+        # the window. False when that cannot be determined.
+        #
+        # @return [Boolean]
+        def streams_session?
+          Frontend.supports_streams? ? true : false
+        rescue StandardError
+          false
         end
 
         # Whether ;display scriptwindow is on. Off when the setting cannot be
@@ -239,8 +259,10 @@ module Lich
           clients.compact.uniq.select { |client| wants?(client) }
         end
 
-        # Starts the change thread if it is not running. Called lazily, so a
-        # session where no client asks for the feed never starts it.
+        # Starts the change thread if it is not running. Called lazily: a
+        # session starts it when a client gets a feed, or, when its front end
+        # renders streams, when any client attaches (see client_ready). A
+        # session with neither never starts it.
         #
         # @return [Thread]
         def start

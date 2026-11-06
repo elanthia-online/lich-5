@@ -358,6 +358,30 @@ RSpec.describe Lich::Common::ScriptListFeed do
       expect(window_client.written).to eq([described_class.window(scripts, ';')])
     end
 
+    # MahtraDR's review of 1863500f0: on a busy settings database the
+    # attach-time read returns the default (off) for 30 s while the stored
+    # value is on. The window must still appear at the next script change
+    # once the setting reads on, without the user toggling it.
+    it 'draws the window at the next change when the setting read off at attach and on later' do
+      stub_const("#{described_class}::SETTLE", 0)
+      reads = [false]
+      allow(Lich).to receive(:display_script_window) { reads.empty? ? true : reads.shift }
+      allow(described_class).to receive(:subscribers) { [window_client].select { |c| described_class.wants?(c) } }
+      expect(described_class.client_ready(window_client)).to be false
+
+      scripts << fake_script.new('afk', false)
+      described_class.changed!
+      deadline = Time.now + 2
+      sleep 0.01 until window_client.written.any? || Time.now > deadline
+      expect(window_client.written).to eq([described_class.window(scripts, ';')])
+    end
+
+    it 'leaves the thread unstarted when the front end has no streams' do
+      $frontend = 'genie'
+      expect(described_class.client_ready(window_client)).to be false
+      expect(described_class.instance_variable_get(:@thread)).to be_nil
+    end
+
     describe '.window_setting_changed' do
       it 'draws the window for streams clients when turned on' do
         stub_const("#{described_class}::SETTLE", 0)
