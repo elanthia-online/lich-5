@@ -12,11 +12,13 @@ Both forms are built from the same list at the same moments.
 
 ## Asking for the data element
 
-A client gets `script_list` by declaring it with the `SET_FRONTEND_CAPS` line (see [capability-declaration.md](capability-declaration.md)):
+A client gets `script_list` by declaring it with the `SET_FRONTEND_CAPS` line (see [capability-declaration.md](capability-declaration.md)). Name the rewrite capabilities the client handles on the same line, so the line means the same thing to every Lich that reads it. Saga, for example, sends:
 
 ```
-SET_FRONTEND_CAPS script_list
+SET_FRONTEND_CAPS room_element game_links double_bold script_list
 ```
+
+A client with no rewrites of its own sends just `SET_FRONTEND_CAPS script_list`.
 
 From then on it gets the data element instead of the window. It can also come from the session's `--frontend-caps=` launch flag or a custom front end's `capabilities` in `frontends.yml`; no built-in catalog entry has it. `script_list` is a feed, kept apart from the rewrite capabilities: a line that names only feeds leaves the client's rewrites exactly as they were, so a Saga client keeps its rich stream. A line that names only rewrites keeps the feed; a bare `SET_FRONTEND_CAPS` clears it along with the rewrites, which puts a `streams` client back on the window.
 
@@ -30,7 +32,10 @@ The window is a user setting, not a capability: `;display scriptwindow` toggles 
 
 With the setting on, a client that declares `script_list` on attach may get one window draw first, sent before Lich has read its declaration. The window's lines stay in its own stream (`ifClosed=""`), so the client can ignore them.
 
-A Lich without this feed ignores `script_list` in a declaration and logs it as unknown. A Lich too old to know `SET_FRONTEND_CAPS` at all forwards the line to the game as a command, so a client should send it only to a Lich new enough to read it (check `LICH_VERSION` in `lib/version.rb`).
+### Older Lich
+
+- **A Lich that knows `SET_FRONTEND_CAPS` but not `script_list`** (5.23.0, for one) logs `script_list` as unknown and applies the rest of the line by its older rule: the line's known names *replace* the client's rewrite set. So `SET_FRONTEND_CAPS script_list` alone declares the empty rewrite set there, and a front end that gets rewrites from its catalog entry (Saga gets `room_element game_links double_bold`) drops to the legacy stream. Restating the rewrites on the same line, as above, keeps them on that Lich and on this one alike.
+- **A Lich too old to know `SET_FRONTEND_CAPS` at all** forwards the line to the game as a command, so a client should send it only to a Lich new enough to read it (check `LICH_VERSION` in `lib/version.rb`).
 
 ## The stream window
 
