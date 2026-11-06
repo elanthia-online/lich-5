@@ -26,7 +26,7 @@ module Lich
       container_to_check = find_container(param)
       unless @weapon_displayer.include?(container_to_check.id)
         result = Lich::Util.issue_command("look in ##{container_to_check.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container_to_check.contents.nil?
-        fput "open ##{container_to_check.id}" if result.include?('That is closed.')
+        fput "open ##{container_to_check.id}" if result&.include?('That is closed.')
         @weapon_displayer.push(container_to_check.id) if GameObj.containers.find { |item| item[0] == container_to_check.id }.nil?
       end
       return container_to_check
@@ -40,6 +40,9 @@ module Lich
     end
 
     def self.add_to_bag(bag, item)
+      # An empty hand is a GameObj with a nil id; "_drag # #bag" reaches the game.
+      return false if item.nil? || item.id.nil?
+
       bag = container(bag)
       try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do |result|
         # Check for vapor message first (bandolier)
@@ -163,7 +166,7 @@ module Lich
       other_containers_var = nil
       other_containers = proc {
         results = Lich::Util.issue_command('inventory containers', /^(?:You are (?:carrying nothing|holding no containers) at this time|You are wearing)/, silent: true, quiet: true)
-        other_containers_ids = results.to_s.scan(/exist=\\"(.*?)\\"/).flatten - [lootsack.id]
+        other_containers_ids = results.to_s.scan(/exist=\\"(.*?)\\"/).flatten - [lootsack&.id]
         other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
         other_containers_var
       }
@@ -209,10 +212,13 @@ module Lich
           else
             result = nil
           end
-          if result.nil? || !result
+          # add_to_bag is false when a container's listing never showed the item,
+          # even though the drag landed. Once the item has left the hand it has
+          # gone somewhere, so another container cannot help.
+          if (result.nil? || !result) && in_hand?(left_hand)
             for container in other_containers.call
-              result = Lich::Stash::add_to_bag(container, GameObj.left_hand)
-              break if result
+              result = Lich::Stash::add_to_bag(container, left_hand)
+              break if result || !in_hand?(left_hand)
             end
           end
         end
@@ -249,10 +255,11 @@ module Lich
           result = nil
         end
         sleep 0.1
-        if result.nil? || !result
+        # See the left hand above: an unconfirmed drag may still have landed.
+        if (result.nil? || !result) && in_hand?(right_hand)
           for container in other_containers.call
-            result = Lich::Stash::add_to_bag(container, GameObj.right_hand)
-            break if result
+            result = Lich::Stash::add_to_bag(container, right_hand)
+            break if result || !in_hand?(right_hand)
           end
         end
       end
