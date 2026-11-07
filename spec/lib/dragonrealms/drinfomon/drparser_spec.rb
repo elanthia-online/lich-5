@@ -69,6 +69,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     described_class.class_variable_set(:@@parsing_exp_mods_output, false)
     described_class.class_variable_set(:@@parsing_inventory_get, false)
     described_class.class_variable_set(:@@shutdown_at, nil)
+    described_class.class_variable_set(:@@room_objs_cut, nil)
   end
 
   describe 'game shutdown tracking' do
@@ -1379,6 +1380,244 @@ RSpec.describe Lich::DragonRealms::DRParser do
     it 'stops on the training-remaining line' do
       expect(drspells_class).to receive(:check_known_barbarian_abilities=).with(false)
       described_class.check_known_barbarian_abilities('You recall that you have 0 training sessions remaining with the Guild.')
+    end
+  end
+
+  # When a room holds too much, DragonRealms cuts the room objs component short
+  # ("... and some other stuff.</component>") while the main-stream room view
+  # that follows the roomName line still lists everything.
+  describe 'room objs component cut short' do
+    # Lines 14-31, 40-54, 63-67, 91-105 and 129-143 of a 2026-11-07 Saga capture
+    # (Andreshlew, Lithralia Street), timestamps stripped, player names and ids
+    # pseudonymized. In order: entry with a cut component (Seamstress Zasele is
+    # only in the main-stream view), an unrelated arrival, a second entry, a
+    # LOOK with room descriptions on, a move east to a complete room, and the
+    # return once the ground was partly cleared (Zasele back in the component).
+    fixture = File.expand_path('../../../fixtures/room_objs/dr_saga_room_objs_cut.xml', __dir__)
+    let(:capture) { File.readlines(fixture) }
+
+    let(:assigned) { {} }
+    # [line number, field, value] for every DRRoom/UserVars write, in order.
+    let(:writes) { [] }
+    let(:line_no) { [0] }
+
+    before do
+      %i[npcs dead_npcs room_objs].each do |field|
+        allow(drroom_class).to receive(:"#{field}=") do |value|
+          assigned[field] = value
+          writes << [line_no[0], field, value]
+        end
+      end
+      allow(drroom_class).to receive(:npcs) { assigned.fetch(:npcs, []) }
+      # parse calls the drdefs room helpers unqualified; production reaches them
+      # because main.rb includes Lich::DragonRealms into Object. Route them to
+      # the real implementations here without including the module globally.
+      drdefs = Object.new.extend(Lich::DragonRealms)
+      %i[find_npcs find_dead_npcs find_objects find_pcs find_pcs_prone find_pcs_sitting].each do |helper|
+        allow(described_class).to receive(helper) { |arg| drdefs.send(helper, arg) }
+      end
+      UserVars.npcs = []
+    end
+
+    def feed(*lines)
+      lines.flatten.each do |line|
+        line_no[0] += 1
+        described_class.parse(+line)
+      end
+      assigned
+    end
+
+    # 1-based line number of the first capture line at or after +from+ that
+    # contains every one of +needles+.
+    def capture_line(*needles, from: 1)
+      index = capture.each_index.find { |i| i + 1 >= from && needles.all? { |n| capture[i].include?(n) } }
+      raise "no capture line has #{needles.inspect}" unless index
+
+      index + 1
+    end
+
+    def writes_on(number) = writes.select { |n, _, _| n == number }
+
+    cut_objs = "<component id='room objs'>You also see a rock, <pushBold/>a goblin<popBold/> and some other stuff.</component>"
+    full_list = 'You also see a rock, <pushBold/>a goblin<popBold/>, a wooden chest, <pushBold/>a kobold<popBold/> which appears dead and <pushBold/>Seamstress Zasele<popBold/>.'
+    full_view = "<style id=\"\"/>  #{full_list}\r\n"
+    prompt = '<prompt time="1794026438">&gt;</prompt>'
+
+    describe 'the real capture' do
+      before { feed(capture) }
+
+      it 'adds the NPC listed after the cut once the room view arrives' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+
+        expect(writes_on(component).to_h { |_, field, value| [field, value] }[:npcs]).to eq([])
+        expect(writes_on(view).to_h { |_, field, value| [field, value] }).to include(npcs: ['Zasele'], dead_npcs: [])
+      end
+
+      it 'replaces the cut list, "other stuff" entry included, with the full one' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        cut = writes_on(component).find { |_, field, _| field == :room_objs }.last
+        full = writes_on(view).find { |_, field, _| field == :room_objs }.last
+
+        # 25 objects + "other stuff"; then 32 objects, 33 entries because
+        # find_objects splits "white and blue cozy shop" (existing behaviour).
+        expect(cut.size).to eq(26)
+        expect(cut.last).to eq('other stuff')
+        expect(full.size).to eq(33)
+        expect(full.first(25)).to eq(cut.first(25))
+        expect(full).to include('sturdy shack', 'boxy structure')
+        expect(full.last).to eq('boxy structure')
+        expect(full.grep(/other stuff|Zasele|<|exist=/)).to be_empty
+      end
+
+      it 'leaves the repaired room alone through later lines up to the next move' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        next_move = capture_line('<nav/>', from: view)
+
+        expect(writes.select { |n, _, _| n > view && n < next_move }).to be_empty
+      end
+
+      it 'repairs the second entry and the LOOK with room descriptions on' do
+        second = capture_line("'room objs'", 'other stuff', from: capture_line('You wander north.'))
+        view = capture_line('<style id=""/>  You also see', from: second)
+        look = capture_line("<preset id='roomDesc'>", from: view)
+
+        [view, look].each do |n|
+          expect(writes_on(n).to_h { |_, field, value| [field, value] }[:npcs]).to eq(['Zasele'])
+          expect(writes_on(n).to_h { |_, field, value| [field, value] }[:room_objs].size).to eq(33)
+        end
+      end
+
+      it 'does not reparse the room view of a complete component' do
+        %w[east west].each do |dir|
+          component = capture_line("'room objs'", from: capture_line("You wander #{dir}."))
+          view = capture_line('<style id=""/>  You also see', from: component)
+
+          expect(writes_on(component).map { |_, field, _| field }).to contain_exactly(:npcs, :dead_npcs, :room_objs)
+          expect(writes_on(view)).to be_empty
+        end
+      end
+
+      it 'ends on the complete component that lists Zasele itself' do
+        expect(assigned[:npcs]).to eq(['Zasele'])
+        # find_objects splits "white and blue cozy shop" on " and " (existing
+        # behaviour, unchanged here), hence "white" and "blue cozy shop".
+        expect(assigned[:room_objs]).to eq(['sturdy shack', 'stone building', 'dragon-painted green stall', 'white', 'blue cozy shop', 'boxy structure'])
+        expect(UserVars.npcs).to eq(['Zasele'])
+      end
+    end
+
+    it 'repairs the legacy dialect too, sorting a dead NPC after the cut into dead_npcs' do
+      feed(cut_objs, full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      expect(assigned[:dead_npcs]).to eq(['kobold'])
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      expect(UserVars.npcs).to eq(%w[Zasele goblin])
+    end
+
+    it 'accepts the "and a lot of other stuff." form of the marker' do
+      feed(cut_objs.sub('some other stuff', 'a lot of other stuff'), full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+    end
+
+    it 'keeps a cut component as sent when no room view follows (still or refreshed)' do
+      feed(cut_objs, prompt, 'You pick up a rock.')
+
+      expect(assigned[:npcs]).to eq(['goblin'])
+      expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+      expect(UserVars.npcs).to eq(['goblin'])
+    end
+
+    it 'repairs from a LOOK several prompts later in the same room' do
+      feed(cut_objs, prompt, 'Brenna just arrived.', prompt)
+      feed("<resource picture=\"0\"/><style id=\"roomName\" />[Room] (**)\r\n", full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+    end
+
+    it 'finds the list after a room description that itself says "You also see"' do
+      look = "<style id=\"\"/><preset id='roomDesc'>You also see a rock in the mist.</preset>  #{full_list}"
+      feed(cut_objs, look)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+    end
+
+    it "ignores another room's view and a container listing" do
+      feed(cut_objs)
+      writes.clear
+      feed('<style id=""/>  You also see a rock, a stump and a goblin.',
+           '<style id=""/>  You also see a rock.',
+           'In the chest you see a rock, a goblin and some other stuff.',
+           '<style id="">  You also see a boulder, a rock, <pushBold/>a goblin<popBold/>, a wooden chest.')
+
+      expect(writes).to be_empty
+    end
+
+    it 'ignores a view that stops where the component was cut' do
+      feed(cut_objs)
+      writes.clear
+      feed('<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/>.')
+
+      expect(writes).to be_empty
+    end
+
+    it 'repairs when only one object follows the cut (" and " continuation)' do
+      feed(cut_objs, '<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/> and a wooden chest.')
+
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+    end
+
+    {
+      'a complete component' => "<component id='room objs'>You also see a rock.</component>",
+      'an empty component'   => "<component id='room objs'></component>",
+      'a move (<nav>)'       => "<nav rm='100029'/>"
+    }.each do |boundary, line|
+      it "forgets the cut after #{boundary}, so the old room view cannot overwrite the room" do
+        feed(cut_objs, line)
+        writes.clear
+        feed(full_view)
+
+        expect(writes).to be_empty
+      end
+    end
+
+    it 'tracks the latest cut component: a newer cut replaces the older one' do
+      newer = "<component id='room objs'>You also see a boulder and some other stuff.</component>"
+      feed(cut_objs, newer)
+      writes.clear
+      feed(full_view)
+      expect(writes).to be_empty
+
+      feed('<style id=""/>  You also see a boulder, a rock and <pushBold/>a troll<popBold/>.')
+      expect(assigned[:npcs]).to eq(['troll'])
+    end
+
+    it 'ignores a room view that arrives before the cut component' do
+      feed(full_view, cut_objs)
+
+      expect(assigned[:npcs]).to eq(['goblin'])
+      expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+    end
+
+    it 'does not treat "some other stuff" before the end of the list as a cut' do
+      feed("<component id='room objs'>You also see some other stuff and a rock.</component>")
+      writes.clear
+      feed('<style id=""/>  You also see some other stuff and a rock, a goblin.')
+
+      expect(writes).to be_empty
+    end
+
+    it 'never reparses main-stream views after a complete component' do
+      feed("<component id='room objs'>You also see a rock and <pushBold/>a goblin<popBold/>.</component>")
+      writes.clear
+      feed('<style id=""/>  You also see a rock and <pushBold/>a goblin<popBold/>.', full_view)
+
+      expect(writes).to be_empty
     end
   end
 
