@@ -172,7 +172,8 @@ reconnect_if_wanted = proc {
                             frontend: requested_fe,
                             custom_launch: requested_custom_launch,
                             data_dir: DATA_DIR,
-                            auth_provider: @argv_options[:auth_provider] || :eaccess
+                            auth_provider: @argv_options[:auth_provider] || :eaccess,
+                            headless: ARGV.include?('--without-frontend')
                           )
                         else
                           Lich::Common::Authentication::CLI.execute(
