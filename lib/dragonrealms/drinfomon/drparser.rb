@@ -42,13 +42,6 @@ module Lich
         RoomObjsCut = / and (?:some|a lot of) other stuff\.\z/.freeze
         # The full list continues the cut component's text with another object.
         RoomObjsContinued = /\A(?:,| and) /.freeze
-        # Where a room object list starts, in a component or a room view.
-        RoomObjsLead = /\A\s*You also see /.freeze
-        # Separator between two objects of a room object list. The split it
-        # gives is not always an object boundary ("a white and blue cozy shop"
-        # splits too), but the same text always splits the same way, which is
-        # all the comparisons below need.
-        RoomObjSeparator = /(, | and )/.freeze
         # A creature's status after its bold name: "(dead)", "(prone)", or the
         # wordier "which appears dead", "that is caught in a cage of swirling
         # darkness". The component and the main-stream view of the same room
@@ -141,12 +134,6 @@ module Lich
       # the "and some other stuff." marker ("You also see a, b, c"); nil when
       # that component was complete. See {.full_room_listing}.
       @@room_objs_cut = nil
-
-      # The last complete object list known for the current room ("You also
-      # see a, b and c."): a complete component, a room view that repaired a cut
-      # one, or a merge (see {.merge_room_objs}). nil after a move, an empty
-      # component or a cut component that could not be merged.
-      @@room_objs_full = nil
 
       # The Saga-identity stream wraps names in object links
       # (<a exist="-10700002" noun="Aldric">Aldric</a>) and currently sends the
@@ -610,10 +597,10 @@ module Lich
       # Sets DRRoom.npcs, DRRoom.dead_npcs, DRRoom.room_objs and UserVars.npcs
       # from a room object list ("You also see ...").
       #
-      # Only DRRoom and UserVars.npcs are rebuilt from a repaired or merged
-      # list. GameObj.npcs/GameObj.loot and the DR Creature registry are built
-      # by XMLParser from the room objs component alone, so after a cut they
-      # still lack the objects listed after it.
+      # Only DRRoom and UserVars.npcs are rebuilt from a repaired list.
+      # GameObj.npcs/GameObj.loot and the DR Creature registry are built by
+      # XMLParser from the room objs component alone, so after a cut they still
+      # lack the objects listed after it.
       # @param objs [String] the list, as {.match_line} leaves it
       # @return [void]
       def self.update_room_objs(objs)
@@ -636,29 +623,22 @@ module Lich
       # view and rebuild the room from it.
       #
       # The game also resends the component, still cut, whenever something in
-      # the room changes, and no room view follows. Such a refresh is merged
-      # with the last complete list of the room (see {.merge_room_objs}), so an
-      # object after the cut stays listed. A cut component that cannot be merged
-      # is applied as sent: what it lists is real, and its trailing "other
-      # stuff" entry is the only sign of the cut a script can see.
+      # the room changes, and no room view follows. Such a refresh is applied
+      # as sent, so an object listed after the cut drops out of DRRoom until
+      # the next room view (a LOOK or the next move). It is not merged with the
+      # room's last full list: the change that caused the refresh may be after
+      # the cut (a creature leaving, a ship pulling out), and a merge would keep
+      # listing what has gone, with nothing to show the list is stale. What a
+      # cut component lists is real, and its trailing "other stuff" entry tells
+      # a script the list is incomplete.
       #
       # A complete or empty component clears the cut record, so a complete room
       # never reparses main-stream text.
       # @param objs [String] the component's text, as {.match_line} leaves it
       # @return [void]
       def self.apply_room_objs(objs)
-        unless Pattern::RoomObjsCut.match?(objs)
-          update_room_objs(objs)
-          @@room_objs_cut = nil
-          @@room_objs_full = Pattern::RoomObjsLead.match?(objs) ? objs : nil
-          return
-        end
-
-        cut = objs.sub(Pattern::RoomObjsCut, '')
-        merged = @@room_objs_full && merge_room_objs(cut, @@room_objs_full)
-        update_room_objs(merged || objs)
-        @@room_objs_cut = cut
-        @@room_objs_full = merged
+        update_room_objs(objs)
+        @@room_objs_cut = Pattern::RoomObjsCut.match?(objs) ? objs.sub(Pattern::RoomObjsCut, '') : nil
       end
 
       # +list+ with every creature status removed, for comparing lists.
@@ -666,62 +646,6 @@ module Lich
       # @return [String]
       def self.without_room_obj_status(list)
         list.gsub(Pattern::RoomObjStatus, '')
-      end
-
-      # The objects of a room object list, each paired with the separator
-      # before it ("" for the first): "You also see a, b and c." gives
-      # [["", "a"], [", ", "b"], [" and ", "c"]].
-      # @param list [String] a list with or without its "You also see " lead
-      #   and closing period
-      # @return [Array<Array(String, String)>]
-      def self.room_obj_entries(list)
-        parts = list.sub(Pattern::RoomObjsLead, '').sub(/\.\z/, '').split(Pattern::RoomObjSeparator)
-        parts.unshift('').each_slice(2).to_a
-      end
-
-      # The current room's full object list, from a cut component that was
-      # resent in the same room and the room's last complete list.
-      #
-      # The refreshed component is right up to its cut. The objects after the
-      # cut are taken from +full+: everything that followed, in +full+, the
-      # object the refresh ends on (its nth occurrence when the refresh lists
-      # it n times). Objects come and go anywhere in the list (an arriving
-      # creature is often listed first, a creature that dies may move to the
-      # front), so before the cut is the only place the refresh can show a
-      # change; an object it lists more often than +full+ did up to that point
-      # has moved in from the tail, and one copy is dropped from the tail so
-      # it is not listed twice. A change after the cut cannot be seen: the
-      # tail is what the last complete list said.
-      #
-      # Statuses are ignored when objects are compared ("a goblin (dead)" is
-      # "a goblin"); the merged list keeps each object's own text.
-      #
-      # @param cut [String] the refreshed component's text without the marker
-      # @param full [String] the room's last complete list
-      # @return [String, nil] the merged list, or nil when +full+ does not list
-      #   the object the refresh ends on often enough
-      def self.merge_room_objs(cut, full)
-        return nil unless Pattern::RoomObjsLead.match?(cut)
-
-        cut_keys = room_obj_entries(cut).map { |_, obj| without_room_obj_status(obj) }
-        return nil if cut_keys.last.to_s.empty?
-
-        full_entries = room_obj_entries(full)
-        full_keys = full_entries.map { |_, obj| without_room_obj_status(obj) }
-        last = cut_keys.last
-        wanted = cut_keys.count(last)
-        index = full_keys.each_index.select { |i| full_keys[i] == last }[wanted - 1]
-        return nil unless index
-
-        moved = cut_keys.tally
-        full_keys.first(index + 1).each { |key| moved[key] -= 1 if moved[key] }
-        tail = full_entries.drop(index + 1).reject do |_, obj|
-          key = without_room_obj_status(obj)
-          next false unless moved[key].to_i.positive?
-
-          moved[key] -= 1
-        end
-        "#{cut}#{tail.join}."
       end
 
       # The full room object list from a main-stream room view, when the last
@@ -766,7 +690,7 @@ module Lich
         begin
           check_game_shutdown(line)
           # A move starts a new room; its own room objs component follows.
-          @@room_objs_cut = @@room_objs_full = nil if (@@room_objs_cut || @@room_objs_full) && Pattern::Nav.match?(line)
+          @@room_objs_cut = nil if @@room_objs_cut && Pattern::Nav.match?(line)
           if Pattern::InventoryListStart.match?(line)
             # COMPLETE inventory (INV LIST): stage a full replacement and publish
             # it only on the clean terminator (see populate_inventory_get). The
@@ -820,7 +744,6 @@ module Lich
             DRRoom.room_objs = []
           elsif @@room_objs_cut && (full = full_room_listing(line))
             update_room_objs(full)
-            @@room_objs_full = full
           elsif Pattern::GroupMembersEmpty.match?(line)
             DRRoom.group_members = []
           elsif (match = line.match(Pattern::GroupMembers))
