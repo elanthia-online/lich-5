@@ -26,6 +26,9 @@ bundle lock \
 This ensures that the lock file can be used by all platforms that are able to support it.
 =end
 
+# Windows contract checks parse a supported static declaration subset.
+# Extending that syntax requires a coordinated shared-reader update in lich-5
+# and Ruby4Lich5's reviewed vendored copy; see docs/dependency-recovery/windows-r4l5-gem-manifest.md.
 source "https://rubygems.org"
 
 # Installs the system libraries the GTK gems need (e.g. libgtk-3-dev via apt) during bundle install
@@ -87,8 +90,5 @@ gem "win32ole", platforms: :windows
 gem "yaml"
 gem "zlib"
 
-if Gem.win_platform?
-  gem "sqlite3", platforms: :windows, force_ruby_platform: true
-else
-  gem "sqlite3"
-end
+# Windows uses the upstream UCRT package selected by Gemfile.lock.
+gem "sqlite3"
