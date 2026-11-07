@@ -1,0 +1,473 @@
+:root {
+  color-scheme: light;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --surface: Canvas;
+  --surface-raised: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+  --border: color-mix(in srgb, CanvasText 26%, transparent);
+  --accent: #2468b4;
+  --danger: #b12a2a;
+  --gap: 12px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; color: CanvasText; background: var(--surface); }
+.webui-image { display: block; }
+.webui-composite { position: relative; flex: none; }
+.composite-surface { overflow: hidden; touch-action: none; user-select: none; }
+.composite-image { -webkit-user-drag: none; }
+.composite-label { white-space: pre; pointer-events: none; }
+.composite-bar { border: 1px solid var(--border); overflow: hidden; pointer-events: none; }
+.composite-region { padding: 0; min-height: 0; background: transparent; border: 0; }
+.composite-region:focus-visible { outline: 2px solid var(--accent); }
+button, input, select, textarea { font: inherit; }
+button { min-height: 32px; padding: 5px 12px; }
+button.primary { background: var(--accent); color: white; border: 1px solid var(--accent); border-radius: 4px; }
+button.danger { color: white; background: var(--danger); border: 1px solid var(--danger); border-radius: 4px; }
+
+#pages { width: min(100%, 880px); margin: 0 auto; padding: 16px; }
+.webui-page { max-width: 100%; }
+.webui-page > h1 { margin: 0 0 12px; font-size: 1.25rem; }
+.webui-stack { display: flex; flex-direction: column; }
+.webui-group { min-width: 0; margin: 0 0 14px; padding: 12px; border: 1px solid var(--border); border-radius: 5px; }
+.webui-group > legend { font-weight: 600; padding: 0 5px; }
+.webui-columns { display: grid; align-items: end; }
+.webui-grid { display: grid; align-items: center; }
+.webui-grid > .webui-group { align-self: stretch; }
+.webui-split { display: grid; min-width: 0; min-height: 0; align-items: stretch; }
+.split-pane { min-width: 0; min-height: 0; overflow: hidden; display: grid; align-items: center; }
+.webui-split[data-fill="true"] > .split-pane { display: flex; flex-direction: column; align-items: stretch; }
+.webui-split[data-fill="true"] > .split-pane > .webui-group { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
+.webui-page .webui-log { background: var(--input-surface); min-height: 100%; overflow-wrap: anywhere; }
+.split-handle { position: relative; background: var(--border); touch-action: none; cursor: col-resize; }
+.webui-split[data-orientation="vertical"] > .split-handle { cursor: row-resize; }
+.split-handle::after { content: ""; position: absolute; inset: 0 -3px; }
+.webui-split[data-orientation="vertical"] > .split-handle::after { inset: -3px 0; }
+.split-handle:focus-visible { outline: 2px solid var(--accent); z-index: 1; }
+.webui-overlay > .webui-text { align-self: center; }
+/* Hit testing belongs to the overlay relationship, including nested controls.
+   Keyboard focus remains available; pass-through is not disabled/inert state. */
+.webui-overlay > [data-overlay-pass-through="true"],
+.webui-overlay > [data-overlay-pass-through="true"] * { pointer-events: none !important; }
+.align-center { text-align: center; }
+.align-start { text-align: left; }
+.align-end { text-align: right; }
+
+/* Compact, explicitly themed pages provide stable meter/text presentation.
+   These are bounded core styles, independent of any compatibility library. */
+/* The same tokens style pages, menus, dialogs and the app-window canvas.
+   Explicit component colors remain inline and take precedence. */
+:root, .webui-page[data-theme="light"],
+:root:has(#pages > .webui-page[data-theme="light"]:only-child) {
+  color-scheme: light; --text: #2e3436; --surface: #f6f5f4;
+  --input-surface: #fff; --input-text: #000; --border: #cdc7c2; --table-text: #000;
+  --disabled-text: #92908e; --header-text: #979a9b; --tab-surface: #dedcd9;
+  --trough: #deddda; --button-border: #bfb8b1; --button-bottom: #edebe9;
+  --button-highlight: #fff; --button-text-shadow: #ffffffc4; --button-hover: #f8f8f7;
+  --button-disabled-text: #929595;
+  --button-active: #d6d1cd; --button-disabled: #faf9f8;
+}
+.webui-page[data-theme="dark"],
+:root:has(#pages > .webui-page[data-theme="dark"]:only-child) {
+  color-scheme: dark; --text: #eeeeec; --surface: #353535;
+  --input-surface: #2d2d2d; --input-text: #fff; --border: #1b1b1b; --table-text: #eeeeec;
+  --disabled-text: #929595; --header-text: #919494; --tab-surface: #2d2d2d;
+  --trough: #2d2d2d; --button-border: #171717; --button-bottom: #303030;
+  --button-highlight: #ffffff12; --button-text-shadow: #00000030; --button-hover: #404040;
+  --button-disabled-text: #929595;
+  --button-active: #282828; --button-disabled: #393939;
+}
+.webui-page { color: var(--text); background: var(--surface); }
+.webui-page[data-density="compact"] { font-size: 12px; line-height: normal; min-height: 100vh; display: flex; flex-direction: column; }
+.webui-page[data-density="compact"] > .webui-stack { flex: 1; }
+.webui-page[data-density="compact"] .webui-group { margin-bottom: 6px; padding: 6px; }
+.webui-page[data-density="compact"] .tab-panel { padding-top: 6px; }
+.webui-page[data-density="compact"] .field.inline { white-space: nowrap; }
+/* Compact layout metrics are shared by both palettes. A theme switch changes
+   paint, never the original control requisitions or the script's packing. */
+.webui-page[data-density="compact"] { line-height: 15px; }
+/* GtkFrame contributes its frame/legend, not an additional content inset.
+   The converted layouts already carry original child margins and box padding. */
+.webui-page[data-density="compact"] .webui-group { border-radius: 0; padding: 0; }
+.webui-page[data-density="compact"] .webui-group > legend { font-weight: normal; padding: 0; }
+/* GtkFrame keeps its 15px label line when the label widget is empty. */
+.webui-page[data-density="compact"] .webui-group[data-empty-label="true"]:not([data-borderless="true"])::before {
+  content: "";
+  display: block;
+  height: 15px;
+}
+/* Match the original theme's control padding; widths still come from each
+   label and its parent's packing, rather than a captured window allocation. */
+.webui-page[data-density="compact"] button:not(:where(.webui-context-menu *)) { min-height: 34px; padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; white-space: nowrap; }
+/* GtkButton paint is shared by native and bounded shim pages. Menu items
+   retain their own flat paint and smaller requisition in either density. */
+.webui-page[data-density="compact"] button:not(:where(.webui-context-menu *)).default {
+  color: var(--text); border-radius: 5px; border-bottom-color: var(--button-border);
+  background: linear-gradient(to top, var(--button-bottom) 2px, var(--surface));
+  box-shadow: inset 0 1px var(--button-highlight), 0 1px 2px #00000012;
+  text-shadow: 0 1px var(--button-text-shadow);
+}
+.webui-page[data-density="compact"] button:not(:where(.webui-context-menu *)).default:hover:not(:disabled) {
+  background: linear-gradient(to top, var(--surface), var(--button-hover) 1px);
+}
+.webui-page[data-density="compact"] button:not(:where(.webui-context-menu *)).default:active:not(:disabled) {
+  background: var(--button-active); border-bottom-color: var(--border); box-shadow: none; text-shadow: none;
+}
+.webui-page[data-density="compact"] button:not(:where(.webui-context-menu *)).default:disabled {
+  color: var(--button-disabled-text); background: var(--button-disabled); border-bottom-color: var(--border); box-shadow: none; text-shadow: none;
+}
+.webui-page[data-density="compact"] .webui-tabs { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.webui-page[data-density="compact"] .tab-list,
+.webui-page[data-density="compact"] .tab-header > .tab-list { background: var(--tab-surface); gap: 0; min-height: 38px; }
+.webui-page[data-density="compact"] .tab-list > button { font-weight: normal; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 12px; }
+.webui-page[data-density="compact"] .tab-list > button[aria-selected="true"],
+.webui-page[data-density="compact"] .tab-header > .tab-list > button[aria-selected="true"] { border-bottom-color: #3584e4; }
+.webui-page[data-density="compact"] .tab-panel { background: var(--input-surface); border: 1px solid var(--border); padding: 0; flex: 1; min-height: 0; }
+.webui-page[data-density="compact"] input:not([type="checkbox"]):not([type="radio"]),
+.webui-page[data-density="compact"] textarea,
+.webui-page[data-density="compact"] select { background: var(--input-surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; min-height: 34px; }
+.webui-page[data-density="compact"] input:not([type="checkbox"]):not([type="radio"]),
+.webui-page[data-density="compact"] textarea { color: var(--input-text); }
+/* GtkTextView's six- and three-line requisitions each include four more
+   vertical pixels than the matching browser textarea with entry padding. */
+.webui-page[data-density="compact"] textarea { padding-block: 8px; }
+/* Gtk::Entry without a width request keeps its natural 20-character
+   requisition. Explicit script widths and character caps take precedence. */
+.webui-page[data-density="compact"] input[data-natural-entry="true"] {
+  min-width: calc(20ch + 2 * var(--entry-padding, 8px) + 2px);
+}
+/* Let the field contribute that entry requisition to a natural grid. A zero
+   field minimum otherwise permits its track to collapse around the input. */
+.webui-page[data-density="compact"] .field:has(> input[data-natural-entry="true"]) { min-width: min-content; }
+.webui-page[data-density="compact"] .field:has(> input[type="checkbox"]) { min-height: 20px; }
+.webui-page[data-density="compact"] input:disabled:not([type="checkbox"]):not([type="radio"]),
+.webui-page[data-density="compact"] textarea:disabled,
+.webui-page[data-density="compact"] select:disabled { color: var(--disabled-text); }
+.webui-page[data-density="compact"] .field:has(input:disabled),
+.webui-page[data-density="compact"] .field:has(select:disabled) { color: var(--disabled-text); }
+.webui-page[data-viewport="true"] { height: 100vh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.webui-context-menu { position: fixed; z-index: 100; padding: 4px 0; min-width: min(190px, 100vw); max-width: 100vw; max-height: 100vh; overflow-y: auto;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 3px 8px #0005; font: 12px/1.4 -apple-system, sans-serif; }
+.webui-context-menu button, .webui-context-menu .field { display: flex; align-items: center;
+  width: 100%; min-height: 23px; padding: 2px 12px; margin: 0; border: 0; border-radius: 0; background: transparent; text-align: left; cursor: default; }
+.webui-context-menu button:hover, .webui-context-menu .field:hover { background: #3584e4; color: white; }
+.webui-context-menu button:disabled { color: var(--disabled-text); }
+.submenu-trigger::after { content: "\25b8"; margin-left: auto; }
+.submenu-items { position: fixed; inset: auto; margin: 0; z-index: 101; min-width: min(180px, 100vw); max-width: 100vw; max-height: 100vh; overflow-y: auto; background: var(--surface);
+  color: var(--text); border: 1px solid var(--border); padding: 4px 0; box-shadow: 0 3px 8px #0005; }
+.webui-context-menu .webui-divider { margin-block: 4px; }
+.webui-context-menu [data-indicator]::before { content: ""; display: inline-block; width: 16px; flex: none; }
+.webui-context-menu [data-indicator="check"][aria-checked="true"]::before { content: "\2713"; }
+.webui-context-menu [data-indicator="radio"][aria-checked="true"]::before { content: "\25cf"; }
+/* Every progress control owns its geometry, independently of a color override.
+   An optional label takes its normal line above the remaining track allocation. */
+.webui-progress { display: flex; flex-direction: column; min-width: 0; }
+.webui-progress > span { flex: none; }
+.webui-progress > progress { display: block; appearance: none; width: 100%; height: 18px; min-height: 0; flex: 1 1 auto; border: 0; background: var(--trough); border-radius: 3px; }
+.webui-progress > progress::-webkit-progress-bar { background: var(--trough); border: 1px solid var(--border); border-radius: 3px; }
+.webui-progress > progress::-webkit-progress-value { background: var(--progress-fill, var(--accent)); border: 1px solid #0078d7; border-radius: 2px; }
+.webui-progress > progress::-moz-progress-bar { background: var(--progress-fill, var(--accent)); border: 1px solid #0078d7; border-radius: 2px; }
+/* Keep an unknown value visibly distinct without inventing a numeric fraction. */
+.webui-progress > progress:indeterminate { border: 1px solid var(--border); background: linear-gradient(var(--progress-fill, var(--accent)), var(--progress-fill, var(--accent))) -55% 0 / 35% 100% no-repeat var(--trough); animation: webui-progress-pending 1.5s ease-in-out infinite alternate; }
+.webui-progress > progress:indeterminate::-webkit-progress-bar { background: transparent; border: 0; }
+.webui-progress > progress:indeterminate::-webkit-progress-value { background: transparent; border: 0; }
+.webui-progress > progress:indeterminate::-moz-progress-bar { background: transparent; border: 0; }
+@keyframes webui-progress-pending { to { background-position: 155% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .webui-progress > progress:indeterminate { animation: none; background-position: 50% 0; }
+}
+.webui-divider { border-top: 1px solid var(--border); margin-block: 8px; }
+.webui-page[data-density="compact"] .webui-divider { margin-block: 0; }
+
+.webui-tabs > .tab-list { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.webui-tabs > .tab-list > button,
+.webui-tabs > .tab-header > .tab-list > button { border: 1px solid transparent; border-radius: 4px 4px 0 0; background: transparent; }
+.webui-tabs > .tab-list > button[aria-selected="true"],
+.webui-tabs > .tab-header > .tab-list > button[aria-selected="true"] { border-color: var(--border); border-bottom-color: var(--surface); font-weight: 600; }
+.tab-panel { padding-top: 14px; }
+.webui-tabs.nested > .tab-list { padding-left: 12px; }
+.webui-tabs.account-tabs-left { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); align-items: start; }
+.webui-tabs.account-tabs-left > .tab-list {
+  grid-column: 1;
+  grid-row: 1;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  border-bottom: 0;
+}
+.webui-tabs.account-tabs-left > .tab-panel { grid-column: 2; grid-row: 1; padding: 0 0 0 14px; }
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field.inline { flex-direction: row; align-items: center; }
+.field-label { font-weight: 500; }
+.webui-number-stepper { display: inline-grid; grid-template-columns: minmax(0, 1fr) 32px 32px; min-width: 0; }
+.webui-number-stepper input { appearance: textfield; -moz-appearance: textfield; }
+.webui-number-stepper input::-webkit-inner-spin-button { appearance: none; }
+.webui-number-stepper button { min-height: 32px; padding: 0; font-size: 20px; background: var(--input-surface); border: 1px solid var(--border); border-left: 0; }
+.webui-number-stepper button:last-child { border-radius: 0 4px 4px 0; }
+.webui-number-stepper input { border-radius: 4px 0 0 4px !important; }
+.webui-toggle[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; font-weight: bold; }
+.webui-switch { position: relative; }
+.webui-switch > .webui-switch-control { position: absolute; opacity: 0; width: 2.5em; height: 1.4em; margin: 0; }
+.webui-switch-track { display: inline-block; flex: 0 0 auto; box-sizing: border-box; width: 2.5em; height: 1.4em; border: 1px solid var(--border); border-radius: 1em; background: var(--surface-raised); pointer-events: none; }
+.webui-switch-track::before { content: ""; display: block; width: 1em; height: 1em; margin: .13em; border-radius: 50%; background: CanvasText; }
+.webui-switch-control:checked + .webui-switch-track { background: var(--accent); }
+.webui-switch-control:checked + .webui-switch-track::before { transform: translateX(1.1em); background: white; }
+.webui-switch-control:focus-visible + .webui-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.webui-switch-control:disabled + .webui-switch-track { opacity: .5; }
+.field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea { width: 100%; min-height: 32px; }
+.radio-options { display: flex; flex-wrap: wrap; gap: 12px; }
+[data-presentation-role="refresh"] { align-self: flex-start; margin-block: 8px; }
+[data-presentation-role="settings"] {
+  width: 100%;
+  min-height: 34px;
+  justify-content: center;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+[data-presentation-role="settings"] input { position: absolute; opacity: 0; pointer-events: none; }
+[data-presentation-role="settings"]:has(input:checked) { box-shadow: inset 0 0 0 2px var(--accent); }
+
+:is([data-presentation-role="record"],
+    :where([data-presentation-role="record"] > .webui-columns),
+    :where([data-presentation-role="record"] > .webui-columns > button)) { padding: 0; border: 0; margin-bottom: 4px; }
+[data-presentation-role="record"] > legend { display: none; }
+/* The record treatment includes its existing column/button packing margins.
+   Keep selector specificity stable so narrow-window stacking is unchanged. */
+[data-presentation-role="record_primary"] {
+  min-height: 28px;
+  width: 100%;
+  padding: 2px 10px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+}
+[data-presentation-role="record_primary"]:where(:has(> .webui-text > .webui-text-fragment)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 36px;
+  padding: 0;
+  align-items: stretch;
+}
+/* Segments are literal authored text fragments, not parts parsed from a label. */
+[data-presentation-role="record_primary"]:where(:has(> .webui-text > .webui-text-fragment)) > .webui-text {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  min-width: 0;
+  height: 100%;
+}
+[data-presentation-role="record_primary"] > .webui-text > .webui-text-fragment {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  padding-inline: 12px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-presentation-role="record_primary"] > .webui-text > .webui-text-fragment + .webui-text-fragment { border-left: 1px solid color-mix(in srgb, white 38%, transparent); }
+[data-presentation-role="record_secondary"] { min-height: 28px; padding-block: 2px; }
+[data-presentation-role="record_favorite"] {
+  min-width: 32px;
+  min-height: 28px;
+  padding: 2px 6px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+[data-presentation-role="record"] > .webui-columns:has(> :where([data-presentation-role="record_primary"]) .webui-text-fragment) > [data-presentation-role="record_secondary"],
+[data-presentation-role="record"] > .webui-columns:has(> :where([data-presentation-role="record_primary"]) .webui-text-fragment) > [data-presentation-role="record_favorite"] {
+  min-height: 36px;
+}
+
+.webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
+.webui-table { width: 100%; border-collapse: collapse; }
+.webui-table th, .webui-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; }
+.webui-page[data-density="compact"] .webui-table th, .webui-page[data-density="compact"] .webui-table td { padding: 3px 6px; }
+.webui-table tbody tr[aria-selected="true"] { background: var(--selection-background, color-mix(in srgb, var(--accent) 15%, transparent)); }
+.webui-table tbody tr[aria-selected="true"] > td[data-background-fill] { background-image: linear-gradient(var(--selection-background, color-mix(in srgb, var(--accent) 15%, transparent)), var(--selection-background, color-mix(in srgb, var(--accent) 15%, transparent))); }
+/* GTK's TreeView selection pairs its blue fill with white text, whether
+   the row has keyboard focus or not. Keep this on compact GTK-like pages;
+   launcher tables retain their existing selection treatment. */
+.webui-page[data-density="compact"] .webui-table tbody tr[aria-selected="true"] {
+  background: var(--selection-background, #3584e4);
+  color: #fff;
+}
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.workflow-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.validation-message { color: var(--danger); margin-top: 5px; }
+
+.webui-dialog { color: var(--text); background: var(--surface); width: min(92vw, 520px); border: 1px solid var(--border); border-radius: 6px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.notification { margin: 8px; padding: 10px; border: 1px solid var(--border); background: var(--surface-raised); }
+.tone-danger { color: var(--danger); }
+.tone-positive { color: #176b37; background-color: #f0fff4; }
+.tone-caution { color: #754b00; background-color: #fff8e1; }
+.connection-status { display: block; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; padding: 12px; color: #754b00; background: #fff8e1; border: 1px solid currentColor; }
+.emphasis-strong { font-weight: 700; }
+.emphasis-subtle { opacity: .72; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+[hidden] { display: none !important; }
+/* Native notebooks can retain the largest page's natural requisition, as GTK
+   does. Inactive content participates in sizing only, never focus or input. */
+.webui-tabs[data-size-to-all="true"] { display: grid; grid-template-rows: auto auto; min-width: min-content; }
+.webui-tabs[data-size-to-all="true"] > .tab-list { grid-area: 1 / 1; }
+.webui-tabs[data-size-to-all="true"] > .tab-panel { grid-area: 2 / 1; }
+.webui-tabs[data-size-to-all="true"] > .tab-panel:not(.webui-grid)[hidden] { display: flex !important; visibility: hidden; pointer-events: none; }
+
+@media (max-width: 620px) {
+  #pages { padding: 8px; }
+  .webui-columns:not([data-compact="true"]):not(.webui-overlay .webui-columns) { grid-template-columns: 1fr !important; }
+  .webui-columns:not([data-compact="true"]):not(.webui-overlay .webui-columns) > * { grid-column: 1 !important; }
+  [data-presentation-role="record"] > .webui-columns {
+    grid-template-columns: minmax(0, 8fr) minmax(72px, 1fr) !important;
+  }
+  [data-presentation-role="record"] > .webui-columns:has(> :where([data-presentation-role="record_primary"]) .webui-text-fragment) {
+    grid-template-columns: minmax(0, 7fr) minmax(72px, 2fr) minmax(44px, 1fr) !important;
+  }
+  [data-presentation-role="record"] > .webui-columns > :nth-child(1) { grid-column: 1 !important; }
+  [data-presentation-role="record"] > .webui-columns > :nth-child(2) { grid-column: 2 !important; }
+  [data-presentation-role="record"] > .webui-columns > :nth-child(3) { grid-column: 3 !important; }
+  .webui-tabs:not(.account-tabs-left) > .tab-list { overflow-x: auto; }
+  .row-actions, .workflow-actions { flex-wrap: wrap; }
+}
+
+/* The frontend editor is a labelled form: GTK draws a fixed-width label in a
+   left column with the field filling the rest, and stacking each label above
+   its field roughly doubled the height of the form. `field` is a flex column
+   whose label span and control are siblings, so turning the row sideways is a
+   container-scoped override rather than a contract property. Scoped to this
+   one group so no other tab, and no script window, is affected. */
+[data-presentation-role="form"] > .field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+[data-presentation-role="form"] > .field > .field-label {
+  text-align: right;
+  font-weight: 400;
+}
+/* The capability rows are their own grid; their checkboxes keep the inline
+   box-then-label shape rather than inheriting the two-column rule above. */
+:is([data-presentation-role="form_choices"],
+    :where([data-presentation-role="form_choices"]) [data-component-type]) { margin-bottom: 4px; }
+[data-presentation-role="form_choices"] .field.inline { gap: 6px; }
+[data-presentation-role="form_hint"] {
+  margin: -2px 0 8px 158px;
+  opacity: .75;
+  font-size: .92em;
+}
+
+/* Bare instrument panels own their spacing. Fixed overlay labels must retain
+   their column alignment even in a window narrower than the form breakpoint. */
+#pages:has(> .webui-page-bare:only-child) { width: 100%; margin: 0; padding: 0; }
+
+/* Meter panels center artwork without changing the configured pixel sizes. */
+.webui-stack.align-center { align-items: center; }
+.webui-composite.align-center { margin-inline: auto; }
+/* Native package browsers retain the original draggable column boundaries. */
+.webui-table th { position: sticky; top: 0; z-index: 1; background: var(--input-surface); }
+.webui-column-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; }
+.webui-column-resize::after { content: ''; position: absolute; top: 3px; bottom: 3px; right: 1px; border-right: 1px solid var(--border); }
+.webui-column-resize:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.webui-column-label { display: inline-block; white-space: nowrap; }
+.webui-table[data-bounded-columns="true"] th,
+.webui-table[data-bounded-columns="true"] td { overflow: hidden; text-overflow: ellipsis; }
+.webui-editable-select { display: flex; min-width: 0; }
+.webui-editable-select > input { min-width: 0; border-radius: 4px 0 0 4px !important; }
+.webui-editable-select > input::-webkit-calendar-picker-indicator { display: none; }
+.webui-choice-picker { position: relative; flex: 0 0 34px; display: grid; place-items: center; border: 1px solid var(--border); border-left: 0; border-radius: 0 4px 4px 0; background: var(--surface); }
+.webui-choice-picker > select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: default; }
+.webui-choice-picker:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* A notebook's viewport expands with its host; its scrolled contents retain
+   their own natural/minimum sizes. Keep the original footer outside that scroll. */
+.webui-page[data-viewport="true"] > .webui-stack { min-height: 0; }
+.webui-page[data-viewport="true"] .tab-panel:not(.webui-grid) { display: flex; flex-direction: column; }
+.webui-page[data-viewport="true"] .tab-panel > .webui-scroll { flex: 1; min-height: 0; }
+
+/* GTK list views have a white data surface. Headerless selection lists do not
+   draw row rules; keep headers/data grids governed by their existing styles. */
+.webui-page[data-density="compact"] .webui-table-wrap { background: var(--input-surface); }
+.webui-page[data-density="compact"] .webui-table th > button { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font-weight: inherit; color: inherit; }
+.webui-page[data-density="compact"] .webui-table:not(:has(thead)) td { border-bottom: 0; padding-inline: 3px; }
+
+/* GTK paints the check indicator six pixels inside the CheckButton allocation;
+   its label already starts at the correct natural offset. */
+.webui-page[data-density="compact"] .field > input[type="checkbox"] {
+  width: 16px; height: 16px; margin: 0; transform: translateX(6px);
+}
+
+/* Tree views explicitly select their original grid treatment. Sort buttons
+   reserve the theme's arrow space even when another column is selected. */
+.webui-table[data-grid-lines] tbody td { border: 0; }
+/* Explicit single-line cells size naturally; resized columns clip the text. */
+.webui-table[data-wrap="false"] tbody td { white-space: nowrap; overflow: hidden; }
+.webui-table[data-grid-lines="horizontal"] tbody td,
+.webui-table[data-grid-lines="both"] tbody td { border-bottom: 1px dotted var(--border); }
+.webui-table[data-grid-lines="vertical"] tbody td,
+.webui-table[data-grid-lines="both"] tbody td { border-right: 1px dotted var(--border); }
+.webui-page[data-density="compact"] .webui-table { border-collapse: separate; border-spacing: 0; color: var(--table-text); }
+.webui-page[data-density="compact"] .webui-table th {
+  background: var(--input-surface); color: var(--header-text); white-space: nowrap; height: 25px;
+  padding: 0 6px; border-top: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+}
+.webui-page[data-density="compact"] .webui-table th:last-child { border-right: 0; }
+.webui-page[data-density="compact"] .webui-table[data-grid-lines="none"] td { padding-inline: 4px; }
+/* CellRenderer editors overlay their existing row; they do not enlarge it. */
+.webui-page[data-density="compact"] .webui-table td:has(> input:not([type="checkbox"]), > select) { position: relative; }
+.webui-page[data-density="compact"] .webui-table td:has(> input:not([type="checkbox"]), > select)::before { content: '\00a0'; }
+.webui-page[data-density="compact"] .webui-table td > input:not([type="checkbox"]),
+.webui-page[data-density="compact"] .webui-table td > select {
+  position: absolute; top: 0; left: 2px; width: calc(100% - 4px); z-index: 1;
+}
+.webui-page[data-density="compact"] .webui-table td > input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: 0; height: 100%; padding: 0 2px; border: 0; border-radius: 0; outline: none;
+}
+.webui-page[data-density="compact"] .webui-table td > select { background: var(--surface); }
+.webui-page[data-density="compact"] .webui-table th > button::after { content: ''; display: inline-block; width: 16px; margin-left: 2px; font-size: 9px; }
+.webui-page[data-density="compact"] .webui-table th[aria-sort="ascending"] > button::after { content: '\25b2'; }
+.webui-page[data-density="compact"] .webui-table th[aria-sort="descending"] > button::after { content: '\25bc'; }
+.webui-page[data-density="compact"] .field:has(> input[type="checkbox"]) { gap: 8px; }
+.webui-page[data-density="compact"] .field > input[type="checkbox"] + span { margin-right: 4px; }
+.webui-page[data-density="compact"] .field-label { font-weight: normal; }
+.webui-page .webui-table .webui-tree-disclosure {
+  display: inline-block;
+  width: 18px;
+  min-width: 18px;
+  min-height: 0;
+  box-shadow: none;
+  line-height: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+}
+
+/* Hidden grid tabs retain grid measurement without becoming flex columns. */
+.webui-tabs[data-size-to-all="true"] > .tab-panel.webui-grid[hidden] { display: grid !important; visibility: hidden; pointer-events: none; }
+/* Named hints inherit through a widget subtree; nested hints override the variable. */
+[data-cursor-hint], [data-cursor-hint] * {
+  cursor: var(--webui-cursor-hint, default) !important;
+}
+
+/* Auxiliary actions share the header allocation but never become indexed tabs. */
+.webui-tabs > .tab-header { display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--border); }
+.webui-tabs > .tab-header > .tab-list { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; }
+.tab-action { flex: none; }
+/* This reset follows the equally specific selected-header rule above. */
+.webui-page[data-density="compact"] .tab-header > .tab-list > button { font-weight: normal; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 12px; }
+.webui-tabs[data-size-to-all="true"] > .tab-header { grid-area: 1 / 1; }
+.webui-tabs.account-tabs-left > .tab-header { grid-column: 1; grid-row: 1; flex-direction: column; align-items: stretch; border-right: 1px solid var(--border); border-bottom: 0; }
+.webui-tabs.account-tabs-left > .tab-header > .tab-list { flex-direction: column; }
+.webui-tabs.nested > .tab-header { padding-left: 12px; }
+.webui-tabs.account-tabs-left > .tab-list > button,
+.webui-tabs.account-tabs-left > .tab-header > .tab-list > button { text-align: left; border-radius: 4px 0 0 4px; }
+.webui-tabs.account-tabs-left > .tab-list > button[aria-selected="true"],
+.webui-tabs.account-tabs-left > .tab-header > .tab-list > button[aria-selected="true"] { border-right-color: var(--surface); border-bottom-color: var(--border); }
+.webui-tabs.account-tabs-left[data-tab-actions="true"] { display: grid; }
