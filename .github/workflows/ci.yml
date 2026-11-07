@@ -205,7 +205,7 @@ jobs:
         run: |
           seed=$RANDOM
           echo "RSpec seed: $seed"
-          bundle exec parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
+          bundle exec ruby spec/support/webui_transition_suites.rb "$seed"
       - name: RSpec skipped (docs/meta-only change)
         if: steps.preflight.outputs.should_test != 'true'
         run: echo "Preflight determined only ignored paths changed; skipping RSpec."
