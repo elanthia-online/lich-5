@@ -132,7 +132,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       expect(described_class.change_master_password(old_master, new_master)).to eq(0)
       expect(keychain[:password]).to eq(new_master)
       expect_cli_passwords(new_master)
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
     end
 
     it 'refuses a master-password update when the prior keychain state is unknown' do
@@ -155,7 +155,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         expect(keychain[:password]).to eq(previous)
         expect(File.binread(yaml_file)).to eq(original_bytes)
         expect_cli_passwords(old_master)
-        expect(Dir.children(temp_dir)).to eq(['entry.yaml'])
+        expect(Dir.children(temp_dir)).to contain_exactly('entry.yaml', 'entry.yaml.lock')
       end
     end
 

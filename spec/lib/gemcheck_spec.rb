@@ -17,23 +17,23 @@ require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
   describe '.startup_groups' do
-    it 'checks default and GTK dependencies for a Windows graphical launch' do
+    it 'checks only default dependencies for a Windows graphical launch' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
-      expect(described_class.startup_groups([])).to eq(%i[default gtk])
+      expect(described_class.startup_groups([])).to eq([:default])
     end
 
-    it 'omits GTK for an explicit no-GUI switch on Windows' do
+    it 'checks only default dependencies for explicit no-GUI switches' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
       expect(described_class.startup_groups(['--no-gui'])).to eq([:default])
       expect(described_class.startup_groups(['--no-gtk'])).to eq([:default])
     end
 
-    it 'does not treat unrelated arguments as a headless request on Windows' do
+    it 'checks only default dependencies with unrelated arguments' do
       allow(described_class).to receive(:self_healing_supported?).and_return(true)
-      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq(%i[default gtk])
+      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq([:default])
     end
 
-    it 'leaves GTK to init.rb on non-Windows platforms' do
+    it 'does not add GTK on non-Windows platforms' do
       allow(described_class).to receive(:self_healing_supported?).and_return(false)
       expect(described_class.startup_groups([])).to eq([:default])
       expect(described_class.startup_groups(['--gtk'])).to eq([:default])
@@ -774,6 +774,51 @@ RSpec.describe Lich::GemCheck do
           .with(['xmessage', '-center', 'body text'], described_class::ALERT_TIMEOUT_SECONDS)
         described_class.alert_linux('body text')
       end
+    end
+  end
+
+  # Lich.msgbox routes non-Windows startup errors here with its own title
+  # (1853:RC4@S7). Every dialog tool is a stub: no real dialog is shown.
+  describe '.show_notice titles' do
+    it 'defaults to the missing-gems title and dispatches by platform' do
+      stub_const('RUBY_PLATFORM', 'x86_64-darwin23')
+      expect(described_class).to receive(:alert_macos).with('body', title: described_class::TITLE)
+      described_class.show_notice('body')
+    end
+
+    it 'passes a caller title to the macOS dialog script' do
+      stub_const('RUBY_PLATFORM', 'x86_64-darwin23')
+      io = StringIO.new
+      allow(io).to receive(:close_write)
+      allow(IO).to receive(:popen).with(['osascript', '-'], 'r+').and_yield(io)
+
+      described_class.show_notice('body', title: 'Lich v1')
+
+      expect(io.string).to include('with title "Lich v1"')
+      expect(io.string).not_to include(described_class::TITLE)
+    end
+
+    it 'passes a caller title to the Linux dialog tool when no terminal is attached' do
+      stub_const('RUBY_PLATFORM', 'x86_64-linux')
+      allow($stdout).to receive(:isatty).and_return(false)
+      allow($stderr).to receive(:isatty).and_return(false)
+      allow(described_class).to receive(:warn)
+      allow(described_class).to receive(:cmd_available?).and_return(false)
+      allow(described_class).to receive(:cmd_available?).with('zenity').and_return(true)
+
+      expect(described_class).to receive(:run_with_timeout)
+        .with(['zenity', '--info', '--title', 'Lich v1', '--text', 'body'], described_class::ALERT_TIMEOUT_SECONDS)
+      described_class.show_notice('body', title: 'Lich v1')
+    end
+
+    it 'passes a caller title to the Windows notice' do
+      shell = double('WScript.Shell')
+      stub_const('WIN32OLE', Class.new)
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      allow(WIN32OLE).to receive(:new).with('WScript.Shell').and_return(shell)
+      expect(shell).to receive(:Popup).with('body', described_class::CONSENT_TIMEOUT_SECONDS, 'Lich v1', 64)
+
+      described_class.notice_windows('body', title: 'Lich v1')
     end
   end
 

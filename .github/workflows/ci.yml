@@ -110,7 +110,7 @@ jobs:
     # fast instead of occupying a runner up to GitHub's 6h default.
     timeout-minutes: 15
     env:
-      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+      BUNDLE_WITHOUT: 'vscode:profanity'
     name: Run tests on Ruby
     steps:
       - name: Classify changed files (preflight)
@@ -205,7 +205,7 @@ jobs:
         run: |
           seed=$RANDOM
           echo "RSpec seed: $seed"
-          bundle exec ruby spec/support/webui_transition_suites.rb "$seed"
+          bundle exec parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
       - name: RSpec skipped (docs/meta-only change)
         if: steps.preflight.outputs.should_test != 'true'
         run: echo "Preflight determined only ignored paths changed; skipping RSpec."
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+      BUNDLE_WITHOUT: 'vscode:profanity'
     name: Changed spec files on their own
     steps:
       - name: List changed spec files

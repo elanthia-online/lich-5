@@ -4,7 +4,6 @@ require 'yaml'
 require_relative 'entry_store'
 require_relative '../gui/utilities'
 require_relative '../gui/account_manager'
-require_relative '../gui/game_selection'
 require_relative 'authenticator'
 require_relative 'login_helpers'
 
@@ -368,7 +367,7 @@ module Lich
             character_data = {
               char_name: char_name,
               game_code: game_code,
-              game_name: Lich::Common::GUI::GameSelection.get_game_name(game_code),
+              game_name: LoginHelpers::GAME_NAMES.fetch(game_code, 'Unknown'),
               frontend: selected_frontend,
               custom_launch: nil,
               custom_launch_dir: nil
@@ -500,7 +499,8 @@ module Lich
 
             # Publish through the shared writer, restoring keychain state on failure.
             Lich::Common::Authentication::EntryStore.write_yaml_with_master_password(
-              yaml_file, yaml_data, new_password
+              yaml_file, yaml_data, new_password,
+              manager: Lich::Common::GUI::MasterPasswordManager
             )
 
             puts 'success: Master password changed'
