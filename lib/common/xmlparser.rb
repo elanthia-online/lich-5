@@ -18,7 +18,7 @@ module Lich
                   :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-                  :dialogs, :room_id, :previous_nav_rm, :nav_count, :show_room_id, :concentration, :max_concentration,
+                  :dialogs, :dialog_names, :room_id, :previous_nav_rm, :nav_count, :show_room_id, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
                   :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
                   :room_climate, :room_terrain, :room_weather, :room_bonfire,
@@ -237,6 +237,9 @@ module Lich
 
         # psm 3.0 dialogdata updates
         @dialogs = {}
+        # each dialog's progress bar id => its text, kept beside @dialogs so a
+        # name shared by two bars (two Sword Hymns) is not lost to one Hash key
+        @dialog_names = {}
 
         # real id updates
         # Default 0 (not nil) so a read before the first <nav> tag is a valid "no UID" value
@@ -386,6 +389,7 @@ module Lich
         name = attributes["text"]
         value = attributes["time"]
         return unless name && value
+        (@dialog_names[kind] ||= {})[id] = name
         # set the expiry for a decade for infinite duration effects
         return @dialogs[kind][name] = @dialogs[kind][id] = Time.now + DECADE if value.downcase.eql?("indefinite")
 
@@ -800,6 +804,7 @@ module Lich
           if name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
             @dialogs[attributes["id"]] ||= {}
             @dialogs[attributes["id"]].clear
+            (@dialog_names[attributes["id"]] ||= {}).clear
             # detect a clear board request for effects, and send to activespell
             # (GemStone-only module; the shared parser must not raise without it)
             ActiveSpell.request_update if defined?(ActiveSpell)

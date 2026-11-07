@@ -559,6 +559,9 @@ module Lich
     # Wrapping a blocking Kernel#system call in Timeout can't do this safely,
     # since the spawned child keeps running as an orphan; spawning it
     # ourselves lets us kill it directly.
+    #
+    # Windows Ruby rejects TERM with Errno::EINVAL, so the child is ended
+    # with KILL there; elsewhere TERM gives the dialog a normal shutdown.
     # @param cmd [Array<String>] command and arguments for Process.spawn
     # @param timeout [Integer] seconds to wait before killing the process
     # @return [Boolean] whether the command exited on its own within the timeout
@@ -567,7 +570,7 @@ module Lich
       Timeout.timeout(timeout) { Process.wait(pid) }
       true
     rescue Timeout::Error
-      Process.kill('TERM', pid)
+      Process.kill(Gem.win_platform? ? 'KILL' : 'TERM', pid)
       Process.wait(pid)
       false
     end

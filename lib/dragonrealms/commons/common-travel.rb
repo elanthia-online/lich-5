@@ -77,6 +77,9 @@ module Lich
         /Usage: ASK/
       ].freeze unless defined?(ASK_FAILURE_PATTERNS)
 
+      # ORDER refusal when the character has no free hand for the item
+      ORDER_HANDS_FULL_PATTERN = /^You realize your hands are full, and stop\./ unless defined?(ORDER_HANDS_FULL_PATTERN)
+
       # Visit a merchant and sell an item.
       # Usually to sell junk at pawn shops.
       #
@@ -133,12 +136,92 @@ module Lich
       #
       # Returns nil without ordering when the walk to +room+ fails: ORDER takes
       # a menu number, so the same ORDER in another shop could buy another item.
+      #
+      # Also returns nil when the character cannot pay (that reply is matched
+      # ignoring case, as bput matches it), or when either ORDER
+      # gets "You realize your hands are full, and stop." That refusal is
+      # matched so it returns at once instead of waiting out bput's timeout.
+      # On success it returns bput's match, 'takes some coins from you'.
+      #
+      # A timeout on either ORDER returns '' (bput's timeout value), which is
+      # truthy. Test the result with +.to_s.empty?+ or compare it with the
+      # success text; a plain truthiness check counts a timeout as a purchase.
       def order_item(room, item_number)
         return unless walk_to_merchant(room, "ordering #{item_number}")
 
-        return if DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins') == 'you don\'t have enough coins'
+        quote = DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins', ORDER_HANDS_FULL_PATTERN)
+        return if quote.match?(/you don't have enough coins/i) || quote.match?(ORDER_HANDS_FULL_PATTERN)
 
-        DRC.bput("order #{item_number}", 'takes some coins from you')
+        result = DRC.bput("order #{item_number}", 'takes some coins from you', ORDER_HANDS_FULL_PATTERN)
+        result unless result.match?(ORDER_HANDS_FULL_PATTERN)
+      end
+
+      # Visit a merchant and order from a menu, like {.order_item}, and say
+      # how it went. ORDER is sent twice: the first gets the merchant's
+      # quote ("Just order it again"), the second pays.
+      #
+      # When both hands already hold something it returns +:hands_full+
+      # before walking or ordering: the game refuses the paying ORDER with
+      # "You realize your hands are full, and stop." The hands are read from
+      # {DRCI.held_ids}, so an empty hand (id nil, name "Empty") counts as
+      # free.
+      #
+      # Differences from {.order_item}, which is unchanged: the up-front hands
+      # check, and no paying ORDER after the first ORDER timed out (order_item
+      # sends one). Otherwise both ORDERs wait for the same replies, so
+      # +:bought+ is exactly when order_item returns
+      # 'takes some coins from you'. Like order_item, the paying ORDER does
+      # not wait for "you don't have enough coins": that text is matched
+      # anywhere in a line, so speech quoting it could hide a sale that went
+      # through. Coins that run short between the two ORDERs give +:timeout+
+      # after bput's timeout.
+      #
+      # To get the id of the item bought, run it inside {DRCI.id_into_hand}.
+      #
+      # @param room [Integer, String] the shop's room id or map tag
+      # @param item_number [Integer, String] the menu number to ORDER
+      # @return [Symbol]
+      #   +:bought+ "takes some coins from you" on the paying ORDER;
+      #   +:hands_full+ both hands held something (nothing walked or sent),
+      #   or {ORDER_HANDS_FULL_PATTERN} on either ORDER (no paying ORDER after
+      #   the first);
+      #   +:unreachable+ the walk to +room+ failed (nothing sent);
+      #   +:no_coins+ "you don't have enough coins", ignoring case, on the
+      #   first ORDER (no paying ORDER);
+      #   +:timeout+ no matching reply to either ORDER (no paying ORDER after
+      #   the first)
+      #
+      # @example Leather 3 from the shop in room 8860, and its id
+      #   leather_id = DRCI.id_into_hand(name: 'leather') { DRCT.order_item_result(8860, 3) == :bought }
+      #   DRCI.put_away_item_result("##{leather_id}", '#758550') if leather_id
+      #
+      # @example Right hand leather, left hand cloth
+      #   DRCT.order_item_result(8860, 8) #=> :hands_full
+      #
+      # @see .order_item
+      def order_item_result(room, item_number)
+        if DRCI.held_ids.size >= 2
+          Lich::Messaging.msg('bold', "DRCT: Both hands are full, so not ordering #{item_number}.")
+          return :hands_full
+        end
+        return :unreachable unless walk_to_merchant(room, "ordering #{item_number}")
+
+        quote = DRC.bput("order #{item_number}", 'Just order it again', 'you don\'t have enough coins', ORDER_HANDS_FULL_PATTERN)
+        return order_reply_result(quote) unless quote.to_s.match?(/just order it again/i)
+
+        order_reply_result(DRC.bput("order #{item_number}", 'takes some coins from you', ORDER_HANDS_FULL_PATTERN))
+      end
+
+      # Internal to {.order_item_result}: the Symbol for the text bput
+      # matched on an ORDER ('' when nothing matched).
+      # @api private
+      def order_reply_result(reply)
+        case reply.to_s
+        when ORDER_HANDS_FULL_PATTERN then :hands_full
+        when /you don't have enough coins/i then :no_coins
+        when /takes some coins from you/i then :bought
+        else :timeout
+        end
       end
 
       # Internal to the merchant helpers above; not meant for scripts.
@@ -177,7 +260,7 @@ module Lich
         room.is_a?(String) && room.count('a-zA-Z') > 0
       end
 
-      private_class_method :walk_to_merchant, :map_tag?
+      private_class_method :walk_to_merchant, :map_tag?, :order_reply_result
 
       def dispose(item, trash_room = nil, worn_trashcan = nil, worn_trashcan_verb = nil)
         return unless item

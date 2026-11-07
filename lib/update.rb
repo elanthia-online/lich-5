@@ -204,6 +204,7 @@ module Lich
     #{$clean_lich_char}lich5-update --track=owner/repo:script.lic       Track a script from custom repo
     #{$clean_lich_char}lich5-update --sync=owner/repo                   Sync a custom repo
     Custom scripts install to #{$clean_lich_char}scripts/custom/<owner-repo>/ (name collisions rejected)
+    Only .lic files at the top level of a custom repo can be tracked
 
   [Beta testing]
     #{$clean_lich_char}lich5-update --beta                              Show the beta notice; confirm within #{ReleaseInstaller::BETA_CONFIRM_WINDOW} seconds
@@ -343,7 +344,7 @@ module Lich
       end
 
       def self.tracked_scripts_manager
-        @tracked_scripts_manager ||= TrackedScripts.new
+        @tracked_scripts_manager ||= TrackedScripts.new(client)
       end
 
       def self.custom_repos_manager

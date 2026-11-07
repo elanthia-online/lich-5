@@ -118,6 +118,16 @@ RSpec.describe Lich::Util::Update::FileUpdater do
       File.delete(effect_list_path) if File.exist?(effect_list_path)
     end
 
+    # The GS login sync fetches effect-list.xml again, so a failure here can
+    # say the next login fixes it.
+    it 'updates effect-list.xml with the login wording for failures' do
+      allow(snapshot_manager).to receive(:new_data_backup_dir).and_return(Dir.mktmpdir('databackup-test'))
+
+      updater.update_core_data_and_scripts('5.16.0')
+
+      expect(updater).to have_received(:update_file).with('data', 'effect-list.xml', retried_by: :login)
+    end
+
     context 'given an explicit snapshot_dir from an active full update' do
       it "backs the prior effect-list.xml up under that snapshot's data directory" do
         snapshot_dir = Dir.mktmpdir('snap-test')
@@ -196,7 +206,7 @@ RSpec.describe Lich::Util::Update::FileUpdater do
 
       updater.update_file('library', 'foo.rb', 'beta')
 
-      expect(printed).to eq(['[lich5-update: GitHub check failed. No beta update was installed. This is a temporary error that should resolve itself by your next login.]'])
+      expect(printed).to eq(['[lich5-update: GitHub check failed. No beta update was installed. This is usually temporary; run the command again in a few minutes.]'])
     end
 
     it 'still says no viable beta when GitHub answered' do
@@ -211,21 +221,33 @@ RSpec.describe Lich::Util::Update::FileUpdater do
   describe '#update_file legacy download' do
     let(:printed) { [] }
     let(:live_path) { File.join(tmpdir, 'foo.lic') }
-    let(:remote) { instance_double(URI::HTTPS) }
+    let(:url) { 'https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/foo.lic' }
+    let(:mono) { [] }
 
     before do
       allow(updater).to receive(:respond) { |msg = ''| printed << msg }
-      allow(URI).to receive(:parse)
-        .with('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/foo.lic')
-        .and_return(remote)
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| mono << msg }
       File.binwrite(live_path, "# foo v1\n")
+    end
+
+    def fail_download(kind, status = nil)
+      allow(client).to receive(:http_get).with(url, auth: false).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: kind, status: status))
+    end
+
+    it 'downloads through the GitHub client, without the token' do
+      allow(client).to receive(:http_get).and_return("# foo v2\n")
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(client).to have_received(:http_get).with(url, auth: false).once
     end
 
     it 'keeps the live file in place for the whole download' do
       seen_during_download = nil
-      allow(remote).to receive(:open) do
+      allow(client).to receive(:http_get).with(url, auth: false) do
         seen_during_download = File.exist?(live_path) ? File.binread(live_path) : :missing
-        StringIO.new("# foo v2\n")
+        "# foo v2\n"
       end
 
       updater.update_file('script', 'foo.lic')
@@ -236,43 +258,120 @@ RSpec.describe Lich::Util::Update::FileUpdater do
       expect(printed).to include('foo.lic has been updated.')
     end
 
-    it 'leaves the existing file untouched when the download fails' do
-      allow(remote).to receive(:open).and_raise(SocketError.new('getaddrinfo failed'))
+    it 'reports a network failure as a GitHub failure and leaves the existing file untouched' do
+      fail_download(:network)
 
       updater.update_file('script', 'foo.lic')
 
       expect(File.binread(live_path)).to eq("# foo v1\n")
       expect(Dir.children(tmpdir)).to eq(['foo.lic'])
-      expect(printed).to include('Error updating foo.lic: SocketError - getaddrinfo failed')
-      expect(printed).to include('The existing foo.lic was left unchanged.')
-      expect(printed).not_to include('foo.lic has been updated.')
+      expect(mono).to eq(['[lich5-update: GitHub check failed. foo.lic was not updated. This is usually temporary; run the command again in a few minutes.]'])
+      expect(printed.grep(/not available via lich5-update|has been updated/)).to be_empty
     end
 
-    it 'leaves the existing file untouched when the write fails' do
-      allow(remote).to receive(:open).and_return(StringIO.new("# foo v2\n"))
+    it 'reports a rate limit as a rate limit, not as a missing file' do
+      fail_download(:rate_limited, 429)
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(mono.grep(/rate limit reached.*foo\.lic was not updated/).size).to eq(1)
+      expect(printed.grep(/not available via lich5-update/)).to be_empty
+    end
+
+    it 'tells the user a file the repository does not have is not available' do
+      fail_download(:not_found, 404)
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(File.binread(live_path)).to eq("# foo v1\n")
+      expect(mono).to be_empty
+      expect(printed).to include('The existing foo.lic was left unchanged.')
+      expect(printed).to include('The filename foo.lic is not available via lich5-update.')
+    end
+
+    it 'does not claim a file was left unchanged when there was none' do
+      File.delete(live_path)
+      fail_download(:not_found, 404)
+
+      updater.update_file('script', 'foo.lic')
+
+      expect(Dir.children(tmpdir)).to be_empty
+      expect(printed.grep(/left unchanged/)).to be_empty
+      expect(printed).to include('The filename foo.lic is not available via lich5-update.')
+    end
+
+    it 'reports a name that cannot form a URL as not available, without a request' do
+      allow(client).to receive(:http_get)
+
+      updater.update_file('script', 'f oo.lic')
+
+      expect(client).not_to have_received(:http_get)
+      expect(mono).to be_empty
+      expect(printed).to include('The filename f oo.lic is not available via lich5-update.')
+    end
+
+    it 'says the next login fixes a failure only when the login sync fetches the file again' do
+      allow(client).to receive(:http_get).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :network))
+
+      updater.update_file('data', 'effect-list.xml', retried_by: :login)
+
+      expect(mono).to eq(['[lich5-update: GitHub check failed. effect-list.xml was not updated. This is a temporary error that should resolve itself by your next login.]'])
+    end
+
+    ['./foo.lic', '../scripts/foo.lic', 'sub//foo.lic', '/foo.lic', '..\\foo.lic'].each do |name|
+      it "refuses #{name.inspect} as not available, without a request or a write outside the directory" do
+        allow(client).to receive(:http_get)
+
+        updater.update_file('script', name)
+
+        expect(client).not_to have_received(:http_get)
+        expect(mono).to be_empty
+        expect(printed).to include("The filename #{name} is not available via lich5-update.")
+        expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+      end
+    end
+
+    it 'still downloads a library file from a subdirectory of lib' do
+      stub_const('LIB_DIR', tmpdir)
+      FileUtils.mkdir_p(File.join(tmpdir, 'common'))
+      allow(resolver).to receive(:resolve_channel_ref).with(:stable).and_return('main')
+      allow(client).to receive(:http_get).and_return("# spell v2\n")
+
+      updater.update_file('library', 'common/spell.rb')
+
+      expect(client).to have_received(:http_get)
+        .with("https://raw.githubusercontent.com/#{Lich::Util::Update::GITHUB_REPO}/main/lib/common/spell.rb", auth: false)
+      expect(File.binread(File.join(tmpdir, 'common', 'spell.rb'))).to eq("# spell v2\n")
+    end
+
+    it 'reports a library channel with no remote as not available instead of raising' do
+      stub_const('LIB_DIR', tmpdir)
+      allow(client).to receive(:http_get)
+
+      expect { updater.update_file('library', 'foo.rb', 'nightly') }.not_to raise_error
+
+      expect(client).not_to have_received(:http_get)
+      expect(printed).to include('The filename foo.rb is not available via lich5-update.')
+    end
+
+    it 'leaves the existing file untouched when the write fails, without blaming the name' do
+      allow(client).to receive(:http_get).and_return("# foo v2\n")
       allow(File).to receive(:rename).and_raise(Errno::EACCES.new('Permission denied'))
 
       updater.update_file('script', 'foo.lic')
 
       expect(File.binread(live_path)).to eq("# foo v1\n")
       expect(Dir.children(tmpdir)).to eq(['foo.lic'])
+      expect(printed.grep(/\AError updating foo\.lic: Errno::EACCES/).size).to eq(1)
       expect(printed).to include('The existing foo.lic was left unchanged.')
-    end
-
-    it 'does not claim a file was left unchanged when there was none' do
-      File.delete(live_path)
-      allow(remote).to receive(:open).and_raise(SocketError.new('getaddrinfo failed'))
-
-      updater.update_file('script', 'foo.lic')
-
-      expect(Dir.children(tmpdir)).to be_empty
-      expect(printed.grep(/left unchanged/)).to be_empty
+      expect(printed.grep(/not available via lich5-update/)).to be_empty
     end
 
     it 'removes a .old file left by an interrupted older update' do
       File.delete(live_path)
       File.binwrite("#{live_path}.old", "# foo v1\n")
-      allow(remote).to receive(:open).and_return(StringIO.new("# foo v2\n"))
+      allow(client).to receive(:http_get).and_return("# foo v2\n")
 
       updater.update_file('script', 'foo.lic')
 
