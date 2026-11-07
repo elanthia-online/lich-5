@@ -911,11 +911,75 @@ module Lich
         !!(DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/) =~ /(?:An?|Some) .+ is (?:in|being)/)
       end
 
-      # Checks if an item is currently worn by tapping it.
+      # The worn item a name means, read from the worn-items list
+      # ({GameObj.inv}). Sends no game command.
+      #
+      # DR's Saga stream sends the whole worn list at login, and again with
+      # the hand tag, ahead of the reply text, when an item is worn or
+      # removed (also seen on GIVE, ACCEPT and SWAP), so the list is current
+      # by the time a WEAR or REMOVE reply arrives. As on GemStone, it is the
+      # worn (top-level) inventory only: stowed items and items in hand are
+      # not in it.
+      #
+      # A name matches a worn item by the {.held_id} rule: its last word
+      # equals the item's noun (ignoring case) and each other word is a word
+      # of the item's name, so "zills" and "polished zills" both match "some
+      # polished thin-edged zills with silvered esoteric filigree". A leading
+      # "my " is dropped, "#<id>" matches that id only, and a name starting
+      # with an ordinal ("second") or "other" never matches. A GameObj (or
+      # anything with an id) matches by id, as Lich::Stash.worn? does.
+      #
+      # @param item [String, Integer, #id, nil] noun phrase, "#<id>", an
+      #   Integer id, or an object with an id
+      # @return [GameObj, nil] the first matching worn item; nil when none
+      #   matches, the name is nil or empty, the object has no id, or the worn
+      #   list is empty or was never received (the legacy stream sends no
+      #   linked list)
+      #
+      # @example Wearing "some polished thin-edged zills with silvered esoteric filigree"
+      #   DRCI.worn_item('zills')&.id #=> "15705095"
+      def worn_item(item)
+        return nil if item.nil?
+
+        inv = GameObj.inv
+        return nil if inv.nil?
+
+        case item
+        when String, Integer
+          inv.find { |obj| held_obj_matches?(obj, item) }
+        else
+          id = item.respond_to?(:id) ? held_obj_id(item) : nil
+          id && inv.find { |obj| held_obj_id(obj) == id }
+        end
+      end
+
+      # Whether the worn-items list ({GameObj.inv}) has an item a name means
+      # (see {.worn_item}). Sends no game command.
+      #
+      # A false answer is only as good as the list: before the login list
+      # arrives, on the legacy stream, or for a name the {.held_id} rule
+      # cannot match (an ordinal, a container phrase), it is false even for a
+      # worn item. Use {.wearing?} when a false answer must be checked with
+      # the game.
+      #
+      # @param item [String, Integer, #id, nil] as for {.worn_item}
+      # @return [Boolean] true if a worn item matches
+      def worn?(item)
+        !worn_item(item).nil?
+      end
+
+      # Checks if an item is currently worn.
+      #
+      # Answers true from the worn-items list ({.worn?}) without sending
+      # anything, so a script checking at the same moment as another can't
+      # take the other script's TAP reply as its own. When the list has no
+      # match, the item is tapped and the reply decides, as before.
       #
       # @param item [String] item noun to check
       # @return [Boolean] true if item is currently worn
       def wearing?(item)
+        return true if worn?(item)
+
         !!(tap(item) =~ /wearing/)
       end
 
@@ -930,6 +994,12 @@ module Lich
 
       # Checks if an item exists in inventory or a container by tapping it.
       #
+      # With no container, an item that is worn ({.worn?}) or in either hand
+      # answers true without sending anything, so two scripts checking at
+      # once (e.g. play and tarantula at login) can't take each other's TAP
+      # replies. Anything else, including every container check and any
+      # item given as other than a String, is tapped.
+      #
       # @param item [String] item noun to check
       # @param container [String, nil] container to check in, or nil for general inventory
       # @return [Boolean] true if the item exists
@@ -938,6 +1008,8 @@ module Lich
       #   DRCI.exists?("deed")
       #   DRCI.exists?("sword", "backpack")
       def exists?(item, container = nil)
+        return true if container.nil? && item.is_a?(String) && (worn?(item) || matching_held_ids([], item).any?)
+
         case tap(item, container)
         when *TAP_SUCCESS_PATTERNS
           true

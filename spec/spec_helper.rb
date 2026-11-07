@@ -1410,6 +1410,12 @@ module Lich
           @@npcs = []
         end
 
+        # The double tracks no worn list; production returns nil for an
+        # empty one too.
+        def inv
+          nil
+        end
+
         # Mirrors the production API so XMLParser#reset - which discards
         # in-flight staged refreshes when resynchronizing - works against this
         # lightweight double. The double has no staging buffers, so it is a
