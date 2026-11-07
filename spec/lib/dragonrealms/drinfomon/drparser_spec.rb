@@ -70,6 +70,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     described_class.class_variable_set(:@@parsing_inventory_get, false)
     described_class.class_variable_set(:@@shutdown_at, nil)
     described_class.class_variable_set(:@@room_objs_cut, nil)
+    described_class.class_variable_set(:@@room_objs_full, nil)
   end
 
   describe 'game shutdown tracking' do
@@ -1604,12 +1605,179 @@ RSpec.describe Lich::DragonRealms::DRParser do
       expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
     end
 
-    it 'does not treat "some other stuff" before the end of the list as a cut' do
-      feed("<component id='room objs'>You also see some other stuff and a rock.</component>")
-      writes.clear
-      feed('<style id=""/>  You also see some other stuff and a rock, a goblin.')
+    it 'does not treat "and some other stuff." before the end of the list as a cut' do
+      objs = 'You also see a rock and some other stuff., <pushBold/>a goblin<popBold/>.'
+      feed("<component id='room objs'>#{objs}</component>")
 
-      expect(writes).to be_empty
+      expect(described_class.class_variable_get(:@@room_objs_cut)).to be_nil
+      expect(described_class.class_variable_get(:@@room_objs_full)).to eq(objs)
+    end
+
+    # A status is worded differently in the component and the room view once
+    # room descriptions are off (dr_legacy_hunt.xml:1561 "which appears dead",
+    # :1608 "(dead)").
+    describe 'creature status worded differently in the component and the view' do
+      it 'repairs from a view that words a status before the cut differently' do
+        feed("<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> which appears dead, a rock and some other stuff.</component>",
+             "<resource picture=\"0\"/><style id=\"roomName\" />[Room] (1)\r\n",
+             '<style id=""/>  You also see <pushBold/>a jeol moradu<popBold/> (dead), a rock, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(['troll'])
+        expect(assigned[:dead_npcs]).to eq(['moradu'])
+        expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      end
+
+      it 'repairs when the status is the last object before the cut, and the wordy form is in the view' do
+        feed("<component id='room objs'>You also see a rock, <pushBold/>a goblin<popBold/> (stunned) and some other stuff.</component>",
+             '<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/> that appears stunned and <pushBold/>Seamstress Zasele<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      end
+
+      it 'still rejects a view whose objects differ once statuses are set aside' do
+        feed("<component id='room objs'>You also see <pushBold/>a goblin<popBold/> which appears dead, a rock and some other stuff.</component>")
+        writes.clear
+        feed('<style id=""/>  You also see <pushBold/>a kobold<popBold/> (dead), a rock, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(writes).to be_empty
+      end
+
+      it 'does not strip status-like words from an object that is not a creature' do
+        feed("<component id='room objs'>You also see a rock which appears dead, a stick and some other stuff.</component>")
+        writes.clear
+        feed('<style id=""/>  You also see a rock (dead), a stick and <pushBold/>a troll<popBold/>.')
+
+        expect(writes).to be_empty
+      end
+    end
+
+    # The game resends the component, still cut, whenever something in the room
+    # changes; no room view follows it.
+    describe 'a cut component resent in the same room' do
+      # rock, goblin | wooden chest, kobold (dead), Zasele
+      let(:refresh) { ->(text) { "<component id='room objs'>You also see #{text} and some other stuff.</component>" } }
+
+      it 'keeps the objects after the cut when an object is added in front' do
+        feed(cut_objs, full_view, refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'), prompt)
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+        expect(assigned[:dead_npcs]).to eq(['kobold'])
+        expect(assigned[:room_objs]).to eq(['sack', 'rock', 'wooden chest'])
+        expect(UserVars.npcs).to eq(%w[Zasele goblin])
+      end
+
+      it 'keeps the tail when the refresh is unchanged (the change was after the cut)' do
+        feed(cut_objs, full_view, cut_objs)
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+        expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      end
+
+      it 'takes the tail after the new last object when an object before the cut is picked up' do
+        feed(cut_objs, full_view, refresh.call('<pushBold/>a goblin<popBold/>, a wooden chest'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+        expect(assigned[:dead_npcs]).to eq(['kobold'])
+        expect(assigned[:room_objs]).to eq(['wooden chest'])
+      end
+
+      it 'does not list twice a creature that moved in front of the cut (died and went first)' do
+        feed(cut_objs, full_view, refresh.call('<pushBold/>Seamstress Zasele<popBold/> which appears dead, a rock'))
+
+        expect(assigned[:npcs]).to eq(['goblin'])
+        expect(assigned[:dead_npcs]).to eq(%w[Zasele kobold])
+        expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      end
+
+      it 'matches the last object by count when it is listed more than once' do
+        three = 'You also see <pushBold/>a goblin<popBold/>, <pushBold/>a goblin<popBold/>, a rock, ' \
+                '<pushBold/>a goblin<popBold/> and <pushBold/>Seamstress Zasele<popBold/>.'
+        feed("<component id='room objs'>#{three}</component>",
+             refresh.call('a sack, <pushBold/>a goblin<popBold/>, <pushBold/>a goblin<popBold/>'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin goblin goblin])
+        expect(assigned[:room_objs]).to eq(%w[sack rock])
+      end
+
+      it 'counts occurrences, so an object removed between two copies does not come back' do
+        feed("<component id='room objs'>You also see <pushBold/>a goblin<popBold/>, a rock, <pushBold/>a goblin<popBold/> and <pushBold/>Seamstress Zasele<popBold/>.</component>",
+             refresh.call('<pushBold/>a goblin<popBold/>, <pushBold/>a goblin<popBold/>'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin goblin])
+        expect(assigned[:room_objs]).to eq([])
+      end
+
+      it 'matches a last object whose status changed' do
+        feed(cut_objs, full_view, refresh.call('a rock, <pushBold/>a goblin<popBold/> (prone)'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+        expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      end
+
+      it 'keeps the tail of a complete component the room had before it filled up' do
+        feed("<component id='room objs'>#{full_list}</component>", refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      end
+
+      it 'keeps merging across several refreshes' do
+        feed(cut_objs, full_view,
+             refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'),
+             refresh.call('a stick, a sack, a rock'))
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+        expect(assigned[:room_objs]).to eq(['stick', 'sack', 'rock', 'wooden chest'])
+      end
+
+      it 'applies the refresh as sent when the old list lacks its last object' do
+        feed(cut_objs, full_view, refresh.call('a rock, <pushBold/>a troll<popBold/>'))
+
+        expect(assigned[:npcs]).to eq(['troll'])
+        expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+        expect(described_class.class_variable_get(:@@room_objs_full)).to be_nil
+      end
+
+      it 'still repairs from a later LOOK after a merge' do
+        feed(cut_objs, full_view, refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'))
+        feed('<style id=""/>  You also see a sack, a rock, <pushBold/>a goblin<popBold/>, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(%w[goblin troll])
+      end
+
+      {
+        'a move (<nav>)'     => "<nav rm='100029'/>",
+        'an empty component' => "<component id='room objs'></component>"
+      }.each do |boundary, line|
+        it "does not merge with the list from before #{boundary}" do
+          feed(cut_objs, full_view, line, cut_objs)
+
+          expect(assigned[:npcs]).to eq(['goblin'])
+          expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+        end
+      end
+
+      it 'does not merge a cut component with no previous list' do
+        feed(cut_objs, cut_objs)
+
+        expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+      end
+
+      it 'keeps Zasele through a resent cut component in the real capture' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        feed(capture.first(view))
+        repaired = assigned[:room_objs]
+        # A tiny pebble is dropped: the game lists it first and the cut now
+        # falls one object earlier.
+        resent = capture[component - 1]
+                 .sub('You also see ', 'You also see a <a exist="1" noun="pebble">tiny pebble</a>, ')
+                 .sub(%r{, a <a exist="\d+" noun="sack">woven sack</a> and some other stuff}, ' and some other stuff')
+        expect(resent).not_to eq(capture[component - 1])
+        feed(resent, prompt)
+
+        expect(assigned[:npcs]).to eq(['Zasele'])
+        expect(assigned[:room_objs]).to eq(['tiny pebble'] + repaired)
+      end
     end
 
     it 'never reparses main-stream views after a complete component' do
