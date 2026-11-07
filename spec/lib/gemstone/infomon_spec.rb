@@ -275,31 +275,39 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Ascension.grizzled_voln_ascendant).to eq(0)
     end
 
-    # Wording assumed from the Combat Maneuver learn/unlearn messages; Kai's
-    # Touch is the first ascension ability whose name carries an apostrophe.
+    # Kai's Touch is the first ascension ability whose name carries an apostrophe.
     it "handles learning and unlearning an ascension ability with an apostrophe" do
       Lich::Gemstone::Infomon.set('ascension.kaistouch', 0)
-      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 2 of Kai's Touch, costing 2 Ascension points.")
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 2 of Kai's Touch, costing 2 Ascension Ability points.")
       expect(Lich::Gemstone::Infomon.get('ascension.kaistouch')).to eq(2)
-      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 2 of Kai's Touch, regaining 2 Ascension points.")
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 2 of Kai's Touch, regaining 2 Ascension Ability points.")
       expect(Lich::Gemstone::Infomon.get('ascension.kaistouch')).to eq(1)
     end
 
-    it "handles learning and unlearning an ascension lore with a spaced hyphen" do
-      Lich::Gemstone::Infomon.set('ascension.elair', 0)
-      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 3 of Elemental Lore - Air, costing 3 Ascension points.")
-      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(3)
-      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 3 of Elemental Lore - Air, regaining 3 Ascension points.")
-      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(2)
-      expect(Lich::Gemstone::Ascension['Elemental Lore - Air']).to eq(2)
+    # Captured from the live game (ASCENSION LEARN/UNLEARN, then CONFIRM).
+    it "handles the live ascension learn and unlearn messages" do
+      Lich::Gemstone::Infomon.set('ascension.strength', 40)
+      Lich::Gemstone::Infomon.set('ascension.elair', 50)
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 40 of Strength, regaining 8 Ascension Ability points.")
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 50 of Elemental Lore - Air, regaining 10 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.strength')).to eq(39)
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(49)
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 40 of Strength, costing 8 Ascension Ability points.")
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 50 of Elemental Lore - Air, costing 10 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.strength')).to eq(40)
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(50)
+      expect(Lich::Gemstone::Ascension['Elemental Lore - Air']).to eq(50)
     end
 
-    it "ignores a learn or unlearn line whose name is not in the lookups" do
+    it "ignores confirmation prompts and learn lines whose name is not in the lookups" do
       expect(Lich::Gemstone::Infomon).not_to receive(:set)
       [
-        "You have now achieved rank 1 of Mental Lore - Transformation, costing 1 Ascension points.",
-        "You decide to unlearn rank 1 of Mental Lore - Transformation, regaining 1 Ascension points.",
+        "You have now achieved rank 1 of Mental Lore - Transformation, costing 1 Ascension Ability points.",
+        "You decide to unlearn rank 1 of Mental Lore - Transformation, regaining 1 Ascension Ability points.",
         "[You are no longer trained in Weapon Technique: Nonexistent Strike.]",
+        # The confirmation prompts arrive before CONFIRM and must not change the rank.
+        "You have chosen to learn rank 40 in Strength at a cost of 8 Ascension Ability points.  If this is acceptable, please enter ASCENSION LEARN CONFIRM within the next 30 seconds to confirm your Ascension Ability choice.  If it is not acceptable, please enter ASCENSION LEARN CANCEL and try again.",
+        "You have chosen to unlearn rank 40 in Strength to regain 8 Ascension Ability points.  If this is acceptable, please enter ASCENSION UNLEARN CONFIRM within the next 30 seconds to confirm your Ascension Ability choice.  If it is not acceptable, please enter ASCENSION UNLEARN CANCEL and try again.",
       ].each { |line| expect(Lich::Gemstone::Infomon::Parser.parse(line)).to eq(:noop) }
     end
   end
