@@ -34,6 +34,22 @@ module Lich
         RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
         RoomObjs = %r{\'room objs\'>(?<objs>.*)</component>}.freeze
         RoomObjsEmpty = %r{\'room objs\'></component>}.freeze
+        # How the game ends a room objs component it cut short because the room
+        # holds too much: "..., a woven sack and some other stuff.</component>".
+        # Container listings end the same way with "and a lot of other stuff.",
+        # so both are accepted. Anchored to the end of the component's text: a
+        # real object named like this mid-list must not count as a cut.
+        RoomObjsCut = / and (?:some|a lot of) other stuff\.\z/.freeze
+        # The full list continues the cut component's text with another object.
+        RoomObjsContinued = /\A(?:,| and) /.freeze
+        # A creature's status after its bold name: "(dead)", "(prone)", or the
+        # wordier "which appears dead", "that is caught in a cage of swirling
+        # darkness". The component and the main-stream view of the same room
+        # can word it differently (the view uses the short form once room
+        # descriptions are off), so lists are compared without it.
+        RoomObjStatus = %r{(?<=<popBold/>) (?:\([^()<>]*\)|(?:which|that) [^,<>]*?)(?=, | and |\.?\z)}.freeze
+        # The <nav/> (or <nav rm='...'/>) tag the game sends on every move.
+        Nav = /<nav\b/.freeze
         GroupMembers = %r{<pushStream id="group"/>  (?<member>\w+):}.freeze
         GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
         ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
@@ -113,6 +129,11 @@ module Lich
       # Wall-clock time the game is expected to go down for maintenance, set
       # from a shutdown announcement. nil when no shutdown is pending.
       @@shutdown_at = nil
+
+      # Text of the last room objs component when the game cut it short, minus
+      # the "and some other stuff." marker ("You also see a, b, c"); nil when
+      # that component was complete. See {.full_room_listing}.
+      @@room_objs_cut = nil
 
       # The Saga-identity stream wraps names in object links
       # (<a exist="-10700002" noun="Aldric">Aldric</a>) and currently sends the
@@ -573,6 +594,90 @@ module Lich
         server_string
       end
 
+      # Sets DRRoom.npcs, DRRoom.dead_npcs, DRRoom.room_objs and UserVars.npcs
+      # from a room object list ("You also see ...").
+      #
+      # Only DRRoom and UserVars.npcs are rebuilt from a repaired list.
+      # GameObj.npcs/GameObj.loot and the DR Creature registry are built by
+      # XMLParser from the room objs component alone, so after a cut they still
+      # lack the objects listed after it.
+      # @param objs [String] the list, as {.match_line} leaves it
+      # @return [void]
+      def self.update_room_objs(objs)
+        DRRoom.npcs = find_npcs(objs)
+        UserVars.npcs = DRRoom.npcs
+        DRRoom.dead_npcs = find_dead_npcs(objs)
+        DRRoom.room_objs = find_objects(objs)
+      end
+
+      # Applies a room objs component and records whether it was cut short.
+      #
+      # When a room holds too much, the game ends the room objs component with
+      # "and some other stuff." and leaves out everything after that. The full
+      # list is still sent in the main stream, in the room view that follows the
+      # roomName line on entry and on LOOK:
+      #   <style id=""/>  You also see a, b, c, d and e.
+      # (with LOOK under room descriptions, the description comes first in a
+      # roomDesc preset on the same line). The component's text before the
+      # marker is therefore kept so {.full_room_listing} can recognise that
+      # view and rebuild the room from it.
+      #
+      # The game also resends the component, still cut, whenever something in
+      # the room changes, and no room view follows. Such a refresh is applied
+      # as sent, so an object listed after the cut drops out of DRRoom until
+      # the next room view (a LOOK or the next move). It is not merged with the
+      # room's last full list: the change that caused the refresh may be after
+      # the cut (a creature leaving, a ship pulling out), and a merge would keep
+      # listing what has gone, with nothing to show the list is stale. What a
+      # cut component lists is real, and its trailing "other stuff" entry tells
+      # a script the list is incomplete.
+      #
+      # A complete or empty component clears the cut record, so a complete room
+      # never reparses main-stream text.
+      # @param objs [String] the component's text, as {.match_line} leaves it
+      # @return [void]
+      def self.apply_room_objs(objs)
+        update_room_objs(objs)
+        @@room_objs_cut = Pattern::RoomObjsCut.match?(objs) ? objs.sub(Pattern::RoomObjsCut, '') : nil
+      end
+
+      # +list+ with every creature status removed, for comparing lists.
+      # @param list [String]
+      # @return [String]
+      def self.without_room_obj_status(list)
+        list.gsub(Pattern::RoomObjStatus, '')
+      end
+
+      # The full room object list from a main-stream room view, when the last
+      # room objs component was cut short and +line+ is that same room's view.
+      #
+      # A line is the same room's view only if a "You also see" list in it
+      # starts with the cut component's whole text (every object up to the cut,
+      # in order) followed by another object. Creature statuses are ignored in
+      # the comparison: the view may word them differently ("(dead)" for
+      # "which appears dead"). Another room's view, a container listing or an
+      # unrelated "You also see" line does not match, so it can never overwrite
+      # DRRoom. The record is cleared only by the next complete room objs
+      # component (or a <nav>), not at the prompt, so a later LOOK in the same
+      # room still repairs the list.
+      #
+      # @param line [String] a server line, as {.match_line} leaves it
+      # @return [String, nil] "You also see ..." through the end of the line, or
+      #   nil when there is no cut component or +line+ is not its room view
+      def self.full_room_listing(line)
+        cut = @@room_objs_cut
+        return nil unless cut
+
+        cut = without_room_obj_status(cut.lstrip)
+        start = -1
+        while (start = line.index('You also see ', start + 1))
+          listing = line[start..].rstrip
+          text = without_room_obj_status(listing)
+          return listing if text.start_with?(cut) && Pattern::RoomObjsContinued.match?(text[cut.length..])
+        end
+        nil
+      end
+
       # Main parser entry point. Processes a line of server output
       # and updates various game state objects (DRStats, DRRoom, DRSkill, etc.).
       # Patterns and Flags are matched against {.match_line}; only the inline
@@ -584,6 +689,8 @@ module Lich
         check_events(line)
         begin
           check_game_shutdown(line)
+          # A move starts a new room; its own room objs component follows.
+          @@room_objs_cut = nil if @@room_objs_cut && Pattern::Nav.match?(line)
           if Pattern::InventoryListStart.match?(line)
             # COMPLETE inventory (INV LIST): stage a full replacement and publish
             # it only on the clean terminator (see populate_inventory_get). The
@@ -629,15 +736,14 @@ module Lich
             DRRoom.pcs_prone = find_pcs_prone(players)
             DRRoom.pcs_sitting = find_pcs_sitting(players)
           elsif (match = line.match(Pattern::RoomObjs))
-            objs = match[:objs]&.dup || ''
-            DRRoom.npcs = find_npcs(objs)
-            UserVars.npcs = DRRoom.npcs
-            DRRoom.dead_npcs = find_dead_npcs(objs)
-            DRRoom.room_objs = find_objects(objs)
+            # Also matches the empty component (RoomObjsEmpty never runs).
+            apply_room_objs(match[:objs]&.dup || '')
           elsif Pattern::RoomObjsEmpty.match?(line)
             DRRoom.npcs = []
             DRRoom.dead_npcs = []
             DRRoom.room_objs = []
+          elsif @@room_objs_cut && (full = full_room_listing(line))
+            update_room_objs(full)
           elsif Pattern::GroupMembersEmpty.match?(line)
             DRRoom.group_members = []
           elsif (match = line.match(Pattern::GroupMembers))
