@@ -1,5 +1,47 @@
 # Changelog
 
+## [5.24.0](https://github.com/elanthia-online/lich-5/compare/v5.23.0...v5.24.0) (2026-11-07)
+
+
+### Features
+
+* **dr:** add DRCC.study_instructions ([#2246](https://github.com/elanthia-online/lich-5/issues/2246)) ([b8760bc](https://github.com/elanthia-online/lich-5/commit/b8760bc5c1352640edec48833a8214ec583829dd))
+* **dr:** DRCC get/stow/check_consumables act by held id ([#2260](https://github.com/elanthia-online/lich-5/issues/2260)) ([d34db48](https://github.com/elanthia-online/lich-5/commit/d34db48e22fc8a64f4e601a78de7d3cd7f6622dd))
+* **dr:** DRCC gets crafting items by remembered or feed ids ([#2261](https://github.com/elanthia-online/lich-5/issues/2261)) ([9d762cb](https://github.com/elanthia-online/lich-5/commit/9d762cb216f8f8446b14470fb2c4ac5bf8f7805c))
+* **dr:** DRCI.held_ids, held_id, id_into_hand, worn_ref ([#2257](https://github.com/elanthia-online/lich-5/issues/2257)) ([9ea53b5](https://github.com/elanthia-online/lich-5/commit/9ea53b5c24fc5faa428c63d6e7382092f5dc3f90))
+* **dr:** DRCI.put_away_item_result ([#2258](https://github.com/elanthia-online/lich-5/issues/2258)) ([bd2677a](https://github.com/elanthia-online/lich-5/commit/bd2677ad911ac07d2c094a8e14afb235d3d54169))
+* **dr:** DRCT.order_item_result ([#2259](https://github.com/elanthia-online/lich-5/issues/2259)) ([ea38763](https://github.com/elanthia-online/lich-5/commit/ea38763304ad4b1caa774161e384225a97c293a1))
+
+
+### Bug Fixes
+
+* **all:** detect Saga installs on Windows, Linux, and macOS ([#2252](https://github.com/elanthia-online/lich-5/issues/2252)) ([4db8b09](https://github.com/elanthia-online/lich-5/commit/4db8b092c070e1714461844ef3b0348813036c2c))
+* **all:** end GemCheck timeout children with KILL on Windows ([#2263](https://github.com/elanthia-online/lich-5/issues/2263)) ([58257bf](https://github.com/elanthia-online/lich-5/commit/58257bf1ccef908ec8f676905fba2084b7394167))
+* **all:** follow the promoted detachable client's PID in Frontend.pid ([#2098](https://github.com/elanthia-online/lich-5/issues/2098)) ([274ff78](https://github.com/elanthia-online/lich-5/commit/274ff78cbd0fdd1bd42f3fc2125ff4cff2e5c4dd))
+* **all:** GitHubClient sets open and read timeouts ([#2281](https://github.com/elanthia-online/lich-5/issues/2281)) ([d38c479](https://github.com/elanthia-online/lich-5/commit/d38c47962f1422ca0bfd3d5261bbb220c24f507f))
+* **all:** lich5-update --track checks the DR Scripts file list, not scripts/ ([#2264](https://github.com/elanthia-online/lich-5/issues/2264)) ([a9b4b48](https://github.com/elanthia-online/lich-5/commit/a9b4b48dc3ee9e9b2481edbe6d840a00403188fa))
+* **all:** lich5-update --track refuses a script the repo does not contain ([#2266](https://github.com/elanthia-online/lich-5/issues/2266)) ([41ac0a2](https://github.com/elanthia-online/lich-5/commit/41ac0a2c3d8e1422df3d5bf6171ded05e273b99a))
+* **all:** lich5-update open-uri paths use GitHubClient timeouts ([#2284](https://github.com/elanthia-online/lich-5/issues/2284)) ([b9c1667](https://github.com/elanthia-online/lich-5/commit/b9c1667874959e3b1443bb2943aa70c6833170fd))
+* **all:** lich5-update refuses tracks that never install and cleans up their leftovers ([#2265](https://github.com/elanthia-online/lich-5/issues/2265)) ([9d5032f](https://github.com/elanthia-online/lich-5/commit/9d5032f7f088d46a6fa8138af571f87132f2ff2b))
+* **all:** lich5-update sync reports tracked scripts the repo does not contain ([#2280](https://github.com/elanthia-online/lich-5/issues/2280)) ([626bd84](https://github.com/elanthia-online/lich-5/commit/626bd8464c1d276da6f406170515d80dc03b8c08))
+* **all:** PipeIO waits for input before reading so Windows spawns don't freeze --pipe ([#2289](https://github.com/elanthia-online/lich-5/issues/2289)) ([879b143](https://github.com/elanthia-online/lich-5/commit/879b143a65a71838d28a0a8d28703744ad8deb54))
+* **all:** read the PID a detachable client sends with SET_FRONTEND_PID ([#2094](https://github.com/elanthia-online/lich-5/issues/2094)) ([37136c9](https://github.com/elanthia-online/lich-5/commit/37136c933aadc145e608d966f355192de8aa25e9))
+* **dr:** check the live title before trusting a recycled instance UID ([#2184](https://github.com/elanthia-online/lich-5/issues/2184)) ([af0735b](https://github.com/elanthia-online/lich-5/commit/af0735bab0a49872e7b110354e6c6e3d82e5b45d))
+* **dr:** DRCC.get_crafting_item stops on "You need a free hand" ([#2186](https://github.com/elanthia-online/lich-5/issues/2186)) ([321be03](https://github.com/elanthia-online/lich-5/commit/321be037c8cde20bef461da86bb460d3d914ffcb))
+* **dr:** DRCC.stow_crafting_item and check_consumables report real failures ([#2256](https://github.com/elanthia-online/lich-5/issues/2256)) ([c727a40](https://github.com/elanthia-online/lich-5/commit/c727a403684e59bc086fe7a1eca40e49dc587719))
+* **dr:** DRCC.stow_crafting_item stows a tool that won't fit the bag ([#2245](https://github.com/elanthia-online/lich-5/issues/2245)) ([bae103f](https://github.com/elanthia-online/lich-5/commit/bae103f5ac19c5feaef038d4b7ead7fad2c0c6d8))
+* **dr:** DRCC.study_instructions ignores a quoted study-again prompt ([#2250](https://github.com/elanthia-online/lich-5/issues/2250)) ([d00d0b1](https://github.com/elanthia-online/lich-5/commit/d00d0b1c876468b0e72f2eb1ae6aba61bb926fbc))
+* **dr:** DRCI.lift? matches "You need a free hand" ([#2215](https://github.com/elanthia-online/lich-5/issues/2215)) ([418464e](https://github.com/elanthia-online/lich-5/commit/418464eefe7883d4c02e8ab8dd0c6066f09d41c2))
+* **dr:** DRCT.order_item treats a hands-full refusal as a failed order ([#2255](https://github.com/elanthia-online/lich-5/issues/2255)) ([4d6ed51](https://github.com/elanthia-online/lich-5/commit/4d6ed51fae286efbaeb35f607281012b0ab07cbb))
+* **dr:** only let the game's own bank lines change DRBanking balances ([#2096](https://github.com/elanthia-online/lich-5/issues/2096)) ([fea28ef](https://github.com/elanthia-online/lich-5/commit/fea28ef7ce366b35a050c3ea0917b7ad1c94e376))
+* **dr:** read the full room listing when the room objs component is cut short ([#2287](https://github.com/elanthia-online/lich-5/issues/2287)) ([20c9acf](https://github.com/elanthia-online/lich-5/commit/20c9acfc2579bf56222b94701ac70a19becf531d))
+* **dr:** refresh DR stats and skills when the character comes back to life ([#2097](https://github.com/elanthia-online/lich-5/issues/2097)) ([ad66122](https://github.com/elanthia-online/lich-5/commit/ad66122ca71c99bda5af4ffeb607055e45918492))
+* **dr:** treat a SlackBot token check Slack could not answer as no answer ([#2095](https://github.com/elanthia-online/lich-5/issues/2095)) ([89fa0fd](https://github.com/elanthia-online/lich-5/commit/89fa0fd77758e6d4c4385c6194dbc65535e47a3d))
+* **gs:** detect Voln Symbol of Sleep reveals in Overwatch ([#2253](https://github.com/elanthia-online/lich-5/issues/2253)) ([a12caea](https://github.com/elanthia-online/lich-5/commit/a12caea8d1f26793f7d27720a84141afe117746c))
+* **gs:** keep a busy infomon.db from freezing Lich or leaking the DB lock ([#2247](https://github.com/elanthia-online/lich-5/issues/2247)) ([af57c76](https://github.com/elanthia-online/lich-5/commit/af57c763fa127d26d13a6f8fab70868442b04d6e))
+* **gs:** resolve effect names by id when ;magic sees duplicate names ([#2249](https://github.com/elanthia-online/lich-5/issues/2249)) ([6841bb2](https://github.com/elanthia-online/lich-5/commit/6841bb2879b9a32792365248c7a98133a120afb1))
+* **gs:** stash_hands stops dragging once the item has left the hand ([#2286](https://github.com/elanthia-online/lich-5/issues/2286)) ([adebeef](https://github.com/elanthia-online/lich-5/commit/adebeef0c98ee4c88964e95917be3ded85f10157))
+
 ## [5.23.0](https://github.com/elanthia-online/lich-5/compare/v5.22.0...v5.23.0) (2026-10-27)
 
 
