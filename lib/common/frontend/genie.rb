@@ -2,5 +2,5 @@
 
 {
   id: :genie,
-  capabilities: %i[xml mono]
+  capabilities: %i[xml streams mono]
 }
