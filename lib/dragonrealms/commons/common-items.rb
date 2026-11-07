@@ -997,8 +997,12 @@ module Lich
       # With no container, an item that is worn ({.worn?}) or in either hand
       # answers true without sending anything, so two scripts checking at
       # once (e.g. play and tarantula at login) can't take each other's TAP
-      # replies. Anything else, including every container check and any
-      # item given as other than a String, is tapped.
+      # replies. DR does not promise which item TAP finds as the "second",
+      # so a name starting with an ordinal asks for at least that many:
+      # "second packet" answers true when two packets are worn or held.
+      # Anything else, including every container check, too few worn or held
+      # matches (the rest may be stowed) and any item given as other than a
+      # String, is tapped.
       #
       # @param item [String] item noun to check
       # @param container [String, nil] container to check in, or nil for general inventory
@@ -1008,7 +1012,7 @@ module Lich
       #   DRCI.exists?("deed")
       #   DRCI.exists?("sword", "backpack")
       def exists?(item, container = nil)
-        return true if container.nil? && item.is_a?(String) && (worn?(item) || matching_held_ids([], item).any?)
+        return true if container.nil? && worn_or_held_at_least?(item)
 
         case tap(item, container)
         when *TAP_SUCCESS_PATTERNS
@@ -1364,6 +1368,30 @@ module Lich
         words[0...-1].all? { |word| name_words.include?(word) }
       end
 
+      # Whether the worn list and the hands already show as many items as a
+      # name asks for: one, or the ordinal's number for a name starting with
+      # one ("second packet" asks for two). Sends no game command.
+      #
+      # @param item [String, Object] noun phrase, optionally "my ..."; anything
+      #   other than a String gives false
+      # @return [Boolean]
+      # @api private
+      def worn_or_held_at_least?(item)
+        return false unless item.is_a?(String)
+
+        words = item.strip.sub(/\Amy\s+/i, '').split
+        needed = 1
+        if (ordinal = Array($ORDINALS).index(words.first.to_s.downcase))
+          needed = ordinal + 1
+          words.shift
+        end
+        return false if words.empty?
+
+        name = words.join(' ')
+        worn_ids = GameObj.inv.to_a.select { |obj| held_obj_matches?(obj, name) }.filter_map { |obj| held_obj_id(obj) }
+        (worn_ids + matching_held_ids([], name)).uniq.size >= needed
+      end
+
       # @param word [String] the first word of a name, downcased
       # @return [Boolean] whether it is an ordinal ("second") or "other"
       # @api private
@@ -1398,7 +1426,7 @@ module Lich
         end.uniq
       end
 
-      private_class_method :held_obj_matches?, :worn_obj_matches?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
+      private_class_method :held_obj_matches?, :worn_obj_matches?, :worn_or_held_at_least?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #

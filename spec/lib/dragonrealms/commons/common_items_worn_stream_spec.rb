@@ -201,6 +201,50 @@ RSpec.describe 'DRCI worn checks from the worn-items stream' do
         expect(drci.exists?('#424242')).to be true
         expect(sent).to eq(['tap #424242 '])
       end
+
+      # DR does not promise which item TAP finds as the "second", so an
+      # ordinal name asks for a count: "second pack" means "at least two".
+      context 'with an ordinal name' do
+        it 'answers true with no game command when that many are worn (two packs)' do
+          expect(drci.exists?('second pack')).to be true
+          expect(drci.exists?('my second pack')).to be true
+          expect(drci.exists?('Second PACK')).to be true
+          expect(drci.exists?('first pack')).to be true
+          expect(sent).to be_empty
+        end
+
+        it 'counts only worn items the rest of the name matches' do
+          game([not_found])
+          expect(drci.exists?("second traveler's pack")).to be false
+          expect(sent).to eq(["tap my second traveler's pack "])
+        end
+
+        it 'taps when fewer are worn or held than asked for (the rest may be stowed)' do
+          game(['You tap a spidersilk pack inside your duffel bag.'])
+          expect(drci.exists?('third pack')).to be true
+          expect(sent).to eq(['tap my third pack '])
+        end
+
+        it 'counts worn and held items together, each id once' do
+          gameobj.new_right_hand('777', 'crystal', 'quartz crystal')
+          expect(drci.exists?('second crystal')).to be true
+          expect(sent).to be_empty
+        end
+
+        it 'does not count one item twice when it is in a hand and still in the worn list' do
+          gameobj.new_right_hand('15705096', 'crystal', 'sanowret crystal')
+          game([not_found])
+          expect(drci.exists?('second crystal')).to be false
+          expect(sent).to eq(['tap my second crystal '])
+        end
+
+        it 'taps a bare ordinal and an "other" name' do
+          game([not_found], [not_found])
+          expect(drci.exists?('second')).to be false
+          expect(drci.exists?('other pack')).to be false
+          expect(sent).to eq(['tap my second ', 'tap my other pack '])
+        end
+      end
     end
 
     describe '.inside?' do
