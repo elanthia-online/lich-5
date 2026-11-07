@@ -25,6 +25,7 @@ function fixture(target) {
     replaceChildren(...children) { this.children.forEach(child => { child.isConnected = false; }); this.children = []; this.append(...children); }
     focus() { document.activeElement = this; }
     closest() { return null; }
+    contains(other) { for (let node = other; node; node = node.parent) if (node === this) return true; return false; }
     click() { this.listeners.click?.({}); }
     getClientRects() { return this.hidden ? [] : [this.getBoundingClientRect()]; }
     querySelector(selector) {
@@ -41,21 +42,31 @@ function fixture(target) {
     querySelectorAll(selector) {
       return this.children.flatMap(child => [
         ...(selector === '[data-width-groups]' && child.dataset.widthGroups ? [child] : []),
+        ...(selector === 'dialog[open]' && child.tagName === 'dialog' && child.open ? [child] : []),
         ...(child.querySelectorAll?.(selector) || [])
       ]);
     }
     setAttribute(name, value) { this.attributes[name] = value; }
     setPointerCapture() {}
     getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight }; }
-    addEventListener(name, callback) { this.listeners[name] = callback; }
+    addEventListener(name, callback) {
+      // Several element handlers may share an event; call each in registration order.
+      const prior = this.listeners[name];
+      this.listeners[name] = prior ? event => { prior(event); callback(event); } : callback;
+    }
     remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
     replaceWith(next) { const parent = this.parent; if (parent) { this.remove(); parent.append(next); } }
     showModal() { this.open = true; }
   }
   const elements = Object.fromEntries(['pages', 'status', 'notifications', 'announcer'].map(id => [id, new Element('div')]));
   const documentEvents = {};
-  const document = { title: '', activeElement: null, createElement: tag => new Element(tag),
-    getElementById: id => elements[id], addEventListener(name, callback) { documentEvents[name] = callback; } };
+  const document = { title: '', activeElement: null, body: new Element('body'), createElement: tag => new Element(tag),
+    getElementById: id => elements[id], addEventListener(name, callback) {
+      // Several document handlers may share an event; call each in registration order.
+      const prior = documentEvents[name];
+      documentEvents[name] = prior ? event => { prior(event); callback(event); } : callback;
+    },
+    querySelectorAll: selector => elements.pages.querySelectorAll(selector) };
   const sent = [], resized = [], listeners = {}, windowEvents = {};
   let timer = 0;
   const frames = [];
@@ -70,6 +81,7 @@ function fixture(target) {
     requestAnimationFrame: work => frames.push(work), resizeTo: (...size) => resized.push(size), setTimeout: () => ++timer, clearTimeout() {},
     setInterval: () => ++timer, clearInterval() {},
     addEventListener: (name, callback) => { windowEvents[name] = callback; },
+    getComputedStyle: element => ({ visibility: element.style.visibility || 'visible' }),
     removeEventListener: name => { delete windowEvents[name]; } };
   const context = vm.createContext({ window, document, WebSocket, URL, URLSearchParams,
     CSS: { escape: value => value }, queueMicrotask: work => work() });
