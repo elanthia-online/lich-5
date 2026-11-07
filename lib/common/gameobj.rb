@@ -1065,6 +1065,18 @@ module Lich
         @@staging_all_containers = false
       end
 
+      # Discards an in-flight full container refresh ({.begin_all_containers})
+      # without publishing it, leaving the previously published contents
+      # visible. Unlike {.discard_inv_refresh} it leaves the worn-list staging
+      # alone, so it cannot abort a worn-items stream refresh in flight.
+      #
+      # @return [void]
+      def self.discard_all_containers_refresh
+        @@staging_all_contents.each_value { |buf| drop_pending_metadata(buf) }
+        @@staging_all_contents = {}
+        @@staging_all_containers = false
+      end
+
       # Discards every in-flight staged refresh without publishing it.
       #
       # Called by +XMLParser#reset+ after a malformed or truncated fragment

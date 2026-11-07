@@ -735,9 +735,23 @@ module XMLData
       @injuries = value
     end
 
+    # Mirrors XMLParser#stream_feature?. Defaults to the linked (Saga
+    # identity) stream every session uses now; a spec for the legacy stream
+    # sets XMLData.stream_features = [].
+    def stream_features
+      @stream_features ||= [:links]
+    end
+
+    attr_writer :stream_features
+
+    def stream_feature?(feature)
+      stream_features.include?(feature)
+    end
+
     def reset
       @game = "rspec"
       @name = "testing"
+      @stream_features = [:links]
       @dialogs = {}
       @dialog_names = {}
       @injuries = {}
