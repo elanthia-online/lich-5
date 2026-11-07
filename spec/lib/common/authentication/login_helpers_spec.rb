@@ -761,4 +761,28 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.format_launch_flag('gst')).to eq('--GST')
     end
   end
+  describe 'public game label compatibility' do
+    it 'retains the accepted-code order and exact launcher labels' do
+      expected = [
+        ['GS3', 'GemStone IV'], ['GST', 'GemStone IV Prime Test'], ['GSF', 'GemStone IV Shattered'],
+        ['DR', 'DragonRealms'], ['DRX', 'DragonRealms Platinum'], ['DRT', 'DragonRealms Prime Test'],
+        ['DRF', 'DragonRealms Fallen'],
+      ]
+      expect(described_class::GAME_NAMES.to_a).to eq(expected)
+      expect(described_class::GAME_NAMES).to be_frozen
+    end
+
+    it 'keeps the legacy provider, retired GSX and Test labels separate from launcher overrides' do
+      expected = [
+        ['GS3', 'GemStone IV'], ['GSX', 'GemStone IV Platinum'], ['GSF', 'GemStone IV Shattered'],
+        ['GST', 'GemStone IV Test'], ['DR', 'DragonRealms'], ['DRX', 'DragonRealms Platinum'],
+        ['DRF', 'DragonRealms Fallen'], ['DRT', 'DragonRealms Test'],
+      ]
+      expect(described_class::GAME_CODE_TO_NAME.to_a).to eq(expected)
+      expect(described_class::GAME_CODE_TO_NAME).to be_frozen
+      expect(described_class.game_name_from_game_code('GSX')).to eq('GemStone IV Platinum')
+      expect(described_class.game_name_from_game_code('gs3')).to eq(GameConfig::DEFAULT_GAME_NAME)
+      expect(described_class::GAME_NAMES.fetch('GSX', 'Unknown')).to eq('Unknown')
+    end
+  end
 end

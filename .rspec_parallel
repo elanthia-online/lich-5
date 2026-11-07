@@ -1,3 +1,4 @@
 --require ./spec/support/frontend_mock
+--require ./spec/support/real_keychain_fence
 --format progress
 --format ParallelTests::RSpec::RuntimeLogger --out tmp/parallel_runtime_rspec.log
