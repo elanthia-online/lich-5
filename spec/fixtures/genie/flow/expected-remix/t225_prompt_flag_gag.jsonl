@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t225_prompt_flag_gag"}
+{"t":0,"ev":"script-start","script":"t225_prompt_flag_gag","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t225_prompt_flag_gag.cmd]","script":"t225_prompt_flag_gag"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":120,"ev":"in","text":"hide me"}
+{"t":120,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":120,"ev":"prompt-event"}
+{"t":130,"ev":"in","text":"blank this"}
+{"t":130,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":130,"ev":"prompt-event"}
+{"t":140,"ev":"in","text":"shown line"}
+{"t":140,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":140,"ev":"prompt-event"}
+{"t":650,"ev":"echo","text":"cnt=2","script":"t225_prompt_flag_gag"}
+{"t":650,"ev":"print","text":"[Script finished (In 0.65 seconds): t225_prompt_flag_gag.cmd]","script":"t225_prompt_flag_gag"}
+{"t":650,"ev":"script-finish","script":"t225_prompt_flag_gag"}
+{"t":650,"ev":"end","live":0}

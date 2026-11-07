@@ -1,0 +1,21 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"config","files":"<lab>/flow-oracle/tests/t175_cfg/settings.cfg","ignorescriptwarnings":false,"triggeroninput":false,"abortdupescript":true,"maxgosubdepth":50,"scripttimeout":5000}
+{"t":0,"ev":"input","text":".t175_routing_settings"}
+{"t":0,"ev":"script-start","script":"t175_routing_settings","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t175_routing_settings.cmd]","script":"t175_routing_settings"}
+{"t":0,"ev":"send","text":"look","origin":"t175_routing_settings","user":false}
+{"t":60,"ev":"in","text":"<pushStream id='thoughts'/>[General] thought<popStream/>"}
+{"t":120,"ev":"in","text":"<stream id='thoughts'>stream thought</stream>"}
+{"t":180,"ev":"in","text":"<pushStream id='combat'/>combat line<popStream/>"}
+{"t":240,"ev":"in","text":"Link <d cmd='look rock'>rock</d> and <d>plain</d> here."}
+{"t":240,"ev":"echo","text":"L:[Link {rock:look rock} and {plain:plain} here.]","script":"t175_routing_settings"}
+{"t":300,"ev":"in","text":"< You swing at a <pushBold/>goblin<popBold/>."}
+{"t":300,"ev":"echo","text":"L:[< You swing at a goblin.]","script":"t175_routing_settings"}
+{"t":360,"ev":"in","text":"main text"}
+{"t":360,"ev":"echo","text":"L:[main text]","script":"t175_routing_settings"}
+{"t":420,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":420,"ev":"prompt-event"}
+{"t":420,"ev":"echo","text":"L:[> ]","script":"t175_routing_settings"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t175_routing_settings.cmd]","script":"t175_routing_settings"}
+{"t":1000,"ev":"script-finish","script":"t175_routing_settings"}
+{"t":1000,"ev":"end","live":0}

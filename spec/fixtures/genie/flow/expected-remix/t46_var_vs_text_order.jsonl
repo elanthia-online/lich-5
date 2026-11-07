@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t46_var_vs_text_order"}
+{"t":0,"ev":"script-start","script":"t46_var_vs_text_order","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t46_var_vs_text_order.cmd]","script":"t46_var_vs_text_order"}
+{"t":0,"ev":"send","text":"look","origin":"t46_var_vs_text_order","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>"}
+{"t":10,"ev":"echo","text":"VAR-ACTION 50","script":"t46_var_vs_text_order"}
+{"t":10,"ev":"in","text":"Ouch, that hurt."}
+{"t":10,"ev":"echo","text":"TEXT-ACTION","script":"t46_var_vs_text_order"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":2000,"ev":"echo","text":"done","script":"t46_var_vs_text_order"}
+{"t":2000,"ev":"print","text":"[Script finished (In 2.00 seconds): t46_var_vs_text_order.cmd]","script":"t46_var_vs_text_order"}
+{"t":2000,"ev":"script-finish","script":"t46_var_vs_text_order"}
+{"t":2000,"ev":"end","live":0}

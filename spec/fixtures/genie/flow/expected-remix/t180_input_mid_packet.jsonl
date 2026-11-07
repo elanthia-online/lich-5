@@ -1,0 +1,36 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t180_input_mid_packet"}
+{"t":0,"ev":"script-start","script":"t180_input_mid_packet","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t180_input_mid_packet.cmd]","script":"t180_input_mid_packet"}
+{"t":0,"ev":"script-start","script":"_t180_wl","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t180_wl.cmd]","script":"_t180_wl"}
+{"t":0,"ev":"queue","text":"look","delay":1,"script":"t180_input_mid_packet"}
+{"t":1000,"ev":"send","text":"look","origin":"","user":false}
+{"t":1000,"ev":"trigger-fire","pattern":"^look$","text":"look"}
+{"t":1000,"ev":"cmdecho","text":"trig-look","window":""}
+{"t":1000,"ev":"echo","text":"own-act:look","script":"t180_input_mid_packet"}
+{"t":1510,"ev":"in","text":"filler1"}
+{"t":1520,"ev":"echo","text":"wl-saw-look","script":"_t180_wl"}
+{"t":1820,"ev":"in","text":"GAMEHELLO"}
+{"t":1820,"ev":"send","text":"smile","origin":"t180_input_mid_packet","user":false}
+{"t":1820,"ev":"trigger-fire","pattern":"^smile$","text":"smile"}
+{"t":1820,"ev":"cmdecho","text":"trig-smile","window":""}
+{"t":1820,"ev":"echo","text":"own-act:smile","script":"t180_input_mid_packet"}
+{"t":1830,"ev":"echo","text":"wl-saw-smile","script":"_t180_wl"}
+{"t":2000,"ev":"send","text":"nod","origin":"t180_input_mid_packet","user":false}
+{"t":2000,"ev":"trigger-fire","pattern":"^nod$","text":"nod"}
+{"t":2000,"ev":"echo","text":"own-act:nod","script":"t180_input_mid_packet"}
+{"t":2010,"ev":"send","text":"bow","origin":"","user":false}
+{"t":2010,"ev":"trigger-fire","pattern":"^bow$","text":"bow"}
+{"t":2010,"ev":"cmdecho","text":"trig-bow","window":""}
+{"t":2010,"ev":"echo","text":"own-act:bow","script":"t180_input_mid_packet"}
+{"t":2330,"ev":"in","text":"filler2"}
+{"t":2340,"ev":"echo","text":"wl-saw-bow","script":"_t180_wl"}
+{"t":2340,"ev":"print","text":"[Script finished (In 2.34 seconds): _t180_wl.cmd]","script":"_t180_wl"}
+{"t":2340,"ev":"script-finish","script":"_t180_wl"}
+{"t":3540,"ev":"in","text":"filler3"}
+{"t":5000,"ev":"echo","text":"done","script":"t180_input_mid_packet"}
+{"t":5000,"ev":"print","text":"[Script finished (In 5.00 seconds): t180_input_mid_packet.cmd]","script":"t180_input_mid_packet"}
+{"t":5000,"ev":"script-finish","script":"t180_input_mid_packet"}
+{"t":5050,"ev":"in","text":"filler4"}
+{"t":6060,"ev":"end","live":0}

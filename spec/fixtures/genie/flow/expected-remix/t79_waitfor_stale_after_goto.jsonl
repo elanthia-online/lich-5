@@ -1,0 +1,14 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t79_waitfor_stale_after_goto"}
+{"t":0,"ev":"script-start","script":"t79_waitfor_stale_after_goto","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t79_waitfor_stale_after_goto.cmd]","script":"t79_waitfor_stale_after_goto"}
+{"t":110,"ev":"in","text":"go"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":220,"ev":"in","text":"You foo"}
+{"t":220,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":220,"ev":"prompt-event"}
+{"t":1120,"ev":"echo","text":"after [foo]","script":"t79_waitfor_stale_after_goto"}
+{"t":1120,"ev":"print","text":"[Script finished (In 1.12 seconds): t79_waitfor_stale_after_goto.cmd(9)]","script":"t79_waitfor_stale_after_goto"}
+{"t":1120,"ev":"script-finish","script":"t79_waitfor_stale_after_goto"}
+{"t":1120,"ev":"end","live":0}

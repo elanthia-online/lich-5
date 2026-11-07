@@ -1,0 +1,21 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t222_math_eval_args"}
+{"t":0,"ev":"script-start","script":"t222_math_eval_args","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t222_math_eval_args.cmd]","script":"t222_math_eval_args"}
+{"t":0,"ev":"var","name":"$a","value":"3","src":"cmd"}
+{"t":0,"ev":"var","name":"$b","value":"12","src":"cmd"}
+{"t":0,"ev":"var","name":"$c","value":"1","src":"cmd"}
+{"t":0,"ev":"var","name":"$d","value":"a b","src":"cmd"}
+{"t":0,"ev":"var","name":"$n","value":"5","src":"cmd"}
+{"t":0,"ev":"var","name":"$n","value":"7","src":"cmd"}
+{"t":0,"ev":"var","name":"$n","value":"0","src":"cmd"}
+{"t":0,"ev":"cmdecho","text":"Invalid #math expression: n","window":""}
+{"t":0,"ev":"var","name":"$nn","value":"1","src":"cmd"}
+{"t":0,"ev":"var","name":"$z","value":"abc","src":"cmd"}
+{"t":0,"ev":"var","name":"$z","value":"2","src":"cmd"}
+{"t":0,"ev":"var","name":"$z","value":"2","src":"cmd"}
+{"t":0,"ev":"cmdecho","text":"Invalid #math expression: z bogus 2","window":""}
+{"t":0,"ev":"echo","text":"a=3 b=12 c=1 d=a b n=0 nn=1 z=2","script":"t222_math_eval_args"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t222_math_eval_args.cmd]","script":"t222_math_eval_args"}
+{"t":0,"ev":"script-finish","script":"t222_math_eval_args"}
+{"t":10,"ev":"end","live":0}

@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t35_action_put_send_in_rt"}
+{"t":0,"ev":"script-start","script":"t35_action_put_send_in_rt","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t35_action_put_send_in_rt.cmd]","script":"t35_action_put_send_in_rt"}
+{"t":0,"ev":"send","text":"swing","origin":"t35_action_put_send_in_rt","user":false}
+{"t":10,"ev":"expect-ok","want":"swing","got":"swing"}
+{"t":10,"ev":"in","text":"You swing."}
+{"t":10,"ev":"in","text":"<roundTime value='1700000004'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":4}
+{"t":10,"ev":"prompt-event"}
+{"t":1020,"ev":"in","text":"Then thunder happens."}
+{"t":1020,"ev":"send","text":"react-put thunder","origin":"t35_action_put_send_in_rt","user":false}
+{"t":1020,"ev":"in","text":"Now rain occurs."}
+{"t":1020,"ev":"queue","text":"react-send rain","delay":0,"script":"t35_action_put_send_in_rt"}
+{"t":1020,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1020,"ev":"prompt-event"}
+{"t":4010,"ev":"send","text":"react-send rain","origin":"","user":false}
+{"t":4010,"ev":"echo","text":"after-rt","script":"t35_action_put_send_in_rt"}
+{"t":4010,"ev":"print","text":"[Script finished (In 4.01 seconds): t35_action_put_send_in_rt.cmd]","script":"t35_action_put_send_in_rt"}
+{"t":4010,"ev":"script-finish","script":"t35_action_put_send_in_rt"}
+{"t":6030,"ev":"end","live":0}

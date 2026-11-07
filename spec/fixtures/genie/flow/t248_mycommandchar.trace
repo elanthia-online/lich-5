@@ -1,0 +1,5 @@
+WAIT 100
+INPUT north
+WAIT 100
+INPUT /spell typed
+WAIT 600

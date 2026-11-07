@@ -1,0 +1,6 @@
+WAIT 100
+IN Calc now
+WAIT 100
+INPUT #evalmath 3+3
+INPUT #if {1} {typed-if}
+WAIT 100

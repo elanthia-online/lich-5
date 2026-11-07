@@ -1,0 +1,37 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t210_wp9_debug"}
+{"t":0,"ev":"script-start","script":"t210_wp9_debug","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t210_wp9_debug.cmd]","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd(4): setvariable x 1","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd: if evaluate: 1 = 1","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd: if returned: True","script":"t210_wp9_debug"}
+{"t":0,"ev":"echo","text":"yes","script":"t210_wp9_debug"}
+{"t":0,"ev":"error","text":"[Script error in t210_wp9_debug.cmd(6): Eval (%nope = 1) contains variable character '%'. Did you use an unassigned variable?]","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd: if evaluate: %nope = 1","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd: if returned: False","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd(8): gosub sub","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd(21): goto sub2","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd(23): return","script":"t210_wp9_debug"}
+{"t":0,"ev":"debug","text":"t210_wp9_debug.cmd(9): pause 0.1","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(10): math: x add 1","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(10): math result: x=2","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(11): eval: y 1+1","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(11): eval result: y=1","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(12): evalmath: z 2*3","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(12): evalmath result: z=6","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(13): counter: add 2","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(13): math result: c=2","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(14): deletevariable y","script":"t210_wp9_debug"}
+{"t":100,"ev":"debug","text":"t210_wp9_debug.cmd(16): matchwait","script":"t210_wp9_debug"}
+{"t":310,"ev":"in","text":"boom"}
+{"t":310,"ev":"debug","text":"t210_wp9_debug.cmd(7): action triggered: ^boom","script":"t210_wp9_debug"}
+{"t":310,"ev":"debug","text":"t210_wp9_debug.cmd(7): action commands: echo act","script":"t210_wp9_debug"}
+{"t":310,"ev":"echo","text":"act","script":"t210_wp9_debug"}
+{"t":310,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":310,"ev":"prompt-event"}
+{"t":320,"ev":"debug","text":"t210_wp9_debug.cmd: match goto lbl","script":"t210_wp9_debug"}
+{"t":320,"ev":"debug","text":"t210_wp9_debug.cmd(17): passing label: lbl","script":"t210_wp9_debug"}
+{"t":320,"ev":"echo","text":"err=Eval (%nope = 1) contains variable character '%'. Did you use an unassigned variable?","script":"t210_wp9_debug"}
+{"t":320,"ev":"print","text":"[Script finished (In 0.32 seconds): t210_wp9_debug.cmd(19)]","script":"t210_wp9_debug"}
+{"t":320,"ev":"script-finish","script":"t210_wp9_debug"}
+{"t":320,"ev":"end","live":0}

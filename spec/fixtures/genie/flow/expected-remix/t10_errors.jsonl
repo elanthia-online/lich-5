@@ -1,0 +1,9 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t10_errors"}
+{"t":0,"ev":"script-start","script":"t10_errors","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t10_errors.cmd]","script":"t10_errors"}
+{"t":0,"ev":"echo","text":"one","script":"t10_errors"}
+{"t":0,"ev":"error","text":"[Script error in t10_errors.cmd(2): Unknown label from GOTO: nowhere]","script":"t10_errors"}
+{"t":0,"ev":"print","text":"[Script aborted! (Run time: 0.00 seconds): t10_errors.cmd]","script":"t10_errors"}
+{"t":0,"ev":"script-finish","script":"t10_errors"}
+{"t":10,"ev":"end","live":0}

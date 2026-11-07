@@ -1,0 +1,6 @@
+WAIT 100
+IN go
+PROMPT
+WAIT 100
+IN You foo
+PROMPT

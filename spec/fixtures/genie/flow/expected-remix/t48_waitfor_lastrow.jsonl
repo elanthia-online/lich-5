@@ -1,0 +1,12 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t48_waitfor_lastrow"}
+{"t":0,"ev":"script-start","script":"t48_waitfor_lastrow","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t48_waitfor_lastrow.cmd]","script":"t48_waitfor_lastrow"}
+{"t":0,"ev":"send","text":"look","origin":"t48_waitfor_lastrow","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"You see nothing."}
+{"t":20,"ev":"echo","text":"resumed","script":"t48_waitfor_lastrow"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t48_waitfor_lastrow.cmd]","script":"t48_waitfor_lastrow"}
+{"t":20,"ev":"script-finish","script":"t48_waitfor_lastrow"}
+{"t":5020,"ev":"in","text":"Something else."}
+{"t":5030,"ev":"end","live":0}

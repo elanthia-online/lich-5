@@ -1,0 +1,25 @@
+IN START
+PROMPT
+IN <dialogData id='minivitals'><progressBar id='health' value='99' text='health 99%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+PROMPT
+PROMPT
+IN <pushStream id="thoughts"/>Someone thinks loudly.<popStream/>
+PROMPT
+IN You feel fine.
+PROMPT
+PROMPT
+EXPECT step2
+PROMPT
+PROMPT
+WAIT 1000
+PROMPT
+PROMPT
+WAIT 1000
+PROMPT
+WAIT 1000
+PROMPT
+PROMPT
+WAIT 1000
+PROMPT
+IN FINAL
+WAIT 500

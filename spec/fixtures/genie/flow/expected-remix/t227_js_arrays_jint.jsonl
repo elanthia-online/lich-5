@@ -1,0 +1,71 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t227_js_arrays_jint"}
+{"t":0,"ev":"script-start","script":"t227_js_arrays_jint","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t227_js_arrays_jint.cmd]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(4): i is not defined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"i-before [undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"push One|Two","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"push2 One|Two|x|y|undefined||5|true|1500","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"pushempty [w]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"pushblank []","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"unshift Two|Three","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"unshiftempty [q|]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"concat One|Two|x|y|undefined||5|true|1500|p|q / undefined|12","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep1 a|b|c|||z","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep2 a|b|c","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep3 a|7|0.5","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep4 x|y|7|0.5","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep5 x|y","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep6 [x|y||]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(49): ]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(50): ]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"rep7 [x|y||]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"sort-string undefined","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"sort-string2 b|a","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(57): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(58): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(59): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"sort b|a","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"i-after-sort [0]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(63): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"fi [undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(65): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(66): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(67): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(68): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(69): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(70): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(71): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(72): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"after-throws b|a [undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(74): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"i-findmax [1]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(77): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(78): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(79): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(80): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(81): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"i-global [0]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(84): j is not defined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"j-before [undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(86): Property 'length' of object is not a function]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"j-after [0]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"ba foo|bar|baz|apple and pie","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"ba2 []","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"ba3 42","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(95): Cannot read property '0' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(96): Cannot read property '0' of null]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(97): Cannot read property 'toString' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(98): Cannot read property 'toString' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(99): Cannot read property '0' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(100): srch is not defined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(101): Cannot read property '0' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(102): Cannot read property 'toString' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(103): Cannot read property '0' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"error","text":"[Script error in t227_js_arrays_jint.cmd(104): Cannot read property '0' of undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"unchanged One|Two|x|y|undefined||5|true|1500|p|q / foo|bar|baz|apple and pie / b|a","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"res [undefined] One|Two|x|y|undefined||5|true|1500|p|q|t","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"echo","text":"res2 [undefined] [undefined]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t227_js_arrays_jint.cmd]","script":"t227_js_arrays_jint"}
+{"t":0,"ev":"script-finish","script":"t227_js_arrays_jint"}
+{"t":10,"ev":"end","live":0}

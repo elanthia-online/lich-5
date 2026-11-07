@@ -1,0 +1,36 @@
+IN <streamWindow id='room' title='Room' subtitle=" - [Shard, Garden Crescent] (2010671)" location='center' target='drop' ifClosed='' resident='true'/>
+IN <component id='room desc'>Snow-white lilies border the edge of a sprawling estate to the east.  Across the street, a shallow moat surrounding an arching building boasts slender kokona reeds that sway in only the stiffest breeze.</component>
+IN <component id='room objs'>You also see <pushBold/>a Shard sentinel<popBold/>.</component>
+IN <component id='room players'></component>
+IN <component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>
+IN <compass><dir value="n"/><dir value="se"/></compass><component id='room objs'>You also see <pushBold/>a Shard sentinel<popBold/>.</component>
+PROMPT
+IN STEP1
+WAIT 200
+IN <component id='room objs'>You also see <pushBold/>an elder Adan'f sorcerer<popBold/> that is trying to remain hidden and <pushBold/>an elder Adan'f sorcerer<popBold/> that is surrounded by a shimmering shield.</component>
+IN <component id='room players'>Also here: Tester.</component>
+PROMPT
+IN STEP2
+WAIT 200
+IN <component id='room objs'>You also see <pushBold/>an Adan'f blood warrior<popBold/>, <pushBold/>an Adan'f blood warrior<popBold/> and <pushBold/>a goblin<popBold/> which appears dead, <pushBold/>a rat<popBold/> (dead), "a quoted rock" and <pushBold/>a kobold<popBold/> that is lying down.</component>
+IN <component id='room players'>Also here: Foo who is lying down and Lord "Bar" the Brave.</component>
+PROMPT
+IN STEP3
+WAIT 200
+IN <component id='room desc'>A "quoted" desc &amp; more &lt;here&gt;.</component>
+PROMPT
+IN STEP4
+WAIT 200
+IN <component id='room objs'>  You also see a box; a rock &apos;n&apos; roll, <pushBold/>Tom &amp; Jerry<popBold/>.</component>
+PROMPT
+IN STEP5
+WAIT 200
+IN <component id='room objs'>You also see a ghost&nbsp;light.</component>
+IN <streamWindow id='room' title='Room' subtitle=" - [Crossing, Town Green]" location='center' target='drop'/>
+PROMPT
+IN STEP6
+WAIT 200
+IN <streamWindow id='room' title='Room' subtitle=" - The Void" location='center' target='drop'/>
+IN <component id='room objs'>You also see <pushBold/>a bat<popBold/>, <pushBold/>a bat<popBold/></component>
+PROMPT
+IN STEP7

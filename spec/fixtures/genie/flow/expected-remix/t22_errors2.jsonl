@@ -1,0 +1,8 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t22_errors2"}
+{"t":0,"ev":"script-start","script":"t22_errors2","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t22_errors2.cmd]","script":"t22_errors2"}
+{"t":0,"ev":"echo","text":"after","script":"t22_errors2"}
+{"t":0,"ev":"print","text":"[Script finished (In 0 seconds): t22_errors2.cmd(3)]","script":"t22_errors2"}
+{"t":0,"ev":"script-finish","script":"t22_errors2"}
+{"t":10,"ev":"end","live":0}

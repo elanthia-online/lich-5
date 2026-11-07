@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t192_wp9_match_unknown_label"}
+{"t":0,"ev":"script-start","script":"t192_wp9_match_unknown_label","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t192_wp9_match_unknown_label.cmd]","script":"t192_wp9_match_unknown_label"}
+{"t":110,"ev":"in","text":"hello"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":120,"ev":"error","text":"[Script error in t192_wp9_match_unknown_label.cmd: Unknown label from MATCH command: nolabel]","script":"t192_wp9_match_unknown_label"}
+{"t":120,"ev":"print","text":"[Script moving to scripterror label (t192_wp9_match_unknown_label.cmd)]","script":"t192_wp9_match_unknown_label"}
+{"t":130,"ev":"echo","text":"se Unknown label from MATCH command: nolabel","script":"t192_wp9_match_unknown_label"}
+{"t":130,"ev":"print","text":"[Script finished (In 0.13 seconds): t192_wp9_match_unknown_label.cmd]","script":"t192_wp9_match_unknown_label"}
+{"t":130,"ev":"script-finish","script":"t192_wp9_match_unknown_label"}
+{"t":130,"ev":"end","live":0}

@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t112_inline_option_branches"}
+{"t":0,"ev":"script-start","script":"t112_inline_option_branches","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t112_inline_option_branches.cmd]","script":"t112_inline_option_branches"}
+{"t":0,"ev":"send","text":"look","origin":"t112_inline_option_branches","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"C"}
+{"t":10,"ev":"echo","text":"T1","script":"t112_inline_option_branches"}
+{"t":10,"ev":"in","text":"c"}
+{"t":10,"ev":"echo","text":"T1","script":"t112_inline_option_branches"}
+{"t":10,"ev":"in","text":"Q"}
+{"t":10,"ev":"in","text":"q"}
+{"t":10,"ev":"echo","text":"T2","script":"t112_inline_option_branches"}
+{"t":10,"ev":"in","text":"aB"}
+{"t":10,"ev":"echo","text":"T1","script":"t112_inline_option_branches"}
+{"t":10,"ev":"in","text":"MN"}
+{"t":10,"ev":"echo","text":"T3","script":"t112_inline_option_branches"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t112_inline_option_branches.cmd]","script":"t112_inline_option_branches"}
+{"t":1000,"ev":"script-finish","script":"t112_inline_option_branches"}
+{"t":1000,"ev":"end","live":0}

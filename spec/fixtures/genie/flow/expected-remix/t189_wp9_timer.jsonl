@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t189_wp9_timer"}
+{"t":0,"ev":"script-start","script":"t189_wp9_timer","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t189_wp9_timer.cmd]","script":"t189_wp9_timer"}
+{"t":0,"ev":"echo","text":"t0=%t","script":"t189_wp9_timer"}
+{"t":0,"ev":"echo","text":"bare=%t","script":"t189_wp9_timer"}
+{"t":1500,"ev":"echo","text":"t=1.5","script":"t189_wp9_timer"}
+{"t":1500,"ev":"echo","text":"stopped=1.5","script":"t189_wp9_timer"}
+{"t":3000,"ev":"echo","text":"resumed=2","script":"t189_wp9_timer"}
+{"t":3000,"ev":"echo","text":"twice=2","script":"t189_wp9_timer"}
+{"t":3000,"ev":"echo","text":"cleared=0","script":"t189_wp9_timer"}
+{"t":5000,"ev":"echo","text":"two=2","script":"t189_wp9_timer"}
+{"t":5000,"ev":"error","text":"[Script error in t189_wp9_timer.cmd(21): Invalid datetime format in TIMER SETSTART command: notadate]","script":"t189_wp9_timer"}
+{"t":5000,"ev":"print","text":"[Script aborted! (Run time: 5.00 seconds): t189_wp9_timer.cmd]","script":"t189_wp9_timer"}
+{"t":5000,"ev":"script-finish","script":"t189_wp9_timer"}
+{"t":6010,"ev":"end","live":0}

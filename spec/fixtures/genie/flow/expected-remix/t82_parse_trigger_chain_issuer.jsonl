@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t82_parse_trigger_chain_issuer"}
+{"t":0,"ev":"script-start","script":"t82_parse_trigger_chain_issuer","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t82_parse_trigger_chain_issuer.cmd]","script":"t82_parse_trigger_chain_issuer"}
+{"t":100,"ev":"trigger-fire","pattern":"^X$","text":"X"}
+{"t":100,"ev":"echo","text":"act-Y","script":"t82_parse_trigger_chain_issuer"}
+{"t":100,"ev":"echo","text":"after-parse","script":"t82_parse_trigger_chain_issuer"}
+{"t":600,"ev":"echo","text":"timeout","script":"t82_parse_trigger_chain_issuer"}
+{"t":600,"ev":"print","text":"[Script finished (In 0.6 seconds): t82_parse_trigger_chain_issuer.cmd(9)]","script":"t82_parse_trigger_chain_issuer"}
+{"t":600,"ev":"script-finish","script":"t82_parse_trigger_chain_issuer"}
+{"t":2010,"ev":"end","live":0}

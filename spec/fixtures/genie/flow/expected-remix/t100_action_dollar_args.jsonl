@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t100_action_dollar_args"}
+{"t":0,"ev":"script-start","script":"t100_action_dollar_args","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t100_action_dollar_args.cmd]","script":"t100_action_dollar_args"}
+{"t":0,"ev":"send","text":"look","origin":"t100_action_dollar_args","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"Bob says, \"hello there\""}
+{"t":10,"ev":"echo","text":"full=[Bob says, hello there] g1=[Bob] g2=[hello there] g3=[]","script":"t100_action_dollar_args"}
+{"t":10,"ev":"in","text":"esc"}
+{"t":10,"ev":"echo","text":"esc=[$1]","script":"t100_action_dollar_args"}
+{"t":10,"ev":"in","text":"abcdefghij"}
+{"t":10,"ev":"echo","text":"ten=[a0]","script":"t100_action_dollar_args"}
+{"t":10,"ev":"in","text":"opty"}
+{"t":10,"ev":"echo","text":"opt=[][y]","script":"t100_action_dollar_args"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t100_action_dollar_args.cmd]","script":"t100_action_dollar_args"}
+{"t":1000,"ev":"script-finish","script":"t100_action_dollar_args"}
+{"t":1000,"ev":"end","live":0}

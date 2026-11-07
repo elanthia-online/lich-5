@@ -1,0 +1,11 @@
+# WP11/G40: triggers.cfg (written by Remix's own #trigger save, CRLF) is loaded at startup
+# (FormMain.cs:2339 R), so the {charging} trigger fires with no loader script run.
+# The third line arrives after the trigger's own `#class charging off`; the script's
+# `#trigger load` reads Config.ConfigDir\triggers.cfg, which does not exist here, so the
+# registry is left as it was (Load returns false and does not clear, Command.cs:1380-1384 R).
+WAIT 200
+IN You prime a large amount of energy into your canvas widget.
+WAIT 1300
+IN You prime a large amount of energy into your canvas widget.
+WAIT 600
+IN You prime a large amount of energy into your canvas widget.

@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t09_shift_args x y z"}
+{"t":0,"ev":"script-start","script":"t09_shift_args","args":"x y z"}
+{"t":0,"ev":"print","text":"[Script loaded: t09_shift_args.cmd]","script":"t09_shift_args"}
+{"t":0,"ev":"echo","text":"argc=3 1=x 2=y 3=z 0=[x y z]","script":"t09_shift_args"}
+{"t":0,"ev":"echo","text":"argc=2 1=y 2=z 3= 0=[y z]","script":"t09_shift_args"}
+{"t":0,"ev":"echo","text":"sub0=[a b c] sub1=a sub2=b argc=3","script":"t09_shift_args"}
+{"t":0,"ev":"echo","text":"sub0=[a b c] sub1=a sub2=b argc=3","script":"t09_shift_args"}
+{"t":0,"ev":"print","text":"[Script finished (In 0 seconds): t09_shift_args.cmd(5)]","script":"t09_shift_args"}
+{"t":0,"ev":"script-finish","script":"t09_shift_args"}
+{"t":10,"ev":"end","live":0}

@@ -1,0 +1,44 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t130_queue_sequence"}
+{"t":0,"ev":"script-start","script":"t130_queue_sequence","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t130_queue_sequence.cmd]","script":"t130_queue_sequence"}
+{"t":0,"ev":"queue","text":"look","delay":2,"script":"t130_queue_sequence"}
+{"t":0,"ev":"queue","text":"smile","delay":1,"script":"t130_queue_sequence"}
+{"t":0,"ev":"queue","text":"wave","delay":0,"script":"t130_queue_sequence"}
+{"t":0,"ev":"cmdecho","text":"Active command queue: ","window":""}
+{"t":0,"ev":"cmdecho","text":"(2) look","window":""}
+{"t":0,"ev":"cmdecho","text":"(1) smile","window":""}
+{"t":0,"ev":"cmdecho","text":"(1) bow","window":""}
+{"t":0,"ev":"cmdecho","text":"(0) wave","window":""}
+{"t":0,"ev":"cmdecho","text":"Active command queue: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: mil","window":""}
+{"t":0,"ev":"cmdecho","text":"(1) smile","window":""}
+{"t":0,"ev":"echo","text":"queued","script":"t130_queue_sequence"}
+{"t":2000,"ev":"send","text":"look","origin":"","user":false}
+{"t":3000,"ev":"send","text":"smile","origin":"","user":false}
+{"t":4000,"ev":"send","text":"bow","origin":"","user":false}
+{"t":4000,"ev":"send","text":"wave","origin":"","user":false}
+{"t":5000,"ev":"queue","text":"never1","delay":3,"script":"t130_queue_sequence"}
+{"t":5000,"ev":"queue","text":"after-clear","delay":1,"script":"t130_queue_sequence"}
+{"t":6000,"ev":"send","text":"after-clear","origin":"","user":false}
+{"t":7000,"ev":"queue","text":"qa","delay":2,"script":"t130_queue_sequence"}
+{"t":8000,"ev":"send","text":"qb","origin":"","user":false}
+{"t":9000,"ev":"queue","text":"","delay":2,"script":"t130_queue_sequence"}
+{"t":9000,"ev":"queue","text":"gap-after-empty","delay":0,"script":"t130_queue_sequence"}
+{"t":11010,"ev":"send","text":"gap-after-empty","origin":"","user":false}
+{"t":12000,"ev":"queue","text":"#var sv 8","delay":0,"script":"t130_queue_sequence"}
+{"t":12000,"ev":"queue","text":"._t130_helper","delay":0,"script":"t130_queue_sequence"}
+{"t":12000,"ev":"queue","text":" spaced","delay":0,"script":"t130_queue_sequence"}
+{"t":13000,"ev":"send","text":"doit","origin":"","user":false}
+{"t":13000,"ev":"var","name":"$qv","value":"7","src":"cmd"}
+{"t":13000,"ev":"var","name":"$sv","value":"8","src":"cmd"}
+{"t":13000,"ev":"script-start","script":"_t130_helper","args":""}
+{"t":13000,"ev":"print","text":"[Script loaded: _t130_helper.cmd]","script":"_t130_helper"}
+{"t":13000,"ev":"echo","text":"helper-ran","script":"_t130_helper"}
+{"t":13000,"ev":"print","text":"[Script finished (In 0.00 seconds): _t130_helper.cmd]","script":"_t130_helper"}
+{"t":13000,"ev":"script-finish","script":"_t130_helper"}
+{"t":13000,"ev":"send","text":" spaced","origin":"","user":false}
+{"t":14000,"ev":"echo","text":"qv=7 sv=8","script":"t130_queue_sequence"}
+{"t":14000,"ev":"print","text":"[Script finished (In 14 seconds): t130_queue_sequence.cmd]","script":"t130_queue_sequence"}
+{"t":14000,"ev":"script-finish","script":"t130_queue_sequence"}
+{"t":20010,"ev":"end","live":0}

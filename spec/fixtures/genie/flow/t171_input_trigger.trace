@@ -1,0 +1,5 @@
+WAIT 1500
+INPUT typed words
+WAIT 200
+INPUT look
+WAIT 300

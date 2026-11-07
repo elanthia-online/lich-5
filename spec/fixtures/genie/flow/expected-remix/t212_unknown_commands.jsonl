@@ -1,0 +1,29 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t212_unknown_commands"}
+{"t":0,"ev":"script-start","script":"t212_unknown_commands","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t212_unknown_commands.cmd]","script":"t212_unknown_commands"}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #ping","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: # echo x","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #  var a 1","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #zzz y z","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #12345g","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #ffdd1aenRod * Ran out of gem pouches!","window":""}
+{"t":0,"ev":"cmdecho","text":"","window":"Log"}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #ff0000* Epistemic Journal","window":""}
+{"t":0,"ev":"cmdecho","text":"","window":"Log"}
+{"t":0,"ev":"cmdecho","text":"red text","window":"","color":"ffff0000"}
+{"t":0,"ev":"var","name":"$r","value":"5","src":"cmd"}
+{"t":0,"ev":"echo","text":"r=5","script":"t212_unknown_commands"}
+{"t":0,"ev":"send","text":"look","origin":"t212_unknown_commands","user":false}
+{"t":0,"ev":"cmdecho","text":"inner","window":""}
+{"t":0,"ev":"cmdecho","text":"Unknown command: #automapper reset","window":""}
+{"t":0,"ev":"mapper","cmd":"#map reset"}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')"}
+{"t":0,"ev":"var","name":"$big","value":"1","src":"cmd"}
+{"t":0,"ev":"echo","text":"big=1","script":"t212_unknown_commands"}
+{"t":0,"ev":"cmdecho","text":"upper","window":""}
+{"t":0,"ev":"echo","text":"done","script":"t212_unknown_commands"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t212_unknown_commands.cmd]","script":"t212_unknown_commands"}
+{"t":0,"ev":"script-finish","script":"t212_unknown_commands"}
+{"t":10,"ev":"end","live":0}

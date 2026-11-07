@@ -1,0 +1,17 @@
+WAIT 100
+IN < You swing at a <pushBold/>goblin<popBold/>.
+WAIT 50
+IN * A goblin <pushBold/>attacks<popBold/> you!
+WAIT 50
+IN > The troll <pushBold/>roars<popBold/> > loudly.
+WAIT 50
+IN <pushBold/>* bold start<popBold/> then more
+WAIT 50
+IN plain <pushBold/>bold<popBold/> plain
+WAIT 50
+IN <pushBold/>
+WAIT 50
+IN * carried bold <popBold/>end
+WAIT 50
+IN < x <pushBold/>y<popBold/> < z <pushBold/>w<popBold/>
+WAIT 200

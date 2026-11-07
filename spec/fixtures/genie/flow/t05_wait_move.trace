@@ -1,0 +1,15 @@
+EXPECT stand
+IN You stand up.
+IN Another line before prompt.
+PROMPT
+EXPECT north
+IN Obvious paths: north.
+PROMPT
+ROOM North Room
+PROMPT
+WAIT 500
+ROOM Next Room
+PROMPT
+EXPECT look
+PROMPT
+WAIT 3000

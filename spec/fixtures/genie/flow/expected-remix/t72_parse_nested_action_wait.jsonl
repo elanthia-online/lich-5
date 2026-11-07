@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t72_parse_nested_action_wait"}
+{"t":0,"ev":"script-start","script":"t72_parse_nested_action_wait","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t72_parse_nested_action_wait.cmd]","script":"t72_parse_nested_action_wait"}
+{"t":210,"ev":"in","text":"OUTER"}
+{"t":210,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":210,"ev":"prompt-event"}
+{"t":220,"ev":"echo","text":"got-inner","script":"t72_parse_nested_action_wait"}
+{"t":220,"ev":"print","text":"[Script finished (In 0.22 seconds): t72_parse_nested_action_wait.cmd]","script":"t72_parse_nested_action_wait"}
+{"t":220,"ev":"script-finish","script":"t72_parse_nested_action_wait"}
+{"t":220,"ev":"end","live":0}

@@ -1,0 +1,7 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t205_wp9_while_trailing_space"}
+{"t":0,"ev":"script-start","script":"t205_wp9_while_trailing_space","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t205_wp9_while_trailing_space.cmd]","script":"t205_wp9_while_trailing_space"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t205_wp9_while_trailing_space.cmd]","script":"t205_wp9_while_trailing_space"}
+{"t":0,"ev":"script-finish","script":"t205_wp9_while_trailing_space"}
+{"t":10,"ev":"end","live":0}

@@ -1,0 +1,26 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t132_queue_webbed_stunned"}
+{"t":0,"ev":"script-start","script":"t132_queue_webbed_stunned","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t132_queue_webbed_stunned.cmd]","script":"t132_queue_webbed_stunned"}
+{"t":110,"ev":"var","name":"$webbed","value":"1","src":"trace"}
+{"t":110,"ev":"in","text":"Do it"}
+{"t":110,"ev":"trigger-fire","pattern":"^Do it","text":"Do it"}
+{"t":1120,"ev":"in","text":"Queue bypass"}
+{"t":1120,"ev":"trigger-fire","pattern":"^Queue bypass","text":"Queue bypass"}
+{"t":2130,"ev":"var","name":"$webbed","value":"0","src":"trace"}
+{"t":2140,"ev":"send","text":"grab","origin":"","user":false}
+{"t":2140,"ev":"send","text":"qbypass","origin":"","user":false}
+{"t":2630,"ev":"var","name":"$stunned","value":"1","src":"trace"}
+{"t":2630,"ev":"in","text":"Do it"}
+{"t":2630,"ev":"trigger-fire","pattern":"^Do it","text":"Do it"}
+{"t":3140,"ev":"in","text":"Send it"}
+{"t":3140,"ev":"trigger-fire","pattern":"^Send it","text":"Send it"}
+{"t":3650,"ev":"var","name":"$stunned","value":"0","src":"trace"}
+{"t":3660,"ev":"send","text":"grab","origin":"","user":false}
+{"t":3660,"ev":"send","text":"push","origin":"","user":false}
+{"t":4150,"ev":"var","name":"$webbed","value":"1","src":"trace"}
+{"t":4150,"ev":"in","text":"Send it"}
+{"t":4150,"ev":"trigger-fire","pattern":"^Send it","text":"Send it"}
+{"t":4160,"ev":"send","text":"push","origin":"","user":false}
+{"t":4660,"ev":"var","name":"$webbed","value":"0","src":"trace"}
+{"t":6860,"ev":"end","live":1}

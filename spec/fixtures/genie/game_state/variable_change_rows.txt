@@ -1,0 +1,14 @@
+<app char="Tester" game="DR: Prime" title="[DR: Tester]"/>
+<left exist="111" noun="shield">a wooden shield</left><right exist="222" noun="sword">a steel sword</right>
+<spell exist="spell">Ignite</spell>
+<castTime value='1700000005'/>
+<spelltime value='1700000001'/>
+<dialogData id='minivitals'><progressBar id='health' value='90' text='health 90%' left='0%' top='0%' width='25%' height='100%'/><progressBar id='conclevel' value='80' text='concentration 80%' left='0%' top='0%' width='25%' height='100%'/><progressBar id='encumlevel' value='3' text='encumbrance' left='0%' top='0%' width='25%' height='100%'/><progressBar id='spirit' value='100' text='spirit 100%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+<indicator id="IconKNEELING" visible="n"/><indicator id="IconPRONE" visible="y"/><indicator id="IconSITTING" visible="n"/><indicator id="IconSTANDING" visible="n"/><indicator id="IconSTUNNED" visible="n"/><indicator id="IconHIDDEN" visible="y"/><indicator id="IconINVISIBLE" visible="n"/><indicator id="IconDEAD" visible="n"/><indicator id="IconWEBBED" visible="n"/><indicator id="IconJOINED" visible="y"/><indicator id="IconBLEEDING" visible="y"/><indicator id="IconPOISONED" visible="y"/><indicator id="IconDISEASED" visible="n"/><indicator id="IconUNKNOWN" visible="y"/>
+<roundTime value='1700000004'/><prompt time="1700000000">H&gt;</prompt>
+<compass><dir value="n"/><dir value="zz"/></compass>
+<streamWindow id='room' title='Room' subtitle=" - [Some Place] (123)"/>
+<component id='room desc'>A desc.</component><component id='room players'>Also here: Bob.</component><component id='room exits'>Obvious paths: north.</component>
+<component id='exp Foo'><b>x</b></component>
+<spell>None</spell>
+<prompt time="1700000001">&gt;</prompt>

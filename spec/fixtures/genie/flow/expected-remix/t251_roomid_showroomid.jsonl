@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t251_roomid_showroomid"}
+{"t":0,"ev":"script-start","script":"t251_roomid_showroomid","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t251_roomid_showroomid.cmd]","script":"t251_roomid_showroomid"}
+{"t":10,"ev":"input","text":"#trigger {^\\[Shard, Garden Crescent\\]$} {#echo TRIG-BARE}"}
+{"t":20,"ev":"input","text":"#trigger {^\\[Shard, Garden Crescent\\] \\(2010671\\)$} {#echo TRIG-SUFFIX}"}
+{"t":130,"ev":"in","text":"<resource picture=\"0\"/><style id=\"roomName\" />[Shard, Garden Crescent] (2010671)"}
+{"t":130,"ev":"trigger-fire","pattern":"^\\[Shard, Garden Crescent\\] \\(2010671\\)$","text":"[Shard, Garden Crescent] (2010671)"}
+{"t":130,"ev":"cmdecho","text":"TRIG-SUFFIX","window":""}
+{"t":130,"ev":"in","text":"<style id=\"\"/>"}
+{"t":130,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":130,"ev":"prompt-event"}
+{"t":140,"ev":"echo","text":"suffix","script":"t251_roomid_showroomid"}
+{"t":140,"ev":"print","text":"[Script finished (In 0.14 seconds): t251_roomid_showroomid.cmd(14)]","script":"t251_roomid_showroomid"}
+{"t":140,"ev":"script-finish","script":"t251_roomid_showroomid"}
+{"t":440,"ev":"end","live":0}

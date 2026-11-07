@@ -1,0 +1,23 @@
+{"t":0,"ev":"setup","scriptdir":"/Users/grocha/genie-port-lab/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (/Users/grocha/repos/Genie4_Remix)","delivery":"row"}
+{"t":0,"ev":"input","text":".t255_escape_sentinel_bytes a\u0002b c\u0001d a\\\u00a4b/\u00a4c"}
+{"t":0,"ev":"script-start","script":"t255_escape_sentinel_bytes","args":"a\u0002b c\u0001d a\\\u00a4b/\u00a4c"}
+{"t":0,"ev":"print","text":"[Script loaded: t255_escape_sentinel_bytes.cmd]","script":"t255_escape_sentinel_bytes"}
+{"t":0,"ev":"echo","text":"A:sword\u0001of truth","script":"t255_escape_sentinel_bytes"}
+{"t":0,"ev":"echo","text":"B:x\u0002y\u0003z|","script":"t255_escape_sentinel_bytes"}
+{"t":0,"ev":"var","name":"$g1","value":"q\u0001r\u0002s","src":"cmd"}
+{"t":0,"ev":"echo","text":"D:q\u0001r\u0002s","script":"t255_escape_sentinel_bytes"}
+{"t":0,"ev":"echo","text":"H:a\u0002b|c\u0001d|a%b$c","script":"t255_escape_sentinel_bytes"}
+{"t":0,"ev":"echo","text":"J:c\u0001d q\u0001r\u0002s","script":"t255_escape_sentinel_bytes"}
+{"t":110,"ev":"in","text":"CAP p\\\\\u00a4q/\u00a4r\u0001s"}
+{"t":110,"ev":"in","text":"GLOB p\\\\\u00a4q/\u00a4r\u0002s"}
+{"t":110,"ev":"var","name":"$g2","value":"p$q/\u00a4r\u0002s","src":"cmd"}
+{"t":220,"ev":"in","text":"DONE"}
+{"t":230,"ev":"echo","text":"K:p$q$r\u0001s|sword\u0001of truth","script":"t255_escape_sentinel_bytes"}
+{"t":230,"ev":"echo","text":"M:p$q$r\u0001s","script":"t255_escape_sentinel_bytes"}
+{"t":230,"ev":"echo","text":"N:p$q/\u00a4r\u0002s","script":"t255_escape_sentinel_bytes"}
+{"t":230,"ev":"echo","text":"O:p$q$r\u0002s sword\u0001of truth","script":"t255_escape_sentinel_bytes"}
+{"t":230,"ev":"cmdecho","text":"P:q\u0001r\u0002s p$q$r\u0001s","window":""}
+{"t":230,"ev":"cmdecho","text":"Q:p$q/\u00a4r\u0002s","window":""}
+{"t":230,"ev":"print","text":"[Script finished (In 0.23 seconds): t255_escape_sentinel_bytes.cmd]","script":"t255_escape_sentinel_bytes"}
+{"t":230,"ev":"script-finish","script":"t255_escape_sentinel_bytes"}
+{"t":530,"ev":"end","live":0}
