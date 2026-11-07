@@ -16,6 +16,10 @@ on:
       - "lib/common/sharing_violation_retry.rb"
       - "spec/lib/common/frontend_settings_spec.rb"
       - "spec/lib/common/sharing_violation_retry_spec.rb"
+      - "lib/common/pipe_io.rb"
+      - "spec/lib/common/pipe_io_spec.rb"
+      - "spec/lib/common/pipe_io_windows_spec.rb"
+      - "spec/support/pipe_io_spawn_child.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   pull_request:
     paths:
@@ -30,6 +34,10 @@ on:
       - "lib/common/sharing_violation_retry.rb"
       - "spec/lib/common/frontend_settings_spec.rb"
       - "spec/lib/common/sharing_violation_retry_spec.rb"
+      - "lib/common/pipe_io.rb"
+      - "spec/lib/common/pipe_io_spec.rb"
+      - "spec/lib/common/pipe_io_windows_spec.rb"
+      - "spec/support/pipe_io_spawn_child.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   workflow_dispatch:
 
@@ -58,3 +66,6 @@ jobs:
       - name: Run dependency recovery specs
         if: ${{ !cancelled() }}
         run: bundle exec rspec spec/lib/dependency_recovery_spec.rb
+      - name: Run PipeIO specs (--pipe front-end transport)
+        if: ${{ !cancelled() }}
+        run: bundle exec rspec spec/lib/common/pipe_io_spec.rb spec/lib/common/pipe_io_windows_spec.rb
