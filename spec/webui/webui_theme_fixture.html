@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI shared theme controls</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<div id="controls"></div>
+<pre id="result">Waiting</pre>
+<script>
+  const markup = `
+    <fieldset class="webui-group"><div>Empty legend requisition</div></fieldset>
+    <button class="default">Original action</button>
+    <label class="field"><span class="field-label">Entry</span><input value="Unchanged"></label>
+    <label class="field"><span class="field-label">Disabled</span><input disabled value="Disabled"></label>
+    <textarea rows="3">Original text</textarea>
+    <select><option>Original choice</option></select>
+    <label class="field inline"><input type="checkbox"><span>Checkbox</span></label>
+    <div class="webui-tabs"><div class="tab-list"><button aria-selected="true">Selected</button><button>Other</button></div><div class="tab-panel">Content</div></div>
+    <div class="webui-table-wrap"><table class="webui-table"><thead><tr><th><button>Title</button></th></tr></thead><tbody><tr aria-selected="true"><td>Selected row</td></tr><tr><td>Other row</td></tr></tbody></table></div>
+    <div class="webui-progress-colored" style="height:24px;--progress-fill:rgb(98,125,152)"><progress max="1" value="0.5"></progress></div>
+    <div class="webui-context-menu" style="position:relative"><button>Menu action</button><button disabled>Unavailable</button></div>
+    <dialog open class="webui-dialog" style="position:relative">Dialog content</dialog>
+    <span data-explicit style="color:rgb(1,2,3);background:rgb(210,220,230);font-size:17px;font-weight:700">Authored styling</span>`;
+  for (const theme of ['light', 'dark']) {
+    const root = document.createElement('section');
+    root.className = 'webui-page';
+    root.dataset.theme = theme;
+    root.dataset.density = 'compact';
+    root.style.width = '500px';
+    root.innerHTML = markup;
+    document.getElementById('controls').append(root);
+  }
+  const roots = document.querySelectorAll('.webui-page');
+  const read = root => [...root.querySelectorAll('*')].map(el => {
+    const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+    return { tag: el.tagName, width: rect.width, height: rect.height, font: style.font,
+      color: style.color, background: style.backgroundColor, scheme: style.colorScheme };
+  });
+  const light = read(roots[0]), dark = read(roots[1]);
+  const failures = [];
+  if (!light.every((a, i) => a.width === dark[i].width && a.height === dark[i].height && a.font === dark[i].font)) failures.push('theme changes geometry or typography');
+  for (const root of roots) {
+    const theme = root.dataset.theme, style = getComputedStyle(root);
+    if (style.colorScheme !== theme) failures.push(`${theme}: native control color scheme`);
+    if (getComputedStyle(root.querySelector('input')).color !== (theme === 'dark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)')) failures.push(`${theme}: GTK entry foreground`);
+    if (style.color !== (theme === 'dark' ? 'rgb(238, 238, 236)' : 'rgb(46, 52, 54)')) failures.push(`${theme}: GTK label foreground`);
+    const selected = getComputedStyle(root.querySelector('tr[aria-selected]'));
+    if (selected.color !== 'rgb(255, 255, 255)') failures.push(`${theme}: selected row text`);
+    if (getComputedStyle(root.querySelector('input:disabled')).color === getComputedStyle(root.querySelector('input:not(:disabled)')).color) failures.push(`${theme}: disabled color`);
+    const explicit = getComputedStyle(root.querySelector('[data-explicit]'));
+    if (explicit.color !== 'rgb(1, 2, 3)' || explicit.fontSize !== '17px') failures.push(`${theme}: authored styling`);
+    if (root.querySelector('progress').position !== 0.5) failures.push(`${theme}: progress fraction`);
+    const expected = theme === 'dark' ? 'rgb(53, 53, 53)' : 'rgb(246, 245, 244)';
+    for (const selector of ['.webui-context-menu', 'dialog']) {
+      if (getComputedStyle(root.querySelector(selector)).backgroundColor !== expected) failures.push(`${theme}: ${selector} palette`);
+    }
+  }
+  window.themeResult = { failures, light, dark };
+  document.getElementById('result').textContent = `${failures.length ? 'FAIL' : 'PASS'} ${JSON.stringify(failures)}`;
+</script>
