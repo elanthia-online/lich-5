@@ -219,6 +219,20 @@ module Lich
           end
         end
 
+        # Resolves a learn/unlearn line to its Infomon key.
+        #
+        # @param category [String] the category text from the game line
+        # @param psm [String] the ability name from the game line
+        # @return [String, nil] e.g. "ascension.kaistouch", or nil when the
+        #   name is not in that category's lookups (so no junk key is written)
+        def self.psm_key(category, psm)
+          cat = find_cat(category)
+          return nil unless cat
+
+          db_name = PSMS.find_name(psm, cat)
+          db_name && "#{cat.downcase}.#{db_name[:short_name]}"
+        end
+
         # Updates character data from one game-output line.
         #
         # @param line [String] One physical line of game output
@@ -450,25 +464,25 @@ module Lich
               :ok
             when Pattern::LearnPSM, Pattern::LearnTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", match[:rank].to_i)
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
+              Infomon.set(key, match[:rank].to_i)
               :ok
             when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
               no_decrement = (match.string =~ /have decreased to/)
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+              Infomon.set(key, (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
               :ok
             when Pattern::LostTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", 0)
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
+              Infomon.set(key, 0)
               :ok
             when Pattern::Resource
               match = Regexp.last_match

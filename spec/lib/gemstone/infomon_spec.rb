@@ -284,6 +284,24 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 2 of Kai's Touch, regaining 2 Ascension points.")
       expect(Lich::Gemstone::Infomon.get('ascension.kaistouch')).to eq(1)
     end
+
+    it "handles learning and unlearning an ascension lore with a spaced hyphen" do
+      Lich::Gemstone::Infomon.set('ascension.elair', 0)
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 3 of Elemental Lore - Air, costing 3 Ascension points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(3)
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 3 of Elemental Lore - Air, regaining 3 Ascension points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(2)
+      expect(Lich::Gemstone::Ascension['Elemental Lore - Air']).to eq(2)
+    end
+
+    it "ignores a learn or unlearn line whose name is not in the lookups" do
+      expect(Lich::Gemstone::Infomon).not_to receive(:set)
+      [
+        "You have now achieved rank 1 of Mental Lore - Transformation, costing 1 Ascension points.",
+        "You decide to unlearn rank 1 of Mental Lore - Transformation, regaining 1 Ascension points.",
+        "[You are no longer trained in Weapon Technique: Nonexistent Strike.]",
+      ].each { |line| expect(Lich::Gemstone::Infomon::Parser.parse(line)).to eq(:noop) }
+    end
   end
 
   context "resource" do
