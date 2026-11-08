@@ -82,4 +82,11 @@ RSpec.describe Lich::StartupPolicyCompatibility do
     clients.first.delete('groups')
     expect { verify }.to raise_error(Lich::AcceptedGemPolicy::PolicyError, /supported-older.*groups/)
   end
+
+  it 'requires each supported client version when proposed policy uses ranges' do
+    target['units'] << Marshal.load(Marshal.dump(unit)).merge('id' => 'modern', 'lich_versions' => { 'min_inclusive' => '5.24.0' })
+    expect { verify }.to raise_error(Lich::AcceptedGemPolicy::PolicyError, /running Lich version is required/)
+    clients.each { |client| client['lich_version'] = '5.24.0' }
+    expect(verify.keys).to eq(%w[supported-older supported-current])
+  end
 end

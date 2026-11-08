@@ -65,14 +65,14 @@ module Lich
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|
           name = package.fetch('name')
-          if packages.key?(name) && packages[name].values_at('version', 'sha256', 'filename') != package.values_at('version', 'sha256', 'filename')
+          if packages.key?(name) && RecoveryUnitPolicy.package_identity(packages[name], plan.target.fetch('platform')) != RecoveryUnitPolicy.package_identity(package, plan.target.fetch('platform'))
             raise InvalidPolicyError, "conflicting accepted package identities for #{name}"
           end
           packages[name] = package
         end
       end
       platforms = packages.transform_values do |package|
-        package.fetch('filename').end_with?("-#{plan.target.fetch('platform')}.gem") ? plan.target.fetch('platform') : 'ruby'
+        RecoveryUnitPolicy.package_platform(package, plan.target.fetch('platform'))
       end
       needed = packages.filter_map do |name, package|
         floor = Gem::Version.new(package.fetch('version'))

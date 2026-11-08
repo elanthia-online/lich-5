@@ -18,7 +18,7 @@ module Lich
         raise ArgumentError, 'startup groups must be an explicit nonempty array of strings' unless groups.is_a?(Array) && !groups.empty? && groups.all? { |group| group.is_a?(String) }
         reader = RuntimeGemContract.new(gemfile: client.fetch('gemfile'), groups: groups)
         dependencies = reader.roots.map { |name, requirements| Gem::Dependency.new(name, *requirements) }
-        recovery = DependencyRecovery.new(http_get: ->(_url) { manifest_bytes })
+        recovery = DependencyRecovery.new(http_get: ->(_url) { manifest_bytes }, lich_version: client['lich_version'])
         plan = recovery.policy_plan(dependencies.map(&:name))
         raise AcceptedGemPolicy::InvalidPolicyError, plan.error unless plan.success?
         supplied = AcceptedGemPolicy.supplied_gems(plan.target)

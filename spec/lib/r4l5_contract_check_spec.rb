@@ -54,13 +54,99 @@ RSpec.describe Lich::R4L5ContractCheck do
     described_class.verify!(gemfile: gemfile, lockfile: lockfile, manifest_bytes: JSON.generate(manifest), provenance: provenance, **options)
   end
 
+  it 'checks the applicable range instead of rejecting retained legacy package versions' do
+    legacy = Marshal.load(Marshal.dump(unit))
+    legacy['id'] = 'redis-legacy'
+    legacy.fetch('packages').first['version'] = '0.20.0'
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [legacy, unit]
+    expect(verify(lich_version: '5.24.0').fetch('packages').keys).to eq(%w[redis redis-client])
+    expect { verify(lich_version: '5.23.0') }.to raise_error(described_class::Error, /version mismatch/)
+  end
+
   it 'accepts the candidate only after matching recovery and installer are available' do
     expect(verify(candidate_sha: 'c' * 40).fetch('packages').keys).to eq(%w[redis redis-client])
+  end
+
+  it 'binds the digest to selected members instead of a displaced legacy-only lock member' do
+    lockfile.sub!("\nCHECKSUMS", "    ast (2.4.3)\n\nCHECKSUMS")
+    lockfile << "  ast (2.4.3) sha256=#{'e' * 64}\n"
+    legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+    legacy['members'] << 'ast'
+    legacy['install_order'].unshift('ast')
+    legacy['packages'].unshift('name' => 'ast', 'version' => '2.4.3', 'filename' => 'ast-2.4.3.gem', 'sha256' => "sha256:#{'e' * 64}")
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [legacy, unit]
+
+    reader = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile)
+    selected_digest = reader.windows_contract_digest(contract.fetch('ruby_inventory'), advertised_members: %w[redis redis-client])
+    all_members = target.fetch('units').flat_map { |entry| entry.fetch('members') }.uniq
+    all_digest = reader.windows_contract_digest(contract.fetch('ruby_inventory'), advertised_members: all_members)
+    expect(reader.locked_packages).to have_key('ast')
+    expect(all_digest).not_to eq(selected_digest)
+    contract['windows_contract_sha256'] = selected_digest
+    expect(verify(lich_version: '5.24.0').fetch('packages').keys).to eq(%w[redis redis-client])
+
+    contract['windows_contract_sha256'] = all_digest
+    provenance['runtime_contract_sha256'] = Lich::RuntimeGemContract.digest(contract)
+    provenance['recovery_manifest_sha256'] = Digest::SHA256.hexdigest(JSON.generate(manifest))
+    expect { verify(lich_version: '5.24.0') }.to raise_error(described_class::Error, /does not match this Windows projection/)
   end
 
   it 'rejects Lich-first delivery before the producer serves its lock' do
     contract['windows_contract_sha256'] = '0' * 64
     expect { verify }.to raise_error(described_class::Error, /build and promote this candidate first/)
+  end
+
+  it 'rejects a shrinking ranged closure that omits an actual application root' do
+    gemfile << "gem 'ast'\n"
+    lockfile.sub!("\nCHECKSUMS", "    ast (2.4.3)\n\nCHECKSUMS")
+    lockfile << "  ast (2.4.3) sha256=#{'e' * 64}\n"
+    legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+    legacy['members'] << 'ast'
+    legacy['install_order'].unshift('ast')
+    legacy['packages'].unshift('name' => 'ast', 'version' => '2.4.3', 'filename' => 'ast-2.4.3.gem', 'sha256' => "sha256:#{'e' * 64}")
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [legacy, unit]
+    refresh_identity
+    expect { verify(lich_version: '5.24.0') }.to raise_error(described_class::Error, /recovery does not cover ast/)
+  end
+
+  [nil, [], 1].each do |document|
+    it "rejects a non-object recovery document #{document.inspect} as a data error" do
+      expect do
+        described_class.verify!(gemfile: gemfile, lockfile: lockfile, manifest_bytes: JSON.generate(document), provenance: {})
+      end.to raise_error(described_class::Error, /manifest must be an object/)
+    end
+  end
+
+  {
+    'target list'           => ->(manifest, _target, _contract) { manifest['targets'] = nil },
+    'target'                => ->(manifest, _target, _contract) { manifest['targets'] = [nil] },
+    'contract'              => ->(_manifest, target, _contract) { target['contract'] = nil },
+    'inventory'             => ->(_manifest, _target, contract) { contract['ruby_inventory'] = nil },
+    'supplied gem'          => ->(_manifest, _target, contract) { contract['ruby_inventory']['gems'] = { 'broken' => nil } },
+    'supplied dependencies' => ->(_manifest, _target, contract) { contract['ruby_inventory']['gems'] = { 'broken' => { 'dependencies' => nil } } },
+    'build roles'           => ->(_manifest, _target, contract) { contract['build_roles'] = nil },
+    'unit'                  => ->(_manifest, target, _contract) { target['units'] = [nil] }
+  }.each do |name, mutate|
+    it "rejects a malformed #{name} shape as a data error" do
+      provenance
+      mutate.call(manifest, target, contract)
+      expect { verify }.to raise_error(described_class::Error, /must be an (?:object|array)/)
+    end
+  end
+
+  it 'rejects malformed provenance shapes and a missing installer version' do
+    expect { verify(provenance: nil) }.to raise_error(described_class::Error, /provenance must be an object/)
+    provenance['ruby_installer_version'] = nil
+    expect { verify }.to raise_error(described_class::Error, /installer Ruby version/)
+  end
+
+  it 'does not mislabel an unexpected NoMethodError as invalid published data' do
+    provenance
+    allow_any_instance_of(Lich::RuntimeGemContract).to receive(:resolve).and_raise(NoMethodError, 'fixture implementation failure')
+    expect { verify }.to raise_error(NoMethodError, /fixture implementation failure/)
   end
 
   it 'accepts dev-only edits while retaining the original producer provenance hashes' do
@@ -242,6 +328,39 @@ RSpec.describe Lich::R4L5ContractCheck do
       expect(status.exitstatus).to eq(1)
       expect(error).to include('matching installer predecessor')
       expect(error).not_to include('unexpected character')
+    end
+  end
+
+  it 'retains strict publication lifecycle validation despite lenient startup selection' do
+    unit['lifecycle'] = { 'state' => 'obsolete', 'reason' => 'unsupported publication key' }
+    expect { verify }.to raise_error(described_class::Error, /lifecycle/)
+  end
+
+  it 'checks portable ranged inputs with an explicit version and never guesses the next release' do
+    require 'open3'
+    old = Marshal.load(Marshal.dump(unit)).merge('id' => 'legacy')
+    old['packages'].each { |package| package['version'] = '0.1' }
+    unit['lich_versions'] = { 'min_inclusive' => '5.24.0' }
+    target['units'] = [old, unit]
+    Dir.mktmpdir do |dir|
+      inputs = { 'Gemfile' => gemfile, 'Gemfile.lock' => lockfile, 'manifest.json' => JSON.generate(manifest), 'provenance.json' => JSON.generate(provenance) }
+      inputs.each { |name, bytes| File.binwrite(File.join(dir, name), bytes) }
+      cli = File.expand_path('../../.github/scripts/check_r4l5_contract.rb', __dir__)
+      args = %w[gemfile lockfile manifest provenance].zip(%w[Gemfile Gemfile.lock manifest.json provenance.json]).flat_map { |key, name| ["--#{key}", File.join(dir, name)] }
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('--lich-version')
+      stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args, '--lich-version', '5.24.0')
+      expect(status.success?).to be(true), stderr
+      expect(stdout).to include('contract accepted')
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args, '--lich-version', '5.24.0-beta.1')
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('version mismatch')
+      Dir.mkdir(File.join(dir, 'lib'))
+      File.write(File.join(dir, 'lib/version.rb'), "LICH_VERSION = '5.23.0'\n")
+      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args)
+      expect(status.exitstatus).to eq(1)
+      expect(stderr).to include('version mismatch')
     end
   end
 end

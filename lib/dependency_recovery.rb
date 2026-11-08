@@ -12,6 +12,7 @@ require 'tempfile'
 require 'timeout'
 require 'tmpdir'
 require 'uri'
+require_relative 'recovery_unit_policy'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -69,7 +70,8 @@ module Lich
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
                    http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
-                   helper_launcher: nil)
+                   helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
+      @lich_version = lich_version
       @manifest_url = manifest_url
       @gem_home = gem_home
       @temp_dir = temp_dir
@@ -110,8 +112,9 @@ module Lich
           raise Error, "unit #{unit.fetch('id')} members disagree with packages"
         end
       end
-      requested = Array(gem_names).select { |name| target.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
-      Plan.new(units: units_for(manifest, requested), target: target)
+      effective = target.merge('units' => RecoveryUnitPolicy.select(target, @lich_version))
+      requested = Array(gem_names).select { |name| effective.fetch('units').any? { |unit| unit_members(unit).include?(name) } }
+      Plan.new(units: units_for(manifest, requested), target: effective)
     rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError, Net::ProtocolError, Net::HTTPBadResponse => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
     rescue StandardError => e
@@ -228,7 +231,7 @@ module Lich
     def units_for(manifest, requested)
       target = target_for(manifest)
 
-      units = target['units']
+      units = RecoveryUnitPolicy.select(target, @lich_version)
       raise Error, 'manifest target units must be an array' unless units.is_a?(Array)
 
       selected = requested.map do |name|
@@ -381,7 +384,7 @@ module Lich
         by_name = staged.fetch(:unit).fetch('packages').to_h { |package| [package.fetch('name'), package] }
         staged.fetch(:unit).fetch('install_order').each do |name|
           package = by_name.fetch(name)
-          if packages.key?(name) && packages[name].values_at('version', 'sha256') != package.values_at('version', 'sha256')
+          if packages.key?(name) && RecoveryUnitPolicy.package_identity(packages[name], Gem::Platform.local.to_s) != RecoveryUnitPolicy.package_identity(package, Gem::Platform.local.to_s)
             raise Error, "conflicting replacement package identities for #{name}"
           end
           packages[name] ||= package.merge('path' => staged.fetch(:package_paths).fetch(name))

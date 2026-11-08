@@ -77,4 +77,25 @@ RSpec.describe Lich::ContractDocument do
       expect { described_class.read_json('https://example.org/provenance') }.to raise_error(JSON::ParserError)
     end
   end
+
+  describe '.version_for' do
+    let(:target) { { 'platform' => Lich::RuntimeGemContract::PLATFORM, 'ruby_abi' => '4.0', 'units' => [] } }
+    let(:manifest) { { 'schema' => 1, 'targets' => [target] } }
+
+    it 'accepts isolated unranged inputs without a version file' do
+      expect(described_class.version_for(JSON.generate(manifest), '/absent/Gemfile')).to be_nil
+    end
+
+    it 'requires a real or explicit version only when the selected target has ranges' do
+      target['units'] << { 'lich_versions' => { 'min_inclusive' => '5.24' } }
+      expect { described_class.version_for(JSON.generate(manifest), '/absent/Gemfile') }.to raise_error(Lich::RuntimeGemContract::Error, /--lich-version/)
+      expect(described_class.version_for(JSON.generate(manifest), '/absent/Gemfile', explicit: '5.24.0-beta.0')).to eq('5.24.0-beta.0')
+      expect { described_class.version_for(JSON.generate(manifest), '/absent/Gemfile', explicit: 'invalid') }.to raise_error(Lich::RuntimeGemContract::Error, /invalid candidate Lich version/)
+      Dir.mktmpdir do |dir|
+        Dir.mkdir(File.join(dir, 'lib'))
+        File.write(File.join(dir, 'lib/version.rb'), "LICH_VERSION = '5.23.0'\n")
+        expect(described_class.version_for(JSON.generate(manifest), File.join(dir, 'Gemfile'))).to eq('5.23.0')
+      end
+    end
+  end
 end

@@ -4,7 +4,7 @@ require 'json'
 require_relative '../../lib/startup_policy_compatibility'
 
 # Offline, on the target Ruby/platform: client matrix entries contain an id,
-# gemfile path and explicit startup groups. The manifest is never fetched or installed.
+# gemfile path, explicit startup groups and lich_version when policy is ranged. The manifest is never fetched or installed.
 if $PROGRAM_NAME == __FILE__
   begin
     raise ArgumentError, 'Usage: check_supported_startup_policy.rb MANIFEST CLIENT_MATRIX' unless ARGV.size == 2

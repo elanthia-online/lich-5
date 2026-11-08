@@ -78,8 +78,9 @@ does not dispatch privileged producer work.
 
 The producer validates the selected candidate SHA explicitly. Both producer and
 consumer compute `RuntimeGemContract#windows_contract_digest` with the measured
-`ruby_inventory`, producer `build_roles`, and the flattened recovery-unit member
-names as `advertised_members`. The method hashes a versioned Windows projection:
+`ruby_inventory`, producer `build_roles`, and the flattened candidate-applicable
+recovery-unit member names as `advertised_members` (after strict range selection
+when ranges are present). The method hashes a versioned Windows projection:
 normalized runtime root requirements, relevant selected Windows lock packages
 (including checksums and normalized dependency requirements), supplied-gem
 resolution and the pristine target inventory. Relevant packages include runtime
@@ -273,3 +274,79 @@ release-assembly mistakes, but a party able to replace both the manifest and
 asset can also replace the expected hash. Treat the release promotion review
 and GitHub repository protections as the current trust boundary until signing
 is funded.
+
+## Range-aware recovery and lifecycle
+
+Units may carry `lich_versions` with an inclusive `min_inclusive` and/or an
+exclusive `max_exclusive` version. At least one bound is required. The running
+`LICH_VERSION` is used before both repair planning and startup version policy.
+Applicable ranged closures replace intersecting legacy closures as whole units;
+Lich never mixes a retained older shared package into a newer closure. Conflicting
+applicable range package identities fail closed. Release checks apply the same selection
+before comparing the candidate lock.
+
+Whole-closure replacement intentionally permits shrinking: legacy `{a,b}` and
+applicable ranged `{a,c}` select only `{a,c}` for the newer client. Legacy-only
+members, including advertised-only or GTK-role members, are not automatically
+retained and do not need tombstones merely because that version selects another
+closure. Required application roots must still be covered, and the producer's
+supported-client checks retain compatibility for published clients. This is the
+same selection rule used by the producer, not permission to withdraw service
+from supported older clients.
+
+A ranged unit may name `legacy_unit`, the ID of a preceding, unranged unit
+sharing at least one member. The reference validates legacy coverage; it does
+not choose the replacement or relax package identity checks. Selection still
+replaces every legacy unit intersecting the applicable ranged members. Missing,
+disjoint or later references are rejected. Omitting `legacy_unit` retains the
+normal preceding-overlap check.
+
+### Explicitly versioned candidates and prerelease bounds
+
+A ranged producer candidate must be a prepared commit containing both the
+candidate lock and its intended `LICH_VERSION`. Administrators select that full
+commit SHA; the producer does not infer a future release version from an
+unversioned lock PR. Contract validation uses that candidate's version (or the
+explicit offline checker version) when selecting applicable units.
+
+Bounds use literal RubyGems `Gem::Version` ordering. For example,
+`5.24.0-beta.1` precedes `5.24.0`: a minimum of `5.24.0` excludes its betas.
+To include the beta series, use an explicit prerelease minimum such as
+`5.24.0-beta.0`. These are illustrative bounds, not selected support cutoffs.
+
+### Publication strictness and startup compatibility
+
+Publication checks reject unknown `lich_versions` keys and malformed or unknown
+lifecycle metadata. Startup ignores lifecycle annotations and unknown range
+keys, but requires at least one recognized bound. It applies known
+`min_inclusive` and `max_exclusive` bounds literally. Thus a range with a known
+minimum and an unknown `max_inclusive` key has no recognized upper bound;
+a range containing only unknown keys is rejected. This is the existing tolerant
+startup rule, not permission to publish those shapes: strict checks reject both.
+
+New fields that change mandatory selection semantics require an explicit
+manifest-schema or reader-capability transition and supported-client acceptance.
+Do not treat an ignored key as an enforced restriction on old readers. This
+manifest schema transition is separate from the runtime contract's schema-2
+semantic identity; the recovery manifest envelope remains schema 1 here.
+
+Keep a complete legacy unit ahead of every ranged replacement. Older first-match
+readers ignore these added fields and continue recovering their legacy closure.
+The producer gates both pinned legacy consumers and the explicitly selected new
+consumer on clean RubyInstaller. Before promoting ranges, it also verifies an
+explicit `range_reader` release tag and full commit against the reviewed reader.
+Release/install this Lich capability before publishing policy that relies on it.
+No range or support cutoff is enabled by this change.
+
+An obsolete unit carries `lifecycle: {"state":"obsolete"}`, optionally with one
+`until_date` (ISO date) or `floor_lich_version`. These fields document support;
+they never automatically remove service. Withdrawal is a separate reviewed
+producer change, emitting `withdrawn_members` and its explicit decisions. No
+unit may advertise or package a withdrawn member, including alternate units and
+the promotion rollback manifest. Historical release files are kept.
+
+GTK remains built and served under the current policy. Frozen GTK preparation
+copies the complete published, hash-verified Ruby 4.0 closure into an immutable
+standalone ZIP. Actual freeze waits for webUI go-live; the shim-retirement change
+sets the future support floor. The v5.19.0 compaction boundary is a compatibility
+consideration for that decision, not a selected support cutoff.

@@ -74,6 +74,82 @@ RSpec.describe Lich::DependencyRecovery do
     )
   end
 
+  context 'Lich version ranges' do
+    let(:legacy) { gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body) }
+    let(:modern) do
+      gem_unit(name: 'sqlite3', artifact_url: 'https://example.test/new.gem', body: 'new payload').merge(
+        'id' => 'sqlite3-current', 'lich_versions' => { 'min_inclusive' => '5.24.0', 'max_exclusive' => '6.0' }
+      ).tap { |unit| unit.fetch('packages').first['version'] = '2.10.2' }
+    end
+
+    def ranged_recovery(version, units: [legacy, modern])
+      described_class.new(manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+                          lich_version: version, http_get: ->(_url) { manifest_for(units, ruby_abi: ruby_abi, platform: platform) })
+    end
+
+    it 'keeps the legacy closure below the lower bound and at the exclusive upper bound' do
+      %w[5.23.9 6.0].each do |version|
+        expect(ranged_recovery(version).recovery_plan(['sqlite3']).units.map { |unit| unit['id'] }).to eq(['sqlite3'])
+      end
+    end
+
+    it 'selects the modern closure at the inclusive lower bound for recovery and startup policy' do
+      recovery = ranged_recovery('5.24.0')
+      expect(recovery.recovery_plan(['sqlite3']).units).to eq([modern])
+      expect(recovery.policy_plan(['sqlite3']).target.fetch('units')).to eq([modern])
+    end
+
+    it 'rejects invalid, ambiguous or unknown-version range policy before downloading packages' do
+      expect(ranged_recovery(nil).recovery_plan(['sqlite3'])).not_to be_success
+      modern['lich_versions']['max_exclusive'] = '5.0'
+      expect(ranged_recovery('5.24').policy_plan(['sqlite3']).error).to include('empty Lich version range')
+      modern['lich_versions'].delete('max_exclusive')
+      duplicate = Marshal.load(Marshal.dump(modern)).merge('id' => 'overlap')
+      duplicate.fetch('packages').first['version'] = '2.10.3'
+      expect(ranged_recovery('5.24', units: [legacy, modern, duplicate]).recovery_plan(['sqlite3']).error).to include('ambiguous ranged')
+    end
+
+    it 'requires legacy coverage to precede ranges and rejects withdrawal through alternate units' do
+      expect(ranged_recovery('5.24', units: [modern, legacy]).recovery_plan(['sqlite3']).error).to include('legacy coverage')
+      target = { 'units' => [legacy], 'withdrawn_members' => ['sqlite3'] }
+      expect { Lich::RecoveryUnitPolicy.select(target, '5.24') }.to raise_error(Lich::RecoveryUnitPolicy::Error, /withdrawn member/)
+    end
+
+    it 'recovers an added transitive package only with the applicable newer closure' do
+      modern['members'] << 'added-child'
+      child = { 'name' => 'added-child', 'version' => '1.0', 'filename' => 'added-child.gem', 'sha256' => sha256('child bytes') }
+      modern['packages'] << child
+      modern['install_order'] = ['added-child', 'sqlite3']
+      modern['artifact'] = { 'url' => 'https://example.test/new.zip', 'filename' => 'new.zip', 'archive' => 'zip', 'sha256' => sha256('zip bytes') }
+      manifest = manifest_for([legacy, modern], ruby_abi: ruby_abi, platform: platform)
+      fetches = []
+      fetch = lambda do |url|
+        fetches << url
+        { manifest_url => manifest, 'https://example.test/new.zip' => 'zip bytes' }.fetch(url)
+      end
+      extractor = lambda do |_zip, destination|
+        File.write(File.join(destination, 'sqlite3.gem'), 'new payload')
+        File.write(File.join(destination, 'added-child.gem'), 'child bytes')
+      end
+      engine = described_class.new(manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+                                   lich_version: '5.24', http_get: fetch, extract_zip: extractor,
+                                   install_gem: ->(path, _home) { installed << File.basename(path) })
+      expect(engine.recover(['sqlite3'])).to be_success
+      expect(installed).to eq(['added-child.gem', 'sqlite3.gem'])
+      expect(fetches).not_to include(artifact_url)
+      expect(ranged_recovery('5.23').recovery_plan(['sqlite3']).units).to eq([legacy])
+    end
+
+    it 'never installs an older shared package via an overlapping legacy closure' do
+      legacy['members'] << 'parent'
+      legacy['packages'] << legacy['packages'].first.merge('name' => 'parent')
+      legacy['install_order'] << 'parent'
+      result = ranged_recovery('5.24').recovery_plan(['parent', 'sqlite3'])
+      expect(result).not_to be_success
+      expect(result.error).to include('does not approve recovery')
+    end
+  end
+
   it 'installs an exact, hash-verified single-gem unit into the runtime Gem.dir' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
