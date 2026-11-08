@@ -526,10 +526,10 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(described_class.worn_ref('leather pouch')).to eq('my leather pouch')
       end
 
-      # Its name does not end in its noun, so no name resolves it: worn_ref
-      # gives today's "my harness".
-      it 'falls back to item_ref for "harness"' do
-        expect(described_class.worn_ref('harness')).to eq('my harness')
+      # Its noun is a whole word of its name, even though the name does not
+      # end in it ("...harness with a leather pouch"), so its noun finds it.
+      it 'resolves "harness" by its noun though the name does not end in it' do
+        expect(described_class.worn_ref('harness')).to eq('#501')
       end
     end
 
