@@ -82,12 +82,6 @@ RSpec.describe Lich::RuntimeGemContract do
     expect { reader.resolve(inventory) }.to raise_error(described_class::Error, /target Windows/)
   end
 
-  it 'rejects the wrong ABI even with the correct Windows platform' do
-    expect { reader.resolve(inventory) }.not_to raise_error
-    inventory['ruby_abi'] = '3.4'
-    expect { reader.resolve(inventory) }.to raise_error(described_class::Error, /Ruby ABI 4.0/)
-  end
-
   it 'follows a newly declared runtime root instead of a fixed root list' do
     contract = described_class.new(gemfile: gemfile + "\ngem 'mini_portile2'\n", lockfile: lockfile)
     expect(contract.resolve(inventory).fetch('packages')).to have_key('mini_portile2')
@@ -129,6 +123,19 @@ RSpec.describe Lich::RuntimeGemContract do
 
   it 'canonicalizes contract hashes independently of key order' do
     expect(described_class.digest('b' => 2, 'a' => { 'z' => 1, 'y' => 2 })).to eq(described_class.digest('a' => { 'y' => 2, 'z' => 1 }, 'b' => 2))
+  end
+
+  it 'reads startup declarations without a lockfile or evaluating plugins' do
+    contract = described_class.new(gemfile: gemfile + "\ngroup :gtk do\n gem 'native-ui'\nend\n", groups: %i[default gtk])
+    expect(contract.roots.keys).to contain_exactly('redis', 'json', 'sqlite3', 'gtk3', 'native-ui')
+    expect(contract.lock_sha256).to be_nil
+    expect { contract.resolve(inventory) }.to raise_error(described_class::Error, /lockfile is required/)
+  end
+
+  it 'rejects the wrong ABI even with the correct Windows platform' do
+    expect { reader.resolve(inventory) }.not_to raise_error
+    inventory['ruby_abi'] = '3.4'
+    expect { reader.resolve(inventory) }.to raise_error(described_class::Error, /Ruby ABI 4.0/)
   end
 
   it 'keeps identity stable across comments, dev pins, non-Windows variants and requirement order' do
@@ -191,5 +198,13 @@ RSpec.describe Lich::RuntimeGemContract do
   end
   it 'reports invalid literal version requirements as a reader error' do
     expect { described_class.new(gemfile: "gem 'redis', 'not-a-version'", lockfile: lockfile) }.to raise_error(described_class::Error, /invalid runtime declarations/)
+  end
+
+  it 'respects an explicit non-default startup group without implicitly adding default roots' do
+    source = "gem 'redis'\ngroup :gtk do\n gem 'gtk3'\nend\n"
+    contract = described_class.new(gemfile: source, groups: [:gtk])
+    expect(contract.roots.keys).to eq(['gtk3'])
+    expect(contract.lock_sha256).to be_nil
+    expect { contract.resolve(inventory) }.to raise_error(described_class::Error, /lockfile is required/)
   end
 end

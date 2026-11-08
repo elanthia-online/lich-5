@@ -18,15 +18,16 @@ module Lich
 
     attr_reader :roots, :gemfile_sha256, :lock_sha256, :locked_packages
 
-    def initialize(gemfile:, lockfile:)
+    def initialize(gemfile:, lockfile: nil, groups: GROUPS)
+      @selected_groups = Array(groups).map(&:to_s)
       @gemfile_sha256 = Digest::SHA256.hexdigest(gemfile)
-      @lock_sha256 = Digest::SHA256.hexdigest(lockfile)
+      @lock_sha256 = Digest::SHA256.hexdigest(lockfile) if lockfile
       @roots = {}
       tree = Ripper.sexp(gemfile)
       raise Error, 'Gemfile syntax is invalid' unless tree
       declarations(tree)
       raise Error, 'Gemfile has no Windows runtime roots' if roots.empty?
-      @specs = parse_lock(lockfile)
+      @specs = parse_lock(lockfile) if lockfile
       @locked_packages = @specs
     rescue ArgumentError => e
       raise Error, "invalid runtime declarations or lock: #{e.message}"
@@ -35,6 +36,7 @@ module Lich
     # Inventory must be captured from the pristine target RubyInstaller before
     # installing application gems. Supplied versions are reported, never shipped.
     def resolve(inventory)
+      raise Error, 'a lockfile is required for producer resolution' unless @specs
       unless inventory['platform'] == PLATFORM && inventory['ruby_abi'] == '4.0' && inventory['gems'].is_a?(Hash)
         raise Error, 'inventory must describe the target Windows RubyInstaller (Ruby ABI 4.0)'
       end
@@ -149,7 +151,8 @@ module Lich
     end
 
     def add_root(node, groups)
-      return unless groups.empty? || (groups & GROUPS).any?
+      effective_groups = groups.empty? ? ['default'] : groups
+      return if (effective_groups & @selected_groups).empty?
       args = arguments(node).dup
       options = args.last&.first == :bare_assoc_hash ? args.pop[1] : []
       platforms = nil
