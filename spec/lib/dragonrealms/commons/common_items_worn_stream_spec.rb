@@ -236,6 +236,27 @@ RSpec.describe 'DRCI worn and held checks from the live stream' do
       end
     end
 
+    # worn_ref gives a worn container's "#<id>" by the same rule, so the
+    # stream's long names resolve: before, its rule needed the name to end in
+    # the given words, and these all fell back to "my ...".
+    describe '.worn_ref' do
+      it 'gives the id for the noun or DR short name of a long-named worn item' do
+        expect(drci.worn_ref('zills')).to eq('#15705095')
+        expect(drci.worn_ref('thin-edged zills')).to eq('#15705095')
+        expect(drci.worn_ref("traveler's pack")).to eq('#15705078')
+        expect(drci.worn_ref('thigh bag')).to eq('#15705077')
+        expect(sent).to be_empty
+      end
+
+      it 'falls back to "my ..." with two matches or none' do
+        expect(drci.worn_ref('pack')).to eq('my pack')                  # two worn packs
+        expect(drci.worn_ref('red pack')).to eq('my red pack')          # "red" is in the description
+        expect(drci.worn_ref('leather bag')).to eq('my leather bag')    # not whole words in order
+        expect(drci.worn_ref('turquoise beading')).to eq('my turquoise beading') # no noun
+        expect(drci.worn_ref('zill')).to eq('my zill')
+      end
+    end
+
     describe '.inside?' do
       it 'still taps a worn item (the worn list says nothing about containers)' do
         game(["You tap #{zills_long} that you are wearing."])

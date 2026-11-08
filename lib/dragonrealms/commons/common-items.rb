@@ -1176,10 +1176,13 @@ module Lich
       # or stowed item of the same noun can't be picked instead. Sends no game
       # command.
       #
-      # A worn item matches when its noun equals the name's last word and its
-      # name ends in the name's words, whole words only, ignoring case. So
-      # "leather pouch" is not the "weapon harness with a leather pouch"
-      # (noun harness), and "pelt pack" is not the "rat-pelt pack".
+      # A worn item matches by the rule {.wearing?} and {.exists?} use (see
+      # {.carried_ids}): the name's words are whole words of the item's name,
+      # in order, and one of them is the item's own noun. That holds for the
+      # long names in the worn-items list, so "zills" and "thin-edged zills"
+      # give the id of "some polished thin-edged zills with silvered esoteric
+      # filigree". "leather pouch" is not the "weapon harness with a leather
+      # pouch" (noun harness), and "pelt pack" is not the "rat-pelt pack".
       #
       # Not for DRCC crafting methods on Lich versions that prepend "my " to
       # the container (that gives "my #123").
@@ -1204,7 +1207,7 @@ module Lich
         inv = GameObj.inv
         return item_ref(name) if words.empty? || held_ref_ordinal?(words.first) || inv.nil?
 
-        ids = inv.select { |item| worn_obj_matches?(item, words) }.filter_map { |item| held_obj_id(item) }.uniq
+        ids = carried_ids(inv, name)
         ids.size == 1 ? "##{ids.first}" : item_ref(name)
       end
 
@@ -1282,19 +1285,6 @@ module Lich
       #   DRCI.item_named?(GameObj.right_hand, 'iron pins')  #=> false
       def item_named?(item, name)
         !item.nil? && !name.nil? && held_obj_matches?(item, name)
-      end
-
-      # Whether a worn GameObj is the one these words name (see {.worn_ref}).
-      #
-      # @param obj [GameObj] a worn item
-      # @param words [Array<String>] the name's words, downcased, non-empty
-      # @return [Boolean]
-      # @api private
-      def worn_obj_matches?(obj, words)
-        return false unless obj.noun.to_s.casecmp?(words.last)
-
-        name_words = obj.name.to_s.downcase.split
-        name_words.size >= words.size && name_words.last(words.size) == words
       end
 
       # Whether a name means this held GameObj (see {.held_id} for the rule).
@@ -1438,7 +1428,7 @@ module Lich
         end.uniq
       end
 
-      private_class_method :held_obj_matches?, :worn_obj_matches?, :carried_name_pattern, :carried_ids, :carried_at_least?, :ordinal_name?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
+      private_class_method :held_obj_matches?, :carried_name_pattern, :carried_ids, :carried_at_least?, :ordinal_name?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #
