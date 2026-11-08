@@ -66,9 +66,13 @@ module Lich
         TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
         FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
         # Headers that open a DR inventory scrape whose <d> output we mine for
-        # item IDs. The two differ in completeness, which decides how we write
-        # GameObj (see .parse):
-        #   INV LIST -> COMPLETE: lists everything, so we clear and repopulate.
+        # item IDs. Only container contents are written when the linked
+        # worn-items stream (pushStream id='inv') owns the worn list, which the
+        # scrape must not overwrite; on the legacy stream the scrape still writes
+        # worn items too. The two differ in completeness, which decides how
+        # items are written (see .parse):
+        #   INV LIST -> COMPLETE: lists everything, so we clear and repopulate
+        #     the container contents.
         #     "You take a moment and rummage about your person, taking stock of
         #      your possessions..."
         #   INV SEARCH <word> / INV <category> full -> PARTIAL: lists only the
@@ -125,6 +129,10 @@ module Lich
       # true while the active inventory scrape is PARTIAL (INV SEARCH / category)
       # -> items are upserted; false for a COMPLETE INV LIST -> items replace.
       @@inventory_partial = false
+      # true while the active scrape also writes worn (top-level) items: only on
+      # the legacy stream, whose worn list is plain text. Set when the scrape
+      # opens (see .worn_stream_linked?).
+      @@inventory_writes_worn = false
 
       # Wall-clock time the game is expected to go down for maintenance, set
       # from a shutdown announcement. nil when no shutdown is pending.
@@ -250,15 +258,16 @@ module Lich
         case server_string
         when Pattern::OutputClassEmpty
           if @@parsing_inventory_get
-            # Clean terminator: a COMPLETE INV LIST finished, so publish the
-            # staged full replacement atomically. PARTIAL scrapes upsert as they
-            # go and stage nothing, so there is nothing to commit for them.
+            # Clean terminator: a COMPLETE INV LIST finished, so publish what it
+            # staged atomically. PARTIAL scrapes upsert as they go and stage
+            # nothing, so there is nothing to commit for them.
             unless @@inventory_partial
-              GameObj.commit_inv
+              GameObj.commit_inv if @@inventory_writes_worn
               GameObj.commit_all_containers_full
             end
             @@parsing_inventory_get = false
             @@inventory_partial = false
+            @@inventory_writes_worn = false
           end
         else
           # This block parses a single line from the output of the `inv search <string>` verb,
@@ -290,8 +299,8 @@ module Lich
             cmd = handler.cmd.to_s.downcase.strip
             # INV SEARCH links every item with a GET command. INV LIST links
             # worn (top-level) items with a REMOVE command and their contents
-            # with GET, so accept either verb: worn items (no container) go back
-            # into GameObj.inv, nested items into their container's contents.
+            # with GET, so accept either verb. Only nested items (with a
+            # container) are stored, into their container's contents.
             id_match = /(?:get|remove) (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
             # <!-- Regex to capture item and container IDs: cmd='(?:get|remove) (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
             # <d cmd='get #8286821 in #8286816 in #8286762'>A papyrus parchment</d> is in a black winter cloak crafted from thick cashmere, which is in a scuffed traveler's pack.
@@ -320,10 +329,20 @@ module Lich
               # the note below store_inv_item.
               container1 = id_match[:container1].strip.delete('#') if id_match[:container1]
               container = container1 || nil
+              # A line with no container is a worn item ("remove #id" in INV
+              # LIST, "... is being worn." in INV SEARCH) or one lying at your
+              # feet. When the linked worn-items stream owns the worn list (it
+              # sends the whole list at login and again with every hand change),
+              # writing them here replaced its entries with noun-less copies
+              # until the next push, so they are skipped; an item at your feet
+              # is not carried at all. The legacy stream's worn list is plain
+              # text, so there the scrape still writes worn items.
+              return server_string if container.nil? && !@@inventory_writes_worn
+
               before = cmd
               after = nil
 
-              # Store the parsed item into its immediate container (or worn inv).
+              # Store the parsed item into its immediate container.
               # DRItems.update_item(item, id, cmd, full_description)
               Lich.log("DRParser: Adding inventory item - ID: #{id}, Noun: #{noun}, Name: #{name}, Container: #{container}, Before: #{before}, After: #{after}")
               store_inv_item(id, noun, name, container, before, after)
@@ -347,6 +366,18 @@ module Lich
           end
         end
         server_string
+      end
+
+      # Whether this session's worn list comes from the linked worn-items
+      # stream: the parser has seen a linked item (<a exist=...>). The legacy
+      # stream (a front end handshake kept with --keep-fe-string) sends its worn
+      # list as plain text, so there the inventory scrapes are its only source.
+      # Read when a scrape opens: a linked session has sent linked items (room
+      # objects, the login worn list) long before any listing, and a legacy
+      # session never sends any.
+      # @return [Boolean]
+      def self.worn_stream_linked?
+        XMLData.stream_feature?(:links)
       end
 
       # Routes a parsed inventory item into GameObj according to the active
@@ -692,11 +723,14 @@ module Lich
           # A move starts a new room; its own room objs component follows.
           @@room_objs_cut = nil if @@room_objs_cut && Pattern::Nav.match?(line)
           if Pattern::InventoryListStart.match?(line)
-            # COMPLETE inventory (INV LIST): stage a full replacement and publish
-            # it only on the clean terminator (see populate_inventory_get). The
-            # live model stays visible until then, so an interrupted listing keeps
-            # the previous inventory instead of wiping it.
-            GameObj.begin_inv
+            # COMPLETE inventory (INV LIST): stage a full replacement of the
+            # container contents and publish it only on the clean terminator (see
+            # populate_inventory_get). The live model stays visible until then, so
+            # an interrupted listing keeps the previous contents instead of wiping
+            # them. The worn list is staged too only on the legacy stream; the
+            # linked worn-items stream owns it otherwise.
+            @@inventory_writes_worn = !worn_stream_linked?
+            GameObj.begin_inv if @@inventory_writes_worn
             GameObj.begin_all_containers
             @@parsing_inventory_get = true
             @@inventory_partial = false
@@ -704,6 +738,7 @@ module Lich
             # PARTIAL inventory (INV SEARCH <word> / INV <category> full): only
             # matching items are listed, so upsert them and leave the rest of the
             # GameObj model intact -- no clear.
+            @@inventory_writes_worn = !worn_stream_linked?
             @@parsing_inventory_get = true
             @@inventory_partial = true
           elsif (match = line.match(Pattern::GenderAgeCircle))
@@ -848,11 +883,12 @@ module Lich
             # discard it (keeping the previously published model) and tell the user
             # rather than silently leaving inventory half-updated.
             unless @@inventory_partial
-              GameObj.discard_inv_refresh
+              @@inventory_writes_worn ? GameObj.discard_inv_refresh : GameObj.discard_all_containers_refresh
               Lich::Messaging.msg('warn', "DRParser: 'inv list' did not finish; keeping previous inventory. Re-run 'inv list' to refresh.")
             end
             @@parsing_inventory_get = false
             @@inventory_partial = false
+            @@inventory_writes_worn = false
           end
 
           populate_inventory_get(line) if @@parsing_inventory_get

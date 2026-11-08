@@ -1093,12 +1093,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
     describe 'when the INV LIST (complete) header matches' do
       let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
 
-      it 'opens a staged full refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
+      it 'opens a staged container refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
         # The full replacement is now staged so the live model stays visible until
         # a clean terminator commits it -- the header must not wipe anything.
+        # The worn list belongs to the worn-items stream, so it is not staged.
         expect(GameObj).not_to receive(:clear_inv)
         expect(GameObj).not_to receive(:clear_all_containers)
-        expect(GameObj).to receive(:begin_inv)
+        expect(GameObj).not_to receive(:begin_inv)
         expect(GameObj).to receive(:begin_all_containers)
 
         described_class.parse(inv_list_line)
@@ -1187,13 +1188,16 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(ids(GameObj.containers['10'])).to contain_exactly('11')
       end
 
-      it 'atomically replaces the model on the clean terminator, dropping absent containers' do
+      it 'atomically replaces the container contents on the clean terminator, dropping absent containers' do
         described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
         described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+        described_class.parse("     -<d cmd='get #21 in #20'>a coin</d>")
         described_class.parse('<output class=""/>')
 
-        expect(ids(GameObj.inv)).to contain_exactly('20')
-        # The cloak was not in the new listing, so its container entry is dropped.
+        # The worn list is the worn-items stream's: the listing leaves it alone.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(ids(GameObj.containers['20'])).to contain_exactly('21')
+        # The cloak's contents were not in the new listing, so its entry is dropped.
         expect(GameObj.containers).not_to have_key('10')
       end
 
@@ -1760,14 +1764,23 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.class_variable_set(:@@inventory_partial, false)
     end
 
-    it 'parses a top-level item, stripping a leading article' do
-      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', nil, 'get #12345', nil)
-      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
+    it 'parses a nested item, stripping a leading article' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', '9', 'get #12345 in #9', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345 in #9'>a small pouch</d>")
     end
 
     it 'strips a capitalized leading article (e.g. from INV SEARCH output)' do
-      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', nil, 'get #12345', nil)
-      described_class.populate_inventory_get("<d cmd='get #12345'>A soft gem pouch</d>")
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', '9', 'get #12345 in #9', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345 in #9'>A soft gem pouch</d>")
+    end
+
+    # The worn list belongs to the worn-items stream. A line with no container
+    # stored here replaced the stream's entries with noun-less copies until the
+    # next hand change (at every login, the game's own INV LIST did this).
+    it 'does not store a top-level item (no container)' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
     end
 
     it 'parses a nested item with its container' do
@@ -1795,8 +1808,9 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
     end
 
-    it 'parses an inv list worn item linked with a remove command into inv' do
-      expect(GameObj).to receive(:new_inv).with('10859433', nil, 'hooded electroweave cloak', nil, 'remove #10859433', nil)
+    it 'does not store an inv list worn item (remove link): the worn-items stream owns it' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:remove_inv_item)
       described_class.populate_inventory_get("  <d cmd='remove #10859433'>a hooded electroweave cloak</d>")
     end
 
@@ -1835,9 +1849,17 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.populate_inventory_get("  <d cmd='get #11404650 in #11404639'>A soft gem pouch</d> is in a sky blue thigh quiver.")
       end
 
-      it 'upserts a matched worn item (remove link) into inv' do
-        expect(GameObj).to receive(:upsert_inv).with('11404268', nil, 'red pouch embroidered with a pork chop', nil, 'remove #11404268', nil)
+      it 'does not upsert a matched worn item (remove link): the worn-items stream owns it' do
+        expect(GameObj).not_to receive(:upsert_inv)
+        expect(GameObj).not_to receive(:new_inv)
         described_class.populate_inventory_get("  <d cmd='remove #11404268'>A red pouch embroidered with a pork chop</d> is being worn.")
+      end
+
+      it 'does not file an item lying at your feet anywhere (it is not carried)' do
+        expect(GameObj).not_to receive(:upsert_inv)
+        expect(GameObj).not_to receive(:new_inv)
+        expect(GameObj).not_to receive(:remove_inv_item)
+        described_class.populate_inventory_get("<d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is lying at your feet.")
       end
 
       # Adversarial (#5): a filtered scrape of a deeply-nested item must NOT touch
@@ -1906,6 +1928,195 @@ RSpec.describe Lich::DragonRealms::DRParser do
       contents = GameObj.containers['10783170'] || []
       expect(contents.map(&:id)).to contain_exactly('10783174', '10783173')
       expect(contents.map(&:name)).to contain_exactly('sheet of red parchment', 'tart')
+    end
+  end
+
+  # The worn list belongs to the worn-items stream (pushStream id='inv'); the
+  # INV LIST and INV SEARCH scrapes write container contents only. Every line
+  # goes through the real XMLParser, then DRParser.parse, in the order
+  # Game.process_xml_data and process_game_specific_data run them. Lines and
+  # ids are verbatim from Quilsilgas' 2026-11-08 09:26 login, where the game
+  # sent the worn list first and its own INV LIST about 180 lines later.
+  describe 'worn-items stream and the INV LIST scrape together (real XMLParser + GameObj)' do
+    let(:xml) { Lich::Common::XMLParser.new }
+
+    worn_push = [
+      '<clearStream id=\'inv\' ifClosed=\'\'/><pushStream id=\'inv\'/>Your worn items are:',
+      '  a <a exist="15705096" noun="crystal">sanowret crystal</a>',
+      '  <a exist="15705095" noun="zills">some polished thin-edged zills with silvered esoteric filigree</a>',
+      '  a <a exist="15705078" noun="pack">spidersilk traveler\'s pack dyed with shifting hues of red and black</a>',
+      '  a <a exist="15705077" noun="bag">heartname leather thigh bag edged in cloud turquoise beading</a>',
+      '  a <a exist="15705076" noun="charm">divine charm</a>',
+      '  a <a exist="15705070" noun="pack">canvas scribe\'s pack</a>',
+      '  a <a exist="15705069" noun="jerkin">leather jerkin</a>',
+      '  <a exist="15705068" noun="vambraces">some buckled leather vambraces</a>',
+      '  a <a exist="15705067" noun="skirt">flowing blue skirt</a>',
+      '<popStream/>'
+    ].freeze
+
+    inv_list = [
+      'You take a moment and rummage about your person, taking stock of your possessions...',
+      'You have:',
+      '  <d cmd=\'remove #15705096\'>sanowret crystal</d>',
+      '  <d cmd=\'remove #15705095\'>thin-edged zills</d>',
+      '  <d cmd=\'remove #15705078\'>traveler\'s pack</d>',
+      '     -<d cmd=\'get #15705079 in #15705078\'>duffel bag</d>',
+      '        -<d cmd=\'get #15705094 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705093 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705092 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705091 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705090 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705089 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705088 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705087 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705086 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705085 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705084 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705083 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705080 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705081 in #15705080 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '  <d cmd=\'remove #15705077\'>thigh bag</d>',
+      '  <d cmd=\'remove #15705076\'>divine charm</d>',
+      '  <d cmd=\'remove #15705070\'>scribe\'s pack</d>',
+      '     -<d cmd=\'get #15705075 in #15705070\'>faience necklace</d>',
+      '     -<d cmd=\'get #15705074 in #15705070\'>bronze rapier</d>',
+      '     -<d cmd=\'get #15705073 in #15705070\'>ice skates</d>',
+      '     -<d cmd=\'get #15705072 in #15705070\'>jade bowl</d>',
+      '     -<d cmd=\'get #15705071 in #15705070\'>Albreda lollipop</d>',
+      '  <d cmd=\'remove #15705069\'>leather jerkin</d>',
+      '  <d cmd=\'remove #15705068\'>leather vambraces</d>',
+      '  <d cmd=\'remove #15705067\'>blue skirt</d>',
+      '<output class=""/>'
+    ].freeze
+
+    def feed(*lines)
+      lines.flatten.each do |line|
+        Ox.sax_parse(xml, line, convert_special: false, symbolize: false, skip: :skip_none)
+        described_class.parse(line.dup)
+      end
+    end
+
+    def worn_by_id
+      Array(GameObj.inv).to_h { |o| [o.id, [o.noun, o.name]] }
+    end
+
+    def contents_ids(id) = Array(GameObj.containers[id]).map(&:id)
+
+    before(:each) do
+      require_relative '../../../../lib/common/xmlparser'
+      allow(XMLData).to receive(:game).and_return('DR')
+      # In production XMLData is this parser: DRParser asks it whether the
+      # stream is linked.
+      allow(XMLData).to receive(:stream_feature?) { |feature| xml.stream_feature?(feature) }
+      xml.instance_variable_set(:@game, 'DR')
+      GameObj.clear_inv
+      GameObj.clear_all_containers
+      GameObj.discard_staged_refreshes
+      described_class.class_variable_set(:@@parsing_inventory_get, false)
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    it 'keeps the stream\'s nouns and long names after the login INV LIST, and fills the containers' do
+      feed(worn_push)
+      before_listing = worn_by_id
+      expect(before_listing['15705095']).to eq(['zills', 'some polished thin-edged zills with silvered esoteric filigree'])
+
+      feed(inv_list)
+
+      expect(worn_by_id).to eq(before_listing)
+      expect(Array(GameObj.inv).map(&:id)).to eq(%w[15705096 15705095 15705078 15705077 15705076 15705070 15705069 15705068 15705067])
+      expect(contents_ids('15705078')).to eq(['15705079'])
+      expect(contents_ids('15705079').size).to eq(11)
+      expect(contents_ids('15705082')).to eq(%w[15705085 15705084 15705083])
+      expect(contents_ids('15705080')).to eq(['15705081'])
+      expect(contents_ids('15705070')).to eq(%w[15705075 15705074 15705073 15705072 15705071])
+      expect(GameObj.containers['15705070'].map(&:name)).to include('ice skates', 'Albreda lollipop')
+    end
+
+    it 'never creates worn entries from an INV LIST that arrives before any worn list' do
+      # Any linked element marks the stream as linked (the login burst has many).
+      feed('<component id=\'room objs\'>You also see a <a exist="96365" noun="bucket">large waste bucket</a>.</component>')
+      feed(inv_list)
+      expect(GameObj.inv).to be_nil
+      expect(contents_ids('15705070').size).to eq(5)
+
+      feed(worn_push)
+      expect(worn_by_id['15705095']&.first).to eq('zills')
+      expect(contents_ids('15705070').size).to eq(5)
+    end
+
+    it 'does not merge a worn list that arrives in the middle of an INV LIST into the listing' do
+      # A Saga session has sent linked items long before any listing (room
+      # objects, the login worn list); only a legacy session has none.
+      feed('<component id=\'room objs\'>You also see a <a exist="96365" noun="bucket">large waste bucket</a>.</component>')
+      feed(inv_list[0..5])
+      feed(worn_push)
+      feed(inv_list[6..])
+
+      ids = Array(GameObj.inv).map(&:id)
+      expect(ids.size).to eq(9)
+      expect(ids.uniq).to eq(ids)
+      expect(Array(GameObj.inv).map(&:noun)).to all(be_a(String))
+      expect(contents_ids('15705079').size).to eq(11)
+    end
+
+    it 'leaves a worn item alone when INV SEARCH reports it as worn' do
+      feed(worn_push)
+      before_search = Array(GameObj.inv).map { |o| [o.id, o.noun, o.name] }
+
+      feed("<roundTime value='1794083168'/>You rummage about your person, looking for zills...",
+           "  <d cmd='remove #15705095'>Some thin-edged zills</d> is being worn.",
+           '<output class=""/>')
+
+      expect(Array(GameObj.inv).map { |o| [o.id, o.noun, o.name] }).to eq(before_search)
+    end
+
+    # A front end handshake kept with --keep-fe-string gets the legacy stream:
+    # its worn list is plain text, so the scrapes stay its only worn source.
+    context 'on the legacy stream (no linked items seen)' do
+      legacy_worn_push = [
+        "<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:",
+        "  a canvas scribe's pack",
+        '  a leather jerkin',
+        '<popStream/>'
+      ].freeze
+
+      it 'still fills the worn list from INV LIST, and from INV SEARCH' do
+        feed(legacy_worn_push)
+        expect(xml.stream_feature?(:links)).to be false
+
+        feed(inv_list)
+        expect(Array(GameObj.inv).map(&:id)).to eq(%w[15705096 15705095 15705078 15705077 15705076 15705070 15705069 15705068 15705067])
+        expect(contents_ids('15705070').size).to eq(5)
+
+        GameObj.clear_inv
+        feed("<roundTime value='1794083168'/>You rummage about your person, looking for jerkin...",
+             "  <d cmd='remove #15705069'>A leather jerkin</d> is being worn.",
+             '<output class=""/>')
+        expect(Array(GameObj.inv).map { |o| [o.id, o.name] }).to eq([['15705069', 'leather jerkin']])
+      end
+
+      it 'discards the staged worn list too when the INV LIST is cut off' do
+        feed(legacy_worn_push, inv_list)
+        before_cut = Array(GameObj.inv).map(&:id)
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+
+        feed(inv_list[0..2], '<prompt time="1794083170">&gt;</prompt>')
+
+        expect(Array(GameObj.inv).map(&:id)).to eq(before_cut)
+        expect(GameObj.inv_refresh_open?).to be false
+      end
+    end
+
+    it 'keeps the worn list and the previous contents when the INV LIST is cut off by a prompt' do
+      feed(worn_push, inv_list)
+      before_cut = [worn_by_id, contents_ids('15705070')]
+      expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+
+      feed(inv_list[0..2], '<prompt time="1794083170">&gt;</prompt>')
+
+      expect([worn_by_id, contents_ids('15705070')]).to eq(before_cut)
     end
   end
 end

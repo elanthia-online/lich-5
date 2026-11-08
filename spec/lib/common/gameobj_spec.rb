@@ -1732,6 +1732,23 @@ RSpec.describe Lich::Common::GameObj do
   # clearContainer fill) that is in flight at the same time must never be
   # clobbered by the full refresh's whole-buffer discard or commit.
   describe 'INV LIST full refresh isolation from per-container refreshes' do
+    # DR's INV LIST stages container contents only; the worn list belongs to the
+    # worn-items stream, whose refresh may be open at the same moment.
+    it 'discard_all_containers_refresh drops the listing but not an open worn-list refresh' do
+      described_class.begin_inv                     # worn-items stream refresh in flight
+      described_class.new_inv('1', 'cloak', 'a cloak')
+      described_class.begin_all_containers          # INV LIST opens
+      described_class.new_inv('99', 'ring', 'a ring', 'pouch')
+
+      described_class.discard_all_containers_refresh
+
+      expect(described_class.inv_refresh_open?).to be true
+      described_class.commit_inv
+      expect(described_class.inv.map(&:id)).to eq(['1'])
+      described_class.commit_all_containers_full    # nothing left to publish
+      expect(described_class.containers).not_to have_key('pouch')
+    end
+
     it 'does not drop an unrelated in-flight container when the listing is discarded' do
       described_class.begin_all_containers          # INV LIST opens
       described_class.begin_container('backpack')   # unrelated clearContainer refresh
