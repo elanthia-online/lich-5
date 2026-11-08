@@ -837,9 +837,11 @@ module Lich
               end
               GameObj.begin_reserve if attributes['id'].to_s == 'reserve'
             elsif attributes['id'].to_s == 'inv'
-              # The linked worn-items list is a complete refresh, as on GemStone,
-              # and the only writer of the worn list (DRParser's INV LIST and
-              # INV SEARCH scrapes write container contents only). If another
+              # The linked worn-items list is a complete refresh, as on GemStone.
+              # DRParser's INV LIST and INV SEARCH scrapes leave the worn list to
+              # it (they write container contents only); the inventoryManager
+              # feed (Lich::Common::Inventory#register_with_gameobj) also writes
+              # the worn list, with its own begin_inv/commit_inv. If another
               # writer holds the worn staging, none opens here. The legacy list
               # is plain text (no GameObj entries). Until the stream's first link
               # has been seen (a login's first list arrives before it) the
