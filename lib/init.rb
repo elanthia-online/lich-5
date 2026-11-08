@@ -390,7 +390,7 @@ rescue LoadError => sqlite_load_error
     end
   else
     Lich::GemCheck.alert(
-      missing: ['sqlite3'], groups: [:default], error: Lich::DependencyRecovery::Error.new(result.error)
+      missing: ['sqlite3'], groups: [:default], error: Lich::GemCheck.recovery_error(result)
     )
     exit 1
   end
@@ -419,7 +419,7 @@ unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
         end
       else
         Lich::GemCheck.alert(
-          missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
+          missing: ['gtk3'], groups: [:gtk], error: Lich::GemCheck.recovery_error(result)
         )
         exit 1
       end

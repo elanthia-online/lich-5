@@ -6,7 +6,10 @@
 #   to be restored without minting a new tag.
 #
 # NOTES
-# - Targets an existing release by tag (for example: v5.16.1).
+# - Targets an existing draft with supported static Gemfile declarations and a
+#   Windows projection matching the currently accepted recovery contract.
+#   Pre-contract or incompatible older tags are intentionally unsupported,
+#   including when build_installer is false; there is no contract bypass.
 # - Rebuilds the core archives and attaches the same installer asset used by the stable workflow:
 #     * lich-5.tar.gz
 #     * lich-5.zip
@@ -19,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to rebuild assets for (e.g. v5.16.1)"
+        description: "Existing compatible draft release tag to rebuild assets for"
         required: true
         type: string
       build_installer:
@@ -37,6 +40,16 @@ jobs:
     outputs:
       tag: ${{ steps.verify.outputs.tag }}
     steps:
+      - name: Checkout contract tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout target consumer contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-target
+          persist-credentials: false
       - name: Verify draft release exists for tag
         id: verify
         env:
@@ -51,6 +64,10 @@ jobs:
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/check-r4l5-contract
+        with:
+          gemfile: release-target/Gemfile
+          lockfile: release-target/Gemfile.lock
 
   build_archives:
     needs: release_guard
@@ -113,6 +130,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout contract tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout target consumer contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release_guard.outputs.tag }}
+          path: release-target
+          persist-credentials: false
       - name: Download latest Ruby4Lich5 installer
         shell: bash
         run: |
@@ -121,6 +148,12 @@ jobs:
             --output Ruby4Lich5.exe \
             https://github.com/elanthia-online/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
           test -s Ruby4Lich5.exe
+
+      - uses: ./.github/actions/check-r4l5-contract
+        with:
+          gemfile: release-target/Gemfile
+          lockfile: release-target/Gemfile.lock
+          installer: Ruby4Lich5.exe
 
       - name: Upload installer to release
         env:
