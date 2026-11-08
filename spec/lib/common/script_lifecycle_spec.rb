@@ -1501,6 +1501,55 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
   end
 
+  # The script list feed (docs/frontends/script-list-feed.md) hears about
+  # every change to what ;list shows: a script joining or leaving the running
+  # list, a pause or unpause, and hide_me.
+  describe 'script list feed signals' do
+    before { allow(Lich::Common::ScriptListFeed).to receive(:changed!) }
+
+    it 'signals when a script joins the running list and again when it leaves' do
+      # What the registry held at each signal: the feed snapshots it after
+      # the signal, so the join must already show the script and the leave
+      # must already have dropped it.
+      seen = []
+      allow(Lich::Common::ScriptListFeed).to receive(:changed!) { seen << script_class.list.map(&:name) }
+      allow(Lich::Common::TRUSTED_SCRIPT_BINDING).to receive(:call).and_return(Lich::Common::Scripting.new.script)
+      script = exec_script_class.start('nil')
+      expect(script.join(1)).to equal(script)
+      expect(seen.first).to include(script.name)
+      expect(seen.last).not_to include(script.name)
+    end
+
+    it 'signals after a named script is published and after a startup is discarded' do
+      seen = []
+      allow(Lich::Common::ScriptListFeed).to receive(:changed!) { seen << script_class.list.map(&:name) }
+      script = script_class.allocate
+      script.instance_variable_set(:@name, 'feednamed')
+      script.__send__(:__publish)
+      expect(seen).to eq([['feednamed']])
+      script.__send__(:__discard_startup)
+      expect(seen.last).to eq([])
+    end
+
+    it 'signals on pause and unpause, but not on a no-op repeat' do
+      script = script_class.allocate
+      script.instance_variable_set(:@name, 'feedtest')
+      script.instance_variable_set(:@paused, false)
+      script.pause
+      script.pause
+      script.unpause
+      script.unpause
+      expect(Lich::Common::ScriptListFeed).to have_received(:changed!).twice
+    end
+
+    it 'signals when a script hides or unhides itself' do
+      script = script_class.allocate
+      script.hidden = true
+      expect(script.hidden).to be true
+      expect(Lich::Common::ScriptListFeed).to have_received(:changed!).once
+    end
+  end
+
   describe 'ExecScript' do
     it 'records successful and failed execution results' do
       allow(Lich::Common::TRUSTED_SCRIPT_BINDING).to receive(:call).and_return(Lich::Common::Scripting.new.script)

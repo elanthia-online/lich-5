@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'script_list_feed'
+
 module Lich
   module Common
     # Which of DragonRealms' rich-stream rewrites each attached front end gets.
@@ -18,6 +20,15 @@ module Lich
     # 3. the frontend catalog's capabilities for +$frontend+ (what every
     #    client got before declarations existed).
     #
+    # The same line also asks for feeds (FEEDS): extra lines Lich sends the
+    # client, such as the running-script list (ScriptListFeed). Feeds never
+    # change the stream, and each category is resolved on its own: a line
+    # replaces a client's rewrite set only when it names a rewrite, and its
+    # feed set only when it names a feed, so asking for a feed never changes
+    # the rewrites. A line that names nothing Lich knows (a bare
+    # SET_FRONTEND_CAPS) replaces both with the empty set. The launch flag
+    # follows the same rule.
+    #
     # Only these three rewrites follow the client. Everything else Lich does
     # to the stream for a front end (Wizard's GSL codes, the origin sentinel,
     # mono, the room-number display, the Genie and Frostbite subtitle edits)
@@ -25,8 +36,11 @@ module Lich
     # ignores declarations: its GSL conversion keeps state across lines, so
     # every client there gets the session's set.
     module ClientCapabilities
-      # The capabilities a client can declare, in canonical order.
+      # The rewrites a client can declare, in canonical order.
       DECLARABLE = %i[room_element game_links double_bold].freeze
+
+      # The feeds a client can ask for, in canonical order.
+      FEEDS = %i[script_list].freeze
 
       # The client-to-Lich control line. Lich consumes it and never sends it
       # to the game. The command is case-sensitive, like SET_FRONTEND_PID; the
@@ -40,6 +54,7 @@ module Lich
       private_constant :SEPARATOR
 
       @launch_capabilities = nil
+      @launch_feeds = nil
 
       class << self
         # Whether a line from a client is a capability declaration.
@@ -52,12 +67,16 @@ module Lich
 
         # Applies a capability declaration to the client that sent it.
         #
-        # The declared set replaces any earlier declaration from that client.
-        # Names Lich does not know are ignored, so a newer client can declare
-        # capabilities an older Lich lacks; a declaration with no known name
-        # (or none at all) declares the empty set, the full legacy rewrite.
+        # The rewrites named replace the client's earlier rewrite set, and the
+        # feeds named replace its earlier feed set; a category the line does
+        # not name is left as it was, so a client can turn on a feed without
+        # restating its rewrites. Names Lich does not know are ignored, so a
+        # newer client can declare capabilities an older Lich lacks; a
+        # declaration with no known name (or none at all) declares the empty
+        # set for both, the full legacy rewrite and no feeds.
         #
-        # @param client [#declared_capabilities=, nil] the client connection
+        # @param client [#declared_capabilities=, #declared_feeds=, nil] the
+        #   client connection
         # @param line [String, nil] one line read from that client
         # @return [Boolean] true when the line was a declaration, which the
         #   caller must then not forward to the game
@@ -65,10 +84,15 @@ module Lich
           match = line.is_a?(String) && DECLARATION.match(line)
           return false unless match
 
-          capabilities, unknown = parse(match[:names])
-          client.declared_capabilities = capabilities if client.respond_to?(:declared_capabilities=)
-          log("info: client declared capabilities [#{capabilities.join(' ')}]" \
+          capabilities, feeds, unknown = parse_all(match[:names])
+          nothing_known = capabilities.empty? && feeds.empty?
+          if (nothing_known || !capabilities.empty?) && client.respond_to?(:declared_capabilities=)
+            client.declared_capabilities = capabilities
+          end
+          client.declared_feeds = feeds if (nothing_known || !feeds.empty?) && client.respond_to?(:declared_feeds=)
+          log("info: client declared capabilities [#{(capabilities + feeds).join(' ')}]" \
               "#{" (ignored unknown: #{unknown.join(' ')})" unless unknown.empty?}")
+          ScriptListFeed.client_ready(client) if defined?(ScriptListFeed)
           true
         end
 
@@ -78,10 +102,37 @@ module Lich
         # @return [Array(Array<Symbol>, Array<String>)] the frozen known set in
         #   DECLARABLE order, and the unknown names as given
         def parse(names)
+          capabilities, _feeds, unknown = parse_all(names)
+          [capabilities, unknown]
+        end
+
+        # Splits a list of names into rewrites, feeds and the rest.
+        #
+        # @param names [String, nil] names separated by spaces, tabs or commas
+        # @return [Array(Array<Symbol>, Array<Symbol>, Array<String>)] the
+        #   frozen rewrite set in DECLARABLE order, the frozen feed set in
+        #   FEEDS order, and the unknown names as given
+        def parse_all(names)
           tokens = names.to_s.split(SEPARATOR).reject(&:empty?)
-          known, unknown = tokens.partition { |token| DECLARABLE.include?(token.downcase.to_sym) }
-          wanted = known.map { |token| token.downcase.to_sym }
-          [DECLARABLE.select { |capability| wanted.include?(capability) }.freeze, unknown]
+          wanted = tokens.map { |token| token.downcase.to_sym }
+          unknown = tokens.reject { |token| (DECLARABLE + FEEDS).include?(token.downcase.to_sym) }
+          [DECLARABLE.select { |capability| wanted.include?(capability) }.freeze,
+           FEEDS.select { |feed| wanted.include?(feed) }.freeze,
+           unknown]
+        end
+
+        # Applies a --frontend-caps= list: like a declaration, it sets the
+        # session's rewrite set only when it names a rewrite (or names nothing
+        # known), and its feed set only when it names a feed.
+        #
+        # @param names [String, nil]
+        # @return [Array<String>] the unknown names, for the caller to report
+        def apply_launch_list(names)
+          capabilities, feeds, unknown = parse_all(names)
+          nothing_known = capabilities.empty? && feeds.empty?
+          self.launch_capabilities = capabilities if nothing_known || !capabilities.empty?
+          self.launch_feeds = feeds if nothing_known || !feeds.empty?
+          unknown
         end
 
         # The session's set from --frontend-caps=, or nil when not given.
@@ -93,6 +144,37 @@ module Lich
         # @param capabilities [Array<Symbol>, nil]
         def launch_capabilities=(capabilities)
           @launch_capabilities = capabilities.nil? ? nil : DECLARABLE.select { |capability| capabilities.include?(capability) }.freeze
+        end
+
+        # The session's feeds from --frontend-caps=, or nil when it named none.
+        # @return [Array<Symbol>, nil]
+        attr_reader :launch_feeds
+
+        # Sets (or, with nil, clears) the session's --frontend-caps= feeds.
+        #
+        # @param feeds [Array<Symbol>, nil]
+        def launch_feeds=(feeds)
+          @launch_feeds = feeds.nil? ? nil : FEEDS.select { |feed| feeds.include?(feed) }.freeze
+        end
+
+        # The feeds a client gets when it has not asked for any: the launch
+        # flag's, else the catalog's for the session's front end (no built-in
+        # front end has one).
+        #
+        # @param frontend [String, nil] the session's front end
+        # @return [Array<Symbol>] frozen, in FEEDS order
+        def session_feeds(frontend = $frontend)
+          launch_feeds || FEEDS.select { |feed| Frontend.has_capability?(frontend, feed) }.freeze
+        end
+
+        # The feeds a client gets: the ones it asked for, else the session's.
+        # Unlike the rewrites, a GSL session honours a client's feeds: they
+        # add lines of their own and touch no conversion state.
+        #
+        # @param client [Object, nil]
+        # @return [Array<Symbol>]
+        def feeds_for(client)
+          (client.declared_feeds if client.respond_to?(:declared_feeds)) || session_feeds
         end
 
         # The set a client gets when it has not declared one: the launch flag's,

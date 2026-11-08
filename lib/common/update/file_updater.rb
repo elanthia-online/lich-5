@@ -115,8 +115,11 @@ module Lich
         # @param type [String] 'script', 'library', or 'data'
         # @param rf [String] requested filename
         # @param version [String] channel ('production' or 'beta')
+        # @param retried_by [Symbol] :user when the user typed the command, so
+        #   a failure tells them to run it again; :login when the login sync
+        #   fetches the file again anyway
         # @return [void]
-        def update_file(type, rf, version = 'production')
+        def update_file(type, rf, version = 'production', retried_by: :user)
           if version =~ /^(?:staging|master)$/i
             respond 'Requested channel %s mapped to main (stable).' % [version]
             version = 'production'
@@ -140,7 +143,7 @@ module Lich
               ref = @resolver.resolve_channel_ref(:beta)
               if ref.nil?
                 if @resolver.last_error
-                  StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
+                  StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.', retried_by: retried_by)
                 else
                   respond 'No viable beta found. Aborting beta update.'
                 end
@@ -158,11 +161,40 @@ module Lich
           unless requested_file_ext == "bad extension"
             file_path = File.join(location, requested_file)
 
+            # An empty, "." or ".." segment would put the file outside its
+            # directory, and raw.githubusercontent.com answers such a path
+            # with a redirect that http_get does not follow.
+            if requested_file.split(%r{[/\\]}, -1).any? { |segment| ['', '.', '..'].include?(segment) }
+              respond_file_unavailable(requested_file, file_path)
+              return
+            end
+
             begin
-              # Download fully before touching the file, then replace it
-              # atomically: the live file stays in place for the whole
-              # network read and is untouched if anything fails.
-              content = URI.parse(File.join(remote_repo, requested_file)).open.read
+              # http_get reports a malformed URL as a network failure, so a
+              # name that cannot form a URL is caught here and reported as
+              # unavailable instead. TypeError is a channel with no remote_repo.
+              url = File.join(remote_repo, requested_file)
+              URI.parse(url)
+            rescue URI::InvalidURIError, TypeError
+              respond_file_unavailable(requested_file, file_path)
+              return
+            end
+
+            # Download fully before touching the file, then replace it
+            # atomically: the live file stays in place for the whole
+            # network read and is untouched if anything fails.
+            content = @client.http_get(url, auth: false)
+            unless content
+              error = @client.last_error
+              if error&.kind == :not_found
+                respond_file_unavailable(requested_file, file_path)
+              else
+                StatusReporter.respond_github_failure(error, "#{requested_file} was not updated.", retried_by: retried_by)
+              end
+              return
+            end
+
+            begin
               FileWriter.safe_write(file_path, content)
 
               respond
@@ -172,11 +204,6 @@ module Lich
               respond "Error updating #{requested_file}: #{e.class} - #{e.message}"
               respond "Backtrace: #{e.backtrace.first(3).join(' | ')}" if $debug
               respond "The existing #{requested_file} was left unchanged." if File.exist?(file_path)
-
-              respond
-              respond "The filename #{requested_file} is not available via lich5-update."
-              respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
-              respond "download #{requested_file} from another repository."
             end
           else
             respond
@@ -212,11 +239,26 @@ module Lich
                 File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
                 respond "The prior version of #{file} was backed up to #{newfilename}."
               end
-              update_file('data', file)
+              update_file('data', file, retried_by: :login)
             end
           end
 
           Lich.core_updated_with_lich_version = version
+        end
+
+        private
+
+        # Tells the user the default repository has no file by this name.
+        #
+        # @param requested_file [String] the name the user asked for
+        # @param file_path [String] where the file would have been written
+        # @return [void]
+        def respond_file_unavailable(requested_file, file_path)
+          respond
+          respond "The existing #{requested_file} was left unchanged." if File.exist?(file_path)
+          respond "The filename #{requested_file} is not available via lich5-update."
+          respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
+          respond "download #{requested_file} from another repository."
         end
       end
     end
