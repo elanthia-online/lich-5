@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# SQLite connection helpers for lich.db3. Loaded by lib/lich.rb before sqlite3
-# and sequel are required, so nothing here touches SQLite3 or Sequel at load
-# time.
+# SQLite connection helpers for lich.db3 and infomon.db (Lich::Gemstone::Infomon
+# opens infomon.db with Lich.open_sequel_sqlite). Loaded by lib/lich.rb before
+# sqlite3 and sequel are required, so nothing here touches SQLite3 or Sequel at
+# load time.
 
 require 'monitor'
 
@@ -63,7 +64,8 @@ module Lich
     SQLITE_POOL_TIMEOUT_BUSY_TIMEOUTS * sqlite_busy_timeout_ms.to_i / 1000.0
   end
 
-  # Opens lich.db3 through Sequel. Sequel's pool hands each thread its own
+  # Opens lich.db3, and infomon.db (lib/gemstone/infomon.rb), through Sequel.
+  # Pool or pragma changes here apply to both files. Sequel's pool hands each thread its own
   # connection, and every connection it creates gets a busy handler that waits
   # with Ruby's sleep (see SQLiteBusyWait). `timeout:` is the C busy timeout
   # Sequel sets first; it stays in force if the Ruby handler can't be installed.
@@ -81,7 +83,8 @@ module Lich
 
   # Lock waits that let the rest of the process keep running.
   #
-  # sqlite3's busy_timeout waits inside C with the GVL held. If the lock holder
+  # sqlite3's busy_timeout waits inside C with the GVL held (except on Windows,
+  # where its sleeps release the GVL; see shared connections below). If the lock holder
   # is another thread of this process that still has Ruby code to run before it
   # commits, it can't run, and the waiter fails when the timeout expires. A
   # waiting thread also freezes every other thread (game I/O included) while
@@ -116,7 +119,9 @@ module Lich
   # scope it was meant for (a Timeout::ExitException after its Timeout block
   # has returned), and a killed script's write can land after the writes its
   # cleanup makes once the kill returns. With the C busy timeout none of this
-  # could happen, because nothing else ran until the wait ended.
+  # could happen, because nothing else ran until the wait ended (except on
+  # Windows, where the C busy timeout's sleeps release the GVL and can deliver
+  # interrupts too; see shared connections below).
   #
   # Two exceptions keep waiting until the lock frees or the busy timeout
   # expires, and deliver the interrupt afterwards:
@@ -142,6 +147,16 @@ module Lich
   # thread calling into it while the first sleeps in the handler blocks on
   # the same connection mutex with the GVL held. Shared connections are
   # therefore serialized; see SQLiteBusyWait::SerializedDatabase.
+  #
+  # On Windows that hazard does not need the Ruby handler. The precompiled
+  # sqlite3 gem imports Sleep() from Ruby's DLL, which exports it as
+  # rb_w32_Sleep, and that sleeps with the GVL released. So every sleep SQLite
+  # takes inside a call releases the GVL while SQLite holds the connection's
+  # mutex: the C busy timeout's waits, and winLock's retries of a lock that
+  # another process holds, which happen even with no busy timeout at all.
+  # Any SQLite3::Database that more than one thread can call must be
+  # serialized, whatever its busy timeout, or a lock held by another Lich
+  # process can freeze this one for good (#2254).
   #
   # Deferring interrupts moves where a Thread#kill lands inside
   # Sequel::Database#transaction to the end of BEGIN or COMMIT; see

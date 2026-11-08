@@ -2,11 +2,76 @@ module Lich
   module Common
     # Database adapter to separate database concerns
     class DatabaseAdapter
+      # A lock that hands itself to the thread that has waited longest.
+      #
+      # Ruby's Mutex and Monitor are not fair: a thread that releases one and
+      # asks again at once usually takes it back before a woken waiter runs.
+      # On release this lock passes ownership straight to the first waiter, so
+      # a thread that calls in a tight loop cannot keep others out.
+      #
+      # Interrupts (Thread#kill, Thread#raise, Timeout) are deferred for the
+      # whole call: while the thread waits for its turn, while it holds the
+      # lock, and until it has released it. None is ever delivered inside, so
+      # a caller's own deferral (update_settings holds a kill back until
+      # on_stored has returned) is never overridden, and a waiter can never
+      # be interrupted out of the queue and strand the lock. The cost is that
+      # a thread waiting here can't be interrupted until its turn has come and
+      # gone; the wait is bounded by the calls queued ahead of it. Not
+      # re-entrant.
+      class HandoffLock
+        def initialize
+          @mutex = Mutex.new
+          @held = false
+          @waiters = []
+        end
+
+        def synchronize
+          Thread.handle_interrupt(Object => :never) do
+            acquire
+            begin
+              yield
+            ensure
+              release
+            end
+          end
+        end
+
+        private
+
+        # Takes the lock, or joins the queue and waits until release hands
+        # it over. With interrupts deferred the wait can't be cut short, so
+        # once pop returns this thread owns the lock.
+        def acquire
+          ticket = @mutex.synchronize do
+            if @held
+              Thread::Queue.new.tap { |queue| @waiters << queue }
+            else
+              @held = true
+              nil
+            end
+          end
+          ticket&.pop
+        end
+
+        # The lock stays held while it is handed over, so no thread arriving
+        # meanwhile can take it ahead of the waiter.
+        def release
+          @mutex.synchronize do
+            if (successor = @waiters.shift)
+              successor << true
+            else
+              @held = false
+            end
+          end
+        end
+      end
+
       def initialize(data_dir, table_name)
         @file = File.join(data_dir, "lich.db3")
         @db = Lich.open_sequel_sqlite(@file)
         @table_name = table_name
         @version_mutex = Mutex.new
+        @version_call_lock = HandoffLock.new
         @version_db = nil
         @version_base = 0
         @version_epoch = -1
@@ -44,13 +109,32 @@ module Lich
       # own that never writes: every commit, from another process or from this
       # one, changes it.
       #
-      # The connection has no busy timeout. While another process holds the
-      # database's exclusive lock (a commit in progress, or a script holding
-      # it), the read fails at once and this returns nil, rather than waiting
-      # inside SQLite, which keeps the GVL and would stall every thread of
-      # this process. Callers then keep what they have; a read that overlaps a
-      # commit may see the database as it was before it. The read runs in one
-      # C call (sqlite3_exec), so no lock is held while Ruby code runs.
+      # The connection does not wait for locks. While another process holds
+      # the database's exclusive lock (a commit in progress, or a script
+      # holding it), the read fails at once and this returns nil instead of
+      # waiting out a busy timeout. Callers then keep what they have; a read
+      # that overlaps a commit may see the database as it was before it. The
+      # read runs in one C call (sqlite3_exec), so no SQLite lock is held
+      # while Ruby code runs.
+      #
+      # Every thread of the process shares this one connection, so only one
+      # thread at a time may be inside a sqlite3 call on it
+      # (@version_call_lock). The GVL does not keep threads out of the C call.
+      # On Windows the sqlite3 gem resolves SQLite's Sleep() to Ruby's
+      # rb_w32_Sleep, which releases the GVL, and SQLite sleeps while it holds
+      # the connection's mutex even with no busy timeout: winLock retries a
+      # lock that another process holds, with a 1 ms sleep between tries. A
+      # second thread that entered the call meanwhile would block on that
+      # mutex with the GVL held, and the sleeping thread could never get the
+      # GVL back. Every thread of the process would then stop for good (#2254).
+      # With the lock, the second thread waits in Ruby, with the GVL released.
+      #
+      # rb_w32_Sleep also delivers pending interrupts. A Thread#kill or
+      # Timeout landing in that sleep would unwind through SQLite's C frames
+      # and leave the connection's mutex locked, with the same result for the
+      # next caller. The lock defers interrupts until the call has returned,
+      # and while a thread waits for its turn, so a caller that defers them
+      # itself (update_settings around on_stored) keeps that guarantee.
       #
       # The pragma counts per connection, starting again from 1 on a new one,
       # so after an error has closed the connection the reopened one could
@@ -62,15 +146,16 @@ module Lich
       # earlier one (a connection would need 2**40 commits to reach the next
       # range).
       #
-      # No Ruby lock is held on the way, so a cache hit never waits for one.
-      # Ruby's Mutex is not fair: a thread calling this in a tight loop would
-      # take the lock back before a waiting thread got to run, and stall other
-      # threads' Settings reads (measured: up to seconds with the lock held
-      # around the pragma, about 100 ms now and then with it held only to
-      # record the value). The GVL already keeps two threads out of the C call
-      # at once. @version_mutex guards only opening and closing the
+      # @version_call_lock is held only for the C call itself, and hands
+      # itself to the longest-waiting thread, because Ruby's Mutex is not fair.
+      # A thread calling this in a tight loop would otherwise take the lock
+      # back before a waiting thread got to run, and stall other threads'
+      # Settings reads (measured: up to seconds with a Mutex held around the
+      # pragma). @version_mutex guards only opening and closing the
       # connection; a value read on a connection that another thread has
-      # closed or replaced meanwhile is discarded (nil).
+      # closed or replaced meanwhile is discarded (nil). Closing also takes
+      # @version_call_lock, so it waits for a call in progress instead of
+      # closing the connection under it.
       #
       # @return [Integer, nil]
       def data_version
@@ -79,7 +164,8 @@ module Lich
         # set, and a connection replaced after this point fails the identity
         # check below.
         base = @version_base
-        raw = Integer(db.execute_batch2('PRAGMA data_version').dig(0, 0))
+        rows = @version_call_lock.synchronize { db.execute_batch2('PRAGMA data_version') }
+        raw = Integer(rows.dig(0, 0))
         return nil unless @version_db.equal?(db)
 
         base + raw
@@ -334,7 +420,8 @@ module Lich
 
           @version_db = nil
         end
-        begin
+        # Wait for a call in progress on db to return before closing it.
+        @version_call_lock.synchronize do
           db&.close
         rescue SQLite3::Exception
           nil

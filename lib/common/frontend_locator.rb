@@ -2,6 +2,7 @@
 
 require 'rexml/document'
 require 'open3'
+require 'shellwords'
 
 module Lich
   module Common
@@ -85,18 +86,22 @@ module Lich
       # @param logger [#call, nil] receives handled discovery warning strings
       # @param application_roots [Array<String>] macOS application directories
       # @param wine [Module, nil] injected Wine integration provider
+      # @param spotlight [#call, nil] macOS bundle-id search returning bundle
+      #   paths; nil uses mdfind
       def initialize(
         platform_key: Frontend.platform_key,
         environment: ENV,
         logger: nil,
         application_roots: ['/Applications', '~/Applications'],
-        wine: (defined?(Wine) ? Wine : nil)
+        wine: (defined?(Wine) ? Wine : nil),
+        spotlight: nil
       )
         @platform_key = Frontend.validate_platform_key!(platform_key)
         @environment = environment
         @logger = logger || method(:default_log)
         @application_roots = application_roots
         @wine = wine
+        @spotlight = spotlight || method(:spotlight_search)
         @cache = {}
         # Always acquire the cache mutex before the application-index mutex
         # when both are needed. resolve(refresh: true) relies on this order.
@@ -170,6 +175,7 @@ module Lich
       def discover(definition)
         candidates = registry_candidates(definition).map { |path| [path, :registry] }
         candidates.concat(application_candidates(definition).map { |path| [path, :application] })
+        candidates.concat(appimage_candidates(definition))
         candidates.concat(conventional_candidates(definition).map { |path| [path, :conventional] })
         candidates.concat(path_candidates(definition).map { |path| [path, :path] })
 
@@ -229,9 +235,144 @@ module Lich
         return [] if bundle_ids.empty?
 
         bundles = bundle_ids.flat_map { |bundle_id| application_index.fetch(bundle_id, []) }.uniq
+        bundles = bundle_ids.flat_map { |bundle_id| spotlight_bundles(bundle_id) }.uniq if bundles.empty?
         bundles.product(executables).map do |bundle, executable|
           File.join(bundle, 'Contents', 'MacOS', executable)
         end
+      end
+
+      SPOTLIGHT_TIMEOUT = 2
+      # Copies Spotlight also indexes that must not become the launch target:
+      # a mounted dmg, the Trash, or a Gatekeeper-translocated read-only copy.
+      SPOTLIGHT_EXCLUDED = %r{\A/Volumes/|/\.Trash/|/AppTranslocation/}
+      private_constant :SPOTLIGHT_TIMEOUT, :SPOTLIGHT_EXCLUDED
+
+      # Finds application bundles outside the scanned application roots via
+      # Spotlight. Each hit is re-checked against its Info.plist bundle id.
+      #
+      # @param bundle_id [String] CFBundleIdentifier to search for
+      # @return [Array<String>] matching bundle paths; empty when Spotlight
+      #   is disabled, slow, or unavailable
+      # @api private
+      def spotlight_bundles(bundle_id)
+        return [] unless bundle_id.match?(/\A[A-Za-z0-9.-]+\z/)
+
+        Array(@spotlight.call(bundle_id)).filter_map do |path|
+          path = path.to_s.strip
+          next unless path.end_with?('.app') && absolute_path?(path)
+          next if path.match?(SPOTLIGHT_EXCLUDED)
+
+          path if mac_bundle_id(path) == bundle_id
+        end
+      rescue SystemCallError, IOError => e
+        log_discovery_error("Spotlight #{bundle_id}", e)
+        []
+      end
+
+      # Runs mdfind for a bundle id with a hard timeout; Spotlight can stall
+      # while indexing and discovery runs while the GUI builds its list.
+      def spotlight_search(bundle_id)
+        query = "kMDItemCFBundleIdentifier == '#{bundle_id}'"
+        Open3.popen3('/usr/bin/mdfind', query) do |stdin, stdout, stderr, wait|
+          stdin.close
+          stderr.close
+          reader = Thread.new { stdout.read }
+          unless wait.join(SPOTLIGHT_TIMEOUT)
+            begin
+              Process.kill('KILL', wait.pid)
+            rescue SystemCallError
+              nil
+            end
+            reader.kill
+            return []
+          end
+          wait.value.success? ? reader.value.to_s.lines(chomp: true) : []
+        end
+      rescue SystemCallError
+        []
+      end
+
+      # Finds a Linux AppImage. Releases ship only a versioned AppImage
+      # (Saga-0.10.8-x86_64.AppImage) that the user places anywhere and that
+      # electron-updater renames to the new version when it updates. Desktop
+      # entries written by AppImage integrators (AppImageLauncher, Gear Lever)
+      # point at custom locations; their directories are then searched by the
+      # catalog name patterns so a renamed post-update file is still found.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @return [Array<Array(String, Symbol)>] candidate paths and sources
+      # @api private
+      def appimage_candidates(definition)
+        return [] unless platform_key == :linux
+
+        appimage = definition.dig(:metadata, :discovery, :appimage)
+        return [] unless appimage
+
+        entries = desktop_entry_appimages(appimage[:startup_wm_class])
+        directories = entries.map { |path| File.dirname(path) }
+        directories.concat((appimage[:directories] || []).filter_map { |path| expand_path(path) })
+        globbed = directories.uniq.flat_map do |directory|
+          appimages_in(directory, appimage[:names] || [])
+        end
+        entries.map { |path| [path, :desktop_entry] } + globbed.uniq.map { |path| [path, :appimage] }
+      end
+
+      # @return [Array<String>] AppImage paths named by matching desktop entries
+      def desktop_entry_appimages(startup_wm_class)
+        return [] if startup_wm_class.to_s.empty?
+
+        data_home = environment_value('XDG_DATA_HOME')
+        data_home = File.join(environment_value('HOME').to_s, '.local', 'share') if data_home.to_s.empty?
+        return [] unless absolute_path?(data_home)
+
+        applications = File.join(data_home, 'applications')
+        Dir.glob('*.desktop', base: applications).sort.filter_map do |name|
+          file = File.join(applications, name)
+          desktop_entry_appimage(file, startup_wm_class)
+        end
+      rescue SystemCallError => e
+        log_discovery_error('desktop entries', e)
+        []
+      end
+
+      def desktop_entry_appimage(file, startup_wm_class)
+        fields = {}
+        section = nil
+        File.foreach(file, encoding: 'UTF-8') do |line|
+          line = line.strip
+          if line.start_with?('[')
+            section = line
+          elsif section == '[Desktop Entry]' && (match = line.match(/\A(StartupWMClass|Exec)\s*=\s*(.*)\z/))
+            fields[match[1]] ||= match[2]
+          end
+        end
+        return nil unless fields['StartupWMClass'] == startup_wm_class
+
+        command = Shellwords.split(fields['Exec'].to_s).first.to_s
+        command if command.start_with?('/') && File.extname(command).casecmp?('.AppImage')
+      rescue SystemCallError, ArgumentError, EncodingError => e
+        log_discovery_error(file, e)
+        nil
+      end
+
+      # Globs catalog AppImage names (case-sensitive) in a directory, newest
+      # release first: highest embedded version, then most recent mtime.
+      def appimages_in(directory, names)
+        paths = names.flat_map do |name|
+          Dir.glob(name, base: directory).map { |file| File.join(directory, file) }
+        end
+        # Dir.glob returns dangling symlinks (e.g. a stable Saga.AppImage link
+        # whose versioned target an update renamed); File.mtime would raise on
+        # them and drop the whole directory. executable? requires a file anyway.
+        paths = paths.uniq.select { |path| File.file?(path) }
+        paths.sort_by { |path| [appimage_version(path), File.mtime(path)] }.reverse
+      rescue SystemCallError => e
+        log_discovery_error(directory, e)
+        []
+      end
+
+      def appimage_version(path)
+        Gem::Version.new(File.basename(path)[/\d+(?:\.\d+)+/] || '0')
       end
 
       def application_index
@@ -265,14 +406,24 @@ module Lich
         end
       end
 
+      # Registry hives a catalog registry entry may name.
+      REGISTRY_HIVES = {
+        local_machine: :HKEY_LOCAL_MACHINE,
+        current_user: :HKEY_CURRENT_USER
+      }.freeze
+      # Win32 KEY_WOW64_64KEY access flag. win32/registry does not define it.
+      # It selects the 64-bit view from a 32-bit Ruby; it is a no-op otherwise.
+      KEY_WOW64_64KEY = 0x0100
+      private_constant :REGISTRY_HIVES, :KEY_WOW64_64KEY
+
       def registry_candidates(definition)
-        keys = definition.dig(:metadata, :discovery, :registry_keys) || []
-        return [] if keys.empty?
+        entries = registry_entries(definition)
+        return [] if entries.empty?
 
         directories = if windows?
-                        windows_registry_directories(keys)
-                      elsif @wine
-                        wine_registry_directories(keys)
+                        windows_registry_directories(entries)
+                      elsif wine_managed?(definition)
+                        wine_registry_directories(entries)
                       else
                         []
                       end
@@ -280,16 +431,43 @@ module Lich
         directories.product(executables).map { |directory, executable| File.join(directory, executable) }
       end
 
-      def windows_registry_directories(keys)
-        require 'win32/registry'
-        keys.filter_map do |key|
-          Win32::Registry::HKEY_LOCAL_MACHINE.open(key, Win32::Registry::KEY_READ) do |registry|
-            registry['Directory']
+      # Normalizes catalog registry entries. A String entry is an
+      # HKEY_LOCAL_MACHINE key whose 'Directory' value holds the install
+      # directory; a Hash entry may name another hive, value, and view.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @return [Array<Hash>] entries with :hive, :key, :value, and :view
+      # @api private
+      def registry_entries(definition)
+        entries = definition.dig(:metadata, :discovery, :registry_keys) || []
+        entries.map do |entry|
+          if entry.is_a?(String)
+            { hive: :local_machine, key: entry, value: 'Directory', view: nil }
+          else
+            {
+              hive: entry.fetch(:hive, :local_machine),
+              key: entry.fetch(:key),
+              value: entry.fetch(:value, 'Directory'),
+              view: entry[:view]
+            }
           end
+        end
+      end
+
+      def windows_registry_directories(entries)
+        require 'win32/registry'
+        entries.filter_map do |entry|
+          hive = Win32::Registry.const_get(REGISTRY_HIVES.fetch(entry[:hive]))
+          access = Win32::Registry::KEY_READ
+          access |= KEY_WOW64_64KEY if entry[:view] == 64
+          directory = hive.open(entry[:key], access) do |registry|
+            registry[entry[:value]]
+          end
+          directory unless directory.to_s.strip.empty?
         rescue Win32::Registry::Error
           nil
         rescue SystemCallError => e
-          log_discovery_error(key, e)
+          log_discovery_error(entry[:key], e)
           nil
         end
       rescue LoadError => e
@@ -297,12 +475,17 @@ module Lich
         []
       end
 
-      def wine_registry_directories(keys)
-        keys.filter_map do |key|
-          value = @wine.registry_gets("HKEY_LOCAL_MACHINE\\#{key}\\Directory")
+      # Wine registry discovery only serves frontends Lich launches through
+      # Wine. Others (e.g. Saga) have native non-Windows builds, so a Windows
+      # copy inside a Wine prefix must not become their launch target.
+      def wine_registry_directories(entries)
+        entries.filter_map do |entry|
+          next unless entry[:hive] == :local_machine
+
+          value = @wine.registry_gets("HKEY_LOCAL_MACHINE\\#{entry[:key]}\\#{entry[:value]}")
           wine_path(value) if value
         rescue SystemCallError => e
-          log_discovery_error(key, e)
+          log_discovery_error(entry[:key], e)
           nil
         end
       end
@@ -397,9 +580,12 @@ module Lich
 
       def wine_managed_executable?(path, definition)
         platform_key == :linux &&
-          @wine &&
-          definition.dig(:metadata, :launcher_adapter) == :simutronics &&
+          wine_managed?(definition) &&
           File.extname(path).casecmp?('.exe')
+      end
+
+      def wine_managed?(definition)
+        !@wine.nil? && definition.dig(:metadata, :launcher_adapter) == :simutronics
       end
 
       def resolution(definition, path, source)

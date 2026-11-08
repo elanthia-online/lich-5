@@ -11,12 +11,16 @@ RSpec.describe Lich::Common::ClientCapabilities do
 
   before do
     allow(Lich).to receive(:log)
-    @saved = [described_class.launch_capabilities, $frontend]
+    @saved = [described_class.launch_capabilities, described_class.launch_feeds, $frontend]
   end
 
   after do
     client.close rescue nil
-    described_class.launch_capabilities, $frontend = @saved
+    described_class.launch_capabilities, described_class.launch_feeds, $frontend = @saved
+    # A real declare hands the client to the script list feed, which may
+    # start its thread (a streams session gets the window by default). Stop
+    # it so it cannot outlive this example.
+    Lich::Common::ScriptListFeed.reset!
   end
 
   describe '.declaration?' do
@@ -156,6 +160,123 @@ RSpec.describe Lich::Common::ClientCapabilities do
       $frontend = 'genie'
       plain = Object.new
       expect(described_class.group([plain])).to eq({ [] => [plain] })
+    end
+  end
+
+  # Feeds (script_list) are resolved apart from the rewrites, so a client can
+  # ask for one without restating, or losing, the rewrite set it gets now.
+  describe 'feeds' do
+    before { allow(Lich::Common::ScriptListFeed).to receive(:client_ready) }
+
+    describe '.parse_all' do
+      it 'splits rewrites, feeds and unknown names' do
+        expect(described_class.parse_all('script_list Room_Element sparkles'))
+          .to eq([[:room_element], [:script_list], ['sparkles']])
+      end
+    end
+
+    describe '.parse' do
+      it 'returns the rewrites only, and does not report a feed as unknown' do
+        expect(described_class.parse('script_list game_links')).to eq([[:game_links], []])
+      end
+    end
+
+    describe '.declare' do
+      it 'leaves the rewrites alone when the line names only a feed' do
+        $frontend = 'saga'
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
+        expect(client.declared_capabilities).to be_nil
+        expect(client.declared_feeds).to eq([:script_list])
+        expect(described_class.group([client])).to eq({ %i[room_element game_links double_bold] => [client] })
+      end
+
+      it 'keeps an earlier rewrite declaration when a later line names only a feed' do
+        described_class.declare(client, "SET_FRONTEND_CAPS game_links\n")
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
+        expect(client.declared_capabilities).to eq([:game_links])
+        expect(client.declared_feeds).to eq([:script_list])
+      end
+
+      it 'keeps the feeds when a later line names only rewrites' do
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
+        described_class.declare(client, "SET_FRONTEND_CAPS room_element\n")
+        expect(client.declared_capabilities).to eq([:room_element])
+        expect(client.declared_feeds).to eq([:script_list])
+      end
+
+      it 'sets both from one line' do
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list double_bold\n")
+        expect(client.declared_capabilities).to eq([:double_bold])
+        expect(client.declared_feeds).to eq([:script_list])
+      end
+
+      it 'clears both on a bare line, as before feeds existed for the rewrites' do
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list game_links\n")
+        described_class.declare(client, "SET_FRONTEND_CAPS\n")
+        expect(client.declared_capabilities).to eq([])
+        expect(client.declared_feeds).to eq([])
+      end
+
+      it 'tells the feed after storing the declaration' do
+        described_class.declare(client, "SET_FRONTEND_CAPS script_list\n")
+        expect(Lich::Common::ScriptListFeed).to have_received(:client_ready).with(client)
+      end
+
+      it 'does not tell the feed about a line that is not a declaration' do
+        described_class.declare(client, "look\n")
+        expect(Lich::Common::ScriptListFeed).not_to have_received(:client_ready)
+      end
+    end
+
+    describe '.apply_launch_list' do
+      it 'leaves the catalog rewrites in place for a list of feeds alone' do
+        $frontend = 'saga'
+        expect(described_class.apply_launch_list('script_list')).to eq([])
+        expect(described_class.launch_capabilities).to be_nil
+        expect(described_class.session_default).to eq(%i[room_element game_links double_bold])
+        expect(described_class.session_feeds).to eq([:script_list])
+      end
+
+      it 'sets both from a mixed list and returns the unknown names' do
+        expect(described_class.apply_launch_list('game_links,script_list,sparkles')).to eq(['sparkles'])
+        expect(described_class.launch_capabilities).to eq([:game_links])
+        expect(described_class.launch_feeds).to eq([:script_list])
+      end
+
+      it 'gives the empty set for both from an empty list, as before for the rewrites' do
+        described_class.apply_launch_list('')
+        expect(described_class.launch_capabilities).to eq([])
+        expect(described_class.launch_feeds).to eq([])
+      end
+    end
+
+    describe '.feeds_for' do
+      it 'is what the client asked for, else the session feeds' do
+        $frontend = 'genie'
+        expect(described_class.feeds_for(client)).to eq([])
+        described_class.launch_feeds = [:script_list]
+        expect(described_class.feeds_for(client)).to eq([:script_list])
+        client.declared_feeds = []
+        expect(described_class.feeds_for(client)).to eq([])
+      end
+
+      # The stream window follows the streams capability (ScriptListFeed);
+      # the only feed is the data element, which no catalog entry has.
+      it 'gives no built-in front end a feed by default' do
+        %w[saga stormfront wrayth genie profanity frostbite wizard avalon].each do |frontend|
+          expect(described_class.session_feeds(frontend)).to eq([])
+        end
+      end
+
+      it 'does not know script_window: the window is not a capability' do
+        expect(described_class.parse_all('script_window')).to eq([[], [], ['script_window']])
+      end
+
+      it 'honours a GSL session client\'s own feeds' do
+        $frontend = 'wizard'
+        client.declared_feeds = [:script_list]
+        expect(described_class.feeds_for(client)).to eq([:script_list])
+      end
     end
   end
 end

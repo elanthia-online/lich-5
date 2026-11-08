@@ -69,6 +69,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     described_class.class_variable_set(:@@parsing_exp_mods_output, false)
     described_class.class_variable_set(:@@parsing_inventory_get, false)
     described_class.class_variable_set(:@@shutdown_at, nil)
+    described_class.class_variable_set(:@@room_objs_cut, nil)
   end
 
   describe 'game shutdown tracking' do
@@ -1092,12 +1093,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
     describe 'when the INV LIST (complete) header matches' do
       let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
 
-      it 'opens a staged full refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
+      it 'opens a staged container refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
         # The full replacement is now staged so the live model stays visible until
         # a clean terminator commits it -- the header must not wipe anything.
+        # The worn list belongs to the worn-items stream, so it is not staged.
         expect(GameObj).not_to receive(:clear_inv)
         expect(GameObj).not_to receive(:clear_all_containers)
-        expect(GameObj).to receive(:begin_inv)
+        expect(GameObj).not_to receive(:begin_inv)
         expect(GameObj).to receive(:begin_all_containers)
 
         described_class.parse(inv_list_line)
@@ -1186,13 +1188,16 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(ids(GameObj.containers['10'])).to contain_exactly('11')
       end
 
-      it 'atomically replaces the model on the clean terminator, dropping absent containers' do
+      it 'atomically replaces the container contents on the clean terminator, dropping absent containers' do
         described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
         described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+        described_class.parse("     -<d cmd='get #21 in #20'>a coin</d>")
         described_class.parse('<output class=""/>')
 
-        expect(ids(GameObj.inv)).to contain_exactly('20')
-        # The cloak was not in the new listing, so its container entry is dropped.
+        # The worn list is the worn-items stream's: the listing leaves it alone.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(ids(GameObj.containers['20'])).to contain_exactly('21')
+        # The cloak's contents were not in the new listing, so its entry is dropped.
         expect(GameObj.containers).not_to have_key('10')
       end
 
@@ -1382,6 +1387,356 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
   end
 
+  # When a room holds too much, DragonRealms cuts the room objs component short
+  # ("... and some other stuff.</component>") while the main-stream room view
+  # that follows the roomName line still lists everything.
+  describe 'room objs component cut short' do
+    # Lines 14-31, 40-54, 63-67, 91-105 and 129-143 of a 2026-11-07 Saga capture
+    # (Andreshlew, Lithralia Street), timestamps stripped, player names and ids
+    # pseudonymized. In order: entry with a cut component (Seamstress Zasele is
+    # only in the main-stream view), an unrelated arrival, a second entry, a
+    # LOOK with room descriptions on, a move east to a complete room, and the
+    # return once the ground was partly cleared (Zasele back in the component).
+    fixture = File.expand_path('../../../fixtures/room_objs/dr_saga_room_objs_cut.xml', __dir__)
+    let(:capture) { File.readlines(fixture) }
+
+    let(:assigned) { {} }
+    # [line number, field, value] for every DRRoom/UserVars write, in order.
+    let(:writes) { [] }
+    let(:line_no) { [0] }
+
+    before do
+      %i[npcs dead_npcs room_objs].each do |field|
+        allow(drroom_class).to receive(:"#{field}=") do |value|
+          assigned[field] = value
+          writes << [line_no[0], field, value]
+        end
+      end
+      allow(drroom_class).to receive(:npcs) { assigned.fetch(:npcs, []) }
+      # parse calls the drdefs room helpers unqualified; production reaches them
+      # because main.rb includes Lich::DragonRealms into Object. Route them to
+      # the real implementations here without including the module globally.
+      drdefs = Object.new.extend(Lich::DragonRealms)
+      %i[find_npcs find_dead_npcs find_objects find_pcs find_pcs_prone find_pcs_sitting].each do |helper|
+        allow(described_class).to receive(helper) { |arg| drdefs.send(helper, arg) }
+      end
+      UserVars.npcs = []
+    end
+
+    def feed(*lines)
+      lines.flatten.each do |line|
+        line_no[0] += 1
+        described_class.parse(+line)
+      end
+      assigned
+    end
+
+    # 1-based line number of the first capture line at or after +from+ that
+    # contains every one of +needles+.
+    def capture_line(*needles, from: 1)
+      index = capture.each_index.find { |i| i + 1 >= from && needles.all? { |n| capture[i].include?(n) } }
+      raise "no capture line has #{needles.inspect}" unless index
+
+      index + 1
+    end
+
+    def writes_on(number) = writes.select { |n, _, _| n == number }
+
+    cut_objs = "<component id='room objs'>You also see a rock, <pushBold/>a goblin<popBold/> and some other stuff.</component>"
+    full_list = 'You also see a rock, <pushBold/>a goblin<popBold/>, a wooden chest, <pushBold/>a kobold<popBold/> which appears dead and <pushBold/>Seamstress Zasele<popBold/>.'
+    full_view = "<style id=\"\"/>  #{full_list}\r\n"
+    prompt = '<prompt time="1794026438">&gt;</prompt>'
+
+    describe 'the real capture' do
+      before { feed(capture) }
+
+      it 'adds the NPC listed after the cut once the room view arrives' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+
+        expect(writes_on(component).to_h { |_, field, value| [field, value] }[:npcs]).to eq([])
+        expect(writes_on(view).to_h { |_, field, value| [field, value] }).to include(npcs: ['Zasele'], dead_npcs: [])
+      end
+
+      it 'replaces the cut list, "other stuff" entry included, with the full one' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        cut = writes_on(component).find { |_, field, _| field == :room_objs }.last
+        full = writes_on(view).find { |_, field, _| field == :room_objs }.last
+
+        # 25 objects + "other stuff"; then 32 objects, 33 entries because
+        # find_objects splits "white and blue cozy shop" (existing behaviour).
+        expect(cut.size).to eq(26)
+        expect(cut.last).to eq('other stuff')
+        expect(full.size).to eq(33)
+        expect(full.first(25)).to eq(cut.first(25))
+        expect(full).to include('sturdy shack', 'boxy structure')
+        expect(full.last).to eq('boxy structure')
+        expect(full.grep(/other stuff|Zasele|<|exist=/)).to be_empty
+      end
+
+      it 'leaves the repaired room alone through later lines up to the next move' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        next_move = capture_line('<nav/>', from: view)
+
+        expect(writes.select { |n, _, _| n > view && n < next_move }).to be_empty
+      end
+
+      it 'repairs the second entry and the LOOK with room descriptions on' do
+        second = capture_line("'room objs'", 'other stuff', from: capture_line('You wander north.'))
+        view = capture_line('<style id=""/>  You also see', from: second)
+        look = capture_line("<preset id='roomDesc'>", from: view)
+
+        [view, look].each do |n|
+          expect(writes_on(n).to_h { |_, field, value| [field, value] }[:npcs]).to eq(['Zasele'])
+          expect(writes_on(n).to_h { |_, field, value| [field, value] }[:room_objs].size).to eq(33)
+        end
+      end
+
+      it 'does not reparse the room view of a complete component' do
+        %w[east west].each do |dir|
+          component = capture_line("'room objs'", from: capture_line("You wander #{dir}."))
+          view = capture_line('<style id=""/>  You also see', from: component)
+
+          expect(writes_on(component).map { |_, field, _| field }).to contain_exactly(:npcs, :dead_npcs, :room_objs)
+          expect(writes_on(view)).to be_empty
+        end
+      end
+
+      it 'ends on the complete component that lists Zasele itself' do
+        expect(assigned[:npcs]).to eq(['Zasele'])
+        # find_objects splits "white and blue cozy shop" on " and " (existing
+        # behaviour, unchanged here), hence "white" and "blue cozy shop".
+        expect(assigned[:room_objs]).to eq(['sturdy shack', 'stone building', 'dragon-painted green stall', 'white', 'blue cozy shop', 'boxy structure'])
+        expect(UserVars.npcs).to eq(['Zasele'])
+      end
+    end
+
+    it 'repairs the legacy dialect too, sorting a dead NPC after the cut into dead_npcs' do
+      feed(cut_objs, full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      expect(assigned[:dead_npcs]).to eq(['kobold'])
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      expect(UserVars.npcs).to eq(%w[Zasele goblin])
+    end
+
+    it 'accepts the "and a lot of other stuff." form of the marker' do
+      feed(cut_objs.sub('some other stuff', 'a lot of other stuff'), full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+    end
+
+    it 'keeps a cut component as sent when no room view follows (still or refreshed)' do
+      feed(cut_objs, prompt, 'You pick up a rock.')
+
+      expect(assigned[:npcs]).to eq(['goblin'])
+      expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+      expect(UserVars.npcs).to eq(['goblin'])
+    end
+
+    it 'repairs from a LOOK several prompts later in the same room' do
+      feed(cut_objs, prompt, 'Brenna just arrived.', prompt)
+      feed("<resource picture=\"0\"/><style id=\"roomName\" />[Room] (**)\r\n", full_view)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+    end
+
+    it 'finds the list after a room description that itself says "You also see"' do
+      look = "<style id=\"\"/><preset id='roomDesc'>You also see a rock in the mist.</preset>  #{full_list}"
+      feed(cut_objs, look)
+
+      expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+    end
+
+    it "ignores another room's view and a container listing" do
+      feed(cut_objs)
+      writes.clear
+      feed('<style id=""/>  You also see a rock, a stump and a goblin.',
+           '<style id=""/>  You also see a rock.',
+           'In the chest you see a rock, a goblin and some other stuff.',
+           '<style id="">  You also see a boulder, a rock, <pushBold/>a goblin<popBold/>, a wooden chest.')
+
+      expect(writes).to be_empty
+    end
+
+    it 'ignores a view that stops where the component was cut' do
+      feed(cut_objs)
+      writes.clear
+      feed('<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/>.')
+
+      expect(writes).to be_empty
+    end
+
+    it 'repairs when only one object follows the cut (" and " continuation)' do
+      feed(cut_objs, '<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/> and a wooden chest.')
+
+      expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+    end
+
+    {
+      'a complete component' => "<component id='room objs'>You also see a rock.</component>",
+      'an empty component'   => "<component id='room objs'></component>",
+      'a move (<nav>)'       => "<nav rm='100029'/>"
+    }.each do |boundary, line|
+      it "forgets the cut after #{boundary}, so the old room view cannot overwrite the room" do
+        feed(cut_objs, line)
+        writes.clear
+        feed(full_view)
+
+        expect(writes).to be_empty
+      end
+    end
+
+    it 'tracks the latest cut component: a newer cut replaces the older one' do
+      newer = "<component id='room objs'>You also see a boulder and some other stuff.</component>"
+      feed(cut_objs, newer)
+      writes.clear
+      feed(full_view)
+      expect(writes).to be_empty
+
+      feed('<style id=""/>  You also see a boulder, a rock and <pushBold/>a troll<popBold/>.')
+      expect(assigned[:npcs]).to eq(['troll'])
+    end
+
+    it 'ignores a room view that arrives before the cut component' do
+      feed(full_view, cut_objs)
+
+      expect(assigned[:npcs]).to eq(['goblin'])
+      expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+    end
+
+    it 'does not treat "and some other stuff." before the end of the list as a cut' do
+      objs = 'You also see a rock and some other stuff., <pushBold/>a goblin<popBold/>.'
+      feed("<component id='room objs'>#{objs}</component>")
+
+      expect(described_class.class_variable_get(:@@room_objs_cut)).to be_nil
+    end
+
+    # A status is worded differently in the component and the room view once
+    # room descriptions are off (dr_legacy_hunt.xml:1561 "which appears dead",
+    # :1608 "(dead)").
+    describe 'creature status worded differently in the component and the view' do
+      it 'repairs from a view that words a status before the cut differently' do
+        feed("<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> which appears dead, a rock and some other stuff.</component>",
+             "<resource picture=\"0\"/><style id=\"roomName\" />[Room] (1)\r\n",
+             '<style id=""/>  You also see <pushBold/>a jeol moradu<popBold/> (dead), a rock, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(['troll'])
+        expect(assigned[:dead_npcs]).to eq(['moradu'])
+        expect(assigned[:room_objs]).to eq(['rock', 'wooden chest'])
+      end
+
+      it 'repairs when the status is the last object before the cut, and the wordy form is in the view' do
+        feed("<component id='room objs'>You also see a rock, <pushBold/>a goblin<popBold/> (stunned) and some other stuff.</component>",
+             '<style id=""/>  You also see a rock, <pushBold/>a goblin<popBold/> that appears stunned and <pushBold/>Seamstress Zasele<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(%w[Zasele goblin])
+      end
+
+      it 'still rejects a view whose objects differ once statuses are set aside' do
+        feed("<component id='room objs'>You also see <pushBold/>a goblin<popBold/> which appears dead, a rock and some other stuff.</component>")
+        writes.clear
+        feed('<style id=""/>  You also see <pushBold/>a kobold<popBold/> (dead), a rock, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(writes).to be_empty
+      end
+
+      it 'does not strip status-like words from an object that is not a creature' do
+        feed("<component id='room objs'>You also see a rock which appears dead, a stick and some other stuff.</component>")
+        writes.clear
+        feed('<style id=""/>  You also see a rock (dead), a stick and <pushBold/>a troll<popBold/>.')
+
+        expect(writes).to be_empty
+      end
+    end
+
+    # The game resends the component, still cut, whenever something in the room
+    # changes; no room view follows it. The change may be after the cut, where
+    # the refresh cannot show it, so the refresh is applied as sent: an object
+    # after the cut is missing until the next room view, never listed after it
+    # has gone.
+    describe 'a cut component resent in the same room' do
+      # rock, goblin | wooden chest, kobold (dead), Zasele
+      let(:refresh) { ->(text) { "<component id='room objs'>You also see #{text} and some other stuff.</component>" } }
+
+      it 'applies a refresh as sent, "other stuff" entry included' do
+        feed(cut_objs, full_view, refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'), prompt)
+
+        expect(assigned[:npcs]).to eq(['goblin'])
+        expect(assigned[:dead_npcs]).to eq([])
+        expect(assigned[:room_objs]).to eq(['sack', 'rock', 'other stuff'])
+        expect(UserVars.npcs).to eq(['goblin'])
+      end
+
+      it 'drops a creature listed after the cut that left (unchanged refresh)' do
+        feed(cut_objs, full_view, 'Seamstress Zasele just went east.', cut_objs, prompt)
+
+        expect(assigned[:npcs]).to eq(['goblin'])
+        expect(assigned[:dead_npcs]).to eq([])
+        expect(assigned[:room_objs]).to eq(['rock', 'other stuff'])
+      end
+
+      it 'drops an object listed after the cut that was taken away (unchanged refresh)' do
+        feed(cut_objs, full_view, 'Brenna picks up a wooden chest.', cut_objs)
+
+        expect(assigned[:room_objs]).not_to include('wooden chest')
+        expect(assigned[:room_objs].last).to eq('other stuff')
+      end
+
+      it 'repairs from a LOOK after a refresh, against the refresh it follows' do
+        feed(cut_objs, full_view, refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'))
+        feed('<style id=""/>  You also see a sack, a rock, <pushBold/>a goblin<popBold/>, a wooden chest and <pushBold/>a troll<popBold/>.')
+
+        expect(assigned[:npcs]).to eq(%w[goblin troll])
+        expect(assigned[:room_objs]).to eq(['sack', 'rock', 'wooden chest'])
+      end
+
+      it 'does not repair from a view of the room as it was before the refresh' do
+        feed(cut_objs, full_view, refresh.call('a sack, a rock, <pushBold/>a goblin<popBold/>'))
+        writes.clear
+        feed(full_view)
+
+        expect(writes).to be_empty
+      end
+
+      # Review of #2287: the repaired list was merged with every later refresh,
+      # so a creature after the cut stayed listed after it left.
+      it 'drops Zasele from the real capture when she leaves and the component is resent' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        feed(capture.first(view))
+        expect(assigned[:npcs]).to eq(['Zasele'])
+
+        feed('Seamstress Zasele just went east.', capture[component - 1], prompt)
+
+        expect(assigned[:npcs]).to eq([])
+        expect(assigned[:room_objs].last).to eq('other stuff')
+      end
+
+      it 'drops her until a LOOK when she stays and the component is resent' do
+        component = capture_line("'room objs'", 'other stuff')
+        view = capture_line('<style id=""/>  You also see', from: component)
+        feed(capture.first(view), capture[component - 1], prompt)
+        expect(assigned[:npcs]).to eq([])
+
+        feed(capture[view - 1])
+
+        expect(assigned[:npcs]).to eq(['Zasele'])
+      end
+    end
+
+    it 'never reparses main-stream views after a complete component' do
+      feed("<component id='room objs'>You also see a rock and <pushBold/>a goblin<popBold/>.</component>")
+      writes.clear
+      feed('<style id=""/>  You also see a rock and <pushBold/>a goblin<popBold/>.', full_view)
+
+      expect(writes).to be_empty
+    end
+  end
+
   describe '.check_known_thief_khri' do
     before do
       drspells_class.reset!
@@ -1409,14 +1764,23 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.class_variable_set(:@@inventory_partial, false)
     end
 
-    it 'parses a top-level item, stripping a leading article' do
-      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', nil, 'get #12345', nil)
-      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
+    it 'parses a nested item, stripping a leading article' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', '9', 'get #12345 in #9', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345 in #9'>a small pouch</d>")
     end
 
     it 'strips a capitalized leading article (e.g. from INV SEARCH output)' do
-      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', nil, 'get #12345', nil)
-      described_class.populate_inventory_get("<d cmd='get #12345'>A soft gem pouch</d>")
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', '9', 'get #12345 in #9', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345 in #9'>A soft gem pouch</d>")
+    end
+
+    # The worn list belongs to the worn-items stream. A line with no container
+    # stored here replaced the stream's entries with noun-less copies until the
+    # next hand change (at every login, the game's own INV LIST did this).
+    it 'does not store a top-level item (no container)' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
     end
 
     it 'parses a nested item with its container' do
@@ -1444,8 +1808,9 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
     end
 
-    it 'parses an inv list worn item linked with a remove command into inv' do
-      expect(GameObj).to receive(:new_inv).with('10859433', nil, 'hooded electroweave cloak', nil, 'remove #10859433', nil)
+    it 'does not store an inv list worn item (remove link): the worn-items stream owns it' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:remove_inv_item)
       described_class.populate_inventory_get("  <d cmd='remove #10859433'>a hooded electroweave cloak</d>")
     end
 
@@ -1484,9 +1849,17 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.populate_inventory_get("  <d cmd='get #11404650 in #11404639'>A soft gem pouch</d> is in a sky blue thigh quiver.")
       end
 
-      it 'upserts a matched worn item (remove link) into inv' do
-        expect(GameObj).to receive(:upsert_inv).with('11404268', nil, 'red pouch embroidered with a pork chop', nil, 'remove #11404268', nil)
+      it 'does not upsert a matched worn item (remove link): the worn-items stream owns it' do
+        expect(GameObj).not_to receive(:upsert_inv)
+        expect(GameObj).not_to receive(:new_inv)
         described_class.populate_inventory_get("  <d cmd='remove #11404268'>A red pouch embroidered with a pork chop</d> is being worn.")
+      end
+
+      it 'does not file an item lying at your feet anywhere (it is not carried)' do
+        expect(GameObj).not_to receive(:upsert_inv)
+        expect(GameObj).not_to receive(:new_inv)
+        expect(GameObj).not_to receive(:remove_inv_item)
+        described_class.populate_inventory_get("<d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is lying at your feet.")
       end
 
       # Adversarial (#5): a filtered scrape of a deeply-nested item must NOT touch
@@ -1555,6 +1928,195 @@ RSpec.describe Lich::DragonRealms::DRParser do
       contents = GameObj.containers['10783170'] || []
       expect(contents.map(&:id)).to contain_exactly('10783174', '10783173')
       expect(contents.map(&:name)).to contain_exactly('sheet of red parchment', 'tart')
+    end
+  end
+
+  # The worn list belongs to the worn-items stream (pushStream id='inv'); the
+  # INV LIST and INV SEARCH scrapes write container contents only. Every line
+  # goes through the real XMLParser, then DRParser.parse, in the order
+  # Game.process_xml_data and process_game_specific_data run them. Lines and
+  # ids are verbatim from Quilsilgas' 2026-11-08 09:26 login, where the game
+  # sent the worn list first and its own INV LIST about 180 lines later.
+  describe 'worn-items stream and the INV LIST scrape together (real XMLParser + GameObj)' do
+    let(:xml) { Lich::Common::XMLParser.new }
+
+    worn_push = [
+      '<clearStream id=\'inv\' ifClosed=\'\'/><pushStream id=\'inv\'/>Your worn items are:',
+      '  a <a exist="15705096" noun="crystal">sanowret crystal</a>',
+      '  <a exist="15705095" noun="zills">some polished thin-edged zills with silvered esoteric filigree</a>',
+      '  a <a exist="15705078" noun="pack">spidersilk traveler\'s pack dyed with shifting hues of red and black</a>',
+      '  a <a exist="15705077" noun="bag">heartname leather thigh bag edged in cloud turquoise beading</a>',
+      '  a <a exist="15705076" noun="charm">divine charm</a>',
+      '  a <a exist="15705070" noun="pack">canvas scribe\'s pack</a>',
+      '  a <a exist="15705069" noun="jerkin">leather jerkin</a>',
+      '  <a exist="15705068" noun="vambraces">some buckled leather vambraces</a>',
+      '  a <a exist="15705067" noun="skirt">flowing blue skirt</a>',
+      '<popStream/>'
+    ].freeze
+
+    inv_list = [
+      'You take a moment and rummage about your person, taking stock of your possessions...',
+      'You have:',
+      '  <d cmd=\'remove #15705096\'>sanowret crystal</d>',
+      '  <d cmd=\'remove #15705095\'>thin-edged zills</d>',
+      '  <d cmd=\'remove #15705078\'>traveler\'s pack</d>',
+      '     -<d cmd=\'get #15705079 in #15705078\'>duffel bag</d>',
+      '        -<d cmd=\'get #15705094 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705093 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705092 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705091 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705090 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705089 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705088 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705087 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705086 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705085 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705084 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705083 in #15705082 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '        -<d cmd=\'get #15705080 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '           -<d cmd=\'get #15705081 in #15705080 in #15705079 in #15705078\'>traveler\'s pack</d>',
+      '  <d cmd=\'remove #15705077\'>thigh bag</d>',
+      '  <d cmd=\'remove #15705076\'>divine charm</d>',
+      '  <d cmd=\'remove #15705070\'>scribe\'s pack</d>',
+      '     -<d cmd=\'get #15705075 in #15705070\'>faience necklace</d>',
+      '     -<d cmd=\'get #15705074 in #15705070\'>bronze rapier</d>',
+      '     -<d cmd=\'get #15705073 in #15705070\'>ice skates</d>',
+      '     -<d cmd=\'get #15705072 in #15705070\'>jade bowl</d>',
+      '     -<d cmd=\'get #15705071 in #15705070\'>Albreda lollipop</d>',
+      '  <d cmd=\'remove #15705069\'>leather jerkin</d>',
+      '  <d cmd=\'remove #15705068\'>leather vambraces</d>',
+      '  <d cmd=\'remove #15705067\'>blue skirt</d>',
+      '<output class=""/>'
+    ].freeze
+
+    def feed(*lines)
+      lines.flatten.each do |line|
+        Ox.sax_parse(xml, line, convert_special: false, symbolize: false, skip: :skip_none)
+        described_class.parse(line.dup)
+      end
+    end
+
+    def worn_by_id
+      Array(GameObj.inv).to_h { |o| [o.id, [o.noun, o.name]] }
+    end
+
+    def contents_ids(id) = Array(GameObj.containers[id]).map(&:id)
+
+    before(:each) do
+      require_relative '../../../../lib/common/xmlparser'
+      allow(XMLData).to receive(:game).and_return('DR')
+      # In production XMLData is this parser: DRParser asks it whether the
+      # stream is linked.
+      allow(XMLData).to receive(:stream_feature?) { |feature| xml.stream_feature?(feature) }
+      xml.instance_variable_set(:@game, 'DR')
+      GameObj.clear_inv
+      GameObj.clear_all_containers
+      GameObj.discard_staged_refreshes
+      described_class.class_variable_set(:@@parsing_inventory_get, false)
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    it 'keeps the stream\'s nouns and long names after the login INV LIST, and fills the containers' do
+      feed(worn_push)
+      before_listing = worn_by_id
+      expect(before_listing['15705095']).to eq(['zills', 'some polished thin-edged zills with silvered esoteric filigree'])
+
+      feed(inv_list)
+
+      expect(worn_by_id).to eq(before_listing)
+      expect(Array(GameObj.inv).map(&:id)).to eq(%w[15705096 15705095 15705078 15705077 15705076 15705070 15705069 15705068 15705067])
+      expect(contents_ids('15705078')).to eq(['15705079'])
+      expect(contents_ids('15705079').size).to eq(11)
+      expect(contents_ids('15705082')).to eq(%w[15705085 15705084 15705083])
+      expect(contents_ids('15705080')).to eq(['15705081'])
+      expect(contents_ids('15705070')).to eq(%w[15705075 15705074 15705073 15705072 15705071])
+      expect(GameObj.containers['15705070'].map(&:name)).to include('ice skates', 'Albreda lollipop')
+    end
+
+    it 'never creates worn entries from an INV LIST that arrives before any worn list' do
+      # Any linked element marks the stream as linked (the login burst has many).
+      feed('<component id=\'room objs\'>You also see a <a exist="96365" noun="bucket">large waste bucket</a>.</component>')
+      feed(inv_list)
+      expect(GameObj.inv).to be_nil
+      expect(contents_ids('15705070').size).to eq(5)
+
+      feed(worn_push)
+      expect(worn_by_id['15705095']&.first).to eq('zills')
+      expect(contents_ids('15705070').size).to eq(5)
+    end
+
+    it 'does not merge a worn list that arrives in the middle of an INV LIST into the listing' do
+      # A Saga session has sent linked items long before any listing (room
+      # objects, the login worn list); only a legacy session has none.
+      feed('<component id=\'room objs\'>You also see a <a exist="96365" noun="bucket">large waste bucket</a>.</component>')
+      feed(inv_list[0..5])
+      feed(worn_push)
+      feed(inv_list[6..])
+
+      ids = Array(GameObj.inv).map(&:id)
+      expect(ids.size).to eq(9)
+      expect(ids.uniq).to eq(ids)
+      expect(Array(GameObj.inv).map(&:noun)).to all(be_a(String))
+      expect(contents_ids('15705079').size).to eq(11)
+    end
+
+    it 'leaves a worn item alone when INV SEARCH reports it as worn' do
+      feed(worn_push)
+      before_search = Array(GameObj.inv).map { |o| [o.id, o.noun, o.name] }
+
+      feed("<roundTime value='1794083168'/>You rummage about your person, looking for zills...",
+           "  <d cmd='remove #15705095'>Some thin-edged zills</d> is being worn.",
+           '<output class=""/>')
+
+      expect(Array(GameObj.inv).map { |o| [o.id, o.noun, o.name] }).to eq(before_search)
+    end
+
+    # A front end handshake kept with --keep-fe-string gets the legacy stream:
+    # its worn list is plain text, so the scrapes stay its only worn source.
+    context 'on the legacy stream (no linked items seen)' do
+      legacy_worn_push = [
+        "<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:",
+        "  a canvas scribe's pack",
+        '  a leather jerkin',
+        '<popStream/>'
+      ].freeze
+
+      it 'still fills the worn list from INV LIST, and from INV SEARCH' do
+        feed(legacy_worn_push)
+        expect(xml.stream_feature?(:links)).to be false
+
+        feed(inv_list)
+        expect(Array(GameObj.inv).map(&:id)).to eq(%w[15705096 15705095 15705078 15705077 15705076 15705070 15705069 15705068 15705067])
+        expect(contents_ids('15705070').size).to eq(5)
+
+        GameObj.clear_inv
+        feed("<roundTime value='1794083168'/>You rummage about your person, looking for jerkin...",
+             "  <d cmd='remove #15705069'>A leather jerkin</d> is being worn.",
+             '<output class=""/>')
+        expect(Array(GameObj.inv).map { |o| [o.id, o.name] }).to eq([['15705069', 'leather jerkin']])
+      end
+
+      it 'discards the staged worn list too when the INV LIST is cut off' do
+        feed(legacy_worn_push, inv_list)
+        before_cut = Array(GameObj.inv).map(&:id)
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+
+        feed(inv_list[0..2], '<prompt time="1794083170">&gt;</prompt>')
+
+        expect(Array(GameObj.inv).map(&:id)).to eq(before_cut)
+        expect(GameObj.inv_refresh_open?).to be false
+      end
+    end
+
+    it 'keeps the worn list and the previous contents when the INV LIST is cut off by a prompt' do
+      feed(worn_push, inv_list)
+      before_cut = [worn_by_id, contents_ids('15705070')]
+      expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+
+      feed(inv_list[0..2], '<prompt time="1794083170">&gt;</prompt>')
+
+      expect([worn_by_id, contents_ids('15705070')]).to eq(before_cut)
     end
   end
 end

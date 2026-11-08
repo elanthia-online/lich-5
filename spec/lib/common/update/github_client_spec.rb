@@ -92,7 +92,7 @@ RSpec.describe Lich::Util::Update::GitHubClient do
 
     # Each request pops the next response; raises when one is an exception.
     def serve(*responses)
-      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil)
+      http = double('Net::HTTP', 'use_ssl=': nil, 'verify_mode=': nil, 'open_timeout=': nil, 'read_timeout=': nil, 'max_retries=': nil)
       allow(http).to receive(:request) do |req|
         sent << req['Authorization']
         nxt = responses.shift
@@ -114,6 +114,65 @@ RSpec.describe Lich::Util::Update::GitHubClient do
     end
 
     after { FileUtils.remove_entry(data_dir, true) }
+
+    it 'sets open and read timeouts on every connection' do
+      conns = []
+      allow(Net::HTTP).to receive(:new).and_wrap_original do |original, *args|
+        conn = original.call(*args)
+        allow(conn).to receive(:request).and_return(response(200, body: '{}'))
+        conns << conn
+        conn
+      end
+
+      expect(client.http_get(url)).to eq('{}')
+      expect(conns.map(&:open_timeout)).to eq([described_class::OPEN_TIMEOUT])
+      expect(conns.map(&:read_timeout)).to eq([described_class::READ_TIMEOUT])
+      expect(conns.map(&:max_retries)).to eq([0])
+      expect(described_class::OPEN_TIMEOUT).to be < 60
+      expect(described_class::READ_TIMEOUT).to be < 60
+    end
+
+    # A real Net::HTTP against a local server that accepts and never
+    # replies, with the read timeout cut short: one connection, one wait.
+    it 'gives up on a stalled read after one READ_TIMEOUT, without retrying or printing' do
+      stub_const("#{described_class}::READ_TIMEOUT", 0.3)
+      server = TCPServer.new('127.0.0.1', 0)
+      accepted = Queue.new
+      held = []
+      acceptor = Thread.new { loop { held << server.accept; accepted << true } }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      result = client.http_get("http://127.0.0.1:#{server.addr[1]}/stall", auth: false)
+
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      expect(result).to be_nil
+      expect(client.last_error.kind).to eq(:network)
+      expect(accepted.size).to eq(1)
+      expect(elapsed).to be < 0.55
+      expect(printed).to be_empty
+    ensure
+      acceptor&.kill
+      held&.each(&:close)
+      server&.close
+    end
+
+    it 'retries once when the connection drops, then returns the body' do
+      serve(Errno::ECONNRESET.new, response(200, body: '{}'))
+
+      expect(client.http_get(url)).to eq('{}')
+      expect(client.last_error).to be_nil
+      expect(sent.size).to eq(2)
+      expect(printed).to be_empty
+    end
+
+    it 'gives up after a second dropped connection, as a network failure' do
+      serve(EOFError.new, Errno::ECONNRESET.new, response(200, body: '{}'))
+
+      expect(client.http_get(url)).to be_nil
+      expect(client.last_error.kind).to eq(:network)
+      expect(sent.size).to eq(2)
+      expect(printed).to be_empty
+    end
 
     it 'classifies a 401 without a token as a temporary outage, prints nothing, and does not retry' do
       serve(response(401, body: '{"message":"Requires authentication"}'))

@@ -246,6 +246,70 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Ascension['thrownweapons']).to eq(4)
       expect(Lich::Gemstone::Ascension['Spiritual Lore Summoning']).to eq(1)
     end
+
+    # Captured from the live game after the Artificer, Arcane Archer and Voln
+    # Avenger elite abilities were added. A trained row is wrapped in
+    # <pushBold/>..<popBold/>, so the popBold lands at the start of the NEXT row.
+    it "handles the full XML ascension list, including bolded trained rows" do
+      fixture = File.read(File.expand_path('../../fixtures/ascension_list.xml', __dir__))
+      rows = fixture.scan(/HELP (\w+)'>\w+<\/d>\s+(\d+)\/\d+/).to_h { |cmd, rank| [cmd, rank.to_i] }
+      expect(rows.size).to eq(92)
+      # Subset, not equality: this capture is filtered to one profession (see footer).
+      expect(Lich::Gemstone::Ascension.ascension_lookups.map { |l| l[:short_name] }).to include(*rows.keys)
+
+      # Seed a stale value so a rank of 0 has to be written, not just defaulted.
+      rows.each_key { |cmd| Lich::Gemstone::Infomon.set("ascension.#{cmd}", 9) }
+
+      fixture.split("\n").each do |line|
+        stripped = Lich::Common::Markup.strip_xml(line)
+        Lich::Gemstone::Infomon::Parser.parse(stripped) unless stripped.nil? || stripped.empty?
+      end
+
+      rows.each do |cmd, rank|
+        expect(Lich::Gemstone::Infomon.get("ascension.#{cmd}")).to eq(rank), "ascension.#{cmd}"
+      end
+      expect(Lich::Gemstone::Ascension.aura).to eq(5)
+      expect(Lich::Gemstone::Ascension.blunt_weapons).to eq(0)
+      expect(Lich::Gemstone::Ascension["Kai's Touch"]).to eq(0)
+      expect(Lich::Gemstone::Ascension['Effective Accessorization']).to eq(0)
+      expect(Lich::Gemstone::Ascension.grizzled_voln_ascendant).to eq(0)
+    end
+
+    # Kai's Touch is the first ascension ability whose name carries an apostrophe.
+    it "handles learning and unlearning an ascension ability with an apostrophe" do
+      Lich::Gemstone::Infomon.set('ascension.kaistouch', 0)
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 2 of Kai's Touch, costing 2 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.kaistouch')).to eq(2)
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 2 of Kai's Touch, regaining 2 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.kaistouch')).to eq(1)
+    end
+
+    # Captured from the live game (ASCENSION LEARN/UNLEARN, then CONFIRM).
+    it "handles the live ascension learn and unlearn messages" do
+      Lich::Gemstone::Infomon.set('ascension.strength', 40)
+      Lich::Gemstone::Infomon.set('ascension.elair', 50)
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 40 of Strength, regaining 8 Ascension Ability points.")
+      Lich::Gemstone::Infomon::Parser.parse("You decide to unlearn rank 50 of Elemental Lore - Air, regaining 10 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.strength')).to eq(39)
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(49)
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 40 of Strength, costing 8 Ascension Ability points.")
+      Lich::Gemstone::Infomon::Parser.parse("You have now achieved rank 50 of Elemental Lore - Air, costing 10 Ascension Ability points.")
+      expect(Lich::Gemstone::Infomon.get('ascension.strength')).to eq(40)
+      expect(Lich::Gemstone::Infomon.get('ascension.elair')).to eq(50)
+      expect(Lich::Gemstone::Ascension['Elemental Lore - Air']).to eq(50)
+    end
+
+    it "ignores confirmation prompts and learn lines whose name is not in the lookups" do
+      expect(Lich::Gemstone::Infomon).not_to receive(:set)
+      [
+        "You have now achieved rank 1 of Mental Lore - Transformation, costing 1 Ascension Ability points.",
+        "You decide to unlearn rank 1 of Mental Lore - Transformation, regaining 1 Ascension Ability points.",
+        "[You are no longer trained in Weapon Technique: Nonexistent Strike.]",
+        # The confirmation prompts arrive before CONFIRM and must not change the rank.
+        "You have chosen to learn rank 40 in Strength at a cost of 8 Ascension Ability points.  If this is acceptable, please enter ASCENSION LEARN CONFIRM within the next 30 seconds to confirm your Ascension Ability choice.  If it is not acceptable, please enter ASCENSION LEARN CANCEL and try again.",
+        "You have chosen to unlearn rank 40 in Strength to regain 8 Ascension Ability points.  If this is acceptable, please enter ASCENSION UNLEARN CONFIRM within the next 30 seconds to confirm your Ascension Ability choice.  If it is not acceptable, please enter ASCENSION UNLEARN CANCEL and try again.",
+      ].each { |line| expect(Lich::Gemstone::Infomon::Parser.parse(line)).to eq(:noop) }
+    end
   end
 
   context "resource" do
@@ -1095,6 +1159,259 @@ RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
       wraith.status = "gone"
       expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
       expect(wraith.status).to eq("gone")
+    end
+  end
+end
+
+RSpec.describe Lich::Gemstone::Infomon, "when the database is busy" do
+  let(:infomon) { Lich::Gemstone::Infomon }
+
+  before(:each) do
+    infomon.reset!
+    allow(Lich).to receive(:log)
+    allow(infomon).to receive(:respond)
+  end
+
+  # Polls for a condition for up to `seconds`; the writer thread runs async.
+  def wait_until(seconds = 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    until yield
+      return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      sleep 0.01
+    end
+    true
+  end
+
+  # Another connection holding the write lock, as another Lich process would.
+  def hold_write_lock(file, seconds)
+    ready = Queue.new
+    holder = Thread.new do
+      conn = SQLite3::Database.new(file)
+      conn.execute('BEGIN IMMEDIATE')
+      ready << true
+      sleep seconds
+      conn.execute('COMMIT')
+    ensure
+      conn&.close
+    end
+    ready.pop
+    holder
+  end
+
+  def row(key)
+    infomon.table[key: key]
+  end
+
+  it "opens infomon.db with the Ruby busy handler used for lich.db3" do
+    expect(infomon.db).to be_a(Lich::SQLiteBusyWait::Transactions)
+  end
+
+  it "keeps the process running while a write waits for another connection's lock" do
+    holder = hold_write_lock(infomon.file, 0.6)
+    ticks = 0
+    stop = false
+    ticker = Thread.new do
+      until stop
+        sleep 0.01
+        ticks += 1
+      end
+    end
+    infomon.set("busy.wait", 1)
+    expect(wait_until { row("busy.wait") }).to be(true)
+    stop = true
+    ticker.join
+    holder.join
+    # a C busy timeout holds the GVL for the whole wait: no ticks at all
+    expect(ticks).to be > 20
+  end
+
+  context "with a short busy timeout" do
+    # Infomon.db is opened once at load with the default 5 s timeout; a second
+    # connection to the same file with a short one stands in for it.
+    let(:short_db) do
+      allow(Lich).to receive(:sqlite_busy_timeout_ms).and_return(150)
+      Lich.open_sequel_sqlite(infomon.file)
+    end
+
+    before do
+      stub_const("#{described_class}::BUSY_BACKOFF_START_S", 0.2)
+      allow(infomon).to receive(:db).and_return(short_db)
+    end
+
+    after { short_db.disconnect }
+
+    it "starts each busy streak at the configured backoff, also after reset!" do
+      holder = hold_write_lock(infomon.file, 0.5)
+      infomon.set("busy.s", 1)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      # 0.2 s from the stubbed constant, not a backoff left over from load or an earlier streak
+      expect(infomon.instance_variable_get(:@busy_until) - infomon.monotonic_now).to be <= 0.2
+      expect(wait_until { row("busy.s") }).to be(true)
+      holder.join
+
+      infomon.instance_variable_set(:@busy_until, infomon.monotonic_now + 30)
+      infomon.instance_variable_set(:@busy_backoff, 30.0)
+      infomon.reset!
+      expect(infomon.write_cooling_down?).to be(false)
+      expect(infomon.instance_variable_get(:@busy_backoff)).to be_nil
+    end
+
+    it "keeps values whose writes are deferred when the cache first loads" do
+      infomon.set("busy.load", 1)
+      expect(wait_until { row("busy.load") }).to be(true)
+      # a fresh session: nothing cached, the first get loads the table
+      infomon.cache.clear
+      infomon.instance_variable_set(:@cache_loaded, false)
+      holder = hold_write_lock(infomon.file, 0.6)
+      infomon.set("busy.load", 2)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      expect(infomon.get("busy.load")).to eq(2)
+      holder.join
+      expect(wait_until { row("busy.load")[:value] == 2 }).to be(true)
+      expect(infomon.get("busy.load")).to eq(2)
+    end
+
+    it "does not cache a row whose delete! is still deferred" do
+      infomon.set("busy.del", 5)
+      expect(wait_until { row("busy.del") }).to be(true)
+      infomon.get("busy.del") # loads the cache once, as at login (reset! unloaded it)
+      holder = hold_write_lock(infomon.file, 0.6)
+      infomon.delete!("busy.del")
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      # the DELETE has not landed: the row is still on disk
+      expect(row("busy.del")).not_to be_nil
+      expect(infomon.get("busy.del")).to be_nil
+      expect(infomon.cache.include?("busy.del")).to be(false)
+      holder.join
+      expect(wait_until { row("busy.del").nil? }).to be(true)
+      expect(infomon.get("busy.del")).to be_nil
+    end
+
+    it "tells a busy database from other write errors" do
+      busy = begin
+        begin
+          raise SQLite3::BusyException, 'database is locked'
+        rescue SQLite3::Exception
+          raise Sequel::DatabaseError, 'wrapped'
+        end
+      rescue Sequel::DatabaseError => e
+        e
+      end
+      expect(infomon.busy_error?(busy)).to be_truthy
+      expect(infomon.busy_error?(Sequel::DatabaseError.new('constraint'))).to be_falsey
+      expect(infomon.busy_error?(RuntimeError.new('other'))).to be_falsey
+    end
+
+    it "retries queued writes in order once the lock frees, with one lock wait per backoff" do
+      busy_failures = 0
+      allow(Lich).to receive(:log) { |msg| busy_failures += 1 if msg.to_s.include?('write deferred (database busy)') }
+      holder = hold_write_lock(infomon.file, 1.0)
+      infomon.set("busy.a", 1)
+      infomon.set("busy.a", 2)
+      (1..8).each { |i| infomon.set("busy.k#{i}", i) }
+      expect(wait_until { row("busy.k8") }).to be(true)
+      holder.join
+      # without the backoff the writer keeps waiting out a 150 ms timeout per queued
+      # write for the whole second (6-7 failures); with it, a few probes of the lock
+      expect(busy_failures).to be_between(1, 4)
+      expect(row("busy.a")[:value]).to eq(2) # replayed in queue order: the later value wins
+      (1..8).each { |i| expect(row("busy.k#{i}")[:value]).to eq(i) }
+      expect(infomon.instance_variable_get(:@unpersisted)).to be_empty
+    end
+
+    it "does not hold the Infomon mutex while writes back off" do
+      holder = hold_write_lock(infomon.file, 1.0)
+      (1..5).each { |i| infomon.set("busy.m#{i}", i) }
+      # the first attempt waits 150 ms for the lock and fails; the backoff starts
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      infomon.mutex.synchronize { nil }
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.1
+      expect(wait_until { row("busy.m5") }).to be(true)
+      holder.join
+    end
+
+    it "reports one in-game line for a busy streak and logs each failure" do
+      holder = hold_write_lock(infomon.file, 0.9)
+      infomon.set("busy.r", 1)
+      expect(wait_until { row("busy.r") }).to be(true)
+      holder.join
+      expect(infomon).to have_received(:respond).with(/database is busy/).once
+      expect(Lich).to have_received(:log).with(/write deferred \(database busy\) for busy.r/).at_least(:once)
+    end
+
+    it "drops the oldest pending writes past the cap and marks their keys unpersisted" do
+      stub_const("#{described_class}::MAX_DEFERRED_WRITES", 2)
+      pending = infomon.instance_variable_get(:@deferred)
+      begin
+        4.times { |i| infomon.defer_write(["SELECT 1", ["cap.#{i}"]]) }
+        expect(pending.size).to eq(2)
+        expect(infomon.instance_variable_get(:@unpersisted).keys).to include("cap.0", "cap.1")
+        expect(Lich).to have_received(:log).with(/dropped 1 pending write/).twice
+      ensure
+        pending.clear
+      end
+    end
+
+    it "does not run a pending write the writer picked up before reset! cleared it" do
+      holder = hold_write_lock(infomon.file, 0.3)
+      infomon.set("busy.reset", 1)
+      expect(wait_until { infomon.write_cooling_down? }).to be(true)
+      infomon.mutex.synchronize do
+        # the 0.2 s backoff runs out while this thread holds the mutex, so the writer
+        # takes the pending write and waits here for the mutex, as it does behind
+        # reset!'s own lock wait on a busy file
+        holder.join
+        sleep 0.4
+        infomon.reset!
+      end
+      expect(infomon.flush).to be(true)
+      expect(wait_until(0.5) { row("busy.reset") }).to be(false)
+      expect(infomon.instance_variable_get(:@deferred)).to be_empty
+    end
+
+    it "forgets pending writes on reset!" do
+      pending = infomon.instance_variable_get(:@deferred)
+      pending << ["SELECT 1", ["reset.key"]]
+      infomon.reset!
+      expect(pending).to be_empty
+    end
+  end
+
+  describe "setup! and reset! locking" do
+    after { infomon.mutex_unlock }
+
+    it "releases the Infomon mutex when a database call raises" do
+      raw = infomon.instance_variable_get(:@db)
+      allow(raw).to receive(:table_exists?).and_raise(Sequel::DatabaseError, "database is locked")
+      expect { infomon.setup! }.to raise_error(Sequel::DatabaseError)
+      expect(infomon.mutex.locked?).to be(false)
+    end
+
+    it "leaves a lock the caller already holds in place" do
+      infomon.mutex_lock
+      infomon.setup!
+      expect(infomon.mutex.owned?).to be(true)
+      infomon.reset!
+      expect(infomon.mutex.owned?).to be(true)
+
+      raw = infomon.instance_variable_get(:@db)
+      allow(raw).to receive(:table_exists?).and_raise(Sequel::DatabaseError, "database is locked")
+      expect { infomon.setup! }.to raise_error(Sequel::DatabaseError)
+      expect(infomon.mutex.owned?).to be(true)
+    end
+
+    it "returns the table when it has to rebuild an old schema" do
+      raw = infomon.instance_variable_get(:@db)
+      raw.drop_table?(infomon.table_name)
+      raw.create_table(infomon.table_name) do
+        text :key, primary_key: true
+        any :value
+      end
+      expect(infomon.setup!).to be_a(Sequel::Dataset)
+      expect(raw.schema(infomon.table_name).map(&:first)).to include(:updated_at)
+      expect(infomon.mutex.locked?).to be(false)
     end
   end
 end

@@ -17,6 +17,7 @@
 # - **Wearing**: {.wear_item?}, {.remove_item?}
 # - **Tying**: {.tie_item?}, {.untie_item?}
 # - **Queries**: {.in_hands?}, {.in_left_hand?}, {.in_right_hand?}, {.in_hand?}
+# - **Item ids**: {.held_ids}, {.held_id}, {.id_into_hand}, {.worn_ref}
 # - **Existence**: {.exists?}, {.wearing?}, {.inside?}, {.search?}
 # - **Counting**: {.count_items}, {.count_item_parts}, {.count_items_in_container}
 # - **Containers**: {.open_container?}, {.close_container?}, {.look_in_container}, {.rummage_container}
@@ -406,6 +407,41 @@ module Lich
         /perhaps try doing that again/
       ].freeze
 
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the item is not
+      # in hand: {.put_away_item_result} gives +:not_holding+. Each grouping
+      # below is selected from that array by source, so it holds the same
+      # Regexp objects; the array itself is unchanged.
+      PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        ['^Perhaps you should be holding that first'].include?(pattern.source)
+      end.freeze
+
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the game found no
+      # such item or container: {.put_away_item_result} gives +:missing+.
+      PUT_AWAY_ITEM_MISSING_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        [
+          '^What were you referring to',
+          '^I could not find what you were referring to',
+          '^Stow what',
+          "^I can't find your container for stowing things in"
+        ].include?(pattern.source)
+      end.freeze
+
+      # The {PUT_AWAY_ITEM_FAILURE_PATTERNS} entries meaning the container is
+      # full, or the item is too big or heavy for it: {.put_away_item_result}
+      # gives +:no_room+.
+      PUT_AWAY_ITEM_NO_ROOM_PATTERNS = PUT_AWAY_ITEM_FAILURE_PATTERNS.select do |pattern|
+        [
+          "^There isn't any more room in",
+          "^There's no room",
+          'completely full',
+          '^(The|That).* too heavy to go in there',
+          'is too .* to (fit|hold)',
+          "^Weirdly, you can't manage .* to fit",
+          'even after stuffing it',
+          'no matter how you arrange it'
+        ].include?(pattern.source)
+      end.freeze
+
       STOW_ITEM_SUCCESS_PATTERNS = [
         *GET_ITEM_SUCCESS_PATTERNS,
         *PUT_AWAY_ITEM_SUCCESS_PATTERNS
@@ -604,7 +640,8 @@ module Lich
         /^There are no items lying at your feet/,
         /^What did you want to try and lift/,
         /can't quite lift it/,
-        /^You are not strong enough to pick that up/
+        /^You are not strong enough to pick that up/,
+        /^You need a free hand/
       ].freeze
 
       GIVE_ITEM_SUCCESS_PATTERNS = [
@@ -874,11 +911,26 @@ module Lich
         !!(DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/) =~ /(?:An?|Some) .+ is (?:in|being)/)
       end
 
-      # Checks if an item is currently worn by tapping it.
+      # Checks if an item is currently worn.
+      #
+      # Answers true from the worn-items list ({GameObj.inv}) without sending
+      # anything when a worn item's name has the name's words (see
+      # {.carried_name_pattern}). DR re-sends that list with every hand change,
+      # ahead of the reply text, so it is current. Otherwise, and for a name
+      # starting with an ordinal ("second") or "other", the item is tapped and
+      # the reply decides, as before. Answering from the list means another
+      # script tapping at the same moment can't hand this one its reply.
       #
       # @param item [String] item noun to check
       # @return [Boolean] true if item is currently worn
+      #
+      # @example Wearing "some polished thin-edged zills with silvered esoteric filigree"
+      #   DRCI.wearing?('zills')            #=> true, nothing sent
+      #   DRCI.wearing?('thin-edged zills') #=> true, nothing sent
+      #   DRCI.wearing?('zill')             #=> taps "my zill"
       def wearing?(item)
+        return true if item.is_a?(String) && !ordinal_name?(item) && carried_ids(GameObj.inv, item).any?
+
         !!(tap(item) =~ /wearing/)
       end
 
@@ -891,7 +943,17 @@ module Lich
         !!(tap(item, container) =~ /inside/)
       end
 
-      # Checks if an item exists in inventory or a container by tapping it.
+      # Checks if an item exists in inventory or a container.
+      #
+      # With no container, answers true without sending anything when a worn
+      # item ({GameObj.inv}) or a held item has the name's words (see
+      # {.carried_name_pattern}). DR does not promise which item TAP finds as
+      # the "second", so a name starting with an ordinal asks for at least that
+      # many: "second pack" answers true when two worn or held items match.
+      # Anything else (a container, too few matches, a name starting with
+      # "other", an item that isn't a String) is tapped and the reply decides,
+      # as before: a miss in the worn list and the hands proves nothing, the
+      # item may be stowed.
       #
       # @param item [String] item noun to check
       # @param container [String, nil] container to check in, or nil for general inventory
@@ -901,6 +963,8 @@ module Lich
       #   DRCI.exists?("deed")
       #   DRCI.exists?("sword", "backpack")
       def exists?(item, container = nil)
+        return true if container.nil? && carried_at_least?(item)
+
         case tap(item, container)
         when *TAP_SUCCESS_PATTERNS
           true
@@ -1017,6 +1081,354 @@ module Lich
           false
         end
       end
+
+      # How long {.id_into_hand} waits between looks at the hands, in seconds.
+      ID_INTO_HAND_POLL_INTERVAL = 0.1
+
+      # Words that, like the ordinals in +$ORDINALS+ ("second"), make a name
+      # pick one of several items by the game's own ordering. A name starting
+      # with one is never resolved to an id (see {.held_obj_matches?}).
+      HELD_REF_ORDINAL_WORDS = ['other'].freeze
+
+      # The ids of the items in hand, right hand first. An empty hand (the
+      # GameObj placeholder named "Empty", whose id is nil) is skipped. Reads
+      # the GameObj hands only; sends no game command.
+      #
+      # @return [Array<String>] zero, one or two ids, without the leading "#"
+      #
+      # @example Right hand holds 41234567, left hand empty
+      #   DRCI.held_ids #=> ["41234567"]
+      def held_ids
+        [GameObj.right_hand, GameObj.left_hand].filter_map { |obj| held_obj_id(obj) }.uniq
+      end
+
+      # The id of the one held item a name means. Reads the GameObj hands
+      # only; sends no game command, so it is safe in roundtime.
+      #
+      # A name matches a held item when, after a leading "my " is dropped, its
+      # last word equals the item's noun (ignoring case, so "leather" is not
+      # "leathers") and each other word is a word of the item's name (so the
+      # shortened {DRC.right_hand} name "heavy bag" matches "heavy silk duffel
+      # bag"). A name starting with an ordinal or "other" never matches.
+      #
+      # @param name [String, Integer, nil] noun phrase, or "#<id>"; an Integer
+      #   is an id, as "#<id>"; nil matches any held item (so it gives nil when
+      #   both hands hold something)
+      # @param except [String, Integer, Array<String, Integer>] ids never
+      #   returned (e.g. a sack being held)
+      # @return [String, nil] the id, without "#"; nil when no held item
+      #   matches or when two different held items match. For "#<id>", the id
+      #   when that item is in either hand, else nil.
+      #
+      # @example Left hand "rat-pelt leather" 63721991, worn "sinuous leathers"
+      #   DRCI.held_id('leather') #=> "63721991"
+      #
+      # @example Both hands hold leather
+      #   DRCI.held_id('leather') #=> nil
+      def held_id(name = nil, except: [])
+        ids = matching_held_ids(held_except(except), name)
+        ids.size == 1 ? ids.first : nil
+      end
+
+      # Runs a block that should put an item in hand, and returns the id of the
+      # item it put there. The hands are read before the block; the id must be
+      # one not held then. Sends no game command itself, only the block does.
+      #
+      # On DR the hand tag arrives before the reply text, so a bput-based block
+      # resolves at the first look; an fput-based one may need the poll.
+      #
+      # @param name [String, Integer, nil] when given, the new item must match
+      #   it as in {.held_id}; nil means any new item
+      # @param except [String, Integer, Array<String, Integer>] ids never returned
+      # @param timeout [Numeric] seconds to keep looking after a truthy block,
+      #   every {ID_INTO_HAND_POLL_INTERVAL}; 0 looks once
+      # @yieldreturn [Object] truthy if the command worked
+      # @return [String, nil] the new id, without "#"; nil when the block was
+      #   falsy (no looking), nothing new and matching arrived in time, or two
+      #   new items matched
+      # @raise [ArgumentError] without a block, or for a non-finite timeout
+      #   (Float::INFINITY, NaN); raised before the block runs
+      #
+      # @example Id of the leather just bought
+      #   DRCI.id_into_hand(name: 'leather') { DRCT.order_item(room, 3) == 'takes some coins from you' }
+      def id_into_hand(name: nil, except: [], timeout: 1)
+        raise ArgumentError, 'DRCI.id_into_hand needs a block' unless block_given?
+
+        seconds = timeout.to_f
+        raise ArgumentError, "DRCI.id_into_hand needs a finite timeout, got #{timeout.inspect}" unless seconds.finite?
+
+        looks = [(seconds / ID_INTO_HAND_POLL_INTERVAL).ceil, 0].max
+        skip = held_ids + held_except(except)
+        return nil unless yield
+
+        found = matching_held_ids(skip, name)
+        looks.times do
+          break unless found.empty?
+
+          sleep ID_INTO_HAND_POLL_INTERVAL
+          found = matching_held_ids(skip, name)
+        end
+        found.size == 1 ? found.first : nil
+      end
+
+      # A reference to a worn container for a command: its "#<id>" when
+      # exactly one worn item (GameObj.inv) matches the given name, so a held
+      # or stowed item of the same noun can't be picked instead. Sends no game
+      # command.
+      #
+      # A worn item matches by the rule {.wearing?} and {.exists?} use (see
+      # {.carried_ids}): the name's words are whole words of the item's name,
+      # in order, and one of them is the item's own noun. That holds for the
+      # long names in the worn-items list, so "zills" and "thin-edged zills"
+      # give the id of "some polished thin-edged zills with silvered esoteric
+      # filigree". "leather pouch" is not the "weapon harness with a leather
+      # pouch" (noun harness), and "pelt pack" is not the "rat-pelt pack".
+      #
+      # Not for DRCC crafting methods on Lich versions that prepend "my " to
+      # the container (that gives "my #123").
+      #
+      # @param name [String, Integer, nil] container name, e.g. "duffel bag";
+      #   surrounding whitespace is dropped. An Integer is an id, given back
+      #   as "#<id>".
+      # @return [String, nil] "#<id>" for one match; {.item_ref}(name) ("my
+      #   duffel bag") for zero or several matches, no worn list, or a name
+      #   starting with an ordinal or "other"; "#..." and "my ..." unchanged;
+      #   nil for nil
+      #
+      # @example One worn duffel bag 758573
+      #   DRCI.worn_ref('duffel bag') #=> "#758573"
+      def worn_ref(name)
+        return nil if name.nil?
+
+        name = name.is_a?(Integer) ? "##{name}" : name.to_s.strip
+        return name if name =~ /\A(my |#)/i
+
+        words = name.downcase.split
+        inv = GameObj.inv
+        return item_ref(name) if words.empty? || held_ref_ordinal?(words.first) || inv.nil?
+
+        ids = carried_ids(inv, name)
+        ids.size == 1 ? "##{ids.first}" : item_ref(name)
+      end
+
+      # The id of the one item directly in a container that a name means,
+      # read from an Inventory feed snapshot ({Lich::Common::Inventory}). Uses
+      # the {.held_id} rule (noun equal to the name's last word, ignoring
+      # case; each other word a word of the item's name; a leading "my "
+      # dropped; an ordinal or "other" first word never matches). Sends no
+      # game command and reads only the snapshot given, so the answer is as
+      # old as that snapshot: the caller must expect the id to name nothing
+      # any more, or a different item.
+      #
+      # @param name [String, Integer, nil] noun phrase, e.g. "pins" or
+      #   "sepia pins"; an Integer is an id, as in {.held_id}
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives nil
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives nil
+      # @return [String, nil] the id, without "#"; nil when the snapshot, the
+      #   container or a matching item is missing, when two different items
+      #   in it match, or when the container is locked (contents unknown)
+      #
+      # @example Some sepia pins 4101800 in the worn duffel bag 2391122
+      #   DRCI.stored_id('pins', '#2391122', snapshot: Lich::Common::Inventory.current) #=> "4101800"
+      def stored_id(name, container, snapshot:)
+        ids = stored_ids(name, container, snapshot: snapshot)
+        ids.size == 1 ? ids.first : nil
+      end
+
+      # The ids of every item directly in a container that a name means, read
+      # from an Inventory feed snapshot, by the same rule as {.stored_id}.
+      # For a caller that must tell "one match" from "several" itself, e.g.
+      # to drop an id it already holds while the snapshot shows the game a
+      # choice. Sends no game command; as old as the snapshot given.
+      #
+      # @param name [String, Integer, nil] noun phrase; an Integer is an id
+      # @param container [String, Integer, nil] the container's id, with or
+      #   without "#" (an Integer is an id); anything else gives []
+      # @param snapshot [Lich::Common::Inventory::Snapshot, nil] the feed
+      #   snapshot to read; nil gives []
+      # @return [Array<String>] the ids, without "#", in snapshot order; []
+      #   when the snapshot, the container or a matching item is missing, or
+      #   when the container is locked (contents unknown)
+      #
+      # @example Two pins in the worn duffel bag 2391122
+      #   DRCI.stored_ids('pins', 2391122, snapshot: Lich::Common::Inventory.current) #=> ["4101800", "4101802"]
+      def stored_ids(name, container, snapshot:)
+        return [] if snapshot.nil? || name.nil?
+
+        container_id = container.to_s.strip.delete_prefix('#')
+        return [] unless container_id.match?(/\A\d+\z/)
+
+        bag = snapshot[container_id]
+        return [] unless bag
+
+        bag.contents(:in).select { |item| held_obj_matches?(item, name) }.filter_map { |item| held_obj_id(item) }.uniq
+      end
+
+      # Whether a name means an item, by the {.held_id} rule (noun equal to
+      # the name's last word, ignoring case; each other word a word of the
+      # item's name; a leading "my " dropped; an ordinal or "other" first
+      # word never matches; a lone "#<id>" matches that id only). For items
+      # that are no longer at hand, such as the ones {DRCC} remembers, so
+      # every caller asks the same question {.held_id} asks of the hands.
+      # Sends no game command.
+      #
+      # @param item [#id, #noun, #name] a GameObj, or anything with the same
+      #   readers
+      # @param name [String, Integer, nil] noun phrase, or "#<id>"; an
+      #   Integer is an id
+      # @return [Boolean]
+      #
+      # @example The shortened hand name of some sepia pins
+      #   DRCI.item_named?(GameObj.right_hand, 'pins')       #=> true
+      #   DRCI.item_named?(GameObj.right_hand, 'iron pins')  #=> false
+      def item_named?(item, name)
+        !item.nil? && !name.nil? && held_obj_matches?(item, name)
+      end
+
+      # Whether a name means this held GameObj (see {.held_id} for the rule).
+      #
+      # @param obj [GameObj] a hand object
+      # @param name [String, Integer] noun phrase, optionally "my ..." or
+      #   "#<id>"; an Integer is an id
+      # @return [Boolean]
+      # @api private
+      def held_obj_matches?(obj, name)
+        name = "##{name}" if name.is_a?(Integer)
+        words = name.to_s.strip.sub(/\Amy\s+/i, '').downcase.split
+        return false if words.empty? || held_ref_ordinal?(words.first)
+
+        if (id = words.first[ITEM_ID_REF_PATTERN, 1]) && words.size == 1
+          return held_obj_id(obj) == id
+        end
+
+        return false unless obj.noun.to_s.casecmp?(words.last)
+
+        name_words = obj.name.to_s.downcase.split
+        words[0...-1].all? { |word| name_words.include?(word) }
+      end
+
+      # The phrase half of how a name matches a worn or held item in
+      # {.wearing?} and {.exists?} (the item's noun is the other half, see
+      # {.carried_ids}): after a leading "my " and a leading article ("a",
+      # "an", "some") are dropped, the name's words must appear in the item's
+      # name in order, as whole words, ignoring case. A letter, digit, hyphen
+      # or apostrophe next to them means they are part of a longer word.
+      #
+      # It works on both kinds of name DR gives an item: the long name in the
+      # worn-items list ("some polished thin-edged zills with silvered esoteric
+      # filigree") and the short name on a hand tag ("sanowret crystal"). So
+      # "zills" and "thin-edged zills" match the zills, while "zill", "edged
+      # zills" and "polished zills" don't, and "bag" doesn't match "bagpipes".
+      #
+      # @param name [String] a noun phrase
+      # @return [Regexp, nil] nil for a name with no words
+      # @api private
+      def carried_name_pattern(name)
+        words = name.to_s.strip.sub(/\Amy\s+/i, '').sub(/\A(?:a|an|some)\s+/i, '').split
+        return nil if words.empty?
+
+        /(?<![\w'-])#{words.map { |word| Regexp.escape(word) }.join('\s+')}(?![\w'-])/i
+      end
+
+      # The distinct ids of the items a name means among the given GameObjs; a
+      # lone "#<id>" matches that id only. Otherwise an item matches when the
+      # name's words are in its name ({.carried_name_pattern}) and one of them
+      # is the item's own noun (its GameObj noun, as DR sends it), so words
+      # from a long name's description never match on their own: "red flower"
+      # is not the "silk cloak embroidered with a red flower" (noun cloak), and
+      # "lockpick" is not the "lockpick ring". An item with no noun never
+      # matches.
+      #
+      # @param items [Array<GameObj>, nil] e.g. {GameObj.inv}
+      # @param name [String] a noun phrase or "#<id>"
+      # @return [Array<String>]
+      # @api private
+      def carried_ids(items, name)
+        id = name.to_s.strip[ITEM_ID_REF_PATTERN, 1]
+        pattern = id ? nil : carried_name_pattern(name)
+        return [] if id.nil? && pattern.nil?
+
+        words = name.to_s.downcase.split
+        Array(items).filter_map do |obj|
+          obj_id = held_obj_id(obj)
+          next unless obj_id
+          next(obj_id == id ? obj_id : nil) if id
+
+          noun = obj.noun.to_s.downcase
+          obj_id if !noun.empty? && words.include?(noun) && obj.name.to_s.match?(pattern)
+        end.uniq
+      end
+
+      # Whether the worn list and the hands show as many items as a name asks
+      # for: one, or the ordinal's number for a name starting with one ("second
+      # pack" asks for two). A name starting with "other" asks for nothing here.
+      #
+      # @param item [Object] the name given to {.exists?}
+      # @return [Boolean]
+      # @api private
+      def carried_at_least?(item)
+        return false unless item.is_a?(String)
+
+        words = item.strip.sub(/\Amy\s+/i, '').split
+        return false if words.empty? || HELD_REF_ORDINAL_WORDS.include?(words.first.downcase)
+
+        needed = 1
+        if (ordinal = Array($ORDINALS).index(words.first.downcase))
+          needed = ordinal + 1
+          words.shift
+        end
+        return false if words.empty?
+
+        name = words.join(' ')
+        (carried_ids(GameObj.inv, name) + carried_ids([GameObj.right_hand, GameObj.left_hand], name)).uniq.size >= needed
+      end
+
+      # @param name [String]
+      # @return [Boolean] whether the name, after a leading "my ", starts with
+      #   an ordinal ("second") or "other"
+      # @api private
+      def ordinal_name?(name)
+        first = name.to_s.strip.sub(/\Amy\s+/i, '').split.first
+        !first.nil? && held_ref_ordinal?(first.downcase)
+      end
+
+      # @param word [String] the first word of a name, downcased
+      # @return [Boolean] whether it is an ordinal ("second") or "other"
+      # @api private
+      def held_ref_ordinal?(word)
+        HELD_REF_ORDINAL_WORDS.include?(word) || Array($ORDINALS).include?(word)
+      end
+
+      # @param obj [GameObj, nil] a hand or worn object
+      # @return [String, nil] its id as a String, or nil for an empty hand
+      # @api private
+      def held_obj_id(obj)
+        id = obj&.id
+        id.nil? || id.to_s.empty? ? nil : id.to_s
+      end
+
+      # @param except [String, Integer, Array, nil]
+      # @return [Array<String>] the ids as Strings, any leading "#" dropped
+      # @api private
+      def held_except(except)
+        Array(except).map { |id| id.to_s.delete_prefix('#') }.reject(&:empty?)
+      end
+
+      # @param skip [Array<String>] ids not to return
+      # @param name [String, nil] name the item must match, or nil for any
+      # @return [Array<String>] distinct held ids, right hand first, not in
+      #   skip and matching name
+      # @api private
+      def matching_held_ids(skip, name)
+        [GameObj.right_hand, GameObj.left_hand].filter_map do |obj|
+          id = held_obj_id(obj)
+          id if id && !skip.include?(id) && (name.nil? || held_obj_matches?(obj, name))
+        end.uniq
+      end
+
+      private_class_method :held_obj_matches?, :carried_name_pattern, :carried_ids, :carried_at_least?, :ordinal_name?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #
@@ -1886,6 +2298,99 @@ module Lich
           return false
         else
           return false
+        end
+      end
+
+      # Puts away a held item and reports what happened, where
+      # {.put_away_item_unsafe?} only says whether it worked.
+      #
+      # Sends the command {.put_away_item_unsafe?} sends for the same
+      # arguments: "put <item> <preposition> <container>", or "stow <item>"
+      # without a container. Names are sent as given, with no "my " added, so
+      # "bin" is a bin in the room; pass "#<id>", {.worn_ref}, or
+      # {.item_ref} for an item of yours. A closed container is opened and the
+      # put tried again, and a retry reply sends it again, as there, each
+      # using up one of +retries+.
+      #
+      # +:put+ is exactly when {.put_away_item_unsafe?} would return true, with
+      # one addition: a "#<id>" item that was in hand when the command went
+      # out and is in neither hand when no reply came (the {.dispose_trash}
+      # rule: the reply was lost, the item is gone).
+      #
+      # @param item [String, Integer] item to put away, e.g. "#41234567" or
+      #   "my leather"; surrounding whitespace is dropped. An Integer is an
+      #   id, sent as "#<id>". A String is sent as written, so a digits-only
+      #   String such as {.held_id}'s result is a name to the game, not an
+      #   id: pass "##{DRCI.held_id('leather')}" (or the id as an Integer).
+      # @param container [String, Integer, nil] container, e.g. "#758550",
+      #   "my bucket" or "bin"; surrounding whitespace is dropped. An Integer
+      #   is an id; nil stows
+      # @param preposition [String] "in", "on", "under", etc.
+      # @param retries [Integer] attempts left; at 0 or below nothing is sent
+      # @return [Symbol]
+      #   +:put+ a {PUT_AWAY_ITEM_SUCCESS_PATTERNS} reply, or the lost-reply
+      #   case above;
+      #   +:not_holding+ a {PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS} reply;
+      #   +:missing+ a {PUT_AWAY_ITEM_MISSING_PATTERNS} reply, or no item
+      #   given (nothing sent);
+      #   +:no_room+ a {PUT_AWAY_ITEM_NO_ROOM_PATTERNS} reply;
+      #   +:closed+ the container is closed and could not be opened (or there
+      #   is no container to open);
+      #   +:refused+ any other {PUT_AWAY_ITEM_FAILURE_PATTERNS} reply, or
+      #   retries used up;
+      #   +:timeout+ no reply matched, unless the lost-reply case applies
+      #   (the item is still held, was not held, or is not a "#<id>")
+      #
+      # @example "my leather" named the worn "sinuous leathers", not the held leather
+      #   DRCI.put_away_item_result('my leather', '#758550') #=> :not_holding
+      #
+      # @example By id, into a room bin
+      #   DRCI.put_away_item_result('#2222485', 'bin') #=> :put
+      #
+      # @see .put_away_item_unsafe?
+      def put_away_item_result(item, container = nil, preposition: 'in', retries: 3)
+        item = item.is_a?(Integer) ? "##{item}" : item.to_s.strip
+        container = container.is_a?(Integer) ? "##{container}" : container&.to_s&.strip
+        return :missing if item.empty?
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: put_away_item_result exceeded max retries")
+          return :refused
+        end
+
+        command = container ? "put #{item} #{preposition} #{container}" : "stow #{item}"
+        id = item.to_s[ITEM_ID_REF_PATTERN, 1]
+        held_before = id && id_in_hand?(id, 'either')
+        # The same patterns as put_away_item_unsafe?, so the same line ends the
+        # wait. The failure groupings go before the rest of the failures
+        # because bput returns only the part of the line its first matching
+        # pattern matched: "You just can't get the brazier to fit in the
+        # satchel, no matter how you arrange it." must come back as "no
+        # matter how you arrange it", not "You just can't get".
+        case DRC.bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+                      PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS, PUT_AWAY_ITEM_MISSING_PATTERNS, PUT_AWAY_ITEM_NO_ROOM_PATTERNS,
+                      PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
+        when *CONTAINER_IS_CLOSED_PATTERNS
+          return :closed unless container && open_container?(container)
+
+          put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
+        when *PUT_AWAY_ITEM_RETRY_PATTERNS
+          put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
+        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
+          :put
+        when *PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS
+          :not_holding
+        when *PUT_AWAY_ITEM_MISSING_PATTERNS
+          :missing
+        when *PUT_AWAY_ITEM_NO_ROOM_PATTERNS
+          :no_room
+        when *PUT_AWAY_ITEM_FAILURE_PATTERNS
+          :refused
+        else
+          return :timeout unless held_before && !id_in_hand?(id, 'either')
+
+          Lich::Messaging.msg("bold", "DRCI: No reply to '#{command}', but '#{item}' has left your hands; treating it as put away.")
+          :put
         end
       end
 

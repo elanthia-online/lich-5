@@ -15,6 +15,40 @@ RSpec.describe Lich::Common::FrontendLocator do
     path
   end
 
+  # Stubs Win32::Registry with hives mapping key => { value_name => data }.
+  # Opening a missing key raises Registry::Error, as the real binding does.
+  # Returns the [hive, key, access] tuples each open received.
+  def stub_windows_registry(hives)
+    opened = []
+    error = Class.new(StandardError)
+    registry = Module.new
+    registry.const_set(:KEY_READ, 1)
+    registry.const_set(:Error, error)
+    hives.each do |hive_name, keys|
+      hkey = Object.new
+      hkey.define_singleton_method(:open) do |key, access, &block|
+        opened << [hive_name, key, access]
+        values = keys.fetch(key) { raise error, "missing #{key}" }
+        block.call(values)
+      end
+      registry.const_set(hive_name, hkey)
+    end
+    win32 = Module.new
+    win32.const_set(:Registry, registry)
+    stub_const('Win32', win32)
+    opened
+  end
+
+  def no_spotlight
+    ->(_bundle_id) { [] }
+  end
+
+  def windows_locator
+    locator = described_class.new(platform_key: :windows, environment: { 'PATH' => '' })
+    allow(locator).to receive(:require).with('win32/registry').and_return(true)
+    locator
+  end
+
   def mac_application(applications, name:, bundle_id:, executable_name:)
     bundle = File.join(applications, "#{name}.app")
     executable_path = executable(File.join(bundle, 'Contents', 'MacOS', executable_name))
@@ -66,7 +100,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
 
       expect(locator.resolve('avalon')).to eq(
@@ -90,7 +125,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
 
       expect(locator.selectable?('saga')).to be(true)
@@ -369,6 +405,294 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
+  context 'when Saga is registered by its NSIS installer' do
+    let(:saga_key) { 'Software\\3f78e0da-1d8f-570d-9cef-2ff34b0efe1a' }
+
+    it 'resolves a per-user install from HKEY_CURRENT_USER' do
+      Dir.mktmpdir do |directory|
+        saga = executable(File.join(directory, 'Saga.exe'))
+        opened = stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => directory } },
+          HKEY_LOCAL_MACHINE: {}
+        )
+
+        expect(windows_locator.resolve('saga')).to eq(
+          described_class::Resolution.new(
+            frontend_id: 'saga',
+            executable_path: File.realpath(saga),
+            source: :registry
+          )
+        )
+        expect(opened.first).to eq([:HKEY_CURRENT_USER, saga_key, 1 | 0x0100])
+      end
+    end
+
+    it 'resolves an elevated all-users install from HKEY_LOCAL_MACHINE' do
+      Dir.mktmpdir do |directory|
+        saga = executable(File.join(directory, 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: {},
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => directory } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(saga))
+      end
+    end
+
+    it 'falls through a stale per-user entry to the all-users install' do
+      Dir.mktmpdir do |directory|
+        stale = File.join(directory, 'removed')
+        machine = File.join(directory, 'machine')
+        saga = executable(File.join(machine, 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => stale } },
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => machine } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(saga))
+      end
+    end
+
+    it 'prefers the per-user install when both are present' do
+      Dir.mktmpdir do |directory|
+        user = executable(File.join(directory, 'user', 'Saga.exe'))
+        executable(File.join(directory, 'machine', 'Saga.exe'))
+        stub_windows_registry(
+          HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => File.dirname(user) } },
+          HKEY_LOCAL_MACHINE: { saga_key => { 'InstallLocation' => File.join(directory, 'machine') } }
+        )
+
+        expect(windows_locator.resolve('saga')&.executable_path).to eq(File.realpath(user))
+      end
+    end
+
+    it 'ignores a blank InstallLocation' do
+      stub_windows_registry(
+        HKEY_CURRENT_USER: { saga_key => { 'InstallLocation' => '' } },
+        HKEY_LOCAL_MACHINE: {}
+      )
+
+      expect(windows_locator.resolve('saga')).to be_nil
+    end
+
+    it 'does not resolve Saga through the Wine registry on Linux' do
+      wine = Module.new
+      wine.const_set(:PREFIX, '/nonexistent-prefix')
+      wine.define_singleton_method(:registry_gets) { |_key| raise 'Wine registry consulted for Saga' }
+      locator = described_class.new(platform_key: :linux, environment: { 'PATH' => '' }, wine: wine)
+
+      expect(locator.resolve('saga')).to be_nil
+    end
+  end
+
+  it 'keeps reading Simutronics frontends from HKEY_LOCAL_MACHINE Directory values' do
+    Dir.mktmpdir do |directory|
+      wrayth = executable(File.join(directory, 'Wrayth.exe'))
+      opened = stub_windows_registry(
+        HKEY_LOCAL_MACHINE: { 'SOFTWARE\\Simutronics\\STORM32' => { 'Directory' => directory } }
+      )
+
+      expect(windows_locator.resolve('stormfront')&.executable_path).to eq(File.realpath(wrayth))
+      expect(opened.first).to eq([:HKEY_LOCAL_MACHINE, 'SOFTWARE\\Simutronics\\STORM32', 1])
+    end
+  end
+
+  context 'when Saga is installed as a Linux AppImage' do
+    def appimage(directory, name, mtime: Time.now)
+      path = executable(File.join(directory, name))
+      File.utime(mtime, mtime, path)
+      path
+    end
+
+    def linux_locator(home, extra = {})
+      described_class.new(platform_key: :linux, environment: { 'PATH' => '', 'HOME' => home }.merge(extra))
+    end
+
+    def desktop_entry(home, name, body)
+      path = File.join(home, '.local', 'share', 'applications', name)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, body)
+      path
+    end
+
+    it 'resolves the highest-versioned AppImage in a usual directory' do
+      Dir.mktmpdir do |home|
+        appimage(File.join(home, 'Applications'), 'Saga-0.9.12-x86_64.AppImage')
+        newest = appimage(File.join(home, 'Applications'), 'Saga-0.10.8-x86_64.AppImage', mtime: Time.now - 3600)
+
+        expect(linux_locator(home).resolve('saga')).to eq(
+          described_class::Resolution.new(
+            frontend_id: 'saga',
+            executable_path: File.realpath(newest),
+            source: :appimage
+          )
+        )
+      end
+    end
+
+    it 'skips a downloaded AppImage that was never made executable' do
+      Dir.mktmpdir do |home|
+        downloaded = File.join(home, 'Downloads', 'Saga-0.10.8-x86_64.AppImage')
+        FileUtils.mkdir_p(File.dirname(downloaded))
+        File.write(downloaded, 'AppImage')
+        FileUtils.chmod(0o644, downloaded)
+
+        expect(linux_locator(home).resolve('saga')).to be_nil
+      end
+    end
+
+    it 'ignores a dangling symlink left beside the renamed AppImage' do
+      Dir.mktmpdir do |home|
+        directory = File.join(home, 'Applications')
+        updated = appimage(directory, 'Saga-0.10.8-x86_64.AppImage')
+        File.symlink(File.join(directory, 'Saga-0.10.7-x86_64.AppImage'), File.join(directory, 'Saga.AppImage'))
+
+        expect(linux_locator(home).resolve('saga')&.executable_path).to eq(File.realpath(updated))
+      end
+    end
+
+    it 'ignores differently cased names that may belong to SAGA GIS' do
+      Dir.mktmpdir do |home|
+        # Default macOS APFS is case-insensitive; the names would be one file.
+        File.write(File.join(home, 'case-probe'), '')
+        skip 'needs a case-sensitive filesystem' if File.exist?(File.join(home, 'CASE-PROBE'))
+        appimage(File.join(home, '.local', 'bin'), 'SAGA-9.1.0-x86_64.AppImage')
+        appimage(File.join(home, '.local', 'bin'), 'saga-9.1.0-x86_64.AppImage')
+
+        expect(linux_locator(home).resolve('saga')).to be_nil
+      end
+    end
+
+    it 'resolves a custom location from an integrator desktop entry' do
+      Dir.mktmpdir do |home|
+        custom = appimage(File.join(home, 'games', 'saga client'), 'saga.appimage')
+        desktop_entry(home, 'appimagekit_0123-Saga.desktop', <<~DESKTOP)
+          [Desktop Entry]
+          Name=Saga
+          Exec="#{custom}" --no-sandbox %U
+          StartupWMClass=Saga
+          [Desktop Action New]
+          Exec=/elsewhere/Other.AppImage
+        DESKTOP
+
+        expect(linux_locator(home).resolve('saga')).to eq(
+          described_class::Resolution.new(
+            frontend_id: 'saga',
+            executable_path: File.realpath(custom),
+            source: :desktop_entry
+          )
+        )
+      end
+    end
+
+    it 'finds the renamed AppImage beside a desktop entry left stale by an update' do
+      Dir.mktmpdir do |home|
+        directory = File.join(home, 'games')
+        updated = appimage(directory, 'Saga-0.10.8-x86_64.AppImage')
+        desktop_entry(home, 'saga.desktop', <<~DESKTOP)
+          [Desktop Entry]
+          Exec=#{File.join(directory, 'Saga-0.10.7-x86_64.AppImage')} %U
+          StartupWMClass=Saga
+        DESKTOP
+
+        expect(linux_locator(home).resolve('saga')&.executable_path).to eq(File.realpath(updated))
+      end
+    end
+
+    it 'honors XDG_DATA_HOME and ignores entries for other applications' do
+      Dir.mktmpdir do |home|
+        other = appimage(File.join(home, 'tools'), 'Other.AppImage')
+        data_home = File.join(home, 'xdg')
+        path = File.join(data_home, 'applications', 'other.desktop')
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, "[Desktop Entry]\nExec=#{other}\nStartupWMClass=Other\n")
+        saga = appimage(File.join(home, 'opt'), 'Saga.AppImage')
+        File.write(
+          File.join(data_home, 'applications', 'saga.desktop'),
+          "[Desktop Entry]\nExec=#{saga}\nStartupWMClass=Saga\n"
+        )
+
+        expect(linux_locator(home, 'XDG_DATA_HOME' => data_home).resolve('saga')&.executable_path)
+          .to eq(File.realpath(saga))
+      end
+    end
+  end
+
+  context 'when Saga.app is outside the scanned macOS application roots' do
+    def darwin_locator(applications, spotlight)
+      described_class.new(
+        platform_key: :darwin,
+        environment: { 'PATH' => '' },
+        application_roots: [applications],
+        spotlight: spotlight
+      )
+    end
+
+    it 'finds it through Spotlight and verifies the bundle identifier' do
+      Dir.mktmpdir do |root|
+        downloads = File.join(root, 'Downloads')
+        saga = mac_application(downloads, name: 'Saga', bundle_id: 'com.auchand.saga', executable_name: 'Saga')
+        impostor = File.join(root, 'Impostor.app')
+        mac_application(root, name: 'Impostor', bundle_id: 'com.example.other', executable_name: 'Saga')
+        queried = []
+        spotlight = lambda do |bundle_id|
+          queried << bundle_id
+          [impostor, File.join(downloads, 'Saga.app'), '']
+        end
+
+        expect(darwin_locator(File.join(root, 'empty'), spotlight).resolve('saga')).to eq(
+          described_class::Resolution.new(
+            frontend_id: 'saga',
+            executable_path: File.realpath(saga),
+            source: :application
+          )
+        )
+        expect(queried).to eq(['com.auchand.saga'])
+      end
+    end
+
+    it 'ignores mounted disk images, the Trash, and translocated copies' do
+      spotlight = lambda do |_bundle_id|
+        ['/Volumes/Saga 0.10.8/Saga.app', '/Users/me/.Trash/Saga.app',
+         '/private/var/folders/x/AppTranslocation/ABC/d/Saga.app']
+      end
+      Dir.mktmpdir do |applications|
+        locator = darwin_locator(applications, spotlight)
+        expect(locator).not_to receive(:mac_bundle_id)
+
+        expect(locator.resolve('saga')).to be_nil
+      end
+    end
+
+    it 'treats a Spotlight failure as not installed' do
+      Dir.mktmpdir do |applications|
+        spotlight = ->(_bundle_id) { raise Errno::ENOENT, '/usr/bin/mdfind' }
+
+        expect(darwin_locator(applications, spotlight).resolve('saga')).to be_nil
+      end
+    end
+
+    it 'does not query Spotlight when the application scan already found Saga' do
+      Dir.mktmpdir do |applications|
+        mac_application(applications, name: 'Saga', bundle_id: 'com.auchand.saga', executable_name: 'Saga')
+        spotlight = ->(_bundle_id) { raise 'Spotlight consulted' }
+
+        expect(darwin_locator(applications, spotlight).resolve('saga')).not_to be_nil
+      end
+    end
+
+    it 'gives up on an mdfind that does not finish in time' do
+      locator = darwin_locator('/nonexistent', nil)
+      stub_const("#{described_class}::SPOTLIGHT_TIMEOUT", 0.2)
+      sleeper = proc { |original, *_args, &block| original.call('sleep', '5', &block) }
+      allow(Open3).to receive(:popen3).with('/usr/bin/mdfind', anything).and_wrap_original(&sleeper)
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      expect(locator.send(:spotlight_search, 'com.auchand.saga')).to eq([])
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 2
+    end
+  end
+
   it 'discovers a Wine frontend without requiring a Unix execute bit' do
     Dir.mktmpdir do |prefix|
       wrayth = File.join(prefix, 'drive_c', 'Simutronics', 'Wrayth.exe')
@@ -441,7 +765,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
 
       expect(locator.resolve('avalon')).to be_nil
@@ -461,7 +786,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
 
       expect(locator.resolve('saga').executable_path).to eq(File.realpath(saga))
@@ -485,7 +811,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
       expect(locator).to receive(:mac_bundle_id).twice.and_call_original
 
@@ -502,7 +829,8 @@ RSpec.describe Lich::Common::FrontendLocator do
       locator = described_class.new(
         platform_key: :darwin,
         environment: { 'PATH' => '' },
-        application_roots: [applications]
+        application_roots: [applications],
+        spotlight: no_spotlight
       )
 
       expect(locator.resolve('saga')).to be_nil
