@@ -735,9 +735,23 @@ module XMLData
       @injuries = value
     end
 
+    # Mirrors XMLParser#stream_feature?. Defaults to the linked (Saga
+    # identity) stream every session uses now; a spec for the legacy stream
+    # sets XMLData.stream_features = [].
+    def stream_features
+      @stream_features ||= [:links]
+    end
+
+    attr_writer :stream_features
+
+    def stream_feature?(feature)
+      stream_features.include?(feature)
+    end
+
     def reset
       @game = "rspec"
       @name = "testing"
+      @stream_features = [:links]
       @dialogs = {}
       @dialog_names = {}
       @injuries = {}
@@ -882,6 +896,7 @@ module Lich
   class << self
     # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
+    attr_accessor :display_script_window
     attr_accessor :display_expgains, :display_roomid_location, :follow_description_flag
 
     def db
@@ -1408,6 +1423,12 @@ module Lich
 
         def clear_npcs
           @@npcs = []
+        end
+
+        # The double tracks no worn list; production returns nil for an
+        # empty one too.
+        def inv
+          nil
         end
 
         # Mirrors the production API so XMLParser#reset - which discards

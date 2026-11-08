@@ -68,7 +68,8 @@ module Lich
       #   PSMS.find_name("feint", "CMan")
       #   # => { long_name: "combat_feint", short_name: "feint", cost: 10 }
       def self.find_name(name, type)
-        name = self.name_normal(name)
+        # squeeze: "Elemental Lore - Air" normalizes to elemental_lore___air
+        name = self.name_normal(name).squeeze("_")
         Object.const_get("Lich::Gemstone::#{type}").method("#{type.downcase}_lookups").call
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end

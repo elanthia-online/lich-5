@@ -216,15 +216,12 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       allow(resolver).to receive(:resolve_channel_ref).with(:beta).and_return('v5.20.0-beta.1')
       allow(resolver).to receive(:last_error).and_return(nil)
       releases_url = "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases"
+      allow(client).to receive(:fetch_github_json).with(releases_url) { [beta, latest.first] }
       allow(URI).to receive(:parse).and_wrap_original do |original, url|
-        if url.to_s == releases_url
-          double('releases', open: StringIO.new(JSON.generate([beta, latest.first])))
-        elsif url.to_s.start_with?('https://example.test/')
-          downloaded << url
-          double('download', open: StringIO.new(archive_for.call(url)))
-        else
-          original.call(url)
-        end
+        next original.call(url) unless url.to_s.start_with?('https://example.test/')
+
+        downloaded << url
+        double('download', open: StringIO.new(archive_for.call(url)))
       end
     end
 
@@ -264,6 +261,119 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
 
         expect(messages.grep(/UPDATE ABORTED/).size).to eq(2)
         expect(downloaded).to eq([beta_url, 'https://example.test/lich-5.19.0.tar.gz'])
+      end
+    end
+
+    context 'when the beta release list cannot be read' do
+      let(:releases_url) { "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases" }
+
+      before do
+        archive = ruby_floor_archive('9.0')
+        offer_beta(->(_url) { archive })
+      end
+
+      it 'reports the GitHub failure, downloads nothing, and leaves the next update to the stable release' do
+        allow(client).to receive(:fetch_github_json).with(releases_url).and_return(nil)
+        allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :rate_limited, status: 403))
+        installer.prep_betatest
+
+        expect { installer.confirm_betatest }.not_to raise_error
+
+        expect(messages.grep(/rate limit reached.*No beta update was installed\. Run the command again once the limit resets\./).size).to eq(1)
+        expect(downloaded).to be_empty
+
+        installer.download_release_update
+
+        expect(downloaded).to eq(['https://example.test/lich-5.19.0.tar.gz'])
+      end
+
+      it 'reports a release list that is not a list instead of raising' do
+        allow(client).to receive(:fetch_github_json).with(releases_url).and_return({ 'message' => 'Not Found' })
+        installer.prep_betatest
+
+        expect { installer.confirm_betatest }.not_to raise_error
+
+        expect(messages).to include('[lich5-update: GitHub check failed. No beta update was installed. This is usually temporary; run the command again in a few minutes.]')
+        expect(downloaded).to be_empty
+      end
+    end
+
+    it 'downloads the release archive with the GitHubClient timeouts' do
+      archive = ruby_floor_archive('9.0')
+      opened = []
+      allow(URI).to receive(:parse).and_wrap_original do |original, url|
+        next original.call(url) unless url.to_s.start_with?('https://example.test/')
+
+        double('download').tap do |download|
+          allow(download).to receive(:open) do |*args, **opts|
+            opened << [args, opts]
+            StringIO.new(archive)
+          end
+        end
+      end
+
+      installer.download_release_update
+
+      timeouts = { open_timeout: Lich::Util::Update::GitHubClient::OPEN_TIMEOUT,
+                   read_timeout: Lich::Util::Update::GitHubClient::READ_TIMEOUT }
+      expect(opened).to eq([[[], timeouts]])
+    end
+
+    # Real open-uri and Net::HTTP against a local server that accepts, then
+    # stops answering, with the read timeout cut short.
+    context 'when the archive server stalls' do
+      let(:accepted) { Queue.new }
+      let(:held) { [] }
+
+      before { stub_const('Lich::Util::Update::GitHubClient::READ_TIMEOUT', 0.3) }
+
+      after do
+        @acceptor&.kill
+        held.each(&:close)
+        @server&.close
+      end
+
+      # Serves the release from a local server that reads each request,
+      # sends +reply+ and then holds the connection open without a word more.
+      def stall_after(reply)
+        @server = TCPServer.new('127.0.0.1', 0)
+        @acceptor = Thread.new do
+          loop do
+            conn = @server.accept
+            held << conn
+            accepted << true
+            nil until conn.gets.to_s.chomp.empty?
+            conn.write(reply)
+          end
+        end
+        url = "http://127.0.0.1:#{@server.addr[1]}/lich-5.19.0.tar.gz"
+        latest.replace([release.merge('assets' => [{ 'name' => Lich::Util::Update::ASSET_TARBALL_NAME, 'browser_download_url' => url }])])
+      end
+
+      def timed_update
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        expect { installer.download_release_update }.to raise_error(Net::ReadTimeout)
+        Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      end
+
+      # Net::HTTP retries a GET once when the headers time out, and open-uri
+      # cannot turn that off, so this stall costs two read timeouts.
+      it 'gives up on a server that never sends headers after two read timeouts' do
+        stall_after('')
+
+        elapsed = timed_update
+
+        expect(accepted.size).to eq(2)
+        expect(elapsed).to be < 1.0
+      end
+
+      it 'gives up on a body that stops partway after one read timeout, without starting over' do
+        stall_after("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n#{'x' * 10}")
+
+        elapsed = timed_update
+
+        expect(accepted.size).to eq(1)
+        expect(elapsed).to be < 0.55
       end
     end
 
@@ -592,7 +702,7 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       it 'reports a GitHub failure while resolving the beta' do
         error = Lich::Util::Update::FetchError.new(kind: :unavailable, status: 503)
         allow(resolver).to receive(:last_error).and_return(error)
-        expect(Lich::Util::Update::StatusReporter).to receive(:respond_github_failure).with(error, 'No beta update was installed.')
+        expect(Lich::Util::Update::StatusReporter).to receive(:respond_github_failure).with(error, 'No beta update was installed.', retried_by: :user)
 
         installer.prep_betatest
         installer.confirm_betatest
@@ -610,8 +720,7 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
           }
         ]
         releases_url = "https://api.github.com/repos/#{Lich::Util::Update::GITHUB_REPO}/releases"
-        allow(URI).to receive(:parse).and_call_original
-        allow(URI).to receive(:parse).with(releases_url).and_return(double(open: StringIO.new(JSON.generate(releases))))
+        allow(client).to receive(:fetch_github_json).with(releases_url).and_return(releases)
         target = nil
         expect(installer).to receive(:download_release_update) do
           target = %i[@update_to @zipfile @new_features].map { |ivar| installer.instance_variable_get(ivar) }

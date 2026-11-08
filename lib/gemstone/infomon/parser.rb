@@ -42,7 +42,7 @@ module Lich
           SocietyResign = /^The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.|^The Poohbah looks at you sternly.  "I had high hopes for you," he says, "but if this be your decision, so be it\.  I hereby strip you of membership|^The Grandmaster says, "I'm sorry to hear that,.+I wish you well with any of your future endeavors./.freeze
           Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
           NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
-          LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
+          LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-z\s\-':]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
           # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
           LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s\-':]+)\.\]$/.freeze
           UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-z\s\-':]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
@@ -217,6 +217,20 @@ module Lich
           when /Weapon/
             'Weapon'
           end
+        end
+
+        # Resolves a learn/unlearn line to its Infomon key.
+        #
+        # @param category [String] the category text from the game line
+        # @param psm [String] the ability name from the game line
+        # @return [String, nil] e.g. "ascension.kaistouch", or nil when the
+        #   name is not in that category's lookups (so no junk key is written)
+        def self.psm_key(category, psm)
+          cat = find_cat(category)
+          return nil unless cat
+
+          db_name = PSMS.find_name(psm, cat)
+          db_name && "#{cat.downcase}.#{db_name[:short_name]}"
         end
 
         # Updates character data from one game-output line.
@@ -450,25 +464,25 @@ module Lich
               :ok
             when Pattern::LearnPSM, Pattern::LearnTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", match[:rank].to_i)
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
+              Infomon.set(key, match[:rank].to_i)
               :ok
             when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
               no_decrement = (match.string =~ /have decreased to/)
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+              Infomon.set(key, (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
               :ok
             when Pattern::LostTechnique
               match = Regexp.last_match
-              @psm_cat = find_cat(match[:cat])
-              seek_name = PSMS.name_normal(match[:psm])
-              db_name = PSMS.find_name(seek_name, @psm_cat)
-              Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", 0)
+              key = psm_key(match[:cat], match[:psm])
+              return :noop unless key
+
+              Infomon.set(key, 0)
               :ok
             when Pattern::Resource
               match = Regexp.last_match
