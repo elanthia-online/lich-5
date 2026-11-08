@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'timeout'
 require 'tmpdir'
 require 'fileutils'
 require 'sqlite3'
@@ -740,6 +741,140 @@ RSpec.describe Lich::Common::DatabaseAdapter do
       expect(answer).to eq(first)
     end
 
+    describe 'sharing the version connection between threads (#2254)' do
+      # On Windows, SQLite's own sleeps inside a call (winLock's retry of a
+      # lock another process holds, the C busy timeout) go through Ruby's
+      # rb_w32_Sleep, which releases the GVL while SQLite holds the
+      # connection's mutex. A second thread entering the same connection then
+      # blocks on that mutex with the GVL held, and the process deadlocks.
+      # That sleep can't be produced on Linux, so this probe stands in for
+      # it: it sits below the connection's own wrappers, right above the C
+      # method, and sleeps (releasing the GVL) on every call made on a
+      # connection that opted in.
+      probe = Module.new do
+        define_method(:exec_batch) do |*args|
+          tracker = instance_variable_get(:@lich_spec_inside_c)
+          return super(*args) unless tracker
+
+          tracker.call(:enter)
+          begin
+            sleep(instance_variable_get(:@lich_spec_sleep) || 0.005)
+            result = super(*args)
+            tracker.call(:returned) # not reached if the call raised or was unwound by a kill
+            result
+          ensure
+            tracker.call(:leave)
+          end
+        end
+        private :exec_batch
+      end
+      SQLite3::Database.prepend(probe) unless SQLite3::Database < probe
+
+      it 'defers a kill that arrives during the call until the call has returned' do
+        @adapter.data_version # opens the version connection
+        db = @adapter.instance_variable_get(:@version_db)
+        in_call = Queue.new
+        events = Queue.new
+        db.instance_variable_set(:@lich_spec_sleep, 0.2)
+        db.instance_variable_set(:@lich_spec_inside_c, lambda do |event|
+          events << event
+          in_call << true if event == :enter
+        end)
+
+        reader = Thread.new { @adapter.data_version }
+        in_call.pop
+        reader.kill
+        reader.join(5)
+        db.remove_instance_variable(:@lich_spec_inside_c)
+
+        expect(reader).not_to be_alive
+        # The kill did not unwind through the C call (it would leave SQLite's
+        # connection mutex locked); it landed once the call had returned.
+        expect(Array.new(events.size) { events.pop }).to eq(%i[enter returned leave])
+        expect(Thread.new { @adapter.data_version }.join(5).value).to be_a(Integer)
+      end
+
+      it 'lets only one thread at a time into a sqlite3 call, even when the call releases the GVL partway through' do
+        @adapter.data_version # opens the version connection
+        db = @adapter.instance_variable_get(:@version_db)
+        count_lock = Mutex.new
+        inside = 0
+        most_inside = 0
+        db.instance_variable_set(:@lich_spec_inside_c, lambda do |event|
+          next if event == :returned
+
+          count_lock.synchronize do
+            inside += (event == :enter ? 1 : -1)
+            most_inside = [most_inside, inside].max
+          end
+        end)
+
+        results = Queue.new
+        threads = Array.new(4) { Thread.new { 10.times { results << @adapter.data_version } } }
+        threads.each(&:join)
+
+        expect(results.size).to eq(40)
+        expect(Array.new(results.size) { results.pop }).to all(be_a(Integer))
+        expect(most_inside).to eq(1)
+      ensure
+        db&.remove_instance_variable(:@lich_spec_inside_c) if db&.instance_variable_defined?(:@lich_spec_inside_c)
+      end
+
+      it 'waits for a call in progress before closing the connection under it' do
+        @adapter.data_version # opens the version connection
+        db = @adapter.instance_variable_get(:@version_db)
+        in_call = Queue.new
+        events = Queue.new
+        db.instance_variable_set(:@lich_spec_sleep, 0.2)
+        db.instance_variable_set(:@lich_spec_inside_c, lambda do |event|
+          events << event
+          in_call << true if event == :enter
+        end)
+
+        reader = Thread.new { @adapter.data_version }
+        in_call.pop
+        db.remove_instance_variable(:@lich_spec_inside_c)
+        closed = @adapter.send(:close_version_connection, db)
+        answer = reader.value
+
+        expect(closed).to be(true)
+        expect(db).to be_closed
+        # The reader's call ran to the end on the open connection; only then
+        # was it closed. Its value is discarded because the connection was
+        # replaced meanwhile.
+        expect(Array.new(events.size) { events.pop }).to eq(%i[enter returned leave])
+        expect(answer).to be_nil
+      end
+    end
+
+    it 'lets update_settings keep a kill held back until on_stored has returned, when on_stored waits for the version connection' do
+      @adapter.data_version # opens the version connection
+      lock = @adapter.instance_variable_get(:@version_call_lock)
+      release = Queue.new
+      holder = Thread.new { lock.synchronize { release.pop } } # another thread inside the pragma
+      Timeout.timeout(5) { Thread.pass until holder.status == 'sleep' }
+      in_on_stored = Queue.new
+      on_stored_finished = false
+      writer = Thread.new do
+        @adapter.update_settings('go2', 'DR', on_stored: lambda do |_row|
+          in_on_stored << true
+          @adapter.data_version # what Settings' on_stored does (settings.rb cache_stored_row_for)
+          on_stored_finished = true
+        end) { |row| row.merge('k' => 1) }
+      end
+      writer.report_on_exception = false
+      in_on_stored.pop
+      Timeout.timeout(5) { Thread.pass until writer.status == 'sleep' }
+      writer.kill # Script#kill while the writer waits inside on_stored
+      release << true
+      holder.join
+      writer.join(5)
+
+      expect(writer).not_to be_alive
+      expect(on_stored_finished).to be(true)
+      expect(@adapter.get_settings('go2', 'DR')).to eq('k' => 1)
+    end
+
     describe 'closing the version connection' do
       before { @adapter.data_version } # opens the version connection
 
@@ -800,33 +935,70 @@ RSpec.describe Lich::Common::DatabaseAdapter do
         value
       end
 
-      it 'discards the value read on the replaced connection' do
-        replaced_value = nil
+      # Another thread can't close the connection while a call on it is in
+      # progress (the closing thread waits for @version_call_lock), but it
+      # can replace it right after the call returns, before this thread's
+      # identity check. Runs the replacement there, once, and returns a
+      # proc that yields the value the other thread got.
+      def replace_connection_after_the_call
+        lock = @adapter.instance_variable_get(:@version_call_lock)
+        replaced = nil
+        done = false
+        allow(lock).to receive(:synchronize).and_wrap_original do |original, &block|
+          next original.call(&block) if done || Thread.current != Thread.main
+
+          done = true
+          begin
+            original.call(&block)
+          ensure
+            replaced = replace_connection_from_another_thread
+          end
+        end
+        -> { replaced }
+      end
+
+      it 'waits for the call before another thread can close the connection under it' do
+        closer = nil
         allow(@old).to receive(:execute_batch2).and_wrap_original do |original, *args|
-          result = original.call(*args)
-          replaced_value = replace_connection_from_another_thread
-          result
+          closer = Thread.new { @adapter.send(:close_version_connection, @old) }
+          # Wait (with a deadline; Timeout can't fire here, the lock defers
+          # interrupts) until the closer has detached the connection and is
+          # blocked on the call lock this thread holds.
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+          waiters = @adapter.instance_variable_get(:@version_call_lock).instance_variable_get(:@waiters)
+          until !@adapter.instance_variable_get(:@version_db).equal?(@old) && !waiters.empty?
+            raise 'closer did not detach the version connection and wait for the call lock' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+            Thread.pass
+          end
+          expect(@old).not_to be_closed
+          original.call(*args)
         end
 
+        expect(@adapter.data_version).to be_nil # replaced before the identity check
+        expect(closer.value).to be(true)
+        expect(@old).to be_closed
+      end
+
+      it 'discards the value read on the replaced connection' do
+        replaced_value = replace_connection_after_the_call
+
         expect(@adapter.data_version).to be_nil
-        expect(replaced_value).to be_a(Integer)
-        expect(@adapter.data_version).to eq(replaced_value)
+        expect(replaced_value.call).to be_a(Integer)
+        expect(@adapter.data_version).to eq(replaced_value.call)
         commit_elsewhere
-        expect(@adapter.data_version).to be > replaced_value
+        expect(@adapter.data_version).to be > replaced_value.call
       end
 
       it 'leaves the new connection open, and logs nothing, when the read fails on the replaced one' do
-        replaced_value = nil
-        allow(@old).to receive(:execute_batch2) do
-          replaced_value = replace_connection_from_another_thread
-          raise SQLite3::MisuseException, 'cannot use a closed database'
-        end
+        allow(@old).to receive(:execute_batch2).and_raise(SQLite3::IOException, 'disk I/O error')
+        replaced_value = replace_connection_after_the_call
 
         expect(@adapter.data_version).to be_nil
         current = @adapter.instance_variable_get(:@version_db)
         expect(current).not_to equal(@old)
         expect(current).not_to be_closed
-        expect(@adapter.data_version).to eq(replaced_value)
+        expect(@adapter.data_version).to eq(replaced_value.call)
         expect(Lich).not_to have_received(:log)
       end
     end
@@ -1056,5 +1228,142 @@ RSpec.describe Lich::Common::DatabaseAdapter do
         expect(SettingsSpecDB.rows(tmp_dir)[%w[s counter]]).to eq('n' => workers * increments)
       end
     end
+  end
+end
+
+RSpec.describe Lich::Common::DatabaseAdapter::HandoffLock do
+  subject(:lock) { described_class.new }
+
+  # Waits until thread is blocked (sleeping on the lock's queue or mutex).
+  def wait_until_blocked(thread)
+    Timeout.timeout(5) { Thread.pass until thread.status == 'sleep' || !thread.alive? }
+  end
+
+  it 'runs the block and returns its value' do
+    expect(lock.synchronize { 42 }).to eq(42)
+  end
+
+  it 'lets one thread in at a time' do
+    inside = 0
+    most = 0
+    counter = Mutex.new
+    threads = Array.new(6) do
+      Thread.new do
+        20.times do
+          lock.synchronize do
+            counter.synchronize { most = [most, inside += 1].max }
+            sleep 0.001
+            counter.synchronize { inside -= 1 }
+          end
+        end
+      end
+    end
+    threads.each(&:join)
+
+    expect(most).to eq(1)
+  end
+
+  it 'hands itself to waiters in the order they arrived' do
+    order = Queue.new
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    waiters = Array.new(3) do |i|
+      Thread.new { lock.synchronize { order << i } }.tap { |t| wait_until_blocked(t) }
+    end
+    release << true
+    ([holder] + waiters).each(&:join)
+
+    expect(Array.new(3) { order.pop }).to eq([0, 1, 2])
+  end
+
+  it 'gets a waiting thread in even while another thread takes it in a tight loop' do
+    stop = false
+    looper = Thread.new { lock.synchronize { sleep 0.001 } until stop }
+    sleep 0.05
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    lock.synchronize { nil }
+    waited = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    stop = true
+    looper.join
+
+    expect(waited).to be < 0.5
+  end
+
+  it 'holds back a kill to a waiting thread until it has had its turn, and is not stranded by it' do
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    ran = false
+    waiter = Thread.new { lock.synchronize { ran = true } }
+    wait_until_blocked(waiter)
+    waiter.kill
+    expect(waiter.join(0.2)).to be_nil # the kill waits for the waiter's turn
+    release << true
+    holder.join
+    waiter.join(5)
+
+    expect(waiter).not_to be_alive
+    expect(ran).to be(true)
+    expect(Thread.new { lock.synchronize { :ok } }.join(5)&.value).to eq(:ok)
+  end
+
+  it "keeps a caller's own interrupt deferral while it waits" do
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    after_wait = false
+    caller_thread = Thread.new do
+      Thread.handle_interrupt(Object => :never) do
+        lock.synchronize { nil }
+        after_wait = true # still inside the caller's deferral
+      end
+    end
+    caller_thread.report_on_exception = false
+    wait_until_blocked(caller_thread)
+    caller_thread.raise(RuntimeError, 'script killed')
+    release << true
+    holder.join
+
+    expect { caller_thread.join(5) }.to raise_error(RuntimeError, 'script killed')
+    expect(after_wait).to be(true)
+  end
+
+  it 'hands itself on, in order, after a waiter killed in the queue has had its turn' do
+    release = Queue.new
+    order = Queue.new
+    holder = Thread.new { lock.synchronize { release.pop } }
+    wait_until_blocked(holder)
+    first = Thread.new { lock.synchronize { order << :first } }
+    wait_until_blocked(first)
+    second = Thread.new { lock.synchronize { order << :second } }
+    wait_until_blocked(second)
+    first.kill # still queued behind holder
+    release << true
+    holder.join
+
+    expect(second.join(5)).to eq(second)
+    expect(first.join(5)).to eq(first)
+    expect(first).not_to be_alive
+    expect(Array.new(order.size) { order.pop }).to eq(%i[first second])
+  end
+
+  it 'defers an interrupt to its holder until it has released the lock' do
+    in_block = Queue.new
+    finished = false
+    holder = Thread.new do
+      lock.synchronize do
+        in_block << true
+        sleep 0.1
+        finished = true
+      end
+    end
+    holder.report_on_exception = false
+    in_block.pop
+    holder.raise(RuntimeError, 'script killed')
+
+    expect { holder.join }.to raise_error(RuntimeError, 'script killed')
+    expect(finished).to be(true)
+    expect(Thread.new { lock.synchronize { :ok } }.join(5)&.value).to eq(:ok)
   end
 end
