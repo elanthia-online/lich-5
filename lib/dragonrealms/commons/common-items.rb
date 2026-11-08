@@ -911,11 +911,26 @@ module Lich
         !!(DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/) =~ /(?:An?|Some) .+ is (?:in|being)/)
       end
 
-      # Checks if an item is currently worn by tapping it.
+      # Checks if an item is currently worn.
+      #
+      # Answers true from the worn-items list ({GameObj.inv}) without sending
+      # anything when a worn item's name has the name's words (see
+      # {.carried_name_pattern}). DR re-sends that list with every hand change,
+      # ahead of the reply text, so it is current. Otherwise, and for a name
+      # starting with an ordinal ("second") or "other", the item is tapped and
+      # the reply decides, as before. Answering from the list means another
+      # script tapping at the same moment can't hand this one its reply.
       #
       # @param item [String] item noun to check
       # @return [Boolean] true if item is currently worn
+      #
+      # @example Wearing "some polished thin-edged zills with silvered esoteric filigree"
+      #   DRCI.wearing?('zills')            #=> true, nothing sent
+      #   DRCI.wearing?('thin-edged zills') #=> true, nothing sent
+      #   DRCI.wearing?('zill')             #=> taps "my zill"
       def wearing?(item)
+        return true if item.is_a?(String) && !ordinal_name?(item) && carried_ids(GameObj.inv, item).any?
+
         !!(tap(item) =~ /wearing/)
       end
 
@@ -928,7 +943,17 @@ module Lich
         !!(tap(item, container) =~ /inside/)
       end
 
-      # Checks if an item exists in inventory or a container by tapping it.
+      # Checks if an item exists in inventory or a container.
+      #
+      # With no container, answers true without sending anything when a worn
+      # item ({GameObj.inv}) or a held item has the name's words (see
+      # {.carried_name_pattern}). DR does not promise which item TAP finds as
+      # the "second", so a name starting with an ordinal asks for at least that
+      # many: "second pack" answers true when two worn or held items match.
+      # Anything else (a container, too few matches, a name starting with
+      # "other", an item that isn't a String) is tapped and the reply decides,
+      # as before: a miss in the worn list and the hands proves nothing, the
+      # item may be stowed.
       #
       # @param item [String] item noun to check
       # @param container [String, nil] container to check in, or nil for general inventory
@@ -938,6 +963,8 @@ module Lich
       #   DRCI.exists?("deed")
       #   DRCI.exists?("sword", "backpack")
       def exists?(item, container = nil)
+        return true if container.nil? && carried_at_least?(item)
+
         case tap(item, container)
         when *TAP_SUCCESS_PATTERNS
           true
@@ -1292,6 +1319,91 @@ module Lich
         words[0...-1].all? { |word| name_words.include?(word) }
       end
 
+      # The phrase half of how a name matches a worn or held item in
+      # {.wearing?} and {.exists?} (the item's noun is the other half, see
+      # {.carried_ids}): after a leading "my " and a leading article ("a",
+      # "an", "some") are dropped, the name's words must appear in the item's
+      # name in order, as whole words, ignoring case. A letter, digit, hyphen
+      # or apostrophe next to them means they are part of a longer word.
+      #
+      # It works on both kinds of name DR gives an item: the long name in the
+      # worn-items list ("some polished thin-edged zills with silvered esoteric
+      # filigree") and the short name on a hand tag ("sanowret crystal"). So
+      # "zills" and "thin-edged zills" match the zills, while "zill", "edged
+      # zills" and "polished zills" don't, and "bag" doesn't match "bagpipes".
+      #
+      # @param name [String] a noun phrase
+      # @return [Regexp, nil] nil for a name with no words
+      # @api private
+      def carried_name_pattern(name)
+        words = name.to_s.strip.sub(/\Amy\s+/i, '').sub(/\A(?:a|an|some)\s+/i, '').split
+        return nil if words.empty?
+
+        /(?<![\w'-])#{words.map { |word| Regexp.escape(word) }.join('\s+')}(?![\w'-])/i
+      end
+
+      # The distinct ids of the items a name means among the given GameObjs; a
+      # lone "#<id>" matches that id only. Otherwise an item matches when the
+      # name's words are in its name ({.carried_name_pattern}) and one of them
+      # is the item's own noun (its GameObj noun, as DR sends it), so words
+      # from a long name's description never match on their own: "red flower"
+      # is not the "silk cloak embroidered with a red flower" (noun cloak), and
+      # "lockpick" is not the "lockpick ring". An item with no noun never
+      # matches.
+      #
+      # @param items [Array<GameObj>, nil] e.g. {GameObj.inv}
+      # @param name [String] a noun phrase or "#<id>"
+      # @return [Array<String>]
+      # @api private
+      def carried_ids(items, name)
+        id = name.to_s.strip[ITEM_ID_REF_PATTERN, 1]
+        pattern = id ? nil : carried_name_pattern(name)
+        return [] if id.nil? && pattern.nil?
+
+        words = name.to_s.downcase.split
+        Array(items).filter_map do |obj|
+          obj_id = held_obj_id(obj)
+          next unless obj_id
+          next(obj_id == id ? obj_id : nil) if id
+
+          noun = obj.noun.to_s.downcase
+          obj_id if !noun.empty? && words.include?(noun) && obj.name.to_s.match?(pattern)
+        end.uniq
+      end
+
+      # Whether the worn list and the hands show as many items as a name asks
+      # for: one, or the ordinal's number for a name starting with one ("second
+      # pack" asks for two). A name starting with "other" asks for nothing here.
+      #
+      # @param item [Object] the name given to {.exists?}
+      # @return [Boolean]
+      # @api private
+      def carried_at_least?(item)
+        return false unless item.is_a?(String)
+
+        words = item.strip.sub(/\Amy\s+/i, '').split
+        return false if words.empty? || HELD_REF_ORDINAL_WORDS.include?(words.first.downcase)
+
+        needed = 1
+        if (ordinal = Array($ORDINALS).index(words.first.downcase))
+          needed = ordinal + 1
+          words.shift
+        end
+        return false if words.empty?
+
+        name = words.join(' ')
+        (carried_ids(GameObj.inv, name) + carried_ids([GameObj.right_hand, GameObj.left_hand], name)).uniq.size >= needed
+      end
+
+      # @param name [String]
+      # @return [Boolean] whether the name, after a leading "my ", starts with
+      #   an ordinal ("second") or "other"
+      # @api private
+      def ordinal_name?(name)
+        first = name.to_s.strip.sub(/\Amy\s+/i, '').split.first
+        !first.nil? && held_ref_ordinal?(first.downcase)
+      end
+
       # @param word [String] the first word of a name, downcased
       # @return [Boolean] whether it is an ordinal ("second") or "other"
       # @api private
@@ -1326,7 +1438,7 @@ module Lich
         end.uniq
       end
 
-      private_class_method :held_obj_matches?, :worn_obj_matches?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
+      private_class_method :held_obj_matches?, :worn_obj_matches?, :carried_name_pattern, :carried_ids, :carried_at_least?, :ordinal_name?, :held_ref_ordinal?, :held_obj_id, :held_except, :matching_held_ids
 
       # Checks if an item exists in a container by LOOKing at it.
       #
