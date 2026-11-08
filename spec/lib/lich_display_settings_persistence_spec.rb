@@ -8,7 +8,7 @@ require 'json'
 # lib/lich.rb replaces the suite's Lich mock; isolate real accessors in children.
 RSpec.describe 'persisted display settings' do
   settings = %w[display_lichid display_uid display_exits display_stringprocs
-                display_room_links display_room_mono display_expgains
+                display_room_links display_room_mono display_expgains display_script_window
                 hide_uid_flag follow_description_flag display_roomid_location]
 
   # Runs real Lich settings against SQLite, outside the suite's global mocks.
@@ -355,7 +355,7 @@ RSpec.describe 'persisted display settings' do
       Lich.display_roomid_location = 'invalid'
       puts JSON.generate([normalized, Lich.display_roomid_location])
     RUBY
-    expect(result).to eq([Array.new(9) { [true, true, false, false] }, 'title'])
+    expect(result).to eq([Array.new(10) { [true, true, false, false] }, 'title'])
   end
 
   it 'propagates other database failures without publishing a new cached value' do
@@ -408,9 +408,10 @@ RSpec.describe 'persisted display settings' do
     expect(result).to eq(['room|false', true, nil, 'room|true', [], 2])
   end
 
-  { 'DR'   => [false, false, false, false, false, true, true, false, false, 'line'],
-    'GSIV' => [true, true, false, false, true, false, true, false, false, 'line'],
-    ''     => Array.new(10) }.each do |game, expected|
+  # display_script_window (the 8th) is off by default in every game.
+  { 'DR'   => [false, false, false, false, false, true, true, false, false, false, 'line'],
+    'GSIV' => [true, true, false, false, true, false, true, false, false, false, 'line'],
+    ''     => Array.new(11) }.each do |game, expected|
     it "preserves missing-row defaults for game #{game.inspect}" do
       result = real_settings("puts JSON.generate(#{settings.inspect}.map { |name| Lich.public_send(name) })", game: game)
       expect(result).to eq(expected)
@@ -425,7 +426,7 @@ RSpec.describe 'persisted display settings' do
       after = #{settings.inspect}.map { |name| Lich.public_send(name) }
       puts JSON.generate([before, after])
     RUBY
-    expect(result).to eq([Array.new(10), [false, false, false, false, false, true, false, false, false, 'line']])
+    expect(result).to eq([Array.new(11), [false, false, false, false, false, true, false, false, false, false, 'line']])
   end
 
   it 'releases a real persistent file lock failure without changing cache or storage' do
