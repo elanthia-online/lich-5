@@ -3,8 +3,16 @@
 require_relative '../../../spec_helper'
 
 # Load production code. common-items is loaded so DRCC reaches the real DRCI
-# (and its pattern constants) whether this file runs alone or in the suite.
+# (and its pattern constants) whether this file runs alone or in the suite;
+# common-travel likewise for the real DRCT.order_item in .check_consumables.
+# common gives the real DRC.right_hand / DRC.left_hand (GameObj 'Empty' ->
+# nil) in place of spec_helper's accessors, also whatever the load order.
+# common/gameobj gives the real GameObj hands and worn list that DRCI.held_id
+# and DRCI.worn_ref read (spec_helper's GameObj double has no inv).
+require 'common/gameobj'
+require 'dragonrealms/commons/common'
 require 'dragonrealms/commons/common-items'
+require 'dragonrealms/commons/common-travel'
 require 'dragonrealms/commons/common-crafting'
 
 DRCC = Lich::DragonRealms::DRCC unless defined?(DRCC)
@@ -1188,6 +1196,7 @@ describe DRCC do
     # Replies by reply class, worded as the GET/UNTIE patterns match them.
     let(:got) { 'You get' }
     let(:heavy) { "can't quite lift it" }
+    let(:no_free_hand) { 'You need a free hand' }
     let(:not_found) { 'What were you' }
     let(:tied) { 'You should untie' }
     let(:untied) { 'You untie' }
@@ -1299,6 +1308,37 @@ describe DRCC do
         reply_with(heavy, got)
 
         expect(DRCC.get_crafting_item('bronze ingot', 'backpack', ['bronze ingot'], nil, true)).to be false
+        expect(sent.size).to eq(1)
+      end
+    end
+
+    # Both hands full, e.g. an item a previous run left held. Without the
+    # pattern the GET waited out bput's 15 s timeout and returned false
+    # silently, and the caller failed later with a misleading message.
+    context 'when the game says "You need a free hand"' do
+      it 'stops the script after one GET when skip_exit is false' do
+        reply_with(no_free_hand)
+
+        expect { DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil) }.to raise_error(SystemExit)
+        expect(sent).to eq(['get my burlap cloth'])
+        expect(drc).to have_received(:beep)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No free hand to get: burlap cloth')
+        expect(Lich::Messaging).to have_received(:msg).with('bold', /Stopping script/)
+      end
+
+      it 'returns false after one GET when skip_exit is true' do
+        reply_with(no_free_hand)
+
+        expect(DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil, true)).to be false
+        expect(sent).to eq(['get my burlap cloth'])
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No free hand to get: burlap cloth')
+        expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Stopping script/)
+      end
+
+      it 'does not GET again even when the next reply would succeed' do
+        reply_with(no_free_hand, got)
+
+        expect(DRCC.get_crafting_item('burlap cloth', 'backpack', nil, nil, true)).to be false
         expect(sent.size).to eq(1)
       end
     end
@@ -1517,12 +1557,12 @@ describe DRCC do
     # method always ends with a boolean or, without skip_exit, an exit. It
     # sends each command at most twice (the GET once), and visits safe-room at
     # most once per untie command. With the item in hand, only a GET answered
-    # "can't quite lift it" ends in anything but true.
+    # "can't quite lift it" or "You need a free hand" ends in anything but true.
     context 'across every sequence of four replies' do
-      let(:replies) { [got, pickup, already, heavy, not_found, tied, untied, untie_what, wounded, ''] }
+      let(:replies) { [got, pickup, already, heavy, no_free_hand, not_found, tied, untied, untie_what, wounded, ''] }
 
       # Stubbed once, reading the loop's state, as re-stubbing in every one of
-      # the 80,000 iterations would dominate the run time.
+      # the 117,128 iterations would dominate the run time.
       it 'is bounded and honours skip_exit' do
         queue = []
         exchanges = []
@@ -1560,7 +1600,7 @@ describe DRCC do
                 expect(sent.count { |command| command.start_with?('get') }).to be <= 1, label
                 next unless held_after
 
-                lifted = exchanges.none? { |command, reply| command.start_with?('get') && reply == heavy }
+                lifted = exchanges.none? { |command, reply| command.start_with?('get') && [heavy, no_free_hand].include?(reply) }
                 expect(result == true).to eq(lifted), label
               end
             end
@@ -1579,6 +1619,12 @@ describe DRCC do
     let(:sent) { [] }
     let(:tie_replies) { [] }
     let(:bag_put_reply) { 'You put your tongs in your backpack.' }
+    # STOW (DRCI.stow_item?) after a bag refusal; the stow pack takes it.
+    let(:stow_reply) { 'You put your tongs in your rucksack.' }
+    # DRC.right_hand / DRC.left_hand: the shortened hand names, nil when empty.
+    # A failed PUT or STOW leaves them as they are.
+    let(:right_hand) { 'tongs' }
+    let(:left_hand) { nil }
     # The safe-room stub moves the character, so only a room id read before
     # the trip walks back to the crafting room (8775).
     let(:room_id) { [8775] }
@@ -1593,7 +1639,13 @@ describe DRCC do
         # main retried without limit; stop the example instead of the stack.
         raise 'tie sent a third time' if sent.count { |c| c.start_with?('tie ') } > 2
 
-        line = command.start_with?('tie ') ? tie_replies.shift.to_s : bag_put_reply
+        line = if command.start_with?('tie ')
+                 tie_replies.shift.to_s
+               elsif command.start_with?('stow ')
+                 stow_reply
+               else
+                 bag_put_reply
+               end
         match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
         raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
 
@@ -1603,6 +1655,11 @@ describe DRCC do
         sent << "#{script} #{args.join(' ')}"
         room_id[0] = 1
       end
+      allow(DRC).to receive(:right_hand) { right_hand }
+      allow(DRC).to receive(:left_hand) { left_hand }
+      # The real DRCI.in_hands?, watched: a PUT or STOW that succeeded must
+      # not read the hands, which the game may not have updated yet.
+      allow(DRCI).to receive(:in_hands?).and_call_original
       allow(DRCT).to receive(:walk_to) { |room| sent << "walk #{room}" }
       allow(Room).to receive(:current) { OpenStruct.new(id: room_id.first) }
       allow(DRCC).to receive(:fput) { |command| sent << command }
@@ -1640,6 +1697,24 @@ describe DRCC do
     it 'puts the tool in the bag when there is no belt' do
       expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
       expect(sent).to eq([bag_put])
+      expect(DRCI).not_to have_received(:in_hands?)
+    end
+
+    [
+      'You put your tongs in your backpack.',
+      'You tuck your tongs into your backpack.',
+      'You combine the stacks.'
+    ].each do |reply|
+      context "when the PUT reply is the success line #{reply.inspect}" do
+        let(:bag_put_reply) { reply }
+
+        # The hand tag may still show the tongs when the line arrives.
+        it 'returns true without reading the hands' do
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+          expect(sent).to eq([bag_put])
+          expect(DRCI).not_to have_received(:in_hands?)
+        end
+      end
     end
 
     [
@@ -1694,6 +1769,248 @@ describe DRCC do
       end
     end
 
+    context 'when the tool will not fit in the bag' do
+      # Enchanting, November 2026: a brazier that would not go in a satchel.
+      let(:bag_put) { 'put my brazier in my leather satchel' }
+      let(:bag_put_reply) { "You just can't get the small brazier to fit in the leather satchel, no matter how you arrange it." }
+
+      it 'stows the tool instead of waiting out the PUT, and returns true' do
+        expect(DRCC.stow_crafting_item('brazier', 'leather satchel', nil)).to be(true)
+        expect(sent).to eq([bag_put, 'stow my brazier'])
+      end
+    end
+
+    # The other refusals DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS knows that leave
+    # the tool in hand; each used to wait out bput and return with it held.
+    # Only the phrase is on record for "even after stuffing" and "completely
+    # full", so those two lines are built around it.
+    [
+      "There isn't any more room in the backpack for that.",
+      "That's too heavy to go in there!",
+      'The tongs is too heavy to go in there!',
+      'The tongs is too long to fit in the backpack.',
+      'The backpack is too small to hold that.',
+      "You can't fit the tongs in the backpack, even after stuffing it.",
+      'The backpack is completely full.',
+      "You can't do that."
+    ].each do |reply|
+      context "when the PUT reply is #{reply.inspect}" do
+        let(:bag_put_reply) { reply }
+
+        it 'stows the tool instead of waiting out the PUT, and returns true' do
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+          expect(sent).to eq([bag_put, 'stow my tongs'])
+        end
+      end
+    end
+
+    [
+      'Bob says, "My backpack is completely full, even after stuffing it."',
+      'Bob says, "The brazier is too small to hold that."'
+    ].each do |speech|
+      context "when another player says #{speech.inspect}" do
+        let(:bag_put_reply) { speech }
+
+        it "doesn't take the speech for a refusal" do
+          expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+        end
+      end
+    end
+
+    # taskmaster, 2026-11: "put my leather in my bucket" found the worn
+    # "sinuous leathers" first, so the game answered "Perhaps you should be
+    # holding that first." and the rat-pelt leather stayed in hand. That
+    # reply matched nothing, bput waited 15 s, and stow_crafting_item said
+    # true; the next ORDER then failed on the full hands.
+    context 'when the PUT matches an item that is not held and the tool stays in hand' do
+      let(:bag_put) { 'put my leather in my bucket' }
+      let(:bag_put_reply) { 'Perhaps you should be holding that first.' }
+      let(:right_hand) { 'rat-pelt leather' }
+
+      it 'returns false at once and says the tool is still held' do
+        expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+        expect(sent).to eq([bag_put])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: Could not put leather in bucket. It is still in your hands.').once
+      end
+
+      context 'with the leather in the left hand' do
+        let(:right_hand) { 'steel tongs' }
+        let(:left_hand) { 'rat-pelt leather' }
+
+        it 'returns false' do
+          expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+        end
+      end
+    end
+
+    # The hands as the game feed leaves them: GameObj hand objects, an empty
+    # one with id nil and name 'Empty', read through the real DRC.right_hand /
+    # DRC.left_hand (which turn 'Empty' into nil) and the real DRCI.in_hands?.
+    context 'with the real DRC hand readers over GameObj hands' do
+      let(:game_right) { MockGameObj.new(id: nil, name: 'Empty') }
+      let(:game_left) { MockGameObj.new(id: nil, name: 'Empty') }
+
+      before(:each) do
+        allow(DRC).to receive(:right_hand).and_call_original
+        allow(DRC).to receive(:left_hand).and_call_original
+        allow(Lich::Common::GameObj).to receive(:right_hand) { game_right }
+        allow(Lich::Common::GameObj).to receive(:left_hand) { game_left }
+      end
+
+      ['What were you referring to?', 'Perhaps you should be holding that first.', ''].each do |reply|
+        label = reply.empty? ? 'no reply' : reply.inspect
+        context "when the PUT gets #{label} with both hands Empty" do
+          let(:bag_put_reply) { reply }
+
+          it 'returns true and stays quiet: nothing is left to put away' do
+            expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+            expect(sent).to eq([bag_put])
+            expect(DRC).to have_received(:right_hand).at_least(:once)
+            expect(Lich::Messaging).not_to have_received(:msg)
+          end
+        end
+      end
+
+      context 'when the PUT gets "Perhaps you should be holding that first." with the leather held' do
+        let(:bag_put) { 'put my leather in my bucket' }
+        let(:bag_put_reply) { 'Perhaps you should be holding that first.' }
+        let(:game_left) { MockGameObj.new(id: '412345', noun: 'leather', name: 'rat-pelt leather') }
+
+        it 'returns false and says the tool is still held' do
+          expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not put leather in bucket. It is still in your hands.').once
+        end
+      end
+
+      # Pins DRCI.in_hands?'s word-prefix match (/\bleather/i) for a name
+      # that held_id does not resolve: no held item has the noun "leather",
+      # so the PUT and the still-held check go by name, and a held "leather
+      # backpack" counts as the leather. When held_id does resolve, the check
+      # goes by id instead (common_crafting_by_held_id_spec.rb).
+      context 'when the PUT gets "What were you referring to?" and a different held item starts with the noun' do
+        let(:bag_put) { 'put my leather in my bucket' }
+        let(:bag_put_reply) { 'What were you referring to?' }
+        let(:game_left) { MockGameObj.new(id: '3', noun: 'backpack', name: 'leather backpack') }
+
+        it 'returns false: the prefix match takes the backpack for the leather' do
+          expect(DRCC.stow_crafting_item('leather', 'bucket', nil)).to be(false)
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not put leather in bucket. It is still in your hands.').once
+        end
+      end
+    end
+
+    # A not-found or not-held reply, or a timeout: false only while the tool
+    # is still in a hand. With nothing matching held there is nothing left to
+    # put away, so it stays true; spin.lic:38 reads false as "the bag refused
+    # the scissors" and moves on to the other bag.
+    [
+      'Perhaps you should be holding that first.',
+      'What were you referring to?',
+      'I could not find what you were referring to.',
+      ''
+    ].each do |reply|
+      label = reply.empty? ? 'no reply' : reply.inspect
+      context "when the PUT gets #{label}" do
+        let(:bag_put_reply) { reply }
+
+        it 'returns false without a STOW while the tool is still in a hand' do
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(false)
+          expect(sent).to eq([bag_put])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not put tongs in backpack. It is still in your hands.').once
+        end
+
+        it 'returns false after a failed belt tie as well' do
+          tie_replies << 'You must be holding the tongs to do that.'
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', belt)).to be(false)
+          expect(sent).to eq([tie, bag_put])
+        end
+
+        context 'with both hands empty' do
+          let(:right_hand) { nil }
+
+          it 'returns true and stays quiet: nothing is left to put away' do
+            expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+            expect(sent).to eq([bag_put])
+            expect(DRCI).to have_received(:in_hands?).with('tongs')
+            expect(Lich::Messaging).not_to have_received(:msg)
+          end
+        end
+
+        context 'with another item in hand' do
+          let(:right_hand) { 'steel hammer' }
+
+          it 'returns true' do
+            expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+          end
+        end
+      end
+    end
+
+    # Speech that arrives before the real PUT reply, with the tool still in
+    # hand because the game has not answered yet: taking it for the reply
+    # would return false for a PUT that then succeeds (spin.lic:38 would
+    # switch bags, forge.lic:1621 would log "Failed to stow").
+    [
+      'Bob says, "Perhaps you should be holding that first."',
+      'Bob says, "What were you referring to?"',
+      'Bob says, "I could not find what you were referring to."'
+    ].each do |speech|
+      context "when another player says #{speech.inspect} with the tool held" do
+        let(:bag_put_reply) { speech }
+
+        it "doesn't take the speech for the PUT reply" do
+          expect { DRCC.stow_crafting_item('tongs', 'backpack', nil) }.to raise_error(/real bput would wait 15 s/)
+          expect(Lich::Messaging).not_to have_received(:msg)
+        end
+      end
+    end
+
+    # The STOW fallback used to be an unchecked fput, so a full stow pack
+    # still returned true with the tool in hand.
+    context 'when the bag is full and the STOW is refused too' do
+      let(:bag_put_reply) { "There isn't any more room in the backpack for that." }
+      let(:stow_reply) { "There isn't any more room in the rucksack for that." }
+
+      it 'returns false and says so' do
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(false)
+        expect(sent).to eq([bag_put, 'stow my tongs'])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: backpack would not take tongs, and stowing it failed too. It is still in your hands.').once
+      end
+    end
+
+    context 'when the bag is full and the STOW gets no reply' do
+      let(:bag_put_reply) { "There's no room in the backpack." }
+      let(:stow_reply) { '' }
+
+      it 'returns false while the tool is held' do
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(false)
+        expect(sent).to eq([bag_put, 'stow my tongs'])
+      end
+
+      context 'with both hands empty' do
+        let(:right_hand) { nil }
+
+        it 'returns true' do
+          expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(true)
+        end
+      end
+    end
+
+    context 'when the bag is full and the STOW needs a free hand' do
+      let(:bag_put_reply) { "There isn't any more room in the backpack for that." }
+      let(:stow_reply) { 'You need a free hand to do that.' }
+
+      it 'returns false' do
+        expect(DRCC.stow_crafting_item('tongs', 'backpack', nil)).to be(false)
+        expect(sent).to eq([bag_put, 'stow my tongs'])
+      end
+    end
+
     context 'when the bag refuses the tool' do
       let(:bag_put_reply) { "You can't put that there." }
 
@@ -1734,6 +2051,832 @@ describe DRCC do
           expect(result).to be(true)
         end
       end
+    end
+  end
+
+  describe '.check_consumables' do
+    let(:get_pins) { 'get my pins from my duffel bag' }
+    let(:count_pins) { 'count my pins' }
+    let(:put_pins) { 'put my pins in my duffel bag' }
+    # Game lines, one queue per command; the stub fails on any extra send.
+    # The pins and bag names are those in the dr_saga_containers_speech golden.
+    let(:got_pins) { 'You get some straight iron pins from inside your battered black duffel bag.' }
+    let(:put_away) { 'You put your pins in your battered black duffel bag.' }
+    let(:free_hand) { 'You need a free hand to pick that up.' }
+    let(:hands_full) { 'You realize your hands are full, and stop.' }
+    let(:replies) { Hash.new { |_hash, command| raise "unexpected command #{command.inspect}" } }
+    let(:sent) { [] }
+    # What DRCT.order_item returns; the real one runs in the context below.
+    let(:order_result) { 'takes some coins from you' }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i,
+      # the matched text is returned, '' on a timeout. A non-empty line that no
+      # pattern matches raises: the real bput would wait out its 15 s timeout.
+      allow(DRC).to receive(:bput) do |command, *patterns|
+        sent << command
+        line = replies[command].shift.to_s
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        raise "real bput would wait 15 s: #{line.inspect} matches none of #{patterns.flatten.inspect}" if match.nil? && !line.empty?
+
+        match ? match.to_a.first : ''
+      end
+      allow(DRCT).to receive(:order_item) do |room, number|
+        sent << "order #{number} at #{room}"
+        order_result
+      end
+      allow(DRCT).to receive(:dispose) { |name| sent << "dispose #{name}" }
+      allow(DRCT).to receive(:walk_to) do |room|
+        sent << "walk #{room}"
+        true
+      end
+      allow(Room).to receive(:current) { OpenStruct.new(id: 8775) }
+      # The pins are in hand after a GET or an order; nothing else is held.
+      allow(DRC).to receive(:right_hand).and_return('iron pins')
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    def check(room = 'tool-room', number = 5)
+      DRCC.check_consumables('pins', room, number, 'duffel bag', [], nil, 5)
+    end
+
+    # sew.lic, hands full (2026-11 incident): the GET got "You need a free
+    # hand", bput timed out, and the old else-branch walked to the shop and
+    # ordered with full hands ("You realize your hands are full, and stop.").
+    it 'returns false without walking or ordering when the GET needs a free hand' do
+      replies[get_pins] = [free_hand]
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', 'DRCC: Could not get pins from duffel bag to check it (no free hand). Not buying more.').once
+    end
+
+    it 'returns false without walking or ordering when the GET gets no reply' do
+      replies[get_pins] = ['']
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', 'DRCC: Could not get pins from duffel bag to check it (no reply). Not buying more.').once
+    end
+
+    ['What were you referring to?', 'I could not find what you were referring to.'].each do |reply|
+      it "orders, puts the new pins away and walks back after #{reply.inspect}" do
+        replies[get_pins] = [reply]
+        replies[put_pins] = [put_away]
+        expect(check).to be(true)
+        expect(sent).to eq([get_pins, 'order 5 at tool-room', put_pins, 'walk 8775'])
+      end
+    end
+
+    it 'passes an Integer room and a String number through to the order unchanged' do
+      replies[get_pins] = ['What were you referring to?']
+      replies[put_pins] = [put_away]
+      expect(check(19_073, '5')).to be(true)
+      expect(DRCT).to have_received(:order_item).with(19_073, '5')
+    end
+
+    # DRCT.order_item's failures: nil (no coins, full hands, a shop it could
+    # not reach) and '' (a timeout, which is truthy). Neither leaves pins to
+    # put away, so no PUT; the walk back still happens.
+    [nil, ''].each do |failed|
+      context "when the order returns #{failed.inspect}" do
+        let(:order_result) { failed }
+
+        it 'returns false and walks back without a PUT' do
+          replies[get_pins] = ['What were you referring to?']
+          expect(check).to be(false)
+          expect(sent).to eq([get_pins, 'order 5 at tool-room', 'walk 8775'])
+          expect(Lich::Messaging).to have_received(:msg)
+            .with('bold', 'DRCC: Could not buy pins (order 5 at tool-room). Not putting anything away.').once
+        end
+      end
+    end
+
+    it 'keeps pins with enough uses: counts, puts them back and buys nothing' do
+      replies[get_pins] = [got_pins]
+      # Built around the COUNT_USES_MESSAGES phrase.
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = [put_away]
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
+    end
+
+    # GET while invisible: DRCI::GET_ITEM_SUCCESS_PATTERNS lists the
+    # /^You fade in for a moment as you/ prefix. The rest of this line is
+    # code-derived (no game log of it in this repo).
+    it 'counts and keeps pins got while invisible ("You fade in for a moment as you ...")' do
+      replies[get_pins] = ['You fade in for a moment as you get some straight iron pins from inside your battered black duffel bag.']
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = [put_away]
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
+    end
+
+    it 'returns false after walking back when the PUT of kept pins leaves them in hand' do
+      replies[get_pins] = [got_pins]
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = ['Perhaps you should be holding that first.']
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'walk 8775'])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', 'DRCC: Could not put pins in duffel bag. It is still in your hands.').once
+    end
+
+    it 'returns false after walking back when the bought pins cannot be put away' do
+      replies[get_pins] = ['What were you referring to?']
+      replies[put_pins] = ["There isn't any more room in the duffel bag for that."]
+      replies['stow my pins'] = ['You need a free hand to do that.']
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, 'order 5 at tool-room', put_pins, 'stow my pins', 'walk 8775'])
+      expect(Lich::Messaging).to have_received(:msg)
+        .with('bold', 'DRCC: duffel bag would not take pins, and stowing it failed too. It is still in your hands.').once
+    end
+
+    it 'returns true when the bought pins go to the stow container after a full bag' do
+      replies[get_pins] = ['What were you referring to?']
+      replies[put_pins] = ["There isn't any more room in the duffel bag for that."]
+      replies['stow my pins'] = ['You put your pins in your rucksack.']
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, 'order 5 at tool-room', put_pins, 'stow my pins', 'walk 8775'])
+    end
+
+    # stow_crafting_item answers false here too: the pins are not in the
+    # duffel bag that the next check_consumables will GET from.
+    it 'returns false when the duffel bag refuses the pins and they go to the other one' do
+      replies[get_pins] = [got_pins]
+      replies[count_pins] = ['The straight iron pins has 12 uses remaining.']
+      replies[put_pins] = ["You can't put that there."]
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, count_pins, put_pins, 'put my pins in my other duffel bag', 'walk 8775'])
+    end
+
+    it 'replaces worn pins with one put and one walk back, not two' do
+      replies[get_pins] = [got_pins, 'What were you referring to?']
+      replies[count_pins] = ['The straight iron pins has 2 uses remaining.']
+      replies[put_pins] = [put_away]
+      expect(check).to be(true)
+      expect(sent).to eq([get_pins, count_pins, 'dispose pins', get_pins, 'order 5 at tool-room', put_pins, 'walk 8775'])
+    end
+
+    it 'returns false when the GET after disposing worn pins needs a free hand' do
+      replies[get_pins] = [got_pins, free_hand]
+      replies[count_pins] = ['The straight iron pins has 2 uses remaining.']
+      expect(check).to be(false)
+      expect(sent).to eq([get_pins, count_pins, 'dispose pins', get_pins])
+    end
+
+    context 'when the replacement order fails' do
+      let(:order_result) { nil }
+
+      it 'returns false with one walk back and no PUT' do
+        replies[get_pins] = [got_pins, 'What were you referring to?']
+        replies[count_pins] = ['The straight iron pins has 2 uses remaining.']
+        expect(check).to be(false)
+        expect(sent).to eq([get_pins, count_pins, 'dispose pins', get_pins, 'order 5 at tool-room', 'walk 8775'])
+      end
+    end
+
+    [
+      'Bob says, "What were you referring to?"',
+      'Bob says, "You need a free hand to pick that up."',
+      'Bob says, "You get nothing."'
+    ].each do |speech|
+      it "doesn't take #{speech.inspect} for the GET reply" do
+        replies[get_pins] = [speech]
+        expect { check }.to raise_error(/real bput would wait 15 s/)
+        expect(sent).to eq([get_pins])
+      end
+    end
+
+    # The real DRCT.order_item on the stubbed bput: both ORDERs go out and
+    # their replies decide what check_consumables does next.
+    context 'through the real DRCT.order_item' do
+      before(:each) do
+        allow(DRCT).to receive(:order_item).and_call_original
+      end
+
+      it 'puts the pins away after "takes some coins from you"' do
+        replies[get_pins] = ['What were you referring to?']
+        replies['order 5'] = ['Just order it again', 'The clerk takes some coins from you and hands you some pins.']
+        replies[put_pins] = [put_away]
+        expect(check(19_073)).to be(true)
+        expect(sent).to eq([get_pins, 'walk 19073', 'order 5', 'order 5', put_pins, 'walk 8775'])
+      end
+
+      it 'returns false with no PUT when the confirm ORDER finds the hands full' do
+        replies[get_pins] = ['What were you referring to?']
+        replies['order 5'] = ['Just order it again', hands_full]
+        expect(check(19_073)).to be(false)
+        expect(sent).to eq([get_pins, 'walk 19073', 'order 5', 'order 5', 'walk 8775'])
+      end
+
+      it 'returns false with no PUT when the confirm ORDER times out' do
+        replies[get_pins] = ['What were you referring to?']
+        replies['order 5'] = ['Just order it again', '']
+        expect(check(19_073)).to be(false)
+        expect(sent).to eq([get_pins, 'walk 19073', 'order 5', 'order 5', 'walk 8775'])
+      end
+
+      it "returns false after one ORDER on \"You don't have enough coins\"" do
+        replies[get_pins] = ['What were you referring to?']
+        replies['order 5'] = ["You don't have enough coins"]
+        expect(check(19_073)).to be(false)
+        expect(sent).to eq([get_pins, 'walk 19073', 'order 5', 'walk 8775'])
+      end
+    end
+  end
+
+  describe '.study_instructions' do
+    # Reference the modules the way production resolves them, so the stubs hit
+    # the same objects whether or not other specs load the real commons.
+    let(:drc) { Lich::DragonRealms::DRC }
+    let(:drci) { Lich::DragonRealms::DRCI }
+    let(:flags) { Lich::DragonRealms::Flags }
+    let(:discard_flag) { DRCC::STUDY_INSTRUCTIONS_DISCARDED_FLAG }
+
+    let(:get_instructions) { 'get my liniment instructions' }
+    let(:study_instructions) { 'study my liniment instructions' }
+    let(:put_instructions) { "put my liniment instructions in my botanist's toolbag" }
+
+    # Game lines, copied from the timestamped copy of each line in two days
+    # of real game logs, 2026-10-25 (".25:N") and 2026-10-26 (".26:N"),
+    # unless a comment says the line is code-derived.
+    let(:got_instructions) do
+      # .25:10795
+      ["You get some shining clubmoss liniment instructions from inside your botanist's toolbag."]
+    end
+    let(:study_again_with_five_uses) do
+      # .25:10810, .25:10812
+      ['The delicate nature of the instructions will cause them to wear out with use.',
+       '[These instructions have only 5 uses remaining.  Study them again to proceed.]']
+    end
+    let(:study_again_with_one_use) do
+      # .25:30338, .25:30340 (the game says "1 uses")
+      ['The delicate nature of the instructions will cause them to wear out with use.',
+       '[These instructions have only 1 uses remaining.  Study them again to proceed.]']
+    end
+    let(:study_complete) do
+      # .25:10821, .25:10823, .25:10825
+      ["You scan the liniment instructions with a glance and confidently discern most of the design's minutiae.",
+       'You now feel ready to begin the crafting process.',
+       'Roundtime: 7 sec.']
+    end
+    let(:study_complete_then_tossed) do
+      # .25:30345, .25:30347, .25:30349, then .25:30352 after the Roundtime
+      ["You scan the liniment instructions with a glance and confidently discern most of the design's minutiae.",
+       'You now feel ready to begin the crafting process.',
+       'Roundtime: 7 sec.',
+       'The instructions have grown so smudged and faded from use that you can no longer make them out, so you toss them away.']
+    end
+    let(:put_away) { ["You put your instructions in your botanist's toolbag."] } # .25:10833
+    let(:what_were_you_referring_to) { ['What were you referring to?'] } # .26:60708 (a GET of missing instructions)
+    let(:ambient_only) do
+      # .25:30323, an unrelated line; nothing a study waits for
+      ["The ka'hurst rivets on your thighband catch your eye as they shimmer with a strikingly green hue, relaxing your mind and helping it focus."]
+    end
+
+    let(:sent) { [] }
+    let(:watched_flags) { {} }
+    let(:lines_after_reply) { [] }
+
+    # Plays +transcripts+ (command => one Array of lines per send; the last
+    # one repeats) through a bput with the real one's contract: each line is
+    # tried against the patterns in argument order, and the first match's text
+    # is returned; '' when no line matches (a timeout). Every line reaches the
+    # Flags as DRParser would deliver it. Lines after the matching one arrive
+    # later: they reach the Flags at the next waitrt?, as the toss line does
+    # in the game (.25:30349 Roundtime, then .25:30352).
+    def play(transcripts)
+      queues = transcripts.transform_values(&:dup)
+      allow(drc).to receive(:bput) do |command, *patterns|
+        sent << command
+        queue = queues.fetch(command) { raise "unexpected command: #{command.inspect}" }
+        reply_to(queue.size > 1 ? queue.shift : queue.first, patterns.flatten)
+      end
+    end
+
+    def reply_to(lines, patterns)
+      regexes = patterns.map { |pattern| pattern.is_a?(Regexp) ? pattern : /#{pattern}/i }
+      lines.each_with_index do |line, index|
+        deliver_to_flags(line)
+        match = regexes.lazy.map { |regex| line.match(regex) }.find(&:itself)
+        next unless match
+
+        lines_after_reply.concat(lines.drop(index + 1))
+        return match.to_a.first
+      end
+      ''
+    end
+
+    def deliver_to_flags(line)
+      watched_flags.each do |key, regexes|
+        match = regexes.lazy.map { |regex| line.match(regex) }.find(&:itself)
+        flags[key] = match if match
+      end
+    end
+
+    # An exit that escapes an example ends rspec early with status 0, which
+    # would hide every later failure. Turn it into a failure of the example.
+    around(:each) do |example|
+      example.run
+    rescue SystemExit
+      raise 'study_instructions stopped the script where the example expected it to continue'
+    end
+
+    before(:each) do
+      allow(flags).to receive(:add).and_wrap_original do |original, key, *patterns|
+        watched_flags[key] = patterns
+        original.call(key, *patterns)
+      end
+      allow(flags).to receive(:delete).and_wrap_original do |original, key|
+        watched_flags.delete(key)
+        original.call(key)
+      end
+      allow(DRCC).to receive(:waitrt?) { lines_after_reply.shift(lines_after_reply.size).each { |line| deliver_to_flags(line) } }
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(drc).to receive(:beep)
+      allow(drci).to receive(:in_hands?).and_return(false)
+      allow(Lich::Messaging).to receive(:msg)
+    end
+
+    after(:each) { flags.delete(discard_flag) }
+
+    def study(skip_exit: false, bag_items: nil)
+      DRCC.study_instructions('liniment instructions', "botanist's toolbag", bag_items, nil, skip_exit)
+    end
+
+    it 'keeps its helpers out of the public DRCC API' do
+      %i[study_held_instructions study_instructions_outcome study_instructions_failure instructions_uses_left].each do |helper|
+        expect(DRCC).not_to respond_to(helper)
+      end
+    end
+
+    context 'when the game asks for a second study, as it does for every remedy set in the logs' do
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, study_complete],
+             put_instructions   => [put_away])
+      end
+
+      it 'studies twice by full name, then puts the instructions back' do
+        study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+      end
+
+      it 'reports the study and one use fewer than the game counted' do
+        result = study
+
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+      end
+
+      it 'prints nothing and does not beep' do
+        study
+
+        expect(Lich::Messaging).not_to have_received(:msg)
+        expect(drc).not_to have_received(:beep)
+      end
+
+      it 'deletes its discard flag' do
+        study
+
+        expect(watched_flags).to be_empty
+        expect(flags[discard_flag]).to be_nil
+      end
+    end
+
+    context 'when the study uses the last use and the game tosses the instructions after the Roundtime' do
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_one_use, study_complete_then_tossed],
+             # .25:30361: what the old stow got after the toss.
+             put_instructions   => [what_were_you_referring_to])
+      end
+
+      it 'does not try to put away instructions it no longer has' do
+        study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions])
+      end
+
+      it 'reports the study, the toss and no uses left' do
+        result = study
+
+        expect(result).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+      end
+
+      it 'deletes its discard flag' do
+        study
+
+        expect(watched_flags).to be_empty
+        expect(flags[discard_flag]).to be_nil
+      end
+    end
+
+    context 'when the flag is already set from an earlier toss' do
+      it 'starts from a cleared flag and stows the new set' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, study_complete],
+             put_instructions   => [put_away])
+        flags[discard_flag] = true
+
+        expect(study).to have_attributes(discarded?: false)
+        expect(sent.last).to eq(put_instructions)
+      end
+    end
+
+    it 'reads a two-digit uses count' do
+      play(get_instructions   => [got_instructions],
+           # .25:35392, .25:35394
+           study_instructions => [['The delicate nature of the instructions will cause them to wear out with use.',
+                                   '[These instructions have only 10 uses remaining.  Study them again to proceed.]'],
+                                  study_complete],
+           put_instructions   => [put_away])
+
+      expect(study.uses_left).to eq(9)
+    end
+
+    it 'reads a singular "use" in the count as the last use' do
+      # Code-derived, unverified: the logs only show "1 uses" (.25:30340).
+      play(get_instructions   => [got_instructions],
+           study_instructions => [['[These instructions have only 1 use remaining.  Study them again to proceed.]'], study_complete],
+           put_instructions   => [what_were_you_referring_to])
+
+      expect(study).to have_attributes(uses_left: 0, discarded?: true)
+      expect(sent).not_to include(put_instructions)
+    end
+
+    context 'when the toss line comes after the study has waited out its roundtime' do
+      # Code-derived timing: in the logs the toss arrives in the same second as
+      # the Roundtime (.25:30349, .25:30352). Here it never reaches the Flag
+      # during the call; the "1 uses" prompt (.25:30340) is what is left.
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_one_use, study_complete],
+             # .25:30361: what the old stow got after the toss.
+             put_instructions   => [what_were_you_referring_to])
+      end
+
+      it 'still does not try to put away the instructions' do
+        study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions])
+      end
+
+      it 'reports the toss and no uses left' do
+        expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+      end
+    end
+
+    context 'when another player quotes the toss line during the study' do
+      # The quoted lines are CONSTRUCTED: the toss text is .25:30352; the
+      # speech shape is .25:21765 (Etasia says, "...") and the ESP shape is
+      # .25:13356 ([General][Xalak] "..."). Neither was seen carrying it.
+      let(:toss_text) { 'The instructions have grown so smudged and faded from use that you can no longer make them out, so you toss them away.' }
+      let(:speech_quoting_toss) { %(Etasia says, "#{toss_text}") }
+      let(:esp_quoting_toss) { %([General][Xalak] "#{toss_text}") }
+
+      it 'still puts away a set with uses left when the speech comes before the Roundtime' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, [speech_quoting_toss, *study_complete]],
+             put_instructions   => [put_away])
+
+        result = study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+      end
+
+      it 'still puts away a set with uses left when the ESP comes after the Roundtime' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, [*study_complete, esp_quoting_toss]],
+             put_instructions   => [put_away])
+
+        result = study
+
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+      end
+    end
+
+    context 'when another player quotes the study-again prompt during the study' do
+      # The quoted lines are CONSTRUCTED: the prompt text is .25:30340; the
+      # speech shape is .25:21765 (Etasia says, "..."), the whisper shape is
+      # 2026-11-01 game log:29234 (Name whispers, "...") and the ESP shape is
+      # .25:13356 ([General][Xalak] "..."). None was seen carrying it.
+      let(:prompt_text) { 'These instructions have only 1 uses remaining.  Study them again to proceed.' }
+      let(:speech_quoting_prompt) { %(Mallory says, "#{prompt_text}") }
+      let(:whisper_quoting_prompt) { %(Mallory whispers, "#{prompt_text}") }
+      let(:esp_quoting_prompt) { %([General][Mallory] "#{prompt_text}") }
+      let(:quoted_prompts) { [speech_quoting_prompt, whisper_quoting_prompt, esp_quoting_prompt] }
+
+      it 'matches the real prompt lines and reads their uses count' do
+        # 2026-11-03 game log:9162 (9 uses) and 2026-11-02 game log:8789 (1 uses).
+        expect('[These instructions have only 9 uses remaining.  Study them again to proceed.]'[DRCC::STUDY_INSTRUCTIONS_AGAIN, :uses]).to eq('9')
+        expect('[These instructions have only 1 uses remaining.  Study them again to proceed.]'[DRCC::STUDY_INSTRUCTIONS_AGAIN, :uses]).to eq('1')
+      end
+
+      it 'does not match the prompt quoted in speech, a whisper or ESP' do
+        quoted_prompts.each do |line|
+          expect(line).not_to match(DRCC::STUDY_INSTRUCTIONS_AGAIN), "matched #{line.inspect}"
+        end
+      end
+
+      it 'does not take the quote as a prompt before the second study completes' do
+        quoted_prompts.each do |line|
+          sent.clear
+          play(get_instructions   => [got_instructions],
+               study_instructions => [study_again_with_five_uses, [line, *study_complete]],
+               put_instructions   => [put_away])
+
+          result = study(skip_exit: true)
+
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions]), "after #{line.inspect}"
+          expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        end
+      end
+
+      it 'does not take the quoted uses count over the real prompt after it' do
+        quoted_prompts.each do |line|
+          sent.clear
+          play(get_instructions   => [got_instructions],
+               study_instructions => [[line, *study_again_with_five_uses], study_complete],
+               put_instructions   => [put_away])
+
+          result = study(skip_exit: true)
+
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions]), "after #{line.inspect}"
+          expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        end
+      end
+    end
+
+    it 'counts the toss line as a toss when the stream puts tags or spaces before it' do
+      # Code-derived prefix: the logs strip tags, so this is the
+      # (?:<[^>]*>|\s)* prefix DRParser allows (drparser.rb StatLine), not a
+      # seen line. The toss text is .25:30352.
+      tagged_toss = "<pushBold/>  #{study_complete_then_tossed.last}"
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_five_uses, [*study_complete, tagged_toss]],
+           put_instructions   => [put_away])
+
+      expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+      expect(sent).not_to include(put_instructions)
+    end
+
+    it 'does not count a "1 uses" prompt as a toss when the study after it gets no reply' do
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_one_use, ambient_only],
+           put_instructions   => [put_away])
+
+      expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: 1, discarded?: false)
+      expect(sent.last).to eq(put_instructions)
+    end
+
+    it 'reports no uses count when the game gives none' do
+      # Code-derived: no log shows instructions that do not wear out; this
+      # transcript is the remedy one without the count prompt.
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_complete],
+           put_instructions   => [put_away])
+
+      expect(study).to have_attributes(studied?: true, uses_left: nil, discarded?: false)
+      expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+    end
+
+    it 'keeps the count from an earlier prompt when a later prompt has none' do
+      # Code-derived: the logs show one prompt per set; a second, bare prompt is hypothetical.
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_five_uses, ['Study them again to proceed.'], study_complete],
+           put_instructions   => [put_away])
+
+      expect(study.uses_left).to eq(4)
+    end
+
+    it 'reports no uses left after a toss even when the game gave no count' do
+      # Code-derived: every toss in the logs follows a "1 uses" prompt (.25:30340).
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_complete_then_tossed],
+           put_instructions   => [what_were_you_referring_to])
+
+      expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+    end
+
+    it 'counts a bare "Study them again" prompt as a prompt' do
+      # Code-derived: the prompt forge, sew, shape and tinker wait for, without
+      # a count; no log shows it on its own.
+      play(get_instructions   => [got_instructions],
+           study_instructions => [['Study them again to proceed.'], study_complete],
+           put_instructions   => [put_away])
+
+      expect(study).to have_attributes(studied?: true, uses_left: nil)
+      expect(sent.count(study_instructions)).to eq(2)
+    end
+
+    it 'gets the instructions from the bag when bag_items lists them' do
+      get_from_bag = "get my liniment instructions from my botanist's toolbag"
+      play(get_from_bag       => [got_instructions],
+           study_instructions => [study_again_with_five_uses, study_complete],
+           put_instructions   => [put_away])
+
+      study(bag_items: ['liniment instructions'])
+
+      expect(sent.first).to eq(get_from_bag)
+    end
+
+    context 'when the game keeps asking for another study' do
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses],
+             put_instructions   => [put_away])
+      end
+
+      it 'stops studying after STUDY_INSTRUCTIONS_MAX_STUDIES studies and returns the failure with skip_exit' do
+        result = study(skip_exit: true)
+
+        expect(sent.count(study_instructions)).to eq(DRCC::STUDY_INSTRUCTIONS_MAX_STUDIES)
+        expect(result).to have_attributes(studied?: false, uses_left: 5, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: Still told to study liniment instructions again after 3 studies.')
+        expect(drc).to have_received(:beep)
+      end
+
+      it 'puts the instructions away before stopping the script without skip_exit' do
+        expect { study }.to raise_error(SystemExit)
+
+        expect(sent.last).to eq(put_instructions)
+        expect(watched_flags).to be_empty
+      end
+    end
+
+    context 'when the study gets no reply it waits for' do
+      before do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [ambient_only],
+             put_instructions   => [put_away])
+      end
+
+      it 'does not study again, puts the instructions away and returns the failure with skip_exit' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
+      end
+
+      it 'stops the script without skip_exit' do
+        expect { study }.to raise_error(SystemExit)
+      end
+    end
+
+    it 'keeps the uses count when the second study times out' do
+      play(get_instructions   => [got_instructions],
+           study_instructions => [study_again_with_five_uses, ambient_only],
+           put_instructions   => [put_away])
+
+      expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: 5)
+    end
+
+    context 'when the study cannot find the instructions' do
+      before do
+        # Code-derived for a study: .26:60708 is the GET reply to missing instructions.
+        play(get_instructions   => [got_instructions],
+             study_instructions => [what_were_you_referring_to],
+             put_instructions   => [put_away])
+      end
+
+      it 'puts away the instructions the GET got and returns the failure with skip_exit' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Could not find liniment instructions to study.')
+      end
+
+      it 'puts the instructions away before stopping the script without skip_exit' do
+        expect { study }.to raise_error(SystemExit)
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+      end
+    end
+
+    context 'when the study says the instructions must be held' do
+      before do
+        # Real reply to `study instruc` in a 2026-11 enchanting log.
+        play(get_instructions   => [got_instructions],
+             study_instructions => [['You must be holding the instructions to study them.']],
+             put_instructions   => [put_away])
+      end
+
+      it 'reports not holding at once, without waiting out a timeout, and puts the instructions away' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+        expect(Lich::Messaging).not_to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
+      end
+    end
+
+    context 'when the study says the instructions are not in hand' do
+      before do
+        # Code-derived for a study: .25:10805 is the reply to `turn my book` without the book in hand.
+        play(get_instructions   => [got_instructions],
+             study_instructions => [["But you're not holding it."]],
+             put_instructions   => [put_away])
+      end
+
+      it 'puts away the instructions the GET got and returns the failure with skip_exit' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+      end
+
+      it 'puts the instructions away before stopping the script without skip_exit' do
+        expect { study }.to raise_error(SystemExit)
+        expect(sent).to eq([get_instructions, study_instructions, put_instructions])
+      end
+    end
+
+    context 'when the instructions are missing' do
+      before do
+        play(get_instructions => [what_were_you_referring_to])
+      end
+
+      it 'stops the script on the GET failure without studying' do
+        expect { study }.to raise_error(SystemExit)
+
+        expect(sent).to eq([get_instructions])
+        expect(watched_flags).to be_empty
+      end
+
+      it 'returns without studying when skip_exit is set, reporting the GET failure once' do
+        result = study(skip_exit: true)
+
+        expect(sent).to eq([get_instructions])
+        expect(result).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: You seem to be missing: liniment instructions').once
+        expect(Lich::Messaging).not_to have_received(:msg).with('bold', /to study/)
+        expect(drc).to have_received(:beep).once
+      end
+    end
+
+    context 'when the GET gets no reply and the instructions are not in hand' do
+      before do
+        play(get_instructions => [ambient_only])
+      end
+
+      it 'stops the script without skip_exit, since crafting cannot start' do
+        expect { study }.to raise_error(SystemExit)
+
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Could not get liniment instructions to study.')
+        expect(sent).to eq([get_instructions])
+      end
+
+      it 'returns without studying when skip_exit is set' do
+        expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(sent).to eq([get_instructions])
+      end
+    end
+
+    context 'when the bag refuses the instructions' do
+      it 'still reports the study, after trying the other bag' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_five_uses, study_complete],
+             # Code-derived: stow_crafting_item's PUT_BAG_CANT_THERE; no log shows it.
+             put_instructions   => [["You can't put that there."]])
+
+        result = study
+
+        expect(result).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        expect(sent.last).to eq("put my liniment instructions in my other botanist's toolbag")
+      end
+    end
+
+    context 'when the name is nil or blank' do
+      let(:belt) { { 'name' => 'grass toolstrap', 'items' => %w[stamp bowl] } }
+
+      [nil, '', '   '].each do |blank|
+        it "raises ArgumentError for #{blank.inspect} before sending anything, belt or not" do
+          allow(drc).to receive(:bput) { |command, *| sent << command }
+
+          expect { DRCC.study_instructions(blank, "botanist's toolbag", nil, nil, true) }.to raise_error(ArgumentError)
+          expect { DRCC.study_instructions(blank, "botanist's toolbag", nil, belt, true) }.to raise_error(ArgumentError)
+          expect(sent).to be_empty
+          expect(flags[discard_flag]).to be_nil
+        end
+      end
+    end
+
+    it 'deletes its discard flag when the study raises' do
+      play(get_instructions => [got_instructions])
+      allow(drc).to receive(:bput).with(study_instructions, any_args).and_raise(ThreadError, 'killed mid-study')
+
+      expect { study }.to raise_error(ThreadError, 'killed mid-study')
+      expect(watched_flags).to be_empty
     end
   end
 end

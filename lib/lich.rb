@@ -1088,6 +1088,29 @@ module Lich
     write_display_setting(:display_room_links, val.to_s.match?(/on|true|yes/))
   end
 
+  # Whether front ends that render stream windows (the streams capability)
+  # get the Lich Scripts window: the running scripts with pause/unpause and
+  # kill links, drawn by Lich (";display scriptwindow"). Off by default. A
+  # client that declared script_list gets the running-script data whatever
+  # this says (see Lich::Common::ScriptListFeed). Persisted in the
+  # lich_settings table.
+  # @return [Boolean, nil] nil until a game is identified and no value is stored
+  def Lich.display_script_window
+    read_display_setting(:display_script_window) do |val|
+      val = false if val.nil? && XMLData.game != ""
+      val.nil? ? nil : val.to_s.match?(/on|true|yes/)
+    end
+  end
+
+  # Sets and persists the Lich Scripts window toggle, then draws the window
+  # for the clients that now get it, or clears it for those that no longer do.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  def Lich.display_script_window=(val)
+    enabled = val.to_s.match?(/on|true|yes/)
+    write_display_setting(:display_script_window, enabled)
+    Lich::Common::ScriptListFeed.window_setting_changed(enabled) if defined?(Lich::Common::ScriptListFeed)
+  end
+
   # Whether the Lich-injected room lines (Room Number, Room Exits, StringProcs)
   # are wrapped in the fixed-width mono style. Persisted in the lich_settings
   # table and shared across characters. When no value has been saved yet, the

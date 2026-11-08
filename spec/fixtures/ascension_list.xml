@@ -1,0 +1,105 @@
+<a exist="-1" noun="Testing">Testing</a>, the following Ascension Abilities are available:
+
+<output class="mono"/>
+  Skill                     Mnemonic        Ranks Type           Category        Subcategory
+  ------------------------------------------------------------------------------------------
+  Acid Resistance           <d cmd='ascensi HELP resistacid'>resistacid</d>      0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Agility                   <d cmd='ascensi HELP agility'>agility</d>         0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Ambush                    <d cmd='ascensi HELP ambush'>ambush</d>          0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Arcane Archer             <d cmd='ascensi HELP arcanearcher'>arcanearcher</d>    0/3   <d cmd='ascensi LIST passive'>Passive</d>        Elite           Arcane Archer
+  Arcane Collector          <d cmd='ascensi HELP arcanecollector'>arcanecollector</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Arcane Perception         <d cmd='ascensi HELP arcanepercept'>arcanepercept</d>   0/1   <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Arcane Scribe             <d cmd='ascensi HELP arcanescribe'>arcanescribe</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Arcane Symbols            <d cmd='ascensi HELP arcanesymbols'>arcanesymbols</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Armor Use                 <d cmd='ascensi HELP armoruse'>armoruse</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+<pushBold/>  Aura                      <d cmd='ascensi HELP aura'>aura</d>            5/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+<popBold/>  Blunt Weapons             <d cmd='ascensi HELP bluntweapons'>bluntweapons</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Bow Specialization        <d cmd='ascensi HELP bowspec'>bowspec</d>         0/25  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Arcane Archer
+  Brawling                  <d cmd='ascensi HELP brawling'>brawling</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Climbing                  <d cmd='ascensi HELP climbing'>climbing</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Cold Resistance           <d cmd='ascensi HELP resistcold'>resistcold</d>      0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Combat Maneuvers          <d cmd='ascensi HELP combatmaneuvers'>combatmaneuvers</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Constitution              <d cmd='ascensi HELP constitution'>constitution</d>    0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Crush Resistance          <d cmd='ascensi HELP resistcrush'>resistcrush</d>     0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Dexterity                 <d cmd='ascensi HELP dexterity'>dexterity</d>       0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Disarming Traps           <d cmd='ascensi HELP disarmingtraps'>disarmingtraps</d>  0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Discipline                <d cmd='ascensi HELP discipline'>discipline</d>      0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Disintegration Resistance <d cmd='ascensi HELP resistdisintegr'>resistdisintegr</d> 0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Disruption Resistance     <d cmd='ascensi HELP resistdisruptio'>resistdisruptio</d> 0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Dodging                   <d cmd='ascensi HELP dodging'>dodging</d>         0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Edged Weapons             <d cmd='ascensi HELP edgedweapons'>edgedweapons</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Effective Accessorization <d cmd='ascensi HELP accessorize'>accessorize</d>     0/1   <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Eldritch Charge           <d cmd='ascensi HELP eldritchcharge'>eldritchcharge</d>  0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Electric Resistance       <d cmd='ascensi HELP resistelectric'>resistelectric</d>  0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Elemental Arrows          <d cmd='ascensi HELP elemarrows'>elemarrows</d>      0/5   <d cmd='ascensi LIST passive'>Passive</d>        Elite           Arcane Archer
+  Elemental Lore - Air      <d cmd='ascensi HELP elair'>elair</d>           0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Elemental Lore - Earth    <d cmd='ascensi HELP elearth'>elearth</d>         0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Elemental Lore - Fire     <d cmd='ascensi HELP elfire'>elfire</d>          0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Elemental Lore - Water    <d cmd='ascensi HELP elwater'>elwater</d>         0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Elemental Mana Control    <d cmd='ascensi HELP elementalmc'>elementalmc</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Faceted Attunement        <d cmd='ascensi HELP facetedattune'>facetedattune</d>   0/3   <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  First Aid                 <d cmd='ascensi HELP firstaid'>firstaid</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Grapple Resistance        <d cmd='ascensi HELP resistgrapple'>resistgrapple</d>   0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Greater Mystic Thread     <d cmd='ascensi HELP greaterthread'>greaterthread</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Grizzled Voln Ascendant   <d cmd='ascensi HELP volnascendant'>volnascendant</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Voln Avenger
+  Harness Power             <d cmd='ascensi HELP harnesspower'>harnesspower</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Health Regeneration       <d cmd='ascensi HELP regenhealth'>regenhealth</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Regen
+  Heat Resistance           <d cmd='ascensi HELP resistheat'>resistheat</d>      0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Impact Resistance         <d cmd='ascensi HELP resistimpact'>resistimpact</d>    0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Influence                 <d cmd='ascensi HELP influence'>influence</d>       0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Intuition                 <d cmd='ascensi HELP intuition'>intuition</d>       0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Kai's Touch               <d cmd='ascensi HELP kaistouch'>kaistouch</d>       0/10  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Voln Avenger
+  Logic                     <d cmd='ascensi HELP logic'>logic</d>           0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Magic Item Use            <d cmd='ascensi HELP magicitemuse'>magicitemuse</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mana Regeneration         <d cmd='ascensi HELP regenmana'>regenmana</d>       0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Regen
+  Mental Lore - Divination  <d cmd='ascensi HELP mldivination'>mldivination</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mental Lore - Manipulatio <d cmd='ascensi HELP mlmanipulation'>mlmanipulation</d>  0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mental Lore - Telepathy   <d cmd='ascensi HELP mltelepathy'>mltelepathy</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mental Lore - Transferenc <d cmd='ascensi HELP mltransference'>mltransference</d>  0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mental Lore - Transformat <d cmd='ascensi HELP mltransform'>mltransform</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mental Mana Control       <d cmd='ascensi HELP mentalmc'>mentalmc</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Multi Opponent Combat     <d cmd='ascensi HELP multiopponent'>multiopponent</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Mystic Thread             <d cmd='ascensi HELP mysticthread'>mysticthread</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Perception                <d cmd='ascensi HELP perception'>perception</d>      0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Physical Fitness          <d cmd='ascensi HELP physicalfitness'>physicalfitness</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Picking Locks             <d cmd='ascensi HELP pickinglocks'>pickinglocks</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Picking Pockets           <d cmd='ascensi HELP pickingpockets'>pickingpockets</d>  0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Plasma Resistance         <d cmd='ascensi HELP resistplasma'>resistplasma</d>    0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Polearm Weapons           <d cmd='ascensi HELP polearmsweapons'>polearmsweapons</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Porter                    <d cmd='ascensi HELP porter'>porter</d>          0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Other
+  Puncture Resistance       <d cmd='ascensi HELP resistpuncture'>resistpuncture</d>  0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Ranged Weapons            <d cmd='ascensi HELP rangedweapons'>rangedweapons</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Scroll Surge              <d cmd='ascensi HELP scrollsurge'>scrollsurge</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Shield Use                <d cmd='ascensi HELP shielduse'>shielduse</d>       0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Slash Resistance          <d cmd='ascensi HELP resistslash'>resistslash</d>     0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Sorcerous Lore - Demonolo <d cmd='ascensi HELP soldemonology'>soldemonology</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Sorcerous Lore - Necroman <d cmd='ascensi HELP solnecromancy'>solnecromancy</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Spell Aiming              <d cmd='ascensi HELP spellaiming'>spellaiming</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Spirit Mana Control       <d cmd='ascensi HELP spiritmc'>spiritmc</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Spiritual Lore - Blessing <d cmd='ascensi HELP slblessings'>slblessings</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Spiritual Lore - Religion <d cmd='ascensi HELP slreligion'>slreligion</d>      0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Spiritual Lore - Summonin <d cmd='ascensi HELP slsummoning'>slsummoning</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Stalking and Hiding       <d cmd='ascensi HELP stalking'>stalking</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Stamina Regeneration      <d cmd='ascensi HELP regenstamina'>regenstamina</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Regen
+  Steam Resistance          <d cmd='ascensi HELP resiststeam'>resiststeam</d>     0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Strength                  <d cmd='ascensi HELP strength'>strength</d>        0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+  Survival                  <d cmd='ascensi HELP survival'>survival</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Swimming                  <d cmd='ascensi HELP swimming'>swimming</d>        0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Thrown Weapons            <d cmd='ascensi HELP thrownweapons'>thrownweapons</d>   0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Trading                   <d cmd='ascensi HELP trading'>trading</d>         0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Transcend Destiny         <d cmd='ascensi HELP trandest'>trandest</d>        0/10  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Other
+  Trinket Surge             <d cmd='ascensi HELP trinketsurge'>trinketsurge</d>    0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Artificer
+  Two Weapon Combat         <d cmd='ascensi HELP twoweaponcombat'>twoweaponcombat</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Two-Handed Weapons        <d cmd='ascensi HELP twohandedweapon'>twohandedweapon</d> 0/50  <d cmd='ascensi LIST passive'>Passive</d>        Common          Skill
+  Unbalance Resistance      <d cmd='ascensi HELP resistunbalance'>resistunbalance</d> 0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Vacuum Resistance         <d cmd='ascensi HELP resistvacuum'>resistvacuum</d>    0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Resist
+  Voln Avenger              <d cmd='ascensi HELP volnavenger'>volnavenger</d>     0/50  <d cmd='ascensi LIST passive'>Passive</d>        Elite           Voln Avenger
+  Wisdom                    <d cmd='ascensi HELP wisdom'>wisdom</d>          0/40  <d cmd='ascensi LIST passive'>Passive</d>        Common          Stat
+
+The output listed above was generated based on the following filters:
+  Availability: profession
+          Type: all
+      Category: all
+   Subcategory: all
+<output class=""/>
+<prompt time="1794082903">UP&gt;</prompt>

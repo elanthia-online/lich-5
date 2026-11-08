@@ -17,7 +17,7 @@ module Lich
   module Common
     module Frontend
       PLATFORM_KEYS = %i[darwin linux windows unsupported].freeze
-      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element game_links double_bold].freeze
+      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element game_links double_bold script_list].freeze
       BUILT_IN_DEFINITION_FILES = [
         %w[stormfront wrayth],
         %w[profanity profanity],

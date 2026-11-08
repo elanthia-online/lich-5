@@ -56,12 +56,13 @@ module Lich
       LOCK = Mutex.new
 
       # The uniform display toggles: read the current value, negate it, let an
-      # explicit true/false argument override, report, write back. Six
-      # branches that differed only in accessor and message, so they are a
-      # table rather than six near-identical bodies.
+      # explicit true/false argument override, report, write back. Branches
+      # that differed only in accessor and message, so they are a table
+      # rather than near-identical bodies. scriptwindow joined the original
+      # six later, at the end, so it keeps their registration order.
       #
       # Ordering note: these are registered in the same relative order the
-      # if/elsif chain had them. None of the six overlap each other, but
+      # if/elsif chain had them. None of them overlap each other, but
       # ;display roomid (DR) sits between uid and exits in the original and is
       # registered separately below to keep that position.
       DISPLAY_TOGGLES = [
@@ -70,7 +71,8 @@ module Lich
         ['exits?',      :display_exits,       'Room Exits of non-StringProc/Obvious exits'],
         ['stringprocs?', :display_stringprocs, 'Room Exits of StringProcs'],
         ['roomlinks?',  :display_room_links,  'room exits as clickable command links'],
-        ['roommono',    :display_room_mono,   'room information in monospace font']
+        ['roommono',    :display_room_mono,   'room information in monospace font'],
+        ['scriptwindow', :display_script_window, 'the Lich Scripts window']
       ].freeze
 
       class << self
@@ -271,6 +273,7 @@ module Lich
           respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
           respond "   #{$clean_lich_char}display roomlinks         toggle rendering of room exits as clickable command links vs plain text"
           respond "   #{$clean_lich_char}display roommono          toggle rendering of Lich room information in monospace font vs game font"
+          respond "   #{$clean_lich_char}display scriptwindow      toggle the Lich Scripts window (running scripts with pause/kill links) on front ends with stream windows; off by default"
           if XMLData.game =~ /^DR/
             respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
             respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"

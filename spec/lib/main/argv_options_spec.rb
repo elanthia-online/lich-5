@@ -147,13 +147,14 @@ RSpec.describe 'Lich::Main::ArgvOptions --frontend-caps' do
   let(:capabilities) { Lich::Common::ClientCapabilities }
 
   around do |example|
-    saved = [ARGV.dup, capabilities.launch_capabilities, $frontend]
+    saved = [ARGV.dup, capabilities.launch_capabilities, $frontend, capabilities.launch_feeds]
     begin
       example.run
     ensure
       ARGV.replace(saved[0])
       capabilities.launch_capabilities = saved[1]
       $frontend = saved[2]
+      capabilities.launch_feeds = saved[3]
     end
   end
 
@@ -183,6 +184,15 @@ RSpec.describe 'Lich::Main::ArgvOptions --frontend-caps' do
     expect { harness.handle_frontend_caps({ frontend_caps: 'game_links,sparkles' }) }
       .to output(/warning: --frontend-caps: ignoring unknown capabilities: sparkles/).to_stdout
     expect(capabilities.launch_capabilities).to eq([:game_links])
+  end
+
+  # script_list is a feed, not a rewrite: naming it alone must not replace
+  # the catalog rewrites (a Saga session would lose its rich stream).
+  it 'adds a feed without touching the rewrites or warning' do
+    capabilities.launch_capabilities = nil
+    expect { harness.handle_frontend_caps({ frontend_caps: 'script_list' }) }.not_to output.to_stdout
+    expect(capabilities.launch_capabilities).to be_nil
+    expect(capabilities.launch_feeds).to eq([:script_list])
   end
 
   it 'leaves the catalog default in place without the flag' do
