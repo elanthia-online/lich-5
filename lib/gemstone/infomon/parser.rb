@@ -78,7 +78,10 @@ module Lich
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
           AccountSubscription = /^Account Type:     (?<subscription>F2P|Standard|Premium|Platinum)(?: with Shattered)?(?: \(\w+\))?$/.freeze
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
-          ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
+          # First word only: a surname can carry ' or - and the line can end in a
+          # status tag such as "(LOOKING FOR GROUP)", e.g.
+          #   Name: Somebody Ar'Example  (LOOKING FOR GROUP)
+          ProfileName = /^Name: (?<name>[A-Za-z]+)\b/.freeze
           ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
           ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
           ResignConfirmCHE = /^\[You have resigned from the (?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?\.\]$/.freeze
@@ -166,6 +169,9 @@ module Lich
           @state = :ready
           Goals = :goals
           Profile = :profile
+          # PROFILE output whose Name: line is this character's; only this state
+          # may write CHE. Entered from Profile, left on the House line or prompt.
+          ProfileSelf = :profile_self
           Ready = :ready
           # Enhancive parsing states
           EnhanciveStats = :enhancive_stats
@@ -179,6 +185,11 @@ module Lich
             case state
             when Goals, Profile
               unless @state.eql?(Ready)
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+              end
+            when ProfileSelf
+              unless @state.eql?(Profile)
                 Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
                 fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
               end
@@ -614,15 +625,17 @@ module Lich
               State.set(State::Profile)
               :ok
             when Pattern::ProfileName
-              match = Regexp.last_match
-              if State.get.eql?(State::Profile) && !match[:name].split(' ').include?(Char.name)
-                State.set(State::Ready)
+              if State.get.eql?(State::Profile)
+                # Fail closed: CHE is only written once the profile is confirmed to
+                # be this character's, so another player's House line (or a title
+                # such as "Chatelaine of Rone Academy") can never be recorded as ours.
+                State.set(Regexp.last_match[:name].eql?(Char.name) ? State::ProfileSelf : State::Ready)
                 :ok
               else
                 :noop
               end
             when Pattern::ProfileHouseCHE
-              if State.get.eql?(State::Profile)
+              if State.get.eql?(State::ProfileSelf)
                 match = Regexp.last_match
                 Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
                 State.set(State::Ready)
