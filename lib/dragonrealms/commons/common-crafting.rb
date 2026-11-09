@@ -877,18 +877,30 @@ module Lich
         bag.is_a?(Integer) || bag.to_s.strip.start_with?('#')
       end
 
-      # The name of the held item whose id is +ref+ ("#<id>"), shortened as
-      # {DRC.fix_dr_bullshit} shortens hand names (first and last word:
-      # "stiff wire brush" gives "stiff brush"), so a worn-out consumable
-      # named by id can be replaced by name. The adjective keeps the
-      # replacing GET off another item with the same noun (a "sanding
-      # brush"). Reads the GameObj hands only.
+      # A name for the held item whose id is +ref+ ("#<id>"), so a worn-out
+      # consumable named by id can be replaced by name: the first word of
+      # its name before its GameObj noun ("stiff wire brush" gives "stiff
+      # brush"), or the noun alone when the name is one word or starts with
+      # the noun ("bucket of viscous gloop" gives "bucket"). The adjective
+      # keeps the replacing GET off another item with the same noun (a
+      # "sanding brush"); a bare noun has no such guard, so that GET can
+      # pick up any item with the noun. The noun comes from the GameObj,
+      # never from the end of the name, which need not be the noun ("bone
+      # saw with a blade edged in audrualm" gives "bone saw"). Reads the
+      # GameObj hands only.
       #
       # @param ref [String] "#<id>"
-      # @return [String, nil] the shortened name; nil when no hand holds that id
+      # @return [String, nil] "<first word> <noun>" or the noun; nil when no
+      #   hand holds that id or it has no noun
       def crafting_held_name(ref)
         obj = crafting_hand_obj(ref)
-        obj && DRC.fix_dr_bullshit(obj.name)
+        return nil unless obj
+
+        noun = obj.noun.to_s.strip
+        return nil if noun.empty?
+
+        words = obj.name.to_s.split
+        words.size < 2 || words.first.casecmp?(noun) ? noun : "#{words.first} #{noun}"
       end
       private_class_method :crafting_name, :crafting_id_ref?, :crafting_bag_ref, :crafting_held_ref, :crafting_id_bag?, :crafting_held_name
 
@@ -1093,13 +1105,14 @@ module Lich
       #
       # The belt tie goes by name, as before. The PUT, the STOW fallback and
       # the other-bag PUT name the tool by its id when +name+ means exactly
-      # one held item ({DRCI.held_id}: noun equal to the last word, so
-      # "leather" is a held "rat-pelt leather" and never worn "sinuous
-      # leathers"), and +bag+ by its id when exactly one worn item matches it
-      # ({DRCI.worn_ref}). No match, two matches, or an ordinal or "other"
-      # name sends `put my <name> in my <bag>` as before. A "#<id>" +name+
-      # (or an Integer id) skips the belt and is sent as "#<id>", never
-      # "my #<id>". A +bag+ given as an id gets no "my other" fallback.
+      # one held item ({DRCI.held_id}: noun equal to the name's
+      # {DRC.get_noun} noun, so "leather" is a held "rat-pelt leather" and
+      # never worn "sinuous leathers"), and +bag+ by its id when exactly one
+      # worn item matches it ({DRCI.worn_ref}). No match, two matches, or an
+      # ordinal or "other" name sends `put my <name> in my <bag>` as before.
+      # A "#<id>" +name+ (or an Integer id) skips the belt and is sent as
+      # "#<id>", never "my #<id>". A +bag+ given as an id gets no "my other"
+      # fallback.
       #
       # A PUT by id that the bag takes ("You put", "You tuck"), or a STOW
       # fallback by id that works, remembers the id in +bag+ with the noun
@@ -1505,10 +1518,12 @@ module Lich
       # A "#<id>" +name+ (or an Integer id) names that one item, and no shop
       # sells it. So it is never ordered: a GET that finds no such item
       # returns false. A worn-out one is disposed of by id and replaced by a
-      # call with its hand name, shortened as {DRC.fix_dr_bullshit} does
-      # ("stiff wire brush" gives "stiff brush"; read from the hand before
-      # the dispose), which can fetch or order another as for any name. The
-      # adjective keeps that GET off a different item with the same noun.
+      # call with the first word of its hand name and its GameObj noun
+      # ({crafting_held_name}: "stiff wire brush" gives "stiff brush"; read
+      # from the hand before the dispose), which can fetch or order another
+      # as for any name. The adjective keeps that GET off a different item
+      # with the same noun. A one-word hand name, or one that starts with
+      # its noun, gives the bare noun, so that GET has no adjective guard.
       #
       # @param name [String, Integer] consumable noun, e.g. 'oil', 'wire
       #   brush', or "#<id>"; an Integer is an id
@@ -1522,7 +1537,8 @@ module Lich
       # @return [Boolean] false, without walking or ordering, when the GET
       #   gets "You need a free hand to pick that up." or no reply, or when
       #   a "#<id>" +name+ is not found (or, worn out, its name can't be
-      #   read from the hand, after it is disposed of). false,
+      #   read from the hand, or the hand has no noun, after it is disposed
+      #   of). false,
       #   with nothing put away, when DRCT.order_item returns nil or '' (no
       #   coins, full hands, an unreachable shop or a timeout); it still walks
       #   back. false, after walking back, when stow_crafting_item returns

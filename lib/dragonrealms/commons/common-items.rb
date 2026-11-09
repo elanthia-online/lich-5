@@ -1106,10 +1106,17 @@ module Lich
       # only; sends no game command, so it is safe in roundtime.
       #
       # A name matches a held item when, after a leading "my " is dropped, its
-      # last word equals the item's noun (ignoring case, so "leather" is not
-      # "leathers") and each other word is a word of the item's name (so the
+      # noun ({DRC.get_noun}, which strips flavor text such as "with a
+      # leather-wrapped hilt" before taking the noun) equals the item's noun,
+      # ignoring case (so "leather" is not "leathers"), and each other word
+      # before that flavor text is a word of the item's name. So the
       # shortened {DRC.right_hand} name "heavy bag" matches "heavy silk duffel
-      # bag"). A name starting with an ordinal or "other" never matches.
+      # bag", and "skinning knife with a leather-wrapped hilt" matches a held
+      # knife whose hand tag says "skinning knife": the description is not
+      # compared, as hand tags don't carry it. "small steel skinning knife"
+      # does not match that knife ("small" and "steel" aren't in its name),
+      # and "leather pouch" never matches a held "weapon harness". A name
+      # starting with an ordinal or "other" never matches.
       #
       # @param name [String, Integer, nil] noun phrase, or "#<id>"; an Integer
       #   is an id, as "#<id>"; nil matches any held item (so it gives nil when
@@ -1125,6 +1132,9 @@ module Lich
       #
       # @example Both hands hold leather
       #   DRCI.held_id('leather') #=> nil
+      #
+      # @example Right hand "skinning knife" 306618 (a long name's flavor text is dropped)
+      #   DRCI.held_id('skinning knife with a leather-wrapped hilt') #=> "306618"
       def held_id(name = nil, except: [])
         ids = matching_held_ids(held_except(except), name)
         ids.size == 1 ? ids.first : nil
@@ -1213,12 +1223,12 @@ module Lich
 
       # The id of the one item directly in a container that a name means,
       # read from an Inventory feed snapshot ({Lich::Common::Inventory}). Uses
-      # the {.held_id} rule (noun equal to the name's last word, ignoring
-      # case; each other word a word of the item's name; a leading "my "
-      # dropped; an ordinal or "other" first word never matches). Sends no
-      # game command and reads only the snapshot given, so the answer is as
-      # old as that snapshot: the caller must expect the id to name nothing
-      # any more, or a different item.
+      # the {.held_id} rule (noun equal to the name's {DRC.get_noun} noun,
+      # ignoring case; each other word before any flavor text a word of the
+      # item's name; a leading "my " dropped; an ordinal or "other" first
+      # word never matches). Sends no game command and reads only the
+      # snapshot given, so the answer is as old as that snapshot: the caller
+      # must expect the id to name nothing any more, or a different item.
       #
       # @param name [String, Integer, nil] noun phrase, e.g. "pins" or
       #   "sepia pins"; an Integer is an id, as in {.held_id}
@@ -1238,7 +1248,9 @@ module Lich
       end
 
       # The ids of every item directly in a container that a name means, read
-      # from an Inventory feed snapshot, by the same rule as {.stored_id}.
+      # from an Inventory feed snapshot, by the same rule as {.stored_id} (the
+      # {.held_id} rule: the name's noun is {DRC.get_noun}'s, so "skinning
+      # knife with a leather-wrapped hilt" means a knife, never a hilt).
       # For a caller that must tell "one match" from "several" itself, e.g.
       # to drop an id it already holds while the snapshot shows the game a
       # choice. Sends no game command; as old as the snapshot given.
@@ -1254,6 +1266,9 @@ module Lich
       #
       # @example Two pins in the worn duffel bag 2391122
       #   DRCI.stored_ids('pins', 2391122, snapshot: Lich::Common::Inventory.current) #=> ["4101800", "4101802"]
+      #
+      # @example A small steel skinning knife 4101860 in the same bag
+      #   DRCI.stored_ids('skinning knife with a leather-wrapped hilt', 2391122, snapshot: Lich::Common::Inventory.current) #=> ["4101860"]
       def stored_ids(name, container, snapshot:)
         return [] if snapshot.nil? || name.nil?
 
@@ -1267,9 +1282,10 @@ module Lich
       end
 
       # Whether a name means an item, by the {.held_id} rule (noun equal to
-      # the name's last word, ignoring case; each other word a word of the
-      # item's name; a leading "my " dropped; an ordinal or "other" first
-      # word never matches; a lone "#<id>" matches that id only). For items
+      # the name's {DRC.get_noun} noun, ignoring case; each other word before
+      # any flavor text a word of the item's name; a leading "my " dropped;
+      # an ordinal or "other" first word never matches; a lone "#<id>"
+      # matches that id only). For items
       # that are no longer at hand, such as the ones {DRCC} remembers, so
       # every caller asks the same question {.held_id} asks of the hands.
       # Sends no game command.
@@ -1283,11 +1299,21 @@ module Lich
       # @example The shortened hand name of some sepia pins
       #   DRCI.item_named?(GameObj.right_hand, 'pins')       #=> true
       #   DRCI.item_named?(GameObj.right_hand, 'iron pins')  #=> false
+      #
+      # @example A held knife whose hand tag says "skinning knife"
+      #   DRCI.item_named?(GameObj.right_hand, 'skinning knife with a leather-wrapped hilt') #=> true
       def item_named?(item, name)
         !item.nil? && !name.nil? && held_obj_matches?(item, name)
       end
 
       # Whether a name means this held GameObj (see {.held_id} for the rule).
+      #
+      # The name's noun is {DRC.get_noun}'s (its flavor text such as "with a
+      # leather-wrapped hilt" stripped by {DRC.remove_flavor_text}, the
+      # player's +custom_flavor_text_patterns+ included), and the words that
+      # must be words of the item's name are the rest of that stripped
+      # phrase. A noun get_noun can't find, or one that is not a whole word
+      # of the stripped phrase, matches nothing.
       #
       # @param obj [GameObj] a hand object
       # @param name [String, Integer] noun phrase, optionally "my ..." or
@@ -1296,17 +1322,24 @@ module Lich
       # @api private
       def held_obj_matches?(obj, name)
         name = "##{name}" if name.is_a?(Integer)
-        words = name.to_s.strip.sub(/\Amy\s+/i, '').downcase.split
+        phrase = name.to_s.strip.sub(/\Amy\s+/i, '')
+        words = phrase.downcase.split
         return false if words.empty? || held_ref_ordinal?(words.first)
 
         if (id = words.first[ITEM_ID_REF_PATTERN, 1]) && words.size == 1
           return held_obj_id(obj) == id
         end
 
-        return false unless obj.noun.to_s.casecmp?(words.last)
+        noun = DRC.get_noun(phrase).to_s.downcase
+        return false if noun.empty? || !obj.noun.to_s.casecmp?(noun)
 
+        others = DRC.remove_flavor_text(phrase).downcase.split
+        noun_at = others.rindex(noun)
+        return false unless noun_at
+
+        others.delete_at(noun_at)
         name_words = obj.name.to_s.downcase.split
-        words[0...-1].all? { |word| name_words.include?(word) }
+        others.all? { |word| name_words.include?(word) }
       end
 
       # The phrase half of how a name matches a worn or held item in
