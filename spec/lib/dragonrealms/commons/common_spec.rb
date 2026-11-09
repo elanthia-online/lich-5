@@ -125,6 +125,40 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('extracts hyphenated noun') { expect(described_class.get_noun(' a long-sword')).to eq('long-sword') }
     it('extracts noun with apostrophe') { expect(described_class.get_noun(" a thief's pick")).to eq("pick") }
     it('returns nil when the name does not end in a word') { expect(described_class.get_noun('a 5')).to be_nil }
+
+    # Item names as the game sent them in November 2026, each with the noun the
+    # game gave it (the noun= of its XML link).
+    context 'with a name whose flavor starts "for a", "for some", "manifested as" or "<participle> of"' do
+      {
+        'a deed for a mammoth-bone stack'                                       => 'deed',
+        'a deed for some punka leather'                                         => 'deed',
+        'a neck strap for a crafting instruction book'                          => 'strap',
+        'an intricate decay sigil-scroll comprised of broad strokes'            => 'sigil-scroll',
+        'a frosty observer manifested as a vaporous cloud'                      => 'observer',
+        'a frosty observer manifested as an infinitely rolling wave'            => 'observer',
+        'a skullcap crafted of orange silk with colorful beadwork'              => 'skullcap',
+        "a complex lockpick ankle-cuff composed of interlocking ka'hurst bands" => 'ankle-cuff',
+        'an awl carved of burnished ebony'                                      => 'awl',
+        'an impressively large hut built of skins and deobar'                   => 'hut',
+        'a dark green sack made of desiccated kelp'                             => 'sack'
+      }.each do |name, noun|
+        it("reads #{noun.inspect} off #{name.inspect}") { expect(described_class.get_noun(name)).to eq(noun) }
+      end
+    end
+
+    # A bare "of" stays a part of the name: in these the noun is the word after
+    # it, so stripping from "of" would give "pair", "piece" or "coil".
+    context 'with a name whose noun follows "of" or a flavor phrase already handled' do
+      {
+        'a pair of pliers'                                         => 'pliers',
+        'a piece of amber'                                         => 'amber',
+        'a coil of burlap reinforced rope'                         => 'rope',
+        'a deed for a large anjisis rock'                          => 'deed',
+        'a small steel skinning knife with a leather-wrapped hilt' => 'knife'
+      }.each do |name, noun|
+        it("still reads #{noun.inspect} off #{name.inspect}") { expect(described_class.get_noun(name)).to eq(noun) }
+      end
+    end
   end
 
   describe '.remove_flavor_text' do
