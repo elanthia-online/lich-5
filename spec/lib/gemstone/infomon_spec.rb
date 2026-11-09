@@ -736,6 +736,17 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
     end
 
+    it "ignores the House line when the Name: line cannot be parsed" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(<<~PROFILE)
+        PERSONAL INFORMATION
+        Name: (unknown)
+        AFFILIATIONS
+        Member of House Paupers
+      PROFILE
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+    end
+
     it "accepts a following PROFILE after a short profile with no AFFILIATIONS section once the prompt arrives" do
       Lich::Gemstone::Infomon.set('che', 'sylvanfair')
       parse_profile(<<~PROFILE)
