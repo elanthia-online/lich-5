@@ -1105,13 +1105,14 @@ module Lich
       #
       # The belt tie goes by name, as before. The PUT, the STOW fallback and
       # the other-bag PUT name the tool by its id when +name+ means exactly
-      # one held item ({DRCI.held_id}: noun equal to the last word, so
-      # "leather" is a held "rat-pelt leather" and never worn "sinuous
-      # leathers"), and +bag+ by its id when exactly one worn item matches it
-      # ({DRCI.worn_ref}). No match, two matches, or an ordinal or "other"
-      # name sends `put my <name> in my <bag>` as before. A "#<id>" +name+
-      # (or an Integer id) skips the belt and is sent as "#<id>", never
-      # "my #<id>". A +bag+ given as an id gets no "my other" fallback.
+      # one held item ({DRCI.held_id}: noun equal to the name's
+      # {DRC.get_noun} noun, so "leather" is a held "rat-pelt leather" and
+      # never worn "sinuous leathers"), and +bag+ by its id when exactly one
+      # worn item matches it ({DRCI.worn_ref}). No match, two matches, or an
+      # ordinal or "other" name sends `put my <name> in my <bag>` as before.
+      # A "#<id>" +name+ (or an Integer id) skips the belt and is sent as
+      # "#<id>", never "my #<id>". A +bag+ given as an id gets no "my other"
+      # fallback.
       #
       # A PUT by id that the bag takes ("You put", "You tuck"), or a STOW
       # fallback by id that works, remembers the id in +bag+ with the noun
