@@ -39,8 +39,11 @@ RSpec.describe Lich::DragonRealms::DRCI do
   # bucket" in the drop reply but its id was not captured.
   let(:bucket) { ['758700', 'bucket', 'portable silversteel bucket'] }
 
-  # None of these readers may send anything to the game.
+  # None of these readers may send anything to the game. The name rule reads
+  # DRC.get_noun, which applies any memoized custom flavor-text patterns, so
+  # none may leak in from another example.
   before do
+    Lich::DragonRealms::CustomSubstitutions.reset!
     gameobj.clear_inv
     hands
     allow(Lich::DragonRealms::DRC).to receive(:bput).and_raise('DRCI sent a bput')
@@ -134,8 +137,62 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(described_class.held_id('heav bag')).to be_nil
       end
 
-      it 'does not resolve when the last word is not the noun' do
+      it "does not resolve when the name's noun is not the item's noun" do
         expect(described_class.held_id('heavy duffel')).to be_nil
+      end
+    end
+
+    # The phrase's noun is DRC.get_noun's, not its last word. The names are
+    # from the game's XML (Nov 2026): "small steel skinning knife with a
+    # leather-wrapped hilt" and "incurvate skinning knife with an opalized
+    # darkspine handle" (noun= "knife"), "black leather weapon harness with
+    # bright silver fittings" (noun= "harness"), and the knackstone name, are
+    # full names or their tails. A hand tag carries only the short "adj noun"
+    # text, so the held knife shows as "skinning knife". Ids are illustrative.
+    context 'with a name whose last word is not its noun' do
+      let(:skinning_knife) { ['306618', 'knife', 'skinning knife'] }
+
+      it 'resolves "skinning knife with a leather-wrapped hilt" to the held knife' do
+        hands(right: skinning_knife, left: leather)
+        expect(described_class.held_id('skinning knife with a leather-wrapped hilt')).to eq('306618')
+        expect(described_class.held_id('my skinning knife with a leather-wrapped hilt')).to eq('306618')
+        expect(described_class.item_named?(gameobj.right_hand, 'skinning knife with a leather-wrapped hilt')).to be true
+      end
+
+      it 'does not compare the description after the noun, so two such knives are ambiguous' do
+        hands(right: skinning_knife, left: ['185254', 'knife', 'skinning knife'])
+        expect(described_class.held_id('skinning knife with an opalized darkspine handle')).to be_nil
+        expect(described_class.held_id('skinning knife with an opalized darkspine handle', except: '306618')).to eq('185254')
+      end
+
+      # "small" and "steel" are words before the noun that the short hand tag
+      # does not carry, so the held knife can't be confirmed as that one.
+      it 'does not resolve the full long name against the short hand tag' do
+        hands(right: skinning_knife)
+        expect(described_class.held_id('small steel skinning knife with a leather-wrapped hilt')).to be_nil
+      end
+
+      it 'does not take a held "weapon harness" (noun harness) for "leather pouch"' do
+        hands(right: ['501', 'harness', 'weapon harness'])
+        expect(described_class.held_id('leather pouch')).to be_nil
+        expect(described_class.held_id('weapon harness with bright silver fittings')).to eq('501')
+      end
+
+      # get_noun reads "knife" from "steel/knife", but no whole word of the
+      # phrase is "knife", so its other words can't be told apart from the
+      # noun: no match, rather than an error or a match on the noun alone.
+      it 'matches nothing when the noun is not a whole word of the phrase' do
+        hands(right: ['1', 'knife', 'steel knife'])
+        expect(described_class.held_id('steel/knife')).to be_nil
+        expect(described_class.item_named?(gameobj.right_hand, 'steel/knife')).to be false
+      end
+
+      # get_noun gives "linen" for this name (its flavor text list has no
+      # "framed by"), so it matches nothing: a miss, never another item.
+      it 'misses, and never picks the other held item, when get_noun misses the noun' do
+        hands(right: ['111000001', 'knackstone', 'heraldic knackstone'], left: leather)
+        expect(described_class.held_id('pitted heraldic knackstone framed by frayed lengths of kelp linen')).to be_nil
+        expect(described_class.held_id('deed for some punka leather')).to be_nil
       end
     end
 

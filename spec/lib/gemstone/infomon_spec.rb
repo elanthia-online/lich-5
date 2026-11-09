@@ -647,6 +647,123 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
   end
 
+  context "CHE from PROFILE" do
+    let(:parser_state) { Lich::Gemstone::Infomon::Parser::State }
+
+    before(:each) do
+      allow(Char).to receive(:name).and_return("Testchar")
+      parser_state.set(parser_state::Ready)
+    end
+
+    after(:each) { parser_state.set(parser_state::Ready) }
+
+    def parse_profile(output)
+      output.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) unless line.empty? }
+    end
+
+    let(:own_profile) do
+      <<~PROFILE
+        PERSONAL INFORMATION
+        Name: Testchar
+        Profession: Wizard   Level: 100
+        Race: Dark Elf   Gender: Male
+        Age: very young (0)
+        AFFILIATIONS
+        Full citizen of Solhaven
+        No MHO affiliation
+        Master in the Order of Voln
+        Member of the Wizard Guild
+        No Deity chosen
+        Member of House Sylvanfair
+        ACHIEVEMENTS
+        Strongest foe vanquished: a creature (level 100)
+      PROFILE
+    end
+
+    it "records the House from the character's own profile" do
+      parse_profile(own_profile)
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+      expect(parser_state.get).to eq(parser_state::Ready)
+    end
+
+    it "records no House from the character's own profile" do
+      parse_profile(own_profile.sub("Member of House Sylvanfair", "No House affiliation"))
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('none')
+    end
+
+    it "records the House when the character's own Name: line carries a status tag" do
+      parse_profile(own_profile.sub("Name: Testchar", "Name: Testchar Surname  (LOOKING FOR GROUP)"))
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+    end
+
+    it "ignores another player's House title when their surname has an apostrophe and a status tag" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(<<~PROFILE)
+        PERSONAL INFORMATION
+
+        Name: Otherchar Ar'Example  (LOOKING FOR GROUP)
+        Title: Artist
+        Race: Sylvankind   Gender: Female
+        Age: in the bloom of youth (286)
+
+        AFFILIATIONS
+
+        Full citizen of Wehnimer's Landing
+        Officer of The Example Irregulars
+        Member of Example Manor
+        No Deity chosen
+        Chatelaine of Rone Academy
+
+        ACHIEVEMENTS
+
+        Strongest foe vanquished: a creature (level 188)
+      PROFILE
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+      expect(parser_state.get).to eq(parser_state::Ready)
+    end
+
+    it "ignores another player's 'No House affiliation'" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(own_profile.sub("Name: Testchar", "Name: Otherchar Smith-Jones")
+                               .sub("Member of House Sylvanfair", "No House affiliation"))
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+    end
+
+    it "ignores another player whose surname matches the character's name" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(own_profile.sub("Name: Testchar", "Name: Otherchar Testchar")
+                               .sub("Member of House Sylvanfair", "Member of House Paupers"))
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+    end
+
+    it "ignores the House line when the Name: line cannot be parsed" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(<<~PROFILE)
+        PERSONAL INFORMATION
+        Name: (unknown)
+        AFFILIATIONS
+        Member of House Paupers
+      PROFILE
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('sylvanfair')
+    end
+
+    it "accepts a following PROFILE after a short profile with no AFFILIATIONS section once the prompt arrives" do
+      Lich::Gemstone::Infomon.set('che', 'sylvanfair')
+      parse_profile(<<~PROFILE)
+        PERSONAL INFORMATION
+        Name: Testchar
+        Profession: Rogue
+        Race: Halfling   Gender: Male
+      PROFILE
+      expect(parser_state.get).to eq(parser_state::ProfileSelf)
+      Lich::Gemstone::Infomon::XMLParser.parse(%(<prompt time="1700000000">&gt;</prompt>))
+      expect(parser_state.get).to eq(parser_state::Ready)
+
+      parse_profile(own_profile.sub("Member of House Sylvanfair", "Member of House Paupers"))
+      expect(Lich::Gemstone::Infomon.get('che')).to eq('paupers')
+    end
+  end
+
   context "Society Join or Resign" do
     before do
       Lich::Gemstone::Infomon.set('society.status', 'None')

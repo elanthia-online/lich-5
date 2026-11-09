@@ -59,6 +59,13 @@ RSpec.describe Lich::DragonRealms::DRCC do
     items.each { |id, noun, name| gameobj.new_inv(id, noun, name) }
   end
 
+  # A distinct letters-only word for a number (0 "a", 25 "z", 26 "ba"), for
+  # synthetic nouns: DR nouns have no digits, and DRC.get_noun (the
+  # {DRCI.item_named?} rule) takes no noun from a name ending in one.
+  def letters(number)
+    number.to_s(26).tr('0-9a-p', 'a-z')
+  end
+
   # The game answers +command+ with +lines+, one per send; a block runs at
   # the first send (the hands change as the game answers).
   def game(command, *lines, &effect)
@@ -437,13 +444,13 @@ RSpec.describe Lich::DragonRealms::DRCC do
       max = described_class::CRAFTING_ITEM_IDS_MAX
       (max + 8).times do |i|
         id = (5_000_000 + i).to_s
-        hands(right: [id, "tool#{i}", "steel tool#{i}"])
+        hands(right: [id, "tool#{letters(i)}", "steel tool#{letters(i)}"])
         game("put ##{id} in #2391122", 'You put your tool in your heavy silk duffel bag.') { hands }
-        described_class.stow_crafting_item("steel tool#{i}", 'duffel bag', nil)
+        described_class.stow_crafting_item("steel tool#{letters(i)}", 'duffel bag', nil)
       end
       expect(memo.size).to eq(max)
-      expect(memo.fetch('#2391122', 'tool0')).to be_nil
-      expect(memo.fetch('#2391122', "tool#{max + 7}")).to eq((5_000_000 + max + 7).to_s)
+      expect(memo.fetch('#2391122', "tool#{letters(0)}")).to be_nil
+      expect(memo.fetch('#2391122', "tool#{letters(max + 7)}")).to eq((5_000_000 + max + 7).to_s)
     end
 
     it 'remembers nothing for a failed PUT' do
@@ -836,6 +843,19 @@ RSpec.describe Lich::DragonRealms::DRCC do
       expect(drci.stored_ids('pins', 'duffel bag', snapshot: inventory.current)).to eq([])
       expect(drci.stored_ids('wax', '#2391122', snapshot: inventory.current)).to eq([])
     end
+
+    # Names from the game's XML (Nov 2026): the tails of "small steel
+    # skinning knife with a leather-wrapped hilt" (noun= "knife") and "black
+    # leather weapon harness with bright silver fittings" (noun= "harness");
+    # the feed's comma split and the ids are illustrative.
+    it 'takes the noun of a name with a description after it by DRC.get_noun, not its last word' do
+      Lich::DragonRealms::CustomSubstitutions.reset!
+      feed([['4101860', 'a small steel,skinning,knife'], ['4101861', 'a black leather,weapon,harness']])
+      bag = '#2391122'
+      expect(drci.stored_ids('skinning knife with a leather-wrapped hilt', bag, snapshot: inventory.current)).to eq(%w[4101860])
+      expect(drci.stored_ids('weapon harness with bright silver fittings', bag, snapshot: inventory.current)).to eq(%w[4101861])
+      expect(drci.stored_ids('leather pouch', bag, snapshot: inventory.current)).to eq([])
+    end
   end
 
   # Named by a String so this file still loads (and its other examples run
@@ -886,18 +906,18 @@ RSpec.describe Lich::DragonRealms::DRCC do
     end
 
     it 'drops the oldest item past the cap' do
-      4.times { |i| keep(ids, i.to_s, "item#{i}") }
+      4.times { |i| keep(ids, i.to_s, "item#{letters(i)}") }
       expect(ids.size).to eq(3)
-      expect(ids.fetch('#1', 'item0')).to be_nil
-      expect(ids.fetch('#1', 'item3')).to eq('3')
+      expect(ids.fetch('#1', "item#{letters(0)}")).to be_nil
+      expect(ids.fetch('#1', "item#{letters(3)}")).to eq('3')
     end
 
     it 'counts a re-remembered id as newest' do
-      3.times { |i| keep(ids, i.to_s, "item#{i}") }
-      keep(ids, '0', 'item0')
-      keep(ids, '3', 'item3')
-      expect(ids.fetch('#1', 'item0')).to eq('0')
-      expect(ids.fetch('#1', 'item1')).to be_nil
+      3.times { |i| keep(ids, i.to_s, "item#{letters(i)}") }
+      keep(ids, '0', "item#{letters(0)}")
+      keep(ids, '3', "item#{letters(3)}")
+      expect(ids.fetch('#1', "item#{letters(0)}")).to eq('0')
+      expect(ids.fetch('#1', "item#{letters(1)}")).to be_nil
     end
 
     it 'bounds the dead ids too, and un-deads a remembered one' do
@@ -914,7 +934,7 @@ RSpec.describe Lich::DragonRealms::DRCC do
       threads = Array.new(8) do |t|
         Thread.new do
           500.times do |i|
-            noun = "item#{t}x#{i % 40}"
+            noun = "item#{letters(t)}x#{letters(i % 40)}"
             keep(shared, "#{t}#{i % 40}", noun, "sepia #{noun}", bag: '#2391122', as: i.even? ? noun : nil)
             value = shared.fetch('#2391122', noun)
             errors << [noun, value] unless value.nil? || value == "#{t}#{i % 40}"

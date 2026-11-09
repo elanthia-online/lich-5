@@ -47,7 +47,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
     allow(Lich).to receive(:log)
     @saved = [Lich::Common::ClientCapabilities.launch_feeds, $frontend, $clean_lich_char]
     $clean_lich_char = ';'
-    $frontend = 'genie' # no streams: a client without script_list gets nothing
+    $frontend = 'frostbite' # no streams: a client without script_list gets nothing
     # Script is stubbed rather than loaded: lib/common/script.rb drags in the
     # whole runtime, and the feed reads only Script.running.
     running = -> { scripts }
@@ -93,7 +93,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
 
     it 'honours the session set for a client that has not declared' do
       undeclared = client_class.new(nil)
-      $frontend = 'genie'
+      $frontend = 'frostbite'
       expect(described_class.wants?(undeclared)).to be false
       Lich::Common::ClientCapabilities.launch_feeds = %i[script_list]
       expect(described_class.wants?(undeclared)).to be true
@@ -331,14 +331,14 @@ RSpec.describe Lich::Common::ScriptListFeed do
     end
 
     it 'gives the window to any other client when the front end has streams' do
-      %w[stormfront wrayth saga profanity].each do |frontend|
+      %w[stormfront wrayth saga profanity genie].each do |frontend|
         $frontend = frontend
         expect(described_class.forms_for(window_client)).to eq([:window])
       end
     end
 
     it 'gives nothing to any other client when the front end has no streams' do
-      %w[genie frostbite wizard avalon].each do |frontend|
+      %w[frostbite wizard avalon].each do |frontend|
         $frontend = frontend
         expect(described_class.forms_for(window_client)).to eq([])
       end
@@ -377,7 +377,7 @@ RSpec.describe Lich::Common::ScriptListFeed do
     end
 
     it 'leaves the thread unstarted when the front end has no streams' do
-      $frontend = 'genie'
+      $frontend = 'frostbite'
       expect(described_class.client_ready(window_client)).to be false
       expect(described_class.instance_variable_get(:@thread)).to be_nil
     end

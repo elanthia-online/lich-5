@@ -24,7 +24,7 @@ From then on it gets the data element instead of the window. It can also come fr
 
 ## Turning on the window
 
-The window is a user setting, not a capability: `;display scriptwindow` toggles it (`;display scriptwindow true` or `false` sets it), and it is off by default. It is stored in the `lich_settings` table (`Lich.display_script_window`). Even when it is on, only a front end with the `streams` capability (`Frontend.supports_streams?`) gets it, so a Wizard or Avalon (GSL) session, and Genie and Frostbite, whose catalog entries have no `streams`, never get the window's XML.
+The window is a user setting, not a capability: `;display scriptwindow` toggles it (`;display scriptwindow true` or `false` sets it), and it is off by default. It is stored in the `lich_settings` table (`Lich.display_script_window`). Even when it is on, only a front end with the `streams` capability (`Frontend.supports_streams?`) gets it, so a Wizard or Avalon (GSL) session, and Frostbite, whose catalog entry has no `streams`, never get the window's XML. Genie has `streams` and does get it: Genie4 adds a hidden `Lich Scripts` window (listed in its Window menu) and prints `Created new window: scripts` in Main, but the window stays empty because Genie4 looks streams up by window title, not id, so the `pushStream id="scripts"` text is dropped, and Genie5 shows the list in Main with a `[scripts]` prefix.
 
 - Turning it on draws the window at once in every client that now gets it.
 - Turning it off replaces the window's contents with `The Lich Scripts window is off. Turn it on with ;display scriptwindow.` in each client that had it, and stops updating it.
