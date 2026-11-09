@@ -611,10 +611,10 @@ RSpec.describe Lich::DragonRealms::DRCC do
       end
 
       # The disposed id names nothing any more: the replacement goes by the
-      # hand name, shortened as DRC.fix_dr_bullshit shortens it ("straight
-      # iron pins" gives "straight pins"), and the bought pins are put away
+      # first word of the hand name and the hand's noun ("straight iron pins",
+      # noun pins, gives "straight pins"), and the bought pins are put away
       # by their own id.
-      it 'disposes a worn-out id, then replaces it by its shortened name and stows the new id' do
+      it 'disposes a worn-out id, then replaces it by its first word and noun and stows the new id' do
         game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
         game('count #5550002', 'The straight iron pins has 1 uses remaining.')
         game('get my straight pins from #758689', 'What were you referring to?')
@@ -652,6 +652,47 @@ RSpec.describe Lich::DragonRealms::DRCC do
         end
       end
 
+      # The replacement is named from the hand's own noun, never from the
+      # last word of its name. Every hand tag logged so far ends in its noun,
+      # so this is a guard, not a replay: the brush below (noun="brush") is
+      # logged 549 times in the 2026-11 logs, all in room or container
+      # listings, never as a hand tag. If a hand name ever carried that
+      # postfix, first and last word would GET "my steel dragon", miss the
+      # brushes in the bag and order another one.
+      context 'with a worn-out brush whose name does not end in its noun' do
+        let(:etched_brush) { ['5550030', 'brush', 'steel wire-bristled brush acid-etched with a stylized dragon'] }
+        let(:new_etched_brush) { ['5550031', 'brush', 'steel wire-bristled brush acid-etched with a stylized dragon'] }
+
+        before(:each) do
+          allow(drct).to receive(:order_item) do |room, number|
+            sent << "order #{number} at #{room}"
+            hands(right: new_etched_brush)
+            order_result
+          end
+        end
+
+        it 'GETs "my steel brush", not "my steel dragon", then buys and stows by id' do
+          game('get #5550030 from #758689', 'You get a steel wire-bristled brush from inside your heavy silk duffel bag.') { hands(right: etched_brush) }
+          game('count #5550030', 'The steel wire-bristled brush has 1 uses remaining.')
+          game('get my steel brush from #758689', 'What were you referring to?')
+          game('put #5550031 in #758689', 'You put your brush in your heavy silk duffel bag.') { hands }
+          expect(described_class.check_consumables(5_550_030, 'tool-room', 7, 'duffel bag', [], nil, 5)).to be(true)
+          expect(sent).to eq(['get #5550030 from #758689', 'count #5550030', 'dispose #5550030',
+                              'get my steel brush from #758689', 'order 7 at tool-room', 'put #5550031 in #758689', 'walk 8775'])
+        end
+      end
+
+      # A hand with an id but no noun gives no name to buy by: the worn-out
+      # one is still disposed of by id, and nothing is fetched or bought.
+      it 'disposes a worn-out id whose hand has no noun, then stops without buying' do
+        game('get #5550002 from #758689', got_pins) { hands(right: ['5550002', nil, 'straight pins']) }
+        game('count #5550002', 'The straight iron pins has 1 uses remaining.')
+        expect(described_class.check_consumables('#5550002', 'tool-room', 5, 'duffel bag', [], nil, 5)).to be(false)
+        expect(sent).to eq(['get #5550002 from #758689', 'count #5550002', 'dispose #5550002'])
+        expect(Lich::Messaging).to have_received(:msg)
+          .with('bold', 'DRCC: Disposed of worn-out #5550002 but could not tell its name. Not buying more.')
+      end
+
       it 'returns false with the bought pins still held when the replacement PUT fails' do
         game('get #5550002 from #758689', got_pins) { hands(right: old_pins) }
         game('count #5550002', 'The straight iron pins has 1 uses remaining.')
@@ -686,6 +727,67 @@ RSpec.describe Lich::DragonRealms::DRCC do
       game('put #5550001 in my duffel bag', put_away) { hands }
       expect(check).to be(true)
       expect(sent).to eq(['get my pins from my duffel bag', 'count #5550001', 'put #5550001 in my duffel bag', 'walk 8775'])
+    end
+  end
+
+  # The name check_consumables replaces a worn-out "#<id>" consumable by: the
+  # first word of the hand's name before its GameObj noun. Item names and
+  # nouns are real (noun= from the 2026-11 logs).
+  describe '.crafting_held_name' do
+    def held_name(id, noun, name)
+      hands(right: [id, noun, name])
+      described_class.send(:crafting_held_name, "##{id}")
+    end
+
+    # Names that do not end in their noun, as logged in room and container
+    # listings (no logged hand tag has this shape): first and last word
+    # would give "bone audrualm", "sturdy bristles", "big stripes" and
+    # "bucket gloop".
+    [
+      ['saw', 'bone saw with a blade edged in audrualm', 'bone saw'],
+      ['brush', 'sturdy wire brush with stiff magenta bristles', 'sturdy brush'],
+      ['oil', 'big flask of oil painted with viridian stripes', 'big oil'],
+      ['bucket', 'bucket of viscous gloop', 'bucket']
+    ].each do |noun, name, expected|
+      it "gives #{expected.inspect} for #{name.inspect} (noun #{noun})" do
+        expect(held_name('9201', noun, name)).to eq(expected)
+      end
+    end
+
+    # Hand tags as logged: short, ending in the noun. The name is the one
+    # DRC.fix_dr_bullshit gave before.
+    [
+      ['pins', 'straight pins', 'straight pins'],
+      ['pins', 'sepia pins', 'sepia pins'],
+      ['pouch', 'soft gem pouch', 'soft pouch'],
+      ['shaper', 'jagged wood shaper', 'jagged shaper'],
+      ['invitation', 'Hollow Eve invitation', 'Hollow invitation'],
+      ["hhr'ata", "hhr'ata", "hhr'ata"]
+    ].each do |noun, name, expected|
+      it "gives #{expected.inspect} for the hand tag #{name.inspect}, as before" do
+        expect(held_name('9202', noun, name)).to eq(expected)
+        expect(drc.fix_dr_bullshit(name)).to eq(expected)
+      end
+    end
+
+    it 'matches the first word to the noun ignoring case' do
+      expect(held_name('9203', 'bucket', 'Bucket of viscous gloop')).to eq('bucket')
+    end
+
+    it 'reads the left hand too' do
+      hands(right: pins, left: ['9204', 'saw', 'bone saw with a blade edged in audrualm'])
+      expect(described_class.send(:crafting_held_name, '#9204')).to eq('bone saw')
+    end
+
+    [nil, '', '  '].each do |noun|
+      it "gives nil for a held id whose noun is #{noun.inspect}" do
+        expect(held_name('9205', noun, 'straight pins')).to be_nil
+      end
+    end
+
+    it 'gives nil when no hand holds the id' do
+      hands(right: pins)
+      expect(described_class.send(:crafting_held_name, '#9999')).to be_nil
     end
   end
 end
