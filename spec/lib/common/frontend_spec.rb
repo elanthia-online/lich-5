@@ -54,7 +54,7 @@ RSpec.describe Lich::Common::Frontend do
     it 'keeps the ordered legacy capability constants unchanged' do
       expect(frontend::XML_FRONTENDS).to eq(%w[stormfront profanity genie frostbite saga wrayth])
       expect(frontend::GSL_FRONTENDS).to eq(%w[wizard avalon])
-      expect(frontend::STREAM_FRONTENDS).to eq(%w[stormfront profanity saga wrayth])
+      expect(frontend::STREAM_FRONTENDS).to eq(%w[stormfront profanity genie saga wrayth])
       expect(frontend::MONO_FRONTENDS).to eq(%w[stormfront genie saga wrayth])
       expect(frontend::SENTINEL_FRONTENDS).to eq(%w[saga])
     end
@@ -348,8 +348,8 @@ RSpec.describe Lich::Common::Frontend do
       expect(FE::STREAM_FRONTENDS).not_to include('frostbite')
     end
 
-    it 'does not include genie' do
-      expect(FE::STREAM_FRONTENDS).not_to include('genie')
+    it 'includes genie' do
+      expect(FE::STREAM_FRONTENDS).to include('genie')
     end
 
     it 'is a subset of XML_FRONTENDS' do
@@ -513,10 +513,6 @@ RSpec.describe Lich::Common::Frontend do
 
       it "returns false for 'frostbite'" do
         expect(frontend.supports_streams?('frostbite')).to be false
-      end
-
-      it "returns false for 'genie'" do
-        expect(frontend.supports_streams?('genie')).to be false
       end
 
       it "returns false for 'wizard'" do
@@ -1229,8 +1225,8 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'returns frontends that have :streams capability' do
       result = frontend.frontends_with_capability(:streams)
-      expect(result).to include('wrayth', 'stormfront', 'profanity')
-      expect(result).not_to include('genie', 'frostbite', 'wizard')
+      expect(result).to include('wrayth', 'stormfront', 'profanity', 'genie')
+      expect(result).not_to include('frostbite', 'wizard')
     end
 
     it 'returns frontends that have :room_window capability' do
