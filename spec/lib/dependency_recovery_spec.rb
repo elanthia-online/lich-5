@@ -26,6 +26,7 @@ RSpec.describe Lich::DependencyRecovery do
 
   before do
     allow(Gem::Specification).to receive(:find_all_by_name).and_return([])
+    allow(Gem::Specification).to receive(:latest_spec_for).and_return(nil)
     allow(Gem::Specification).to receive(:reset)
     allow(Gem).to receive(:clear_paths)
   end
@@ -1660,12 +1661,14 @@ RSpec.describe Lich::DependencyRecovery do
     context 'when a newer version of the gem is installed (RubyGems then skips the plugins check)' do
       let(:plugins) { File.join(gem_home, 'plugins') }
 
-      def installed_sqlite3(version)
+      # Stubs what Gem::Installer#generate_plugins consults.
+      def installed_sqlite3(version, platform: 'ruby')
         spec = Gem::Specification.new do |entry|
           entry.name = 'sqlite3'
           entry.version = version
+          entry.platform = platform
         end
-        allow(Gem::Specification).to receive(:find_all_by_name).with('sqlite3').and_return([spec])
+        allow(Gem::Specification).to receive(:latest_spec_for).with('sqlite3').and_return(spec)
       end
 
       before do
@@ -1693,6 +1696,15 @@ RSpec.describe Lich::DependencyRecovery do
         expect(launcher).not_to have_received(:call)
       end
 
+      # find_all_by_name keeps only specs for this platform; latest_spec_for,
+      # which RubyGems consults, counts every platform.
+      it 'follows RubyGems when the newer installed version is for another platform' do
+        installed_sqlite3('9.0', platform: 'java')
+        expect(Gem::Specification.find_all_by_name('sqlite3')).to be_empty
+
+        expect(preflight_recovery(built_gem).recover(['sqlite3'], force: true)).to be_success
+      end
+
       it 'refuses when the installed version is the same, since RubyGems skips only for a newer one' do
         installed_sqlite3('1.2.3')
         result = preflight_recovery(built_gem).recover(['sqlite3'], force: true)
@@ -1706,6 +1718,8 @@ RSpec.describe Lich::DependencyRecovery do
 
       before do
         skip 'requires native Windows file attributes' unless Gem.win_platform?
+        # Real RubyGems runs here, and it consults latest_spec_for itself.
+        allow(Gem::Specification).to receive(:latest_spec_for).and_call_original
         FileUtils.mkdir_p(plugins)
         expect(system('attrib', '+R', plugins.tr('/', '\\'), out: File::NULL)).to be(true)
       end

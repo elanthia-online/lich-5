@@ -478,7 +478,10 @@ module Lich
     end
 
     # Gem::Installer#generate_plugins returns early, before checking the
-    # plugins directory, when a newer version of the gem is installed.
+    # plugins directory, when Gem::Specification.latest_spec_for(name) is
+    # newer than the gem being installed. This asks the same question the
+    # same way: latest_spec_for counts installed specs of any platform,
+    # where find_all_by_name keeps only those matching this one.
     # @param staged_units [Array<Hash>]
     # @param keeps_installed_newer [Boolean]
     # @return [Boolean] whether installing some staged package checks plugins
@@ -486,8 +489,8 @@ module Lich
       return true unless keeps_installed_newer
 
       staged_units.flat_map { |staged| staged.fetch(:unit).fetch('packages') }.any? do |package|
-        version = Gem::Version.new(package.fetch('version'))
-        Gem::Specification.find_all_by_name(package.fetch('name')).none? { |spec| spec.version > version }
+        latest = Gem::Specification.latest_spec_for(package.fetch('name'))
+        !(latest && latest.version > Gem::Version.new(package.fetch('version')))
       end
     end
 
