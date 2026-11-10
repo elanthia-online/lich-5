@@ -540,13 +540,13 @@ module Lich
       end
     end
 
-    # @param dir [String]
+    # @param dir [String] the directory, or the lock file, that refused the write
     # @param error [SystemCallError]
     # @return [String] one line naming +dir+ and the refusal
     def denied_dir_message(dir, error)
       shown = Gem.win_platform? ? dir.tr('/', '\\') : dir
       reason = error.class.name.split('::').last
-      "Writing to #{shown} was denied (#{reason}), so gems cannot be installed. Give your account permission to modify that folder."
+      "Writing to #{shown} was denied (#{reason}), so gems cannot be installed. Give your account permission to modify it."
     end
 
     # A unit containing native gems cannot safely be overwritten while the
@@ -1134,16 +1134,31 @@ module Lich
     # @yield installation work
     # @return [Object]
     def with_install_lock
-      FileUtils.mkdir_p(@gem_home)
-      lock_path = File.join(@gem_home, LOCK_FILENAME)
-      File.open(lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
+      lock = open_install_lock
+      begin
         lock.flock(File::LOCK_EX)
         yield
       ensure
-        lock.flock(File::LOCK_UN) if lock
+        lock.flock(File::LOCK_UN)
+        lock.close
       end
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot write Ruby runtime gem directory #{@gem_home}: #{e.message}"
+    end
+
+    # Opens (creating it if needed) the lock file in the gem home. A gem home
+    # that refuses this is reported like the preflight's refusals, since it
+    # is the first write a repair makes; often no lock file exists yet.
+    # Errors raised while the lock is held keep #with_install_lock's message.
+    # @return [File]
+    # @raise [GemHomeNotWritableError] if the lock file cannot be opened for writing
+    def open_install_lock
+      FileUtils.mkdir_p(@gem_home)
+      lock_path = File.join(@gem_home, LOCK_FILENAME)
+      File.open(lock_path, File::RDWR | File::CREAT, 0o600)
+    rescue Errno::EACCES, Errno::EPERM, Errno::EROFS => e
+      denied = lock_path && File.exist?(lock_path) ? lock_path : nearest_existing_dir(@gem_home)
+      raise GemHomeNotWritableError, denied_dir_message(denied, e)
     end
 
     # Uses Lich's own temp directory rather than the platform AppData/system

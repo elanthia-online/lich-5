@@ -1268,7 +1268,8 @@ RSpec.describe Lich::DependencyRecovery do
       expect(File).to receive(:open).with(File.join(gem_home, described_class::LOCK_FILENAME), anything, anything).and_raise(Errno::EACCES)
       expect(subject).not_to receive(:schedule_runtime_replacement)
       result = subject.recover(['sqlite3'], restart: true)
-      expect(result.error).to include('Cannot write Ruby runtime gem directory')
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.error).to eq("Writing to #{gem_home} was denied (EACCES), so gems cannot be installed. Give your account permission to modify it.")
       expect(installed).to be_empty
     end
 
@@ -1533,7 +1534,7 @@ RSpec.describe Lich::DependencyRecovery do
       result = preflight_recovery(built_gem).recover(['sqlite3'])
 
       expect(result.error_kind).to eq(:gem_home_not_writable)
-      expect(result.error).to eq("Writing to #{gems} was denied (EACCES), so gems cannot be installed. Give your account permission to modify that folder.")
+      expect(result.error).to eq("Writing to #{gems} was denied (EACCES), so gems cannot be installed. Give your account permission to modify it.")
       expect(installed).to be_empty
     end
 
@@ -1550,6 +1551,72 @@ RSpec.describe Lich::DependencyRecovery do
       ensure
         File.chmod(0o755, gem_home)
       end
+    end
+
+    # 5.24.0's first startup repair is usually what creates the lock file,
+    # so a gem home that refuses writes most often has none yet.
+    it 'reports a gem home that refuses the lock file it has not created yet, before the helper starts' do
+      skip_unless_posix_permissions
+      File.chmod(0o555, gem_home)
+      begin
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true, preserve_newer: true)
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(result.error).to eq("Writing to #{gem_home} was denied (EACCES), so gems cannot be installed. Give your account permission to modify it.")
+        expect(launcher).not_to have_received(:call)
+      ensure
+        File.chmod(0o755, gem_home)
+      end
+      expect(File.exist?(File.join(gem_home, described_class::LOCK_FILENAME))).to be(false)
+    end
+
+    it 'names the lock file itself when it exists but cannot be opened for writing' do
+      skip_unless_posix_permissions
+      lock = File.join(gem_home, described_class::LOCK_FILENAME)
+      File.write(lock, '')
+      File.chmod(0o444, lock)
+
+      result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.error).to start_with("Writing to #{lock} was denied (EACCES)")
+      expect(launcher).not_to have_received(:call)
+    end
+
+    it 'names the nearest existing parent when the gem home cannot be created' do
+      skip_unless_posix_permissions
+      parent = Dir.mktmpdir('preflight-parent', recovery_temp_dir)
+      File.chmod(0o555, parent)
+      missing_home = File.join(parent, 'gems', '4.0.0')
+      subject = described_class.new(gem_home: missing_home, temp_dir: recovery_temp_dir)
+      begin
+        expect { subject.send(:with_install_lock) { raise 'lock was acquired' } }
+          .to raise_error(described_class::GemHomeNotWritableError, /\AWriting to #{Regexp.escape(parent)} was denied/)
+      ensure
+        File.chmod(0o755, parent)
+      end
+    end
+
+    it 'keeps the old message for a refusal while the lock is held, such as the helper moving a gem aside' do
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir)
+
+      expect { subject.send(:with_install_lock) { raise Errno::EACCES, 'gems/sqlite3-1.2.3' } }
+        .to raise_error(described_class::Error, /\ACannot write Ruby runtime gem directory #{Regexp.escape(gem_home)}/) { |error|
+          expect(error).not_to be_a(described_class::GemHomeNotWritableError)
+        }
+    end
+
+    it 'closes the lock file after the block, including when it raises' do
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir)
+      opened = []
+      allow(File).to receive(:open).and_wrap_original do |original, *args, **kw|
+        original.call(*args, **kw).tap { |file| opened << file }
+      end
+
+      subject.send(:with_install_lock) { nil }
+      expect { subject.send(:with_install_lock) { raise ArgumentError, 'boom' } }.to raise_error(ArgumentError)
+
+      expect(opened.size).to eq(2)
+      expect(opened).to all(be_closed)
     end
 
     it 'does not refuse a non-plugins directory only because File.writable? is false (RubyGems writes into it anyway)' do
