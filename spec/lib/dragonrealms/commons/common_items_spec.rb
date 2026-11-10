@@ -2630,7 +2630,10 @@ RSpec.describe Lich::DragonRealms::DRCI do
           case command
           when /^get my (\S+)/ then handle_get(Regexp.last_match(1))
           when /^(?:put|drop|feed) my (\S+)/ then handle_dispose(command, Regexp.last_match(1))
-          when /^tap my / then 'You drum your fingers on your shroud.'
+          # What bput returns for a worn bucket's flush: the first TAP of a
+          # pair primes it, the second flushes it (the drum line before each
+          # is not waited for).
+          when /^tap my / then (@taps = @taps.to_i + 1).odd? ? '[OOC: TAP the bucket again within the next 30 seconds to flush it.].' : 'After a moment, a dull *THUD* echoes from within the bucket.'
           else ''
           end
         end

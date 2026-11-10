@@ -119,11 +119,34 @@ module Lich
         /perhaps try doing that again/
       ].freeze
 
+      # The worn trash can verb's first lines. dispose_trash no longer waits for
+      # these (see {flush_worn_trashcan}); kept for scripts that refer to them.
       WORN_TRASHCAN_VERB_PATTERNS = [
         /^You drum your fingers/,
         /^You pull a lever/,
         /^You poke your finger around/
       ].freeze
+
+      # A worn bucket's flush, from the TAP that empties it:
+      #   You drum your fingers on the bucket rhythmically.
+      #   After a moment, a dull *THUD* echoes from within the bucket.
+      # The first TAP after a put usually only primes it ({WORN_TRASHCAN_TAP_AGAIN});
+      # a TAP within 30 seconds of another flushes at once.
+      # Anchored, with optional asterisks (an older capture has "a dull THUD").
+      WORN_TRASHCAN_FLUSHED = /^After a moment, a dull \*?THUD\*? echoes from within/.freeze
+      # The first TAP of a pair: "[OOC: TAP the bucket again within the next 30
+      # seconds to flush it.]".
+      WORN_TRASHCAN_TAP_AGAIN = /again within the next \d+ seconds to flush it/.freeze
+      # Replies to the verb of a worn trash can whose flush has no known
+      # confirming line. They are worked as before: the verb twice, then
+      # counted as emptied.
+      WORN_TRASHCAN_UNCONFIRMED = [
+        /^You pull a lever/,
+        /^You poke your finger around/
+      ].freeze
+      # Pairs of verb uses a worn trash can gets to flush before the item is
+      # taken back out of it.
+      WORN_TRASHCAN_FLUSH_ROUNDS = 2
 
       GET_ITEM_SUCCESS_PATTERNS = [
         /you draw (?!\w+'s wounds)/i,
@@ -704,6 +727,12 @@ module Lich
       # room meta-tagged trashcan, room objects matching known trash
       # receptacles, and finally drops the item on the ground.
       #
+      # A worn bucket's flush is confirmed by its "*THUD*". When it doesn't
+      # flush, the item is taken back out and goes on to the room's trash or,
+      # failing that, the floor here, with a message saying so: left in the
+      # bucket, it would be thrown out onto the floor about five minutes
+      # later, wherever the character is by then.
+      #
       # @param item [String] item noun to dispose of
       # @param worn_trashcan [String, nil] worn container for trash (e.g., "shroud")
       # @param worn_trashcan_verb [String, nil] verb to activate the worn trashcan after use
@@ -727,26 +756,93 @@ module Lich
         return false if dispose_retries_exhausted?(retries)
         return unless DRCI.get_item_if_not_held?(item)
 
-        dispose_held_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries)
+        before = dispose_item_hands(item).values.map(&:first).compact
+        disposed = dispose_held_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries)
+        (before - held_ids).each { |id| note_thrown_away(id) } if disposed == true
+        disposed
+      end
+
+      # Most ids {thrown_away?} keeps; the oldest goes first.
+      # One taskmaster bin can be up to 300 pieces.
+      THROWN_AWAY_IDS_MAX = 512
+      THROWN_AWAY_LOCK = Mutex.new
+
+      # Records that the item with this id was thrown away, so code that
+      # remembers item ids (DRCC's crafting memo) never fetches it again: a
+      # GET by its id would take it back out of a trash can that didn't
+      # flush, or up off the floor. {dispose_trash} calls this for every item
+      # it disposes of; a script that bins an item by itself should too.
+      #
+      # @param id [String, Integer] the item's id, with or without "#"
+      # @return [void]
+      def note_thrown_away(id)
+        id = id.to_s.delete_prefix('#')
+        return if id.empty?
+
+        THROWN_AWAY_LOCK.synchronize do
+          @thrown_away_ids ||= []
+          @thrown_away_ids.delete(id)
+          @thrown_away_ids << id
+          @thrown_away_ids.shift while @thrown_away_ids.size > THROWN_AWAY_IDS_MAX
+        end
+      end
+
+      # Forgets every id {note_thrown_away} recorded.
+      #
+      # @return [void]
+      # @api private
+      def clear_thrown_away
+        THROWN_AWAY_LOCK.synchronize { @thrown_away_ids = [] }
+      end
+
+      # Whether the item with this id was thrown away ({note_thrown_away}).
+      #
+      # @param id [String, Integer] the item's id, with or without "#"
+      # @return [Boolean]
+      def thrown_away?(id)
+        id = id.to_s.delete_prefix('#')
+        THROWN_AWAY_LOCK.synchronize { Array(@thrown_away_ids).include?(id) }
       end
 
       # Disposes of an item already in hand. Never GETs: see {dispose_trash}.
       #
       # @return [Boolean] true if disposed, false if not
       # @api private
-      def dispose_held_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil, retries:)
+      #
+      # A worn trash can with a verb is flushed with it ({flush_worn_trashcan}).
+      # When a bucket doesn't flush, the item is taken back out
+      # ({take_back_unflushed}), because a bucket throws an unflushed item out
+      # onto the floor about five minutes later, wherever its wearer is by
+      # then. The item then goes on to the room's trash and, failing that, is
+      # dropped here, with a message saying so and why.
+      #
+      # @param unflushed [Hash, nil] set once the worn trash can failed to
+      #   flush: :trashcan (as configured), :noun (its GameObj noun, or nil)
+      #   and :why (what the verb got). Room receptacles with that noun are
+      #   skipped, since "put ... in bucket" could reach the worn bucket again.
+      def dispose_held_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil, retries:, unflushed: nil)
         return false if dispose_retries_exhausted?(retries)
 
         if worn_trashcan
+          hands_before = dispose_item_hands(item).values
           result = execute_dispose_command("put #{item_ref(item)} in #{item_ref(worn_trashcan)}", item, retries, worn_trashcan, worn_trashcan_verb)
           if result == :success
-            if worn_trashcan_verb
-              DRC.bput("#{worn_trashcan_verb} #{item_ref(worn_trashcan)}", *WORN_TRASHCAN_VERB_PATTERNS)
-              DRC.bput("#{worn_trashcan_verb} #{item_ref(worn_trashcan)}", *WORN_TRASHCAN_VERB_PATTERNS)
-            end
-            return true
+            return true unless worn_trashcan_verb
+
+            # The one that left the hands, when the noun is held twice.
+            held = hands_before.find { |id, _name| id && !held_ids.include?(id) } || hands_before.first
+
+            flush = flush_worn_trashcan(worn_trashcan, worn_trashcan_verb)
+            return true if flush == :flushed || flush == :unconfirmed
+
+            unflushed = { trashcan: worn_trashcan, noun: worn_trashcan_noun(worn_trashcan), why: flush, name: (held&.last || item).to_s.sub(/\A(?:an?|some|the) /i, '') }
+            taken = take_back_unflushed(item, held, unflushed)
+            return true unless taken
+
+            item = taken
+          else
+            return result unless result == :failure
           end
-          return result unless result == :failure
         end
 
         # Check for meta:trashcan tag on the room to identify a specific trashcan to use.
@@ -762,9 +858,11 @@ module Lich
             metatag_trash_command = "put #{item_ref(item)} in #{metatag_trashcan}"
           end
 
+          metatag_trash_command = nil if unflushed_receptacle?(metatag_trashcan.split, unflushed)
+
           # gelapod is not here - probably winter move on to next attempt to get rid of
           unless metatag_trash_command.nil?
-            result = execute_dispose_command(metatag_trash_command, item, retries)
+            result = execute_dispose_command(metatag_trash_command, item, retries, unflushed: unflushed)
             return true if result == :success
             return result unless result == :failure
           end
@@ -806,14 +904,17 @@ module Lich
           end
 
           trash_command = "put #{item_ref(item)} in #{trashcan}" unless trashcan == 'gelapod'
+          # After the mapping above: "bucket of viscous gloop" is put in as "bucket".
+          next if unflushed_receptacle?(trashcan.split, unflushed)
 
-          result = execute_dispose_command(trash_command, item, retries)
+          result = execute_dispose_command(trash_command, item, retries, unflushed: unflushed)
           return true if result == :success
           return result unless result == :failure
         end
 
         # No trash bins or not able to put item in a bin, just drop it.
-        result = execute_dispose_command("drop #{item_ref(item)}", item, retries)
+        announce_unflushed_drop(unflushed) if unflushed
+        result = execute_dispose_command("drop #{item_ref(item)}", item, retries, unflushed: unflushed)
         case result
         when :success
           true
@@ -843,11 +944,12 @@ module Lich
       # @param item [String] item being disposed
       # @param retries [Integer] remaining retry attempts
       # @param retry_args [Array] extra args to pass to dispose_held_trash on retry
+      # @param unflushed [Hash, nil] passed to dispose_held_trash on retry
       # @return [Symbol, Boolean] :success, :failure (try the next way), or a
       #   final boolean for dispose_trash to return
       #
       # @api private
-      def execute_dispose_command(command, item, retries, *retry_args)
+      def execute_dispose_command(command, item, retries, *retry_args, unflushed: nil)
         hands_before = dispose_item_hands(item)
         case DRC.bput(command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
         when *DROP_TRASH_SUCCESS_PATTERNS
@@ -859,7 +961,7 @@ module Lich
         when *DROP_TRASH_RETRY_PATTERNS
           return dispose_item_not_held(item) unless in_hands?(item)
 
-          dispose_held_trash(item, *retry_args, retries: retries - 1)
+          dispose_held_trash(item, *retry_args, retries: retries - 1, unflushed: unflushed)
         else
           # No reply matched before bput's timeout. If a hand that held the
           # item now holds something else, count it as disposed. That only
@@ -872,6 +974,127 @@ module Lich
           Lich::Messaging.msg("bold", "DRCI: No reply to '#{command}', but '#{item}' has left your hands; treating it as disposed.")
           :success
         end
+      end
+
+      # Uses a worn trash can's verb to flush it, a pair at a time, up to
+      # {WORN_TRASHCAN_FLUSH_ROUNDS} pairs. A bucket confirms the flush
+      # ({WORN_TRASHCAN_FLUSHED}); the drum line before it is not waited for,
+      # so bput reads on to the line that says what happened. A trash can
+      # whose replies are {WORN_TRASHCAN_UNCONFIRMED} gets its verb twice and
+      # counts as emptied, as before.
+      #
+      # For a script that puts items in the worn trash can by itself (e.g.
+      # several, then one flush) instead of through {dispose_trash}. Anything
+      # but :flushed or :unconfirmed means the items are still in it; a bucket
+      # throws them out onto the floor about five minutes later, wherever its
+      # wearer is by then.
+      #
+      # @param worn_trashcan [String] the worn trash can
+      # @param verb [String] its verb, e.g. "tap"
+      # @return [Symbol, String] :flushed, :unconfirmed, or what the last use
+      #   of the verb got, for the message: the reply, or "no reply"
+      #
+      # @example
+      #   DRCI.flush_worn_trashcan('bucket', 'tap') #=> :flushed
+      def flush_worn_trashcan(worn_trashcan, verb)
+        command = "#{verb} #{item_ref(worn_trashcan)}"
+        no_effect = /^You #{Regexp.escape(verb)} .+ that you are wearing\./i
+        last = nil
+        WORN_TRASHCAN_FLUSH_ROUNDS.times do
+          2.times do |use|
+            reply = DRC.bput(command, WORN_TRASHCAN_FLUSHED, WORN_TRASHCAN_TAP_AGAIN, no_effect, *WORN_TRASHCAN_UNCONFIRMED)
+            return :flushed if reply.match?(WORN_TRASHCAN_FLUSHED)
+
+            if WORN_TRASHCAN_UNCONFIRMED.any? { |pattern| reply.match?(pattern) }
+              DRC.bput(command, *WORN_TRASHCAN_UNCONFIRMED) if use.zero?
+              return :unconfirmed
+            end
+
+            last = reply.empty? ? 'no reply' : reply
+            break unless reply.match?(WORN_TRASHCAN_TAP_AGAIN)
+          end
+        end
+        last
+      end
+
+      # The GameObj noun of the worn trash can, when exactly one worn item is
+      # it ({carried_ids}); nil otherwise.
+      #
+      # @param worn_trashcan [String]
+      # @return [String, nil]
+      # @api private
+      def worn_trashcan_noun(worn_trashcan)
+        ids = carried_ids(GameObj.inv, worn_trashcan)
+        return nil unless ids.size == 1
+
+        noun = GameObj.inv.find { |obj| held_obj_id(obj) == ids.first }&.noun.to_s
+        noun.empty? ? nil : noun
+      end
+
+      # Takes an item a worn trash can didn't flush back out of it: by its id
+      # when the hands gave one before the put, otherwise by name from the
+      # trash can. Says what happened.
+      #
+      # @param item [String] the item as dispose_trash was given it
+      # @param held [Array, nil] [id, name] of the item before the put
+      # @param unflushed [Hash] see {dispose_held_trash}
+      # @return [String, nil] how to name the item now in hand, or nil when
+      #   it is gone (flushed after all) or could not be taken back
+      # @api private
+      def take_back_unflushed(item, held, unflushed)
+        trashcan = unflushed[:trashcan]
+        id = item.to_s[ITEM_ID_REF_PATTERN, 1] || held&.first
+        ref = id ? "##{id}" : nil
+        command = ref ? "get #{ref}" : "get #{item_ref(item)} from #{item_ref(trashcan)}"
+        name = unflushed[:name]
+        reply = DRC.bput(command, /^You get/, /^You pick up/, /^What were you referring to/, /^I could not find/, /free hand/)
+        if reply.match?(/^What were you referring to|^I could not find/)
+          Lich::Messaging.msg("bold", "DRCI: Your #{trashcan} did not confirm a flush (#{unflushed[:why]}), but the #{name} is no longer there; treating it as disposed.")
+          return nil
+        end
+        if reply.match?(/^You get|^You pick up/) && in_hands?(ref || item)
+          Lich::Messaging.msg("bold", "DRCI: Your #{trashcan} did not flush (#{unflushed[:why]}). Left there, the #{name} would be thrown out onto the floor in about 5 minutes, wherever you are by then. Took it back out to dispose of here instead.")
+          return ref || item
+        end
+
+        Lich::Messaging.msg("bold", "DRCI: Your #{trashcan} did not flush (#{unflushed[:why]}), and the #{name} could not be taken back out ('#{command}': #{reply.empty? ? 'no reply' : reply}). It will be thrown out onto the floor in about 5 minutes, wherever you are by then.")
+        nil
+      end
+
+      # Whether a room receptacle named by +words+ must be skipped because the
+      # worn trash can just failed to flush and shares its noun: an untargeted
+      # "put ... in bucket" could reach the worn bucket again.
+      #
+      # @param words [Array<String>] the receptacle's name, as words
+      # @param unflushed [Hash, nil] see {dispose_held_trash}
+      # @return [Boolean]
+      # @api private
+      def unflushed_receptacle?(words, unflushed)
+        return false unless unflushed && unflushed[:noun]
+        return false unless words.map(&:downcase).include?(unflushed[:noun].downcase)
+
+        name = words.join(' ')
+        skipped = (unflushed[:skipped] ||= [])
+        unless skipped.include?(name)
+          skipped << name
+          Lich::Messaging.msg("bold", "DRCI: Not using the room's #{name}: 'put ... in #{words.last}' could reach your #{unflushed[:trashcan]} again.")
+        end
+        true
+      end
+
+      # Says, before the drop, that an item a worn trash can didn't flush is
+      # being dropped on the floor here, and why. Once per item: a drop
+      # retried after a warning comes back through here.
+      #
+      # @param unflushed [Hash] see {dispose_held_trash}
+      # @return [void]
+      # @api private
+      def announce_unflushed_drop(unflushed)
+        return if unflushed[:announced]
+
+        unflushed[:announced] = true
+        room = XMLData.room_title.to_s.gsub(/\A\[+|\]+\z/, '')
+        Lich::Messaging.msg("bold", "DRCI: Dropping the #{unflushed[:name]} on the floor here (#{room}): your #{unflushed[:trashcan]} did not flush (#{unflushed[:why]}) and no trash in this room took it. Otherwise the #{unflushed[:trashcan]} would throw it out in about 5 minutes, wherever you are by then.")
       end
 
       # The hands holding the item, each with what it holds (id and name).
