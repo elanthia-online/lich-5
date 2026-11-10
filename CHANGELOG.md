@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.24.1](https://github.com/elanthia-online/lich-5/compare/v5.24.0...v5.24.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **all:** check the gem home is writable before a gem repair ([#2306](https://github.com/elanthia-online/lich-5/issues/2306)) ([f6f83be](https://github.com/elanthia-online/lich-5/commit/f6f83be9a8a399a99f6d5c1686f8764c130553b1))
+* **all:** retry the Windows snapshot rename Ruby reports as EXDEV ([#2305](https://github.com/elanthia-online/lich-5/issues/2305)) ([3895a62](https://github.com/elanthia-online/lich-5/commit/3895a62fbca3ad98907984d3f44fdd3a77ff3d81))
+* **all:** wait on the Lich process handle before native gem replacement ([#2302](https://github.com/elanthia-online/lich-5/issues/2302)) ([7e359b8](https://github.com/elanthia-online/lich-5/commit/7e359b81b6611a101ad36e3a8b8fcb3258c9834f))
+
 ## [5.24.0](https://github.com/elanthia-online/lich-5/compare/v5.23.0...v5.24.0) (2026-11-09)
 
 
