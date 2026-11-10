@@ -1437,4 +1437,188 @@ RSpec.describe Lich::DependencyRecovery do
       end
     end
   end
+
+  describe 'gem home write preflight' do
+    let(:launcher) { spy('replacement helper') }
+
+    # Builds a real .gem so the executables check reads a genuine spec.
+    def built_gem(executables: [])
+      source = Dir.mktmpdir('preflight-gem-source', recovery_temp_dir)
+      FileUtils.mkdir_p(File.join(source, 'lib'))
+      File.write(File.join(source, 'lib', 'sqlite3.rb'), "# fixture\n")
+      executables.each do |name|
+        FileUtils.mkdir_p(File.join(source, 'exe'))
+        File.write(File.join(source, 'exe', name), "#!/usr/bin/env ruby\n")
+      end
+      spec = Gem::Specification.new do |entry|
+        entry.name = 'sqlite3'
+        entry.version = '1.2.3'
+        entry.summary = 'Preflight fixture'
+        entry.authors = ['Lich contributors']
+        entry.files = ['lib/sqlite3.rb'] + executables.map { |name| "exe/#{name}" }
+        entry.bindir = 'exe'
+        entry.executables = executables
+        entry.license = 'MIT'
+        entry.homepage = 'https://example.test/'
+      end
+      filename = Dir.chdir(source) { Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec) } }
+      File.binread(File.join(source, filename))
+    end
+
+    def preflight_recovery(body)
+      unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: body)
+      recovery(artifacts: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), artifact_url => body },
+               helper_launcher: launcher)
+    end
+
+    def probe_leftovers
+      Dir.glob(File.join(gem_home, '**', '.lich-write-probe-*'), File::FNM_DOTMATCH)
+    end
+
+    def skip_unless_posix_permissions
+      skip 'POSIX permission bits' if Gem.win_platform?
+      skip 'root ignores permission bits' if Process.uid.zero?
+    end
+
+    def lock_dir(path)
+      FileUtils.mkdir_p(path)
+      File.chmod(0o555, path)
+    end
+
+    after do
+      Dir.glob(File.join(gem_home, '**', '*'), File::FNM_DOTMATCH).each do |path|
+        File.chmod(0o755, path) if File.directory?(path) && !File.symlink?(path)
+      end
+    end
+
+    it 'installs when every directory is writable, and leaves no probe files behind' do
+      FileUtils.mkdir_p(File.join(gem_home, 'plugins'))
+      result = preflight_recovery(built_gem).recover(['sqlite3'])
+
+      expect(result).to be_success
+      expect(installed.map(&:first)).to eq(['sqlite3.gem'])
+      expect(probe_leftovers).to be_empty
+    end
+
+    it 'refuses before installing when the plugins directory is not writable, naming it' do
+      skip_unless_posix_permissions
+      plugins = File.join(gem_home, 'plugins')
+      lock_dir(plugins)
+
+      result = preflight_recovery(built_gem).recover(['sqlite3'])
+
+      expect(result).not_to be_success
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.error).to eq("#{plugins} is not writable, so gems cannot be installed. Make it writable for your user (chmod u+w \"#{plugins}\").")
+      expect(installed).to be_empty
+      expect(probe_leftovers).to be_empty
+    end
+
+    it 'refuses before scheduling the replacement helper, so Lich does not exit into a failure' do
+      skip_unless_posix_permissions
+      lock_dir(File.join(gem_home, 'plugins'))
+
+      result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.restart_required).to be_falsey
+      expect(launcher).not_to have_received(:call)
+    end
+
+    it 'refuses when writing into a gem home directory is denied, naming it' do
+      skip_unless_posix_permissions
+      gems = File.join(gem_home, 'gems')
+      lock_dir(gems)
+
+      result = preflight_recovery(built_gem).recover(['sqlite3'])
+
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.error).to eq("Writing to #{gems} was denied (EACCES), so gems cannot be installed. Give your account permission to modify that folder.")
+      expect(installed).to be_empty
+    end
+
+    it 'probes a missing directory through the parent RubyGems would create it in' do
+      skip_unless_posix_permissions
+      # An earlier recovery left its lock file, so the lock opens without
+      # creating anything and the preflight is what meets the denial.
+      File.write(File.join(gem_home, described_class::LOCK_FILENAME), '')
+      File.chmod(0o555, gem_home)
+      begin
+        result = preflight_recovery(built_gem).recover(['sqlite3'])
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(result.error).to start_with("Writing to #{gem_home} was denied")
+      ensure
+        File.chmod(0o755, gem_home)
+      end
+    end
+
+    it 'does not refuse a non-plugins directory only because File.writable? is false (RubyGems writes into it anyway)' do
+      specifications = File.join(gem_home, 'specifications')
+      FileUtils.mkdir_p(specifications)
+      allow(File).to receive(:writable?).and_call_original
+      allow(File).to receive(:writable?).with(specifications).and_return(false)
+
+      expect(preflight_recovery(built_gem).recover(['sqlite3'])).to be_success
+    end
+
+    it 'does not judge a plugins directory that does not exist yet by its parent' do
+      allow(File).to receive(:writable?).and_call_original
+      allow(File).to receive(:writable?).with(gem_home).and_return(false)
+
+      expect(File.exist?(File.join(gem_home, 'plugins'))).to be(false)
+      expect(preflight_recovery(built_gem).recover(['sqlite3'])).to be_success
+    end
+
+    it 'checks the bin directory only when a staged gem has executables' do
+      skip_unless_posix_permissions
+      bin = File.join(gem_home, 'bin')
+      lock_dir(bin)
+
+      expect(preflight_recovery(built_gem).recover(['sqlite3'])).to be_success
+
+      installed.clear
+      result = preflight_recovery(built_gem(executables: ['sqlite3-tool'])).recover(['sqlite3'])
+      expect(result.error_kind).to eq(:gem_home_not_writable)
+      expect(result.error).to start_with("#{bin} is not writable")
+      expect(installed).to be_empty
+    end
+
+    it 'treats a staged package whose spec cannot be read as having no executables' do
+      skip_unless_posix_permissions
+      lock_dir(File.join(gem_home, 'bin'))
+
+      expect(preflight_recovery('not a gem archive').recover(['sqlite3'])).to be_success
+    end
+
+    context 'with Windows messages' do
+      before { allow(Gem).to receive(:win_platform?).and_return(true) }
+
+      it 'names a read-only plugins folder with a backslash path and the attrib command to clear it' do
+        plugins = File.join(gem_home, 'plugins')
+        FileUtils.mkdir_p(plugins)
+        allow(File).to receive(:writable?).and_call_original
+        allow(File).to receive(:writable?).with(plugins).and_return(false)
+
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+        native = plugins.tr('/', '\\')
+        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Clear it with: attrib -R \"#{native}\"")
+        expect(result.error.lines.size).to eq(1)
+        expect(launcher).not_to have_received(:call)
+      end
+
+      it 'names a denied folder with a backslash path' do
+        gems = File.join(gem_home, 'gems')
+        FileUtils.mkdir_p(gems)
+        allow(File).to receive(:open).and_call_original
+        allow(File).to receive(:open).with(start_with(File.join(gems, '.lich-write-probe-')), anything).and_raise(Errno::EACCES)
+
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(result.error).to start_with("Writing to #{gems.tr('/', '\\')} was denied (EACCES)")
+        expect(launcher).not_to have_received(:call)
+      end
+    end
+  end
 end

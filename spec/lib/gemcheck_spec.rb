@@ -146,6 +146,18 @@ RSpec.describe Lich::GemCheck do
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
+      it 'preserves the unwritable gem home type through Windows startup failure reporting' do
+        check.needed = ['sqlite3']
+        allow(recovery).to receive(:recover).and_return(
+          Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'C:\\gems\\plugins is marked read-only', error_kind: :gem_home_not_writable)
+        )
+        expect(described_class).to receive(:alert) do |**args|
+          expect(args.fetch(:error)).to be_a(Lich::DependencyRecovery::GemHomeNotWritableError)
+          expect(args.fetch(:error).message).to eq('C:\\gems\\plugins is marked read-only')
+        end
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+      end
+
       it 'does not repair or continue when consent is refused' do
         check.needed = ['sqlite3']
         allow(described_class).to receive(:recovery_units_approved?).and_return(false)
@@ -817,6 +829,19 @@ RSpec.describe Lich::GemCheck do
       expect(body).not_to include('reinstall', "You're missing")
       expect(described_class).to receive(:alert_windows).with(body, download: false)
       described_class.alert(error: error)
+    end
+
+    it 'names the unwritable gem folder fix without offering an installer' do
+      error = Lich::DependencyRecovery::GemHomeNotWritableError.new(
+        'C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins is marked read-only, so gems cannot be installed. ' \
+        'Clear it with: attrib -R "C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins"'
+      )
+      body = described_class.build_alert_body(['sqlite3'], error)
+      expect(body).to start_with('Lich cannot write to its Ruby gem folder')
+      expect(body).to include('attrib -R "C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins"')
+      expect(body).not_to include("You're missing", 'reinstall')
+      expect(described_class).to receive(:alert_windows).with(body, download: false)
+      described_class.alert(error: error, missing: ['sqlite3'])
     end
 
     it 'explains missing server coverage without offering an installer' do
