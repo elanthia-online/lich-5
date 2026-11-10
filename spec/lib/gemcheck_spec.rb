@@ -889,8 +889,8 @@ RSpec.describe Lich::GemCheck do
     it 'explains an unsupported runtime with manual install guidance and the installer link' do
       error = Lich::AcceptedGemPolicy::UnsupportedRuntimeError.new('manifest has no target for Ruby 4.0 on aarch64-mingw-ucrt')
       body = described_class.build_alert_body(['ox'], error)
-      expect(body).to start_with('Automatic gem repair is not available for this Ruby')
-      expect(body).to include('gem install', 'x64 Ruby4Lich5 installer', 'Missing gems:', 'no target')
+      expect(body).to start_with("Automatic gem repair is not available for Ruby #{RUBY_VERSION} on #{Gem::Platform.local}.")
+      expect(body).to include('gem install', 'Ruby4Lich5 installer (on ARM64, Windows 11 only)', 'Missing gems:', 'no target')
       expect(body).not_to include('release maintainer')
       expect(described_class).to receive(:alert_windows).with(body, download: true)
       described_class.alert(error: error, missing: ['ox'])

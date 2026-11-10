@@ -298,8 +298,15 @@ module Lich
     end
 
     def target_for(manifest)
-      targets = manifest.fetch('targets').select do |candidate|
-        candidate.is_a?(Hash) && candidate['ruby_abi'] == ruby_abi && candidate['platform'] == Gem::Platform.local.to_s
+      all_targets = manifest.fetch('targets')
+      # Only a well-formed target list may report "no target for this
+      # runtime"; anything malformed stays a fail-closed invalid policy.
+      raise Error, 'manifest targets must not be empty' if all_targets.empty?
+      unless all_targets.all? { |candidate| candidate.is_a?(Hash) && candidate['ruby_abi'].is_a?(String) && candidate['platform'].is_a?(String) }
+        raise Error, 'manifest targets must each name a String ruby_abi and platform'
+      end
+      targets = all_targets.select do |candidate|
+        candidate['ruby_abi'] == ruby_abi && candidate['platform'] == Gem::Platform.local.to_s
       end
       raise UnsupportedRuntimeError, "manifest has no target for Ruby #{ruby_abi} on #{Gem::Platform.local}" if targets.empty?
       raise Error, 'manifest has duplicate targets for this runtime' unless targets.length == 1

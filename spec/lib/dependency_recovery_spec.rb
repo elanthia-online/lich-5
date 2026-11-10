@@ -1191,6 +1191,22 @@ RSpec.describe Lich::DependencyRecovery do
       expect(subject.policy_plan(['sqlite3']).error_kind).to eq(:unsupported_runtime)
     end
 
+    {
+      'an empty targets list'       => ->(targets) { targets.clear },
+      'a bare string target'        => ->(targets) { targets << 'x64-mingw-ucrt' },
+      'a numeric ruby_abi'          => ->(targets) { targets << targets.first.merge('ruby_abi' => 4.0, 'platform' => 'other-platform') },
+      'a target without a platform' => ->(targets) { targets << targets.first.except('platform') }
+    }.each do |shape, mutate|
+      it "keeps #{shape} an invalid policy, not an unsupported runtime" do
+        data = JSON.parse(manifest)
+        mutate.call(data['targets'])
+        plan = recovery(artifacts: { manifest_url => JSON.generate(data) }).policy_plan(['sqlite3'])
+        expect(plan.error_kind).to eq(:invalid)
+        expect(plan.error).not_to include('has no target')
+        expect(installed).to be_empty
+      end
+    end
+
     it 'keeps duplicate applicable targets an invalid policy, not an unsupported runtime' do
       data = JSON.parse(manifest)
       data['targets'] << data['targets'].first.dup

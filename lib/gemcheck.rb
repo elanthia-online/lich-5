@@ -388,8 +388,8 @@ module Lich
       when AcceptedGemPolicy::AcquisitionError
         "Lich could not retrieve the accepted runtime policy.\nCheck your network connection and retry. Startup requires reachable policy."
       when AcceptedGemPolicy::UnsupportedRuntimeError
-        "Automatic gem repair is not available for this Ruby (#{Gem::Platform.local}).\n" \
-          "Install the missing gems with 'gem install', or (Windows 11) use the x64 Ruby4Lich5 installer."
+        "Automatic gem repair is not available for Ruby #{RUBY_VERSION} on #{Gem::Platform.local}.\n" \
+          "Install the missing gems with 'gem install', or install Ruby with the Ruby4Lich5 installer (on ARM64, Windows 11 only)."
       when AcceptedGemPolicy::CoverageError
         "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
       when AcceptedGemPolicy::InvalidPolicyError
