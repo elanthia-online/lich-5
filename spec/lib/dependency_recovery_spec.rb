@@ -1284,4 +1284,157 @@ RSpec.describe Lich::DependencyRecovery do
       expect(File.read(newer.loaded_from)).to eq('newer registration')
     end
   end
+
+  describe '#wait_for_parent_exit' do
+    # Mirrors WindowsProcessApi: open returns [handle, nil] or [nil, error],
+    # wait returns [result, error], close takes the handle.
+    let(:fake_api_class) do
+      Class.new do
+        attr_reader :calls
+
+        def initialize(open:, wait: nil)
+          @open = open
+          @wait = wait
+          @calls = []
+        end
+
+        def open(pid)
+          @calls << [:open, pid]
+          @open
+        end
+
+        def wait(handle, milliseconds)
+          @calls << [:wait, handle, milliseconds]
+          raise @wait if @wait.is_a?(Exception)
+
+          @wait
+        end
+
+        def close(handle)
+          @calls << [:close, handle]
+        end
+      end
+    end
+    let(:api_constants) { described_class::WindowsProcessApi }
+
+    def waiter(api)
+      described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir, windows_process_api: api)
+    end
+
+    context 'on Windows (stubbed kernel32)' do
+      before do
+        allow(Gem).to receive(:win_platform?).and_return(true)
+        expect(Process).not_to receive(:kill)
+      end
+
+      it 'returns once the process handle is signalled, and closes it' do
+        api = fake_api_class.new(open: [:handle, nil], wait: [api_constants::WAIT_OBJECT_0, 0])
+        waiter(api).send(:wait_for_parent_exit, '4242')
+        expect(api.calls).to eq([[:open, 4242], [:wait, :handle, 120_000], [:close, :handle]])
+      end
+
+      it 'converts a fractional timeout to whole milliseconds without rounding down to zero' do
+        api = fake_api_class.new(open: [:handle, nil], wait: [api_constants::WAIT_OBJECT_0, 0])
+        waiter(api).send(:wait_for_parent_exit, 1, timeout: 0.0001)
+        expect(api.calls[1]).to eq([:wait, :handle, 1])
+      end
+
+      it 'treats a process id that names no process as already exited' do
+        api = fake_api_class.new(open: [nil, api_constants::ERROR_INVALID_PARAMETER])
+        waiter(api).send(:wait_for_parent_exit, 4242)
+        expect(api.calls).to eq([[:open, 4242]])
+      end
+
+      it 'fails with the Windows error when the process cannot be opened for another reason' do
+        api = fake_api_class.new(open: [nil, 5])
+        expect { waiter(api).send(:wait_for_parent_exit, 4242) }
+          .to raise_error(described_class::Error, /could not open Lich process 4242.*Windows error 5/)
+        expect(api.calls).to eq([[:open, 4242]])
+      end
+
+      it 'keeps the existing timeout message when Lich is still running, and closes the handle' do
+        api = fake_api_class.new(open: [:handle, nil], wait: [api_constants::WAIT_TIMEOUT, 0])
+        expect { waiter(api).send(:wait_for_parent_exit, 4242) }
+          .to raise_error(described_class::Error, 'timed out waiting for Lich to exit before native gem replacement')
+        expect(api.calls.last).to eq([:close, :handle])
+      end
+
+      it 'fails with the wait result and Windows error when the wait itself fails, and closes the handle' do
+        api = fake_api_class.new(open: [:handle, nil], wait: [0xFFFF_FFFF, 6])
+        expect { waiter(api).send(:wait_for_parent_exit, 4242) }
+          .to raise_error(described_class::Error, /could not wait for Lich process 4242.*wait result 4294967295, Windows error 6/)
+        expect(api.calls.last).to eq([:close, :handle])
+      end
+
+      it 'closes the handle when the wait raises' do
+        api = fake_api_class.new(open: [:handle, nil], wait: Interrupt.new)
+        expect { waiter(api).send(:wait_for_parent_exit, 4242) }.to raise_error(Interrupt)
+        expect(api.calls.last).to eq([:close, :handle])
+      end
+
+      it 'rejects a parent pid that is not an integer before calling Windows' do
+        api = fake_api_class.new(open: [:handle, nil])
+        expect { waiter(api).send(:wait_for_parent_exit, 'not-a-pid') }.to raise_error(ArgumentError)
+        expect(api.calls).to be_empty
+      end
+    end
+
+    context 'with native Windows processes' do
+      before { skip 'requires native Windows process handles' unless Gem.win_platform? }
+
+      it 'returns for an exited process that Process.kill(0) still reports as running' do
+        # Ruby keeps a spawned child's handle open until Process.wait, the
+        # same way any other holder (a launcher, a console host) keeps an
+        # exited Lich openable. This is the state the old kill(0) loop
+        # mistook for a running Lich.
+        child = Process.spawn(RbConfig.ruby, '-e', 'exit 7')
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        waiter(described_class::WindowsProcessApi).send(:wait_for_parent_exit, child, timeout: 30)
+
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 30
+        expect(Process.kill(0, child)).to eq(1)
+        Process.wait(child)
+        expect($?.exitstatus).to eq(7)
+      end
+
+      it 'times out while the process is still running' do
+        child = Process.spawn(RbConfig.ruby, '-e', 'sleep 60')
+        begin
+          expect { waiter(described_class::WindowsProcessApi).send(:wait_for_parent_exit, child, timeout: 0.5) }
+            .to raise_error(described_class::Error, /timed out waiting for Lich to exit/)
+        ensure
+          Process.kill('KILL', child) rescue nil
+          Process.wait(child) rescue nil
+        end
+      end
+
+      it 'returns at once for a process id that names no process' do
+        child = Process.spawn(RbConfig.ruby, '-e', 'exit 0')
+        Process.wait(child)
+        waiter(described_class::WindowsProcessApi).send(:wait_for_parent_exit, child, timeout: 30)
+      end
+    end
+
+    context 'off Windows' do
+      before { skip 'covers the non-Windows polling path' if Gem.win_platform? }
+
+      it 'returns once the process is gone' do
+        child = Process.spawn(RbConfig.ruby, '-e', 'exit 0')
+        Process.wait(child)
+        waiter(fake_api_class.new(open: [:unused, nil])).send(:wait_for_parent_exit, child, timeout: 5)
+      end
+
+      it 'times out while the process is still running' do
+        child = Process.spawn(RbConfig.ruby, '-e', 'sleep 60')
+        begin
+          expect { waiter(fake_api_class.new(open: [:unused, nil])).send(:wait_for_parent_exit, child, timeout: 0.3) }
+            .to raise_error(described_class::Error, 'timed out waiting for Lich to exit before native gem replacement')
+        ensure
+          Process.kill('KILL', child) rescue nil
+          Process.wait(child) rescue nil
+        end
+      end
+    end
+  end
 end

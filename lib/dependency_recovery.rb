@@ -34,6 +34,7 @@ module Lich
     DOWNLOAD_TIMEOUT_SECONDS = 300
     MAX_MANIFEST_BYTES = 5 * 1024 * 1024
     NATIVE_LOAD_TIMEOUT_SECONDS = 60
+    PARENT_EXIT_TIMEOUT_SECONDS = 120
     SHA256_PATTERN = /\Asha256:[0-9a-f]{64}\z/
     SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
@@ -60,6 +61,62 @@ module Lich
     class Error < StandardError; end
     class StagingTimeoutError < Error; end
 
+    # kernel32 calls the replacement helper uses to wait for Lich to exit.
+    #
+    # Ruby's Process.kill(0, pid) on Windows only checks that OpenProcess
+    # succeeds. An exited process stays openable while any other process
+    # still holds a handle to it, so polling kill(0) can report a finished
+    # Lich as running until the helper gives up. Waiting on the process
+    # handle reports the exit itself. Fiddle and kernel32 load on first use,
+    # so other platforms never touch them.
+    module WindowsProcessApi
+      SYNCHRONIZE = 0x0010_0000
+      PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+      ERROR_INVALID_PARAMETER = 87
+      WAIT_OBJECT_0 = 0
+      WAIT_TIMEOUT = 0x102
+
+      module_function
+
+      # Opens a handle that can wait on +pid+.
+      # @param pid [Integer]
+      # @return [Array(Fiddle::Pointer, nil), Array(nil, Integer)] the handle,
+      #   or nil and the Win32 error code when OpenProcess fails
+      def open(pid)
+        handle = kernel32.OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+        error = Fiddle.win32_last_error
+        handle.null? ? [nil, error] : [handle, nil]
+      end
+
+      # @param handle [Fiddle::Pointer] handle from {open}
+      # @param milliseconds [Integer]
+      # @return [Array(Integer, Integer)] WaitForSingleObject result and Win32 error
+      def wait(handle, milliseconds)
+        result = kernel32.WaitForSingleObject(handle, milliseconds)
+        [result, Fiddle.win32_last_error]
+      end
+
+      # @param handle [Fiddle::Pointer] handle from {open}
+      # @return [void]
+      def close(handle)
+        kernel32.CloseHandle(handle)
+      end
+
+      # @return [Module] Fiddle bindings for the kernel32 functions above
+      def kernel32
+        @kernel32 ||= begin
+          require 'fiddle/import'
+          Module.new do
+            extend Fiddle::Importer
+            dlload 'kernel32.dll'
+            extern 'void* OpenProcess(unsigned long, int, unsigned long)'
+            extern 'unsigned long WaitForSingleObject(void*, unsigned long)'
+            extern 'int CloseHandle(void*)'
+          end
+        end
+      end
+    end
+
     # @param manifest_url [String] HTTPS manifest location
     # @param gem_home [String] runtime-owned installation directory
     # @param temp_dir [String] Lich-owned directory for transient recovery files
@@ -67,10 +124,14 @@ module Lich
     # @param install_gem [#call, nil] test seam for local gem installation
     # @param extract_zip [#call, nil] test seam for zip extraction
     # @param powershell_runner [#call, nil] test seam for the Windows extractor
+    # @param windows_process_api [#open, #wait, #close] test seam for the
+    #   kernel32 calls that wait for Lich to exit
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
                    http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
-                   helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
+                   helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil),
+                   windows_process_api: WindowsProcessApi)
+      @windows_process_api = windows_process_api
       @lich_version = lich_version
       @manifest_url = manifest_url
       @gem_home = gem_home
@@ -507,18 +568,55 @@ module Lich
       end
     end
 
-    # @param pid [Integer]
+    # @param pid [Integer, String] process id of the Lich that scheduled the replacement
+    # @param timeout [Numeric] seconds to wait before giving up
     # @return [void]
-    def wait_for_parent_exit(pid)
-      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 120
+    # @raise [Error] if Lich is still running when the timeout expires
+    def wait_for_parent_exit(pid, timeout: PARENT_EXIT_TIMEOUT_SECONDS)
+      pid = Integer(pid)
+      return wait_for_windows_process_exit(pid, timeout) if Gem.win_platform?
+
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
       loop do
-        Process.kill(0, Integer(pid))
-        raise Error, 'timed out waiting for Lich to exit before native gem replacement' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        Process.kill(0, pid)
+        raise Error, parent_exit_timeout_message if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
         sleep 0.1
       rescue Errno::ESRCH
         return
       end
+    end
+
+    # Waits on the process handle, which is signalled when the process exits
+    # even while other processes still hold handles to it.
+    # @param pid [Integer]
+    # @param timeout [Numeric] seconds
+    # @return [void]
+    # @raise [Error] on timeout, or when Windows cannot open or wait on the process
+    def wait_for_windows_process_exit(pid, timeout)
+      handle, error = @windows_process_api.open(pid)
+      unless handle
+        # Windows reports a process id that names no process as an invalid
+        # parameter: Lich has already exited and nothing holds its handle.
+        return if error == WindowsProcessApi::ERROR_INVALID_PARAMETER
+
+        raise Error, "could not open Lich process #{pid} to wait for it to exit (Windows error #{error})"
+      end
+
+      begin
+        result, error = @windows_process_api.wait(handle, (timeout * 1000).ceil)
+        return if result == WindowsProcessApi::WAIT_OBJECT_0
+        raise Error, parent_exit_timeout_message if result == WindowsProcessApi::WAIT_TIMEOUT
+
+        raise Error, "could not wait for Lich process #{pid} to exit (wait result #{result}, Windows error #{error})"
+      ensure
+        @windows_process_api.close(handle)
+      end
+    end
+
+    # @return [String]
+    def parent_exit_timeout_message
+      'timed out waiting for Lich to exit before native gem replacement'
     end
 
     # @param packages [Array<Hash>]
