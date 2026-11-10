@@ -65,8 +65,16 @@ module Lich
       package.fetch('filename').end_with?("-#{platform}.gem") ? platform : 'ruby'
     end
 
+    # Identity includes the effective startup minimum, so an absent minimum
+    # and one equal to the version are the same package.
     def self.package_identity(package, platform)
-      package.values_at('version', 'sha256') + [package_platform(package, platform)]
+      package.values_at('version', 'sha256') + [package_platform(package, platform), package_minimum(package)]
+    end
+
+    # The lowest installed version startup accepts without a repair. A package
+    # without one keeps the strict floor: its accepted version.
+    def self.package_minimum(package)
+      package.fetch('minimum', package['version'])
     end
 
     # Bounds use literal Gem::Version ordering, including prereleases.

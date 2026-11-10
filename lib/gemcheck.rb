@@ -77,7 +77,10 @@ module Lich
       rescue AcceptedGemPolicy::UnsupportedRuntimeError => e
         return verify_unsupported_windows_runtime!(groups, e)
       end
-      return policy.activate!(check) if check.needed.empty?
+      if check.needed.empty?
+        write_recommended_log(check) unless Array(check.recommended).empty?
+        return policy.activate!(check)
+      end
       exit 1 unless recovery_units_approved?(check.plan.units, groups)
 
       write_recovery_log(missing: check.needed, groups: groups, units: check.plan.units)
@@ -412,6 +415,33 @@ module Lich
     # @return [void]
     def write_recovery_log(missing:, groups:, units:)
       write_log(missing: missing, groups: groups, event: 'recovery', recovery_units: units)
+    end
+
+    # Installed gems at or above a package's minimum but below its accepted
+    # version start Lich as they are: no dialog, wait or repair. The accepted
+    # versions install with the next required repair of their unit. This entry
+    # is appended on each such start, so it stays short.
+    # @param check [AcceptedGemPolicy::Check]
+    # @return [void]
+    def write_recommended_log(check)
+      found = check.plan.units.flat_map { |unit| unit.fetch('packages').map { |package| [package.fetch('name'), [unit, package]] } }.to_h
+      selected = Array(check.specs).to_h { |spec| [spec.name, spec] }
+      log_path = File.join(TEMP_DIR, LOG_FILENAME)
+      Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
+      File.open(log_path, 'a') do |f|
+        f.puts "[#{Time.now}] Lich5 GemCheck recommended update"
+        f.puts '  Started on installed gems older than the accepted version but at or above its minimum.'
+        f.puts '  The accepted versions are installed by the next gem repair; nothing is required now.'
+        Array(check.recommended).each do |name|
+          unit, package = found[name]
+          installed = selected[name] ? selected[name].version : 'unknown'
+          accepted = package ? "#{package.fetch('version')} (minimum #{RecoveryUnitPolicy.package_minimum(package)})" : 'unknown'
+          f.puts "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
+        end
+        f.puts
+      end
+    rescue StandardError
+      # Filesystem write failed; startup continues on the installed versions.
     end
 
     # @param missing [Array<String>]

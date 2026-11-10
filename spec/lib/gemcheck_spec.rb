@@ -213,6 +213,71 @@ RSpec.describe Lich::GemCheck do
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
+      context 'with a package minimum' do
+        let(:package) { { 'name' => 'sqlite3', 'version' => '2.10.2', 'minimum' => '2.10.1', 'filename' => 'sqlite3-2.10.2.gem', 'sha256' => "sha256:#{'a' * 64}" } }
+        let(:units) { [{ 'id' => 'sqlite3', 'members' => ['sqlite3'], 'install_order' => ['sqlite3'], 'packages' => [package] }] }
+        let(:plan) { Lich::DependencyRecovery::Plan.new(units: units, target: { 'platform' => Gem::Platform.local.to_s, 'contract' => { 'ruby_inventory' => { 'gems' => {} } } }) }
+        let(:installed) { {} }
+        let(:loaded) { {} }
+        let(:policy) { Lich::AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: loaded) }
+        let(:log) { File.join(TEMP_DIR, described_class::LOG_FILENAME) }
+
+        def installed_spec(name, version, dependencies = {})
+          Gem::Specification.new do |item|
+            item.name = name
+            item.version = version
+            dependencies.each { |child, requirement| item.add_runtime_dependency(child, requirement) }
+          end.tap do |result|
+            activated = loaded
+            result.define_singleton_method(:activate) { activated[name] = self; true }
+          end
+        end
+
+        before do
+          allow(recovery).to receive(:policy_plan).and_return(plan)
+          allow(policy).to receive(:check).and_call_original
+          allow(policy).to receive(:activate!).and_call_original
+          FileUtils.rm_f(log)
+        end
+
+        it 'starts on a recommended-only gap with no dialog or repair and logs it' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          expect(described_class).not_to receive(:alert)
+          expect(described_class).not_to receive(:recovery_units_approved?)
+          expect(described_class).not_to receive(:show_notice)
+          expect(recovery).not_to receive(:recover)
+          expect { described_class.verify! }.not_to raise_error
+          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
+          entry = File.read(log)
+          expect(entry).to include('Lich5 GemCheck recommended update')
+          expect(entry).to include('- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.1), sqlite3 gem')
+          expect(entry).not_to include('Lich5 GemCheck failure')
+        end
+
+        it 'writes no recommended entry when the accepted version is installed' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1'), installed_spec('sqlite3', '2.10.2')]
+          described_class.verify!
+          expect(File.exist?(log) ? File.read(log) : '').not_to include('recommended update')
+          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.2')
+        end
+
+        it 'runs one consented repair of the whole unit when a needed member shares it with a recommended one' do
+          units.first['members'] << 'closure'
+          units.first['install_order'].unshift('closure')
+          units.first['packages'] << { 'name' => 'closure', 'version' => '1.0', 'filename' => 'closure-1.0.gem', 'sha256' => "sha256:#{'b' * 64}" }
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1', 'closure' => '>= 1')]
+          expect(described_class).to receive(:recovery_units_approved?).once.with(units, [:default]).and_return(true)
+          expect(recovery).to receive(:recover).once do |names, force:, plan:, restart:, preserve_newer:|
+            expect(names).to eq(['closure'])
+            expect([force, restart, preserve_newer]).to eq([true, true, true])
+            expect(plan.units).to eq(units)
+            Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true)
+          end
+          expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
+          expect(File.exist?(log) ? File.read(log) : '').not_to include('recommended update')
+        end
+      end
+
       it 'reports an unwritable runtime instead of continuing after a failed repair' do
         check.needed = ['sqlite3']
         allow(recovery).to receive(:recover).and_return(Lich::DependencyRecovery::Result.new(error: 'Cannot write Gem.dir'))

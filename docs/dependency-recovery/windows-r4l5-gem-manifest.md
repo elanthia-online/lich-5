@@ -117,8 +117,9 @@ passes `--no-gtk` or `--no-gui`. The build-time non-GTK contract still includes
 the profanity group independently of these launch-time groups.
 
 Lich validates every unit in the applicable ABI/platform target before selecting
-required roots and their complete recovery closures. Every selected package
-version is a minimum. An installed-only RubyGems resolver checks the declared
+required roots and their complete recovery closures. Every selected package's
+startup floor is its `minimum` when present and otherwise its `version` (see
+[Package minimum](#package-minimum)). An installed-only RubyGems resolver checks the declared
 requirements, closure floors and package platforms, then Lich explicitly
 activates and verifies the selected versions. Eligible newer installations remain
 eligible; an already active accepted newer version is retained. RubyInstaller-
@@ -152,6 +153,79 @@ reported separately from unreachable policy, missing server coverage and
 incompatible accepted versions. Lich does not download an unlisted dependency
 to conceal a damaged installation. Genuine requirement conflicts remain policy
 compatibility failures and retain maintainer guidance.
+
+### Package minimum
+
+A package may carry an optional `minimum` next to its `version`:
+
+```json
+{ "name": "redis-client", "version": "0.26.0", "minimum": "0.25.0",
+  "filename": "redis-client-0.26.0.gem", "sha256": "sha256:..." }
+```
+
+`version` stays the exact version a repair installs. `minimum` is the lowest
+installed version startup accepts without a repair. It shares the package's
+platform; it has no platform of its own. A missing `minimum` means
+`minimum == version`, which is the strict behavior described above. When the
+key is present it must be a non-empty string that is a valid RubyGems version
+and no higher than `version`; otherwise the policy is invalid and startup stops
+as for any other invalid policy. The release contract check rejects the same
+shapes, and also units that give one lock-checked package different minimums.
+
+The effective minimum is part of a package's identity. Two selected units that
+carry the same package with different minimums are conflicting identities
+(`InvalidPolicyError`); an absent minimum and one equal to `version` are the
+same package.
+
+Startup then sorts each package into one of three tiers:
+
+- **Needed** (below `minimum`, wrong platform, or an older version already
+  active): the existing consented repair runs for every unit containing a
+  needed package, then Lich restarts. The repair installs each package of
+  those units at its `version`, so a package of the same unit that was only
+  recommended is upgraded with it. Units with only recommended packages are
+  not added to the repair.
+- **Recommended** (the installed version startup selects is at or above
+  `minimum` but below `version`): log-only. Lich starts immediately on the
+  installed version with no dialog, no wait and no repair attempt, and appends
+  a short entry to `temp/lich5-missing-gems.log`:
+
+  ```
+  [time] Lich5 GemCheck recommended update
+    Started on installed gems older than the accepted version but at or above its minimum.
+    The accepted versions are installed by the next gem repair; nothing is required now.
+      - redis-client: installed 0.25.0, accepted 0.26.0 (minimum 0.25.0), redis bundle
+  ```
+
+  The entry repeats on each start until a repair of that unit installs
+  `version`.
+- **Current** (`version` or an eligible newer version is installed): as before.
+
+Resolution and activation use the minimums as floors and keep the resolver's
+existing preference: the highest acceptable installed version, or the version
+already active. If the accepted version is installed alongside an older
+acceptable one, it is selected and nothing is recommended.
+
+A lower floor never turns a repairable state into a startup failure. If the
+installed gems cannot be resolved at the minimums (for example, an installed
+newer `redis` requires `redis-client >= 0.26` while `redis-client` 0.25 meets
+its minimum), Lich raises the floors of the units named by the failure to their
+`version` and repairs those units. If that names no package below its version,
+Lich decides exactly as with no minimums: a repair where some package is below
+its version, otherwise today's local-installation or policy error.
+
+`StartupPolicyCompatibility` checks every supported client at both the
+`version` floors and the `minimum` floors, so a producer cannot publish a
+minimum that a supported client's declared requirements reject. A failure at
+the `version` floors keeps its existing message; one only at the minimums
+reports `served package minimums cannot supply a complete startup`.
+
+Lich releases without `minimum` support (5.24.x and earlier) do not read the
+key: their package validation checks only `name`, `version`, `filename` and
+`sha256`, and their identity comparison ignores it. They keep treating
+`version` as the floor, the stricter direction, so publishing a `minimum` does
+not change how they start. A manifest without any `minimum` behaves exactly as
+before on every Lich release.
 
 ## Supported-client policy retention
 

@@ -363,4 +363,34 @@ RSpec.describe Lich::R4L5ContractCheck do
       expect(stderr).to include('version mismatch')
     end
   end
+
+  context 'with a package minimum' do
+    it 'accepts a minimum at or below the locked version' do
+      packages.first['minimum'] = '0.25.0'
+      packages.last['minimum'] = '6.0.0'
+      expect(verify.fetch('packages').keys).to eq(%w[redis redis-client])
+    end
+
+    it 'rejects a minimum above the version while still comparing the version to the lock' do
+      packages.first['minimum'] = '0.31.0'
+      expect { verify }.to raise_error(described_class::Error, /invalid R4L5 contract: .*minimum is above its version/)
+      packages.first['minimum'] = '0.25.0'
+      packages.first['version'] = '0.30.0'
+      expect { verify }.to raise_error(described_class::Error, /version mismatch for redis-client/)
+    end
+
+    it 'rejects a minimum that is not a version' do
+      ['not a version', '', 25].each do |minimum|
+        packages.first['minimum'] = minimum
+        expect { verify }.to raise_error(described_class::Error, /invalid R4L5 contract: .*minimum is invalid/)
+      end
+    end
+
+    it 'rejects units that disagree on the minimum of a shared package' do
+      legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+      legacy.fetch('packages').first['minimum'] = '0.25.0'
+      target['units'] = [unit, legacy]
+      expect { verify }.to raise_error(described_class::Error, /minimum mismatch for redis-client/)
+    end
+  end
 end

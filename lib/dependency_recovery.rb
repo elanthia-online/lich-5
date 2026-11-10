@@ -380,6 +380,11 @@ module Lich
       end
       raise Error, "unit #{unit_id} package name is unsafe" unless package['name'].match?(SAFE_NAME)
       raise Error, "unit #{unit_id} package version is invalid" unless Gem::Version.correct?(package['version'])
+      if package.key?('minimum')
+        minimum = package['minimum']
+        raise Error, "unit #{unit_id} package minimum is invalid" unless minimum.is_a?(String) && !minimum.empty? && Gem::Version.correct?(minimum)
+        raise Error, "unit #{unit_id} package minimum is above its version" if Gem::Version.new(minimum) > Gem::Version.new(package['version'])
+      end
       require_filename!(package['filename'], "unit #{unit_id} package")
       raise Error, "unit #{unit_id} package filename must end in .gem" unless package['filename'].end_with?('.gem')
       require_sha256!(package['sha256'], "unit #{unit_id} package")
