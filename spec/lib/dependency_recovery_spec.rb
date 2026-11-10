@@ -1590,6 +1590,49 @@ RSpec.describe Lich::DependencyRecovery do
       expect(preflight_recovery('not a gem archive').recover(['sqlite3'])).to be_success
     end
 
+    context 'with a real read-only attribute on native Windows' do
+      let(:plugins) { File.join(gem_home, 'plugins') }
+
+      before do
+        skip 'requires native Windows file attributes' unless Gem.win_platform?
+        FileUtils.mkdir_p(plugins)
+        expect(system('attrib', '+R', plugins.tr('/', '\\'), out: File::NULL)).to be(true)
+      end
+
+      after do
+        system('attrib', '-R', plugins.tr('/', '\\'), out: File::NULL) if Gem.win_platform? && File.directory?(plugins)
+      end
+
+      # The state a player reached: attrib showed R on gems/<abi>/plugins.
+      it 'is what makes RubyGems refuse the install with the reported error' do
+        expect(File.writable?(plugins)).to be(false)
+        gem_path = File.join(recovery_temp_dir, 'sqlite3-1.2.3.gem')
+        File.binwrite(gem_path, built_gem)
+        installer = Gem::Installer.at(gem_path, install_dir: gem_home, ignore_dependencies: true, wrappers: false, force: true)
+
+        expect { installer.install }
+          .to raise_error(Gem::FilePermissionError, /write permissions for the #{Regexp.escape(plugins)} directory/)
+      end
+
+      it 'refuses the repair before the helper starts, naming the folder and the attrib command' do
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+        native = plugins.tr('/', '\\')
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Clear it with: attrib -R \"#{native}\"")
+        expect(launcher).not_to have_received(:call)
+      end
+
+      it 'lets the repair through once that attrib command has run' do
+        expect(system('attrib', '-R', plugins.tr('/', '\\'), out: File::NULL)).to be(true)
+
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+
+        expect(result).to be_success
+        expect(launcher).to have_received(:call)
+      end
+    end
+
     context 'with Windows messages' do
       before { allow(Gem).to receive(:win_platform?).and_return(true) }
 
