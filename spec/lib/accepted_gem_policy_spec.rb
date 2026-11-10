@@ -123,6 +123,20 @@ RSpec.describe Lich::AcceptedGemPolicy do
     expect { policy.check(dependencies) }.to raise_error(described_class::Error, /service unavailable/)
   end
 
+  it 'reports a policy without this runtime as unsupported rather than as a policy failure' do
+    allow(recovery).to receive(:policy_plan).and_return(
+      Lich::DependencyRecovery::Plan.new(units: [], error: 'manifest has no target for Ruby 4.0 on aarch64-mingw-ucrt', error_kind: :unsupported_runtime)
+    )
+    expect { policy.check(dependencies) }.to raise_error(described_class::UnsupportedRuntimeError, /no target/) { |error|
+      expect(error).not_to be_a(described_class::PolicyError)
+    }
+  end
+
+  it 'keeps an otherwise invalid policy an InvalidPolicyError' do
+    allow(recovery).to receive(:policy_plan).and_return(Lich::DependencyRecovery::Plan.new(units: [], error: 'duplicate targets', error_kind: :invalid))
+    expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError)
+  end
+
   it 'requires declared roots to be covered by accepted policy or supplied RubyInstaller gems' do
     plan.units = []
     expect { policy.check(dependencies) }.to raise_error(described_class::Error, /does not cover/)

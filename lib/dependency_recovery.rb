@@ -64,6 +64,10 @@ module Lich
     # Raised before any gem is installed or scheduled when a directory
     # RubyGems must write to in the gem home is read-only or denies writes.
     class GemHomeNotWritableError < Error; end
+    # Raised when a well-formed manifest publishes no target for the running
+    # Ruby ABI and platform (for example native ARM64 Windows Ruby while only
+    # x64 is published). This is a coverage gap, not a corrupt manifest.
+    class UnsupportedRuntimeError < Error; end
 
     # Gem home subdirectories Gem::Installer#install writes into for a gem
     # without executables (see #verify_gem_home_writable!).
@@ -186,6 +190,8 @@ module Lich
       Plan.new(units: units_for(manifest, requested), target: effective)
     rescue OpenURI::HTTPError, SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError, Net::ProtocolError, Net::HTTPBadResponse => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :acquisition)
+    rescue UnsupportedRuntimeError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :unsupported_runtime)
     rescue StandardError => e
       Plan.new(units: [], error: "#{e.class}: #{e.message}", error_kind: :invalid)
     end
@@ -295,7 +301,7 @@ module Lich
       targets = manifest.fetch('targets').select do |candidate|
         candidate.is_a?(Hash) && candidate['ruby_abi'] == ruby_abi && candidate['platform'] == Gem::Platform.local.to_s
       end
-      raise Error, "manifest has no target for Ruby #{ruby_abi} on #{Gem::Platform.local}" if targets.empty?
+      raise UnsupportedRuntimeError, "manifest has no target for Ruby #{ruby_abi} on #{Gem::Platform.local}" if targets.empty?
       raise Error, 'manifest has duplicate targets for this runtime' unless targets.length == 1
       target = targets.first
       raise Error, 'manifest target units must be an array' unless target['units'].is_a?(Array)
