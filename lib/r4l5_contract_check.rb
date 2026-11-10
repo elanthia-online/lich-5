@@ -8,8 +8,9 @@ module Lich
   class R4L5ContractCheck
     Error = RuntimeGemContract::Error
 
-    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
-      reader = RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile)
+    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil,
+                     lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil), platform: RuntimeGemContract::PLATFORM)
+      reader = RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile, platform: platform)
       manifest = JSON.parse(manifest_bytes)
       require_object!(manifest, 'recovery manifest')
       require_object!(provenance, 'installer provenance')
@@ -17,7 +18,7 @@ module Lich
       targets = manifest.fetch('targets')
       raise Error, 'recovery targets must be an array' unless targets.is_a?(Array)
       targets.each { |target| require_object!(target, 'recovery target') }
-      targets = targets.select { |target| target['platform'] == RuntimeGemContract::PLATFORM && target['ruby_abi'] == '4.0' }
+      targets = targets.select { |target| target['platform'] == platform && target['ruby_abi'] == '4.0' }
       raise Error, 'expected exactly one Windows Ruby 4.0 target' unless targets.length == 1
       target = targets.first
       contract = target.fetch('contract')
