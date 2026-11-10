@@ -8,6 +8,7 @@ require 'open3'
 require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
+require 'securerandom'
 require 'tempfile'
 require 'timeout'
 require 'tmpdir'
@@ -60,6 +61,13 @@ module Lich
     # Raised internally for malformed manifests and rejected artifacts.
     class Error < StandardError; end
     class StagingTimeoutError < Error; end
+    # Raised before any gem is installed or scheduled when a directory
+    # RubyGems must write to in the gem home is read-only or denies writes.
+    class GemHomeNotWritableError < Error; end
+
+    # Gem home subdirectories Gem::Installer#install writes into for a gem
+    # without executables (see #verify_gem_home_writable!).
+    GEM_HOME_WRITE_DIRS = %w[gems specifications extensions cache build_info].freeze
 
     # kernel32 calls the replacement helper uses to wait for Lich to exit.
     #
@@ -203,7 +211,14 @@ module Lich
         # endpoint therefore fails closed without changing the runtime.
         staged_units = Timeout.timeout(DOWNLOAD_TIMEOUT_SECONDS, StagingTimeoutError) { planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) } }
         with_install_lock do
-          if restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+          # Fail here, while Lich is still running and nothing has changed,
+          # rather than in the detached helper after Lich has exited, where
+          # the player only sees a popup and the next start asks again.
+          replace_after_exit = restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+          # The helper moves installed versions aside first, except newer
+          # ones under preserve_newer; an in-process install leaves them.
+          verify_gem_home_writable!(staged_units, keeps_installed_newer: !replace_after_exit || preserve_newer)
+          if replace_after_exit
             schedule_runtime_replacement(staged_units, work_dir, preserve_newer: preserve_newer)
             Result.new(installed_gems: [], restart_required: true)
           else
@@ -216,6 +231,8 @@ module Lich
       result
     rescue StagingTimeoutError => e
       Result.new(installed_gems: [], error: "Recovery staging timed out: #{e.message}", error_kind: :timeout)
+    rescue GemHomeNotWritableError => e
+      Result.new(installed_gems: [], error: e.message, error_kind: :gem_home_not_writable)
     rescue Error, JSON::ParserError, OpenURI::HTTPError, SocketError, SystemCallError => e
       Result.new(installed_gems: [], error: e.message)
     rescue StandardError => e
@@ -423,6 +440,116 @@ module Lich
         @install_gem.call(staged.fetch(:package_paths).fetch(name), @gem_home)
         name
       end
+    end
+
+    # Checks, before anything is installed or scheduled, that RubyGems will be
+    # able to write everywhere Gem::Installer#install writes for these gems.
+    #
+    # Every directory gets a real write probe. The plugins directory, and the
+    # bin directory when a staged gem has executables, are also checked with
+    # File.writable?, because Gem::Installer#ensure_writable_dir refuses them
+    # when that is false. plugins is checked that way only when some staged
+    # gem will reach Gem::Installer#generate_plugins, which returns before
+    # the check when a newer version of that gem is installed and stays
+    # installed (+keeps_installed_newer+). On Windows, File.writable? false
+    # means the folder has the read-only attribute, which Windows itself
+    # ignores for writes into a folder; other
+    # directories are not checked that way, since RubyGems would install into
+    # them anyway. A directory that does not exist yet skips that check (the
+    # one RubyGems creates carries no such flag) and is probed through its
+    # nearest existing parent, which is where RubyGems would create it.
+    #
+    # @param staged_units [Array<Hash>] units from #stage_unit
+    # @param keeps_installed_newer [Boolean] whether installed versions newer
+    #   than a staged package stay installed while it is installed
+    # @return [void]
+    # @raise [GemHomeNotWritableError] naming the directory and how to fix it
+    def verify_gem_home_writable!(staged_units, keeps_installed_newer:)
+      plugins = Gem.plugindir(@gem_home)
+      attribute_checked = []
+      attribute_checked << plugins if reaches_generate_plugins?(staged_units, keeps_installed_newer)
+      attribute_checked << Gem.bindir(@gem_home) if staged_executables?(staged_units)
+      probed = ([@gem_home] + GEM_HOME_WRITE_DIRS.map { |name| File.join(@gem_home, name) } + [plugins] + attribute_checked).uniq
+
+      attribute_checked.each do |dir|
+        raise GemHomeNotWritableError, read_only_dir_message(dir) if File.directory?(dir) && !File.writable?(dir)
+      end
+      probed.each { |dir| probe_dir_write!(nearest_existing_dir(dir)) }
+    end
+
+    # Gem::Installer#generate_plugins returns early, before checking the
+    # plugins directory, when Gem::Specification.latest_spec_for(name) is
+    # newer than the gem being installed. This asks the same question the
+    # same way: latest_spec_for counts installed specs of any platform,
+    # where find_all_by_name keeps only those matching this one.
+    # @param staged_units [Array<Hash>]
+    # @param keeps_installed_newer [Boolean]
+    # @return [Boolean] whether installing some staged package checks plugins
+    def reaches_generate_plugins?(staged_units, keeps_installed_newer)
+      return true unless keeps_installed_newer
+
+      staged_units.flat_map { |staged| staged.fetch(:unit).fetch('packages') }.any? do |package|
+        latest = Gem::Specification.latest_spec_for(package.fetch('name'))
+        !(latest && latest.version > Gem::Version.new(package.fetch('version')))
+      end
+    end
+
+    # A package whose spec cannot be read counts as having none; installing
+    # it then fails with RubyGems' own error, which says more than this could.
+    # @param staged_units [Array<Hash>]
+    # @return [Boolean] whether any staged gem installs executables
+    def staged_executables?(staged_units)
+      staged_units.any? do |staged|
+        staged.fetch(:package_paths).each_value.any? do |path|
+          !Gem::Package.new(path).spec.executables.empty?
+        rescue Gem::Exception
+          false
+        end
+      end
+    end
+
+    # @param dir [String]
+    # @return [String] +dir+, or its nearest ancestor that is a directory
+    def nearest_existing_dir(dir)
+      dir = File.dirname(dir) until File.directory?(dir) || File.dirname(dir) == dir
+      dir
+    end
+
+    # Creates and removes an empty file in +dir+.
+    # @param dir [String]
+    # @return [void]
+    # @raise [GemHomeNotWritableError] if the file cannot be created
+    def probe_dir_write!(dir)
+      probe = File.join(dir, ".lich-write-probe-#{Process.pid}-#{SecureRandom.hex(4)}")
+      File.open(probe, File::WRONLY | File::CREAT | File::EXCL) { nil }
+    rescue Errno::EACCES, Errno::EPERM, Errno::EROFS => e
+      raise GemHomeNotWritableError, denied_dir_message(dir, e)
+    ensure
+      begin
+        File.delete(probe) if probe && File.exist?(probe)
+      rescue SystemCallError
+        nil
+      end
+    end
+
+    # @param dir [String]
+    # @return [String] one line naming +dir+ and how to clear the flag
+    def read_only_dir_message(dir)
+      if Gem.win_platform?
+        native = dir.tr('/', '\\')
+        "#{native} is marked read-only, so gems cannot be installed. Open a Command Prompt and run: attrib -R \"#{native}\""
+      else
+        "#{dir} is not writable, so gems cannot be installed. Make it writable for your user (chmod u+w \"#{dir}\")."
+      end
+    end
+
+    # @param dir [String] the directory, or the lock file, that refused the write
+    # @param error [SystemCallError]
+    # @return [String] one line naming +dir+ and the refusal
+    def denied_dir_message(dir, error)
+      shown = Gem.win_platform? ? dir.tr('/', '\\') : dir
+      reason = error.class.name.split('::').last
+      "Writing to #{shown} was denied (#{reason}), so gems cannot be installed. Give your account permission to modify it."
     end
 
     # A unit containing native gems cannot safely be overwritten while the
@@ -1010,16 +1137,31 @@ module Lich
     # @yield installation work
     # @return [Object]
     def with_install_lock
-      FileUtils.mkdir_p(@gem_home)
-      lock_path = File.join(@gem_home, LOCK_FILENAME)
-      File.open(lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
+      lock = open_install_lock
+      begin
         lock.flock(File::LOCK_EX)
         yield
       ensure
-        lock.flock(File::LOCK_UN) if lock
+        lock.flock(File::LOCK_UN)
+        lock.close
       end
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot write Ruby runtime gem directory #{@gem_home}: #{e.message}"
+    end
+
+    # Opens (creating it if needed) the lock file in the gem home. A gem home
+    # that refuses this is reported like the preflight's refusals, since it
+    # is the first write a repair makes; often no lock file exists yet.
+    # Errors raised while the lock is held keep #with_install_lock's message.
+    # @return [File]
+    # @raise [GemHomeNotWritableError] if the lock file cannot be opened for writing
+    def open_install_lock
+      FileUtils.mkdir_p(@gem_home)
+      lock_path = File.join(@gem_home, LOCK_FILENAME)
+      File.open(lock_path, File::RDWR | File::CREAT, 0o600)
+    rescue Errno::EACCES, Errno::EPERM, Errno::EROFS => e
+      denied = lock_path && File.exist?(lock_path) ? lock_path : nearest_existing_dir(@gem_home)
+      raise GemHomeNotWritableError, denied_dir_message(denied, e)
     end
 
     # Uses Lich's own temp directory rather than the platform AppData/system

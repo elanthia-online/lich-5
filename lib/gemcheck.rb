@@ -84,7 +84,11 @@ module Lich
     end
 
     def recovery_error(result)
-      type = result.error_kind == :timeout ? DependencyRecovery::StagingTimeoutError : DependencyRecovery::Error
+      type = case result.error_kind
+             when :timeout then DependencyRecovery::StagingTimeoutError
+             when :gem_home_not_writable then DependencyRecovery::GemHomeNotWritableError
+             else DependencyRecovery::Error
+             end
       type.new(result.error)
     end
 
@@ -351,11 +355,14 @@ module Lich
     end
 
     def policy_failure?(error)
-      error.is_a?(AcceptedGemPolicy::PolicyError) || error.is_a?(DeclarationError) || error.is_a?(DependencyRecovery::StagingTimeoutError)
+      error.is_a?(AcceptedGemPolicy::PolicyError) || error.is_a?(DeclarationError) || error.is_a?(DependencyRecovery::StagingTimeoutError) ||
+        error.is_a?(DependencyRecovery::GemHomeNotWritableError)
     end
 
     def failure_message(error)
       case error
+      when DependencyRecovery::GemHomeNotWritableError
+        "Lich cannot write to its Ruby gem folder, so it cannot install the gems it needs.\nFix the folder named below, then start Lich again."
       when DependencyRecovery::StagingTimeoutError
         "The runtime recovery download timed out.\nCheck your connection and retry. If it repeats, use a faster connection or contact the release maintainer."
       when AcceptedGemPolicy::AcquisitionError
