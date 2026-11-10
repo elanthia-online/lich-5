@@ -1442,20 +1442,20 @@ RSpec.describe Lich::DependencyRecovery do
     let(:launcher) { spy('replacement helper') }
 
     # Builds a real .gem so the executables check reads a genuine spec.
-    def built_gem(executables: [])
+    def built_gem(executables: [], name: 'sqlite3')
       source = Dir.mktmpdir('preflight-gem-source', recovery_temp_dir)
       FileUtils.mkdir_p(File.join(source, 'lib'))
-      File.write(File.join(source, 'lib', 'sqlite3.rb'), "# fixture\n")
-      executables.each do |name|
+      File.write(File.join(source, 'lib', "#{name}.rb"), "# fixture\n")
+      executables.each do |executable|
         FileUtils.mkdir_p(File.join(source, 'exe'))
-        File.write(File.join(source, 'exe', name), "#!/usr/bin/env ruby\n")
+        File.write(File.join(source, 'exe', executable), "#!/usr/bin/env ruby\n")
       end
       spec = Gem::Specification.new do |entry|
-        entry.name = 'sqlite3'
+        entry.name = name
         entry.version = '1.2.3'
         entry.summary = 'Preflight fixture'
         entry.authors = ['Lich contributors']
-        entry.files = ['lib/sqlite3.rb'] + executables.map { |name| "exe/#{name}" }
+        entry.files = ["lib/#{name}.rb"] + executables.map { |executable| "exe/#{executable}" }
         entry.bindir = 'exe'
         entry.executables = executables
         entry.license = 'MIT'
@@ -1590,6 +1590,50 @@ RSpec.describe Lich::DependencyRecovery do
       expect(preflight_recovery('not a gem archive').recover(['sqlite3'])).to be_success
     end
 
+    context 'when a newer version of the gem is installed (RubyGems then skips the plugins check)' do
+      let(:plugins) { File.join(gem_home, 'plugins') }
+
+      def installed_sqlite3(version)
+        spec = Gem::Specification.new do |entry|
+          entry.name = 'sqlite3'
+          entry.version = version
+        end
+        allow(Gem::Specification).to receive(:find_all_by_name).with('sqlite3').and_return([spec])
+      end
+
+      before do
+        FileUtils.mkdir_p(plugins)
+        allow(File).to receive(:writable?).and_call_original
+        allow(File).to receive(:writable?).with(plugins).and_return(false)
+      end
+
+      it 'does not refuse an in-process install over a read-only plugins folder' do
+        installed_sqlite3('9.0')
+        expect(preflight_recovery(built_gem).recover(['sqlite3'], force: true)).to be_success
+      end
+
+      it 'does not refuse a replacement that keeps the newer version (preserve_newer)' do
+        installed_sqlite3('9.0')
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true, preserve_newer: true)
+        expect(result).to be_success
+        expect(launcher).to have_received(:call)
+      end
+
+      it 'refuses a replacement that moves the newer version aside first' do
+        installed_sqlite3('9.0')
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(launcher).not_to have_received(:call)
+      end
+
+      it 'refuses when the installed version is the same, since RubyGems skips only for a newer one' do
+        installed_sqlite3('1.2.3')
+        result = preflight_recovery(built_gem).recover(['sqlite3'], force: true)
+        expect(result.error_kind).to eq(:gem_home_not_writable)
+        expect(installed).to be_empty
+      end
+    end
+
     context 'with a real read-only attribute on native Windows' do
       let(:plugins) { File.join(gem_home, 'plugins') }
 
@@ -1603,15 +1647,27 @@ RSpec.describe Lich::DependencyRecovery do
         system('attrib', '-R', plugins.tr('/', '\\'), out: File::NULL) if Gem.win_platform? && File.directory?(plugins)
       end
 
+      def real_install(name)
+        gem_path = File.join(recovery_temp_dir, "#{name}-1.2.3.gem")
+        File.binwrite(gem_path, built_gem(name: name))
+        Gem::Installer.at(gem_path, install_dir: gem_home, ignore_dependencies: true, wrappers: false, force: true).install
+      end
+
       # The state a player reached: attrib showed R on gems/<abi>/plugins.
       it 'is what makes RubyGems refuse the install with the reported error' do
         expect(File.writable?(plugins)).to be(false)
-        gem_path = File.join(recovery_temp_dir, 'sqlite3-1.2.3.gem')
-        File.binwrite(gem_path, built_gem)
-        installer = Gem::Installer.at(gem_path, install_dir: gem_home, ignore_dependencies: true, wrappers: false, force: true)
+        expect(Gem::Specification.latest_spec_for('lich-preflight-fixture')).to be_nil
 
-        expect { installer.install }
+        expect { real_install('lich-preflight-fixture') }
           .to raise_error(Gem::FilePermissionError, /write permissions for the #{Regexp.escape(plugins)} directory/)
+      end
+
+      # Gem::Installer#generate_plugins returns before its check when a newer
+      # version is installed; the bundle always carries a newer sqlite3.
+      it 'does not stop RubyGems when a newer version of the gem is installed' do
+        expect(Gem::Specification.latest_spec_for('sqlite3').version).to be > Gem::Version.new('1.2.3')
+
+        expect { real_install('sqlite3') }.not_to raise_error
       end
 
       it 'refuses the repair before the helper starts, naming the folder and the attrib command' do
@@ -1619,7 +1675,7 @@ RSpec.describe Lich::DependencyRecovery do
 
         native = plugins.tr('/', '\\')
         expect(result.error_kind).to eq(:gem_home_not_writable)
-        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Clear it with: attrib -R \"#{native}\"")
+        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Open a Command Prompt and run: attrib -R \"#{native}\"")
         expect(launcher).not_to have_received(:call)
       end
 
@@ -1645,7 +1701,7 @@ RSpec.describe Lich::DependencyRecovery do
         result = preflight_recovery(built_gem).recover(['sqlite3'], force: true, restart: true)
 
         native = plugins.tr('/', '\\')
-        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Clear it with: attrib -R \"#{native}\"")
+        expect(result.error).to eq("#{native} is marked read-only, so gems cannot be installed. Open a Command Prompt and run: attrib -R \"#{native}\"")
         expect(result.error.lines.size).to eq(1)
         expect(launcher).not_to have_received(:call)
       end

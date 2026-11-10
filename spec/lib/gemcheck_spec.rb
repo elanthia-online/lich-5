@@ -834,7 +834,7 @@ RSpec.describe Lich::GemCheck do
     it 'names the unwritable gem folder fix without offering an installer' do
       error = Lich::DependencyRecovery::GemHomeNotWritableError.new(
         'C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins is marked read-only, so gems cannot be installed. ' \
-        'Clear it with: attrib -R "C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins"'
+        'Open a Command Prompt and run: attrib -R "C:\\Ruby4Lich5\\4.0.9\\lib\\ruby\\gems\\4.0.0\\plugins"'
       )
       body = described_class.build_alert_body(['sqlite3'], error)
       expect(body).to start_with('Lich cannot write to its Ruby gem folder')

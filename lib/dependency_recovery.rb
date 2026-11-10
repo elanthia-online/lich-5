@@ -214,8 +214,11 @@ module Lich
           # Fail here, while Lich is still running and nothing has changed,
           # rather than in the detached helper after Lich has exited, where
           # the player only sees a popup and the next start asks again.
-          verify_gem_home_writable!(staged_units)
-          if restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+          replace_after_exit = restart || staged_units.any? { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+          # The helper moves installed versions aside first, except newer
+          # ones under preserve_newer; an in-process install leaves them.
+          verify_gem_home_writable!(staged_units, keeps_installed_newer: !replace_after_exit || preserve_newer)
+          if replace_after_exit
             schedule_runtime_replacement(staged_units, work_dir, preserve_newer: preserve_newer)
             Result.new(installed_gems: [], restart_required: true)
           else
@@ -445,25 +448,47 @@ module Lich
     # Every directory gets a real write probe. The plugins directory, and the
     # bin directory when a staged gem has executables, are also checked with
     # File.writable?, because Gem::Installer#ensure_writable_dir refuses them
-    # when that is false. On Windows that means the folder has the read-only
-    # attribute, which Windows itself ignores for writes into a folder; other
+    # when that is false. plugins is checked that way only when some staged
+    # gem will reach Gem::Installer#generate_plugins, which returns before
+    # the check when a newer version of that gem is installed and stays
+    # installed (+keeps_installed_newer+). On Windows, File.writable? false
+    # means the folder has the read-only attribute, which Windows itself
+    # ignores for writes into a folder; other
     # directories are not checked that way, since RubyGems would install into
     # them anyway. A directory that does not exist yet skips that check (the
     # one RubyGems creates carries no such flag) and is probed through its
     # nearest existing parent, which is where RubyGems would create it.
     #
     # @param staged_units [Array<Hash>] units from #stage_unit
+    # @param keeps_installed_newer [Boolean] whether installed versions newer
+    #   than a staged package stay installed while it is installed
     # @return [void]
     # @raise [GemHomeNotWritableError] naming the directory and how to fix it
-    def verify_gem_home_writable!(staged_units)
-      attribute_checked = [Gem.plugindir(@gem_home)]
+    def verify_gem_home_writable!(staged_units, keeps_installed_newer:)
+      plugins = Gem.plugindir(@gem_home)
+      attribute_checked = []
+      attribute_checked << plugins if reaches_generate_plugins?(staged_units, keeps_installed_newer)
       attribute_checked << Gem.bindir(@gem_home) if staged_executables?(staged_units)
-      probed = [@gem_home] + GEM_HOME_WRITE_DIRS.map { |name| File.join(@gem_home, name) } + attribute_checked
+      probed = ([@gem_home] + GEM_HOME_WRITE_DIRS.map { |name| File.join(@gem_home, name) } + [plugins] + attribute_checked).uniq
 
       attribute_checked.each do |dir|
         raise GemHomeNotWritableError, read_only_dir_message(dir) if File.directory?(dir) && !File.writable?(dir)
       end
       probed.each { |dir| probe_dir_write!(nearest_existing_dir(dir)) }
+    end
+
+    # Gem::Installer#generate_plugins returns early, before checking the
+    # plugins directory, when a newer version of the gem is installed.
+    # @param staged_units [Array<Hash>]
+    # @param keeps_installed_newer [Boolean]
+    # @return [Boolean] whether installing some staged package checks plugins
+    def reaches_generate_plugins?(staged_units, keeps_installed_newer)
+      return true unless keeps_installed_newer
+
+      staged_units.flat_map { |staged| staged.fetch(:unit).fetch('packages') }.any? do |package|
+        version = Gem::Version.new(package.fetch('version'))
+        Gem::Specification.find_all_by_name(package.fetch('name')).none? { |spec| spec.version > version }
+      end
     end
 
     # A package whose spec cannot be read counts as having none; installing
@@ -509,7 +534,7 @@ module Lich
     def read_only_dir_message(dir)
       if Gem.win_platform?
         native = dir.tr('/', '\\')
-        "#{native} is marked read-only, so gems cannot be installed. Clear it with: attrib -R \"#{native}\""
+        "#{native} is marked read-only, so gems cannot be installed. Open a Command Prompt and run: attrib -R \"#{native}\""
       else
         "#{dir} is not writable, so gems cannot be installed. Make it writable for your user (chmod u+w \"#{dir}\")."
       end
