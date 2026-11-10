@@ -63,6 +63,13 @@ module Lich
         /^What do you/
       ].freeze
 
+      # A GET by a known id that took the item out of a worn container, read
+      # whole (bput returns only the matched text, so this comes before the
+      # caller's patterns): "You get some wool yarn from inside your
+      # silversteel bucket." {crafting_get_by_known_id} reads the container
+      # off it to refuse an item taken out of the trash.
+      CRAFTING_ID_GET_FROM = /^You get .+ from inside your (?<container>.+?)\.?\s*\z/
+
       # Most crafting item ids DRCC keeps. A crafting script uses a handful
       # of tools and consumables, so this holds every one of several
       # scripts' sets; the oldest goes first.
@@ -928,8 +935,9 @@ module Lich
       # moved in or out of +bag+ that +name+ means ({CRAFTING_ITEM_IDS}),
       # else the one item in +bag+ the Inventory feed says +name+ means
       # ({crafting_feed_ids}), unless DRCC found that id dead since
-      # ({ItemIdMemo#dead?}). An id already in a hand is never given (the
-      # caller wants another one, and a GET of a held item stays by name).
+      # ({ItemIdMemo#dead?}) or it was thrown away since ({DRCI.thrown_away?}:
+      # a remembered one is forgotten). An id already in a hand is never given
+      # (the caller wants another one, and a GET of a held item stays by name).
       #
       # When the feed snapshot already held shows the game a choice (two or
       # more items in +bag+ that +name+ means, not counting held or dead
@@ -950,8 +958,14 @@ module Lich
         return nil unless memo_bag
 
         held = DRCI.held_ids
-        usable = ->(ids) { ids.reject { |id| held.include?(id) || CRAFTING_ITEM_IDS.dead?(id) } }
+        usable = ->(ids) { ids.reject { |id| held.include?(id) || CRAFTING_ITEM_IDS.dead?(id) || DRCI.thrown_away?(id) } }
         id = CRAFTING_ITEM_IDS.fetch(memo_bag, name)
+        if id && DRCI.thrown_away?(id)
+          # Binned since DRCC moved it: a GET by its id would take it back out
+          # of a trash can that didn't flush, or up off the floor.
+          CRAFTING_ITEM_IDS.forget(id)
+          id = nil
+        end
         if id && !held.include?(id)
           # A remembered id sends no refresh: only a snapshot already held.
           return usable.call(crafting_feed_ids(name, memo_bag, refresh: false)).size > 1 ? nil : id
@@ -1010,7 +1024,13 @@ module Lich
       # that.": the id names a worn item, not the one in the bag). A
       # GET that works but puts in hand an item +name+ no longer means (the
       # id now names a different item) forgets the id, puts that item back
-      # in +bag+ (STOW without a bag) and gives nil too.
+      # in +bag+ (STOW without a bag) and gives nil too. So does a GET that
+      # took the item out of a worn trash receptacle ({crafting_trash_ref}):
+      # the item goes back in it. A worn bucket that didn't flush keeps what
+      # was binned for about five minutes, and an id remembered from before
+      # the bin would take that piece back out (Hollow Eve, 2026-11-10).
+      # Other places the item can have gone (another container after a full
+      # bag, the floor) are still gone to by id.
       #
       # @param name [String] item name, already through {crafting_name}
       # @param bag [String, Integer, nil] crafting container
@@ -1026,18 +1046,51 @@ module Lich
 
         ref = "##{id}"
         missed = CRAFTING_ID_GET_MISSING + misses
-        result = DRC.bput("get #{ref}", *successes, *others, *missed)
+        result = DRC.bput("get #{ref}", CRAFTING_ID_GET_FROM, *successes, *others, *missed)
         if missed.any? { |pattern| result.match?(pattern) } || (result.match?(GET_CRAFTING_ALREADY) && !DRCI.in_hand?(ref))
           CRAFTING_ITEM_IDS.forget(id)
           return nil
         end
         return [result, ref] unless successes.any? { |pattern| result.match?(pattern) } && DRCI.in_hand?(ref)
+
+        trash = crafting_trash_ref(result, bag)
+        if trash
+          CRAFTING_ITEM_IDS.forget(id)
+          put_back = DRCI.put_away_item?(ref, trash)
+          Lich::Messaging.msg('bold', "DRCC: #{ref} (#{name}) was in your trash can (#{result[CRAFTING_ID_GET_FROM, :container]}). " \
+                                      "#{put_back ? 'Put it back' : 'Could not put it back'}; getting #{name} by name.")
+          return nil
+        end
         return [result, ref] if DRCI.held_id(name, except: DRCI.held_ids - [id]) == id
 
         CRAFTING_ITEM_IDS.forget(id)
         put_back = bag.nil? ? DRCI.put_away_item?(ref) : DRCI.put_away_item?(ref, crafting_bag_ref(bag))
         Lich::Messaging.msg('bold', "DRCC: #{ref} is no longer #{name}. #{put_back ? 'Put it back' : 'Could not put it back'}; getting #{name} by name.")
         nil
+      end
+
+      # The worn container a GET by a known id took the item out of, as
+      # "#<id>", when it is a trash receptacle: the one worn item the
+      # reply's container words name ({DRCI.worn_ref}) has a noun in
+      # {DRCI.trash_storage}. nil for any other reply, for a container that
+      # isn't one worn item, and for the crafting bag itself (a "basket" can
+      # be a crafting bag). A worn trash can whose noun isn't in that list
+      # isn't recognized; the thrown-away ids ({DRCI.thrown_away?}) still
+      # cover what DRCI threw in it.
+      #
+      # @param line [String] the GET's reply
+      # @param bag [String, Integer, nil] crafting container
+      # @return [String, nil]
+      def crafting_trash_ref(line, bag)
+        container = line[CRAFTING_ID_GET_FROM, :container]
+        return nil unless container
+
+        ref = DRCI.worn_ref(container)
+        id = ref.to_s[DRCI::ITEM_ID_REF_PATTERN, 1]
+        return nil if id.nil? || ref == crafting_bag_ref(bag)
+
+        noun = GameObj.inv.find { |obj| obj.id.to_s == id }&.noun.to_s.downcase
+        DRCI.trash_storage.include?(noun) ? ref : nil
       end
 
       # Remembers the id of the +name+ a GET just put in hand: the one held
@@ -1097,7 +1150,7 @@ module Lich
         CRAFTING_ITEM_IDS.matching(memo_bag, name).each { |id| CRAFTING_ITEM_IDS.forget(id) } if memo_bag
       end
       private_class_method :crafting_memo_bag, :crafting_known_id, :crafting_feed_ids, :crafting_interrupted?, :crafting_get_by_known_id,
-                           :remember_got_crafting_item, :remember_crafting_id, :crafting_hand_obj, :forget_combined_crafting_ids
+                           :crafting_trash_ref, :remember_got_crafting_item, :remember_crafting_id, :crafting_hand_obj, :forget_combined_crafting_ids
 
       # Puts a crafting tool away: ties it to the crafting belt when the belt
       # lists it, otherwise (or when the tie fails) puts it in +bag+. A bag
