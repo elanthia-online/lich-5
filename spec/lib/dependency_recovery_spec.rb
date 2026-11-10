@@ -1269,8 +1269,9 @@ RSpec.describe Lich::DependencyRecovery do
       expect(File).to receive(:open).with(File.join(gem_home, described_class::LOCK_FILENAME), anything, anything).and_raise(Errno::EACCES)
       expect(subject).not_to receive(:schedule_runtime_replacement)
       result = subject.recover(['sqlite3'], restart: true)
+      shown = Gem.win_platform? ? gem_home.tr('/', '\\') : gem_home
       expect(result.error_kind).to eq(:gem_home_not_writable)
-      expect(result.error).to eq("Writing to #{gem_home} was denied (EACCES), so gems cannot be installed. Give your account permission to modify it.")
+      expect(result.error).to eq("Writing to #{shown} was denied (EACCES), so gems cannot be installed. Give your account permission to modify it.")
       expect(installed).to be_empty
     end
 
