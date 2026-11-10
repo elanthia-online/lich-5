@@ -1177,6 +1177,43 @@ RSpec.describe Lich::DependencyRecovery do
       expect(subject.policy_plan(['sqlite3']).error).to include('duplicate targets')
     end
 
+    it 'classifies a well-formed manifest without this platform as an unsupported runtime' do
+      other_platform = platform == 'aarch64-mingw-ucrt' ? 'x64-mingw-ucrt' : 'aarch64-mingw-ucrt'
+      subject = recovery(artifacts: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: other_platform) })
+      plan = subject.policy_plan(['sqlite3'])
+      expect(plan.error_kind).to eq(:unsupported_runtime)
+      expect(plan.error).to include('has no target')
+      expect(installed).to be_empty
+    end
+
+    it 'classifies a well-formed manifest without this Ruby ABI as an unsupported runtime' do
+      subject = recovery(artifacts: { manifest_url => manifest_for([unit], ruby_abi: '99.0', platform: platform) })
+      expect(subject.policy_plan(['sqlite3']).error_kind).to eq(:unsupported_runtime)
+    end
+
+    {
+      'an empty targets list'       => ->(targets) { targets.clear },
+      'a bare string target'        => ->(targets) { targets << 'x64-mingw-ucrt' },
+      'a numeric ruby_abi'          => ->(targets) { targets << targets.first.merge('ruby_abi' => 4.0, 'platform' => 'other-platform') },
+      'a target without a platform' => ->(targets) { targets << targets.first.except('platform') }
+    }.each do |shape, mutate|
+      it "keeps #{shape} an invalid policy, not an unsupported runtime" do
+        data = JSON.parse(manifest)
+        mutate.call(data['targets'])
+        plan = recovery(artifacts: { manifest_url => JSON.generate(data) }).policy_plan(['sqlite3'])
+        expect(plan.error_kind).to eq(:invalid)
+        expect(plan.error).not_to include('has no target')
+        expect(installed).to be_empty
+      end
+    end
+
+    it 'keeps duplicate applicable targets an invalid policy, not an unsupported runtime' do
+      data = JSON.parse(manifest)
+      data['targets'] << data['targets'].first.dup
+      subject = recovery(artifacts: { manifest_url => JSON.generate(data) })
+      expect(subject.policy_plan(['sqlite3']).error_kind).to eq(:invalid)
+    end
+
     it 'rejects empty policy rather than reporting all dependencies satisfied' do
       subject = recovery(artifacts: { manifest_url => manifest_for([], ruby_abi: ruby_abi, platform: platform) })
       expect(subject.policy_plan(['sqlite3']).error).to include('no recovery units')

@@ -14,6 +14,10 @@ module Lich
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
     class CoverageError < PolicyError; end
+    # The accepted manifest is valid but publishes no target for this Ruby
+    # ABI/platform. Not a PolicyError: GemCheck treats it as "no accepted
+    # policy applies here" and falls back to the plain missing-gem check.
+    class UnsupportedRuntimeError < Error; end
 
     Check = Struct.new(:plan, :needed, :specs, keyword_init: true)
 
@@ -43,7 +47,11 @@ module Lich
       raise Error, 'no required startup dependencies were declared' if dependencies.empty?
       plan = @recovery.policy_plan(dependencies.map(&:name))
       unless plan.success?
-        type = plan.error_kind == :acquisition ? AcquisitionError : InvalidPolicyError
+        type = case plan.error_kind
+               when :acquisition then AcquisitionError
+               when :unsupported_runtime then UnsupportedRuntimeError
+               else InvalidPolicyError
+               end
         raise type, plan.error
       end
       supplied = self.class.supplied_gems(plan.target)

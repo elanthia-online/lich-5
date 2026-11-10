@@ -72,7 +72,11 @@ module Lich
     def verify_windows!(groups)
       recovery = DependencyRecovery.new
       policy = AcceptedGemPolicy.new(recovery: recovery)
-      check = policy.check(required_dependencies(groups))
+      begin
+        check = policy.check(required_dependencies(groups))
+      rescue AcceptedGemPolicy::UnsupportedRuntimeError => e
+        return verify_unsupported_windows_runtime!(groups, e)
+      end
       return policy.activate!(check) if check.needed.empty?
       exit 1 unless recovery_units_approved?(check.plan.units, groups)
 
@@ -81,6 +85,22 @@ module Lich
       raise recovery_error(result) unless result.success?
       raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
       exit 0
+    end
+
+    # The accepted manifest publishes no target for this Windows Ruby (for
+    # example native ARM64 RubyInstaller, while Ruby4Lich5 ships only x64), so
+    # there are no accepted versions to enforce and nothing to repair from.
+    # Apply the plain missing-gem check instead of refusing to start; a
+    # malformed or unreachable manifest still fails closed in verify_windows!.
+    # @param groups [Array<Symbol>]
+    # @param error [AcceptedGemPolicy::UnsupportedRuntimeError]
+    # @return [void]
+    def verify_unsupported_windows_runtime!(groups, error)
+      missing = missing_gems(groups)
+      return if missing.empty?
+
+      alert(missing: missing, groups: groups, error: error)
+      exit 1
     end
 
     def recovery_error(result)
@@ -367,6 +387,9 @@ module Lich
         "The runtime recovery download timed out.\nCheck your connection and retry. If it repeats, use a faster connection or contact the release maintainer."
       when AcceptedGemPolicy::AcquisitionError
         "Lich could not retrieve the accepted runtime policy.\nCheck your network connection and retry. Startup requires reachable policy."
+      when AcceptedGemPolicy::UnsupportedRuntimeError
+        "Automatic gem repair is not available for Ruby #{RUBY_VERSION} on #{Gem::Platform.local}.\n" \
+          "Install the missing gems with 'gem install', or install Ruby with the Ruby4Lich5 installer (on ARM64, Windows 11 only)."
       when AcceptedGemPolicy::CoverageError
         "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
       when AcceptedGemPolicy::InvalidPolicyError

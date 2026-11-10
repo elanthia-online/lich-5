@@ -173,6 +173,40 @@ RSpec.describe Lich::GemCheck do
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
 
+      context 'when the accepted manifest has no target for this runtime' do
+        let(:unsupported) { Lich::AcceptedGemPolicy::UnsupportedRuntimeError.new('manifest has no target for Ruby 4.0 on aarch64-mingw-ucrt') }
+
+        before { allow(policy).to receive(:check).and_raise(unsupported) }
+
+        it 'starts without enforcement when no declared gem is missing' do
+          expect(described_class).to receive(:missing_gems).with([:default]).and_return([])
+          expect(described_class).not_to receive(:alert)
+          expect(policy).not_to receive(:activate!)
+          expect(recovery).not_to receive(:recover)
+          expect { described_class.verify! }.not_to raise_error
+        end
+
+        it 'checks the requested groups' do
+          expect(described_class).to receive(:missing_gems).with(%i[default gtk]).and_return([])
+          described_class.verify!(:default, :gtk)
+        end
+
+        it 'reports missing gems without attempting a repair' do
+          allow(described_class).to receive(:missing_gems).and_return(['ox'])
+          expect(recovery).not_to receive(:recover)
+          expect(described_class).not_to receive(:recovery_units_approved?)
+          expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default], error: unsupported)
+          expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+        end
+      end
+
+      it 'still fails closed on an invalid policy even when no gem is missing' do
+        allow(policy).to receive(:check).and_raise(Lich::AcceptedGemPolicy::InvalidPolicyError, 'duplicate targets')
+        allow(described_class).to receive(:missing_gems).and_return([])
+        expect(described_class).to receive(:alert) { |**args| expect(args.fetch(:error)).to be_a(Lich::AcceptedGemPolicy::InvalidPolicyError) }
+        expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+      end
+
       it 'fails closed when reading declarations fails instead of accepting an empty missing list' do
         allow(described_class).to receive(:required_dependencies).and_raise(Lich::DependencyRecovery::Error, 'invalid Gemfile')
         expect(described_class).to receive(:alert) { |**args| expect(args.fetch(:error).message).to include('invalid Gemfile') }
@@ -850,6 +884,16 @@ RSpec.describe Lich::GemCheck do
       expect(body).to include('release maintainer', 'reinstalling Ruby will not fix')
       expect(described_class).to receive(:alert_windows).with(body, download: false)
       described_class.alert(error: error)
+    end
+
+    it 'explains an unsupported runtime with manual install guidance and the installer link' do
+      error = Lich::AcceptedGemPolicy::UnsupportedRuntimeError.new('manifest has no target for Ruby 4.0 on aarch64-mingw-ucrt')
+      body = described_class.build_alert_body(['ox'], error)
+      expect(body).to start_with("Automatic gem repair is not available for Ruby #{RUBY_VERSION} on #{Gem::Platform.local}.")
+      expect(body).to include('gem install', 'Ruby4Lich5 installer (on ARM64, Windows 11 only)', 'Missing gems:', 'no target')
+      expect(body).not_to include('release maintainer')
+      expect(described_class).to receive(:alert_windows).with(body, download: true)
+      described_class.alert(error: error, missing: ['ox'])
     end
 
     it 'explains malformed policy separately from missing installed gems' do
