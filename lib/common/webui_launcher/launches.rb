@@ -6,8 +6,8 @@ module Lich
       private
 
       # Prepares a manual login, then independently admits optional save and launch.
-      # Multi-Launch keeps the launcher open and starts a child session, as for
-      # saved entries.
+      # Multi-Launch starts a saved-entry child only after requested saving succeeds;
+      # otherwise the authenticated launch continues in this process.
       # @api private
       # @param operation [Operation] cancelable launch token
       # @param account [String] account to authenticate
@@ -18,6 +18,7 @@ module Lich
       def perform_manual_launch(operation, account, character, credential, values)
         launch = nil
         save_notice = nil
+        saved = false
         entry = nil
         credential.consume do |password|
           auth = @authenticator.authenticate(account: account, password: password,
@@ -31,11 +32,14 @@ module Lich
           favorite = submitted(values, 'checkbox:manual-favorite')
           entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
           if save || favorite
-            commit(operation) { save_notice = save_manual_entry(entry, password, favorite: favorite) }
+            commit(operation) do
+              save_notice = save_manual_entry(entry, password, favorite: favorite)
+              saved = save_notice.nil?
+            end
           end
         end
         report_feedback(save_notice) if save_notice && operation_live?(operation)
-        if @persistent
+        if @persistent && saved
           child_launch(operation, launch, entry) { @manual = default_manual_state }
         else
           terminal_launch(operation, launch, :manual)

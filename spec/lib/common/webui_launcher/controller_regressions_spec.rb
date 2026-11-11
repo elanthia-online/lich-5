@@ -943,21 +943,176 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
   describe 'persistent manual launch' do
     let(:session_launcher) { class_double(Lich::Common::SessionLauncher, launch: { ok: true }) }
     let(:launcher_options) { { persistent: true, session_launcher: session_launcher } }
+    let(:credential) { launcher.instance_variable_get(:@manual_credentials)['viewer-1'] }
+
+    before do
+      connect_manual
+      credential
+    end
+
+    def play_manual(values = {})
+      launcher.manual_play(event({ 'select:manual-frontend' => 'stormfront' }.merge(values)))
+    end
+
+    it 'uses the authenticated terminal launch without Save even when a matching entry exists' do
+      play_manual
+
+      expect(catalog.calls).to be_empty
+      expect(session_launcher).not_to have_received(:launch)
+      expect(launches).to contain_exactly([:manual, array_including('KEY=session-key', 'FRONTEND=stormfront')])
+      expect(credential).to be_consumed
+      expect(launcher.lifecycle).to eq(:closed)
+      expect(feedback).to be_empty
+    end
+
+    it 'uses the authenticated terminal launch and custom options when no entry has been saved' do
+      catalog.entries_value = []
+
+      play_manual('checkbox:manual-custom-enabled' => true, 'text_input:manual-custom' => '/fixture/custom',
+                  'text_input:manual-custom-dir' => '/fixture/work')
+
+      expect(catalog.calls).to be_empty
+      expect(session_launcher).not_to have_received(:launch)
+      expect(launches).to contain_exactly([:manual, array_including('KEY=session-key', 'FRONTEND=stormfront',
+                                                                    'CUSTOMLAUNCH=/fixture/custom', 'CUSTOMLAUNCHDIR=/fixture/work')])
+      expect(credential).to be_consumed
+      expect(launcher.lifecycle).to eq(:closed)
+    end
+
+    %i[refused raised].each do |failure|
+      it "uses the authenticated terminal launch when Save is #{failure}, after disposing the password" do
+        password_buffer = nil
+        allow(catalog).to receive(:upsert_manual_entry) do |_entry, password|
+          password_buffer = password
+          raise IOError, 'synthetic save failure' if failure == :raised
+
+          false
+        end
+        allow(launcher).to receive(:report_feedback).and_wrap_original do |original, notice|
+          expect(credential).to be_consumed
+          expect(password_buffer).to eq('')
+          original.call(notice)
+        end
+
+        play_manual('checkbox:manual-save' => true)
+
+        expect(session_launcher).not_to have_received(:launch)
+        expect(launches).to contain_exactly([:manual, array_including('KEY=session-key', 'FRONTEND=stormfront')])
+        expect(credential).to be_consumed
+        expect(password_buffer).to eq('')
+        expect(feedback).to contain_exactly('Login succeeded, but the entry or favorite was not saved.')
+        expect(launcher.lifecycle).to eq(:closed)
+      end
+    end
 
     it 'keeps the launcher open and starts a child session after manual Save' do
-      connect_manual
-      launcher.manual_play(event({ 'select:manual-frontend' => 'stormfront', 'checkbox:manual-save' => true }))
+      play_manual('checkbox:manual-save' => true)
 
       expect(catalog.calls.map(&:first)).to include(:save_manual)
+      expect(catalog.calls.find { |call| call.first == :save_manual }.last).to eq('')
       expect(session_launcher).to have_received(:launch).with(
         kind_of(Array),
         launch_context: hash_including(char_name: 'Aldor', game_code: 'GS3', frontend: 'stormfront',
                                        data_dir: '/fixture', force_path_flags: true)
       )
+      expect(credential).to be_consumed
       expect(launches).to be_empty
       expect(launcher.lifecycle).not_to eq(:closed)
       expect(launcher.send(:render_state)[:manual][:phase]).to eq(:editing)
       expect(launcher.send(:render_state)[:notice][:text]).to eq('Session launched.')
+    end
+
+    it 'preserves the manual custom command and directory on a successfully saved child launch' do
+      play_manual('checkbox:manual-save' => true, 'checkbox:manual-custom-enabled' => true,
+                  'text_input:manual-custom' => '/fixture/custom', 'text_input:manual-custom-dir' => '/fixture/work')
+
+      expect(session_launcher).to have_received(:launch).with(
+        array_including('CUSTOMLAUNCH=/fixture/custom', 'CUSTOMLAUNCHDIR=/fixture/work'),
+        launch_context: hash_including(frontend: 'stormfront', custom_launch: '/fixture/custom',
+                                       custom_launch_dir: '/fixture/work', data_dir: '/fixture', force_path_flags: true)
+      )
+      expect(launches).to be_empty
+    end
+
+    it 'starts a child after Favorite saves both the entry and favorite without requiring Save' do
+      play_manual('checkbox:manual-favorite' => true)
+
+      expect(catalog.calls.map(&:first)).to eq(%i[save_manual favorite])
+      expect(session_launcher).to have_received(:launch)
+      expect(launches).to be_empty
+      expect(launcher.lifecycle).not_to eq(:closed)
+      expect(feedback).to be_empty
+    end
+
+    it 'starts a child for an already-favorite entry without toggling it off' do
+      catalog.entries_value = [entry.with(favorite: true)]
+
+      play_manual('checkbox:manual-favorite' => true)
+
+      expect(catalog.calls.map(&:first)).to eq([:save_manual])
+      expect(session_launcher).to have_received(:launch)
+      expect(launches).to be_empty
+    end
+
+    [false, nil].each do |result|
+      it "uses the authenticated terminal launch when the favorite write returns #{result.inspect}" do
+        allow(catalog).to receive(:toggle_favorite).and_return(result)
+
+        play_manual('checkbox:manual-favorite' => true)
+
+        expect(catalog.calls.map(&:first)).to include(:save_manual)
+        expect(session_launcher).not_to have_received(:launch)
+        expect(launches).to contain_exactly([:manual, array_including('KEY=session-key')])
+        expect(credential).to be_consumed
+        expect(feedback).to contain_exactly('Login succeeded, but the entry or favorite was not saved.')
+        expect(launcher.lifecycle).to eq(:closed)
+      end
+    end
+
+    it 'keeps the existing saved-entry child route and frontend/path context' do
+      launcher.saved_launch(event, entry.key)
+
+      expect(session_launcher).to have_received(:launch).with(
+        array_including('FRONTEND=stormfront'),
+        launch_context: hash_including(char_name: 'Aldor', game_code: 'GS3', frontend: 'stormfront',
+                                       data_dir: '/fixture', force_path_flags: true)
+      )
+      expect(launches).to be_empty
+      expect(launcher.lifecycle).not_to eq(:closed)
+    end
+
+    %i[disconnect close].each do |cancellation|
+      it "refuses Save and both launch routes when #{cancellation} occurs during authentication" do
+        allow(authenticator).to receive(:authenticate).and_wrap_original do |original, **arguments|
+          result = original.call(**arguments)
+          cancellation == :close ? launcher.close : launcher.manual_disconnect('viewer-1')
+          result
+        end
+
+        play_manual('checkbox:manual-save' => true)
+
+        expect(catalog.calls).to be_empty
+        expect(session_launcher).not_to have_received(:launch)
+        expect(launches).to be_empty
+        expect(credential).to be_consumed
+        expect(feedback).to be_empty
+      end
+
+      it "refuses the child launch when #{cancellation} follows a successful save" do
+        allow(credential).to receive(:consume).and_wrap_original do |original, &work|
+          result = original.call(&work)
+          cancellation == :close ? launcher.close : launcher.manual_disconnect('viewer-1')
+          result
+        end
+
+        play_manual('checkbox:manual-save' => true)
+
+        expect(catalog.calls.map(&:first)).to eq([:save_manual])
+        expect(session_launcher).not_to have_received(:launch)
+        expect(launches).to be_empty
+        expect(credential).to be_consumed
+        expect(feedback).to be_empty
+      end
     end
   end
 
