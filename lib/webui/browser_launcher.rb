@@ -348,12 +348,16 @@ module Lich
       end
 
       # Finds Chrome specifically for callers that require that browser.
+      # @param platform [String] Ruby platform string selecting the candidate lists
+      # @param executable [#call] admits a candidate; defaults to an executable regular file
       # @return [String, nil] executable path
       def google_chrome_path(platform: RUBY_PLATFORM, executable: method(:executable_file?))
         chrome_candidates(platform: platform).find { |path| executable.call(path) }
       end
 
       # Lists conventional installation paths for the requested host platform.
+      # @param platform [String] Ruby platform string selecting the candidate lists
+      # @param environment [#[]] environment source for Windows installation roots
       # @return [Array<String>] ordered discovery candidates
       def chrome_candidates(platform: RUBY_PLATFORM, environment: ENV)
         return MACOS_PATHS if platform.match?(/darwin/i)
@@ -381,6 +385,7 @@ module Lich
       end
 
       # Lists Windows Edge paths beneath the available installation environment roots.
+      # @param environment [#[]] environment source for Windows installation roots
       # @return [Array<String>] ordered discovery candidates
       def edge_candidates(environment: ENV)
         %w[PROGRAMFILES PROGRAMFILES(X86) LOCALAPPDATA].filter_map do |variable|
