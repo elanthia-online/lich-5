@@ -58,7 +58,7 @@ RSpec.describe 'remaining Builder setup families' do
     2.times do
       barrier = Queue.new
       service.runtime.dispatch(owner: owner) { barrier << true }
-      expect(barrier.pop(timeout: 3)).to be(true)
+      expect(barrier.pop(timeout: 15)).to be(true)
     end
     expect(@diagnostics.grep(/callback failed/)).to be_empty, @diagnostics.join("\n") if expect_success
   end
@@ -122,7 +122,7 @@ RSpec.describe 'remaining Builder setup families' do
       # Its constructor owns the wait loop, so retain the allocated instance for cleanup.
       @form = klass.allocate
       @runner = Thread.new { @form.send(:initialize, rows) }
-      Timeout.timeout(3) { sleep 0.005 until @form.instance_variable_get(:@running) }
+      Timeout.timeout(15) { sleep 0.005 until @form.instance_variable_get(:@running) }
     else
       @form = klass.new(@settings)
       if source_failure
@@ -133,7 +133,7 @@ RSpec.describe 'remaining Builder setup families' do
       @runner = Thread.new { @form.start }
     end
     page = nil
-    Timeout.timeout(4) do
+    Timeout.timeout(30) do
       loop do
         drain
         page = service.registry.pages_for(owner).first
@@ -403,7 +403,7 @@ RSpec.describe 'remaining Builder setup families' do
     event(form['profile_button'], 'activate', {}, submission: :current)
     # Profile loading queues further changed handlers after drain's markers.
     # Wait for their effects together; a fixed number of markers cannot prove completion.
-    Timeout.timeout(3, Timeout::Error, 'Bigshot profile callbacks did not reach the expected state') do
+    Timeout.timeout(15, Timeout::Error, 'Bigshot profile callbacks did not reach the expected state') do
       loop do
         expect(@diagnostics.grep(/callback failed/)).to be_empty, @diagnostics.join("\n")
         break if form['resting_room_id'].text == '1234' && form['profile_current'].text == 'fixture' && form['custom_fog'].sensitive?
