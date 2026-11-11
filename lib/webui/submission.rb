@@ -59,6 +59,7 @@ module Lich
 
       # Explicitly hands non-sensitive snapshot values to author-owned domain mutation code.
       # Sensitive carriers remain carriers and are not converted by this method.
+      # @return [Object] result of the supplied mutation block
       def commit
         raise ArgumentError, 'commit requires a block' unless block_given?
         raise Error, 'submission snapshot has already been committed' if @committed

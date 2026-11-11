@@ -86,6 +86,9 @@ module Lich
 
       # Retains a visible selected page, otherwise selects the first visible page.
       # All-hidden notebooks keep a bounded index while displaying no page.
+      # @param headers [Array<Hash>, nil] tab headers, or nil when no headers are authored
+      # @param index [Integer] current tab index
+      # @return [Integer] current index or first visible index, including zero when all are hidden
       def visible_tab_index(headers, index)
         return index unless headers&.dig(index, :hidden)
 
@@ -151,6 +154,7 @@ module Lich
       end
 
       # Looks up a supported type after identifier normalization.
+      # @param type [Symbol, String] component type identifier
       # @return [Hash] frozen schema
       # @raise [UnknownTypeError] if the type is outside the contract
       def schema(type)
@@ -161,6 +165,7 @@ module Lich
       end
 
       # Converts identifier-shaped strings to symbols; leaves other inputs for rejection.
+      # @param type [Object] candidate component type
       # @return [Object] normalized candidate type
       def normalize_type(type)
         return type if type.is_a?(Symbol)
@@ -171,6 +176,9 @@ module Lich
 
       # Preserve a literal string while dividing it across bounded wire fields.
       # The receiver still owns the collection bound and presentation policy.
+      # @param value [String] literal text to retain or fragment
+      # @param bound [Symbol] key of the character limit in BOUNDS
+      # @return [String, Array<String>] original text within the limit, otherwise bounded fragments
       def fragment_text(value, bound:)
         limit = BOUNDS.fetch(bound)
         value.length <= limit ? value : value.scan(/.{1,#{limit}}/m)
@@ -178,6 +186,7 @@ module Lich
 
       # Accepts the current major protocol version and returns the server version.
       # Minor version differences do not prevent attachment.
+      # @param client_version [#to_s] client version whose first dotted segment is the major
       # @return [String] server contract version
       # @raise [VersionError] for malformed or incompatible major versions
       def negotiate!(client_version)
@@ -198,6 +207,7 @@ module Lich
 
       # Copies hash/array containers recursively, retaining scalar objects.
       # This is a schema composition helper, not a general mutable deep copy.
+      # @param value [Object] schema container or scalar to preserve
       # @return [Object] copied container or original scalar
       def deep_dup(value)
         case value
