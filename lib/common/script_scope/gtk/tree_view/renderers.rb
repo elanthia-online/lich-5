@@ -99,7 +99,7 @@ module Lich
 
           # Literal display text is independent of the model's identity/sort value.
           # Binary-tagged UTF-8 is re-tagged as ListStore and TextBuffer do; other
-          # non-UTF-8 text is refused here, not later at projection (1844:RC10).
+          # non-UTF-8 text is refused here, not later at projection.
           # @param value [String] literal text published as UTF-8
           # @return [void] result is not part of the supported script contract
           def text=(value)

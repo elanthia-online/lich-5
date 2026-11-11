@@ -88,7 +88,7 @@ module Lich
         end
 
         @sessions = {}.compare_by_identity
-        # Owners whose death close has begun (1845:RC12). Weak: the marker must
+        # Owners whose death close has begun. Weak: the marker must
         # not keep a dead Script alive.
         @closed_owners = Lich::WebUI::WeakIdentityMap.new
         @mutex = Mutex.new
@@ -119,15 +119,15 @@ module Lich
         # would stay held with a hook that never fires. The same holds for an owner
         # that never used Gtk, whose core pre-terminate hooks have started or run:
         # its first widget, built by a worker unwinding after them, gets no session
-        # either (1836:RC22). The hook is registered before the session is created,
+        # either. The hook is registered before the session is created,
         # and the core refusal of a registration for an owner whose hooks have
         # started is what is trusted; a check before registering would leave a
         # window in which the owner starts between the check and the call.
         # Both refuse through the closed-owner error below. An owner that is merely
-        # stopping, before its death close, still gets one (1845:RC12).
+        # stopping, before its death close, still gets one.
         # Because the hook is registered first and the core has no unregister, a
         # failed Session.new leaves one no-op hook on the owner until the owner
-        # dies; no shipped path raises there (1845:RC15).
+        # dies; no shipped path raises there.
         # @return [Session]
         # @raise [UnsupportedOperation] when no Script owns the call, or the owner's
         #   death close or pre-terminate hooks have started, and it has no session
@@ -224,12 +224,12 @@ module Lich
         # Closes the dying script's windows through the core's pre-terminate hook,
         # so their destroy handlers run while the owner's pages are still
         # registered; a plain ScriptDeath handler would run after the core
-        # retired them (1836:RC20). The hook is registered for this owner only,
+        # retired them. The hook is registered for this owner only,
         # just before its session is created: the hook runner costs a host thread and a
         # wait on the cleanup thread per hook, and scripts that never used Gtk
         # must not pay it. It runs on a host thread, bounded by
         # Lich::WebUI::BEFORE_TERMINATE_TIMEOUT. The hook marks the owner closed
-        # before it drops the session, so no later call recreates one (1845:RC12).
+        # before it drops the session, so no later call recreates one.
         # It closes whichever session the owner holds then, so it needs no session at
         # registration time.
         # @param owner [Script] script whose death closes its session

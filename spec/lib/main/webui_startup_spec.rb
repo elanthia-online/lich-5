@@ -48,7 +48,7 @@ RSpec.describe Lich::Main::WebUIStartup do
     allow(Lich).to receive(:msgbox_alert).and_return(false) if Lich.respond_to?(:msgbox_alert)
   end
 
-  it 'also offers a launcher failure to the desktop alert path (1853:RC4)' do
+  it 'also offers a launcher failure to the desktop alert path' do
     # lib/lich.rb is not loaded here; stand in for Lich.msgbox_alert for this example only.
     standin = !Lich.respond_to?(:msgbox_alert)
     Lich.define_singleton_method(:msgbox_alert) { |**| false } if standin
@@ -117,7 +117,7 @@ RSpec.describe Lich::Main::WebUIStartup do
   end
 
   # Thread#kill only simulates an abandoned wait in a live process. A real signal
-  # exit is handled by the launcher's at_exit hook, not by this ensure (1853:RC16).
+  # exit is handled by the launcher's at_exit hook, not by this ensure.
   it 'tears the launcher down when the startup wait thread is killed' do
     launcher = launcher_class.new(block: true)
     waiter = Thread.new { described_class.await(launcher) }

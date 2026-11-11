@@ -5,9 +5,9 @@ require 'webui'
 require_relative '../../../lib/common/script_scope/gtk/session'
 require_relative '../../../lib/common/script_scope/gtk/widgets'
 
-# Widget text boundaries: the P12 share of 1843:RC19. Every text setter turns
+# Widget text boundaries. Every text setter turns
 # binary-tagged UTF-8 into UTF-8 and refuses other non-UTF-8 text at the call,
-# as the P13 model, table and text setters do, instead of at the next publication.
+# as the model, table and text setters do, instead of at the next publication.
 RSpec.describe 'script compatibility widget text' do
   port_class = Class.new do
     attr_reader :sets, :created
@@ -76,7 +76,7 @@ RSpec.describe 'script compatibility widget text' do
   ]
 
   setters.each do |name, operation, factory, setter, reader, property|
-    it "#{name} re-tags binary-tagged UTF-8 and refuses other non-UTF-8 text at the call (1843:RC19)" do
+    it "#{name} re-tags binary-tagged UTF-8 and refuses other non-UTF-8 text at the call" do
       widget = factory.call
       widget.materialize
       before_value = reader && widget.public_send(reader)
@@ -98,7 +98,7 @@ RSpec.describe 'script compatibility widget text' do
     end
   end
 
-  it 'applies the same rule to text given at construction (1843:RC19)' do
+  it 'applies the same rule to text given at construction' do
     constructors = {
       label: [:new, ->(v) { gtk::Label.new(v).text }],
       toggle: [:new, ->(v) { gtk::ToggleButton.new(v).label }],
@@ -114,7 +114,7 @@ RSpec.describe 'script compatibility widget text' do
     end
   end
 
-  it 'publishes a re-tagged label as UTF-8 content (1843:RC19)' do
+  it 'publishes a re-tagged label as UTF-8 content' do
     window = gtk::Window.new
     window.add(gtk::Label.new(cafe))
     window.materialize

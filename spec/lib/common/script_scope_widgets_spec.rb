@@ -548,7 +548,7 @@ RSpec.describe 'bounded script compatibility pilot' do
     before do
       allow(Lich::WebUI).to receive(:service).and_return(service)
       allow(Lich::WebUI).to receive(:adapter).and_call_original
-      # The real adapter presents only once core enables presentation (1853:RC2).
+      # The real adapter presents only once core enables presentation.
       Lich::WebUI.configure_presentation(enabled: true)
     end
 

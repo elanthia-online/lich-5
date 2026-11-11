@@ -138,7 +138,7 @@ module Lich
 
           # Validates literal labels and retains the constructor's mnemonic policy.
           # Binary-tagged UTF-8 is re-tagged as UTF-8; other non-UTF-8 text is
-          # refused here, not later at publication (1844:RC13).
+          # refused here, not later at publication.
           # @return [String] label as UTF-8, never stripped or interpreted as markup
           # @raise [UnsupportedOperation] for invalid input or requested mnemonic syntax
           def menu_label(label, underline)

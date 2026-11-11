@@ -290,7 +290,7 @@ module Lich
           # write, so the write is still refused at its call. The model already
           # bounds rows and depth and keeps identities unique and parents live,
           # and viewer state is reconciled when the change is published; the
-          # whole-table check runs then (1844:RC4).
+          # whole-table check runs then.
           # @param keys [Array<String>] identities of rows the mutation inserted or wrote
           # @return [void]
           # @api private
