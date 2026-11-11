@@ -7,6 +7,10 @@ module Lich
     # Registers a native WebUI page owned by the supplied core or script object.
     # Registration does not render or open a window. Render the page, start the
     # host, then open it; the owner remains responsible for its domain behavior.
+    # Dispatched native callbacks and background render workers use HostThread
+    # in ThreadGroup::Default, outside the owning script's thread. Do not assume
+    # Script.current or script pause context there. Keep callbacks nonblocking;
+    # enqueue game I/O back to the owning script's thread.
     #
     # @param owner [Object] lifetime identity used for page cleanup
     # @param id [String] page identifier unique within this owner
@@ -37,6 +41,7 @@ module Lich
 
     # Creates a hosted imperative adapter; its first valid page render opens
     # the window automatically. Consumers must not create their own server.
+    # The callback and background-render thread rules for webui_page also apply.
     #
     # @param owner [Object] lifetime identity used for adapter page cleanup
     # @param viewer [String, nil] attachment id for viewer-local properties;
@@ -74,6 +79,7 @@ module Lich
     end
 
     # Renders current server state and delivers it to connected page viewers.
+    # This explicit refresh evaluates the render block on the calling thread.
     # @param page [Lich::WebUI::Page] page whose render block should run
     # @return [Integer] generated revision; concurrent work may deliver a newer one
     def self.webui_refresh(page)
