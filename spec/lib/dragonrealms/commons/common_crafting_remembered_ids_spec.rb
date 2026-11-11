@@ -652,6 +652,84 @@ RSpec.describe Lich::DragonRealms::DRCC do
     end
   end
 
+  # A worn bucket that doesn't flush keeps what was binned for about five
+  # minutes; on 2026-11-10 sew's next GET by a remembered id took binned
+  # wool yarn back out ("You get some wool yarn from inside your silversteel
+  # bucket.", Evro 22:17:58) and studied the instructions over a scrap too
+  # small to use, once per run, until the task was locked.
+  describe '.get_crafting_item after the item was thrown away' do
+    let(:bucket) { ['900', 'bucket', 'portable silversteel bucket with a flared rim'] }
+    let(:from_bucket) { 'You get some sepia pins from inside your silversteel bucket.' }
+
+    before { worn(silk_duffel, pack, bucket) }
+
+    it 'forgets a remembered id DRCI says was thrown away and GETs by name' do
+      stow_pins
+      Lich::DragonRealms::DRCI.note_thrown_away('4101800')
+      game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get my pins from #2391122'])
+      expect(memo.fetch('#2391122', 'pins')).to eq('4101801')
+    end
+
+    it 'never takes a thrown-away id from the Inventory feed' do
+      allow(inventory).to receive(:feed_available?).and_return(true)
+      feed([['4101800', 'some sepia,,pins']])
+      Lich::DragonRealms::DRCI.note_thrown_away('#4101800')
+      game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get my pins from #2391122'])
+    end
+
+    it 'puts back an item the GET by id took out of the worn bucket, forgets the id and GETs by name' do
+      stow_pins
+      game('get #4101800', from_bucket) { hands(right: pins, left: half_made) }
+      game('put #4101800 in #900', 'You drop some sepia pins into a portable silversteel bucket with a flared rim.') { hands(left: half_made) }
+      game('get my pins from #2391122', got_pins) { hands(right: new_pins, left: half_made) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get #4101800', 'put #4101800 in #900', 'get my pins from #2391122'])
+      expect(memo.dead?('4101800')).to be(true)
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /#4101800 \(pins\) was in your trash can \(silversteel bucket\)\. Put it back; getting pins by name\./)
+    end
+
+    it 'says so when the bucket will not take it back, and still GETs by name' do
+      stow_pins
+      game('get #4101800', from_bucket) { hands(right: pins, left: half_made) }
+      game('put #4101800 in #900', 'You can\'t put that there.')
+      game('get my pins from #2391122', got_pins) { hands(right: pins, left: new_pins) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get #4101800', 'put #4101800 in #900', 'get my pins from #2391122'])
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Could not put it back; getting pins by name/)
+    end
+
+    it 'still GETs by id from a container that is not a trash receptacle (the pack, after a full bag)' do
+      stow_pins
+      game('get #4101800', 'You get some sepia pins from inside your scuffed traveler\'s pack.') { hands(right: pins, left: half_made) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get #4101800'])
+    end
+
+    it 'still GETs by id from a crafting bag whose noun is a trash noun (a basket)' do
+      basket = ['2391122', 'basket', 'woven wicker basket']
+      worn(basket, pack, bucket)
+      hands(right: pins, left: half_made)
+      game('put #4101800 in #2391122', 'You put your pins in your woven wicker basket.') { hands(left: half_made) }
+      expect(described_class.stow_crafting_item('pins', 'wicker basket', nil)).to be(true)
+      sent.clear
+      game('get #4101800', 'You get some sepia pins from inside your wicker basket.') { hands(right: pins, left: half_made) }
+      expect(described_class.get_crafting_item('pins', 'wicker basket', ['pins'], nil, true)).to be(true)
+      expect(sent).to eq(['get #4101800'])
+    end
+
+    it 'still GETs by id when the bucket named is not one worn item' do
+      worn(silk_duffel, pack, bucket, ['901', 'bucket', 'sturdy silversteel bucket'])
+      stow_pins
+      game('get #4101800', from_bucket) { hands(right: pins, left: half_made) }
+      expect(get_pins).to be(true)
+      expect(sent).to eq(['get #4101800'])
+    end
+  end
+
   describe '.check_consumables' do
     let(:count_ok) { 'The sepia pins has 12 uses remaining.' }
 
