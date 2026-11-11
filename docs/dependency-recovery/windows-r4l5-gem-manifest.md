@@ -167,15 +167,22 @@ A package may carry an optional `minimum` next to its `version`:
 installed version startup accepts without a repair. It shares the package's
 platform; it has no platform of its own. A missing `minimum` means
 `minimum == version`, which is the strict behavior described above. When the
-key is present it must be a non-empty string that is a valid RubyGems version
-and no higher than `version`; otherwise the policy is invalid and startup stops
-as for any other invalid policy. The release contract check rejects the same
-shapes, and also units that give one lock-checked package different minimums.
+key is present it must be a release version (not a prerelease) written in
+canonical RubyGems form, so `Gem::Version.new(minimum).to_s == minimum`, and no
+higher than `version`. A blank or padded string (`" "`, `" 2.10.1"`,
+`"2.10.1\n"`) or one RubyGems rewrites (`"2.10.1-1"` becomes `2.10.1.pre.1`) is
+rejected. A prerelease minimum is rejected because startup requirements are
+releases, so startup could never run on an installed prerelease. Otherwise the
+policy is invalid and startup stops as for any other invalid policy. The
+release contract check rejects the same shapes, and also units that give one
+lock-checked package different minimums.
 
 The effective minimum is part of a package's identity. Two selected units that
 carry the same package with different minimums are conflicting identities
-(`InvalidPolicyError`); an absent minimum and one equal to `version` are the
-same package.
+(`InvalidPolicyError`). Minimums are compared by version value, and an absent
+minimum counts as `version`, so an absent minimum, `"2.10.2"` and `"2.10.2.0"`
+for version 2.10.2 are the same package. The release contract check compares
+minimums the same way.
 
 Startup then sorts each package into one of three tiers:
 
@@ -183,11 +190,11 @@ Startup then sorts each package into one of three tiers:
   active): the existing consented repair runs for every unit containing a
   needed package, then Lich restarts. The repair installs each package of
   those units at its `version`, so a package of the same unit that was only
-  recommended is upgraded with it. Units with only recommended packages are
-  not added to the repair.
+  recommended is upgraded with it. A unit with only recommended packages is
+  not added to this repair; the conflict fallback below can still repair one.
 - **Recommended** (the installed version startup selects is at or above
   `minimum` but below `version`): log-only. Lich starts immediately on the
-  installed version with no dialog, no wait and no repair attempt, and appends
+  installed version with no dialog, no wait and no repair attempt, and writes
   a short entry to `temp/lich5-missing-gems.log`:
 
   ```
@@ -197,8 +204,10 @@ Startup then sorts each package into one of three tiers:
       - redis-client: installed 0.25.0, accepted 0.26.0 (minimum 0.25.0), redis bundle
   ```
 
-  The entry repeats on each start until a repair of that unit installs
-  `version`.
+  The entry is written only when its content, ignoring the timestamp,
+  differs from the last recommended entry in the log, so repeated starts on
+  the same installed gems add nothing. If the log cannot be read, the entry
+  is written anyway, and a failed write never stops startup.
 - **Current** (`version` or an eligible newer version is installed): as before.
 
 Resolution and activation use the minimums as floors and keep the resolver's
@@ -206,13 +215,24 @@ existing preference: the highest acceptable installed version, or the version
 already active. If the accepted version is installed alongside an older
 acceptable one, it is selected and nothing is recommended.
 
-A lower floor never turns a repairable state into a startup failure. If the
+On the same installed gems, a lower floor never turns a repairable state into
+a startup failure. This holds for each installed state, not across a history of
+starts: a repair deferred at one start can leave the next start in a state the
+strict policy would never have reached. If the
 installed gems cannot be resolved at the minimums (for example, an installed
 newer `redis` requires `redis-client >= 0.26` while `redis-client` 0.25 meets
 its minimum), Lich raises the floors of the units named by the failure to their
 `version` and repairs those units. If that names no package below its version,
 Lich decides exactly as with no minimums: a repair where some package is below
 its version, otherwise today's local-installation or policy error.
+
+The fallback can repair a unit that has nothing below its minimum, when the
+resolver names it in the failure. It handles one resolver failure per start, so
+a sequence of starts can need more consented repairs and restarts than the
+strict policy would, and some such sequences still end in a policy error. One
+example: a deferred unit whose installed newer dependent pins another member
+exactly (`=`) can leave every later start with the policy error where the strict
+policy would have repaired it at the first start.
 
 `StartupPolicyCompatibility` checks every supported client at both the
 `version` floors and the `minimum` floors, so a producer cannot publish a
