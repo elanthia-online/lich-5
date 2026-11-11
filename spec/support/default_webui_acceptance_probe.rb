@@ -125,7 +125,7 @@ module LichCiDefaultWebUIAcceptance
       result = exercise(url)
       report(result)
       # An owned browser window closes the launcher by exiting; a viewer detach
-      # alone leaves the page open (1836:RC8), so report the substitute's exit.
+      # alone leaves the page open, so report the substitute's exit.
       on_exit&.call
     rescue StandardError => error
       report(

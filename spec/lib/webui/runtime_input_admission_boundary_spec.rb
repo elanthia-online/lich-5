@@ -4,8 +4,7 @@ require_relative '../../spec_helper'
 require 'webui'
 require 'json'
 
-# Disabled and hidden input admission and atomic submission:
-# 1831:RC3, 1831:RC4 and the P05 share of 1831:RC29.
+# Disabled and hidden input admission and atomic submission.
 RSpec.describe 'WebUI input admission boundaries' do
   connection_class = Class.new do
     attr_reader :viewer_id
@@ -56,7 +55,7 @@ RSpec.describe 'WebUI input admission boundaries' do
     runtime.handle(viewer, message)
   end
 
-  describe 'disabled and hidden event admission (1831:RC3)' do
+  describe 'disabled and hidden event admission' do
     it 'runs blur cleanup from a disabled input with the server value and no viewer-state change' do
       sink = received
       page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'blur', title: 'Blur') do
@@ -85,7 +84,7 @@ RSpec.describe 'WebUI input admission boundaries' do
     end
   end
 
-  describe 'disabled submission values (1831:RC4)' do
+  describe 'disabled submission values' do
     it 'retains the server value of a disabled input and of an input under a disabled ancestor' do
       sink = received
       page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'disabled-submit', title: 'Disabled') do
@@ -103,7 +102,7 @@ RSpec.describe 'WebUI input admission boundaries' do
     end
   end
 
-  describe 'atomic submission commit (1831:RC29)' do
+  describe 'atomic submission commit' do
     it 'commits no viewer value and disposes earlier secret carriers when a later wrap fails' do
       sink = received
       page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'atomic', title: 'Atomic') do

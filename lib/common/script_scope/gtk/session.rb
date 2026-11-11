@@ -136,7 +136,7 @@ module Lich
           # the destroys they trigger, without reviving dispatch. The stopping
           # owner's own threads (a killed worker's ensure block) run inline the
           # same way, so a queue-then-wait there completes instead of hanging the
-          # stop (1843:RC18, legacy parity); the wait needs no timeout. Other
+          # stop (legacy parity); the wait needs no timeout. Other
           # threads get nil while the owner is stopping. Destroy handlers run by
           # the owner-death close, and any later call, get nil: that work is
           # skipped, not deferred.
@@ -289,7 +289,7 @@ module Lich
           # Until the one queued fence job runs, later writes to that model check
           # only their own rows and publish together at the next barrier: the
           # fence job's callback flush, or an earlier widget read, write or
-          # callback flush. No timer is involved (1844:RC4).
+          # callback flush. No timer is involved.
           # @param model [ListStore] model being mutated outside a callback
           # @return [Boolean] whether the mutation may defer its publication
           # @api private
@@ -378,7 +378,7 @@ module Lich
           # contained only once this session is closed or its owner is already
           # stopping. A destroy handler that exits while the owner is live (a
           # window closed from a signal, or an explicit destroy) is an owner-stop
-          # request like any other callback exit (1843:RC3): it propagates to the
+          # request like any other callback exit: it propagates to the
           # dispatcher or the script thread, and the remaining handlers of that
           # destroy are skipped because the owner is being stopped.
           # @param receiver [Widget] object whose cleanup is running

@@ -80,7 +80,7 @@ RSpec.describe 'WebUI presentation policy at startup' do
     expect(have_gtk_for('--reconnect', '--no-gtk', '--game=GS3')).to eq('[false]')
   end
 
-  it 'hides Gtk from script scope for --no-gui and --no-gtk only (1853:RC2@S7)' do
+  it 'hides Gtk from script scope for --no-gui and --no-gtk only' do
     expect(script_value_for('defined?(Gtk)', '--no-gui')).to eq('[nil]')
     expect(script_value_for('defined?(Gtk)', '--no-gtk')).to eq('[nil]')
     expect(script_value_for('defined?(Gtk)')).to eq('["constant"]')
