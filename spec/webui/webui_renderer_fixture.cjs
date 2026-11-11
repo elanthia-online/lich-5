@@ -25,6 +25,7 @@ function fixture(target) {
     replaceChildren(...children) { this.children.forEach(child => { child.isConnected = false; }); this.children = []; this.append(...children); }
     focus() { document.activeElement = this; }
     closest() { return null; }
+    contains(target) { return this === target || this.children.some(child => child.contains?.(target)); }
     click() { this.listeners.click?.({}); }
     getClientRects() { return this.hidden ? [] : [this.getBoundingClientRect()]; }
     querySelector(selector) {
@@ -53,9 +54,13 @@ function fixture(target) {
     showModal() { this.open = true; }
   }
   const elements = Object.fromEntries(['pages', 'status', 'notifications', 'announcer'].map(id => [id, new Element('div')]));
-  const documentEvents = {};
+  const documentEvents = {}, documentListeners = {};
   const document = { title: '', activeElement: null, createElement: tag => new Element(tag),
-    getElementById: id => elements[id], addEventListener(name, callback) { documentEvents[name] = callback; } };
+    getElementById: id => elements[id],
+    addEventListener(name, callback) {
+      (documentListeners[name] ||= []).push(callback);
+      documentEvents[name] ||= event => documentListeners[name].forEach(listener => listener(event));
+    } };
   const sent = [], resized = [], listeners = {}, windowEvents = {};
   let timer = 0;
   const frames = [];
