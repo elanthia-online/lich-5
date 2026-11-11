@@ -113,6 +113,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
     expect(failures.first).to include('Google Chrome or Chromium is required', 'Browser path', 'Settings',
                                       'LICH_WEBUI_BROWSER')
+    expect(failures.first).not_to include('snap-packaged')
   end
 
   it 'refuses a snap-packaged browser path, naming the setting and LICH_WEBUI_BROWSER, without spawning' do
@@ -132,6 +133,52 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
 
     expect(open_with(platform: 'x86_64-linux', spawn: ->(*arguments, **) { (argv = arguments) && 7 })).to be(true)
     expect(argv.first).to eq(detected)
+  end
+
+  describe 'automatic discovery with snap candidates' do
+    before do
+      # Use real executable and snap probes over stand-ins only; host browsers
+      # cannot satisfy either the initial search or the failure-only search.
+      allow(described_class).to receive(:chrome_candidates).and_return([])
+      allow(described_class).to receive(:chromium_candidates).and_return([snap_wrapper])
+    end
+
+    it 'names a skipped snap browser and non-snap recovery without spawning or exposing the URL' do
+      spawn = ->(*) {}
+      expect(spawn).not_to receive(:call)
+
+      expect(open_with(platform: 'x86_64-linux', spawn: spawn)).to be(false)
+      expect(failures.size).to eq(1)
+      expect(failures.first).to include("'#{snap_wrapper}'", 'snap-packaged Chromium cannot open the WebUI launch files',
+                                        'Browser path', 'Settings', 'non-snap Chrome or Chromium', 'LICH_WEBUI_BROWSER')
+      expect((failures + logs).join).not_to include(url, 'f' * 64)
+    end
+
+    it 'preserves spaces in the skipped browser path' do
+      path = File.join(directory, 'snap browser.exe')
+      File.rename(snap_wrapper, path)
+      allow(described_class).to receive(:chromium_candidates).and_return([path])
+
+      expect(open_with(platform: 'x86_64-linux', spawn: ->(*) {})).to be(false)
+      expect(failures.first).to include("'#{path}'", 'snap-packaged')
+    end
+
+    it 'does not describe a non-executable snap candidate as a skipped browser' do
+      allow(described_class).to receive(:executable_file?).with(snap_wrapper).and_return(false)
+
+      expect(open_with(platform: 'x86_64-linux', spawn: ->(*) {})).to be(false)
+      expect(failures.first).to include('Google Chrome or Chromium is required')
+      expect(failures.first).not_to include('snap-packaged')
+    end
+
+    it 'selects a later usable browser without scanning the candidates again' do
+      expect(described_class).to receive(:chromium_candidates).once.and_return([snap_wrapper, chromium])
+      argv = nil
+
+      expect(open_with(platform: 'x86_64-linux', spawn: ->(*arguments, **) { (argv = arguments) && 7 })).to be(true)
+      expect(argv.first).to eq(chromium)
+      expect(failures).to be_empty
+    end
   end
 
   describe 'Linux Chromium discovery' do
