@@ -113,11 +113,13 @@ module Lich
       end
 
       # Selects native or browser argv without invoking a shell or starting a process.
+      # Failed automatic Linux discovery names any skipped snap browser so the
+      # recovery message can direct the user to a non-snap installation.
       # @param url [String] private launch-file path (native) or file URL (browser)
       # @param platform [String, nil] discovery override; nil uses the current OS
       # @param browser_path [String, nil] explicit browser, bypassing native selection
       # @param chrome_path [String, nil] legacy alias for browser_path
-      # @param environment [#[]] environment source for LICH_WEBUI_BROWSER
+      # @param environment [#[]] environment source for browser overrides and discovery
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
       # @param profile_dir [String, nil] isolated browser profile directory
       # @return [Array<String>] executable followed by its arguments
@@ -130,6 +132,17 @@ module Lich
         platform ||= OS.host_os
         executable = override || app_browser_path(platform: platform, environment: environment)
         unless executable
+          if platform.match?(/linux/i)
+            candidates = chrome_candidates(platform: platform, environment: environment) +
+                         chromium_candidates(platform: platform, environment: environment)
+            snap = candidates.find { |path| executable_file?(path) && snap_browser?(path) }
+            if snap
+              shown = snap.gsub(/[[:cntrl:]]/, '?')
+              raise Error, "the discovered browser '#{shown}' is unusable: " \
+                           'snap-packaged Chromium cannot open the WebUI launch files; ' \
+                           "#{ROUTES_HINT} to a non-snap Chrome or Chromium"
+            end
+          end
           requirement = if windows?(platform)
                           'Google Chrome or Microsoft Edge'
                         elsif platform.match?(/darwin/i)
