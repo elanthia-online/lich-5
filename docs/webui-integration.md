@@ -134,9 +134,13 @@ maintainers' supported-platform policy.
 
 Windows and Linux use dedicated browser app windows. Chrome and Edge are the
 supported defaults (Edge is discovered on Windows), and distro Chromium is
-discovered on Linux. Any other browser can be chosen with the launcher's Browser
-path setting or the `LICH_WEBUI_BROWSER` environment variable, at the user's own
-risk.
+discovered on Linux. Other Chromium-based browsers may work at the user's own
+risk. The launcher's saved Browser path applies only to the launcher window;
+script windows do not inherit it. Set `LICH_WEBUI_BROWSER` to a Chromium-based
+browser's executable path to select it for both launcher and script windows.
+An explicit launcher path takes precedence for that launcher. Linux discovery
+skips snap-packaged Chromium, and an explicit snap path is refused; use a
+non-snap Chrome or Chromium installation.
 Windows topmost/opacity support uses the existing Fiddle/user32 integration, not
 an additional WebView2 runtime. Browser and OS capabilities differ. Native focus,
 topmost, opacity, geometry and cleanup require platform beta acceptance.

@@ -313,6 +313,7 @@ module Lich
   # @param args [Hash] message, optional title and icon, as given to Lich.msgbox
   # @return [Boolean] whether a helper was invoked
   def Lich.msgbox_alert(args)
+    return false if defined?(Win32)
     return false unless args[:icon] == :error
     return false if STDOUT.isatty || STDERR.isatty
     return false unless defined?(Lich::GemCheck) && Lich::GemCheck.respond_to?(:show_notice)
