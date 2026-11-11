@@ -232,8 +232,28 @@ module Lich
       # remaining.  Study them again to proceed.") is not taken as the game
       # asking for another study, with its uses count.
       STUDY_INSTRUCTIONS_AGAIN = /^[^"]*?(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
-      # Ends a completed study: "Roundtime: 7 sec." (2026-10-25 game log:10825).
-      STUDY_INSTRUCTIONS_SUCCESS = /^Roundtime/
+      # The study's own line, the first line of a completed study's reply:
+      # "You scan the liniment instructions with a glance and confidently
+      # discern most of the design's minutiae." (2026-10-25 game log:10821),
+      # then "You now feel ready to begin the crafting process." and
+      # "Roundtime: 7 sec." (10823, 10825). In the November logs of
+      # 2023-2026 (about 940,000 studies) it always starts "You scan the
+      # <x> instructions with a glance and ", with three endings:
+      # "completely understand all facets of the design." (nearly all),
+      # "comprehend all but several minor details in the text." (23 in
+      # 2023, 54 in 2025, 2 in 2026) and "confidently discern most of the
+      # design's minutiae." (40 in 2025). Only the start is matched, so an
+      # ending not seen yet still counts.
+      #
+      # Not "Roundtime": bput returns on the first line after the command
+      # that matches, and when the game is lagging it can still be
+      # answering commands sent before the study (DragonRealms, 2026-11-12:
+      # the server went quiet for about 3.5 minutes, then ran the queued
+      # commands in order and sent all their replies at once). A late
+      # "Roundtime: N sec." from one of those commands took a study that
+      # hadn't happened yet for a completed one. Anchored, so another
+      # player's speech or ESP that quotes the line doesn't match either.
+      STUDY_INSTRUCTIONS_SUCCESS = /^You scan the .+ instructions with a glance and /
       # Code-derived, not seen after a study in the logs: the reply to a
       # `<verb> my <name>` that names nothing on the character, as a GET of
       # missing instructions gets (2026-10-26 game log:60708).
@@ -1274,8 +1294,9 @@ module Lich
       # What one study_instructions call did.
       #
       # @!attribute [r] studied
-      #   @return [Boolean] true when a study ended in Roundtime, so the
-      #     design is learned and crafting can start
+      #   @return [Boolean] true when the game sent the study's own line
+      #     (STUDY_INSTRUCTIONS_SUCCESS), so the design is learned and
+      #     crafting can start
       # @!attribute [r] uses_left
       #   @return [Integer, nil] uses the instructions have after this call:
       #     0 when they were tossed; the game's count minus one after a
@@ -1315,18 +1336,22 @@ module Lich
       #    another "instructions" item cannot answer it. A "Study them again"
       #    prompt sends it again, up to STUDY_INSTRUCTIONS_MAX_STUDIES studies
       #    in all; the prompt's uses count is kept for +uses_left+.
-      # 3. Waits out the study's roundtime, then checks a Flag for
-      #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the Roundtime line
-      #    bput returned on. A completed study after a "1 uses" prompt counts
-      #    as a toss even if the Flag missed the line.
+      # 3. A study is complete on the study's own line
+      #    (STUDY_INSTRUCTIONS_SUCCESS), not on "Roundtime", which a reply to
+      #    an earlier command can send while the game is lagging. Waits out
+      #    the study's roundtime (the game sets it on the reply's first line,
+      #    so it is already known when bput returns), then checks a Flag for
+      #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the study's
+      #    Roundtime line, after bput returned. A completed study after a "1
+      #    uses" prompt counts as a toss even if the Flag missed the line.
       # 4. stow_crafting_item(+name+, +bag+, +belt+), unless the instructions
       #    were tossed. A study that says they are not there or not in hand
       #    still comes after a GET that got them, so they are put away too; if
       #    they really are gone, the PUT only gets "What were you referring
       #    to?" (2026-10-25 game log:30361).
       #
-      # A study that does not end in Roundtime (not found, not holding, a
-      # timeout, or still "Study them again" after the last study) is a final
+      # A study that does not complete (not found, not holding, a timeout,
+      # or still "Study them again" after the last study) is a final
       # failure: it beeps, prints a bold line and stops the script, or returns
       # with +studied+ false when +skip_exit+ is set. The instructions are put
       # away first, so a stop does not leave them in hand. A GET that fails
@@ -1414,7 +1439,7 @@ module Lich
         end
       end
 
-      # The bold line for a study that did not end in Roundtime.
+      # The bold line for a study that did not complete.
       #
       # @param outcome [Symbol] a study_instructions_outcome other than :studied
       # @param name [String] the instructions
