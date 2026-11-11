@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
 require 'json'
-require 'open3'
-require 'rbconfig'
 require 'timeout'
 
 # Owner stop and render-worker ownership at the runtime layer: the P05 shares of
 # 1832:RC1 and 1832:RC28, plus 1837:RC1, 1836:RC11 and 1836:RC12.
 RSpec.describe 'WebUI runtime owner-stop boundaries' do
+  include WebUIFreshProcess
+
   connection_class = Class.new do
     attr_reader :viewer_id
 
@@ -41,7 +42,8 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
   after { runtime.shutdown }
 
   def run_fresh(code)
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+    output, errors, status = run_ruby_with_deadline(code)
+    expect_child_within_deadline(status, output, errors, 'fresh-process runtime owner-stop example')
     [output, errors, status]
   end
 
