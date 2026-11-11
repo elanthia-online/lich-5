@@ -164,10 +164,12 @@ RSpec.describe 'WebUI script window lifecycle' do
     Timeout.timeout(2) { entered.pop }
     service.runtime.close_page(target)
     release << true
+    expect(opening.join(2)).to eq(opening), 'opening worker did not finish after the page was removed within 2 seconds'
     opening.value
     expect(terminated).to eq([[OS.windows? ? 'KILL' : 'TERM', 77]])
   ensure
     release << true if release
+    opening.kill if opening&.alive?
     opening&.join(2)
   end
 
