@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
-require 'open3'
-require 'rbconfig'
 require 'timeout'
 
 # Host service boundaries: 1836:RC6, the P05 shares of 1836:RC10, 1853:RC1,
 # 1853:RC2 and 1853:RC7, and 1836:RC14.
 RSpec.describe 'WebUI host service boundaries' do
+  include WebUIFreshProcess
+
   let(:owner) { Object.new }
   let(:registry) { Lich::WebUI::Registry.new }
   let(:logged) { [] }
@@ -154,7 +155,8 @@ RSpec.describe 'WebUI host service boundaries' do
         puts child
         #{exit_code}
       RUBY_CODE
-      output, errors, = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', code)
+      output, errors, status = run_ruby_with_deadline(code)
+      expect_child_within_deadline(status, output, errors, 'fresh-process owned window cleanup')
       pid = Integer(output.lines.first, exception: false)
       raise "fixture did not start a child: #{errors}" unless pid
 
