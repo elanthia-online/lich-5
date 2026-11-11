@@ -17,6 +17,7 @@ module Lich
     TITLE           = 'Lich5: Ruby Gem Check'
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
+    RECOMMENDED_HEADING = 'Lich5 GemCheck recommended update'
     CONSENT_TIMEOUT_SECONDS = 120
     BUNDLER_RECOVERY_TIMEOUT_SECONDS = 120
     ALERT_TIMEOUT_SECONDS = 120
@@ -419,29 +420,61 @@ module Lich
 
     # Installed gems at or above a package's minimum but below its accepted
     # version start Lich as they are: no dialog, wait or repair. The accepted
-    # versions install with the next required repair of their unit. This entry
-    # is appended on each such start, so it stays short.
+    # versions install with the next required repair of their unit. A player
+    # can stay in this state for many starts, so the entry is written only
+    # when its content differs from the last recommended entry in the log.
     # @param check [AcceptedGemPolicy::Check]
     # @return [void]
     def write_recommended_log(check)
       found = check.plan.units.flat_map { |unit| unit.fetch('packages').map { |package| [package.fetch('name'), [unit, package]] } }.to_h
       selected = Array(check.specs).to_h { |spec| [spec.name, spec] }
+      body = [
+        '  Started on installed gems older than the accepted version but at or above its minimum.',
+        '  The accepted versions are installed by the next gem repair; nothing is required now.'
+      ]
+      Array(check.recommended).each do |name|
+        unit, package = found[name]
+        installed = selected[name] ? selected[name].version : 'unknown'
+        accepted = package ? "#{package.fetch('version')} (minimum #{RecoveryUnitPolicy.package_minimum(package)})" : 'unknown'
+        body << "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
+      end
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
+      return if last_recommended_body(log_path) == body
+
       Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
       File.open(log_path, 'a') do |f|
-        f.puts "[#{Time.now}] Lich5 GemCheck recommended update"
-        f.puts '  Started on installed gems older than the accepted version but at or above its minimum.'
-        f.puts '  The accepted versions are installed by the next gem repair; nothing is required now.'
-        Array(check.recommended).each do |name|
-          unit, package = found[name]
-          installed = selected[name] ? selected[name].version : 'unknown'
-          accepted = package ? "#{package.fetch('version')} (minimum #{RecoveryUnitPolicy.package_minimum(package)})" : 'unknown'
-          f.puts "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
-        end
+        f.puts "[#{Time.now}] #{RECOMMENDED_HEADING}"
+        body.each { |line| f.puts line }
         f.puts
       end
     rescue StandardError
       # Filesystem write failed; startup continues on the installed versions.
+    end
+
+    # Body lines of the last recommended entry, without its timestamped
+    # heading, or nil when there is none or the log cannot be read; an
+    # unreadable log must not stop the entry from being written.
+    # @param log_path [String]
+    # @return [Array<String>, nil]
+    def last_recommended_body(log_path)
+      return nil unless File.exist?(log_path)
+
+      last = nil
+      current = nil
+      File.foreach(log_path) do |line|
+        line = line.chomp
+        if line.start_with?('[') && line.end_with?("] #{RECOMMENDED_HEADING}")
+          current = []
+          last = current
+        elsif line.empty? || line.start_with?('[')
+          current = nil
+        elsif current
+          current << line
+        end
+      end
+      last
+    rescue StandardError
+      nil
     end
 
     # @param missing [Array<String>]

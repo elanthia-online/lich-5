@@ -254,6 +254,49 @@ RSpec.describe Lich::GemCheck do
           expect(entry).not_to include('Lich5 GemCheck failure')
         end
 
+        it 'writes one recommended entry for repeated identical starts' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          3.times do
+            loaded.clear
+            described_class.verify!
+          end
+          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(1)
+        end
+
+        it 'writes a new recommended entry when its content changes, even after another entry' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          described_class.verify!
+          File.open(log, 'a') { |f| f.puts "[#{Time.now}] Lich5 GemCheck failure", '  something else', '' }
+          loaded.clear
+          described_class.verify!
+          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(1)
+          package['minimum'] = '2.10.0'
+          loaded.clear
+          described_class.verify!
+          entries = File.read(log).lines.grep(/- sqlite3:/).map(&:strip)
+          expect(entries).to eq(['- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.1), sqlite3 gem',
+                                 '- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.0), sqlite3 gem'])
+        end
+
+        it 'still writes the recommended entry and starts when the log cannot be read' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          described_class.verify!
+          allow(File).to receive(:foreach).and_call_original
+          allow(File).to receive(:foreach).with(log).and_raise(Errno::EACCES)
+          loaded.clear
+          expect { described_class.verify! }.not_to raise_error
+          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
+          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(2)
+        end
+
+        it 'starts without raising when the recommended entry cannot be written' do
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          allow(File).to receive(:open).and_call_original
+          allow(File).to receive(:open).with(log, 'a').and_raise(Errno::EACCES)
+          expect { described_class.verify! }.not_to raise_error
+          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
+        end
+
         it 'writes no recommended entry when the accepted version is installed' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1'), installed_spec('sqlite3', '2.10.2')]
           described_class.verify!
