@@ -86,7 +86,7 @@ module Lich
         end
       end
 
-      # Resolves an image route after one URL decode and realpath containment checks.
+      # Resolves an image route after one URL decode and lexical/realpath containment checks.
       # HTTP authentication is enforced by Server before calling this resolver.
       # @param alias_name [String] registered route alias
       # @param encoded_relative_path [String] URL-encoded path beneath the alias root
@@ -97,11 +97,15 @@ module Lich
 
         relative_path = URI::DEFAULT_PARSER.unescape(encoded_relative_path.to_s)
         return nil if relative_path.empty? || relative_path.include?("\0")
+        return nil if relative_path.start_with?('/', '\\', '~') || relative_path.match?(/\A[A-Za-z]:/)
 
         content_type = EXTENSIONS[File.extname(relative_path).downcase]
         return nil unless content_type
 
-        candidate = File.realpath(File.expand_path(relative_path, route[:root]))
+        candidate = File.expand_path(relative_path, route[:root])
+        return nil unless within?(candidate, route[:root], allow_root: false)
+
+        candidate = File.realpath(candidate)
         return nil unless within?(candidate, route[:root], allow_root: false)
         return nil unless File.file?(candidate)
 
@@ -146,8 +150,8 @@ module Lich
         raise ArgumentError, "file root does not resolve: #{directory}"
       end
 
-      # Checks resolved paths at a directory boundary, including filesystem roots.
-      # @param candidate [String] canonical path to test
+      # Checks expanded or resolved paths at a directory boundary, including filesystem roots.
+      # @param candidate [String] expanded or resolved path to test
       # @param root [String] canonical allowed directory
       # @param allow_root [Boolean] whether the directory itself is allowed
       # @return [Boolean] whether the path is contained
