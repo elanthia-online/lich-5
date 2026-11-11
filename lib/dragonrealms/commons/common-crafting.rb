@@ -715,10 +715,25 @@ module Lich
       #   item isn't in hand.
       # Each one beeps and prints a bold line. The method then returns false
       # when +skip_exit+ is set; otherwise it stops the script. A reply that
-      # matches nothing (a bput timeout) is not final. A timed-out GET, or a
-      # timed-out untie after "You should untie", returns whether the item is
-      # in hand, as a late reply may still deliver it; a timed-out belt untie
-      # falls back to the GET.
+      # matches nothing (a bput timeout) is not final either: it returns
+      # without a beep or a stop. A timed-out belt untie falls back to the
+      # GET. A timed-out GET, or a timed-out untie after "You should untie",
+      # returns true only when a held item the name means ({DRCI.held_id})
+      # is one that was not in hand before the GET: a late reply did deliver
+      # it. A timed-out GET that delivered it remembers its id as a GET that
+      # worked does. An item of that name that was already held before the
+      # GET does not count, because it can't show that this GET did
+      # anything: when the game is lagging, the hands can still show what an
+      # earlier command left there while this GET waits in the game's queue
+      # (DragonRealms, 2026-11-12: a timed-out `get my wool yarn` was taken
+      # for a success because the yarn a previous run had not yet put away
+      # was still in hand). So when the item was already in hand and only
+      # the GET's reply was lost, a timeout now returns false where it used
+      # to return true. That is the safe side: the caller stops or tries
+      # again, instead of going on as if this GET had worked. Two new held
+      # items that both match the name also give false (held_id names
+      # neither), and so does an item the held_id noun rule doesn't match
+      # the name to (e.g. a name that doesn't end in the item's noun).
       #
       # @param name [String, Integer] item to put in hand, or "#<id>"; an
       #   Integer is an id
@@ -729,8 +744,10 @@ module Lich
       # @param skip_exit [Boolean] return false on a final failure instead of
       #   stopping the script
       # @return [Boolean] true when the item is in hand (the untie or get
-      #   succeeded, or it was already held); false after a final failure
-      #   with +skip_exit+, or when a timed-out reply leaves it out of hand
+      #   succeeded, the game said it was already held, or a timed-out GET or
+      #   untie brought a new one into hand); false after a final failure with
+      #   +skip_exit+, or after a timeout that brought no new one into hand
+      #   (also when one was already held before the GET)
       def get_crafting_item(name, bag, bag_items, belt, skip_exit = false)
         name = crafting_name(name)
         waitrt?
@@ -784,10 +801,20 @@ module Lich
 
             crafting_item_failed("DRCC: Told to untie it, but found nothing to untie: #{name}", skip_exit)
           else
-            DRCI.in_hands?(item)
+            # The untie timed out. Same rule as a timed-out GET: an untied
+            # item comes into hand under an id that was not held before the
+            # GET, and one that was held before can't show that the untie
+            # did anything.
+            !DRCI.held_id(item, except: before).nil?
           end
         else
-          DRCI.in_hands?(item)
+          # The GET timed out (no pattern matched). Only a held item the name
+          # means that was not held before the GET shows that the GET worked,
+          # late; one held before may be what an earlier command left in
+          # hand while the game was lagging. See the method doc.
+          arrived = DRCI.held_id(item, except: before)
+          remember_got_crafting_item(name, bag, before) if arrived
+          !arrived.nil?
         end
       end
 

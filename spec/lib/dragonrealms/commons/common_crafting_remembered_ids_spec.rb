@@ -402,6 +402,112 @@ RSpec.describe Lich::DragonRealms::DRCC do
       get_pins
       expect(sent).to eq(['get my pins from #2391122'])
     end
+
+    # Game lag (DragonRealms, 2026-11-12): the server held commands for
+    # minutes and ran them later, in order, so a GET's reply can miss bput's
+    # timeout ('' here) while the hands still show what an earlier command
+    # left in them. A timed-out GET counts only a held item the name means
+    # that was not held before the GET.
+    context 'when the GET reply never comes (bput timed out)' do
+      let(:scissors) { ['4101810', 'scissors', 'iron scissors'] }
+
+      it 'is false when the only pins in hand were held before the GET, and does not stop the script' do
+        hands(right: pins)
+        game('get my pins from #2391122', '')
+        expect(get_pins(false)).to be(false)
+        expect(sent).to eq(['get my pins from #2391122'])
+        expect(drc).not_to have_received(:beep)
+        expect(memo.fetch('#2391122', 'pins')).to be_nil
+      end
+
+      it 'is true when new pins came into hand while it waited, and remembers their id' do
+        game('get my pins from #2391122', '') { hands(right: pins, left: half_made) }
+        expect(get_pins(false)).to be(true)
+        expect(memo.fetch('#2391122', 'pins')).to eq('4101800')
+      end
+
+      it 'is false when the new item in hand is not pins, though pins from before are held' do
+        hands(right: pins)
+        game('get my pins from #2391122', '') { hands(right: pins, left: scissors) }
+        expect(get_pins(false)).to be(false)
+        expect(memo.fetch('#2391122', 'pins')).to be_nil
+      end
+
+      it 'is true for the new pins when other pins were held before the GET, and remembers only the new ones' do
+        hands(right: pins)
+        game('get my pins from #2391122', '') { hands(right: pins, left: new_pins) }
+        expect(get_pins(false)).to be(true)
+        expect(memo.fetch('#2391122', 'pins')).to eq('4101801')
+      end
+
+      # One GET puts one item in hand; two new matches can't be told apart,
+      # so neither counts (DRCI.held_id gives nil).
+      it 'is false when two new pins came into hand at once' do
+        hands
+        game('get my pins from #2391122', '') { hands(right: pins, left: new_pins) }
+        expect(get_pins(false)).to be(false)
+        expect(memo.fetch('#2391122', 'pins')).to be_nil
+      end
+
+      it 'is false for a "#<id>" name whose item was held before the GET' do
+        hands(right: pins)
+        game('get #4101800', '')
+        expect(described_class.get_crafting_item('#4101800', 'duffel bag', nil, nil)).to be(false)
+        expect(sent).to eq(['get #4101800'])
+      end
+
+      it 'is true for a "#<id>" name whose item came into hand while it waited' do
+        hands
+        game('get #4101800', '') { hands(right: pins) }
+        expect(described_class.get_crafting_item('#4101800', 'duffel bag', nil, nil)).to be(true)
+      end
+
+      # A known id is never a held one, so the GET by id already went by the
+      # exact id; other pins held from before still don't count.
+      it 'is false for a GET by a known id when only other pins from before are in hand' do
+        stow_pins
+        hands(right: iron_pins)
+        game('get #4101800', '')
+        expect(get_pins(false)).to be(false)
+        expect(sent).to eq(['get #4101800'])
+      end
+
+      it 'is false when the untie after "You should untie" times out and the only pins were held before' do
+        hands(right: pins)
+        game('get my pins from #2391122', 'You should untie the pins first.')
+        game('untie my pins', '')
+        expect(get_pins(false)).to be(false)
+        expect(sent).to eq(['get my pins from #2391122', 'untie my pins'])
+      end
+
+      it 'is true when the untie after "You should untie" times out but new pins came into hand' do
+        game('get my pins from #2391122', 'You should untie the pins first.')
+        game('untie my pins', '') { hands(right: pins, left: half_made) }
+        expect(get_pins(false)).to be(true)
+      end
+
+      # Only the timeout changed: a reply that did come still reads the
+      # hands as before, so pins held before still answer "What were you".
+      [true, false].each do |skip_exit|
+        it "still counts pins held before after \"What were you referring to?\" (skip_exit #{skip_exit})" do
+          hands(right: pins)
+          game('get my pins from #2391122', not_found)
+          expect(get_pins(skip_exit)).to be(true)
+          expect(drc).not_to have_received(:beep)
+        end
+
+        it "still treats \"What were you referring to?\" with no pins as final (skip_exit #{skip_exit})" do
+          hands
+          game('get my pins from #2391122', not_found)
+          if skip_exit
+            expect(get_pins(true)).to be(false)
+          else
+            expect { get_pins(false) }.to raise_error(SystemExit)
+          end
+          expect(drc).to have_received(:beep)
+        end
+      end
+    end
   end
 
   describe '.stow_crafting_item' do
