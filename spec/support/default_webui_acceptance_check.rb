@@ -5,14 +5,17 @@ require 'json'
 require 'open3'
 require 'rbconfig'
 require 'tmpdir'
+require_relative 'default_webui_acceptance_report'
 
 # Subprocess supervisor for the real no-argument entrypoint with a protocol-only
 # browser substitute. The probe points the home, data, temp, script, map, log and
 # backup roots into one temporary root (only lib stays on the checkout), and the
-# verdict fails unless every reported root resolves inside it; the inherited report
-# pipe carries the record. On Unix the child runs in its own process group and cleanup
-# signals the group; on Windows (no `pgroup:`, no TERM) the child PID alone is killed.
+# verdict fails unless every reported root resolves inside it; an atomic report
+# file carries the record without inherited descriptors. On Unix the child runs in
+# its own process group and cleanup signals the group; on Windows (no `pgroup:`,
+# no TERM) the child PID alone is killed.
 # It does not verify a browser cookie jar or native window geometry.
+# Native Windows entrypoint acceptance still requires the P22 example and a CI receipt.
 root = File.expand_path('../..', __dir__)
 probe = File.join(root, 'spec/support/default_webui_acceptance_probe.rb')
 # Windows Ruby rejects `pgroup:` and has no TERM; there the child is spawned
@@ -20,23 +23,22 @@ probe = File.join(root, 'spec/support/default_webui_acceptance_probe.rb')
 # bounded_child helper (script_scope_builder_spec.rb).
 own_process_group = !RbConfig::CONFIG['host_os'].match?(/mswin|mingw|cygwin/)
 acceptance_root = Dir.mktmpdir('lich-r3-default-webui-acceptance')
-reader, writer = IO.pipe
+report_path = File.join(acceptance_root, 'report.json')
 output = +''
 nil
 
 begin
   env = {
-    'RUBYOPT'                    => "-r#{probe}",
-    'LICH_CI_DEFAULT_WEBUI_FD'   => writer.fileno.to_s,
-    'LICH_CI_DEFAULT_WEBUI_ROOT' => acceptance_root
+    'RUBYOPT'                      => "-r#{probe}",
+    'LICH_CI_DEFAULT_WEBUI_REPORT' => report_path,
+    'LICH_CI_DEFAULT_WEBUI_ROOT'   => acceptance_root
   }
-  spawn_options = { chdir: root, writer.fileno => writer }
+  spawn_options = { chdir: root }
   spawn_options[:pgroup] = true if own_process_group
   stdin, combined, wait = Open3.popen2e(env, RbConfig.ruby, File.join(root, 'lich.rbw'), **spawn_options)
-  writer.close
   stdin.close
   drain = Thread.new { output << combined.read }
-  raw = IO.select([reader], nil, nil, 20) ? reader.gets.to_s : ''
+  raw = DefaultWebUIAcceptanceReport.receive(report_path, wait).to_s
   wait.join(10)
   stops = own_process_group ? [['TERM', 2], ['KILL', nil]] : [['KILL', nil]]
   stops.each do |signal, grace|
@@ -75,7 +77,5 @@ begin
   puts JSON.generate(result)
   exit(result['verdict'] == 'pass' ? 0 : 1)
 ensure
-  reader.close unless reader.closed?
-  writer.close unless writer.closed?
   FileUtils.remove_entry(acceptance_root) if File.directory?(acceptance_root)
 end

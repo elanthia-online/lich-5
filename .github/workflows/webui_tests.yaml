@@ -94,8 +94,23 @@ jobs:
           cache-dependency-path: spec/webui/package-lock.json
       - if: steps.classify.outputs.webui == 'true'
         run: npm ci --prefix spec/webui
+      - name: Install renderer engines and headed display dependencies
+        if: steps.classify.outputs.webui == 'true'
+        working-directory: spec/webui
+        run: |
+          npx --no-install playwright install --with-deps webkit
+          npx --no-install playwright install-deps chrome
+          google-chrome --version || npx --no-install playwright install chrome
       - if: steps.classify.outputs.webui == 'true'
-        run: npm test --prefix spec/webui
+        run: xvfb-run --auto-servernum npm test --prefix spec/webui
+      - name: Upload renderer engine diagnostics
+        if: failure() && steps.classify.outputs.webui == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webui-renderer-failures
+          path: spec/webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   browser:
     name: Chrome browser integration (${{ matrix.shard }}/2)
