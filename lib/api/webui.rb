@@ -89,6 +89,11 @@ module Lich
 
     # Requests a modal without blocking a WebUI callback. The caller must choose
     # a no-viewer policy; completion may represent a response or cancellation.
+    # Viewer presence (active or resumable) is checked for the owner at modal open.
+    # Opening a host window alone does not establish attachment; a newly opened
+    # viewer remains absent until it attaches. If neither an active nor a
+    # resumable viewer is present, abort/default complete immediately. The wait
+    # policy opts into waiting for attachment and is forbidden for credential prompts.
     #
     # @param options [Hash] keywords accepted by ModalCoordinator#open
     # @param content [Proc, nil] optional dialog content builder

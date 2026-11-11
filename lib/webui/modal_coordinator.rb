@@ -62,12 +62,17 @@ module Lich
         @mutex = Mutex.new
       end
 
-      # Registers a nonblocking modal while its owner is live, with explicit viewer policy.
+      # Opens a nonblocking modal while its owner is live, with explicit viewer policy.
+      # Viewer presence (active or resumable) is checked for this owner at modal open.
+      # Opening a host window alone does not establish attachment; a newly opened
+      # viewer remains absent until it attaches. If neither an active nor a
+      # resumable viewer is present, abort/default complete immediately. The wait
+      # policy opts into waiting for attachment and is forbidden for credential prompts.
       # @param owner [Object] lifetime identity shared with the presenting pages
       # @param id [String] modal page ID unique within the owner
       # @param title [String] dialog title
       # @param buttons [Array<Hash>] permitted responses
-      # @param no_viewer [Symbol, String] abort, default or wait when no active viewer exists
+      # @param no_viewer [Symbol, String] abort, default or wait when no active or resumable viewer exists
       # @param body [String, nil] optional dialog text
       # @param default_button [String, nil] response selected by the default policy
       # @param timeout [Numeric, nil] explicit deadline in seconds; nil adds no deadline

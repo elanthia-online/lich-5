@@ -140,6 +140,11 @@ module Lich
 
       # Flushes pending roots, then opens an owner-scoped asynchronous modal.
       # The adapter's owner is reserved: an owner prop is refused, never forwarded.
+      # Viewer presence (active or resumable) is checked for that owner at modal open.
+      # Opening a host window alone does not establish attachment; a newly opened
+      # viewer remains absent until it attaches. If neither an active nor a
+      # resumable viewer is present, abort/default complete immediately. The wait
+      # policy opts into waiting for attachment and is forbidden for credential prompts.
       # @param props [Hash] modal options; ID is generated when absent
       # @return [Future] completion
       # @raise [Error] when props name an owner
