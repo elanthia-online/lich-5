@@ -3,7 +3,9 @@
   "private": true,
   "description": "Local and CI tests for the shipped WebUI renderer",
   "scripts": {
-    "test": "node --test webui_*_test.cjs"
+    "test": "npm run test:logic && npm run test:engine",
+    "test:logic": "node --test webui_*_test.cjs",
+    "test:engine": "playwright test --config playwright.config.cjs"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

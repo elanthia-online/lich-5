@@ -1,7 +1,7 @@
 // Native input refresh regressions for the shipped renderer: a focused textarea keeps
 // its scroll offsets across a redraw; a native select keeps its DOM node and only the
 // newest deferred render from the gesture that opens its option popup until its change,
-// focusout or an Escape, while focus alone never holds a page; and socket loss
+// focusout, Escape or keyup reporting no popup, while focus alone never holds a page; and socket loss
 // retires that deferred render.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -181,7 +181,7 @@ test('focusout or an Escape releases a held native select to the newest render',
   });
 });
 
-test('Space, F4 and plain or Alt arrows on a select hold its page; modified arrows and the same keys elsewhere do not', t => {
+test('Space, F4 and arrows with every modifier on a select hold its page; the same keys elsewhere do not', t => {
   const { dom, receive, runTimers } = fixture(t);
   const { document } = dom.window;
   const select = () => document.querySelector('[data-cid="choice"] select');
@@ -205,7 +205,7 @@ test('Space, F4 and plain or Alt arrows on a select hold its page; modified arro
   observed.space = press(select(), { key: ' ' });
   observed.f4 = press(select(), { key: 'F4' });
   observed.altArrow = press(select(), { key: 'ArrowDown', altKey: true });
-  // Plain arrows open the popup without a change on macOS; Ctrl, Meta and Shift arrows do not open it.
+  // These are potential opening keys; the real engine decides whether a popup opens.
   observed.plainArrow = press(select(), { key: 'ArrowDown' });
   observed.plainArrowUp = press(select(), { key: 'ArrowUp' });
   observed.ctrlArrow = press(select(), { key: 'ArrowDown', ctrlKey: true });
@@ -214,15 +214,14 @@ test('Space, F4 and plain or Alt arrows on a select hold its page; modified arro
   observed.spaceOnButton = press(document.querySelector('button[data-cid="save"]'), { key: ' ' });
   assert.deepEqual(observed, {
     space: true, f4: true, altArrow: true, plainArrow: true, plainArrowUp: true,
-    ctrlArrow: false, metaArrow: false, shiftArrow: false, spaceOnButton: false
+    ctrlArrow: true, metaArrow: true, shiftArrow: true, spaceOnButton: false
   });
   assert.equal(title(), `Render ${generation}`);
 });
 
-// Documents a known limit rather than a goal: on a non-macOS engine an arrow on the last
-// option changes nothing, so no change event releases the hold. It lasts until focus-out
-// or Escape; this pins that focus-out ends it.
-test('a plain arrow that fires no change keeps its hold until focus-out releases it', t => {
+// Without a change or a keyup reporting no popup, the fallback hold lasts until
+// focusout or Escape. The real-engine suite covers keyup with native :open state.
+test('a plain arrow with no change or keyup keeps its hold until focus-out releases it', t => {
   const { dom, receive, runTimers } = fixture(t);
   const { document } = dom.window;
   const select = () => document.querySelector('[data-cid="choice"] select');
