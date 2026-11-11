@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
 
 RSpec.describe 'Adapter publication boundaries' do
+  include WebUIFreshProcess
+
   let(:owner) { Object.new }
   let(:service) { Lich::WebUI::Service.new }
   let(:published) { [] }
@@ -130,7 +131,8 @@ RSpec.describe 'Adapter publication boundaries' do
           service.stop
         end
       RUBY_CODE
-      output, errors, status = Open3.capture3(RbConfig.ruby, '-w', '-I', LIB_DIR, '-e', code)
+      output, errors, status = run_ruby_with_deadline(code, '-w')
+      expect_child_within_deadline(status, output, errors, "fresh-process adapter publication through #{entry}")
       expect(status.success?).to be(true), errors
       # TreeBuilder intentionally replaces its generated text method. These
       # two existing warnings are the complete baseline; any other warning fails.
