@@ -34,6 +34,101 @@ RSpec.describe Lich::WebUI::FileService do
     end
   end
 
+  it 'refuses even an existing in-root absolute path before expansion or realpath' do
+    Dir.mktmpdir('webui-app') do |root|
+      path = File.join(File.realpath(root), 'inside.png')
+      File.binwrite(path, 'png')
+      service = described_class.new(application_roots: [root])
+      service.register('images', root, owner: owner)
+
+      expect(File).not_to receive(:expand_path)
+      expect(File).not_to receive(:realpath)
+      expect(service.resolve('images', path.gsub('/', '%2F'))).to be_nil
+      expect(service.resolve('images', path)).to be_nil
+    end
+  end
+
+  it 'refuses non-relative syntax after one decode without filesystem resolution' do
+    Dir.mktmpdir('webui-app') do |root|
+      service = described_class.new(application_roots: [root])
+      service.register('images', root, owner: owner)
+      paths = [
+        '/image.png', '\\image.png', 'C:/image.png', 'c:\\image.png', 'C:image.png',
+        '//webui-invalid.invalid/share/image.png', '\\\\webui-invalid.invalid\\share\\image.png',
+        '~/image.png', '~webui_missing_user/image.png',
+      ]
+
+      expect(File).not_to receive(:expand_path)
+      expect(File).not_to receive(:realpath)
+      paths.each do |path|
+        expect(service.resolve('images', path)).to be_nil
+        encoded = URI::DEFAULT_PARSER.escape(path, /[^A-Za-z0-9_.-]/)
+        expect(service.resolve('images', encoded)).to be_nil
+      end
+    end
+  end
+
+  it 'refuses lexical escapes before realpath even when the outside file exists' do
+    Dir.mktmpdir('webui-parent') do |parent|
+      root = File.join(parent, 'images')
+      sibling = File.join(parent, 'images-sibling')
+      Dir.mkdir(root)
+      Dir.mkdir(sibling)
+      File.binwrite(File.join(parent, 'outside.png'), 'outside')
+      File.binwrite(File.join(sibling, 'outside.png'), 'sibling')
+      service = described_class.new(application_roots: [root])
+      service.register('images', root, owner: owner)
+
+      expect(File).not_to receive(:realpath)
+      ['%2e%2e%2foutside.png', '../outside.png', '../images-sibling/outside.png'].each do |path|
+        expect(service.resolve('images', path)).to be_nil
+      end
+    end
+  end
+
+  it 'serves nested escaped names and plus signs with exactly one decode' do
+    Dir.mktmpdir('webui-app') do |root|
+      nested = File.join(root, 'nested images')
+      Dir.mkdir(nested)
+      Dir.mkdir(File.join(root, 'directory.png'))
+      names = {
+        'nested%20images/space%20name.png' => 'space name.png',
+        'nested%20images/plus+name.png'    => 'plus+name.png',
+        'nested%20images/plus%2Bname.png'  => 'plus+name.png',
+        'nested%20images/%252e%252e.png'   => '%2e%2e.png',
+      }
+      names.each_value { |name| File.binwrite(File.join(nested, name), 'png') }
+      service = described_class.new(application_roots: [root])
+      service.register('images', root, owner: owner)
+
+      names.each do |encoded, name|
+        expect(service.resolve_url("/files/images/#{encoded}")&.first).to eq(File.realpath(File.join(nested, name)))
+      end
+      expect(service.resolve('images', 'nested%20images/../nested%20images/space%20name.png')&.first)
+        .to eq(File.realpath(File.join(nested, 'space name.png')))
+      expect(service.resolve('images', 'nested%20images')).to be_nil
+      expect(service.resolve('images', 'directory.png')).to be_nil
+      expect(service.resolve('images', 'inside%00.png')).to be_nil
+    end
+  end
+
+  it 'serves a symlink whose target stays within the registered root' do
+    Dir.mktmpdir('webui-app') do |root|
+      target = File.join(root, 'inside.png')
+      File.binwrite(target, 'png')
+      begin
+        File.symlink(target, File.join(root, 'link.png'))
+      rescue NotImplementedError, Errno::EACCES, Errno::EPERM => error
+        # Skip only when the account lacks the platform symlink privilege.
+        skip "File.symlink is unavailable to this account (#{error.class}); needs the platform symlink privilege"
+      end
+      service = described_class.new(application_roots: [root])
+      service.register('images', root, owner: owner)
+
+      expect(service.resolve('images', 'link.png')&.first).to eq(File.realpath(target))
+    end
+  end
+
   it 'refuses a symlink that escapes the registered root' do
     Dir.mktmpdir('webui-app') do |application_root|
       Dir.mktmpdir('webui-outside') do |outside_root|
