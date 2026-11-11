@@ -11,8 +11,15 @@ Setup acceptance remains distinct from whole-script gameplay acceptance.
 The setup fixtures keep the retained source lines byte for byte but are not
 whole upstream files: most add synthetic enclosing wrappers, and a few carry the
 boundary edits listed per fixture below. Each entry records the original source
-identity (whole-script and retained-class SHA-256) separately from the fixture
-file's own SHA-256.
+identity (whole-script and upstream or normalized retained-class SHA-256, labeled
+below) separately from the fixture file's own SHA-256.
+
+For the hash recipes below, read files as bytes (`File.binread` in Ruby). A source
+range first-last means `source.lines[first - 1, last - first + 1].join`, named
+`raw_lines` below. Hash that string with `Digest::SHA256.hexdigest`. `chomp` drops
+one final LF, CRLF or CR; `lstrip.chomp` also drops leading whitespace. Neither recipe
+changes internal line endings. Whole-script and fixture-file hashes always cover
+all stored bytes without normalization.
 
 Byte-pinned files and line endings
 
@@ -159,7 +166,7 @@ Provenance checks:
 
 - Original whole-script SHA-256: `64e7b1d920bed944b8b33bf9a192c13bb23289d932e6873f38d61579971da4bf`.
 - Fixture file SHA-256: `6ae8038eef18f3325811c486b5b1068cf32f174bf029a69841bca99c46026061`
-  (no wrapper; identical to the retained source lines).
+  (no wrapper; `raw_lines` from lines 267-623, including the final line terminator).
 - `Setup.ui` SHA-256: `1dec1310d30d6b3f1e34beb7a39aeccdffdd6da70e87c476818759405be13eea` (25,513 bytes).
 - The Builder regression asserts the XML digest and 54 constructed objects.
 
@@ -177,7 +184,8 @@ of EO `scripts/ewaggle.lic` at 7fd0b971 (line 634 is a blank line, not retained)
 including Builder XML, original initialization, signals,
 list-transfer handlers and save/destroy behavior. No callbacks were rewritten.
 Whole-script SHA-256: fe74b93bbc73ce83981ff8e23dba11dcc0e51a905454685afb39988eb87726e4.
-Fixture file SHA-256: 1156f420986c07c7f0a9472dc6215934318693b43eb30376c1dc7b05f24b7097 (no wrapper).
+Fixture file SHA-256: 1156f420986c07c7f0a9472dc6215934318693b43eb30376c1dc7b05f24b7097
+(no wrapper; `raw_lines` from lines 199-633, including the final CRLF).
 Setup.ewaggle_ui SHA-256: c617157ee342adb4bfcb9d3281de5d63c17ef777d4f75fcad60544ec6049eddf
 (28,928 bytes; 77 constructed objects).
 The harness substitutes game lookups and Ewaggle.save_profile's destination only.
@@ -193,7 +201,8 @@ script tree (7fd0b971387492cfd81b4bc7ef94428413965071), inside synthetic LF
 enclosing module/GTK-guard wrapper lines added for isolated loading. XML,
 initialization and callbacks are not rewritten. The retained class line ranges,
 original class and whole-script SHA-256 values, wrapper lines on each side and
-fixture file SHA-256 are:
+fixture file SHA-256 are below. Class hashes use `raw_lines`, including the final
+LF or CRLF, with no leading or trailing whitespace removed:
 
 - ebounty: lines 1151-2033; class ea8e307083274d54569f48364fd1add9dcf41f1069733b77162136fe67db08c3;
   whole script 9cb9dafe5941f8336a51006846b0c86b712cca2b2340ea1e1c042e7ede781ab7; 435 objects;
@@ -254,13 +263,15 @@ repository and go2 setup fixtures
 These retain the complete Setup classes byte for byte from the same frozen EO
 source tree, including original XML, initialization, filtering/settings
 callbacks and Close. Synthetic LF enclosing module/class/GTK-guard wrapper lines
-are added for isolated loading. Class hashes exclude wrappers and the trailing
-newline and are checked in RSpec; the fixture file SHA-256 covers the wrappers.
+are added for isolated loading. Normalized class hashes use `raw_lines.lstrip.chomp`:
+they exclude wrappers, leading whitespace before the class declaration and the
+final line terminator, and are checked in RSpec. The fixture file SHA-256 covers
+the wrappers and all stored bytes.
 
-- repository: lines 880-1042; class ac0107e3149a487f61cfd345a3b962b7673df65ec99921f4b9fdd74d47dd86e5;
+- repository: lines 880-1042; normalized class ac0107e3149a487f61cfd345a3b962b7673df65ec99921f4b9fdd74d47dd86e5;
   whole script d46a023aaac5f96c1395b89727d0640cee69a91a9103853353de3a1389fe1aa0;
   3 wrapper lines on each side; fixture 7c20377fbc3ca5a0355ac978af1fcce8e4a81ddf31754fbebc7cb8ba219f9dff.
-- go2: lines 474-842; class 8bdcf8959473c59d9da2eba4dbc69a2dd13185acd9a3c556288b1bd8198862b2;
+- go2: lines 474-842; normalized class 8bdcf8959473c59d9da2eba4dbc69a2dd13185acd9a3c556288b1bd8198862b2;
   whole script e4763e1fd11ee2645409067dd5ed3463d7e6f8fd48595ae01b19d4aea04237a6;
   2 wrapper lines on each side; fixture 8f51c6313e1f0349acc1e6d635da40817519148068c32599a091760fc4768a8a.
 
@@ -286,19 +297,22 @@ The two fixtures preserve upstream formatting; RuboCop Layout exclusions and
 Huntplan's unused local exclusion apply only to these excerpts, not product or
 harness code.
 
-- bigshot: frozen EO original, lines 1300-2704;
-  class da564437b0eb893e8abd3757afdbbe35bd57b4b134d24e562e4f17d1af76ad34;
+- bigshot: frozen EO source, lines 1300-2704;
+  upstream class 4b8a3d9912a2b2147da3112e01294b99370df3beba813744e9fad8ff2d198f1d
+  (`raw_lines.chomp`; no leading whitespace removed);
+  normalized class da564437b0eb893e8abd3757afdbbe35bd57b4b134d24e562e4f17d1af76ad34
+  (`raw_lines.lstrip.chomp`; also fixture lines 2-1406 with `chomp`);
   whole script f96ac381aa1f09f248f79de486bf236fa4ae558d3231ad90941333dd4e3f2873;
   fixture 96f776df5e26ba41feac6d26e95717cf43999b48d7e3b6919537ba6c750d342b.
   Boundary edits: fixture line 2 drops the upstream two-space indent of
   `class Setup`, and the class-closing `end` is LF where upstream is CRLF.
 - huntplan: retained original, mirror 549e3350 lib/huntplan.lic, lines 1992-2112;
   class 45c8df7cdfac0d281f0b5746260c84c6af5a7f6153086df771cd7250476507ee
-  (upstream lines 1992-2112 less the final line terminator);
+  (`raw_lines.chomp` from upstream lines 1992-2112; no leading whitespace removed);
   whole script 37a6af449da8f8bbf26cc63d8b714d52099c87fe994dabeddeac6f07a5fbd726;
   fixture 9667d7039ea72d4d835673085406fc7f8efa03391efedaf59e58c90cd1c5ab07.
-  The fixture's own retained-class hash (fixture lines 2-122 less the final
-  newline) is 14d3be8481c1d1abc76cf7394c9dc7d7fb4aca8966b33fb4d3940f9bcabf92a5;
+  The fixture's own retained-class hash (fixture lines 2-122 with `chomp`)
+  is 14d3be8481c1d1abc76cf7394c9dc7d7fb4aca8966b33fb4d3940f9bcabf92a5;
   it differs from the upstream class hash because of the boundary edit.
   Boundary edits: upstream's class-closing line 2112 is "end # Setup" with CRLF;
   fixture line 122 is a bare "end" with LF, so the " # Setup" comment is dropped
@@ -359,10 +373,11 @@ source blocks. EO revision c4a96840ea2a29a445fd797c7baec0b012b0dd12 and mirror
 revision 2fa28f1e540e97c468af88bbc8c432d3cebf8755 are fixed provenance, not a
 claim that these are the latest upstream versions.
 
-- Bigshot v5.17.0 Setup, lines 955-2359, is byte-identical to bigshot_setup.lic's
-  original class (including CRLF). The manifest links the new whole-source hash
-  to the existing fixture; no duplicate Setup is needed. The original missing
-  boon_flee_from failure and separately corrected candidate remain unchanged.
+- Bigshot v5.17.0 Setup, lines 955-2359, uses the normalized class hash
+  (`raw_lines.lstrip.chomp`) recorded above. The manifest links the new whole-source
+  hash to the existing fixture with its documented boundary edits; no duplicate
+  Setup is needed. The original missing boon_flee_from failure and separately
+  corrected candidate remain unchanged.
 - eloot v2.13.0 Setup, lines 742-1948, replaces loot_defensive with loot_stance.
   The refreshed original still fails on exclusions_label. Its separately labeled
   positive candidate applies only the existing exact-match label-ID repair and
