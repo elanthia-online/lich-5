@@ -39,8 +39,10 @@ module Lich
       Lich::WebUI::Contract::VERSION
     end
 
-    # Creates a hosted imperative adapter; its first valid page render opens
-    # the window automatically. Consumers must not create their own server.
+    # Creates a hosted imperative adapter. Its first valid page render opens a
+    # window only when the core presentation policy is enabled. Otherwise it
+    # spawns no window and delivers the page's existing close lifecycle.
+    # Consumers must not create their own server.
     # The callback and background-render thread rules for webui_page also apply.
     #
     # @param owner [Object] lifetime identity used for adapter page cleanup
@@ -69,11 +71,14 @@ module Lich
       Lich::WebUI.launch_url(page: page)
     end
 
-    # Opens a browser app window. Render the page and start the host first.
-    # Reopening an already owned page reuses its existing window.
+    # Opens a browser app window when the core presentation policy is enabled.
+    # Render the page and start the host first. Reopening an already owned page
+    # reuses its existing window.
     #
     # @param page [Lich::WebUI::Page, nil] registered page, or the page selector
-    # @return [Boolean] whether opening succeeded or the page was already open
+    # @return [Boolean] whether opening succeeded or the page was already open;
+    #   false without spawning when policy is not enabled, including before
+    #   startup resolves it or when --no-gui disables it
     def self.webui_open(page: nil)
       Lich::WebUI.open(page: page)
     end
