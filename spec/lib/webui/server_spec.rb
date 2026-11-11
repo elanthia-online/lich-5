@@ -322,7 +322,7 @@ RSpec.describe Lich::WebUI::Server do
     receiver&.close
   end
 
-  it 'retires an interrupted direct write without relying on drain cleanup (1837:RC10)' do
+  it 'retires an interrupted direct write without relying on drain cleanup' do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     frame = Lich::WebUI::WebSocket.encode_text_message('x' * 128)
     start_write = Queue.new
@@ -417,7 +417,7 @@ RSpec.describe Lich::WebUI::Server do
     server&.stop
   end
 
-  it 'refuses an otherwise valid /ws upgrade with cross-site or navigation Fetch Metadata (1837:RC3)' do
+  it 'refuses an otherwise valid /ws upgrade with cross-site or navigation Fetch Metadata' do
     delivered = Queue.new
     server = build_server(@assets_dir, handler: ->(connection, message) { delivered << [connection.viewer_id, message] }).start
     _uri, _response, cookie = authenticate(server)
@@ -453,7 +453,7 @@ RSpec.describe Lich::WebUI::Server do
     server&.stop
   end
 
-  it 'refuses cross-site /files requests and never routes an alias outside the alias pattern (1837:RC4)' do
+  it 'refuses cross-site /files requests and never routes an alias outside the alias pattern' do
     Dir.mktmpdir('webui-files') do |root|
       File.binwrite(File.join(root, 'icon.png'), 'png-bytes')
       files = Lich::WebUI::FileService.new(application_roots: [root])

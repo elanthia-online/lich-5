@@ -26,7 +26,7 @@ module Lich
 
           def set(type, text)
             session.style_operation(self, :set) do
-              # Binary-tagged UTF-8 is re-tagged; other non-UTF-8 text is refused here (1844:RC13).
+              # Binary-tagged UTF-8 is re-tagged; other non-UTF-8 text is refused here.
               wired = Gtk.wire_text(text) if text.is_a?(String)
               valid = type == Gdk::Selection::TYPE_STRING && wired && wired.length <= Lich::WebUI::Contract::BOUNDS[:input_text]
               session.refuse(self, :set) unless valid

@@ -172,7 +172,7 @@ module Lich
           end
 
           # Reads current viewer input only inside a live callback; otherwise uses committed/default shadow state.
-          # A widget in its owner's destroy sequence never reads live: its handle is retired (1844:RC8).
+          # A widget in its owner's destroy sequence never reads live: its handle is retired.
           # @param property [Symbol] shared shadow or port property name
           # @return [Object] synchronous script-visible value
           # @api private

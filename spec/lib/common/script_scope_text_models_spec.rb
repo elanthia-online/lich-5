@@ -11,8 +11,7 @@ require_relative '../../../lib/common/script_scope/gtk/combo_box'
 require_relative '../../../lib/common/script_scope/gtk/menus'
 require_relative '../../../lib/common/script_scope/gtk/transfers'
 
-# Model, table and text boundaries: the P13 share of 1831:RC27, plus 1844:RC1,
-# RC5, RC6, RC7, RC9, RC10, RC11, RC12, RC13, RC15 and RC16 and 1845:RC3 and RC5. A recording port stands in for core.
+# Model, table and text boundaries. A recording port stands in for core.
 RSpec.describe 'script compatibility models, tables and text' do
   port_class = Class.new do
     attr_reader :sets
@@ -62,7 +61,7 @@ RSpec.describe 'script compatibility models, tables and text' do
   def bytes(*values) = values.pack('C*')
   def utf8(binary) = binary.dup.force_encoding(Encoding::UTF_8)
 
-  it 'stores binary-tagged UTF-8 cells as UTF-8 and refuses other bytes without changing the row (1831:RC27)' do
+  it 'stores binary-tagged UTF-8 cells as UTF-8 and refuses other bytes without changing the row' do
     store = gtk::ListStore.new(String)
     view = gtk::TreeView.new(store)
     view.append_column(gtk::TreeViewColumn.new('Name', gtk::CellRendererText.new, text: 0))
@@ -81,7 +80,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(store.get_value(iter, 0)).to eq(utf8(cafe))
   end
 
-  it 'admits binary-tagged UTF-8 text into a buffer and refuses other bytes without editing it (1831:RC27)' do
+  it 'admits binary-tagged UTF-8 text into a buffer and refuses other bytes without editing it' do
     buffer = gtk::TextBuffer.new
     cafe = utf8('caf'.b + bytes(0xC3, 0xA9))
     naive = 'na'.b + bytes(0xC3, 0xAF) + 've'.b
@@ -97,7 +96,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(buffer.text).to eq(utf8(resume))
   end
 
-  it 'leaves an editor intact when log conversion refuses, and degrades long history (1844:RC5)' do
+  it 'leaves an editor intact when log conversion refuses, and degrades long history' do
     long_line = 'x' * (Lich::WebUI::Contract::BOUNDS[:log_line] + 1)
     view = gtk::TextView.new
     view.buffer.text = "#{long_line}\nshort"
@@ -111,7 +110,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect([view.send(:log?), view.editable?, view.buffer.text]).to eq([true, false, lines.last(gtk::TextBuffer::MAX_LINES).join("\n")])
   end
 
-  it 'releases a destroyed view buffer with its text so a replacement view can bind it (1844:RC6)' do
+  it 'releases a destroyed view buffer with its text so a replacement view can bind it' do
     buffer = gtk::TextBuffer.new
     view = gtk::TextView.new(buffer)
     buffer.text = 'kept'
@@ -142,7 +141,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     end
     let(:port) { retiring_port.new }
 
-    it 'completes teardown and keeps the last editor text for a replacement view (1844:RC6)' do
+    it 'completes teardown and keeps the last editor text for a replacement view' do
       logs = []
       allow(Lich).to receive(:log) { |message| logs << message }
       buffer = gtk::TextBuffer.new
@@ -171,7 +170,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     end
   end
 
-  it 'refuses out-of-capacity path and child indices with attribution while missing rows stay nil (1844:RC1)' do
+  it 'refuses out-of-capacity path and child indices with attribution while missing rows stay nil' do
     store = gtk::TreeStore.new(String)
     store.append
     huge = 2**64
@@ -185,7 +184,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(gtk::TreePath.new(limit - 1).indices).to eq([limit - 1])
   end
 
-  it 'answers selection membership without rebuilding the model rows (1844:RC7)' do
+  it 'answers selection membership without rebuilding the model rows' do
     store = gtk::ListStore.new(String)
     first, second = store.append, store.append
     view = gtk::TreeView.new(store)
@@ -200,7 +199,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(store).not_to have_received(:rows)
   end
 
-  it 'reports a removed row as unselected even while viewer state still names it (1844:RC7)' do
+  it 'reports a removed row as unselected even while viewer state still names it' do
     store = gtk::ListStore.new(String)
     store.append
     view = gtk::TreeView.new(store)
@@ -211,7 +210,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(view.selection.iter_is_selected?(stale)).to be(false)
   end
 
-  it 'keeps a valid log tail when only discarded lines are overlong (1845:RC3)' do
+  it 'keeps a valid log tail when only discarded lines are overlong' do
     view = log_view
     long_line = 'x' * (Lich::WebUI::Contract::BOUNDS[:log_line] + 1)
     tail = Array.new(gtk::TextBuffer::MAX_LINES) { |index| "line #{index}" }
@@ -222,7 +221,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(view.buffer.text).to eq(tail.join("\n"))
   end
 
-  it 'keeps a retained iterator as a current-bounds offset across edits (1845:RC5)' do
+  it 'keeps a retained iterator as a current-bounds offset across edits' do
     buffer = gtk::TextBuffer.new
     buffer.text = 'abcdef'
     iter = buffer.get_iter_at_offset(4)
@@ -234,7 +233,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect { buffer.insert(gtk::TextBuffer.new.start_iter, 'x') }.to raise_error(gtk::UnsupportedOperation, /operation=insert/)
   end
 
-  it 'leaves no row behind when a combo text append, prepend or insert is refused (1844:RC9)' do
+  it 'leaves no row behind when a combo text append, prepend or insert is refused' do
     invalid = bytes(0xFF)
     overlong = 'x' * (Lich::WebUI::Contract::BOUNDS[:short_text] + 1)
     cafe = 'caf'.b + bytes(0xC3, 0xA9)
@@ -254,7 +253,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect([labels.call, labels.call.last.encoding]).to eq([['ok', utf8(cafe)], Encoding::UTF_8])
   end
 
-  it 'leaves no row behind when a combo item append is refused for its id (1844:RC9)' do
+  it 'leaves no row behind when a combo item append is refused for its id' do
     combo = gtk::ComboBox.new
     combo.append('a', 'one')
     revision = combo.model.revision
@@ -264,7 +263,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect([combo.model.rows.map { |iter| iter[0] }, combo.model.revision]).to eq([['one'], revision])
   end
 
-  it 'refuses non-UTF-8 renderer text at the setter and re-tags binary-tagged UTF-8 (1844:RC10)' do
+  it 'refuses non-UTF-8 renderer text at the setter and re-tags binary-tagged UTF-8' do
     store = gtk::ListStore.new(String)
     store.append[0] = 'row'
     renderer = gtk::CellRendererText.new
@@ -289,7 +288,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(view.send(:row_definitions).first[:cells].values).to eq([utf8(cafe)])
   end
 
-  it 'refuses non-UTF-8 combo entry text at the setter and re-tags binary-tagged UTF-8 (1844:RC11)' do
+  it 'refuses non-UTF-8 combo entry text at the setter and re-tags binary-tagged UTF-8' do
     cafe = 'caf'.b + bytes(0xC3, 0xA9)
     combo = gtk::ComboBox.new(entry: true)
     handle = combo.materialize
@@ -305,7 +304,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect([published, published.encoding, entry.text, entry.text.encoding]).to eq(['text:caf' + utf8(bytes(0xC3, 0xA9)), Encoding::UTF_8, utf8(cafe), Encoding::UTF_8])
   end
 
-  it 'matches binary-tagged UTF-8 entry text to a closed combo label (1844:RC11)' do
+  it 'matches binary-tagged UTF-8 entry text to a closed combo label' do
     cafe = 'caf'.b + bytes(0xC3, 0xA9)
     combo = gtk::ComboBox.new(entry: true)
     combo.append_text(utf8(cafe))
@@ -315,7 +314,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(combo.child.text).to eq(utf8(cafe))
   end
 
-  it 'selects a just-appended binary-tagged UTF-8 combo label by the same raw text (1844:RC15)' do
+  it 'selects a just-appended binary-tagged UTF-8 combo label by the same raw text' do
     name = 'Grunwald'.b.sub('u', bytes(0xC3, 0xBC)) # u-umlaut, binary-tagged as game text arrives
     combo = gtk::ComboBox.new
     combo.append_text(name)
@@ -334,7 +333,7 @@ RSpec.describe 'script compatibility models, tables and text' do
     expect(combo.active).to eq(0)
   end
 
-  it 'refuses non-UTF-8 column tooltips at the setter and re-tags binary-tagged UTF-8 (1844:RC12)' do
+  it 'refuses non-UTF-8 column tooltips at the setter and re-tags binary-tagged UTF-8' do
     store = gtk::ListStore.new(String)
     store.append[0] = 'row'
     column = gtk::TreeViewColumn.new('Name', gtk::CellRendererText.new, text: 0)
@@ -355,8 +354,8 @@ RSpec.describe 'script compatibility models, tables and text' do
 
   # Text kept as ASCII-8BIT, or in another encoding, failed only at publication.
   # The setters now share Gtk.wire_text: binary-tagged UTF-8 is re-tagged and every
-  # other non-UTF-8 text is refused at the call (1844:RC13).
-  describe 'non-UTF-8 text at the P13 setters (1844:RC13)' do
+  # other non-UTF-8 text is refused at the call.
+  describe 'non-UTF-8 text at the model, table and text setters' do
     let(:cafe) { 'caf'.b + bytes(0xC3, 0xA9) }
     let(:rejected) do
       [
@@ -442,7 +441,7 @@ RSpec.describe 'script compatibility models, tables and text' do
 
   # Classes that a later layer first defines (images, style). hide_const makes any
   # layer behave as P13 does, where none of them exist.
-  context 'without the classes a later layer defines (1844:RC14)' do
+  context 'without the classes a later layer defines' do
     before do
       %w[Gtk::Image Gtk::Color Gdk::RGBA Pango::FontDescription].each do |name|
         hide_const("Lich::Common::ScriptScope::#{name}")

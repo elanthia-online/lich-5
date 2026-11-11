@@ -6,8 +6,7 @@ require 'webui'
 require 'json'
 require 'timeout'
 
-# Owner stop and render-worker ownership at the runtime layer: the P05 shares of
-# 1832:RC1 and 1832:RC28, plus 1837:RC1, 1836:RC11 and 1836:RC12.
+# Owner stop and render-worker ownership at the runtime layer.
 RSpec.describe 'WebUI runtime owner-stop boundaries' do
   include WebUIFreshProcess
 
@@ -47,7 +46,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     [output, errors, status]
   end
 
-  it 'contains script-class and exit failures from render workers and modal responses, in a fresh process (1832:RC1)' do
+  it 'contains script-class and exit failures from render workers and modal responses, in a fresh process' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       require 'webui'
       require 'timeout'
@@ -84,7 +83,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     expect(output).to eq("ready\n")
   end
 
-  it 'stops the owner, its pages and its admission when an ordinary dispatched callback exits (1832:RC1)' do
+  it 'stops the owner, its pages and its admission when an ordinary dispatched callback exits' do
     service = Lich::WebUI::Service.new(registry: Lich::WebUI::Registry.new, logger: ->(*) {})
     service.registry.register(Lich::WebUI::Page.new(owner: owner, id: 'main', title: 'Main') {})
     service.runtime.dispatch(owner: owner) { exit 3 }
@@ -94,7 +93,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     service&.stop
   end
 
-  it 'stops the owner when a modal completion callback exits, runs the remaining callbacks and keeps the process, in a fresh process (1832:RC28)' do
+  it 'stops the owner when a modal completion callback exits, runs the remaining callbacks and keeps the process, in a fresh process' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       require 'webui'
       require 'timeout'
@@ -117,7 +116,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     expect(output).to eq("ready\n")
   end
 
-  it 'cancels and cleans up queued callbacks behind a running one when the runtime terminates the owner (1837:RC1)' do
+  it 'cancels and cleans up queued callbacks behind a running one when the runtime terminates the owner' do
     stub_const('Lich::WebUI::Dispatcher::SHUTDOWN_JOIN_TIMEOUT', 2)
     entered, release, ran = Queue.new, Queue.new, Queue.new
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'ending', title: 'Ending') do
@@ -154,7 +153,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     release&.push(true)
   end
 
-  it 'bounds render cancellation and never delivers a render that outlives owner termination (1836:RC11)' do
+  it 'bounds render cancellation and never delivers a render that outlives owner termination' do
     stub_const('Lich::WebUI::Runtime::RenderCoordinator::STOP_TIMEOUT', 0.2)
     host = Lich::WebUI::Runtime.new(registry: registry, dispatcher: dispatcher, logger: ->(level, message) { logged << [level, message] })
     blocking, entered, release = [false], Queue.new, Queue.new
@@ -185,7 +184,7 @@ RSpec.describe 'WebUI runtime owner-stop boundaries' do
     host&.shutdown
   end
 
-  it 'runs render workers and modal timers on host threads that survive the requesting script (1836:RC12)' do
+  it 'runs render workers and modal timers on host threads that survive the requesting script' do
     groups, timed_out = Queue.new, Queue.new
     script_group = ThreadGroup.new
     modals = Lich::WebUI::ModalCoordinator.new(registry: registry, runtime: runtime, viewers_present: ->(_) { true }, pages_changed: proc {})

@@ -10,8 +10,7 @@ require_relative '../../../lib/common/script_scope/gtk/scheduling'
 require_relative '../../../lib/common/script_scope/gtk/style'
 require_relative '../../../lib/common/script_scope/gtk/display_geometry'
 
-# Shim callback, lifecycle and classification boundaries: the P12 shares of
-# 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC12, RC13, RC14, RC20 and RC21, plus 1845:RC14.
+# Shim callback, lifecycle and classification boundaries.
 # Exit and LoadError paths run in a fresh process; the rest use a recording port.
 RSpec.describe 'script compatibility widget boundaries' do
   include WebUIFreshProcess
@@ -102,7 +101,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     [output, errors, status]
   end
 
-  it 'routes a queued or timed exit to the owner-stop hook and contains other script errors (1843:RC3, 1832:RC1)' do
+  it 'routes a queued or timed exit to the owner-stop hook and contains other script errors' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       queued, timed, survivor = new_owner('queued.lic'), new_owner('timed.lic'), new_owner('survivor.lic')
       Lich::Common::Script.current = queued
@@ -127,7 +126,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(output).to eq("ready\n")
   end
 
-  it 'completes a refused presentation close despite a failing handler, honors a veto and stops an exiting owner (1843:RC2, 1853:RC1)' do
+  it 'completes a refused presentation close despite a failing handler, honors a veto and stops an exiting owner' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       failing, vetoing, exiting = new_owner('failing.lic'), new_owner('vetoing.lic'), new_owner('exiting.lic')
       results = {}
@@ -160,7 +159,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(output).to eq("ready\n")
   end
 
-  it 'refuses native GTK entrypoints while unrelated helpers named like GTK packages load (1843:RC10)' do
+  it 'refuses native GTK entrypoints while unrelated helpers named like GTK packages load' do
     output, errors, status = run_fresh(<<~RUBY_CODE)
       require 'common/script_scope/gtk/require_boundary'
       boundary = GTK::RequireBoundary
@@ -180,7 +179,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(output).to eq("ready\n")
   end
 
-  it 'contains non-StandardError cleanup failures so every window still closes (1832:RC1)' do
+  it 'contains non-StandardError cleanup failures so every window still closes' do
     first = gtk::Window.new('one')
     second = gtk::Window.new('two')
     closed = []
@@ -192,7 +191,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(logs.grep(/operation=destroy .*cleanup failed error=SecurityError/).size).to eq(1)
   end
 
-  it 'keeps accumulated scroll requests within the contract range (1843:RC5)' do
+  it 'keeps accumulated scroll requests within the contract range' do
     max = 2_147_483_647
     stub_const('Lich::Common::ScriptScope::Gtk::ScrollEvent', Class.new do
       def initialize(_payload); end
@@ -210,7 +209,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(logs.grep(/callback failed/)).to be_empty
   end
 
-  it 'retires widget shadow state when port teardown fails, keeping the diagnostic (1843:RC8)' do
+  it 'retires widget shadow state when port teardown fails, keeping the diagnostic' do
     window = gtk::Window.new('setup')
     child = gtk::Label.new('field')
     window.add(child)
@@ -226,7 +225,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(port.destroyed).to eq(1)
   end
 
-  it 'keeps text= literal on a link label instead of writing new Markdown links (1843:RC9)' do
+  it 'keeps text= literal on a link label instead of writing new Markdown links' do
     label = gtk::Label.new
     label.set_markup('<a href="https://example.com/">site</a>')
 
@@ -236,7 +235,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(label.text).to eq('plain words (no link)')
   end
 
-  it 'bounds SizeGroup creation over the session lifetime (1843:RC13)' do
+  it 'bounds SizeGroup creation over the session lifetime' do
     keys = Array.new(gtk::SizeGroup::LIFETIME_LIMIT) { gtk::SizeGroup.new(:horizontal).key }
 
     expect(keys.uniq.size).to eq(512)
@@ -244,7 +243,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect { gtk::SizeGroup.new(:horizontal) }.to raise_error(gtk::UnsupportedOperation, /class=\S*SizeGroup operation=new/)
   end
 
-  it 'converts SizeGroup and the GLib boundary implicitly without a refusal (1843:RC12)' do
+  it 'converts SizeGroup and the GLib boundary implicitly without a refusal' do
     group = gtk::SizeGroup.new(:horizontal)
     glib = Lich::Common::ScriptScope::GLib
 
@@ -258,7 +257,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect { glib.unsupported_native_call }.to raise_error(gtk::UnsupportedOperation, /operation=unsupported_native_call/)
   end
 
-  it 'converts display objects and their classes implicitly without a refusal (1845:RC14)' do
+  it 'converts display objects and their classes implicitly without a refusal' do
     gdk = Lich::Common::ScriptScope::Gdk
     objects = [gdk::Screen.default, gdk::Display.default, gdk::Screen, gdk::Display]
 
@@ -272,7 +271,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect { gdk::Display.unsupported_native_call }.to raise_error(gtk::UnsupportedOperation, /operation=unsupported_native_call/)
   end
 
-  it 'ignores activation of a destroyed radio member without deselecting its group (1843:RC14)' do
+  it 'ignores activation of a destroyed radio member without deselecting its group' do
     first = gtk::RadioButton.new('a')
     second = gtk::RadioButton.new(first, 'b')
     third = gtk::RadioButton.new(first, 'c')
@@ -285,7 +284,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(toggled).to be_empty
   end
 
-  it 'appends a notebook page with a Label header before EventBox exists (1843:RC20)' do
+  it 'appends a notebook page with a Label header before EventBox exists' do
     # EventBox first loads with the layout layer, so this must hold without it.
     hide_const('Lich::Common::ScriptScope::Gtk::EventBox')
     notebook = gtk::Notebook.new
@@ -298,7 +297,7 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(notebook.n_pages).to eq(1)
   end
 
-  it 'still takes an EventBox-wrapped Label header once EventBox exists (1843:RC20)' do
+  it 'still takes an EventBox-wrapped Label header once EventBox exists' do
     stub_const('Lich::Common::ScriptScope::Gtk::EventBox', gtk::Box)
     notebook = gtk::Notebook.new
     wrapper = gtk::Box.new
@@ -316,7 +315,7 @@ RSpec.describe 'script compatibility widget boundaries' do
                 %w[Screen Color RGBA EventMask WindowTypeHint].map { |name| "Lich::Common::ScriptScope::Gdk::#{name}" } +
                 ['Lich::Common::ScriptScope::Pango::FontDescription']
 
-  context 'without the classes a later layer defines (1843:RC21)' do
+  context 'without the classes a later layer defines' do
     before { later_layer.each { |name| hide_const(name) } }
 
     it 'valigns a widget inside a parent without raising NameError' do
