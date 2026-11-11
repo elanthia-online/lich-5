@@ -382,6 +382,20 @@ RSpec.describe Lich::AcceptedGemPolicy do
       installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
       expect(policy.check(dependencies).needed).to be_empty
     end
+
+    it 'treats an absent minimum and one equal in value to the version as the same package' do
+      sqlite3.delete('minimum')
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.2.0')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect(policy.check(dependencies).needed).to be_empty
+    end
+
+    it 'still rejects an absent minimum against a lower one for the same package' do
+      sqlite3.delete('minimum')
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.1')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package identities for sqlite3/)
+    end
   end
 
   it 'gives a minimum equal to the version exactly the strict results' do
@@ -422,6 +436,24 @@ RSpec.describe Lich::AcceptedGemPolicy do
       ['2.10.3', 'not a version', '', 2].each do |minimum|
         expect { served(minimum).check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is (?:invalid|above its version)/)
       end
+    end
+
+    it 'rejects a blank, padded or rewritten minimum that would otherwise pass as a version' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      [' ', ' 2.10.1', '2.10.1 ', "2.10.1\n", '2.10.1-1'].each do |minimum|
+        expect(Gem::Version.correct?(minimum)).to be(true)
+        expect { served(minimum).check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
+      end
+    end
+
+    it 'does not start on a version below the strict floor through a blank minimum' do
+      installed['sqlite3'] = [spec('sqlite3', '1.3.0')]
+      expect { served(' ').check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
+    end
+
+    it 'rejects a canonical prerelease minimum, which startup could never run on' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2.rc1')]
+      expect { served('2.10.2.rc1').check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
     end
 
     it 'applies the strict floor when the minimum is absent and the relaxed one when it is present' do

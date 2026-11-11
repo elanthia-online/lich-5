@@ -382,7 +382,15 @@ module Lich
       raise Error, "unit #{unit_id} package version is invalid" unless Gem::Version.correct?(package['version'])
       if package.key?('minimum')
         minimum = package['minimum']
-        raise Error, "unit #{unit_id} package minimum is invalid" unless minimum.is_a?(String) && !minimum.empty? && Gem::Version.correct?(minimum)
+        # Gem::Version.correct? accepts surrounding whitespace (a blank string
+        # would be floor 0) and rewrites forms such as "2.10.1-1"; accept only
+        # the canonical spelling. A prerelease floor is rejected: startup
+        # requirements are releases, so the resolver never starts on an
+        # installed prerelease and the tier could only end in a repair.
+        unless minimum.is_a?(String) && !minimum.empty? && Gem::Version.correct?(minimum) &&
+               Gem::Version.new(minimum).to_s == minimum && !Gem::Version.new(minimum).prerelease?
+          raise Error, "unit #{unit_id} package minimum is invalid"
+        end
         raise Error, "unit #{unit_id} package minimum is above its version" if Gem::Version.new(minimum) > Gem::Version.new(package['version'])
       end
       require_filename!(package['filename'], "unit #{unit_id} package")
