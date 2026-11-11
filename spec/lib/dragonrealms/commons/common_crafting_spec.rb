@@ -2675,6 +2675,111 @@ describe DRCC do
       expect(sent.count(study_instructions)).to eq(2)
     end
 
+    # The three endings of the study line in the November logs of 2023-2026
+    # (ClickHouse log index, about 940,000 studies): the first nearly always,
+    # the second 23 times in 2023, 54 in 2025 and twice in 2026, the third
+    # (the .25:10821 line above) 40 times in 2025.
+    [
+      'completely understand all facets of the design.',
+      'comprehend all but several minor details in the text.',
+      "confidently discern most of the design's minutiae."
+    ].each do |ending|
+      context "when the study line ends #{ending.inspect}" do
+        let(:study_line) { "You scan the liniment instructions with a glance and #{ending}" }
+
+        it 'counts the study as complete' do
+          play(get_instructions   => [got_instructions],
+               study_instructions => [study_again_with_five_uses, [study_line, 'You now feel ready to begin the crafting process.', 'Roundtime: 7 sec.']],
+               put_instructions   => [put_away])
+
+          expect(study).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        end
+
+        it 'is the line that completes it; a Roundtime line on its own is not' do
+          expect(DRCC.send(:study_instructions_outcome, study_line)).to eq(:studied)
+          expect(DRCC.send(:study_instructions_outcome, 'Roundtime: 7 sec.')).to eq(:timeout)
+        end
+      end
+    end
+
+    # Game lag (DragonRealms, 2026-11-12): the server went quiet for about
+    # 3.5 minutes, then ran the queued commands in order and sent their
+    # replies at once, so a reply to a command sent before the study can be
+    # the first line after it. Here a late "Roundtime: 8 sec." comes first;
+    # bput, waiting for the study's line, must read past it.
+    context 'when a late Roundtime from an earlier command arrives before the study reply' do
+      let(:late_roundtime) { 'Roundtime: 8 sec.' }
+
+      it 'is no completed study when the study itself then gets no reply' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *ambient_only]],
+             put_instructions   => [put_away])
+
+        expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
+        expect(drc).to have_received(:beep)
+        expect(sent.last).to eq(put_instructions)
+      end
+
+      it 'stops the script without skip_exit, after putting the instructions away' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime]],
+             put_instructions   => [put_away])
+
+        expect { study }.to raise_error(SystemExit)
+        expect(sent.last).to eq(put_instructions)
+      end
+
+      it 'still studies again when the "Study them again" prompt follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *study_again_with_five_uses], study_complete],
+             put_instructions   => [put_away])
+
+        expect(study).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+      end
+
+      it 'reports not holding when that follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, 'You must be holding the instructions to study them.']],
+             put_instructions   => [put_away])
+
+        expect(study(skip_exit: true)).to have_attributes(studied?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+      end
+
+      it 'counts the study once its own line follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *study_complete]],
+             put_instructions   => [put_away])
+
+        expect(study).to have_attributes(studied?: true, uses_left: nil, discarded?: false)
+        expect(drc).not_to have_received(:beep)
+      end
+
+      # The study's Roundtime and the toss line now both come after the line
+      # bput returned on; waitrt? lets the Flag see the toss.
+      it 'still sees the toss after the last use' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_one_use, [late_roundtime, *study_complete_then_tossed]],
+             put_instructions   => [what_were_you_referring_to])
+
+        expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions])
+        expect(watched_flags).to be_empty
+      end
+    end
+
+    it "does not take another player's speech quoting the study line for the study" do
+      quoted = 'Mahtra says, "You scan the liniment instructions with a glance and completely understand all facets of the design."'
+      play(get_instructions   => [got_instructions],
+           study_instructions => [[quoted, *ambient_only]],
+           put_instructions   => [put_away])
+
+      expect(study(skip_exit: true)).to have_attributes(studied?: false)
+    end
+
     it 'gets the instructions from the bag when bag_items lists them' do
       get_from_bag = "get my liniment instructions from my botanist's toolbag"
       play(get_from_bag       => [got_instructions],
