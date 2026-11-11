@@ -322,6 +322,42 @@ RSpec.describe Lich::WebUI::Server do
     receiver&.close
   end
 
+  it 'retires an interrupted direct write without relying on drain cleanup (1837:RC10)' do
+    sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
+    frame = Lich::WebUI::WebSocket.encode_text_message('x' * 128)
+    start_write = Queue.new
+    wrote_part = Queue.new
+    release = Queue.new
+    allow(sender).to receive(:write_nonblock).and_wrap_original do |original, data, **options|
+      written = original.call(data.byteslice(0, 16), **options)
+      wrote_part << written
+      release.pop
+      written
+    end
+    # Run write directly so drain's separate ensure cannot retire the stream for it.
+    connection = described_class::Connection.new(sender, thread_factory: lambda do |&_drain|
+      Thread.new { start_write.pop.send(:write, frame) }
+    end)
+    writer = connection.instance_variable_get(:@writer)
+    lock = connection.instance_variable_get(:@write_mutex)
+    start_write << connection
+    written = Timeout.timeout(2) { wrote_part.pop }
+    expect(written).to be_between(1, frame.bytesize - 1)
+    expect(Timeout.timeout(2) { receiver.read(written) }).to eq(frame.byteslice(0, written))
+    expect(writer.kill.join(2)).to equal(writer)
+
+    expect(lock).not_to be_locked
+    expect(connection).not_to be_alive
+    expect(connection.send_text('must not append to an incomplete frame')).to be(false)
+    expect(Timeout.timeout(2) { receiver.read }).to eq('')
+  ensure
+    writer&.kill&.join(2)
+    release&.push(true)
+    connection&.close
+    sender&.close
+    receiver&.close
+  end
+
   it 'sends a Close frame before shutting down an idle WebSocket' do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     connection = described_class::Connection.new(sender)
