@@ -61,7 +61,7 @@ function fixture(target) {
       (documentListeners[name] ||= []).push(callback);
       documentEvents[name] ||= event => documentListeners[name].forEach(listener => listener(event));
     } };
-  const sent = [], resized = [], listeners = {}, windowEvents = {};
+  const sent = [], resized = [], listeners = {}, windowEvents = {}, windowListeners = {};
   let timer = 0;
   const frames = [];
   class WebSocket {
@@ -74,8 +74,13 @@ function fixture(target) {
     innerWidth: 800, innerHeight: 600, outerWidth: 800, outerHeight: 630, screenX: 0, screenY: 0,
     requestAnimationFrame: work => frames.push(work), resizeTo: (...size) => resized.push(size), setTimeout: () => ++timer, clearTimeout() {},
     setInterval: () => ++timer, clearInterval() {},
-    addEventListener: (name, callback) => { windowEvents[name] = callback; },
-    removeEventListener: name => { delete windowEvents[name]; } };
+    addEventListener(name, callback) {
+      (windowListeners[name] ||= []).push(callback);
+      windowEvents[name] ||= event => windowListeners[name].forEach(listener => listener(event));
+    },
+    removeEventListener(name, callback) {
+      windowListeners[name] = (windowListeners[name] || []).filter(listener => listener !== callback);
+    } };
   const context = vm.createContext({ window, document, WebSocket, URL, URLSearchParams,
     CSS: { escape: value => value }, queueMicrotask: work => work() });
   for (const asset of browserAssets()) vm.runInContext(asset.source, context, { filename: asset.name });
