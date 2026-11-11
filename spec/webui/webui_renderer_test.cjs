@@ -69,11 +69,12 @@ for (const ending of ['close', 'disconnect']) test(`replacing a tracked pointer 
   pointer(dom.window, 'pointermove', 22, 220);
   if (ending === 'close') receive({ type: 'page_closed', page: 'canvas' });
   else disconnect();
-  assert.deepEqual(events().at(-1), ['pointer_release', 220]);
+  // A disconnected page sends nothing; the gesture is still retired locally.
+  assert.deepEqual(events().at(-1), ending === 'close' ? ['pointer_release', 220] : ['pointer_press', 200]);
   assert.equal(timers.size, 0);
   assert.equal(activeListeners.size, 0);
   pointer(dom.window, 'pointerup', 22, 240);
-  assert.equal(events().length, 4);
+  assert.equal(events().length, ending === 'close' ? 4 : 3);
 });
 
 test('native minimize measurements are deduplicated and listeners retire on close', t => {
