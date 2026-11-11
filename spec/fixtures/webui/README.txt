@@ -403,3 +403,53 @@ Those three browser flows also passed actual macOS WebKit checks; native cancel
 was not separately exercised in that pass. Ruby covers cancellation and cleanup.
 The separate GTK/shim/native Bigshot preview used repaired setup candidates for
 GTK and shim; visual similarity does not convert the original failure into a pass.
+
+Prepared activation candidates (separate from the historical shim fixtures)
+
+activation-candidates.json pins prepared sources from the 2026-10-22 reconciliation
+against EO scripts revision b3a63a02eca9aa973f281b67b29299376708b848. These are local
+candidates, not claims that those bytes have been published. Header versions remain
+upstream labels; candidate_sha256 identifies the actual tested preparation.
+
+- vars 1.2.0, original author Tillmen, maintained by Elanthia-Online: adapted shim
+  setup body, original lines 77-211. The harness supplies its method wrapper.
+- alias 1.0.5, author elanthia-online, contributor Tillmen: adapted shim setup
+  worker, original lines 102-346. The harness supplies a method wrapper and the
+  existing database, update-regex closure and live service owner.
+- map 2.1.4, author elanthia-online: native MapData/NativeMap, lines 177-838.
+  The harness appends the enclosing module's end after excluding its run entrypoint.
+- jinx 0.8.1, author elanthia-online: native GUI module, lines 1785-2322, and
+  separately pinned original Service module. No source wrapper is added.
+
+Each record includes original whole-source and prepared whole-source SHA-256,
+verbatim block text, block SHA-256 and original line range. JSON escapes line
+terminators; parsing the source field restores the exact bytes used by the digest.
+The reconciled Map candidate differs from the older saved preparation; only the
+recorded candidate hash is accepted here.
+
+activation_script_candidates_spec.rb runs these blocks through the production
+shim/native contract. Vars/Alias cover edited Save & Close, edited Cancel, edited
+host close and unchanged close with finite completion and owner cleanup. Vars uses
+its real provider; an explicit harness Vars.save checks SQLite persistence after
+the script's assignments, rather than claiming the script saves immediately.
+Alias writes isolated SQLite tables. Character data, original surrounding hook
+registration and error-output boundaries are supplied by the harness.
+
+Native Map checks current/tag/location marker layers and Find submission/cleanup
+with synthetic rooms and an isolated image root. Its candidate lacks the old
+room-list dialog; no room-list acceptance or accepted degradation is claimed.
+Jinx runs the original Service.main(['gui']) and GUI.start! path, renders its four
+tabs and closes cleanly. Offline option/catalog/action/directory substitutes and
+Browser.show(load:false) exclude manifest fetching and package operations.
+Native window opening and actual browser input transport are not exercised.
+These checks do not execute complete script startup, game loops or live gameplay.
+
+The default_inventory records all ten core defaults plus GS-only ewaggle from
+lib/update.rb, their pinned source/prepared identities and acceptance limits.
+Autostart/version inspect GTK version diagnostically and have no GUI entrypoint;
+log/logxml are stream/file loggers. Go2/Repository/Ewaggle native candidates have
+historical browser-startup evidence; their older shim fixtures above remain
+separate. Published release points are unset. Existing background login sync is
+an upgrade route, but does not delay autostart or establish candidate availability
+before first use or after a failed/offline sync. Delivery and platform acceptance
+remain release obligations; fixture passes do not close them.

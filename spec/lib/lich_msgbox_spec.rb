@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require 'json'
 require 'open3'
 require 'rbconfig'
 require 'tmpdir'
@@ -106,6 +107,56 @@ RSpec.describe 'Lich.msgbox without a graphical toolkit' do
       expect(status.success?).to be(true), stderr
       expect(stdout).to eq("notice title=Lich vtest body=Startup failed\nresult=nil\n")
       expect(stderr.strip).to eq('Startup failed')
+    end
+
+    it 'uses one Windows notification and retains fatal exit, log and cleanup on desktop launch' do
+      setup = <<~'SETUP'
+        require 'json'
+        require File.expand_path('main/webui_startup', File.dirname(ARGV[0]))
+        module Win32
+          MB_OKCANCEL = 1
+          MB_YESNO = 2
+          MB_OK = 0
+          MB_ICONERROR = 16
+          MB_ICONQUESTION = 32
+          MB_ICONWARNING = 48
+          IDIOK = 1
+          IDICANCEL = 2
+          IDIYES = 6
+          IDINO = 7
+          def self.MessageBox(**) = ($dialogs += 1; IDIOK)
+        end
+        module Lich; module GemCheck
+          def self.show_notice(*) = ($helper_notices += 1)
+        end; end
+        $dialogs = $helper_notices = 0
+        STDOUT.define_singleton_method(:isatty) { false }
+        STDERR.define_singleton_method(:isatty) { false }
+        logs = []
+        Lich.define_singleton_method(:log) { |message| logs << message }
+        launcher = Object.new
+        launcher.define_singleton_method(:start) do
+          # The launcher's default recovery notifier uses this native message box.
+          Lich.msgbox(message: 'host failed', icon: :warning)
+          self
+        end
+        launcher.define_singleton_method(:await_launch) { nil }
+        launcher.define_singleton_method(:failure) { 'host failed' }
+        launcher.define_singleton_method(:close_at_exit) { @closed = true }
+        begin
+          Lich::Main::WebUIStartup.await(launcher)
+        rescue SystemExit => error
+          puts JSON.generate(dialogs: $dialogs, helpers: $helper_notices, exit: error.status,
+                             logs: logs, closed: launcher.instance_variable_get(:@closed))
+        end
+      SETUP
+      stdout, stderr, status = run_msgbox(setup, 'nil')
+
+      expect(status.success?).to be(true), stderr
+      expect(JSON.parse(stdout.lines.first)).to eq(
+        'dialogs' => 1, 'helpers' => 0, 'exit' => 1,
+        'logs' => ['error: host failed'], 'closed' => true
+      )
     end
 
     it 'passes an explicit title to the helper' do
