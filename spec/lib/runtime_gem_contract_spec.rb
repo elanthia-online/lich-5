@@ -162,10 +162,18 @@ RSpec.describe Lich::RuntimeGemContract do
       expect(explicit.windows_contract_digest(inventory)).to eq(reader.windows_contract_digest(inventory))
     end
 
-    it 'binds the platform into the contract identity' do
-      x64 = described_class.new(gemfile: gemfile, lockfile: lockfile)
-      arm = described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'aarch64-mingw-ucrt')
-      expect(arm.windows_contract_digest(arm_inventory)).not_to eq(x64.windows_contract_digest(inventory))
+    # Golden digests for this fixture. The x64 value is what the reader gave
+    # before platforms existed, so it must not move. Update either value only
+    # when the projection changes on purpose.
+    it 'pins the x64 contract digest for the default and an explicit platform' do
+      explicit = described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'x64-mingw-ucrt')
+      expect(reader.windows_contract_digest(inventory)).to eq('5082ffb937a1960ea017e4aa42f31b884a06d21f151a73311a922cd3342a82cf')
+      expect(explicit.windows_contract_digest(inventory)).to eq('5082ffb937a1960ea017e4aa42f31b884a06d21f151a73311a922cd3342a82cf')
+    end
+
+    it 'pins the ARM64 contract digest' do
+      arm = described_class.new(gemfile: gemfile, lockfile: arm_lockfile, platform: 'aarch64-mingw-ucrt')
+      expect(arm.windows_contract_digest(arm_inventory)).to eq('ccd41ba53c722daf2607d9fcc7abcc95e4367126b1cc384727ea446367688a5d')
     end
 
     it 'treats every Windows selector as applying to ARM64, matching Bundler' do
@@ -178,6 +186,12 @@ RSpec.describe Lich::RuntimeGemContract do
       expect(described_class.runtime_platform('aarch64-mingw-ucrt')).to eq('aarch64-mingw-ucrt')
       expect(described_class.runtime_platform('x64-mingw-ucrt')).to eq('x64-mingw-ucrt')
       expect(described_class.runtime_platform('x86-mingw-ucrt')).to eq('x64-mingw-ucrt')
+    end
+
+    it 'maps a Gem::Platform the same way as its string' do
+      expect(described_class.runtime_platform(Gem::Platform.new('aarch64-mingw-ucrt'))).to eq('aarch64-mingw-ucrt')
+      expect(described_class.runtime_platform(Gem::Platform.new('x64-mingw-ucrt'))).to eq('x64-mingw-ucrt')
+      expect(described_class.runtime_platform(Gem::Platform.new('x86-mingw32'))).to eq('x64-mingw-ucrt')
     end
   end
 

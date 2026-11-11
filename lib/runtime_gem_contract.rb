@@ -23,11 +23,14 @@ module Lich
 
     attr_reader :roots, :gemfile_sha256, :lock_sha256, :locked_packages, :platform
 
-    # The supported contract platform for the running Ruby, or the default when
-    # the running platform has no published contract.
-    # @param local [String] RubyGems platform of the running Ruby
+    # Which published runtime contract (manifest) to read for the running Ruby:
+    # its own platform when one is published, otherwise the default. This only
+    # picks a manifest; it is not a substitute for Gem::Platform.local when
+    # matching manifest targets, since an unpublished platform maps to x64.
+    # @param local [String, Gem::Platform] RubyGems platform of the running Ruby
     # @return [String]
-    def self.runtime_platform(local = Gem::Platform.local.to_s)
+    def self.runtime_platform(local = Gem::Platform.local)
+      local = local.to_s
       PLATFORMS.include?(local) ? local : PLATFORM
     end
 
