@@ -238,6 +238,9 @@ RSpec.configure do |config|
     # DRCC remembers crafting item ids for the whole process; an id one
     # example stowed would turn the next example's by-name GET into "get #id".
     Lich::DragonRealms::DRCC::CRAFTING_ITEM_IDS.clear if defined?(Lich::DragonRealms::DRCC::CRAFTING_ITEM_IDS)
+    # DRCI remembers thrown-away ids for the whole process too; one example's
+    # dispose_trash would stop the next example's GET by that id.
+    Lich::DragonRealms::DRCI.clear_thrown_away if defined?(Lich::DragonRealms::DRCI) && Lich::DragonRealms::DRCI.respond_to?(:clear_thrown_away)
 
     # Game objects - clear registries via class_variable_set (no test methods in production)
     # NOTE: class_variable_set used because GameObj is a production class with no reset! method
