@@ -135,6 +135,24 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     expect(argv.first).to eq(detected)
   end
 
+  it 'rejects directories and discovers executable files with the default probe' do
+    directory_root = File.join(directory, 'directory-install')
+    file_root = File.join(directory, 'file-install')
+    browser_directory = File.join(directory_root, 'Google', 'Chrome', 'Application', 'chrome.exe')
+    browser_file = File.join(file_root, 'Google', 'Chrome', 'Application', 'chrome.exe')
+    FileUtils.mkdir_p([browser_directory, File.dirname(browser_file)])
+    File.chmod(0o755, browser_directory)
+    File.write(browser_file, '')
+    File.chmod(0o755, browser_file)
+    environment = { 'PROGRAMFILES' => directory_root }
+
+    expect(File.executable?(browser_directory)).to be(true)
+    expect(described_class.app_browser_path(platform: 'x64-mingw-ucrt', environment: environment)).to be_nil
+
+    environment['PROGRAMFILES(X86)'] = file_root
+    expect(described_class.app_browser_path(platform: 'x64-mingw-ucrt', environment: environment)).to eq(browser_file)
+  end
+
   describe 'automatic discovery with snap candidates' do
     before do
       # Use real executable and snap probes over stand-ins only; host browsers
