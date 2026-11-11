@@ -6,6 +6,7 @@ require 'json'
 require 'socket'
 require 'timeout'
 require 'uri'
+require_relative 'default_webui_acceptance_report'
 
 acceptance_root = ENV.fetch('LICH_CI_DEFAULT_WEBUI_ROOT')
 FileUtils.mkdir_p(acceptance_root)
@@ -48,7 +49,7 @@ module LichCiDefaultWebUIAcceptance
     @installer.enable
   end
 
-  # Starts the probe client and writes a structured success/failure report to the parent pipe.
+  # Starts the probe client and publishes a structured success/failure report for the parent.
   # @return [Thread] client worker
   def start_client(url)
     @client = Thread.new do
@@ -224,13 +225,11 @@ module LichCiDefaultWebUIAcceptance
     roots
   end
 
-  # Writes one JSON result to the inherited report descriptor, then closes that writer.
+  # Publishes one complete JSON result in the parent's isolated temporary root.
+  # @param result [Hash] acceptance result
   # @return [void]
   def report(result)
-    writer = IO.for_fd(Integer(ENV.fetch('LICH_CI_DEFAULT_WEBUI_FD')), 'w')
-    writer.puts(JSON.generate(result))
-    writer.flush
-    writer.close
+    DefaultWebUIAcceptanceReport.publish(ENV.fetch('LICH_CI_DEFAULT_WEBUI_REPORT'), result)
   end
 end
 
