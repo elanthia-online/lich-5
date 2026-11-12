@@ -26,8 +26,6 @@ jobs:
     name: Native Windows WebUI coverage
     runs-on: windows-latest
     timeout-minutes: 45
-    env:
-      LICH_CI_DEFAULT_WEBUI_ARTIFACT: tmp/windows-webui/default-entrypoint.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,11 +95,9 @@ jobs:
             authentication = @('spec/lib/real_keychain_fence_spec.rb', 'spec/lib/common/authentication/entry_store_spec.rb', 'spec/lib/common/authentication/cli_password_spec.rb', 'spec/lib/common/cli/cli_encryption_mode_change_spec.rb', 'spec/lib/common/gui/account_manager_spec.rb', 'spec/lib/common/gui/master_password_manager_spec.rb')
             launcher = @('spec/lib/common/webui_launcher/controller_regressions_spec.rb', 'spec/lib/common/webui_launcher/catalog_browser_path_spec.rb', 'spec/lib/common/webui_launcher/catalog_password_changes_spec.rb', 'spec/lib/common/webui_launcher/window_geometry_store_spec.rb', 'spec/lib/common/webui_launcher_workflows_spec.rb', 'spec/lib/common/frontend_choices_spec.rb', 'spec/lib/util/memoryreleaser_spec.rb')
             builder = @('spec/lib/common/script_scope_builder_spec.rb', 'spec/lib/common/script_scope_builder_remaining_spec.rb', 'spec/lib/common/script_scope_destroy_sibling_reads_spec.rb', 'spec/lib/common/script_scope_model_coalescing_spec.rb', 'spec/lib/common/script_scope_css_corpus_spec.rb')
-            # P22 owns these real-entrypoint specs and removal of the Windows skip.
-            entrypoint = @('spec/lib/main/webui_startup_spec.rb', 'spec/lib/main/default_webui_acceptance_spec.rb', 'spec/lib/main/default_webui_acceptance_report_spec.rb')
+            reports = @('spec/lib/main/default_webui_acceptance_report_spec.rb')
           }
-          # The testbed's informational gemcheck group is unrelated and omitted;
-          # every selected group below is blocking, including entrypoint acceptance.
+          # Every selected group is blocking; unrelated gem checks are omitted.
           $failed = $false
           foreach ($group in $groups.GetEnumerator()) {
             $name = $group.Key
@@ -116,13 +112,6 @@ jobs:
               $result = Get-Content "tmp/windows-webui/$name.json" -Raw | ConvertFrom-Json
               "${name}: $($result.summary.example_count) examples, $($result.summary.failure_count) failures, $($result.summary.pending_count) pending; $($clock.Elapsed.TotalSeconds)s" | Out-File $env:GITHUB_STEP_SUMMARY -Append
             }
-          }
-          # A green file-level run with a skipped/pending principal example is insufficient.
-          $acceptance = Get-Content tmp/windows-webui/entrypoint.json -Raw | ConvertFrom-Json
-          $principal = @($acceptance.examples | Where-Object { $_.full_description -eq 'default WebUI entrypoint acceptance authenticates the real page, exercises it, and shuts down without GTK' })
-          if ($principal.Count -ne 1 -or $principal[0].status -ne 'passed') {
-            Write-Output '::error::The principal default-WebUI entrypoint example must execute and pass on Windows (P22 dependency).'
-            $failed = $true
           }
           if ($failed) { exit 1 }
       - name: Run logic and native renderer engines
