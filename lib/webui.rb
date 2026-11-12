@@ -195,6 +195,8 @@ module Lich
       #   page windows use persisted geometry or their declared size
       # @return [Boolean] whether opening succeeded or the page was already open;
       #   false without spawning when the core presentation policy is not enabled
+      # @raise [Error] when presentation is enabled and the host is not running,
+      #   the page is unregistered, or its owner has terminated
       def open(page: nil, geometry: nil)
         return false unless presentation_enabled?
 
