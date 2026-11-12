@@ -3,13 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { windowsSpecPaths } = require('./workflow_classification_source.cjs');
 
 const root = path.join(__dirname, '../..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/\r\n/g, '\n');
 const workflow = read('.github/workflows/windows_webui.yaml');
-const groups = workflow.match(/^          \$groups = \[ordered\]@\{\n([\s\S]*?)^          \}/m)?.[1];
-assert.ok(groups, 'expected the Windows RSpec selection table');
-const selected = [...groups.matchAll(/'(spec\/[^']+)'/g)].map(match => match[1]);
+const selected = windowsSpecPaths(workflow);
 const renderer = read('.github/workflows/webui_tests.yaml').split('\n  browser:\n')[0];
 const guard = workflow.match(/^    if: >-\n((?:      .+\n)+)/m)?.[1].trim();
 assert.ok(guard, 'expected a job-level owner guard before any checkout');
