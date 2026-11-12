@@ -110,6 +110,30 @@ RSpec.describe Lich::Util::Update::GemPackages do
       expect(printed.last).to eq('[lich5-update: x/y: release v2 has no .gem attached; skipped.]')
     end
 
+    it 'skips an asset whose version RubyGems rejects and uses the next one' do
+      described_class.save('x/y' => { 'deployed' => '1.2.0' })
+      allow(client).to receive(:fetch_github_json).and_return(
+        'tag_name' => 'v1.2.0',
+        'assets'   => [{ 'name' => 'tiny-1..2.gem' }, { 'name' => 'tiny-1.2.0.gem', 'browser_download_url' => 'https://example.com/tiny-1.2.0.gem' }]
+      )
+      allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+      expect(manager.sync_gem('x/y')).to eq(:current)
+    end
+
+    it 'treats a release with only invalid gem versions as having no gem' do
+      allow(client).to receive(:fetch_github_json).and_return('tag_name' => 'v2', 'assets' => [{ 'name' => 'tiny-1..2.gem' }])
+      expect(manager.sync_gem('x/y')).to eq(:skipped)
+    end
+
+    it 'refuses a gem name another registration already provides' do
+      described_class.save('a/b' => { 'gem' => 'tiny', 'deployed' => '1.2.0' }, 'x/y' => {})
+      allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
+      allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+      expect(manager.sync_gem('x/y')).to eq(:failed)
+      expect(printed.last).to include("x/y publishes the gem 'tiny', which a/b already provides")
+      expect(described_class.all['x/y']).not_to have_key('deployed')
+    end
+
     it 'does nothing, silently, when the installed gem is as new and its scripts were deployed' do
       described_class.save('x/y' => { 'deployed' => '1.2.0' })
       allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
@@ -225,9 +249,31 @@ RSpec.describe Lich::Util::Update::GemPackages do
         allow(File).to receive(:write).and_call_original
         allow(File).to receive(:write).with(a_string_starting_with(File.join(gem_home, 'gems')), '').and_raise(Errno::EACCES)
         FileUtils.mkdir_p(File.join(gem_home, 'gems'))
-        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+        allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
         expect(manager.sync_gem('x/y')).to eq(:failed)
         expect(printed.last).to include('cannot write to', 'GEM_HOME')
+        expect(printed.join).not_to include('must not download')
+      end
+
+      it 'refuses a gem whose contents do not match the asset name' do
+        allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.3.0.gem'))
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('named tiny 1.3.0 but contains tiny 1.2.0')
+        expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
+      end
+
+      it 'downloads to a name unique to the process and thread, and removes it' do
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+        written = []
+        allow(File).to receive(:open).and_wrap_original do |original, path, *rest, &block|
+          written << path if path.to_s.start_with?(TEMP_DIR)
+          original.call(path, *rest, &block)
+        end
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        # RubyGems reopens the file while installing; every open is the one path.
+        expect(written.uniq).to eq([File.join(TEMP_DIR, "#{Process.pid}-#{Thread.current.object_id}-tiny-1.2.0.gem")])
+        expect(Dir.children(TEMP_DIR)).to be_empty
       end
 
       let(:default_installer) do

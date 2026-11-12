@@ -164,6 +164,13 @@ module Lich
 
           name = asset[:name]
           version = asset[:version]
+          # A gem is installed once for the whole Ruby, so two registrations
+          # publishing the same gem name would deploy each other's scripts.
+          claimant = self.class.all.find { |repo, reg| repo != owner_repo && reg['gem'] == name }&.first
+          if claimant
+            StatusReporter.respond_mono("[lich5-update: #{owner_repo} publishes the gem '#{name}', which #{claimant} already provides; skipped.]")
+            return :failed
+          end
           remember(owner_repo, 'gem' => name)
           installed = self.class.installed_version(name)
           deployed = self.class.all.dig(owner_repo, 'deployed')
@@ -174,6 +181,12 @@ module Lich
           if installed && installed >= version
             spec = Gem::Specification.find_all_by_name(name, "= #{installed}").first
             return deploy(owner_repo, spec, spec.metadata[METADATA_KEY], installed, nil) if spec
+          end
+
+          problem = gem_home_problem
+          if problem
+            StatusReporter.respond_mono("[lich5-update: #{name} #{version} not installed: #{problem}]")
+            return :failed
           end
 
           gem_path = download(asset[:url], asset[:filename])
@@ -192,6 +205,9 @@ module Lich
           Array(release['assets']).each do |asset|
             filename = asset['name'].to_s
             m = ASSET_NAME.match(filename) or next
+            # The pattern admits strings like '1..2' that Gem::Version rejects.
+            next unless Gem::Version.correct?(m[:version])
+
             return { name: m[:name], version: Gem::Version.new(m[:version]), filename: filename, url: asset['browser_download_url'] }
           end
           nil
@@ -213,7 +229,9 @@ module Lich
         #
         # @return [String, nil] the downloaded file
         def download(url, filename)
-          path = File.join(TEMP_DIR, filename)
+          # Every Lich session on an install shares TEMP_DIR, so the name is
+          # made unique to this process and thread.
+          path = File.join(TEMP_DIR, "#{Process.pid}-#{Thread.current.object_id}-#{filename}")
           FileUtils.mkdir_p(TEMP_DIR)
           File.open(path, 'wb') { |file| file.write URI.parse(url).open(**GitHubClient.open_uri_timeouts).read }
           path
@@ -226,6 +244,10 @@ module Lich
         def install(owner_repo, name, version, gem_path, installed)
           package = Gem::Package.new(gem_path)
           spec = package.spec
+          unless spec.name == name && spec.version == version
+            StatusReporter.respond_mono("[lich5-update: #{owner_repo}: the asset is named #{name} #{version} but contains #{spec.name} #{spec.version}; not installed.]")
+            return :failed
+          end
           unless spec.extensions.empty?
             StatusReporter.respond_mono("[lich5-update: #{name} #{version} builds native extensions, which a script package may not; not installed.]")
             return :failed
@@ -239,12 +261,6 @@ module Lich
 
           unless spec.runtime_dependencies.empty?
             StatusReporter.respond_mono("[lich5-update: Note: #{name} declares gem dependencies (#{spec.runtime_dependencies.map(&:name).join(', ')}), which Lich does not install.]")
-          end
-
-          problem = gem_home_problem
-          if problem
-            StatusReporter.respond_mono("[lich5-update: #{name} #{version} not installed: #{problem}]")
-            return :failed
           end
 
           # RubyGems' installer does not check these itself (its resolver
