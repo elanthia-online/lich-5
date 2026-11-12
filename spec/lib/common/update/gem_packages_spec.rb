@@ -111,7 +111,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
     end
 
     it 'skips an asset whose version RubyGems rejects and uses the next one' do
-      described_class.save('x/y' => { 'deployed' => '1.2.0' })
+      described_class.save('x/y' => { 'deployed_gem' => 'tiny', 'deployed' => '1.2.0' })
       allow(client).to receive(:fetch_github_json).and_return(
         'tag_name' => 'v1.2.0',
         'assets'   => [{ 'name' => 'tiny-1..2.gem' }, { 'name' => 'tiny-1.2.0.gem', 'browser_download_url' => 'https://example.com/tiny-1.2.0.gem' }]
@@ -126,7 +126,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
     end
 
     it 'refuses a gem name another registration already provides' do
-      described_class.save('a/b' => { 'gem' => 'tiny', 'deployed' => '1.2.0' }, 'x/y' => {})
+      described_class.save('a/b' => { 'gem' => 'tiny', 'deployed_gem' => 'tiny', 'deployed' => '1.2.0' }, 'x/y' => {})
       allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
       allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
       expect(manager.sync_gem('x/y')).to eq(:failed)
@@ -135,7 +135,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
     end
 
     it 'does nothing, silently, when the installed gem is as new and its scripts were deployed' do
-      described_class.save('x/y' => { 'deployed' => '1.2.0' })
+      described_class.save('x/y' => { 'deployed_gem' => 'tiny', 'deployed' => '1.2.0' })
       allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
       allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
       expect(manager.sync_gem('x/y')).to eq(:current)
@@ -243,6 +243,43 @@ RSpec.describe Lich::Util::Update::GemPackages do
         allow_any_instance_of(URI::HTTP).to receive(:open).and_raise(OpenURI::HTTPError.new('404 Not Found', StringIO.new))
         expect(manager.sync_gem('x/y')).to eq(:failed)
         expect(printed.last).to include('Could not download tiny-1.2.0.gem')
+        expect(Dir.children(TEMP_DIR)).to be_empty
+      end
+
+      it 'deploys a renamed gem even when the old name was deployed at the same version' do
+        described_class.save('x/y' => { 'gem' => 'old_name', 'deployed_gem' => 'old_name', 'deployed' => '1.2.0' })
+        allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+        allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
+        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny', '= 1.2.0').and_return([])
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(described_class.all['x/y']).to include('gem' => 'tiny', 'deployed_gem' => 'tiny', 'deployed' => '1.2.0')
+        expect(File).to exist(File.join(lich_dir, 'scripts', 'tiny.lic'))
+      end
+
+      it 'waits for another session holding the install lock before touching the gem directory' do
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+        lock = File.join(gem_home, '.lich5-gem-packages.lock')
+        held = Queue.new
+        released = false
+        other = Thread.new do
+          described_class.with_lock(lock) do
+            held << true
+            sleep 0.3
+            released = true
+          end
+        end
+        held.pop
+
+        seen = nil
+        allow(manager).to receive(:sync_locked).and_wrap_original do |original, *args|
+          seen = released
+          original.call(*args)
+        end
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        other.join
+        expect(seen).to be(true)
       end
 
       it 'stops before downloading when the gem home is not writable' do
@@ -319,6 +356,45 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
     def release_with(asset_name)
       { 'tag_name' => 'v1.2.0', 'assets' => [{ 'name' => asset_name, 'browser_download_url' => "https://github.com/x/y/releases/download/v1.2.0/#{asset_name}" }] }
+    end
+  end
+
+  describe '.update_registry' do
+    it 'does not restore an entry another session removed while it waited' do
+      described_class.save('a/b' => {}, 'x/y' => {})
+      held = Queue.new
+      other = Thread.new do
+        described_class.update_registry do |data|
+          held << true
+          sleep 0.3
+          data.delete('a/b')
+        end
+      end
+      held.pop
+
+      # Without the lock this read the registry before the removal was saved
+      # and wrote 'a/b' back.
+      manager.send(:remember, 'x/y', 'gem' => 'tiny')
+      other.join
+
+      expect(described_class.all).to eq('x/y' => { 'gem' => 'tiny' })
+    end
+
+    it 'keeps an addition made by another session' do
+      described_class.save('x/y' => {})
+      held = Queue.new
+      other = Thread.new do
+        described_class.update_registry do |data|
+          held << true
+          sleep 0.3
+          data['c/d'] = {}
+        end
+      end
+      held.pop
+      manager.remove_gem('x/y')
+      other.join
+
+      expect(described_class.all).to eq('c/d' => {})
     end
   end
 

@@ -79,14 +79,17 @@ module Lich
             return
           end
 
-          data = self.class.all
-          if data[owner_repo]
+          added = self.class.update_registry do |data|
+            next false if data[owner_repo]
+
+            data[owner_repo] = { 'added_at' => Time.now.strftime('%Y-%m-%d') }
+            true
+          end
+          unless added
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is already registered.]")
             return
           end
 
-          data[owner_repo] = { 'added_at' => Time.now.strftime('%Y-%m-%d') }
-          self.class.save(data)
           StatusReporter.respond_mono("[lich5-update: Registered gem package '#{owner_repo}'.]")
           result = sync_gem(owner_repo, retried_by: :user)
           StatusReporter.respond_mono("[lich5-update: #{owner_repo} is already up to date.]") if result == :current
@@ -98,14 +101,12 @@ module Lich
         # @param owner_repo [String]
         # @return [void]
         def remove_gem(owner_repo)
-          data = self.class.all
-          reg = data.delete(owner_repo)
+          reg = self.class.update_registry { |data| data.delete(owner_repo) }
           unless reg
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is not a registered gem package.]")
             return
           end
 
-          self.class.save(data)
           note = reg['gem'] ? " The #{reg['gem']} gem and its scripts stay installed." : ''
           StatusReporter.respond_mono("[lich5-update: Removed gem package '#{owner_repo}'.#{note}]")
         end
@@ -163,7 +164,6 @@ module Lich
           end
 
           name = asset[:name]
-          version = asset[:version]
           # A gem is installed once for the whole Ruby, so two registrations
           # publishing the same gem name would deploy each other's scripts.
           claimant = self.class.all.find { |repo, reg| repo != owner_repo && reg['gem'] == name }&.first
@@ -172,12 +172,67 @@ module Lich
             return :failed
           end
           remember(owner_repo, 'gem' => name)
+
+          # Every Lich session using this Ruby shares one gem directory, and
+          # RubyGems clears a gem's directory before extracting into it. The
+          # recheck, install and deploy run under one lock so a second
+          # session cannot pull files out from under the first.
+          self.class.with_lock(install_lock_path) { sync_locked(owner_repo, asset) }
+        end
+
+        # Runs +block+ holding an exclusive lock on +path+, across processes
+        # and threads.
+        #
+        # @param path [String] the lock file
+        # @return [Object] the block's value
+        def self.with_lock(path)
+          FileUtils.mkdir_p(File.dirname(path))
+          File.open(path, File::RDWR | File::CREAT, 0o644) do |file|
+            file.flock(File::LOCK_EX)
+            yield
+          ensure
+            file.flock(File::LOCK_UN)
+          end
+        end
+
+        # Reads the registry, lets +block+ change it, and saves it, under a
+        # lock, so another session's add, remove or sync in between is not
+        # overwritten.
+        #
+        # @yieldparam data [Hash] the registry, to change in place
+        # @return [Object] the block's value
+        def self.update_registry
+          with_lock(registry_lock_path) do
+            data = all
+            result = yield data
+            save(data)
+            result
+          end
+        end
+
+        # @return [String] the registry lock, one per Lich install
+        def self.registry_lock_path
+          File.join(DATA_DIR, 'gem_packages.lock')
+        end
+
+        private
+
+        # The part of #sync_gem that touches the shared gem directory.
+        #
+        # @param owner_repo [String]
+        # @param asset [Hash] from #find_gem_asset
+        # @return [Symbol] :updated, :current or :failed
+        def sync_locked(owner_repo, asset)
+          name = asset[:name]
+          version = asset[:version]
           installed = self.class.installed_version(name)
-          deployed = self.class.all.dig(owner_repo, 'deployed')
+          reg = self.class.all[owner_repo] || {}
+          deployed = reg['deployed_gem'] == name ? reg['deployed'] : nil
           return :current if installed && installed >= version && deployed == installed.to_s
 
-          # The gem is installed but its scripts never were (its installer
-          # failed last time): run the installer again without downloading.
+          # The gem is installed but its scripts never were here (its
+          # installer failed, or another session installed it): run the
+          # installer without downloading.
           if installed && installed >= version
             spec = Gem::Specification.find_all_by_name(name, "= #{installed}").first
             return deploy(owner_repo, spec, spec.metadata[METADATA_KEY], installed, nil) if spec
@@ -197,7 +252,18 @@ module Lich
           FileUtils.rm_f(gem_path) if gem_path
         end
 
-        private
+        # The install lock sits beside the gem directory it protects, which
+        # Lich installs sharing one Ruby share too. When that directory
+        # cannot hold it, the lock falls back to this Lich install's TEMP_DIR.
+        #
+        # @return [String]
+        def install_lock_path
+          path = File.join(Gem.dir, '.lich5-gem-packages.lock')
+          File.open(path, File::RDWR | File::CREAT, 0o644) {} # rubocop:disable Lint/EmptyBlock
+          path
+        rescue SystemCallError
+          File.join(TEMP_DIR, 'gem-packages-install.lock')
+        end
 
         # @param release [Hash] releases/latest payload
         # @return [Hash, nil] :name, :version, :filename, :url
@@ -217,11 +283,7 @@ module Lich
         # @param fields [Hash]
         # @return [void]
         def remember(owner_repo, fields)
-          data = self.class.all
-          return unless data[owner_repo]
-
-          data[owner_repo].merge!(fields)
-          self.class.save(data)
+          self.class.update_registry { |data| data[owner_repo]&.merge!(fields) }
         end
 
         # GitHub serves release assets through a redirect, which open-uri
@@ -236,6 +298,8 @@ module Lich
           File.open(path, 'wb') { |file| file.write URI.parse(url).open(**GitHubClient.open_uri_timeouts).read }
           path
         rescue StandardError => e
+          # File.open created the file before the request failed.
+          FileUtils.rm_f(path) if path
           StatusReporter.respond_mono("[lich5-update: Could not download #{filename}: #{e.class}: #{e.message}]")
           nil
         end
@@ -351,7 +415,7 @@ module Lich
           end
           return :failed unless run_entry_point(spec, entry)
 
-          remember(owner_repo, 'deployed' => version.to_s)
+          remember(owner_repo, 'deployed_gem' => spec.name, 'deployed' => version.to_s)
           name = spec.name
           line = previous ? "#{name} updated to #{version}" : "#{name} #{version} installed"
           line += "; restart #{name} to use it" if defined?(Script) && Script.respond_to?(:running?) && Script.running?(name)
