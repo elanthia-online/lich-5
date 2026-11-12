@@ -35,8 +35,7 @@ RSpec.describe 'WebUI window host startup failure' do
 
       expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
       message = 'unable to open WebUI window: Google Chrome or Chromium is required to open the WebUI launcher ' \
-                'window; install it, or set the Browser path in the launcher Settings or the LICH_WEBUI_BROWSER ' \
-                'environment variable to another browser'
+                'window; install it, or set the LICH_WEBUI_BROWSER environment variable to another browser'
       expect(failures).to eq([message])
       expect(logs).to eq(["warning: #{message}"])
     end

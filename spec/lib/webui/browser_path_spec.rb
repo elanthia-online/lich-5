@@ -9,8 +9,9 @@ require 'webui/browser_launcher'
 # names the setting. LICH_WEBUI_BROWSER and Linux Chromium discovery give a host
 # without Chrome a route to a window. Snap-packaged Chromium cannot read the launch
 # file in its private /tmp, so discovery skips it and an explicit path naming it is
-# refused. Environments are injected, never the real ENV. Snap browsers are
-# stand-in files in a tmpdir. File tests only, so the examples hold on Windows as well.
+# refused. Environments are injected, never the real ENV. Snap wrapper probes use
+# stand-in files in a tmpdir; diagnostic control characters use injected strings.
+# File tests only, so the examples hold on Windows as well.
 RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
   let(:url) { "http://127.0.0.1:4567/auth?token=#{'f' * 64}&to=%2F" }
   let(:directory) { Dir.mktmpdir('webui-browser-path') }
@@ -107,13 +108,13 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
     expect(failures.first).not_to include("\n")
   end
 
-  it 'names the setting when automatic discovery finds no browser' do
+  it 'names only the environment override when automatic discovery finds no browser' do
     allow(File).to receive(:executable?).and_return(false)
 
     expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
-    expect(failures.first).to include('Google Chrome or Chromium is required', 'Browser path', 'Settings',
-                                      'LICH_WEBUI_BROWSER')
-    expect(failures.first).not_to include('snap-packaged')
+    expect(failures.first).to include('Google Chrome or Chromium is required',
+                                      'set the LICH_WEBUI_BROWSER environment variable to another browser')
+    expect(failures.first).not_to include('snap-packaged', 'Browser path', 'Settings')
   end
 
   it 'refuses a snap-packaged browser path, naming the setting and LICH_WEBUI_BROWSER, without spawning' do
@@ -168,8 +169,19 @@ RSpec.describe Lich::WebUI::BrowserLauncher, 'configured browser path' do
       expect(open_with(platform: 'x86_64-linux', spawn: spawn)).to be(false)
       expect(failures.size).to eq(1)
       expect(failures.first).to include("'#{snap_wrapper}'", 'snap-packaged Chromium cannot open the WebUI launch files',
-                                        'Browser path', 'Settings', 'non-snap Chrome or Chromium', 'LICH_WEBUI_BROWSER')
+                                        'set the LICH_WEBUI_BROWSER environment variable to a non-snap Chrome or Chromium')
+      expect(failures.first).not_to include('Browser path', 'Settings')
       expect((failures + logs).join).not_to include(url, 'f' * 64)
+    end
+
+    it 'substitutes control characters in a skipped browser path without creating that path' do
+      path = "/snap/chro\nmium/chromium"
+      allow(described_class).to receive(:chromium_candidates).and_return([path])
+      allow(described_class).to receive(:executable_file?).with(path).and_return(true)
+
+      expect(open_with(platform: 'x86_64-linux', spawn: ->(*) { raise 'must not spawn' })).to be(false)
+      expect(failures.first).to include("'/snap/chro?mium/chromium'", 'snap-packaged')
+      expect((failures + logs).join).not_to include("\n")
     end
 
     it 'preserves spaces in the skipped browser path' do
