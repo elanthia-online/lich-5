@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 
 RSpec.describe 'Server connection loading' do
+  include WebUIFreshProcess
+
   %w[webui/server webui/server/connection].each do |entry|
     it "loads through #{entry} with framing, close and class identity intact" do
       code = <<~RUBY_CODE
@@ -37,7 +38,8 @@ RSpec.describe 'Server connection loading' do
           receiver.close
         end
       RUBY_CODE
-      output, errors, status = Open3.capture3(RbConfig.ruby, '-w', '-I', LIB_DIR, '-e', code)
+      output, errors, status = run_ruby_with_deadline(code, '-w')
+      expect_child_within_deadline(status, output, errors, "fresh-process #{entry} loading example")
       expect(status.success?).to be(true), errors
       expect(errors).to be_empty
       expect(output).to eq("ready\n")
