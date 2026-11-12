@@ -3,40 +3,17 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { lf, workflow, classifierSource, windowsSpecPaths } = require('./workflow_classification_source.cjs');
+const windowsWorkflow = lf(fs.readFileSync(path.join(__dirname, '../../.github/workflows/windows_webui.yaml'), 'utf8'));
 
-// Normalized once so every marker and regex below sees LF, as on a CRLF
-// checkout (core.autocrlf) the raw text would break indexOf and $ anchors (1852:RC12).
-const lf = text => text.replace(/\r\n/g, '\n');
-const workflow = lf(fs.readFileSync(path.join(__dirname, '../../.github/workflows/webui_tests.yaml'), 'utf8'));
-
-// Execute the checkout-free production block; its YAML location is deliberately
-// narrow so a workflow rearrangement fails instead of testing a copied policy.
-function classifierSource(text = workflow) {
-  const lines = text.split('\n');
-  const anchors = lines.flatMap((line, index) => line === '      - &classify' ? [index] : []);
-  assert.equal(anchors.length, 1, 'expected one shared classify step');
-  const start = anchors[0];
-  const end = lines.findIndex((line, index) => index > start && line.startsWith('      - '));
-  assert.ok(end > start, 'expected another step after classify');
-  const step = lines.slice(start, end);
-  assert.ok(step.includes('        id: classify'));
-  assert.ok(step.includes('        with:'));
-  const scripts = step.flatMap((line, index) => line === '          script: |' ? [index] : []);
-  assert.equal(scripts.length, 1, 'expected one literal classify script');
-  const body = step.slice(scripts[0] + 1);
-  assert.ok(body.some(line => line.trim()), 'classify script must not be empty');
-  assert.ok(body.every(line => !line.trim() || line.startsWith('            ')), 'unexpected script indentation');
-  return body.map(line => line.slice(12)).join('\n');
-}
-
-async function classify({ files = [], eventName = 'pull_request', apiError = null } = {}) {
-  const outputs = [], notices = [], calls = [];
+async function classify({ files = [], eventName = 'pull_request', apiError = null, contentError = null, windows = windowsWorkflow, contentData = null } = {}) {
+  const outputs = [], notices = [], calls = [], contentCalls = [];
   const listFiles = () => { throw new Error('listFiles must be passed to paginate, not called directly'); };
   const sandbox = {
     context: {
       eventName,
       repo: { owner: 'fixture-owner', repo: 'fixture-repo' },
-      payload: { pull_request: { number: 42 } },
+      payload: { pull_request: { number: 42, head: { sha: 'fixture-head-sha', repo: { owner: { login: 'fixture-fork-owner' }, name: 'fixture-fork' } } } },
     },
     core: {
       info() {},
@@ -44,7 +21,20 @@ async function classify({ files = [], eventName = 'pull_request', apiError = nul
       setOutput(name, value) { outputs.push([name, value]); },
     },
     github: {
-      rest: { pulls: { listFiles } },
+      rest: {
+        pulls: { listFiles },
+        repos: {
+          async getContent(options) {
+            contentCalls.push(options);
+            assert.equal(options.owner, 'fixture-fork-owner');
+            assert.equal(options.repo, 'fixture-fork');
+            assert.equal(options.ref, 'fixture-head-sha');
+            assert.equal(options.path, '.github/workflows/windows_webui.yaml');
+            if (contentError) throw contentError;
+            return { data: contentData || { encoding: 'base64', content: Buffer.from(windows).toString('base64') } };
+          },
+        },
+      },
       async paginate(method, options) {
         calls.push(method);
         assert.equal(method, listFiles);
@@ -56,10 +46,35 @@ async function classify({ files = [], eventName = 'pull_request', apiError = nul
         return files;
       },
     },
+    Buffer,
   };
   await vm.runInNewContext(`(async () => {\n${classifierSource()}\n})()`, sandbox, { timeout: 1_000 });
-  return { outputs, notices, calls };
+  return { outputs, notices, calls, contentCalls };
 }
+
+test('every Windows-selected spec change, rename and deletion selects WebUI jobs', async () => {
+  for (const filename of windowsSpecPaths(windowsWorkflow)) {
+    for (const file of [
+      { filename, status: 'modified' },
+      { filename: 'spec/retired_spec.rb', previous_filename: filename, status: 'renamed' },
+      { filename, status: 'removed' },
+    ]) {
+      assert.deepEqual((await classify({ files: [file] })).outputs, [['webui', 'true']], `${filename}: ${file.status}`);
+    }
+  }
+});
+
+test('new Windows groups flow through the shared parser with exact file and directory boundaries', async () => {
+  const windows = windowsWorkflow.replace('          $groups = [ordered]@{', "          $groups = [ordered]@{\n            future = @('spec/future/principal_spec.rb', 'spec/future/windows')");
+  assert.ok(windowsSpecPaths(windows).includes('spec/future/principal_spec.rb'));
+  for (const filename of ['spec/future/principal_spec.rb', 'spec/future/windows', 'spec/future/windows/nested/example_spec.rb']) {
+    assert.deepEqual((await classify({ windows, files: [{ filename }] })).outputs, [['webui', 'true']], filename);
+  }
+  for (const filename of ['spec/future/other_spec.rb', 'spec/future/principal_spec.rb.bak', 'spec/future/windows_extra/example_spec.rb']) {
+    assert.deepEqual((await classify({ windows, files: [{ filename }] })).outputs, [['webui', 'false']], filename);
+  }
+  assert.deepEqual(windowsSpecPaths(windows.replace(/\n/g, '\r\n')), windowsSpecPaths(windows));
+});
 
 for (const filename of [
   'lib/common/webui_launcher.rb',
@@ -179,6 +194,8 @@ for (const filename of [
   'lib/common/webui_launcher_other/catalog.rb',
   'spec/login_spec_helper.rb.bak', 'spec/support/frontend_mock.rb.bak', 'spec/support/real_keychain_fence.rb.bak',
   'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
+  'spec/lib/main/unrelated_spec.rb', 'spec/lib/main/default_webui_acceptance_report_spec.rb.bak',
+  'spec/lib/real_keychain_fence_spec.rb.bak', 'spec/lib/common/authentication/unrelated_spec.rb',
 ]) {
   test(`unrelated or near-prefix path does not select WebUI jobs: ${filename}`, async () => {
     assert.deepEqual((await classify({ files: [{ filename }] })).outputs, [['webui', 'false']]);
@@ -205,7 +222,23 @@ test('changed-file API failure runs WebUI jobs and records the reason', async ()
   const result = await classify({ apiError: new Error('fixture pagination failure') });
   assert.deepEqual(result.outputs, [['webui', 'true']]);
   assert.equal(result.calls.length, 1);
-  assert.deepEqual(result.notices, ['Could not read changed files (fixture pagination failure); running WebUI jobs.']);
+  assert.deepEqual(result.notices, ['Could not classify changed files (fixture pagination failure); running WebUI jobs.']);
+  assert.deepEqual(result.contentCalls, []);
+});
+
+test('Windows selection API and parse failures run WebUI jobs and record the reason', async () => {
+  for (const [options, reason] of [
+    [{ contentError: new Error('fixture content failure') }, 'fixture content failure'],
+    [{ contentData: { encoding: 'none', content: '' } }, 'expected the Windows workflow file content'],
+    [{ windows: 'missing table' }, 'expected the Windows RSpec selection table'],
+    [{ windows: '          $groups = [ordered]@{\n          }' }, 'expected the Windows RSpec selection table'],
+    [{ windows: "          $groups = [ordered]@{\n            empty = @()\n          }" }, 'expected selected Windows specs'],
+  ]) {
+    const result = await classify(options);
+    assert.deepEqual(result.outputs, [['webui', 'true']]);
+    assert.equal(result.contentCalls.length, 1);
+    assert.deepEqual(result.notices, [`Could not classify changed files (${reason}); running WebUI jobs.`]);
+  }
 });
 
 for (const eventName of ['push', 'workflow_dispatch']) {
@@ -213,6 +246,7 @@ for (const eventName of ['push', 'workflow_dispatch']) {
     const result = await classify({ eventName });
     assert.deepEqual(result.outputs, [['webui', 'true']]);
     assert.deepEqual(result.calls, []);
+    assert.deepEqual(result.contentCalls, []);
     assert.deepEqual(result.notices, []);
   });
 }

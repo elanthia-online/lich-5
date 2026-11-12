@@ -150,7 +150,7 @@ module LichCiDefaultWebUIAcceptance
   # @raise [RuntimeError] if the server refuses the upgrade
   def websocket(uri, cookie)
     socket = TCPSocket.new(uri.host, uri.port)
-    key = Base64.strict_encode64('lich-r3-acceptance')
+    key = Base64.strict_encode64('lich-webui-probe')
     socket.write([
       'GET /ws HTTP/1.1', "Host: #{uri.host}:#{uri.port}", 'Upgrade: websocket',
       'Connection: Upgrade', 'Sec-WebSocket-Version: 13', "Sec-WebSocket-Key: #{key}",
