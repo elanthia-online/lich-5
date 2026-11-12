@@ -9,16 +9,21 @@ module ZipBuilder
   module_function
 
   # @param entries [Array<Hash>] :name, :data, and optional :method (:deflate
-  #   or :store), :descriptor, :flags, :crc32, :size, :compressed_size
+  #   or :store), :descriptor, :flags, :crc32, :size, :compressed_size,
+  #   :payload (raw entry data, replacing the compressed :data), :trailing
+  #   (bytes appended to the payload and counted in its compressed size),
+  #   :local_signature
+  # @param end_record [Hash] optional :disk, :directory_disk, :disk_count,
+  #   :total_count, :directory_size, :directory_offset overrides
   # @return [String] binary ZIP
-  def build(entries)
+  def build(entries, end_record = {})
     body = +''.b
     central = +''.b
     entries.each do |entry|
       name = entry.fetch(:name).b
       data = entry.fetch(:data, '').b
       deflate = entry.fetch(:method, :deflate) == :deflate
-      payload = deflate ? raw_deflate(data) : data
+      payload = entry.fetch(:payload) { deflate ? raw_deflate(data) : data }.b + entry.fetch(:trailing, '').b
       flags = entry.fetch(:flags, 0) | (entry[:descriptor] ? 0x0008 : 0)
       method = entry.fetch(:method_id, deflate ? 8 : 0)
       crc = entry.fetch(:crc32, Zlib.crc32(data))
@@ -27,7 +32,7 @@ module ZipBuilder
       offset = body.bytesize
 
       local_crc, local_compressed, local_size = entry[:descriptor] ? [0, 0, 0] : [crc, compressed_size, size]
-      body << [0x04034b50, 20, flags, method, 0, 0, local_crc, local_compressed, local_size, name.bytesize, 0].pack('VvvvvvVVVvv')
+      body << [entry.fetch(:local_signature, 0x04034b50), 20, flags, method, 0, 0, local_crc, local_compressed, local_size, name.bytesize, 0].pack('VvvvvvVVVvv')
       body << name << payload
       body << [0x08074b50, crc, compressed_size, size].pack('VVVV') if entry[:descriptor]
 
@@ -36,7 +41,10 @@ module ZipBuilder
       central << name
     end
     count = entries.length
-    body + central + [0x06054b50, 0, 0, count, count, central.bytesize, body.bytesize, 0].pack('VvvvvVVv')
+    fields = { disk: 0, directory_disk: 0, disk_count: count, total_count: count,
+               directory_size: central.bytesize, directory_offset: body.bytesize }.merge(end_record)
+    body + central + [0x06054b50, *fields.values_at(:disk, :directory_disk, :disk_count, :total_count,
+                                                    :directory_size, :directory_offset), 0].pack('VvvvvVVv')
   end
 
   # @param data [String]

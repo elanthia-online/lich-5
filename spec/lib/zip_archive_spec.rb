@@ -148,6 +148,32 @@ RSpec.describe Lich::ZipArchive do
       expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /smaller than declared/)
     end
 
+    it 'rejects bytes after the end of a deflate stream instead of writing them' do
+      # Size and CRC-32 describe the data plus the trailing bytes, so only the
+      # stream-length check stops them reaching the output file.
+      write_zip([{ name: 'a.gem', data: 'payload' * 10, trailing: 'junk', size: 74, crc32: Zlib.crc32("#{'payload' * 10}junk") }])
+
+      expect { described_class.extract(zip_path, destination) }
+        .to raise_error(described_class::Error, /data after its compressed stream: a\.gem/)
+    end
+
+    it 'rejects trailing bytes that arrive in a later chunk than the end of the stream' do
+      data = Random.new(2).bytes(200_000)
+      write_zip([{ name: 'a.gem', data: data, method: :deflate, trailing: 'x' * 70_000 }])
+
+      expect { described_class.extract(zip_path, destination) }
+        .to raise_error(described_class::Error, /data after its compressed stream: a\.gem/)
+    end
+
+    it 'rejects a deflate stream that stops before its final block' do
+      deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -Zlib::MAX_WBITS)
+      unfinished = deflater.deflate('x' * 100, Zlib::SYNC_FLUSH)
+      deflater.close
+      write_zip([{ name: 'a.gem', data: 'x' * 100, payload: unfinished }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /corrupt: a\.gem/)
+    end
+
     it 'rejects corrupt deflate data' do
       write_zip([{ name: 'a.gem', data: 'x' * 100 }])
       bytes = File.binread(zip_path)
