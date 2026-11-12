@@ -41,6 +41,37 @@ RSpec.describe Lich::Archive do
     end
   end
 
+  describe '.resolve' do
+    let(:root) { File.expand_path(destination) }
+
+    it 'keeps a leading "~" literal instead of expanding it as a home directory' do
+      expect(described_class.resolve('~nosuchuser123/x.gem', root)).to eq(File.join(root, '~nosuchuser123', 'x.gem'))
+      expect(described_class.safe_destination('~/x.gem', root)).to eq(File.join(root, '~', 'x.gem'))
+    end
+  end
+
+  describe '.plan' do
+    let(:root) { File.expand_path(destination) }
+
+    it 'returns each target in entry order' do
+      expect(described_class.plan([['a/', true], ['a/b.gem', false], ['c.gem', false]], root))
+        .to eq([File.join(root, 'a'), File.join(root, 'a', 'b.gem'), File.join(root, 'c.gem')])
+    end
+
+    it 'refuses an unsafe name before checking the layout' do
+      expect { described_class.plan([['a.gem', false], ['../a.gem', false]], root) }.to raise_error(described_class::Error, /unsafe archive entry: \.\.\/a\.gem/)
+    end
+
+    it 'refuses a duplicate file and a path that is both a file and a directory' do
+      expect { described_class.plan([['a.gem', false], ['A.GEM', false]], root) }.to raise_error(described_class::Error, /duplicate archive entry: A\.GEM/)
+      expect { described_class.plan([['a/b/c', false], ['a/b', false]], root) }.to raise_error(described_class::Error, %r{both a file and a directory: a/b\z})
+    end
+
+    it 'allows a repeated directory' do
+      expect(described_class.plan([['a/', true], ['a/', true], ['a/x', false]], root).length).to eq(3)
+    end
+  end
+
   describe '.extract_zip' do
     it 'extracts through the ZIP reader' do
       zip = File.join(work_dir, 'a.zip')

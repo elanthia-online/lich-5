@@ -30,8 +30,10 @@ module Lich
       def extract(path, destination)
         root = File.expand_path(destination)
         # The first pass reads only headers, so nothing is written for an
-        # archive with any unsafe entry.
-        each_entry(path) { |entry| validate!(entry, root) }
+        # archive with any unsafe or colliding entry.
+        planned = []
+        each_entry(path) { |entry| planned << [entry.full_name, entry.directory?] if validate!(entry, root) }
+        Archive.plan(planned, root)
         FileUtils.mkdir_p(root)
         names = []
         each_entry(path) do |entry|
@@ -61,21 +63,21 @@ module Lich
 
       # @param entry [Gem::Package::TarReader::Entry]
       # @param root [String]
-      # @return [void]
+      # @return [Boolean] whether the entry will be extracted
+      # @raise [Error] when the entry is a link
       def validate!(entry, root)
         if entry.symlink? || LINK_TYPES.include?(entry.header.typeflag)
           raise Error, "archive entry is a link, which Lich does not extract: #{entry.full_name}"
         end
-        return unless entry.file? || entry.directory?
-        return if root_directory?(entry, root)
+        return false unless entry.file? || entry.directory?
 
-        Archive.safe_destination(entry.full_name, root)
+        !root_directory?(entry, root)
       end
 
       # `tar -czf x.tar.gz .` starts with a "./" entry for the root itself.
       # @return [Boolean]
       def root_directory?(entry, root)
-        entry.directory? && !Archive.unsafe_entry?(entry.full_name) && File.expand_path(entry.full_name, root) == root
+        entry.directory? && !Archive.unsafe_entry?(entry.full_name) && Archive.resolve(entry.full_name, root) == root
       end
 
       # @param entry [Gem::Package::TarReader::Entry]

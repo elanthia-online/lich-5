@@ -62,9 +62,9 @@ module Lich
         root = File.expand_path(destination)
         File.open(path, 'rb') do |file|
           list = read_central_directory(file)
-          list.each { |entry| Archive.safe_destination(entry.name, root) }
+          targets = Archive.plan(list.map { |entry| [entry.name, entry.directory?] }, root)
           FileUtils.mkdir_p(root)
-          list.each { |entry| extract_entry(file, entry, Archive.safe_destination(entry.name, root)) }
+          list.zip(targets) { |entry, target| extract_entry(file, entry, target) }
           list.map(&:name)
         end
       end

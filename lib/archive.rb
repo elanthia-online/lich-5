@@ -11,7 +11,8 @@ module Lich
   # - no external program is started (no PowerShell, WScript, tar or unzip),
   #   so nothing depends on execution policy, PATH or a console window;
   # - every entry name is validated before anything is written, so an unsafe
-  #   archive leaves nothing behind;
+  #   archive, or one whose entries would collide on disk, leaves nothing
+  #   behind;
   # - links are never created, and anything else this module cannot verify
   #   raises Archive::Error instead of being guessed at.
   module Archive
@@ -76,10 +77,65 @@ module Lich
     def safe_destination(name, root)
       raise Error, "unsafe archive entry: #{name}" if unsafe_entry?(name)
 
-      target = File.expand_path(name, root)
+      target = resolve(name, root)
       raise Error, "unsafe archive entry: #{name}" unless target.start_with?("#{root}/", "#{root}#{File::SEPARATOR}")
 
       target
+    end
+
+    # Joined before expanding: File.expand_path(name, root) would read a
+    # leading "~" as a home directory, raising ArgumentError for an unknown
+    # user. Callers refuse unsafe_entry? names first, so absolute and
+    # drive-qualified names never get here.
+    # @param name [String] archive entry name
+    # @param root [String] expanded extraction directory
+    # @return [String] the absolute path +name+ names under +root+
+    def resolve(name, root)
+      File.expand_path(File.join(root, name))
+    end
+
+    # Resolves every entry's output path, refusing the whole archive if any
+    # name is unsafe or two entries would collide on disk. Nothing is written.
+    # @param entries [Array<Array(String, Boolean)>] name and directory? of
+    #   each entry that will be extracted
+    # @param root [String] expanded extraction directory
+    # @return [Array<String>] absolute output paths, in entry order
+    # @raise [Error]
+    def plan(entries, root)
+      targets = entries.map { |name, _directory| safe_destination(name, root) }
+      check_layout!(entries.map(&:first).zip(targets, entries.map(&:last)), root)
+      targets
+    end
+
+    # Refuses entries that would overwrite each other or need one path to be
+    # both a file and a directory (+a+ and +a/+, or +a+ and +a/b+), which
+    # would otherwise fail midway with an OS error. Paths are compared
+    # case-insensitively because Windows treats +A.gem+ and +a.gem+ as one
+    # file. Repeated directory entries are allowed.
+    # @param entries [Array<Array(String, String, Boolean)>] name, target, directory?
+    # @param root [String] expanded extraction directory
+    # @return [void]
+    # @raise [Error]
+    def check_layout!(entries, root)
+      files = {}
+      directories = {}
+      entries.each do |name, target, directory|
+        key = target.downcase
+        if directory
+          directories[key] ||= name
+        else
+          raise Error, "duplicate archive entry: #{name}" if files.key?(key)
+
+          files[key] = name
+        end
+        parent = File.dirname(target)
+        while parent.length > root.length
+          directories[parent.downcase] ||= name
+          parent = File.dirname(parent)
+        end
+      end
+      clash = files.keys.find { |key| directories.key?(key) }
+      raise Error, "archive entry is both a file and a directory: #{files[clash]}" if clash
     end
   end
 end

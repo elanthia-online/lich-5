@@ -71,6 +71,52 @@ RSpec.describe Lich::Archive::TarGz do
     end
   end
 
+  it 'extracts names starting with "~" literally under the destination, not under a home directory' do
+    write_tarball([{ name: '~nosuchuser123/', type: :directory },
+                   { name: '~nosuchuser123/x.rb', data: 'unknown user' },
+                   { name: '~/y.rb', data: 'current user' }])
+
+    described_class.extract(tarball, destination)
+
+    expect(File.read(File.join(destination, '~nosuchuser123', 'x.rb'))).to eq('unknown user')
+    expect(File.read(File.join(destination, '~', 'y.rb'))).to eq('current user')
+    expect(Dir.children(work_dir).sort).to eq(%w[lich.tar.gz out])
+  end
+
+  {
+    'a file and a directory of the same name'           => [{ name: 'r/clash', data: 'x' }, { name: 'r/clash/', type: :directory }],
+    'a directory and a file of the same name'           => [{ name: 'r/clash/', type: :directory }, { name: 'r/clash', data: 'x' }],
+    'a file that another entry needs as its directory'  => [{ name: 'r/a', data: 'x' }, { name: 'r/a/b.rb', data: 'y' }],
+    'a nested file whose directory another entry names' => [{ name: 'r/a/b.rb', data: 'y' }, { name: 'r/a', data: 'x' }],
+    'a file and a directory differing only in case'     => [{ name: 'r/Clash', data: 'x' }, { name: 'r/clash/', type: :directory }]
+  }.each do |label, entries|
+    it "refuses #{label} and writes nothing" do
+      write_tarball(entries)
+
+      expect { described_class.extract(tarball, destination) }
+        .to raise_error(Lich::Archive::Error, /archive entry is both a file and a directory/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+  end
+
+  [%w[r/same.rb r/same.rb], %w[r/same.rb r/Same.rb], %w[r/same.rb r/./same.rb]].each do |first, second|
+    it "refuses #{first.inspect} followed by #{second.inspect} as a duplicate and writes nothing" do
+      write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])
+
+      expect { described_class.extract(tarball, destination) }
+        .to raise_error(Lich::Archive::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+  end
+
+  it 'accepts a directory listed more than once and directories implied by their files' do
+    write_tarball([{ name: 'r/', type: :directory }, { name: 'r/lib/a.rb', data: 'a' }, { name: 'r/', type: :directory },
+                   { name: 'r/lib/', type: :directory }])
+
+    expect(described_class.extract(tarball, destination)).to eq(%w[r r/lib/a.rb r r/lib])
+    expect(File.read(File.join(destination, 'r/lib/a.rb'))).to eq('a')
+  end
+
   it 'refuses a symbolic link, even one pointing inside the archive, and writes nothing' do
     write_tarball([{ name: 'r/real.rb', data: 'x' }, { name: 'r/link.rb', type: :symlink, target: 'real.rb' }])
 
