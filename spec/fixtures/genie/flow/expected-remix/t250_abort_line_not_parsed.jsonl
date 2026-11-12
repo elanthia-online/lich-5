@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t250_abort_line_not_parsed"}
+{"t":0,"ev":"script-start","script":"t250_abort_line_not_parsed","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t250_abort_line_not_parsed.cmd]","script":"t250_abort_line_not_parsed"}
+{"t":0,"ev":"script-start","script":"_t250_child","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t250_child.cmd]","script":"_t250_child"}
+{"t":200,"ev":"print","text":"[Script aborted! (Run time: 0.20 seconds): _t250_child.cmd]","script":"_t250_child"}
+{"t":200,"ev":"script-finish","script":"_t250_child"}
+{"t":400,"ev":"script-start","script":"_t250_child","args":""}
+{"t":400,"ev":"print","text":"[Script loaded: _t250_child.cmd]","script":"_t250_child"}
+{"t":600,"ev":"print","text":"[Script aborted! (Run time: 0.20 seconds): _t250_child.cmd]","script":"_t250_child"}
+{"t":600,"ev":"script-finish","script":"_t250_child"}
+{"t":600,"ev":"script-start","script":"_t250_child","args":""}
+{"t":600,"ev":"print","text":"[Script loaded: _t250_child.cmd]","script":"_t250_child"}
+{"t":800,"ev":"print","text":"[Script aborted! (Run time: 0.20 seconds): _t250_child.cmd]","script":"_t250_child"}
+{"t":800,"ev":"script-finish","script":"_t250_child"}
+{"t":1300,"ev":"echo","text":"not seen","script":"t250_abort_line_not_parsed"}
+{"t":1300,"ev":"print","text":"[Script finished (In 1.3 seconds): t250_abort_line_not_parsed.cmd(20)]","script":"t250_abort_line_not_parsed"}
+{"t":1300,"ev":"script-finish","script":"t250_abort_line_not_parsed"}
+{"t":1300,"ev":"end","live":0}

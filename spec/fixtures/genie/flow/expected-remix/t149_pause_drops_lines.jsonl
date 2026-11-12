@@ -1,0 +1,24 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t149_pause_drops_lines"}
+{"t":0,"ev":"script-start","script":"t149_pause_drops_lines","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t149_pause_drops_lines.cmd]","script":"t149_pause_drops_lines"}
+{"t":0,"ev":"script-start","script":"_t149_b","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t149_b.cmd]","script":"_t149_b"}
+{"t":100,"ev":"print","text":"[Script paused: _t149_b.cmd]","script":"_t149_b"}
+{"t":100,"ev":"script-pause","script":"_t149_b"}
+{"t":210,"ev":"in","text":"HIT one"}
+{"t":210,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":210,"ev":"prompt-event"}
+{"t":400,"ev":"print","text":"[Script resumed: _t149_b.cmd]","script":"_t149_b"}
+{"t":400,"ev":"script-resume","script":"_t149_b"}
+{"t":520,"ev":"in","text":"HIT two"}
+{"t":520,"ev":"echo","text":"B-act two","script":"_t149_b"}
+{"t":520,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":520,"ev":"prompt-event"}
+{"t":530,"ev":"echo","text":"B-waitfor-done","script":"_t149_b"}
+{"t":530,"ev":"print","text":"[Script finished (In 0.53 seconds): _t149_b.cmd]","script":"_t149_b"}
+{"t":530,"ev":"script-finish","script":"_t149_b"}
+{"t":700,"ev":"echo","text":"done","script":"t149_pause_drops_lines"}
+{"t":700,"ev":"print","text":"[Script finished (In 0.70 seconds): t149_pause_drops_lines.cmd]","script":"t149_pause_drops_lines"}
+{"t":700,"ev":"script-finish","script":"t149_pause_drops_lines"}
+{"t":700,"ev":"end","live":0}

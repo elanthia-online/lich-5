@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t40_evaltrigger_chain"}
+{"t":0,"ev":"script-start","script":"t40_evaltrigger_chain","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t40_evaltrigger_chain.cmd]","script":"t40_evaltrigger_chain"}
+{"t":0,"ev":"var","name":"$ta","value":"1","src":"cmd"}
+{"t":0,"ev":"trigger-fire","pattern":"$ta = 1","var":"$ta"}
+{"t":0,"ev":"var","name":"$tb","value":"1","src":"cmd"}
+{"t":0,"ev":"trigger-fire","pattern":"$tb = 1","var":"$tb"}
+{"t":0,"ev":"cmdecho","text":"tb-fired","window":""}
+{"t":200,"ev":"echo","text":"tb=1","script":"t40_evaltrigger_chain"}
+{"t":200,"ev":"print","text":"[Script finished (In 0.20 seconds): t40_evaltrigger_chain.cmd]","script":"t40_evaltrigger_chain"}
+{"t":200,"ev":"script-finish","script":"t40_evaltrigger_chain"}
+{"t":200,"ev":"end","live":0}

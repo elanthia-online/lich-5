@@ -1,0 +1,4 @@
+EXPECT swing
+IN You swing.
+PROMPT 3
+WAIT 4000

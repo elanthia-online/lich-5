@@ -1,0 +1,6 @@
+EXPECT look
+IN You also see a CRATE which Looks Broken.
+PROMPT
+EXPECT look
+IN Obvious paths: north.
+PROMPT

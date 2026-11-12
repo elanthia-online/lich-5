@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t20_delay_rt"}
+{"t":0,"ev":"script-start","script":"t20_delay_rt","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t20_delay_rt.cmd]","script":"t20_delay_rt"}
+{"t":0,"ev":"send","text":"swing","origin":"t20_delay_rt","user":false}
+{"t":10,"ev":"expect-ok","want":"swing","got":"swing"}
+{"t":10,"ev":"in","text":"You swing."}
+{"t":10,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":3}
+{"t":10,"ev":"prompt-event"}
+{"t":3510,"ev":"echo","text":"after-delay","script":"t20_delay_rt"}
+{"t":3510,"ev":"print","text":"[Script finished (In 3.51 seconds): t20_delay_rt.cmd]","script":"t20_delay_rt"}
+{"t":3510,"ev":"script-finish","script":"t20_delay_rt"}
+{"t":4020,"ev":"end","live":0}

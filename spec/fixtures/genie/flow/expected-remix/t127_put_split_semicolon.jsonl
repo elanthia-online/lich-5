@@ -1,0 +1,27 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t127_put_split_semicolon"}
+{"t":0,"ev":"script-start","script":"t127_put_split_semicolon","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t127_put_split_semicolon.cmd]","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"var","name":"$gx","value":"b","src":"cmd"}
+{"t":100,"ev":"echo","text":"gx=b","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"echo","text":"parsed-a","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"var","name":"$zz","value":"1","src":"cmd"}
+{"t":100,"ev":"echo","text":"parsed-b","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"echo","text":"zz=1","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"var","name":"$flagready","value":"1","src":"cmd"}
+{"t":100,"ev":"var","name":"$flagready","value":"0","src":"cmd"}
+{"t":100,"ev":"echo","text":"fr=0","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"cmdecho","text":"hi","window":""}
+{"t":100,"ev":"send","text":"look","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"var","name":"$q","value":"1","src":"cmd"}
+{"t":100,"ev":"echo","text":"q=1","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"send","text":"a","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"send","text":";b","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"send","text":";c","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"send","text":"x","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"send","text":"  y ","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"send","text":"z","origin":"t127_put_split_semicolon","user":false}
+{"t":100,"ev":"echo","text":"done","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"print","text":"[Script finished (In 0.10 seconds): t127_put_split_semicolon.cmd]","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"script-finish","script":"t127_put_split_semicolon"}
+{"t":100,"ev":"end","live":0}

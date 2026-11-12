@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t235_js_debug"}
+{"t":0,"ev":"script-start","script":"t235_js_debug","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t235_js_debug.cmd]","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd: setVar(\"t\", \"1\"); (jsblock)","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd: setVar(\"t2\", \"x\") (jsblock)","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd:  (jsblockend)","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd: echo t=%t (echo)","script":"t235_js_debug"}
+{"t":0,"ev":"echo","text":"t=1","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd: debug 10 (debuglevel)","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd(9): [echo u=2]","script":"t235_js_debug"}
+{"t":0,"ev":"echo","text":"u=2","script":"t235_js_debug"}
+{"t":0,"ev":"debug","text":"t235_js_debug.cmd(10): [jscall r getVar(\"u\")]","script":"t235_js_debug"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t235_js_debug.cmd]","script":"t235_js_debug"}
+{"t":0,"ev":"script-finish","script":"t235_js_debug"}
+{"t":10,"ev":"end","live":0}

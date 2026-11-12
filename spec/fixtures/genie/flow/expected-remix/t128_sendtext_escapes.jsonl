@@ -1,0 +1,21 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t128_sendtext_escapes"}
+{"t":0,"ev":"script-start","script":"t128_sendtext_escapes","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t128_sendtext_escapes.cmd]","script":"t128_sendtext_escapes"}
+{"t":0,"ev":"send","text":"e;f","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"send","text":"sing a;b","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"send","text":"SING la;la","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"send","text":"Bug report;x","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"queue","text":"sing c\\;d","delay":0,"script":"t128_sendtext_escapes"}
+{"t":0,"ev":"inputbox","text":"g\\h\\x","origin":"t128_sendtext_escapes"}
+{"t":0,"ev":"send","text":"i@j","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"send","text":"k\\l","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"send","text":"mn\\o","origin":"t128_sendtext_escapes","user":false}
+{"t":0,"ev":"inputbox","text":"say hello@there","origin":"t128_sendtext_escapes"}
+{"t":0,"ev":"var","name":"$esc","value":"a\\;b","src":"cmd"}
+{"t":0,"ev":"echo","text":"esc=[a\\;b]","script":"t128_sendtext_escapes"}
+{"t":10,"ev":"send","text":"sing c;d","origin":"","user":false}
+{"t":100,"ev":"echo","text":"done","script":"t128_sendtext_escapes"}
+{"t":100,"ev":"print","text":"[Script finished (In 0.10 seconds): t128_sendtext_escapes.cmd]","script":"t128_sendtext_escapes"}
+{"t":100,"ev":"script-finish","script":"t128_sendtext_escapes"}
+{"t":100,"ev":"end","live":0}

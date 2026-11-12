@@ -1,0 +1,35 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t218_gag_sub_lists"}
+{"t":0,"ev":"script-start","script":"t218_gag_sub_lists","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t218_gag_sub_lists.cmd]","script":"t218_gag_sub_lists"}
+{"t":0,"ev":"cmdecho","text":"Invalid regexp in gag: (bad x","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid regexp in substitute: (bad","window":""}
+{"t":0,"ev":"cmdecho","text":"Active substitutes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: {^In the chapter entitled.*(Holy Warrior \\[how\\]) {$1 utility/warding} {Paladin}","window":""}
+{"t":0,"ev":"cmdecho","text":"^The (\\w+) door => A ${1}x door $$ $&   $+ [$_]","window":""}
+{"t":0,"ev":"cmdecho","text":"Active gags: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^You see","window":""}
+{"t":0,"ev":"cmdecho","text":"^hidden","window":""}
+{"t":0,"ev":"cmdecho","text":"a b","window":""}
+{"t":0,"ev":"cmdecho","text":"Active substitutes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^The (\\w+) door => A ${1}x door $$ $&   $+ [$_]","window":""}
+{"t":0,"ev":"cmdecho","text":"^Gold => 0 gold","window":""}
+{"t":0,"ev":"cmdecho","text":"Active gags: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^hidden","window":""}
+{"t":0,"ev":"cmdecho","text":"list","window":""}
+{"t":0,"ev":"cmdecho","text":"Active substitutes: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^The (\\w+) door => A ${1}x door $$ $&   $+ [$_]","window":""}
+{"t":0,"ev":"cmdecho","text":"Substitutes Cleared","window":""}
+{"t":0,"ev":"cmdecho","text":"Gags Cleared","window":""}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t218_gag_sub_lists.cmd]","script":"t218_gag_sub_lists"}
+{"t":0,"ev":"script-finish","script":"t218_gag_sub_lists"}
+{"t":10,"ev":"in","text":"You see a thing."}
+{"t":10,"ev":"in","text":"The oak door is open."}
+{"t":10,"ev":"in","text":"Gold coins here."}
+{"t":10,"ev":"in","text":"text with  spaced   words"}
+{"t":10,"ev":"in","text":"gagme now"}
+{"t":10,"ev":"in","text":"abbb"}
+{"t":10,"ev":"in","text":"HIDDEN thing"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"end","live":0}

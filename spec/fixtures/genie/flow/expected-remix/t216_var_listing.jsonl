@@ -1,0 +1,212 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t216_var_listing"}
+{"t":0,"ev":"script-start","script":"t216_var_listing","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t216_var_listing.cmd]","script":"t216_var_listing"}
+{"t":0,"ev":"var","name":"$pvpdummy","value":"goblin","src":"cmd"}
+{"t":0,"ev":"var","name":"$newpvpdummy","value":"0","src":"cmd"}
+{"t":0,"ev":"var","name":"$tmpvp","value":"1","src":"cmd"}
+{"t":0,"ev":"var","name":"$svpvp","value":"2","src":"cmd"}
+{"t":0,"ev":"sendraw","text":"<stgupd><vars><<a><k name=\"svpvp\" value=\"2\"/></<a></vars>\n"}
+{"t":0,"ev":"var","name":"$Pvp2","value":"x","src":"cmd"}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: pvp","window":""}
+{"t":0,"ev":"cmdecho","text":"$newpvpdummy=0","window":""}
+{"t":0,"ev":"cmdecho","text":"$pvpdummy=goblin","window":""}
+{"t":0,"ev":"cmdecho","text":"(temporary) $tmpvp=1","window":""}
+{"t":0,"ev":"cmdecho","text":"(server) $svpvp=2","window":""}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: Pvp","window":""}
+{"t":0,"ev":"cmdecho","text":"$Pvp2=x","window":""}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"$newpvpdummy=0","window":""}
+{"t":0,"ev":"cmdecho","text":"$Pvp2=x","window":""}
+{"t":0,"ev":"cmdecho","text":"$pvpdummy=goblin","window":""}
+{"t":0,"ev":"cmdecho","text":"(temporary) $tmpvp=1","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $account=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $artdir=@artdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $bleeding=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $casttime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $casttimeremaining=@casttimeremaining@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $charactername=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $client=Genie Remix Client 4","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $concentration=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $connected=1","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $date=@date@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $datetime=@datetime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $datetime24=@datetime24@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dayofmonth=@dayofmonth@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dayofyear=@dayofyear@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dead=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $diseased=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $down=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $east=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $encumbrance=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gamehost=eaccess.play.net","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gamename=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gameport=7910","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gametime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $health=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $hidden=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $invisible=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $joined=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $kneeling=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lastcommand=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lefthand=Empty","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lefthandnoun=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $logdir=@logdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $mana=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $mapdir=@mapdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $militarytime=@militarytime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $monstercount=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $monsterlist=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $month=@month@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $north=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $northeast=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $northwest=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $out=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $plugindir=@plugindir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $poisoned=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $preparedspell=None","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $prompt=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $prone=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $repeatregex=^\\.\\.\\.wait|^Sorry\\, you may only type ahead|^You are still stunned|^You can\\'t do that while|^You don\\'t seem to be able","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $righthand=Empty","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $righthandnoun=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomdesc=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomexits=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomname=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomnote=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomobjs=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomplayers=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roundtime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $scriptdir=@scriptdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $scriptlist=none","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $sitting=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $sounddir=@sounddir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $south=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $southeast=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $southwest=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spellpreptime=@spellpreptime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spellstarttime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spelltime=@spelltime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spirit=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $stamina=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $standing=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $stunned=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $time=@time@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $time24=@time24@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $unixtime=@unixtime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $up=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $version=4.2.4.0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $webbed=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $west=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $year=@year@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $zoneid=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $zonename=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(server) $svpvp=2","window":""}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"$newpvpdummy=0","window":""}
+{"t":0,"ev":"cmdecho","text":"$Pvp2=x","window":""}
+{"t":0,"ev":"cmdecho","text":"$pvpdummy=goblin","window":""}
+{"t":0,"ev":"cmdecho","text":"(temporary) $tmpvp=1","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $account=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $artdir=@artdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $bleeding=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $casttime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $casttimeremaining=@casttimeremaining@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $charactername=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $client=Genie Remix Client 4","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $concentration=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $connected=1","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $date=@date@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $datetime=@datetime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $datetime24=@datetime24@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dayofmonth=@dayofmonth@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dayofyear=@dayofyear@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $dead=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $diseased=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $down=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $east=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $encumbrance=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gamehost=eaccess.play.net","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gamename=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gameport=7910","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $gametime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $health=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $hidden=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $invisible=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $joined=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $kneeling=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lastcommand=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lefthand=Empty","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $lefthandnoun=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $logdir=@logdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $mana=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $mapdir=@mapdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $militarytime=@militarytime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $monstercount=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $monsterlist=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $month=@month@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $north=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $northeast=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $northwest=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $out=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $plugindir=@plugindir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $poisoned=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $preparedspell=None","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $prompt=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $prone=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $repeatregex=^\\.\\.\\.wait|^Sorry\\, you may only type ahead|^You are still stunned|^You can\\'t do that while|^You don\\'t seem to be able","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $righthand=Empty","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $righthandnoun=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomdesc=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomexits=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomname=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomnote=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomobjs=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roomplayers=","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $roundtime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $scriptdir=@scriptdir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $scriptlist=none","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $sitting=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $sounddir=@sounddir@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $south=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $southeast=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $southwest=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spellpreptime=@spellpreptime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spellstarttime=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spelltime=@spelltime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $spirit=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $stamina=100","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $standing=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $stunned=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $time=@time@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $time24=@time24@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $unixtime=@unixtime@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $up=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $version=4.2.4.0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $webbed=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $west=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $year=@year@","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $zoneid=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $zonename=0","window":""}
+{"t":0,"ev":"cmdecho","text":"(server) $svpvp=2","window":""}
+{"t":0,"ev":"var","name":"$roundtime","value":"5","src":"cmd"}
+{"t":0,"ev":"var","name":"$pvp","value":"roundtime","src":"cmd"}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: health","window":""}
+{"t":0,"ev":"cmdecho","text":"(reserved) $health=100","window":""}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: dummy","window":""}
+{"t":0,"ev":"cmdecho","text":"$pvpdummy=goblin","window":""}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: zzzzqq","window":""}
+{"t":0,"ev":"cmdecho","text":"None.","window":""}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"An error occurred trying to start process 'notepad.exe' with working directory '<lab>/flow-oracle/tests'. No such file or directory"}
+{"t":0,"ev":"cmdecho","text":"Active variables: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: a b","window":""}
+{"t":0,"ev":"cmdecho","text":"None.","window":""}
+{"t":0,"ev":"echo","text":"done","script":"t216_var_listing"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t216_var_listing.cmd]","script":"t216_var_listing"}
+{"t":0,"ev":"script-finish","script":"t216_var_listing"}
+{"t":10,"ev":"end","live":0}

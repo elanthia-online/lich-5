@@ -1,0 +1,43 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t217_trigger_listing"}
+{"t":0,"ev":"script-start","script":"t217_trigger_listing","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t217_trigger_listing.cmd]","script":"t217_trigger_listing"}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"BEGIN\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!$=#var arenafoe $1;#echo >Conversation #000000 *** Bout 1;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#send .arenawatch;#class backoffwatcher on","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out a veteran\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out the next contender\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"BEGIN\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!$=#var arenafoe $1;#echo >Conversation #000000 *** Bout 1;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#send .arenawatch;#class backoffwatcher on","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out a veteran\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out the next contender\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^Alpha=#echo alpha","window":""}
+{"t":0,"ev":"cmdecho","text":"^beta=#echo beta","window":""}
+{"t":0,"ev":"cmdecho","text":"^zeta=#echo zeta","window":""}
+{"t":0,"ev":"cmdecho","text":"$x = 1=#echo ev","window":""}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: eta","window":""}
+{"t":0,"ev":"cmdecho","text":"^beta=#echo beta","window":""}
+{"t":0,"ev":"cmdecho","text":"^zeta=#echo zeta","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid regexp in trigger: (bad","window":""}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"Filter: list","window":""}
+{"t":0,"ev":"cmdecho","text":"None.","window":""}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"BEGIN\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!$=#var arenafoe $1;#echo >Conversation #000000 *** Bout 1;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#send .arenawatch;#class backoffwatcher on","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out a veteran\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out the next contender\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^Alpha=#echo alpha","window":""}
+{"t":0,"ev":"cmdecho","text":"^beta=#echo beta","window":""}
+{"t":0,"ev":"cmdecho","text":"^zeta=#echo zeta","window":""}
+{"t":0,"ev":"cmdecho","text":"$x = 1=#echo ev","window":""}
+{"t":0,"ev":"cmdecho","text":"Active triggers: ","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"BEGIN\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!$=#var arenafoe $1;#echo >Conversation #000000 *** Bout 1;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#send .arenawatch;#class backoffwatcher on","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out a veteran\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^A herald cries, \"Bring out the next contender\\!\"  A wooden gate swings open, revealing the approach of.* (\\w+)\\!  The herald adds, \"And here comes another\\!  Bout (\\d+), BEGIN\\!\"$=#var arenafoe $1;#echo >Conversation #000000 *** Bout $2;#echo >Conversation #000000 *** Watching for $arenafoe;#script abort all;#queue clear;#var closedin 1;#class backoffwatcher on;#send .arenawatch","window":""}
+{"t":0,"ev":"cmdecho","text":"^Alpha=#echo alpha","window":""}
+{"t":0,"ev":"cmdecho","text":"^beta=#echo beta","window":""}
+{"t":0,"ev":"cmdecho","text":"$x = 1=#echo ev","window":""}
+{"t":0,"ev":"echo","text":"done","script":"t217_trigger_listing"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t217_trigger_listing.cmd]","script":"t217_trigger_listing"}
+{"t":0,"ev":"script-finish","script":"t217_trigger_listing"}
+{"t":10,"ev":"end","live":0}

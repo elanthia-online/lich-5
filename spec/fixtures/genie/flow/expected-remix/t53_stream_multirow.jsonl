@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t53_stream_multirow"}
+{"t":0,"ev":"script-start","script":"t53_stream_multirow","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t53_stream_multirow.cmd]","script":"t53_stream_multirow"}
+{"t":110,"ev":"in","text":"<pushStream id='thoughts'/>[General] THOUGHTTOK one"}
+{"t":120,"ev":"echo","text":"got-thought","script":"t53_stream_multirow"}
+{"t":520,"ev":"in","text":"<popStream/>"}
+{"t":630,"ev":"in","text":"<pushStream id='percWindow'/>Spell one"}
+{"t":940,"ev":"in","text":"PLAINTOK arrives"}
+{"t":950,"ev":"echo","text":"got-plain","script":"t53_stream_multirow"}
+{"t":1250,"ev":"in","text":"<popStream/>"}
+{"t":1460,"ev":"in","text":"DONETOK"}
+{"t":1470,"ev":"echo","text":"done","script":"t53_stream_multirow"}
+{"t":1470,"ev":"print","text":"[Script finished (In 1.47 seconds): t53_stream_multirow.cmd]","script":"t53_stream_multirow"}
+{"t":1470,"ev":"script-finish","script":"t53_stream_multirow"}
+{"t":1770,"ev":"end","live":0}

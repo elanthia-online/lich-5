@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t129_quick_send"}
+{"t":0,"ev":"script-start","script":"t129_quick_send","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t129_quick_send.cmd]","script":"t129_quick_send"}
+{"t":0,"ev":"send","text":"look","origin":"t129_quick_send","user":false}
+{"t":0,"ev":"var","name":"$x","value":"","src":"cmd"}
+{"t":0,"ev":"echo","text":"x=[]","script":"t129_quick_send"}
+{"t":1000,"ev":"send","text":"nod","origin":"","user":false}
+{"t":3000,"ev":"send","text":"grin","origin":"","user":false}
+{"t":4000,"ev":"send","text":"smile","origin":"","user":false}
+{"t":5000,"ev":"send","text":"inner","origin":"","user":false}
+{"t":5010,"ev":"in","text":"Queue now"}
+{"t":5010,"ev":"queue","text":"asend","delay":1,"script":"t129_quick_send"}
+{"t":6010,"ev":"send","text":"asend","origin":"","user":false}
+{"t":7010,"ev":"send","text":"aquick","origin":"","user":false}
+{"t":9020,"ev":"echo","text":"done","script":"t129_quick_send"}
+{"t":9020,"ev":"print","text":"[Script finished (In 9.02 seconds): t129_quick_send.cmd]","script":"t129_quick_send"}
+{"t":9020,"ev":"script-finish","script":"t129_quick_send"}
+{"t":10020,"ev":"end","live":0}

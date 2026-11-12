@@ -1,0 +1,17 @@
+WAIT 300
+IN some text
+WAIT 300
+VAR g 1
+WAIT 300
+IN RAND now
+WAIT 300
+IN SETX now
+WAIT 300
+IN <dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+WAIT 300
+IN <dialogData id='minivitals'><progressBar id='health' value='70' text='health 70%' left='0%' top='0%' width='25%' height='100%'/></dialogData>
+WAIT 300
+IN RAND again
+WAIT 300
+VAR r 3
+WAIT 300

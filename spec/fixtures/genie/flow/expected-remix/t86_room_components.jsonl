@@ -1,0 +1,62 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t86_room_components"}
+{"t":0,"ev":"script-start","script":"t86_room_components","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t86_room_components.cmd]","script":"t86_room_components"}
+{"t":10,"ev":"in","text":"<streamWindow id='room' title='Room' subtitle=\" - [Shard, Garden Crescent] (2010671)\" location='center' target='drop' ifClosed='' resident='true'/>"}
+{"t":10,"ev":"in","text":"<component id='room desc'>Snow-white lilies border the edge of a sprawling estate to the east.  Across the street, a shallow moat surrounding an arching building boasts slender kokona reeds that sway in only the stiffest breeze.</component>"}
+{"t":10,"ev":"move-event"}
+{"t":10,"ev":"in","text":"<component id='room objs'>You also see <pushBold/>a Shard sentinel<popBold/>.</component>"}
+{"t":10,"ev":"in","text":"<component id='room players'></component>"}
+{"t":10,"ev":"in","text":"<component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>"}
+{"t":10,"ev":"in","text":"<compass><dir value=\"n\"/><dir value=\"se\"/></compass><component id='room objs'>You also see <pushBold/>a Shard sentinel<popBold/>.</component>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"in","text":"STEP1"}
+{"t":30,"ev":"echo","text":"rn=[Shard, Garden Crescent] uid=[2010671]","script":"t86_room_components"}
+{"t":30,"ev":"echo","text":"objs=[You also see a Shard sentinel.] mc=[1] ml=[a Shard sentinel]","script":"t86_room_components"}
+{"t":30,"ev":"echo","text":"pl=[] ex=[Obvious paths: north, southeast.]","script":"t86_room_components"}
+{"t":30,"ev":"echo","text":"n=[1] se=[1] s=[0]","script":"t86_room_components"}
+{"t":30,"ev":"echo","text":"desc=[Snow-white lilies border the edge of a sprawling estate to the east.  Across the street, a shallow moat surrounding an arching building boasts slender kokona reeds that sway in only the stiffest breeze.]","script":"t86_room_components"}
+{"t":30,"ev":"echo","text":"sup=[$inside] [$gameroomid] [$name] [$level] [$maxhealth] [$roomtitle] [$Mana] [$Bleeding] [$RoomObjs] v=[4.2.4.0]","script":"t86_room_components"}
+{"t":230,"ev":"in","text":"<component id='room objs'>You also see <pushBold/>an elder Adan'f sorcerer<popBold/> that is trying to remain hidden and <pushBold/>an elder Adan'f sorcerer<popBold/> that is surrounded by a shimmering shield.</component>"}
+{"t":230,"ev":"in","text":"<component id='room players'>Also here: Tester.</component>"}
+{"t":230,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":230,"ev":"prompt-event"}
+{"t":240,"ev":"in","text":"STEP2"}
+{"t":250,"ev":"echo","text":"objs=[You also see an elder Adan'f sorcerer that is trying to remain hidden and an elder Adan'f sorcerer that is surrounded by a shimmering shield.] mc=[2] ml=[an elder Adan'f sorcerer that is trying to remain hidden, an elder Adan'f sorcerer that is surrounded by a shimmering shield]","script":"t86_room_components"}
+{"t":250,"ev":"echo","text":"pl=[Also here: Tester.]","script":"t86_room_components"}
+{"t":450,"ev":"in","text":"<component id='room objs'>You also see <pushBold/>an Adan'f blood warrior<popBold/>, <pushBold/>an Adan'f blood warrior<popBold/> and <pushBold/>a goblin<popBold/> which appears dead, <pushBold/>a rat<popBold/> (dead), \"a quoted rock\" and <pushBold/>a kobold<popBold/> that is lying down.</component>"}
+{"t":450,"ev":"in","text":"<component id='room players'>Also here: Foo who is lying down and Lord \"Bar\" the Brave.</component>"}
+{"t":450,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":450,"ev":"prompt-event"}
+{"t":460,"ev":"in","text":"STEP3"}
+{"t":470,"ev":"echo","text":"objs=[You also see an Adan'f blood warrior, an Adan'f blood warrior and a goblin which appears dead, a rat (dead), a quoted rock and a kobold that is lying down.] mc=[3] ml=[an Adan'f blood warrior, an Adan'f blood warrior, a kobold that is lying down]","script":"t86_room_components"}
+{"t":470,"ev":"echo","text":"pl=[Also here: Foo who is lying down and Lord Bar the Brave.]","script":"t86_room_components"}
+{"t":670,"ev":"in","text":"<component id='room desc'>A \"quoted\" desc &amp; more &lt;here&gt;.</component>"}
+{"t":670,"ev":"move-event"}
+{"t":670,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":670,"ev":"prompt-event"}
+{"t":680,"ev":"in","text":"STEP4"}
+{"t":690,"ev":"echo","text":"objs=[] mc=[3] ml=[an Adan'f blood warrior, an Adan'f blood warrior, a kobold that is lying down] pl=[] ex=[]","script":"t86_room_components"}
+{"t":690,"ev":"echo","text":"desc=[A quoted desc & more <here>.]","script":"t86_room_components"}
+{"t":890,"ev":"in","text":"<component id='room objs'>  You also see a box; a rock &apos;n&apos; roll, <pushBold/>Tom &amp; Jerry<popBold/>.</component>"}
+{"t":890,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":890,"ev":"prompt-event"}
+{"t":900,"ev":"in","text":"STEP5"}
+{"t":910,"ev":"echo","text":"objs=[You also see a box a rock 'n' roll, Tom & Jerry.] mc=[1] ml=[Tom &amp; Jerry]","script":"t86_room_components"}
+{"t":1110,"ev":"in","text":"<component id='room objs'>You also see a ghost&nbsp;light.</component>"}
+{"t":1110,"ev":"in","text":"<streamWindow id='room' title='Room' subtitle=\" - [Crossing, Town Green]\" location='center' target='drop'/>"}
+{"t":1110,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1110,"ev":"prompt-event"}
+{"t":1120,"ev":"in","text":"STEP6"}
+{"t":1130,"ev":"echo","text":"objs=[You also see a box a rock 'n' roll, Tom & Jerry.] mc=[1] ml=[Tom &amp; Jerry]","script":"t86_room_components"}
+{"t":1130,"ev":"echo","text":"rn=[Crossing, Town Green] uid=[0]","script":"t86_room_components"}
+{"t":1330,"ev":"in","text":"<streamWindow id='room' title='Room' subtitle=\" - The Void\" location='center' target='drop'/>"}
+{"t":1330,"ev":"in","text":"<component id='room objs'>You also see <pushBold/>a bat<popBold/>, <pushBold/>a bat<popBold/></component>"}
+{"t":1330,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1330,"ev":"prompt-event"}
+{"t":1340,"ev":"in","text":"STEP7"}
+{"t":1350,"ev":"echo","text":"rn=[The Void] uid=[0] objs=[You also see a bat, a bat] mc=[2]","script":"t86_room_components"}
+{"t":1350,"ev":"print","text":"[Script finished (In 1.35 seconds): t86_room_components.cmd]","script":"t86_room_components"}
+{"t":1350,"ev":"script-finish","script":"t86_room_components"}
+{"t":1350,"ev":"end","live":0}

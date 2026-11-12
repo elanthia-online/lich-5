@@ -1,0 +1,7 @@
+INPUT #trigger {^\[Shard, Garden Crescent\]$} {#echo TRIG-BARE}
+INPUT #trigger {^\[Shard, Garden Crescent\] \(2010671\)$} {#echo TRIG-SUFFIX}
+WAIT 100
+IN <resource picture="0"/><style id="roomName" />[Shard, Garden Crescent] (2010671)
+IN <style id=""/>
+PROMPT
+WAIT 300

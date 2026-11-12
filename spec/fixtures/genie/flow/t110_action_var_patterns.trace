@@ -1,0 +1,16 @@
+EXPECT n
+WAIT 100
+IN Obvious paths: north, south.
+WAIT 200
+IN ...wait 1 seconds.
+WAIT 200
+IN You can't go there.
+WAIT 200
+IN You begin climbing the rope.
+WAIT 200
+IN Obvious exits: none.
+WAIT 200
+IN You reach the top.
+WAIT 200
+IN Obvious paths: east.
+PROMPT

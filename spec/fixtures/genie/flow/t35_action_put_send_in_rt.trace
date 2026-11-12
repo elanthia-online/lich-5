@@ -1,0 +1,8 @@
+EXPECT swing
+IN You swing.
+PROMPT 4
+WAIT 1000
+IN Then thunder happens.
+IN Now rain occurs.
+PROMPT
+WAIT 5000

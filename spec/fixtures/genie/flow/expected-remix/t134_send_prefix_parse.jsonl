@@ -1,0 +1,18 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t134_send_prefix_parse"}
+{"t":0,"ev":"script-start","script":"t134_send_prefix_parse","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t134_send_prefix_parse.cmd]","script":"t134_send_prefix_parse"}
+{"t":0,"ev":"host-exception","where":"Script_SendText","message":"The input string '0.5' was not in a correct format."}
+{"t":0,"ev":"echo","text":"after-half","script":"t134_send_prefix_parse"}
+{"t":0,"ev":"host-exception","where":"Script_SendText","message":"The input string '1.' was not in a correct format."}
+{"t":0,"ev":"host-exception","where":"Script_SendText","message":"The input string '.5' was not in a correct format."}
+{"t":0,"ev":"host-exception","where":"Script_SendText","message":"Value was either too large or too small for an Int32."}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"The input string '1.2.3' was not in a correct format."}
+{"t":0,"ev":"echo","text":"after-bad","script":"t134_send_prefix_parse"}
+{"t":0,"ev":"swallowed-fault","where":"Script_ParseCommand","message":"The input string '0.25.' was not in a correct format."}
+{"t":2000,"ev":"send","text":"twodot","origin":"","user":false}
+{"t":2500,"ev":"send","text":"halfok","origin":"","user":false}
+{"t":3000,"ev":"echo","text":"done","script":"t134_send_prefix_parse"}
+{"t":3000,"ev":"print","text":"[Script finished (In 3.00 seconds): t134_send_prefix_parse.cmd]","script":"t134_send_prefix_parse"}
+{"t":3000,"ev":"script-finish","script":"t134_send_prefix_parse"}
+{"t":4010,"ev":"end","live":0}

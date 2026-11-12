@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t177_bufferwait_action_goto"}
+{"t":0,"ev":"script-start","script":"t177_bufferwait_action_goto","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t177_bufferwait_action_goto.cmd]","script":"t177_bufferwait_action_goto"}
+{"t":0,"ev":"script-start","script":"_t177_ping","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t177_ping.cmd]","script":"_t177_ping"}
+{"t":500,"ev":"send","text":"ping","origin":"_t177_ping","user":false}
+{"t":500,"ev":"print","text":"[Script finished (In 0.50 seconds): _t177_ping.cmd]","script":"_t177_ping"}
+{"t":500,"ev":"script-finish","script":"_t177_ping"}
+{"t":510,"ev":"echo","text":"act-goto","script":"t177_bufferwait_action_goto"}
+{"t":1010,"ev":"echo","text":"after-pause","script":"t177_bufferwait_action_goto"}
+{"t":1010,"ev":"print","text":"[Script finished (In 1.01 seconds): t177_bufferwait_action_goto.cmd(12)]","script":"t177_bufferwait_action_goto"}
+{"t":1010,"ev":"script-finish","script":"t177_bufferwait_action_goto"}
+{"t":1210,"ev":"in","text":"hello row"}
+{"t":4220,"ev":"end","live":0}

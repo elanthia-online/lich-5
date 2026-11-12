@@ -25,6 +25,13 @@ module StreamReplay
   #
   # Self-contained like benchmark.rb: nothing under lib/ is loaded in this
   # process; the production code runs only inside the child Lich process.
+  #
+  # Scripted sessions: a body entry may be a Hash STEP instead of a server line,
+  # so a spec can drive a script through the real client and game sockets:
+  #   { client: text }  the client sends +text+ (a command is "<c>;name args")
+  #   { stdout: re }    wait until what Lich wrote to the client matches +re+
+  #   { game: re }      wait until what Lich wrote to the game socket matches +re+
+  # A wait that times out (STEP_TIMEOUT) raises with the tail of both streams.
   class Driver
     REPO = File.expand_path('../../..', __dir__)
     PROBE = File.join(__dir__, 'replay_probe.lic')
@@ -32,6 +39,7 @@ module StreamReplay
     WARMUP_PROMPT = '<prompt time="0">&gt;</prompt>'
     READY_TIMEOUT = 60
     PROMPT_TIMEOUT = 10
+    STEP_TIMEOUT = 20
 
     Result = Struct.new(:snapshots, :stdout, :warnings, :game_input, keyword_init: true)
 
@@ -41,12 +49,16 @@ module StreamReplay
     #   starts with (e.g. a ;display toggle), seeded into its lich.db3
     # @param client_lines [Array<String>] lines the client sends Lich after
     #   its handshake, before the stream starts (e.g. SET_FRONTEND_CAPS)
-    def initialize(fixture, frontend: nil, settings: {}, client_lines: [])
+    # @param scripts [Hash{String=>String}] file name => content written into
+    #   the child's scripts directory before it boots (e.g. a .cmd to run)
+    def initialize(fixture, frontend: nil, settings: {}, client_lines: [], scripts: {})
       @fixture = fixture
       @frontend = frontend
       @settings = settings
       @client_lines = client_lines
+      @scripts = scripts
       @warnings = []
+      @io_mutex = Mutex.new
     end
 
     # @return [Result]
@@ -54,15 +66,20 @@ module StreamReplay
       Dir.mktmpdir('lich_replay') do |tmp|
         %w[data scripts logs maps backup temp].each { |d| FileUtils.mkdir_p(File.join(tmp, d)) }
         FileUtils.cp(PROBE, File.join(tmp, 'scripts', 'replay_probe.lic'))
+        @scripts.each { |name, body| File.binwrite(File.join(tmp, 'scripts', name), body) }
         seed_settings(File.join(tmp, 'data', 'lich.db3')) unless @settings.empty?
         snapshot_path = File.join(tmp, 'snapshots.jsonl')
         server = TCPServer.new('127.0.0.1', 0)
-        stdout = +''
-        game_input = +''
+        @stdout = stdout = +''
+        @game_input = game_input = +''
         begin
           Open3.popen2e(child_env(snapshot_path), *child_args(tmp, server.addr[1]), chdir: REPO) do |stdin, out, wait_thr|
+            @stdin = stdin
             reader = Thread.new do
-              loop { stdout << out.readpartial(65_536) }
+              loop do
+                chunk = out.readpartial(65_536)
+                @io_mutex.synchronize { stdout << chunk }
+              end
             rescue IOError # includes EOFError
               nil
             end
@@ -74,7 +91,10 @@ module StreamReplay
             conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
             conn.gets # login key
             drain = Thread.new do
-              loop { game_input << conn.readpartial(4096) }
+              loop do
+                chunk = conn.readpartial(4096)
+                @io_mutex.synchronize { game_input << chunk }
+              end
             rescue StandardError
               nil
             end
@@ -136,6 +156,8 @@ module StreamReplay
       wait_until(PROMPT_TIMEOUT, 'warm-up snapshot') { snapshot_count(snapshot_path) >= 1 }
       expected = 1
       @fixture.body_lines.each do |line|
+        next step(line) if line.is_a?(Hash)
+
         write_line(conn, line)
         next unless line.include?('<prompt')
 
@@ -151,6 +173,22 @@ module StreamReplay
         @warnings << "no snapshot for prompt line #{expected} (have #{actual}): #{line[0, 120].inspect}"
         expected = actual
       end
+    end
+
+    # One scripted-session step (see the class comment).
+    def step(entry)
+      if entry.key?(:client)
+        @stdin.puts(entry[:client])
+        @stdin.flush
+        return
+      end
+      stream, pattern = entry.key?(:stdout) ? [:stdout, entry[:stdout]] : [:game, entry.fetch(:game)]
+      buffer = stream == :stdout ? @stdout : @game_input
+      return if wait_until(STEP_TIMEOUT, '', raise_on_timeout: false) { @io_mutex.synchronize { buffer.match?(pattern) } }
+
+      tails = @io_mutex.synchronize { [@stdout[-1500..] || @stdout, @game_input[-500..] || @game_input] }
+      raise Timeout::Error, "stream replay: timed out waiting for #{stream} =~ #{pattern.inspect}\n" \
+                            "--- client output tail:\n#{tails[0]}\n--- game input tail:\n#{tails[1]}"
     end
 
     # The ready marker (line 1) carries the offline preload's self-check. A

@@ -1,0 +1,27 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t254_trigger_class_same_line"}
+{"t":0,"ev":"script-start","script":"t254_trigger_class_same_line","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t254_trigger_class_same_line.cmd]","script":"t254_trigger_class_same_line"}
+{"t":10,"ev":"input","text":"#trigger {^hel} {#echo A-fired;#class xx off}"}
+{"t":20,"ev":"input","text":"#trigger {^hello} {#echo B-fired} {xx}"}
+{"t":30,"ev":"input","text":"#trigger {^help} {#echo C-fired;#class yy on}"}
+{"t":40,"ev":"input","text":"#trigger {^helpme} {#echo D-fired} {yy}"}
+{"t":50,"ev":"input","text":"#class yy off"}
+{"t":160,"ev":"in","text":"hello there"}
+{"t":160,"ev":"trigger-fire","pattern":"^hel","text":"hello there"}
+{"t":160,"ev":"cmdecho","text":"A-fired","window":""}
+{"t":160,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":160,"ev":"prompt-event"}
+{"t":270,"ev":"in","text":"helpme now"}
+{"t":270,"ev":"trigger-fire","pattern":"^hel","text":"helpme now"}
+{"t":270,"ev":"cmdecho","text":"A-fired","window":""}
+{"t":270,"ev":"trigger-fire","pattern":"^help","text":"helpme now"}
+{"t":270,"ev":"cmdecho","text":"C-fired","window":""}
+{"t":270,"ev":"trigger-fire","pattern":"^helpme","text":"helpme now"}
+{"t":270,"ev":"cmdecho","text":"D-fired","window":""}
+{"t":270,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":270,"ev":"prompt-event"}
+{"t":1000,"ev":"echo","text":"end","script":"t254_trigger_class_same_line"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t254_trigger_class_same_line.cmd]","script":"t254_trigger_class_same_line"}
+{"t":1000,"ev":"script-finish","script":"t254_trigger_class_same_line"}
+{"t":1000,"ev":"end","live":0}

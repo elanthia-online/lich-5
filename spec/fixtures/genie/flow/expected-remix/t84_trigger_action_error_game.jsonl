@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t84_trigger_action_error_game"}
+{"t":0,"ev":"script-start","script":"t84_trigger_action_error_game","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t84_trigger_action_error_game.cmd]","script":"t84_trigger_action_error_game"}
+{"t":110,"ev":"in","text":"X"}
+{"t":110,"ev":"trigger-fire","pattern":"^X","text":"X"}
+{"t":110,"ev":"cmdecho","text":"T1","window":""}
+{"t":110,"ev":"trigger-fire","pattern":"^X$","text":"X"}
+{"t":110,"ev":"cmdecho","text":"T2","window":""}
+{"t":110,"ev":"echo","text":"A-X","script":"t84_trigger_action_error_game"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":500,"ev":"echo","text":"after","script":"t84_trigger_action_error_game"}
+{"t":500,"ev":"print","text":"[Script finished (In 0.50 seconds): t84_trigger_action_error_game.cmd]","script":"t84_trigger_action_error_game"}
+{"t":500,"ev":"script-finish","script":"t84_trigger_action_error_game"}
+{"t":920,"ev":"end","live":0}

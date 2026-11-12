@@ -1,0 +1,49 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t238_js_uber_text_to_number"}
+{"t":0,"ev":"script-start","script":"t238_js_uber_text_to_number","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t238_js_uber_text_to_number.cmd]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty-three, numeric value is: 23","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"A [23]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: one hundred five, numeric value is: 105","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"B [105]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: two thousand three hundred forty-five, numeric value is: 2345","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"C [2345]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: five million six, numeric value is: 5000006","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"D [5000006]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: one decillion, numeric value is: 1E+33","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"E [1E+33]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: Twenty, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"F [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: nine hundred ninety-nine quintillion, numeric value is: 9.99E+20","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"G [9.99E+20]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: seven--eight  thousand, numeric value is: 15000","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"H [15000]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: thousand million, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"I [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"J [1000000]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: some, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"K [undefined] [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: , numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"L [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"M [undefined] [42]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twelve thousand thirty-four million, numeric value is: 34012000","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"N [34012000]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\u00a0three, numeric value is: 23","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"nbsp [23]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\u0085three, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"nel [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\ufeffthree, numeric value is: 23","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"feff [23]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\u2028three, numeric value is: 23","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"ls [23]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\u200bthree, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"zwsp [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: twenty\u180ethree, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"mvs [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: hundred, numeric value is: 0","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"h [0]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"Received text string: -five-, numeric value is: 5","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"echo","text":"d [5]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"print","text":"[Script finished (In 0 seconds): t238_js_uber_text_to_number.cmd(50)]","script":"t238_js_uber_text_to_number"}
+{"t":0,"ev":"script-finish","script":"t238_js_uber_text_to_number"}
+{"t":10,"ev":"end","live":0}

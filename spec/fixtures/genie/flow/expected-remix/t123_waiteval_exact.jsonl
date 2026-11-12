@@ -1,0 +1,18 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t123_waiteval_exact"}
+{"t":0,"ev":"script-start","script":"t123_waiteval_exact","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t123_waiteval_exact.cmd]","script":"t123_waiteval_exact"}
+{"t":0,"ev":"var","name":"$g","value":"1","src":"cmd"}
+{"t":100,"ev":"echo","text":"waiting-g","script":"t123_waiteval_exact"}
+{"t":310,"ev":"in","text":"some text"}
+{"t":620,"ev":"var","name":"$g","value":"1","src":"trace"}
+{"t":630,"ev":"echo","text":"after-g","script":"t123_waiteval_exact"}
+{"t":920,"ev":"in","text":"RAND now"}
+{"t":1230,"ev":"in","text":"SETX now"}
+{"t":1240,"ev":"echo","text":"after-x","script":"t123_waiteval_exact"}
+{"t":1540,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='50' text='health 50%' left='0%' top='0%' width='25%' height='100%'/></dialogData>"}
+{"t":1850,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='70' text='health 70%' left='0%' top='0%' width='25%' height='100%'/></dialogData>"}
+{"t":1860,"ev":"echo","text":"after-health 70","script":"t123_waiteval_exact"}
+{"t":2160,"ev":"in","text":"RAND again"}
+{"t":2470,"ev":"var","name":"$r","value":"3","src":"trace"}
+{"t":4770,"ev":"end","live":1}

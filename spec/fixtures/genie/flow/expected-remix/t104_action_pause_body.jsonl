@@ -1,0 +1,12 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t104_action_pause_body"}
+{"t":0,"ev":"script-start","script":"t104_action_pause_body","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t104_action_pause_body.cmd]","script":"t104_action_pause_body"}
+{"t":110,"ev":"in","text":"go"}
+{"t":110,"ev":"echo","text":"got","script":"t104_action_pause_body"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"prompt-event"}
+{"t":610,"ev":"echo","text":"fell-through","script":"t104_action_pause_body"}
+{"t":610,"ev":"print","text":"[Script finished (In 0.61 seconds): t104_action_pause_body.cmd]","script":"t104_action_pause_body"}
+{"t":610,"ev":"script-finish","script":"t104_action_pause_body"}
+{"t":610,"ev":"end","live":0}

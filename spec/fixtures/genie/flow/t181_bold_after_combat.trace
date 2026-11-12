@@ -1,0 +1,11 @@
+WAIT 100
+IN < You swing <pushBold/>at a goblin
+IN * more <a exist="1" noun="x">thing</a> end<popBold/>
+IN > next <preset id="speech">p</preset> row
+FLUSH
+WAIT 100
+IN text <pushStream id="talk"/>T<popStream/>
+IN pre <pushStream id="main"/>post
+IN <popStream/>
+FLUSH
+WAIT 300

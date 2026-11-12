@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t165_parse_unlisted_child"}
+{"t":0,"ev":"script-start","script":"t165_parse_unlisted_child","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t165_parse_unlisted_child.cmd]","script":"t165_parse_unlisted_child"}
+{"t":0,"ev":"script-start","script":"_t165_child","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t165_child.cmd]","script":"_t165_child"}
+{"t":100,"ev":"echo","text":"child-got","script":"_t165_child"}
+{"t":100,"ev":"print","text":"[Script finished (In 0.10 seconds): _t165_child.cmd]","script":"_t165_child"}
+{"t":100,"ev":"script-finish","script":"_t165_child"}
+{"t":300,"ev":"echo","text":"end","script":"t165_parse_unlisted_child"}
+{"t":300,"ev":"print","text":"[Script finished (In 0.30 seconds): t165_parse_unlisted_child.cmd]","script":"t165_parse_unlisted_child"}
+{"t":300,"ev":"script-finish","script":"t165_parse_unlisted_child"}
+{"t":510,"ev":"end","live":0}

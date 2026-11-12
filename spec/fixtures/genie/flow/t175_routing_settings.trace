@@ -1,0 +1,15 @@
+WAIT 50
+IN <pushStream id='thoughts'/>[General] thought<popStream/>
+WAIT 50
+IN <stream id='thoughts'>stream thought</stream>
+WAIT 50
+IN <pushStream id='combat'/>combat line<popStream/>
+WAIT 50
+IN Link <d cmd='look rock'>rock</d> and <d>plain</d> here.
+WAIT 50
+IN < You swing at a <pushBold/>goblin<popBold/>.
+WAIT 50
+IN main text
+WAIT 50
+PROMPT
+WAIT 200

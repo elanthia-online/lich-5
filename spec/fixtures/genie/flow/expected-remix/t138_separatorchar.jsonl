@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"config","files":"<lab>/flow-oracle/tests/t138_cfg/settings.cfg","ignorescriptwarnings":false,"triggeroninput":true,"abortdupescript":true,"maxgosubdepth":50,"scripttimeout":5000}
+{"t":0,"ev":"input","text":".t138_separatorchar"}
+{"t":0,"ev":"script-start","script":"t138_separatorchar","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t138_separatorchar.cmd]","script":"t138_separatorchar"}
+{"t":0,"ev":"var","name":"$a","value":"1","src":"cmd"}
+{"t":0,"ev":"var","name":"$b","value":"2","src":"cmd"}
+{"t":0,"ev":"echo","text":"a=1 b=2","script":"t138_separatorchar"}
+{"t":0,"ev":"send","text":"x;y","origin":"t138_separatorchar","user":false}
+{"t":0,"ev":"send","text":"p","origin":"t138_separatorchar","user":false}
+{"t":0,"ev":"send","text":"q","origin":"t138_separatorchar","user":false}
+{"t":0,"ev":"var","name":"$c","value":"n","src":"cmd"}
+{"t":0,"ev":"echo","text":"c=n","script":"t138_separatorchar"}
+{"t":110,"ev":"in","text":"Act now"}
+{"t":110,"ev":"var","name":"$act1","value":"1","src":"cmd"}
+{"t":120,"ev":"echo","text":"act1=1 act2=1ct2","script":"t138_separatorchar"}
+{"t":120,"ev":"print","text":"[Script finished (In 0.12 seconds): t138_separatorchar.cmd]","script":"t138_separatorchar"}
+{"t":120,"ev":"script-finish","script":"t138_separatorchar"}
+{"t":220,"ev":"end","live":0}

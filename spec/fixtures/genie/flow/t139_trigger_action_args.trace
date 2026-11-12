@@ -1,0 +1,6 @@
+WAIT 100
+IN Hit "quoted" word
+WAIT 100
+WAIT 100
+INPUT #echo probe=$probe
+WAIT 100

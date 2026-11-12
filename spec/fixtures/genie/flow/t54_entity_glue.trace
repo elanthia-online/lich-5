@@ -1,0 +1,27 @@
+# Remix ParseGameRow entity handling (Game.cs:756-815 R) vs the Lich glue (XmlEntities), N18:
+# a ';' outside an entity is dropped (Game.cs:763-784 R); an '&' opens an entity buffer that
+# is flushed only past 6 chars (Game.cs:796-815 R) and never after the row, so a short
+# tail ('& Al' + CRLF) is lost; '&amp;gt;' -> '&' then a dropped ';' -> '&gt'; &apos; and
+# numeric refs blank, &nbsp; -> space (Utility.cs:257-289 R). Patterns avoid a literal ';'
+# because typed INPUT is split on it.
+INPUT #trigger {^a\W b$} {#echo trig-semi-kept}
+INPUT #trigger {^a b$} {#echo trig-semi-dropped}
+INPUT #trigger {^Tom & Al$} {#echo trig-amp-kept}
+INPUT #trigger {^Tom $} {#echo trig-amp-lost}
+INPUT #trigger {^it's here$} {#echo trig-apos-decoded}
+INPUT #trigger {^its here$} {#echo trig-apos-blanked}
+INPUT #trigger {^TOK x$} {#echo trig-nbsp-space}
+INPUT #trigger {^TOK&nbsp.x$} {#echo trig-nbsp-literal}
+WAIT 100
+IN You think; therefore you are.
+WAIT 100
+IN Tom & Al
+WAIT 100
+IN X &amp;gt; Y
+WAIT 100
+IN a; b
+WAIT 100
+IN it&apos;s here
+WAIT 100
+IN TOK&nbsp;x
+WAIT 300

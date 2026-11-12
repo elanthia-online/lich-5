@@ -1,0 +1,19 @@
+EXPECT look
+IN An arisen big zombie lurches.
+IN A big zombie lurches.
+IN An arisen zombie lurches.
+IN A spirit floats.
+IN You attack the big orc hard.
+IN You attack the orc hard.
+IN The TROLL waits.
+IN Watch the big troll sleep.
+IN You see a big wolf
+IN You see a grey wolf
+IN You see wolf
+IN a blue gem
+IN a red shiny gem here
+PROMPT
+WAIT 200
+IN no way going
+IN now go there
+PROMPT

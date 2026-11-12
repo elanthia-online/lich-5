@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t194_wp9_dup_label_load"}
+{"t":0,"ev":"script-start","script":"t194_wp9_dup_label_load","args":""}
+{"t":0,"ev":"error","text":"[Script error(6): Replacing duplicate label: x]","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"print","text":"[Script loaded: t194_wp9_dup_label_load.cmd]","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"echo","text":"a","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"echo","text":"b","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"echo","text":"Replacing duplicate label: x","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t194_wp9_dup_label_load.cmd]","script":"t194_wp9_dup_label_load"}
+{"t":0,"ev":"script-finish","script":"t194_wp9_dup_label_load"}
+{"t":10,"ev":"end","live":0}

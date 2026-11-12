@@ -1,0 +1,50 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t93_action_sort_order"}
+{"t":0,"ev":"script-start","script":"t93_action_sort_order","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t93_action_sort_order.cmd]","script":"t93_action_sort_order"}
+{"t":0,"ev":"send","text":"look","origin":"t93_action_sort_order","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"x"}
+{"t":10,"ev":"echo","text":"k13","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k18","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k29","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k31","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k30","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k28","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k04","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k32","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k33","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k42","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k10","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k05","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k06","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k11","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k22","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k08","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k20","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k23","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k19","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k03","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k27","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k26","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k25","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k37","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k12","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k38","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k14","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k39","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k43","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k40","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k15","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k34","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k21","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k17","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k07","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k09","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k35","script":"t93_action_sort_order"}
+{"t":10,"ev":"echo","text":"k16","script":"t93_action_sort_order"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t93_action_sort_order.cmd]","script":"t93_action_sort_order"}
+{"t":1000,"ev":"script-finish","script":"t93_action_sort_order"}
+{"t":1000,"ev":"end","live":0}

@@ -1,0 +1,12 @@
+WAIT 100
+IN You do something.
+PROMPT 3
+WAIT 100
+IN GOTEXT
+PROMPT
+WAIT 3500
+IN You do something.
+PROMPT 3
+WAIT 100
+INPUT #var g 1
+WAIT 3500

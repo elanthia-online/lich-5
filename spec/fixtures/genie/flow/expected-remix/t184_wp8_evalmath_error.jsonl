@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t184_wp8_evalmath_error"}
+{"t":0,"ev":"script-start","script":"t184_wp8_evalmath_error","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t184_wp8_evalmath_error.cmd]","script":"t184_wp8_evalmath_error"}
+{"t":0,"ev":"error","text":"[Script error in t184_wp8_evalmath_error.cmd: Invalid expression: (1 +. Local Variable em has been set to 0.]","script":"t184_wp8_evalmath_error"}
+{"t":0,"ev":"echo","text":"em=0","script":"t184_wp8_evalmath_error"}
+{"t":0,"ev":"echo","text":"en=1","script":"t184_wp8_evalmath_error"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t184_wp8_evalmath_error.cmd]","script":"t184_wp8_evalmath_error"}
+{"t":0,"ev":"script-finish","script":"t184_wp8_evalmath_error"}
+{"t":10,"ev":"end","live":0}

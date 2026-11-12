@@ -1,0 +1,15 @@
+WAIT 50
+IN PRE <preset id='roomDesc'>open
+WAIT 50
+IN </preset> POST
+WAIT 50
+IN A <pushStream id='thoughts'/>B<popStream/>C
+WAIT 50
+IN <pushStream id='familiar'/>fam row
+WAIT 50
+IN next row still familiar target?
+WAIT 50
+IN <popStream/>after pop
+WAIT 50
+IN bad &#233; entity and caf&eacute;s
+WAIT 200

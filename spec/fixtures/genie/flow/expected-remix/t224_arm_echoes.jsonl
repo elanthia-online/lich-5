@@ -1,0 +1,38 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t224_arm_echoes"}
+{"t":0,"ev":"script-start","script":"t224_arm_echoes","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t224_arm_echoes.cmd]","script":"t224_arm_echoes"}
+{"t":0,"ev":"cmdecho","text":"Profile \"BellulaDR\" not found. Lich was not started.","window":"","color":"OrangeRed"}
+{"t":0,"ev":"cmdecho","text":"Profile \"Two Words\" not found. Lich was not started.","window":"","color":"OrangeRed"}
+{"t":0,"ev":"cmdecho","text":"Invalid number of arguments in #connect command. Syntax: #connect account password character game","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid number of arguments in #connect command. Syntax: #connect account password character game","window":""}
+{"t":0,"ev":"cmdecho","text":"No File Name was specified for the Image Command.","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid Width Specified: w:x","window":""}
+{"t":0,"ev":"cmdecho","text":"No File Name was specified for the Image Command.","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid Height Specified: height:zz","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid #preset keyword.","window":""}
+{"t":0,"ev":"cmdecho","text":"Syntax Error: Window Name, and one of (Width, Height, Top, or Left) are required.","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Syntax Error: Window Name, and one of (Width, Height, Top, or Left) are required.","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Syntax Error: Width (x) and/or Height (5) are not formatted correctly.","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Error in command: #window position main 10 20 30 40 50: 1 too many Args in Position command.","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Error in command: #window position {a b} 10 20 30 40 50: 1 too many Args in Position command.","window":"","color":"Cyan"}
+{"t":0,"ev":"cmdecho","text":"Invalid RegExp in highlight: (bad","window":""}
+{"t":0,"ev":"cmdecho","text":"Invalid RegExp in highlight: (also more words","window":""}
+{"t":0,"ev":"cmdecho","text":"Macros Cleared","window":""}
+{"t":0,"ev":"cmdecho","text":"Macros Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Names Loaded","window":""}
+{"t":0,"ev":"cmdecho","text":"Names Cleared","window":""}
+{"t":0,"ev":"cmdecho","text":"Highlights Loaded","window":""}
+{"t":0,"ev":"cmdecho","text":"Highlights Cleared","window":""}
+{"t":0,"ev":"cmdecho","text":"Gags Loaded","window":""}
+{"t":0,"ev":"cmdecho","text":"Gags Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Substitutes Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Substitutes Loaded","window":""}
+{"t":0,"ev":"cmdecho","text":"Classes Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Aliases Saved","window":""}
+{"t":0,"ev":"cmdecho","text":"Aliases Loaded","window":""}
+{"t":0,"ev":"echo","text":"done","script":"t224_arm_echoes"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t224_arm_echoes.cmd]","script":"t224_arm_echoes"}
+{"t":0,"ev":"script-finish","script":"t224_arm_echoes"}
+{"t":10,"ev":"end","live":0}

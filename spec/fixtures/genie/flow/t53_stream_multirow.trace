@@ -1,0 +1,18 @@
+# A stream that opens on one row and closes on a later row (N19 multi-row). Remix parses
+# every row when it arrives (Game.cs:567ff ParseGameRow per row; Other is parsed,
+# Game.cs:1630-1635, 3063-3069 R). The Lich "main" strip carries the server string while
+# the stream is unbalanced (lib/common/markup.rb strip_multiline) and delivers it only at
+# popStream, so ours sees THOUGHTTOK and the plain main-stream PLAINTOK row late.
+WAIT 100
+IN <pushStream id='thoughts'/>[General] THOUGHTTOK one
+WAIT 400
+IN <popStream/>
+WAIT 100
+IN <pushStream id='percWindow'/>Spell one
+WAIT 300
+IN PLAINTOK arrives
+WAIT 300
+IN <popStream/>
+WAIT 200
+IN DONETOK
+WAIT 300

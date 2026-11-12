@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t193_wp9_label_in_block_scripterror"}
+{"t":0,"ev":"script-start","script":"t193_wp9_label_in_block_scripterror","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t193_wp9_label_in_block_scripterror.cmd]","script":"t193_wp9_label_in_block_scripterror"}
+{"t":0,"ev":"error","text":"[Script error in t193_wp9_label_in_block_scripterror.cmd(4): Passing a LABEL from within a script block is not allowed: inside]","script":"t193_wp9_label_in_block_scripterror"}
+{"t":0,"ev":"print","text":"[Script moving to scripterror label (t193_wp9_label_in_block_scripterror.cmd)]","script":"t193_wp9_label_in_block_scripterror"}
+{"t":20,"ev":"echo","text":"se Passing a LABEL from within a script block is not allowed: inside","script":"t193_wp9_label_in_block_scripterror"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t193_wp9_label_in_block_scripterror.cmd(10)]","script":"t193_wp9_label_in_block_scripterror"}
+{"t":20,"ev":"script-finish","script":"t193_wp9_label_in_block_scripterror"}
+{"t":20,"ev":"end","live":0}
