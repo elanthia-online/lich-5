@@ -8,9 +8,13 @@ require 'stringio'
 require 'tmpdir'
 
 require_relative '../../lib/dependency_recovery'
+require_relative '../../lib/zip_archive'
+require_relative '../support/no_process_expectations'
 require_relative '../support/zip_builder'
 
 RSpec.describe Lich::DependencyRecovery do
+  include NoProcessExpectations
+
   let(:gem_home) { Dir.mktmpdir('lich-recovery-gems') }
   let(:manifest_url) { 'https://example.test/R4L5-gem-manifest.json' }
   let(:artifact_url) { 'https://example.test/sqlite3.gem' }
@@ -1091,9 +1095,7 @@ RSpec.describe Lich::DependencyRecovery do
     it 'extracts in-process on Windows, without PowerShell, WScript, or any other program' do
       allow(Gem).to receive(:win_platform?).and_return(true)
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk', descriptor: true }]))
-      expect(Open3).not_to receive(:capture3)
-      expect(Process).not_to receive(:spawn)
-      expect(IO).not_to receive(:popen)
+      expect_no_process(subject, Lich::ZipArchive)
 
       subject.send(:extract_zip_file, zip_path, destination)
 

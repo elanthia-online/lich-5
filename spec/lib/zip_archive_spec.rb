@@ -3,12 +3,17 @@ require 'fileutils'
 require 'tmpdir'
 
 require_relative '../../lib/zip_archive'
+require_relative '../support/no_process_expectations'
 require_relative '../support/zip_builder'
 
 RSpec.describe Lich::ZipArchive do
+  include NoProcessExpectations
+
   let(:work_dir) { Dir.mktmpdir('lich-zip-archive') }
   let(:zip_path) { File.join(work_dir, 'bundle.zip') }
   let(:destination) { File.join(work_dir, 'packages') }
+  # "cafe.gem" with an e-acute, built from its code point to keep the source ASCII.
+  let(:accented_name) { "caf#{[0xE9].pack('U')}.gem" }
 
   after { FileUtils.remove_entry(work_dir) if Dir.exist?(work_dir) }
 
@@ -206,7 +211,63 @@ RSpec.describe Lich::ZipArchive do
     it 'rejects an entry whose data offset lies outside the archive' do
       write_zip([{ name: 'a.gem', data: 'x', offset: 50_000 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /outside the archive/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /entry data lies outside the archive: a\.gem/)
+    end
+
+    # Each archive below is otherwise valid, so removing the check it targets
+    # lets the extraction succeed and the example fail.
+    it 'rejects an archive that spans disks' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'x' }], disk_count: 0))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /multi-disk/)
+    end
+
+    it 'rejects an archive whose end record names another disk' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'x' }], disk: 1, directory_disk: 1))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /multi-disk/)
+    end
+
+    it 'rejects a central directory that runs into the end record' do
+      entries = [{ name: 'a.gem', data: 'x' }]
+      directory_size = ZipBuilder.build(entries).byteslice(-22, 22).unpack('VvvvvVVv')[5]
+      File.binwrite(zip_path, ZipBuilder.build(entries, directory_size: directory_size + 4))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /central directory lies outside the archive/)
+    end
+
+    it 'rejects an entry whose local header has the wrong signature' do
+      write_zip([{ name: 'a.gem', data: 'x', local_signature: 0x04034b51 }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /local header has a bad signature: a\.gem/)
+    end
+
+    it 'rejects a non-ASCII name that is not flagged as UTF-8' do
+      write_zip([{ name: accented_name, data: 'x' }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /must be ASCII unless flagged UTF-8/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+
+    it 'extracts a non-ASCII name flagged as UTF-8' do
+      write_zip([{ name: accented_name, data: 'x', flags: 0x0800 }])
+
+      expect(described_class.extract(zip_path, destination)).to eq([accented_name])
+      expect(File.read(File.join(destination, accented_name))).to eq('x')
+    end
+
+    it 'rejects a name that is not valid UTF-8' do
+      write_zip([{ name: "caf#{0xE9.chr}.gem".b, data: 'x', flags: 0x0800 }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /not valid UTF-8/)
+    end
+
+    ['./', '.'].each do |name|
+      it "refuses #{name.inspect}, which names the destination itself" do
+        write_zip([{ name: name, data: '', method: :store }])
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /unsafe archive entry: #{Regexp.escape(name)}\z/)
+      end
     end
 
     it 'rejects a file that is not a ZIP archive' do
@@ -223,10 +284,8 @@ RSpec.describe Lich::ZipArchive do
     end
 
     it 'starts no external process' do
-      write_zip([{ name: 'a.gem', data: 'payload' }])
-      expect(Process).not_to receive(:spawn)
-      expect(Kernel).not_to receive(:system)
-      expect(IO).not_to receive(:popen)
+      write_zip([{ name: 'gems/', data: '', method: :store }, { name: 'gems/a.gem', data: 'payload' }, { name: 'b.gem', data: 'b', method: :store }])
+      expect_no_process(described_class)
 
       described_class.extract(zip_path, destination)
     end
