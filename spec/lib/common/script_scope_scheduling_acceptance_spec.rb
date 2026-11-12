@@ -8,10 +8,10 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'scheduled repository, sail2 and gemstonev source acceptance' do
-  # Settled B5: each script-derived example names the script, the tested version
-  # and pinned source revision, and the credited author, as the source header
-  # writes them (spec/fixtures/webui/README.txt, Attribution). Revisions are those
-  # recorded in scheduling.json; sail2's header has no author field and is signed.
+  # Each script-derived example names the script, tested version, pinned source
+  # revision and credited author as written in the pinned source header.
+  # Revisions are recorded in scheduling.json; sail2's header has no author
+  # field and is signed.
   attribution = {
     'gemstonev'  => '[gemstonev version 3, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]',
     'repository' => '[repository version 2.76, revision c4a96840ea2a29a445fd797c7baec0b012b0dd12, author elanthia-online]',

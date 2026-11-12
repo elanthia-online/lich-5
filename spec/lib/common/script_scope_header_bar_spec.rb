@@ -9,9 +9,9 @@ require 'json'
 require 'timeout'
 
 RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
-  # Settled B5: examples that run the retained tpick-titlebar.json methods name
+  # Examples that run the retained tpick-titlebar.json methods name
   # the script, tested version, pinned source revision and credited author as
-  # the source header writes them (spec/fixtures/webui/README.txt).
+  # written in the pinned source header.
   attribution = '[tpick version 48, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]'
 
   include WebUISpecSupport::ShimBindings

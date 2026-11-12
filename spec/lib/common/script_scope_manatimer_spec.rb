@@ -8,9 +8,9 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'manatimer progress and overlay acceptance' do
-  # Settled B5: examples that run the retained manatimer.json blocks name the
+  # Examples that run the retained manatimer.json blocks name the
   # script, tested version, pinned source revision and credited author as the
-  # source header writes them (spec/fixtures/webui/README.txt).
+  # pinned source header writes them.
   attribution = '[manatimer version 0.1, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Drafix]'
 
   let(:scope) { Lich::Common::ScriptScope }

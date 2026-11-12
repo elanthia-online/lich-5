@@ -5,10 +5,9 @@ require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
 RSpec.describe 'progress provider lifecycle' do
-  # Settled B5: every example that loads the staminabar2 stylesheet helper names
-  # the script, its pinned source revision and what its header states, from that
-  # script's css-decoration.json attribution record (spec/fixtures/webui/README.txt);
-  # the header states no version or author.
+  # Each example that loads the staminabar2 stylesheet helper names the script
+  # and pinned source revision from its css-decoration.json attribution record.
+  # The pinned source header states no version or author; neither is inferred.
   attribution = '[staminabar2 version not established, mirror 549e33506e121453e3c01cfe5df46a902f44fc5f, author not established]'
 
   let(:scope) { Lich::Common::ScriptScope }
