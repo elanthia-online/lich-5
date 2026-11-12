@@ -38,10 +38,10 @@ module Lich
             session.refuse(self, :background=) if @projecting_cell
             session.style_operation(self, :background=) do
               valid = value.is_a?(String) && value.valid_encoding? && value.encoding.ascii_compatible? && value.length <= 64
-              # Later-layer constant (Color; first defined at P14) is absent from P13 trees;
+              # Color is defined in another shim file and may be absent;
               # resolve it at call time, so a non-nil value is refused until it exists.
               # Retirement: replace this guard with a plain constant reference once this
-              # file is no longer shipped or tested without the later layers.
+              # file is always shipped and tested with the defining file.
               color = Color.parse(value) if valid && defined?(Color)
               session.refuse(self, :background=) unless value.nil? || color
               @background_color = color
@@ -117,10 +117,10 @@ module Lich
           # @param value [Gdk::RGBA, nil] typed foreground; nil restores theme color
           # @return [void] result is not part of the supported script contract
           def foreground_rgba=(value)
-            # Later-layer constant (Gdk::RGBA; first defined at P14) is absent from P13 trees;
+            # Gdk::RGBA is defined in another shim file and may be absent;
             # resolve it at call time. An absent class has no instances.
             # Retirement: replace this guard with a plain constant reference once this
-            # file is no longer shipped or tested without the later layers.
+            # file is always shipped and tested with the defining file.
             session.refuse(self, :foreground_rgba=) unless value.nil? || (defined?(Gdk::RGBA) && value.is_a?(Gdk::RGBA))
             @cell_foreground = value&.to_h
             @cell_foreground_set = !value.nil?
