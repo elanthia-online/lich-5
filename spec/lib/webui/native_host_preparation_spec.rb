@@ -13,6 +13,9 @@ RSpec.describe Lich::WebUI::NativeHost do
   let(:marker) { File.join(@directory, 'builds') }
   let(:lock_path) { File.join(@directory, 'prepare.lock') }
   let(:build_script) { File.join(@directory, 'build.rb') }
+  let(:notification_script) { File.join(@directory, 'notify.rb') }
+  let(:notification_marker) { File.join(@directory, 'notifications') }
+  let(:notification_command) { [RbConfig.ruby, notification_script, notification_marker] }
   let(:bridge) { File.join(@directory, 'window.js') }
   let(:info) { File.join(@directory, 'Info.plist') }
   let(:build_command) { [RbConfig.ruby, build_script, executable, marker, bridge, info] }
@@ -29,14 +32,22 @@ RSpec.describe Lich::WebUI::NativeHost do
   around do |example|
     Dir.mktmpdir('native helper preparation ') do |directory|
       @directory = directory
-      example.run
+      existing_waiters = Thread.list.grep(Process::Waiter)
+      begin
+        example.run
+      ensure
+        (Thread.list.grep(Process::Waiter) - existing_waiters).each { |waiter| waiter.join(10) }
+      end
     end
   end
 
   before do
+    allow(Lich).to receive(:log)
+    File.write(notification_script, "File.open(ARGV.fetch(0), 'a') { |file| file.puts ARGV.fetch(1) }\n")
     File.write(build_script, build_source)
     stub_const('Lich::WebUI::NativeHost::HELPERS', {
-      macos: { name: 'macOS', executable: executable, resources: [bridge, info], lock: lock_path, build: build_command },
+      macos: { name: 'macOS', executable: executable, resources: [bridge, info], lock: lock_path,
+               notification: notification_command, build: build_command },
     })
   end
 
@@ -45,6 +56,68 @@ RSpec.describe Lich::WebUI::NativeHost do
     expect(File.executable?(executable)).to be(true)
     expect(described_class.prepare!(platform: 'darwin')).to be(true)
     expect(File.readlines(marker)).to eq(["built\n"])
+  end
+
+  it 'logs and detaches the desktop notice before starting the build' do
+    logged = File.join(@directory, 'logged-notice')
+    release = File.join(@directory, 'release-notice')
+    finished = File.join(@directory, 'finished-notice')
+    message = 'Building the macOS WebUI helper for the first start after install or update; this may take a minute or two.'
+    allow(Lich).to receive(:log) { |notice| File.write(logged, notice) }
+    File.write(notification_script, <<~RUBY)
+      require 'timeout'
+      abort 'notification ran before its log' unless File.read(#{logged.dump}) == #{message.dump}
+      File.write(ARGV.fetch(0), ARGV.fetch(1))
+      begin
+        Timeout.timeout(5) { sleep 0.01 until File.exist?(#{release.dump}) }
+      ensure
+        File.write(#{finished.dump}, 'notification finished')
+      end
+    RUBY
+    File.write(build_script, <<~RUBY + build_source)
+      require 'timeout'
+      Timeout.timeout(5) { sleep 0.01 until File.exist?(#{notification_marker.dump}) }
+      abort 'notification blocked the builder' if File.exist?(#{finished.dump})
+    RUBY
+    existing_waiters = Thread.list.grep(Process::Waiter)
+
+    expect(described_class.prepare!(platform: 'darwin')).to be(true)
+    expect(Lich).to have_received(:log).with(message)
+    expect(File.read(notification_marker)).to eq("display notification #{message.dump} with title \"Lich WebUI\"")
+    expect(File.exist?(finished)).to be(false)
+    expect(Thread.list.grep(Process::Waiter) - existing_waiters).to contain_exactly(an_instance_of(Process::Waiter))
+    expect(File.readlines(marker)).to eq(["built\n"])
+  ensure
+    File.write(release, 'release notification') if release
+  end
+
+  it 'still builds when the desktop notification command cannot start' do
+    described_class::HELPERS.fetch(:macos)[:notification] = [File.join(@directory, 'missing notification')]
+
+    expect(described_class.prepare!(platform: 'darwin')).to be(true)
+    expect(File.readlines(marker)).to eq(["built\n"])
+  end
+
+  it 'sends real build stdout and stderr to the debug stream without writing to the client stream' do
+    File.write(build_script, "puts 'build stdout'\nwarn 'build stderr'\n" + build_source)
+    original_stdout = $stdout
+    original_stderr = $stderr
+    File.open(File.join(@directory, 'client-stream'), 'w+') do |client|
+      File.open(File.join(@directory, 'debug-log'), 'w+') do |debug|
+        begin
+          $stdout = client
+          $stderr = debug
+          expect(described_class.prepare!(platform: 'darwin')).to be(true)
+        ensure
+          $stdout = original_stdout
+          $stderr = original_stderr
+        end
+        client.rewind
+        debug.rewind
+        expect(client.read).to eq('')
+        expect(debug.read).to include("build stdout\n", "build stderr\n")
+      end
+    end
   end
 
   it 'retains an already installed executable without running the build' do
@@ -176,19 +249,22 @@ RSpec.describe Lich::WebUI::NativeHost do
 
   it 'serializes repair of an incomplete bundle while resources are being written' do
     release = File.join(@directory, 'release')
+    started = File.join(@directory, 'build-started')
     File.write(executable, 'incomplete installed helper')
     File.chmod(0o755, executable)
     File.write(info, 'existing bundle metadata')
     File.write(build_script, <<~RUBY + build_source)
       require 'timeout'
       File.write(#{bridge.dump}, 'partial bridge')
-      File.write(#{marker.dump}, 'started')
+      File.write(#{started.dump}, 'started')
       Timeout.timeout(5) { sleep 0.01 until File.exist?(#{release.dump}) }
-      File.delete(#{marker.dump})
     RUBY
     child = <<~RUBY
       require #{File.expand_path('../../../lib/webui/native_host', __dir__).dump}
       host = Lich::WebUI::NativeHost
+      def Lich.log(message)
+        File.open(ARGV.fetch(1), 'a') { |file| file.puts message }
+      end
       host.send(:remove_const, :HELPERS)
       host.const_set(:HELPERS, #{described_class::HELPERS.inspect})
       locking = TracePoint.new(:c_call) do |event|
@@ -197,15 +273,16 @@ RSpec.describe Lich::WebUI::NativeHost do
       locking.enable
       host.prepare!(platform: 'darwin')
       locking.disable
+      Thread.list.grep(Process::Waiter).each(&:join)
     RUBY
     children = []
     2.times do |index|
       ready = File.join(@directory, "ready-#{index}")
-      children << Open3.popen3(RbConfig.ruby, '-e', child, ready)
+      children << Open3.popen3(RbConfig.ruby, '-e', child, ready, File.join(@directory, 'child-debug.log'))
       children.last.first.close
       Timeout.timeout(5) { sleep 0.01 until File.exist?(ready) }
       if index.zero?
-        Timeout.timeout(5) { sleep 0.01 until File.exist?(marker) }
+        Timeout.timeout(5) { sleep 0.01 until File.exist?(started) }
         expect(File.exist?(executable)).to be(false)
         expect(File.read(bridge)).to eq('partial bridge')
       end
@@ -217,6 +294,7 @@ RSpec.describe Lich::WebUI::NativeHost do
       expect(output.read).to eq('')
     end
     expect(File.readlines(marker)).to eq(["built\n"])
+    expect(File.readlines(notification_marker).length).to eq(1)
     expect(File.executable?(executable)).to be(true)
     expect(File.read(bridge)).to eq('fixture bridge')
   ensure
@@ -259,7 +337,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     it 'prepares native hosting before either login route can continue' do
       Lich::WebUI.configure_presentation(enabled: true)
 
-      Lich::Main::WebUIStartup.prepare
+      expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
 
       expect(File.executable?(executable)).to be(true)
       expect(File.readlines(marker)).to eq(["built\n"])
@@ -268,7 +346,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     it 'keeps disabled presentation free of native builds' do
       Lich::WebUI.configure_presentation(enabled: false)
 
-      Lich::Main::WebUIStartup.prepare
+      expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
 
       expect(File.exist?(marker)).to be(false)
       expect(File.exist?(executable)).to be(false)
@@ -282,7 +360,7 @@ RSpec.describe Lich::WebUI::NativeHost do
       allow(ENV).to receive(:[]).with('LICH_WEBUI_BROWSER').and_return(" #{browser} ")
       Lich::WebUI.configure_presentation(enabled: true)
 
-      Lich::Main::WebUIStartup.prepare
+      expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
 
       expect(Lich::WebUI::BrowserLauncher.command_for('http://127.0.0.1:1234/').first).to eq(browser)
       expect(File.exist?(marker)).to be(false)

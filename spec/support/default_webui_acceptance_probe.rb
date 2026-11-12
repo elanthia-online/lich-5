@@ -55,7 +55,8 @@ module LichCiDefaultWebUIAcceptance
     @installer.enable
   end
 
-  # Supplies a local fixture builder without replacing native preparation logic.
+  # Supplies local fixture build and notification commands without replacing
+  # native preparation or announcement logic.
   # The fixture executable supplies no native-window behavior.
   # @param host [Module] production native host with its methods already defined
   # @return [void]
@@ -64,6 +65,8 @@ module LichCiDefaultWebUIAcceptance
     FileUtils.mkdir_p(directory)
     executable = File.join(directory, 'helper.exe')
     builder = File.join(directory, 'build.rb')
+    notifier = File.join(directory, 'notify.rb')
+    notification = File.join(directory, 'notifications')
     marker = File.join(directory, 'builds')
     lock = File.join(directory, 'prepare.lock')
     bridge = File.join(directory, 'window.js')
@@ -71,7 +74,10 @@ module LichCiDefaultWebUIAcceptance
       #!/bin/sh
       printf '%s\n' '{"source":"unavailable","screens":[]}'
     SH
+    File.write(notifier, "File.open(ARGV.fetch(0), 'a') { |file| file.puts ARGV.fetch(1) }\n")
     File.write(builder, <<~RUBY)
+      require 'timeout'
+      Timeout.timeout(5) { sleep 0.01 until File.exist?(#{notification.dump}) }
       File.open(ARGV.fetch(1), 'a') { |file| file.puts 'built' }
       File.write(ARGV.fetch(2), 'fixture bridge')
       File.write(ARGV.fetch(0), #{program.dump})
@@ -82,6 +88,7 @@ module LichCiDefaultWebUIAcceptance
     host.send(:remove_const, :HELPERS)
     host.const_set(:HELPERS, {
       macos: { name: 'macOS', executable: executable, resources: [bridge].freeze, lock: lock,
+               notification: [{ 'RUBYOPT' => nil }, RbConfig.ruby, notifier, notification].freeze,
                build: [{ 'RUBYOPT' => nil }, RbConfig.ruby, builder, executable, marker, bridge].freeze }.freeze,
     }.freeze)
     @native_fixture = { executable: executable, lock: lock, marker: marker }
