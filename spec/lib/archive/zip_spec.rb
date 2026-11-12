@@ -1,11 +1,11 @@
-# spec/lib/zip_archive_spec.rb
+# spec/lib/archive/zip_spec.rb
 require 'fileutils'
 require 'tmpdir'
 
-require_relative '../../lib/zip_archive'
-require_relative '../support/zip_builder'
+require_relative '../../../lib/archive'
+require_relative '../../support/zip_builder'
 
-RSpec.describe Lich::ZipArchive do
+RSpec.describe Lich::Archive::Zip do
   let(:work_dir) { Dir.mktmpdir('lich-zip-archive') }
   let(:zip_path) { File.join(work_dir, 'bundle.zip') }
   let(:destination) { File.join(work_dir, 'packages') }
@@ -70,7 +70,7 @@ RSpec.describe Lich::ZipArchive do
       it "refuses #{name.inspect} and writes nothing" do
         write_zip([{ name: 'first.gem', data: 'first' }, { name: name, data: 'evil' }])
 
-        expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /unsafe archive entry/)
+        expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /unsafe archive entry/)
         expect(Dir.exist?(destination) ? extracted : []).to be_empty
         expect(File.exist?(File.join(work_dir, 'escape.gem'))).to be(false)
       end
@@ -79,19 +79,19 @@ RSpec.describe Lich::ZipArchive do
     it 'rejects an entry whose CRC-32 does not match' do
       write_zip([{ name: 'a.gem', data: 'payload', crc32: 1234 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /CRC-32/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /CRC-32/)
     end
 
     it 'rejects an entry that inflates past its declared size' do
       write_zip([{ name: 'a.gem', data: 'x' * 10_000, size: 100 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /larger than declared/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /larger than declared/)
     end
 
     it 'rejects an entry that inflates short of its declared size' do
       write_zip([{ name: 'a.gem', data: 'x' * 100, size: 101 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /smaller than declared/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /smaller than declared/)
     end
 
     it 'rejects corrupt deflate data' do
@@ -102,44 +102,44 @@ RSpec.describe Lich::ZipArchive do
       bytes.setbyte(data_at + 1, 0xFF)
       File.binwrite(zip_path, bytes)
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /corrupt|CRC-32|declared/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /corrupt|CRC-32|declared/)
     end
 
     it 'rejects encrypted entries' do
       write_zip([{ name: 'a.gem', data: 'x', flags: 0x0001 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /encrypted/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /encrypted/)
     end
 
     it 'rejects compression methods other than stored and deflated' do
       write_zip([{ name: 'a.gem', data: 'x', method: :store, method_id: 12 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /compression method 12/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /compression method 12/)
     end
 
     it 'rejects ZIP64 entries' do
       write_zip([{ name: 'a.gem', data: 'x', size: 0xFFFFFFFF }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ZIP64/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /ZIP64/)
     end
 
     it 'rejects an entry whose data offset lies outside the archive' do
       write_zip([{ name: 'a.gem', data: 'x', offset: 50_000 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /outside the archive/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /outside the archive/)
     end
 
     it 'rejects a file that is not a ZIP archive' do
       File.binwrite(zip_path, 'not a zip archive at all, just some bytes')
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /not a ZIP archive/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /not a ZIP archive/)
     end
 
     it 'rejects a truncated archive' do
       write_zip([{ name: 'a.gem', data: 'payload' * 100 }])
       File.binwrite(zip_path, File.binread(zip_path)[0, 40])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error)
     end
 
     it 'starts no external process' do
@@ -171,21 +171,6 @@ RSpec.describe Lich::ZipArchive do
       write_zip([{ name: 'a.gem', data: 'abc' }, { name: 'b.gem', data: 'defg', method: :store }])
 
       expect(described_class.entries(zip_path).map { |entry| [entry.name, entry.uncompressed_size] }).to eq([['a.gem', 3], ['b.gem', 4]])
-    end
-  end
-
-  describe '.unsafe_entry?' do
-    it 'rejects empty, absolute, drive, stream, control-character, and parent-traversal names' do
-      ['', '/absolute.gem', '\\absolute.gem', 'C:\\absolute.gem', 'C:/absolute.gem', 'C:relative.gem',
-       'a.gem:stream', "a\tb.gem", '../escape.gem', 'gems/../escape.gem', 'gems\\..\\escape.gem'].each do |name|
-        expect(described_class.unsafe_entry?(name)).to be(true), name.inspect
-      end
-    end
-
-    it 'accepts safe relative filenames and subpaths' do
-      %w[sqlite3.gem gems/sqlite3.gem gems/native/sqlite3.gem gems/ a..b.gem].each do |name|
-        expect(described_class.unsafe_entry?(name)).to be(false), name.inspect
-      end
     end
   end
 end

@@ -14,7 +14,7 @@ require 'timeout'
 require 'tmpdir'
 require 'uri'
 require_relative 'recovery_unit_policy'
-require_relative 'zip_archive'
+require_relative 'archive'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -1011,7 +1011,7 @@ module Lich
     # must place declared .gem files at its archive root; package filenames are
     # constrained to prevent manifest-controlled path traversal.
     #
-    # Extraction runs in-process (ZipArchive, Zlib) on every platform. It used
+    # Extraction runs in-process (Lich::Archive) on every platform. It used
     # to start PowerShell through a hidden WScript launcher on Windows, which
     # failed with no diagnostics wherever the execution policy blocked scripts
     # (Restricted is the Windows client default), Windows Script Host was
@@ -1020,8 +1020,8 @@ module Lich
     # @param destination [String]
     # @return [void]
     def extract_zip_file(zip_path, destination)
-      ZipArchive.extract(zip_path, destination)
-    rescue ZipArchive::Error => e
+      Archive.extract_zip(zip_path, destination)
+    rescue Archive::Error => e
       raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
