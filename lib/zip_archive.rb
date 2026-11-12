@@ -266,8 +266,14 @@ module Lich
         write.call(inflater ? inflater.inflate(chunk) : chunk)
       end
       if inflater
-        write.call(inflater.finish)
+        tail = inflater.finish
         raise Error, "archive entry data is truncated: #{entry.name}" unless inflater.finished?
+        # Zlib hands back any input left after the end of the deflate stream
+        # as if it were output, so bytes past the stream's end must be
+        # refused rather than written.
+        raise Error, "archive entry has data after its compressed stream: #{entry.name}" unless inflater.total_in == entry.compressed_size
+
+        write.call(tail)
       end
       raise Error, "archive entry is smaller than declared: #{entry.name}" unless written == entry.uncompressed_size
       raise Error, "archive entry failed its CRC-32 check: #{entry.name}" unless crc == entry.crc32
