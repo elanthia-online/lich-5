@@ -27,8 +27,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     env:
-      # Retire gtk exclusion at P22 when Gemfile removes the native GTK group.
-      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
       LICH_CI_DEFAULT_WEBUI_ARTIFACT: tmp/windows-webui/default-entrypoint.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,7 +34,10 @@ jobs:
           persist-credentials: false
       - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
         with:
-          bundler-cache: true
+          ruby-version: '4.0.9'
+          windows-toolchain: none
+          bundler: none
+          bundler-cache: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '26.5.0'
@@ -66,7 +67,28 @@ jobs:
             image = $env:ImageVersion
             ruby = (& ruby --version)
             node = (& node --version)
+            devkit = $env:RI_DEVKIT
+            gem_home = (& ruby -e 'puts Gem.dir')
           } | ConvertTo-Json | Set-Content tmp/windows-webui/runner.json
+      - name: Prepare the production Windows runtime
+        shell: pwsh
+        run: ./.github/scripts/windows_runtime_prepare.ps1
+      - name: Install RSpec separately from the runtime
+        shell: pwsh
+        run: |
+          # Test tooling must not select or replace production runtime gems.
+          $toolHome = Join-Path $env:RUNNER_TEMP 'lich-test-gems'
+          & gem install rspec --version 3.13.2 --no-document --install-dir $toolHome
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $runtimePaths = & ruby -e 'puts Gem.path.join(File::PATH_SEPARATOR)'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "GEM_PATH=$toolHome$([IO.Path]::PathSeparator)$runtimePaths" | Out-File $env:GITHUB_ENV -Append
+          (Join-Path $toolHome 'bin') | Out-File $env:GITHUB_PATH -Append
+      - name: Verify nested RSpec executable discovery
+        shell: pwsh
+        run: |
+          & ruby -S rspec --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run native Windows Ruby coverage
         shell: pwsh
         run: |
@@ -85,7 +107,7 @@ jobs:
             $name = $group.Key
             $specFiles = $group.Value
             $clock = [Diagnostics.Stopwatch]::StartNew()
-            & bundle exec rspec @specFiles --format progress --format json --out "tmp/windows-webui/$name.json" 2>&1 | Tee-Object "tmp/windows-webui/$name.log"
+            & ruby -S rspec @specFiles --format progress --format json --out "tmp/windows-webui/$name.json" 2>&1 | Tee-Object "tmp/windows-webui/$name.log"
             $code = $LASTEXITCODE
             $clock.Stop()
             if ($code -ne 0) { $failed = $true }
