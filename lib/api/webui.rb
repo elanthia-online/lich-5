@@ -79,6 +79,8 @@ module Lich
     # @return [Boolean] whether opening succeeded or the page was already open;
     #   false without spawning when policy is not enabled, including before
     #   startup resolves it or when --no-gui disables it
+    # @raise [Lich::WebUI::Error] when presentation is enabled and the host is not
+    #   running, the page is unregistered, or its owner has terminated
     def self.webui_open(page: nil)
       Lich::WebUI.open(page: page)
     end
@@ -87,6 +89,8 @@ module Lich
     # This explicit refresh evaluates the render block on the calling thread.
     # @param page [Lich::WebUI::Page] page whose render block should run
     # @return [Integer] generated revision; concurrent work may deliver a newer one
+    # @raise [Lich::WebUI::Error] if the page is unregistered, its owner has
+    #   terminated, or the host has stopped admitting renders
     def self.webui_refresh(page)
       Lich::WebUI.refresh(page)
     end
@@ -100,11 +104,6 @@ module Lich
 
     # Requests a modal without blocking a WebUI callback. The caller must choose
     # a no-viewer policy; completion may represent a response or cancellation.
-    # Viewer presence (active or resumable) is checked for the owner at modal open.
-    # Opening a host window alone does not establish attachment; a newly opened
-    # viewer remains absent until it attaches. If neither an active nor a
-    # resumable viewer is present, abort/default complete immediately. The wait
-    # policy opts into waiting for attachment and is forbidden for credential prompts.
     #
     # @param options [Hash] keywords accepted by ModalCoordinator#open
     # @param content [Proc, nil] optional dialog content builder
