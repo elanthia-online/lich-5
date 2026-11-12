@@ -281,7 +281,7 @@ module CssDecorationCorpus
                                   else 'Not determined: CSS excerpts only.'
                                   end }
     end
-    { 'description' => 'Pinned source CSS evidence. Samples are measured acceptance inputs and size evidence from the pinned sources, credited per record under settled direction B5, not redistributed works; calls carry only line, method and priority constants; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.',
+    { 'description' => 'Pinned source CSS evidence. Samples are measured acceptance inputs and size evidence from the pinned sources, credited per record, not redistributed works; calls carry only line, method and priority constants; excerpts are synthetic, hand-written slices that carry no verbatim script text. No original script executed. Dynamic samples are not runtime maxima.',
       'audit_sha256' => Digest::SHA256.file(audit_path).hexdigest, 'bound' => 8192, 'fields' => FIELDS, 'scripts' => records }
   end
 end

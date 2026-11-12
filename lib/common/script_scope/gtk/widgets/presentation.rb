@@ -58,10 +58,10 @@ module Lich
           # @return [Widget] self
           # @raise [UnsupportedOperation] for other state/color objects
           def override_background_color(state, colour)
-            # Later-layer constants (Gdk::RGBA and StateFlags; defined at P13 or P14) are absent from
-            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-            # Retirement: replace these guards with plain constant references once this
-            # file is no longer shipped or tested without the later layers.
+            # Gdk::RGBA is defined in another shim file and may be absent.
+            # Resolve it at call time; an absent class has no instances.
+            # Retirement: replace this guard with a plain constant reference once this
+            # file is always shipped and tested with the defining file.
             session.refuse(self, :override_background_color) unless state == :normal && defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA)
             session.degrade(:background_colour, 'widget background colours follow browser theme; displayed values are retained')
             self

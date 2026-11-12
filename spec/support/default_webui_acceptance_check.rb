@@ -15,11 +15,10 @@ require_relative 'default_webui_acceptance_report'
 # its own process group and cleanup signals the group; on Windows (no `pgroup:`,
 # no TERM) the child PID alone is killed.
 # It does not verify a browser cookie jar or native window geometry.
-# Native Windows entrypoint acceptance still requires the P22 example and a CI receipt.
 root = File.expand_path('../..', __dir__)
 probe = File.join(root, 'spec/support/default_webui_acceptance_probe.rb')
 # Windows Ruby rejects `pgroup:` and has no TERM; there the child is spawned
-# plainly and stopped by its own PID with KILL. Same choice as the P19
+# plainly and stopped by its own PID with KILL. Same choice as the
 # bounded_child helper (script_scope_builder_spec.rb).
 own_process_group = !RbConfig::CONFIG['host_os'].match?(/mswin|mingw|cygwin/)
 acceptance_root = Dir.mktmpdir('lich-default-webui-acceptance')

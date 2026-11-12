@@ -91,10 +91,10 @@ module Lich
           #   :button_press_mask or :button_release_mask
           # @return [Widget] self
           def add_events(mask)
-            # Later-layer constants (Gdk::EventMask; defined at P13 or P14) are absent from
-            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-            # Retirement: replace these guards with plain constant references once this
-            # file is no longer shipped or tested without the later layers.
+            # Gdk::EventMask is defined in another shim file and may be absent.
+            # Resolve it at call time; event masks are refused until it exists.
+            # Retirement: replace this guard with a plain constant reference once this
+            # file is always shipped and tested with the defining file.
             session.refuse(self, :add_events) unless defined?(Gdk::EventMask)
             masks = { Gdk::EventMask::BUTTON_PRESS_MASK => :pointer_press, Gdk::EventMask::BUTTON_RELEASE_MASK => :pointer_release, Gdk::EventMask::SCROLL_MASK => :scroll,
                       Gdk::EventMask::ENTER_NOTIFY_MASK => :pointer_enter, Gdk::EventMask::LEAVE_NOTIFY_MASK => :pointer_leave }

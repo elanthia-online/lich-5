@@ -307,15 +307,15 @@ RSpec.describe 'script compatibility widget boundaries' do
     expect(notebook.n_pages).to eq(1)
   end
 
-  # Classes that a later layer defines (layout, style, header bar, image). hide_const
-  # makes any layer behave as P12 and P13 do, where none of them exist.
+  # Classes defined in other shim files (layout, style, header bar, image).
+  # hide_const exercises calls made without those class definitions loaded.
   later_layer = %w[
     Table EventBox Overlay ScrolledWindow StateFlags CssProvider Color Image HeaderBar StyleContext
   ].map { |name| "Lich::Common::ScriptScope::Gtk::#{name}" } +
                 %w[Screen Color RGBA EventMask WindowTypeHint].map { |name| "Lich::Common::ScriptScope::Gdk::#{name}" } +
                 ['Lich::Common::ScriptScope::Pango::FontDescription']
 
-  context 'without the classes a later layer defines' do
+  context 'without classes defined in other shim files' do
     before { later_layer.each { |name| hide_const(name) } }
 
     it 'valigns a widget inside a parent without raising NameError' do
@@ -363,7 +363,7 @@ RSpec.describe 'script compatibility widget boundaries' do
       end
     end
 
-    it 'checks each later-layer class on its own when only some are loaded' do
+    it 'checks each optional shim class on its own when only some are loaded' do
       session_ref = session
       screen_class = Class.new { define_method(:session) { session_ref } }
       stub_const('Lich::Common::ScriptScope::Gdk::Screen', screen_class)

@@ -4,7 +4,7 @@ require_relative '../../spec_helper'
 require 'webui'
 
 # Pre-terminate hooks on script death. ScriptDeath
-# has no handler order, so a later layer registers here to close its own
+# has no handler order, so a compatibility shim registers here to close its own
 # resources before the core handler retires the dying owner's pages.
 RSpec.describe 'WebUI pre-terminate hooks on script death' do
   let(:owner) { Object.new }

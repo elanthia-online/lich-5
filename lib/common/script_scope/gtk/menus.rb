@@ -72,10 +72,10 @@ module Lich
           # @raise [UnsupportedOperation] for replacement, late attachment or foreign ownership
           def set_image(image)
             session.style_operation(self, :set_image) do
-              # Later-layer constant (Image; first defined at P14) is absent from P13 trees;
+              # Image is defined in another shim file and may be absent;
               # resolve it at call time. An absent class has no instances.
               # Retirement: replace this guard with a plain constant reference once this
-              # file is no longer shipped or tested without the later layers.
+              # file is always shipped and tested with the defining file.
               session.refuse(self, :set_image) if destroyed? || @handle || !(defined?(Image) && image.is_a?(Image)) ||
                                                   !image.session.equal?(session) || image.destroyed? || image.parent || @image
               insert_child(image, 0)

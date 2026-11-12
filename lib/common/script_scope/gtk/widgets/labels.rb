@@ -139,10 +139,10 @@ module Lich
             # Merchantical's located-item cue colors one entire literal label.
             # Reuse the shared background property, not raw HTML or fragment CSS.
             if (background = value.match(/\A<span background=(['"])([^'"<>]*)\1>([^<>]*)<\/span>\z/m))
-              # Later-layer constants (Color; defined at P13 or P14) are absent from
-              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-              # Retirement: replace these guards with plain constant references once this
-              # file is no longer shipped or tested without the later layers.
+              # Color is defined in another shim file and may be absent.
+              # Resolve it at call time; a non-nil color is refused until it exists.
+              # Retirement: replace this guard with a plain constant reference once this
+              # file is always shipped and tested with the defining file.
               color = Color.parse_markup(background[2]) if defined?(Color)
               session.refuse(self, :set_markup) unless color
               replace_markup_font(background: color)
