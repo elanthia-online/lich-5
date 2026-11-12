@@ -16,6 +16,7 @@ module Lich
                  resources: [File.expand_path('native/macos/build/LichWebUI.app/Contents/Info.plist', __dir__),
                              File.expand_path('native/macos/build/LichWebUI.app/Contents/Resources/window.js', __dir__)].freeze,
                  lock: File.expand_path('native/macos/build/prepare.lock', __dir__),
+                 notification: ['osascript', '-e'].freeze,
                  build: ['zsh', File.expand_path('native/macos/build.sh', __dir__)].freeze }.freeze,
       }.freeze
 
@@ -40,7 +41,8 @@ module Lich
       # Incomplete installed executables are removed before rebuilding resources.
       # Complete installed helpers need no writable lock. Builders publish their
       # executable last, after supplying all resources. Browser-only platforms
-      # do no build work.
+      # do no build work. Announces builds before they run and sends both build
+      # output streams to the startup debug log through redirected stderr.
       # @param platform [String, nil] explicit test/discovery override
       # @return [Boolean] whether a native helper is available for this platform
       # @raise [Error] if preparation fails or leaves no executable helper
@@ -51,16 +53,14 @@ module Lich
 
         FileUtils.mkdir_p(File.dirname(helper.fetch(:lock)))
         File.open(helper.fetch(:lock), File::RDWR | File::CREAT, 0o600) do |lock|
-          unless lock.flock(File::LOCK_EX)
-            raise Error, "#{helper.fetch(:name)} WebUI helper preparation could not acquire its lock"
-          end
-
+          lock.flock(File::LOCK_EX)
           return true if complete?(helper)
 
           ready = false
           begin
             File.delete(helper.fetch(:executable)) if File.exist?(helper.fetch(:executable))
-            built = system(*helper.fetch(:build), out: $stdout, err: $stderr)
+            announce_build(helper)
+            built = system(*helper.fetch(:build), out: $stderr, err: $stderr)
             ready = built && complete?(helper)
             unless ready
               raise Error, "#{helper.fetch(:name)} WebUI helper build failed; check the debug log and retry"
@@ -73,6 +73,24 @@ module Lich
         true
       rescue SystemCallError => error
         raise Error, "#{helper.fetch(:name)} WebUI helper preparation failed: #{error.class}"
+      end
+
+      # Logs build progress and posts a detached macOS desktop notification.
+      # Notification availability does not determine whether the helper builds.
+      # @param helper [Hash] OS-specific helper metadata
+      # @return [Process::Waiter, nil] detached notification waiter, if started
+      # @api private
+      def announce_build(helper)
+        message = "Building the #{helper.fetch(:name)} WebUI helper for the first start after install or update; this may take a minute or two."
+        Lich.log message
+        begin
+          pid = Process.spawn(*helper.fetch(:notification), "display notification #{message.dump} with title \"Lich WebUI\"",
+                              out: $stderr, err: $stderr)
+          Process.detach(pid)
+        rescue SystemCallError
+          # A desktop notification is optional; startup still needs the build.
+          nil
+        end
       end
 
       # Checks the executable and required resources without modifying the install.
@@ -92,7 +110,7 @@ module Lich
       # @raise [Error] if the helper has not been built or supplied
       def command_for(launch_file, geometry: nil)
         unless File.executable?(EXECUTABLE)
-          raise Error, 'macOS WebUI helper is missing; run lib/webui/native/macos/build.sh or supply the prebuilt helper'
+          raise Error, 'macOS WebUI helper is missing; run lib/webui/native/macos/build.sh, supply the prebuilt helper, or restart Lich to rebuild it'
         end
 
         [EXECUTABLE, launch_file, JSON.generate(geometry || {})]

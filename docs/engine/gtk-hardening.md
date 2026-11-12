@@ -6,7 +6,7 @@ loop, GLib callback-retention wrappers, and `shutdown_gtk!` are not current APIs
 Their historical implementation remains in Git history; do not use those
 instructions to configure or extend WebUI.
 
-The current [script-local shim](../../lib/common/script_scope/gtk/boot.rb) is a
+The current script-local shim is a
 bounded migration bridge into WebUI. Core and native WebUI consumers do not load
 GTK. The [author guide](../webui-integration.md) describes supported methods,
 refusals, declared presentation omissions, and the shared owner lifecycle.
