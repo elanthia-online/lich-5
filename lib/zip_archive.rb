@@ -62,14 +62,64 @@ module Lich
       root = File.expand_path(destination)
       File.open(path, 'rb') do |file|
         list = read_central_directory(file)
-        list.each do |entry|
-          raise Error, "unsafe archive entry: #{entry.name}" if unsafe_entry?(entry.name)
-          raise Error, "unsafe archive entry: #{entry.name}" unless within?(File.expand_path(entry.name, root), root)
-        end
+        targets = plan(list, root)
         FileUtils.mkdir_p(root)
-        list.each { |entry| extract_entry(file, entry, File.expand_path(entry.name, root)) }
+        list.zip(targets) { |entry, target| extract_entry(file, entry, target) }
         list.map(&:name)
       end
+    end
+
+    # Resolves every entry's output path, refusing the whole archive if any
+    # name is unsafe or two entries would collide on disk.
+    # @param list [Array<Entry>]
+    # @param root [String] expanded destination
+    # @return [Array<String>] absolute output paths, in entry order
+    # @raise [Error]
+    def plan(list, root)
+      targets = list.map do |entry|
+        raise Error, "unsafe archive entry: #{entry.name}" if unsafe_entry?(entry.name)
+
+        # Joined before expanding: File.expand_path(name, root) would read a
+        # leading "~" as a home directory. unsafe_entry? has already refused
+        # absolute and drive-qualified names, so the join cannot escape root.
+        target = File.expand_path(File.join(root, entry.name))
+        raise Error, "unsafe archive entry: #{entry.name}" unless within?(target, root)
+
+        target
+      end
+      check_layout!(list.map(&:name).zip(targets, list.map(&:directory?)), root)
+      targets
+    end
+
+    # Refuses entries that would overwrite each other or need one path to be
+    # both a file and a directory (+a+ and +a/+, or +a+ and +a/b+), which
+    # would otherwise fail midway with an OS error. Paths are compared
+    # case-insensitively because Windows, where this mostly runs, treats
+    # +A.gem+ and +a.gem+ as one file. Repeated directory entries are allowed.
+    # @param entries [Array<Array(String, String, Boolean)>] name, target, directory?
+    # @param root [String] expanded destination
+    # @return [void]
+    # @raise [Error]
+    def check_layout!(entries, root)
+      files = {}
+      directories = {}
+      entries.each do |name, target, directory|
+        key = target.downcase
+        if directory
+          directories[key] ||= name
+        else
+          raise Error, "duplicate archive entry: #{name}" if files.key?(key)
+
+          files[key] = name
+        end
+        parent = File.dirname(target)
+        while parent.length > root.length
+          directories[parent.downcase] ||= name
+          parent = File.dirname(parent)
+        end
+      end
+      clash = files.keys.find { |key| directories.key?(key) }
+      raise Error, "archive entry is both a file and a directory: #{files[clash]}" if clash
     end
 
     # @param name [String] archive entry name

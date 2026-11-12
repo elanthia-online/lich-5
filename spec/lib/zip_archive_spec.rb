@@ -76,6 +76,60 @@ RSpec.describe Lich::ZipArchive do
       end
     end
 
+    it 'extracts names starting with "~" literally under the destination, not under a home directory' do
+      write_zip([
+                  { name: '~nosuchuser123/x.gem', data: 'unknown user' },
+                  { name: '~/y.gem', data: 'current user' },
+                  { name: '~bare', data: 'bare' }
+                ])
+
+      described_class.extract(zip_path, destination)
+
+      expect(File.read(File.join(destination, '~nosuchuser123', 'x.gem'))).to eq('unknown user')
+      expect(File.read(File.join(destination, '~', 'y.gem'))).to eq('current user')
+      expect(File.read(File.join(destination, '~bare'))).to eq('bare')
+      expect(Dir.children(work_dir).sort).to eq(%w[bundle.zip packages])
+    end
+
+    {
+      'a file and a directory of the same name'              => [['clash', false], ['clash/', true]],
+      'a directory and a file of the same name'              => [['clash/', true], ['clash', false]],
+      'a file that another entry needs as its directory'     => [['a', false], ['a/b.gem', false]],
+      'a nested file whose directory another entry names'    => [['a/b.gem', false], ['a', false]],
+      'a file and a directory differing only in case'        => [['Clash', false], ['clash/', true]],
+      'a file that a later entry uses as a deeper directory' => [['a/b', false], ['a/b/c/d.gem', false]]
+    }.each do |label, layout|
+      it "refuses #{label} and writes nothing" do
+        write_zip(layout.map { |name, directory| { name: name, data: directory ? '' : 'x', method: :store } })
+
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(described_class::Error, /archive entry is both a file and a directory/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    [%w[same.gem same.gem], %w[same.gem Same.gem], %w[same.gem ./same.gem], %w[dir/x.gem dir//x.gem]].each do |first, second|
+      it "refuses #{first.inspect} followed by #{second.inspect} as a duplicate and writes nothing" do
+        write_zip([{ name: first, data: 'first' }, { name: second, data: 'second' }])
+
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(described_class::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    it 'accepts a directory listed more than once and directories implied by their files' do
+      write_zip([
+                  { name: 'gems/', data: '', method: :store },
+                  { name: 'gems/a.gem', data: 'a' },
+                  { name: 'gems/', data: '', method: :store },
+                  { name: 'gems/native/b.gem', data: 'b' }
+                ])
+
+      expect(described_class.extract(zip_path, destination).length).to eq(4)
+      expect(extracted).to eq(%w[gems/a.gem gems/native/b.gem])
+    end
+
     it 'rejects an entry whose CRC-32 does not match' do
       write_zip([{ name: 'a.gem', data: 'payload', crc32: 1234 }])
 
