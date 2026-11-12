@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
-require 'open3'
-require 'rbconfig'
 
 # The shim closes a dying script's windows through the core pre-terminate hook
 # (1836:RC20): destroy handlers run while the owner is still admitted, before
 # the core retires its pages, and keep resolving the dying Script. Fresh
 # process with the production shim entry and a real Script owner.
 RSpec.describe 'script compatibility close on script death' do
+  include WebUIFreshProcess
+
   def run_fresh(body)
     prelude = <<~RUBY_CODE
       require 'webui'
@@ -50,7 +51,9 @@ RSpec.describe 'script compatibility close on script death' do
         abort 'owner did not stop' unless owner.join(6) && !owner.running?
       end
     RUBY_CODE
-    Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', prelude + body + "\nputs 'ready'\n")
+    output, errors, status = run_ruby_with_deadline(prelude + body + "\nputs 'ready'\n")
+    expect_child_within_deadline(status, output, errors, RSpec.current_example.full_description)
+    [output, errors, status]
   end
 
   it 'closes the windows before the core retires the owner, as the dying script' do
