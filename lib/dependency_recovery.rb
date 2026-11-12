@@ -14,7 +14,6 @@ require 'timeout'
 require 'tmpdir'
 require 'uri'
 require_relative 'recovery_unit_policy'
-require_relative 'archive'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -1020,6 +1019,12 @@ module Lich
     # @param destination [String]
     # @return [void]
     def extract_zip_file(zip_path, destination)
+      # Loaded here, not at the top: Ruby4Lich5 runs each supported release's
+      # startup policy from a pinned copy of only its reviewed files
+      # (accepted_gem_policy, dependency_recovery, recovery_unit_policy,
+      # runtime_gem_contract, startup_policy_compatibility), so loading this
+      # file must not need anything outside that set.
+      require_relative 'archive'
       Archive.extract_zip(zip_path, destination)
     rescue Archive::Error => e
       raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
