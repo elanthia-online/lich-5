@@ -50,6 +50,10 @@ group :vscode do
   gem "ruby-lsp"
 end
 
+group :gtk do
+  gem "gtk3"
+end
+
 group :profanity do
   gem "curses"
 end
