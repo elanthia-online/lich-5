@@ -362,8 +362,13 @@ Lich extracts ZIP bundles in-process with Zlib (`Lich::ZipArchive`) and starts
 no external program, so PowerShell's execution policy, Windows Script Host and
 the presence of `unzip` do not matter. The bundle must be a single-disk,
 non-ZIP64, unencrypted archive whose entries are stored or deflated. Data
-descriptors are fine, since sizes are read from the central directory. Any
-other archive fails extraction with a named reason, and nothing is installed.
+descriptors are fine, since sizes are read from the central directory. Each
+deflated entry's compressed size must end exactly where its deflate stream
+ends. Entry names must be relative, without `..` segments, colons or control
+characters, ASCII unless the entry is flagged UTF-8, and unique: no two
+entries may name the same file, compared case-insensitively, and no file may
+share a path with a directory. Any other archive fails extraction with a named
+reason, and nothing is installed.
 
 The generator should derive package names, versions, filenames, and SHA-256
 values from the exact staged `.gem` files used by the clean-runtime smoke test.
