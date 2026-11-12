@@ -127,7 +127,8 @@ RSpec.describe Lich::Archive::TarGz do
     FileUtils.mkdir_p(File.join(source, 'lib'))
     File.write(File.join(source, 'lib', 'version.rb'), "LICH_VERSION = '1'\n")
     File.binwrite(File.join(source, 'blob'), Random.new(2).bytes(100_000))
-    system('tar', '-czf', tarball, '-C', File.join(work_dir, 'src'), 'lich-5-abc', exception: true)
+    # Relative paths: GNU tar (Git for Windows) reads "D:/..." as host:path.
+    system('tar', '-czf', File.basename(tarball), '-C', 'src', 'lich-5-abc', chdir: work_dir, exception: true)
 
     described_class.extract(tarball, destination)
 
