@@ -64,6 +64,32 @@ RSpec.describe Lich::R4L5ContractCheck do
     expect { verify(lich_version: '5.23.0') }.to raise_error(described_class::Error, /version mismatch/)
   end
 
+  context 'with an ARM64 manifest' do
+    let(:arm_inventory) { { 'ruby_version' => '4.0.9', 'ruby_abi' => '4.0', 'platform' => 'aarch64-mingw-ucrt', 'gems' => {} } }
+
+    before do
+      target['platform'] = 'aarch64-mingw-ucrt'
+      contract['ruby_inventory'] = arm_inventory
+      contract['windows_contract_sha256'] = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile, platform: 'aarch64-mingw-ucrt')
+                                                                    .windows_contract_digest(arm_inventory, advertised_members: unit.fetch('members'))
+    end
+
+    it 'verifies the target for the requested platform' do
+      expect(verify(platform: 'aarch64-mingw-ucrt').fetch('packages').keys).to eq(%w[redis redis-client])
+    end
+
+    it 'does not let the default x64 check accept an ARM64-only manifest' do
+      expect { verify }.to raise_error(described_class::Error, /exactly one Windows Ruby 4.0 target/)
+    end
+
+    it 'rejects an x64 contract identity presented as ARM64' do
+      contract['windows_contract_sha256'] = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile).windows_contract_digest(
+        contract['ruby_inventory'].merge('platform' => 'x64-mingw-ucrt'), advertised_members: unit.fetch('members')
+      )
+      expect { verify(platform: 'aarch64-mingw-ucrt') }.to raise_error(described_class::Error, /does not match this Windows projection/)
+    end
+  end
+
   it 'accepts the candidate only after matching recovery and installer are available' do
     expect(verify(candidate_sha: 'c' * 40).fetch('packages').keys).to eq(%w[redis redis-client])
   end
@@ -361,6 +387,52 @@ RSpec.describe Lich::R4L5ContractCheck do
       _stdout, stderr, status = Open3.capture3(RbConfig.ruby, cli, *args)
       expect(status.exitstatus).to eq(1)
       expect(stderr).to include('version mismatch')
+    end
+  end
+
+  context 'with a package minimum' do
+    it 'accepts a minimum at or below the locked version' do
+      packages.first['minimum'] = '0.25.0'
+      packages.last['minimum'] = '6.0.0'
+      expect(verify.fetch('packages').keys).to eq(%w[redis redis-client])
+    end
+
+    it 'rejects a minimum above the version while still comparing the version to the lock' do
+      packages.first['minimum'] = '0.31.0'
+      expect { verify }.to raise_error(described_class::Error, /invalid R4L5 contract: .*minimum is above its version/)
+      packages.first['minimum'] = '0.25.0'
+      packages.first['version'] = '0.30.0'
+      expect { verify }.to raise_error(described_class::Error, /version mismatch for redis-client/)
+    end
+
+    it 'rejects a minimum that is not a version' do
+      ['not a version', '', 25].each do |minimum|
+        packages.first['minimum'] = minimum
+        expect { verify }.to raise_error(described_class::Error, /invalid R4L5 contract: .*minimum is invalid/)
+      end
+    end
+
+    it 'rejects units that disagree on the minimum of a shared package' do
+      legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+      legacy.fetch('packages').first['minimum'] = '0.25.0'
+      target['units'] = [unit, legacy]
+      expect { verify }.to raise_error(described_class::Error, /minimum mismatch for redis-client/)
+    end
+
+    it 'compares minimums of a shared package by version value, an absent one being the version' do
+      legacy = Marshal.load(Marshal.dump(unit)).merge('id' => 'redis-legacy')
+      legacy.fetch('packages').first['minimum'] = '0.30.1.0'
+      target['units'] = [unit, legacy]
+      expect(verify.fetch('packages').keys).to eq(%w[redis redis-client])
+      legacy.fetch('packages').first['minimum'] = '0.30.0'
+      expect { verify }.to raise_error(described_class::Error, /minimum mismatch for redis-client/)
+    end
+
+    it 'rejects a blank, padded or rewritten minimum' do
+      [' ', ' 0.25.0', "0.25.0\n", '0.25.0-1'].each do |minimum|
+        packages.first['minimum'] = minimum
+        expect { verify }.to raise_error(described_class::Error, /invalid R4L5 contract: .*minimum is invalid/)
+      end
     end
   end
 end

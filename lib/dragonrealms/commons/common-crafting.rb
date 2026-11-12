@@ -63,6 +63,13 @@ module Lich
         /^What do you/
       ].freeze
 
+      # A GET by a known id that took the item out of a worn container, read
+      # whole (bput returns only the matched text, so this comes before the
+      # caller's patterns): "You get some wool yarn from inside your
+      # silversteel bucket." {crafting_get_by_known_id} reads the container
+      # off it to refuse an item taken out of the trash.
+      CRAFTING_ID_GET_FROM = /^You get .+ from inside your (?<container>.+?)\.?\s*\z/
+
       # Most crafting item ids DRCC keeps. A crafting script uses a handful
       # of tools and consumables, so this holds every one of several
       # scripts' sets; the oldest goes first.
@@ -225,8 +232,28 @@ module Lich
       # remaining.  Study them again to proceed.") is not taken as the game
       # asking for another study, with its uses count.
       STUDY_INSTRUCTIONS_AGAIN = /^[^"]*?(?:These instructions have only (?<uses>\d+) uses? remaining\.\s+)?Study them again/
-      # Ends a completed study: "Roundtime: 7 sec." (2026-10-25 game log:10825).
-      STUDY_INSTRUCTIONS_SUCCESS = /^Roundtime/
+      # The study's own line, the first line of a completed study's reply:
+      # "You scan the liniment instructions with a glance and confidently
+      # discern most of the design's minutiae." (2026-10-25 game log:10821),
+      # then "You now feel ready to begin the crafting process." and
+      # "Roundtime: 7 sec." (10823, 10825). In the November logs of
+      # 2023-2026 (about 940,000 studies) it always starts "You scan the
+      # <x> instructions with a glance and ", with three endings:
+      # "completely understand all facets of the design." (nearly all),
+      # "comprehend all but several minor details in the text." (23 in
+      # 2023, 54 in 2025, 2 in 2026) and "confidently discern most of the
+      # design's minutiae." (40 in 2025). Only the start is matched, so an
+      # ending not seen yet still counts.
+      #
+      # Not "Roundtime": bput returns on the first line after the command
+      # that matches, and when the game is lagging it can still be
+      # answering commands sent before the study (DragonRealms, 2026-11-12:
+      # the server went quiet for about 3.5 minutes, then ran the queued
+      # commands in order and sent all their replies at once). A late
+      # "Roundtime: N sec." from one of those commands took a study that
+      # hadn't happened yet for a completed one. Anchored, so another
+      # player's speech or ESP that quotes the line doesn't match either.
+      STUDY_INSTRUCTIONS_SUCCESS = /^You scan the .+ instructions with a glance and /
       # Code-derived, not seen after a study in the logs: the reply to a
       # `<verb> my <name>` that names nothing on the character, as a GET of
       # missing instructions gets (2026-10-26 game log:60708).
@@ -708,10 +735,25 @@ module Lich
       #   item isn't in hand.
       # Each one beeps and prints a bold line. The method then returns false
       # when +skip_exit+ is set; otherwise it stops the script. A reply that
-      # matches nothing (a bput timeout) is not final. A timed-out GET, or a
-      # timed-out untie after "You should untie", returns whether the item is
-      # in hand, as a late reply may still deliver it; a timed-out belt untie
-      # falls back to the GET.
+      # matches nothing (a bput timeout) is not final either: it returns
+      # without a beep or a stop. A timed-out belt untie falls back to the
+      # GET. A timed-out GET, or a timed-out untie after "You should untie",
+      # returns true only when a held item the name means ({DRCI.held_id})
+      # is one that was not in hand before the GET: a late reply did deliver
+      # it. A timed-out GET that delivered it remembers its id as a GET that
+      # worked does. An item of that name that was already held before the
+      # GET does not count, because it can't show that this GET did
+      # anything: when the game is lagging, the hands can still show what an
+      # earlier command left there while this GET waits in the game's queue
+      # (DragonRealms, 2026-11-12: a timed-out `get my wool yarn` was taken
+      # for a success because the yarn a previous run had not yet put away
+      # was still in hand). So when the item was already in hand and only
+      # the GET's reply was lost, a timeout now returns false where it used
+      # to return true. That is the safe side: the caller stops or tries
+      # again, instead of going on as if this GET had worked. Two new held
+      # items that both match the name also give false (held_id names
+      # neither), and so does an item the held_id noun rule doesn't match
+      # the name to (e.g. a name that doesn't end in the item's noun).
       #
       # @param name [String, Integer] item to put in hand, or "#<id>"; an
       #   Integer is an id
@@ -722,8 +764,10 @@ module Lich
       # @param skip_exit [Boolean] return false on a final failure instead of
       #   stopping the script
       # @return [Boolean] true when the item is in hand (the untie or get
-      #   succeeded, or it was already held); false after a final failure
-      #   with +skip_exit+, or when a timed-out reply leaves it out of hand
+      #   succeeded, the game said it was already held, or a timed-out GET or
+      #   untie brought a new one into hand); false after a final failure with
+      #   +skip_exit+, or after a timeout that brought no new one into hand
+      #   (also when one was already held before the GET)
       def get_crafting_item(name, bag, bag_items, belt, skip_exit = false)
         name = crafting_name(name)
         waitrt?
@@ -777,10 +821,20 @@ module Lich
 
             crafting_item_failed("DRCC: Told to untie it, but found nothing to untie: #{name}", skip_exit)
           else
-            DRCI.in_hands?(item)
+            # The untie timed out. Same rule as a timed-out GET: an untied
+            # item comes into hand under an id that was not held before the
+            # GET, and one that was held before can't show that the untie
+            # did anything.
+            !DRCI.held_id(item, except: before).nil?
           end
         else
-          DRCI.in_hands?(item)
+          # The GET timed out (no pattern matched). Only a held item the name
+          # means that was not held before the GET shows that the GET worked,
+          # late; one held before may be what an earlier command left in
+          # hand while the game was lagging. See the method doc.
+          arrived = DRCI.held_id(item, except: before)
+          remember_got_crafting_item(name, bag, before) if arrived
+          !arrived.nil?
         end
       end
 
@@ -928,8 +982,9 @@ module Lich
       # moved in or out of +bag+ that +name+ means ({CRAFTING_ITEM_IDS}),
       # else the one item in +bag+ the Inventory feed says +name+ means
       # ({crafting_feed_ids}), unless DRCC found that id dead since
-      # ({ItemIdMemo#dead?}). An id already in a hand is never given (the
-      # caller wants another one, and a GET of a held item stays by name).
+      # ({ItemIdMemo#dead?}) or it was thrown away since ({DRCI.thrown_away?}:
+      # a remembered one is forgotten). An id already in a hand is never given
+      # (the caller wants another one, and a GET of a held item stays by name).
       #
       # When the feed snapshot already held shows the game a choice (two or
       # more items in +bag+ that +name+ means, not counting held or dead
@@ -950,8 +1005,14 @@ module Lich
         return nil unless memo_bag
 
         held = DRCI.held_ids
-        usable = ->(ids) { ids.reject { |id| held.include?(id) || CRAFTING_ITEM_IDS.dead?(id) } }
+        usable = ->(ids) { ids.reject { |id| held.include?(id) || CRAFTING_ITEM_IDS.dead?(id) || DRCI.thrown_away?(id) } }
         id = CRAFTING_ITEM_IDS.fetch(memo_bag, name)
+        if id && DRCI.thrown_away?(id)
+          # Binned since DRCC moved it: a GET by its id would take it back out
+          # of a trash can that didn't flush, or up off the floor.
+          CRAFTING_ITEM_IDS.forget(id)
+          id = nil
+        end
         if id && !held.include?(id)
           # A remembered id sends no refresh: only a snapshot already held.
           return usable.call(crafting_feed_ids(name, memo_bag, refresh: false)).size > 1 ? nil : id
@@ -1010,7 +1071,13 @@ module Lich
       # that.": the id names a worn item, not the one in the bag). A
       # GET that works but puts in hand an item +name+ no longer means (the
       # id now names a different item) forgets the id, puts that item back
-      # in +bag+ (STOW without a bag) and gives nil too.
+      # in +bag+ (STOW without a bag) and gives nil too. So does a GET that
+      # took the item out of a worn trash receptacle ({crafting_trash_ref}):
+      # the item goes back in it. A worn bucket that didn't flush keeps what
+      # was binned for about five minutes, and an id remembered from before
+      # the bin would take that piece back out (Hollow Eve, 2026-11-10).
+      # Other places the item can have gone (another container after a full
+      # bag, the floor) are still gone to by id.
       #
       # @param name [String] item name, already through {crafting_name}
       # @param bag [String, Integer, nil] crafting container
@@ -1026,18 +1093,51 @@ module Lich
 
         ref = "##{id}"
         missed = CRAFTING_ID_GET_MISSING + misses
-        result = DRC.bput("get #{ref}", *successes, *others, *missed)
+        result = DRC.bput("get #{ref}", CRAFTING_ID_GET_FROM, *successes, *others, *missed)
         if missed.any? { |pattern| result.match?(pattern) } || (result.match?(GET_CRAFTING_ALREADY) && !DRCI.in_hand?(ref))
           CRAFTING_ITEM_IDS.forget(id)
           return nil
         end
         return [result, ref] unless successes.any? { |pattern| result.match?(pattern) } && DRCI.in_hand?(ref)
+
+        trash = crafting_trash_ref(result, bag)
+        if trash
+          CRAFTING_ITEM_IDS.forget(id)
+          put_back = DRCI.put_away_item?(ref, trash)
+          Lich::Messaging.msg('bold', "DRCC: #{ref} (#{name}) was in your trash can (#{result[CRAFTING_ID_GET_FROM, :container]}). " \
+                                      "#{put_back ? 'Put it back' : 'Could not put it back'}; getting #{name} by name.")
+          return nil
+        end
         return [result, ref] if DRCI.held_id(name, except: DRCI.held_ids - [id]) == id
 
         CRAFTING_ITEM_IDS.forget(id)
         put_back = bag.nil? ? DRCI.put_away_item?(ref) : DRCI.put_away_item?(ref, crafting_bag_ref(bag))
         Lich::Messaging.msg('bold', "DRCC: #{ref} is no longer #{name}. #{put_back ? 'Put it back' : 'Could not put it back'}; getting #{name} by name.")
         nil
+      end
+
+      # The worn container a GET by a known id took the item out of, as
+      # "#<id>", when it is a trash receptacle: the one worn item the
+      # reply's container words name ({DRCI.worn_ref}) has a noun in
+      # {DRCI.trash_storage}. nil for any other reply, for a container that
+      # isn't one worn item, and for the crafting bag itself (a "basket" can
+      # be a crafting bag). A worn trash can whose noun isn't in that list
+      # isn't recognized; the thrown-away ids ({DRCI.thrown_away?}) still
+      # cover what DRCI threw in it.
+      #
+      # @param line [String] the GET's reply
+      # @param bag [String, Integer, nil] crafting container
+      # @return [String, nil]
+      def crafting_trash_ref(line, bag)
+        container = line[CRAFTING_ID_GET_FROM, :container]
+        return nil unless container
+
+        ref = DRCI.worn_ref(container)
+        id = ref.to_s[DRCI::ITEM_ID_REF_PATTERN, 1]
+        return nil if id.nil? || ref == crafting_bag_ref(bag)
+
+        noun = GameObj.inv.find { |obj| obj.id.to_s == id }&.noun.to_s.downcase
+        DRCI.trash_storage.include?(noun) ? ref : nil
       end
 
       # Remembers the id of the +name+ a GET just put in hand: the one held
@@ -1097,7 +1197,7 @@ module Lich
         CRAFTING_ITEM_IDS.matching(memo_bag, name).each { |id| CRAFTING_ITEM_IDS.forget(id) } if memo_bag
       end
       private_class_method :crafting_memo_bag, :crafting_known_id, :crafting_feed_ids, :crafting_interrupted?, :crafting_get_by_known_id,
-                           :remember_got_crafting_item, :remember_crafting_id, :crafting_hand_obj, :forget_combined_crafting_ids
+                           :crafting_trash_ref, :remember_got_crafting_item, :remember_crafting_id, :crafting_hand_obj, :forget_combined_crafting_ids
 
       # Puts a crafting tool away: ties it to the crafting belt when the belt
       # lists it, otherwise (or when the tie fails) puts it in +bag+. A bag
@@ -1221,8 +1321,9 @@ module Lich
       # What one study_instructions call did.
       #
       # @!attribute [r] studied
-      #   @return [Boolean] true when a study ended in Roundtime, so the
-      #     design is learned and crafting can start
+      #   @return [Boolean] true when the game sent the study's own line
+      #     (STUDY_INSTRUCTIONS_SUCCESS), so the design is learned and
+      #     crafting can start
       # @!attribute [r] uses_left
       #   @return [Integer, nil] uses the instructions have after this call:
       #     0 when they were tossed; the game's count minus one after a
@@ -1262,18 +1363,22 @@ module Lich
       #    another "instructions" item cannot answer it. A "Study them again"
       #    prompt sends it again, up to STUDY_INSTRUCTIONS_MAX_STUDIES studies
       #    in all; the prompt's uses count is kept for +uses_left+.
-      # 3. Waits out the study's roundtime, then checks a Flag for
-      #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the Roundtime line
-      #    bput returned on. A completed study after a "1 uses" prompt counts
-      #    as a toss even if the Flag missed the line.
+      # 3. A study is complete on the study's own line
+      #    (STUDY_INSTRUCTIONS_SUCCESS), not on "Roundtime", which a reply to
+      #    an earlier command can send while the game is lagging. Waits out
+      #    the study's roundtime (the game sets it on the reply's first line,
+      #    so it is already known when bput returns), then checks a Flag for
+      #    STUDY_INSTRUCTIONS_DISCARDED, which arrives after the study's
+      #    Roundtime line, after bput returned. A completed study after a "1
+      #    uses" prompt counts as a toss even if the Flag missed the line.
       # 4. stow_crafting_item(+name+, +bag+, +belt+), unless the instructions
       #    were tossed. A study that says they are not there or not in hand
       #    still comes after a GET that got them, so they are put away too; if
       #    they really are gone, the PUT only gets "What were you referring
       #    to?" (2026-10-25 game log:30361).
       #
-      # A study that does not end in Roundtime (not found, not holding, a
-      # timeout, or still "Study them again" after the last study) is a final
+      # A study that does not complete (not found, not holding, a timeout,
+      # or still "Study them again" after the last study) is a final
       # failure: it beeps, prints a bold line and stops the script, or returns
       # with +studied+ false when +skip_exit+ is set. The instructions are put
       # away first, so a stop does not leave them in hand. A GET that fails
@@ -1361,7 +1466,7 @@ module Lich
         end
       end
 
-      # The bold line for a study that did not end in Roundtime.
+      # The bold line for a study that did not complete.
       #
       # @param outcome [Symbol] a study_instructions_outcome other than :studied
       # @param name [String] the instructions

@@ -22,16 +22,21 @@ module Lich
         plan = recovery.policy_plan(dependencies.map(&:name))
         raise AcceptedGemPolicy::InvalidPolicyError, plan.error unless plan.success?
         supplied = AcceptedGemPolicy.supplied_gems(plan.target)
-        available = supplied.to_h { |name, entry| [name, specification(name, entry.fetch('version'), 'ruby', entry.fetch('dependencies', {}))] }
-        plan.units.each do |unit|
-          unit.fetch('packages').each do |package|
-            platform = package.fetch('filename').end_with?("-#{plan.target.fetch('platform')}.gem") ? plan.target.fetch('platform') : 'ruby'
-            available[package.fetch('name')] = specification(package.fetch('name'), package.fetch('version'), platform)
+        # Startup accepts any installed version from a package's minimum up,
+        # so both the accepted versions and the minimums must start cleanly.
+        { 'version' => 'served package floors', 'minimum' => 'served package minimums' }.each do |tuple, label|
+          available = supplied.to_h { |name, entry| [name, specification(name, entry.fetch('version'), 'ruby', entry.fetch('dependencies', {}))] }
+          plan.units.each do |unit|
+            unit.fetch('packages').each do |package|
+              platform = package.fetch('filename').end_with?("-#{plan.target.fetch('platform')}.gem") ? plan.target.fetch('platform') : 'ruby'
+              version = tuple == 'minimum' ? RecoveryUnitPolicy.package_minimum(package) : package.fetch('version')
+              available[package.fetch('name')] = specification(package.fetch('name'), version, platform)
+            end
           end
+          policy = AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { available.key?(name) ? [available.fetch(name)] : [] }, loaded_specs: {})
+          check = policy.check(dependencies)
+          raise AcceptedGemPolicy::CoverageError, "#{label} cannot supply a complete startup" unless check.needed.empty?
         end
-        policy = AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { available.key?(name) ? [available.fetch(name)] : [] }, loaded_specs: {})
-        check = policy.check(dependencies)
-        raise AcceptedGemPolicy::CoverageError, 'served package floors cannot supply a complete startup' unless check.needed.empty?
         [client.fetch('id'), reader.roots.keys.sort]
       rescue AcceptedGemPolicy::Error, RuntimeGemContract::Error, KeyError, TypeError, ArgumentError => e
         raise AcceptedGemPolicy::PolicyError, "supported client #{client.fetch('id', '(missing ID)')}: #{e.message}"

@@ -22,6 +22,8 @@ on:
       - "spec/lib/common/pipe_io_spec.rb"
       - "spec/lib/common/pipe_io_windows_spec.rb"
       - "spec/support/pipe_io_spawn_child.rb"
+      - "lib/common/update/snapshot_manager.rb"
+      - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   pull_request:
     paths:
@@ -42,6 +44,8 @@ on:
       - "spec/lib/common/pipe_io_spec.rb"
       - "spec/lib/common/pipe_io_windows_spec.rb"
       - "spec/support/pipe_io_spawn_child.rb"
+      - "lib/common/update/snapshot_manager.rb"
+      - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   workflow_dispatch:
 
@@ -59,7 +63,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler-cache: true
       - name: Run ActiveSessions ownership and handoff specs
@@ -73,3 +77,6 @@ jobs:
       - name: Run PipeIO specs (--pipe front-end transport)
         if: ${{ !cancelled() }}
         run: bundle exec rspec spec/lib/common/pipe_io_spec.rb spec/lib/common/pipe_io_windows_spec.rb
+      - name: Run snapshot rename specs (lich5-update)
+        if: ${{ !cancelled() }}
+        run: bundle exec rspec spec/lib/common/update/snapshot_manager_windows_spec.rb

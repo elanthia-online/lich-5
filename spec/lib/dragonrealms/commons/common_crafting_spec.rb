@@ -1232,7 +1232,18 @@ describe DRCC do
       raise 'get_crafting_item stopped the script where the example expected it to continue'
     end
 
+    # The real GameObj hands, as the XML parser sets them; an empty hand is
+    # its placeholder (id nil, name 'Empty'). DRCI.held_ids and held_id read
+    # them; a timed-out GET or untie counts only a hand id not held before.
+    let(:mallet) { ['4100001', 'mallet', 'wooden mallet'] }
+
+    def hands(right: nil, left: nil)
+      Lich::Common::GameObj.new_right_hand(*(right || [nil, nil, 'Empty']))
+      Lich::Common::GameObj.new_left_hand(*(left || [nil, nil, 'Empty']))
+    end
+
     before(:each) do
+      hands
       allow(drc).to receive(:beep)
       allow(drc).to receive(:wait_for_script_to_complete)
       allow(drct).to receive(:walk_to)
@@ -1240,6 +1251,8 @@ describe DRCC do
       allow(Lich::Messaging).to receive(:msg)
       allow(drci).to receive(:in_hands?).and_return(false)
     end
+
+    after(:each) { hands }
 
     context 'when the GET succeeds' do
       ['You get', 'You pick up', 'You are already'].each do |reply|
@@ -1496,17 +1509,37 @@ describe DRCC do
         expect(Lich::Messaging).not_to have_received(:msg).with('bold', /Cannot continue crafting/)
       end
 
-      it 'reports whether the item is in hand when the untie times out, without stopping' do
+      # A timed-out untie counts only when the untie brought a new mallet
+      # into hand (a GameObj hand id not held before the GET).
+      it 'is true when the untie times out but a new mallet came into hand, without stopping' do
+        allow(drci).to receive(:in_hands?).and_call_original
+        reply_with(tied, '')
+        allow(drc).to receive(:bput).with('untie my mallet', any_args) do |command|
+          sent << command
+          hands(right: mallet)
+          ''
+        end
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be true
+        expect(sent).to eq(['get my mallet', 'untie my mallet'])
+        expect(drc).not_to have_received(:beep)
+      end
+
+      it 'is false when the untie times out with nothing new in hand, without stopping' do
         reply_with(tied, '')
 
         expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be false
         expect(sent).to eq(['get my mallet', 'untie my mallet'])
+        expect(drc).not_to have_received(:beep)
+      end
 
-        sent.clear
+      it 'is false when the untie times out and the only mallet in hand was held before the GET' do
+        hands(right: mallet)
         reply_with(tied, '')
-        allow(drci).to receive(:in_hands?).with('mallet').and_return(true)
-        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be true
-        expect(sent).to eq(['get my mallet', 'untie my mallet'])
+        allow(drci).to receive(:in_hands?).and_call_original
+        expect(drci.in_hands?('mallet')).to be(true)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be false
         expect(drc).not_to have_received(:beep)
       end
     end
@@ -1531,13 +1564,36 @@ describe DRCC do
       end
     end
 
+    # DRCI.held_id reads the GameObj hands; where an example sets them,
+    # DRCI.in_hands? reads them too (the real one, not the before block's
+    # stub).
     context 'when the GET reply matches nothing (bput timed out)' do
-      it 'reports whether the item is in hand and does not stop the script' do
+      it 'is false with nothing new in hand, and does not stop the script' do
         reply_with('')
 
         expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be false
-        allow(drci).to receive(:in_hands?).with('mallet').and_return(true)
+        expect(drc).not_to have_received(:beep)
+      end
+
+      it 'is true when a new mallet came into hand while the GET waited' do
+        allow(drci).to receive(:in_hands?).and_call_original
+        allow(drc).to receive(:bput) do |command|
+          sent << command
+          hands(left: mallet)
+          ''
+        end
+
         expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be true
+        expect(drc).not_to have_received(:beep)
+      end
+
+      it 'is false when the only mallet in hand was already held before the GET' do
+        hands(left: mallet)
+        reply_with('')
+        allow(drci).to receive(:in_hands?).and_call_original
+        expect(drci.in_hands?('mallet')).to be(true)
+
+        expect(DRCC.get_crafting_item('mallet', 'backpack', nil, nil)).to be false
         expect(drc).not_to have_received(:beep)
       end
     end
@@ -1556,8 +1612,11 @@ describe DRCC do
     # belt and without it, with the item in hand afterwards and without: the
     # method always ends with a boolean or, without skip_exit, an exit. It
     # sends each command at most twice (the GET once), and visits safe-room at
-    # most once per untie command. With the item in hand, only a GET answered
-    # "can't quite lift it" or "You need a free hand" ends in anything but true.
+    # most once per untie command. With the item in hand all along (held
+    # before the GET, so DRCI.in_hands? says so but no new GameObj hand id
+    # appears), only a GET answered "can't quite lift it" or "You need a free
+    # hand", or a call whose last reply timed out (a timed-out GET or untie
+    # counts only a newly held item), ends in anything but true.
     context 'across every sequence of four replies' do
       let(:replies) { [got, pickup, already, heavy, no_free_hand, not_found, tied, untied, untie_what, wounded, ''] }
 
@@ -1571,8 +1630,9 @@ describe DRCC do
         allow(drc).to receive(:bput) do |command, *patterns|
           sent << command
           reply = queue.size > 1 ? queue.shift : queue.first
-          exchanges << [command, reply]
-          bput_result(reply, patterns)
+          matched = bput_result(reply, patterns)
+          exchanges << [command, reply, matched]
+          matched
         end
         allow(drci).to receive(:in_hands?) { held }
         allow(drc).to receive(:wait_for_script_to_complete) { trips += 1 }
@@ -1600,8 +1660,10 @@ describe DRCC do
                 expect(sent.count { |command| command.start_with?('get') }).to be <= 1, label
                 next unless held_after
 
-                lifted = exchanges.none? { |command, reply| command.start_with?('get') && [heavy, no_free_hand].include?(reply) }
-                expect(result == true).to eq(lifted), label
+                lifted = exchanges.none? { |command, reply, _matched| command.start_with?('get') && [heavy, no_free_hand].include?(reply) }
+                # bput returned '' (no pattern matched) to the last command.
+                timed_out = exchanges.last.last.empty?
+                expect(result == true).to eq(lifted && !timed_out), label
               end
             end
           end
@@ -2673,6 +2735,111 @@ describe DRCC do
 
       expect(study).to have_attributes(studied?: true, uses_left: nil)
       expect(sent.count(study_instructions)).to eq(2)
+    end
+
+    # The three endings of the study line in the November logs of 2023-2026
+    # (ClickHouse log index, about 940,000 studies): the first nearly always,
+    # the second 23 times in 2023, 54 in 2025 and twice in 2026, the third
+    # (the .25:10821 line above) 40 times in 2025.
+    [
+      'completely understand all facets of the design.',
+      'comprehend all but several minor details in the text.',
+      "confidently discern most of the design's minutiae."
+    ].each do |ending|
+      context "when the study line ends #{ending.inspect}" do
+        let(:study_line) { "You scan the liniment instructions with a glance and #{ending}" }
+
+        it 'counts the study as complete' do
+          play(get_instructions   => [got_instructions],
+               study_instructions => [study_again_with_five_uses, [study_line, 'You now feel ready to begin the crafting process.', 'Roundtime: 7 sec.']],
+               put_instructions   => [put_away])
+
+          expect(study).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+          expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+        end
+
+        it 'is the line that completes it; a Roundtime line on its own is not' do
+          expect(DRCC.send(:study_instructions_outcome, study_line)).to eq(:studied)
+          expect(DRCC.send(:study_instructions_outcome, 'Roundtime: 7 sec.')).to eq(:timeout)
+        end
+      end
+    end
+
+    # Game lag (DragonRealms, 2026-11-12): the server went quiet for about
+    # 3.5 minutes, then ran the queued commands in order and sent their
+    # replies at once, so a reply to a command sent before the study can be
+    # the first line after it. Here a late "Roundtime: 8 sec." comes first;
+    # bput, waiting for the study's line, must read past it.
+    context 'when a late Roundtime from an earlier command arrives before the study reply' do
+      let(:late_roundtime) { 'Roundtime: 8 sec.' }
+
+      it 'is no completed study when the study itself then gets no reply' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *ambient_only]],
+             put_instructions   => [put_away])
+
+        expect(study(skip_exit: true)).to have_attributes(studied?: false, uses_left: nil, discarded?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: No reply to studying liniment instructions.')
+        expect(drc).to have_received(:beep)
+        expect(sent.last).to eq(put_instructions)
+      end
+
+      it 'stops the script without skip_exit, after putting the instructions away' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime]],
+             put_instructions   => [put_away])
+
+        expect { study }.to raise_error(SystemExit)
+        expect(sent.last).to eq(put_instructions)
+      end
+
+      it 'still studies again when the "Study them again" prompt follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *study_again_with_five_uses], study_complete],
+             put_instructions   => [put_away])
+
+        expect(study).to have_attributes(studied?: true, uses_left: 4, discarded?: false)
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions, put_instructions])
+      end
+
+      it 'reports not holding when that follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, 'You must be holding the instructions to study them.']],
+             put_instructions   => [put_away])
+
+        expect(study(skip_exit: true)).to have_attributes(studied?: false)
+        expect(Lich::Messaging).to have_received(:msg).with('bold', 'DRCC: Not holding liniment instructions to study.')
+      end
+
+      it 'counts the study once its own line follows it' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [[late_roundtime, *study_complete]],
+             put_instructions   => [put_away])
+
+        expect(study).to have_attributes(studied?: true, uses_left: nil, discarded?: false)
+        expect(drc).not_to have_received(:beep)
+      end
+
+      # The study's Roundtime and the toss line now both come after the line
+      # bput returned on; waitrt? lets the Flag see the toss.
+      it 'still sees the toss after the last use' do
+        play(get_instructions   => [got_instructions],
+             study_instructions => [study_again_with_one_use, [late_roundtime, *study_complete_then_tossed]],
+             put_instructions   => [what_were_you_referring_to])
+
+        expect(study).to have_attributes(studied?: true, uses_left: 0, discarded?: true)
+        expect(sent).to eq([get_instructions, study_instructions, study_instructions])
+        expect(watched_flags).to be_empty
+      end
+    end
+
+    it "does not take another player's speech quoting the study line for the study" do
+      quoted = 'Mahtra says, "You scan the liniment instructions with a glance and completely understand all facets of the design."'
+      play(get_instructions   => [got_instructions],
+           study_instructions => [[quoted, *ambient_only]],
+           put_instructions   => [put_away])
+
+      expect(study(skip_exit: true)).to have_attributes(studied?: false)
     end
 
     it 'gets the instructions from the bag when bag_items lists them' do

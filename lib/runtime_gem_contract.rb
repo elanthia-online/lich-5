@@ -11,14 +11,33 @@ module Lich
   class RuntimeGemContract
     class Error < StandardError; end
 
+    # Default target. Published contracts and every existing consumer use it,
+    # so an explicit platform is only needed for another Windows target.
     PLATFORM = 'x64-mingw-ucrt'
+    # Windows RubyInstaller platforms a runtime contract may describe. Each is
+    # published independently; the x64 contract is unaffected by the others.
+    PLATFORMS = [PLATFORM, 'aarch64-mingw-ucrt'].freeze
     GROUPS = %w[default profanity].freeze
     SHA256 = /\A[0-9a-f]{64}\z/
     COMMIT = /\A[0-9a-f]{40}\z/
 
-    attr_reader :roots, :gemfile_sha256, :lock_sha256, :locked_packages
+    attr_reader :roots, :gemfile_sha256, :lock_sha256, :locked_packages, :platform
 
-    def initialize(gemfile:, lockfile: nil, groups: GROUPS)
+    # Which published runtime contract (manifest) to read for the running Ruby:
+    # its own platform when one is published, otherwise the default. This only
+    # picks a manifest; it is not a substitute for Gem::Platform.local when
+    # matching manifest targets, since an unpublished platform maps to x64.
+    # @param local [String, Gem::Platform] RubyGems platform of the running Ruby
+    # @return [String]
+    def self.runtime_platform(local = Gem::Platform.local)
+      local = local.to_s
+      PLATFORMS.include?(local) ? local : PLATFORM
+    end
+
+    def initialize(gemfile:, lockfile: nil, groups: GROUPS, platform: PLATFORM)
+      raise Error, "unsupported runtime contract platform #{platform.inspect}" unless PLATFORMS.include?(platform)
+
+      @platform = platform
       @selected_groups = Array(groups).map(&:to_s)
       @gemfile_sha256 = Digest::SHA256.hexdigest(gemfile)
       @lock_sha256 = Digest::SHA256.hexdigest(lockfile) if lockfile
@@ -37,7 +56,7 @@ module Lich
     # installing application gems. Supplied versions are reported, never shipped.
     def resolve(inventory)
       raise Error, 'a lockfile is required for producer resolution' unless @specs
-      unless inventory['platform'] == PLATFORM && inventory['ruby_abi'] == '4.0' && inventory['gems'].is_a?(Hash)
+      unless inventory['platform'] == platform && inventory['ruby_abi'] == '4.0' && inventory['gems'].is_a?(Hash)
         raise Error, 'inventory must describe the target Windows RubyInstaller (Ruby ABI 4.0)'
       end
       supplied = inventory.fetch('gems')
@@ -83,7 +102,7 @@ module Lich
       end.transform_values do |spec|
         spec.merge('dependencies' => spec.fetch('dependencies').transform_values { |requirements| normalized_requirements(requirements) })
       end
-      self.class.digest('schema' => 1, 'platform' => PLATFORM, 'ruby_abi' => '4.0',
+      self.class.digest('schema' => 1, 'platform' => platform, 'ruby_abi' => '4.0',
                         'roots' => roots.transform_values { |requirements| normalized_requirements(requirements) },
                         'packages' => packages, 'bundled' => resolved.fetch('bundled'), 'ruby_inventory' => inventory)
     end
@@ -194,7 +213,7 @@ module Lich
       end
       raise Error, 'only a RubyGems lock with checksums is supported' unless text.start_with?("GEM\n") && !checksums.empty?
       specs.group_by { |spec| spec.fetch('name') }.filter_map do |name, variants|
-        selected = variants.select { |spec| spec['platform'] == PLATFORM }
+        selected = variants.select { |spec| spec['platform'] == platform }
         selected = variants.select { |spec| spec['platform'] == 'ruby' } if selected.empty?
         next if selected.empty?
         raise Error, "ambiguous Windows lock entry for #{name}" unless selected.length == 1

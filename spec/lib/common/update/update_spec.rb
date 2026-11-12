@@ -18,6 +18,15 @@ RSpec.describe 'Lich::Util::Update SCRIPT_REPOS registry' do
     expect(config[:default_tracked]).to include('alias.lic', 'go2.lic', 'map.lic')
   end
 
+  # logxml.lic was removed from elanthia-online/scripts (;log --xml replaced
+  # it). A default script missing from the repo is reported as "not in repo,
+  # not synced" on every ;lich5-update, so it must not stay a default.
+  it 'does not track logxml.lic, which left the scripts repo, by default' do
+    config = Lich::Util::Update::SCRIPT_REPOS['scripts']
+    expect(config[:default_tracked]).to include('log.lic')
+    expect(config[:default_tracked]).not_to include('logxml.lic')
+  end
+
   it 'has frozen configs' do
     Lich::Util::Update::SCRIPT_REPOS.each_value do |config|
       expect(config).to be_frozen

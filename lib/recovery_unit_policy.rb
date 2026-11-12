@@ -65,8 +65,23 @@ module Lich
       package.fetch('filename').end_with?("-#{platform}.gem") ? platform : 'ruby'
     end
 
+    # Identity includes the effective startup minimum by version value, so an
+    # absent minimum, one equal to the version and one spelled differently
+    # but equal to it (2.10.2.0 for 2.10.2) are the same package.
     def self.package_identity(package, platform)
-      package.values_at('version', 'sha256') + [package_platform(package, platform)]
+      package.values_at('version', 'sha256') + [package_platform(package, platform), minimum_identity(package)]
+    end
+
+    # Canonical segments, not Gem::Version: Gem::Version#eql? compares the
+    # raw string, so 2.10.2 and 2.10.2.0 would not collapse in uniq or Hash.
+    def self.minimum_identity(package)
+      Gem::Version.new(package_minimum(package)).canonical_segments
+    end
+
+    # The lowest installed version startup accepts without a repair. A package
+    # without one keeps the strict floor: its accepted version.
+    def self.package_minimum(package)
+      package.fetch('minimum', package['version'])
     end
 
     # Bounds use literal Gem::Version ordering, including prereleases.

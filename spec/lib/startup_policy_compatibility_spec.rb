@@ -89,4 +89,25 @@ RSpec.describe Lich::StartupPolicyCompatibility do
     clients.each { |client| client['lich_version'] = '5.24.0' }
     expect(verify.keys).to eq(%w[supported-older supported-current])
   end
+
+  context 'with a package minimum' do
+    let(:package) { unit.fetch('packages').first }
+
+    it 'accepts a minimum every supported client can start on' do
+      package['minimum'] = '2.10.1'
+      clients.last['gemfile'] = "gem 'sqlite3', '~> 2.10'"
+      expect(verify.keys).to eq(%w[supported-older supported-current])
+    end
+
+    it 'rejects a minimum below a supported client requirement even though the version satisfies it' do
+      package['minimum'] = '2.10.1'
+      expect { verify }.to raise_error(Lich::AcceptedGemPolicy::PolicyError, /supported-current.*served package minimums cannot supply a complete startup/)
+    end
+
+    it 'reports the version tuple first, with its existing message' do
+      package['minimum'] = '2.10.1'
+      clients.first['gemfile'] = "gem 'sqlite3', '< 2.10.2'"
+      expect { verify }.to raise_error(Lich::AcceptedGemPolicy::PolicyError, /supported-older.*cannot satisfy/)
+    end
+  end
 end

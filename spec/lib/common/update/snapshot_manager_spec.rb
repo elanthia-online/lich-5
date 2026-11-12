@@ -1753,12 +1753,61 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(messages.grep(/retrying/)).to be_empty
     end
 
-    [Errno::EPERM, Errno::EBUSY].each do |error|
+    [Errno::EPERM, Errno::EBUSY, Errno::EXDEV].each do |error|
       it "retries a staging rename refused with #{error.name.split('::').last}" do
         refuse_renames(times: 1, error: error) { |from, _to| from.include?('L5-staging-') }
 
         expect(manager.snapshot).to eq(base)
         expect(staging).to be_empty
+      end
+    end
+
+    # Ruby on Windows raises EXDEV, not EACCES, when a directory rename to a
+    # name that does not exist yet is refused with access denied, which is
+    # what a scanner holding a freshly copied file inside it causes.
+    context 'when Ruby reports the refused staging directory rename as EXDEV' do
+      it 'waits it out like the other refusals and publishes the snapshot' do
+        calls = refuse_renames(times: 2, error: Errno::EXDEV) { |from, to| to == base && from.include?('L5-staging-') }
+        messages = capture_responses
+
+        expect(manager.snapshot).to eq(base)
+
+        expect(calls.size).to eq(3)
+        expect(File.read(File.join(base, 'lib', 'version.rb'))).to eq("LICH_VERSION = '5.22.0'\n")
+        expect(manager).to have_received(:sleep).twice
+        expect(messages.grep(/retrying/).size).to eq(1)
+        expect(messages.grep(/Snapshot failed/)).to be_empty
+        expect(staging).to be_empty
+      end
+
+      it 'gives up after the last retry with the EXDEV, publishing nothing and removing the staging directory' do
+        calls = refuse_renames(error: Errno::EXDEV) { |from, to| to == base && from.include?('L5-staging-') }
+        messages = capture_responses
+
+        expect { manager.snapshot }.to raise_error(Errno::EXDEV)
+
+        expect(calls.size).to eq(delays.size + 1)
+        expect(published).to be_empty
+        expect(staging).to be_empty
+        expect(messages).to include('No snapshot was saved and nothing was changed.')
+      end
+
+      it 'does not try another snapshot name, since nothing took this one' do
+        calls = refuse_renames(error: Errno::EXDEV) { |from, _to| from.include?('L5-staging-') }
+
+        expect { manager.snapshot }.to raise_error(Errno::EXDEV)
+
+        expect(calls.map(&:last).uniq).to eq([base])
+      end
+
+      it 'does not retry it on other platforms, where EXDEV is a real cross-device rename' do
+        allow(Gem).to receive(:win_platform?).and_return(false)
+        calls = refuse_renames(times: 1, error: Errno::EXDEV) { |from, _to| from.include?('L5-staging-') }
+
+        expect { manager.snapshot }.to raise_error(Errno::EXDEV)
+
+        expect(calls.size).to eq(1)
+        expect(manager).not_to have_received(:sleep)
       end
     end
 
@@ -1833,6 +1882,19 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(revert_temp_dirs).to be_empty
         expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
         expect(messages.grep(/retrying/).size).to eq(1)
+      end
+
+      it 'completes the swap when moving a live lib directory out is refused at first with EXDEV' do
+        live_common = File.join(LIB_DIR, 'common')
+        calls = refuse_renames(times: 1, error: Errno::EXDEV) { |from, to| from == live_common && to.include?('.lich5-revert-old-') }
+        messages = capture_responses
+
+        manager.revert
+
+        expect(calls.size).to eq(2)
+        expect(tree(LIB_DIR)).to eq(tree(File.join(BACKUP_DIR, 'L5-snapshot-2026-10-01-00-00-00', 'lib')))
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
       end
 
       it 'warns, while the launcher is moved out, not to close Lich during the wait' do

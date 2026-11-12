@@ -8,8 +8,9 @@ module Lich
   class R4L5ContractCheck
     Error = RuntimeGemContract::Error
 
-    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil))
-      reader = RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile)
+    def self.verify!(gemfile:, lockfile:, manifest_bytes:, provenance:, candidate_sha: nil, installer_path: nil,
+                     lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil), platform: RuntimeGemContract::PLATFORM)
+      reader = RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile, platform: platform)
       manifest = JSON.parse(manifest_bytes)
       require_object!(manifest, 'recovery manifest')
       require_object!(provenance, 'installer provenance')
@@ -17,7 +18,7 @@ module Lich
       targets = manifest.fetch('targets')
       raise Error, 'recovery targets must be an array' unless targets.is_a?(Array)
       targets.each { |target| require_object!(target, 'recovery target') }
-      targets = targets.select { |target| target['platform'] == RuntimeGemContract::PLATFORM && target['ruby_abi'] == '4.0' }
+      targets = targets.select { |target| target['platform'] == platform && target['ruby_abi'] == '4.0' }
       raise Error, 'expected exactly one Windows Ruby 4.0 target' unless targets.length == 1
       target = targets.first
       contract = target.fetch('contract')
@@ -69,6 +70,9 @@ module Lich
         unless occurrences.all? { |entry| entry['version'] == spec.fetch('version') }
           raise Error, "recovery version mismatch for #{name}: lock requires #{spec.fetch('version')}"
         end
+        # Each package's minimum was validated against its version above;
+        # minimums are compared by version value.
+        raise Error, "recovery minimum mismatch for #{name}" unless occurrences.map { |entry| RecoveryUnitPolicy.minimum_identity(entry) }.uniq.length == 1
         # Unmodified upstream files retain the lock checksum. Built/repacked
         # packages have new digests and are checked by the producer smoke gate.
         if unit.dig('artifact', 'url')&.start_with?('https://rubygems.org/downloads/') && package['sha256'] != "sha256:#{spec.fetch('sha256')}"

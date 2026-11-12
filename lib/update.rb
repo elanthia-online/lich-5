@@ -61,9 +61,11 @@ module Lich
           script_prefix: 'scripts',
           check_lich_requirement: true,
           game_filter: nil,
+          # logxml.lic left the repo when log.lic gained --xml (scripts 2026-11);
+          # a default no longer in the repo shows as "not in repo" on every sync.
           default_tracked: %w[
             alias.lic autostart.lic go2.lic jinx.lic log.lic
-            logxml.lic map.lic repository.lic vars.lic version.lic
+            map.lic repository.lic vars.lic version.lic
           ].freeze,
           subdirs: {}
         }.freeze,

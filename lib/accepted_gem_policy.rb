@@ -14,8 +14,15 @@ module Lich
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
     class CoverageError < PolicyError; end
+    # The accepted manifest is valid but publishes no target for this Ruby
+    # ABI/platform. Not a PolicyError: GemCheck treats it as "no accepted
+    # policy applies here" and falls back to the plain missing-gem check.
+    class UnsupportedRuntimeError < Error; end
 
-    Check = Struct.new(:plan, :needed, :specs, keyword_init: true)
+    # +needed+ is below a package minimum and requires a repair. +recommended+
+    # starts on an installed version below the accepted one, at or above its
+    # minimum; startup only logs it.
+    Check = Struct.new(:plan, :needed, :specs, :recommended, keyword_init: true)
 
     class InstalledSet < Gem::Resolver::Set
       def initialize(find_specs, platforms)
@@ -43,7 +50,11 @@ module Lich
       raise Error, 'no required startup dependencies were declared' if dependencies.empty?
       plan = @recovery.policy_plan(dependencies.map(&:name))
       unless plan.success?
-        type = plan.error_kind == :acquisition ? AcquisitionError : InvalidPolicyError
+        type = case plan.error_kind
+               when :acquisition then AcquisitionError
+               when :unsupported_runtime then UnsupportedRuntimeError
+               else InvalidPolicyError
+               end
         raise type, plan.error
       end
       supplied = self.class.supplied_gems(plan.target)
@@ -74,29 +85,26 @@ module Lich
       platforms = packages.transform_values do |package|
         RecoveryUnitPolicy.package_platform(package, plan.target.fetch('platform'))
       end
-      needed = packages.filter_map do |name, package|
-        floor = Gem::Version.new(package.fetch('version'))
-        acceptable = @find_specs.call(name).select { |spec| spec.version >= floor && spec.platform.to_s == platforms.fetch(name) }
-        active = @loaded_specs[name]
-        name if acceptable.empty? || (active && (active.version < floor || active.platform.to_s != platforms.fetch(name)))
-      end
-      if needed.any?
-        units = plan.units.select { |unit| unit.fetch('packages').any? { |package| needed.include?(package.fetch('name')) } }
-        return Check.new(plan: DependencyRecovery::Plan.new(units: units, target: plan.target), needed: needed, specs: [])
-      end
+      strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
+      minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
+      return evaluate(plan, dependencies, packages, platforms, supplied_roots, strict) if minimums == strict
 
-      requirements = dependencies.map { |dep| Gem::Dependency.new(dep.name, *dep.requirement.as_list) }
-      packages.each do |name, package|
-        requirements << Gem::Dependency.new(name, ">= #{package.fetch('version')}")
-        active = @loaded_specs[name]
-        requirements << Gem::Dependency.new(name, "= #{active.version}") if active
+      begin
+        evaluate(plan, dependencies, packages, platforms, supplied_roots, minimums)
+      rescue Gem::Exception => e
+        # A lower floor must never stop startup where the accepted versions
+        # would repair it, such as an installed newer dependent requiring more
+        # than another member's minimum. Raise the floors of the units named by
+        # the failure; if that requires no repair, decide exactly as without
+        # minimums.
+        names = failure_names(e) & packages.keys
+        units = plan.units.select { |unit| unit.fetch('packages').any? { |package| names.include?(package.fetch('name')) } }
+        floors = minimums.merge(units.flat_map { |unit| unit.fetch('packages') }.to_h { |package| [package.fetch('name'), strict.fetch(package.fetch('name'))] })
+        needed = needed_at(packages, platforms, floors)
+        return repair_check(plan, needed) if needed.any?
+
+        evaluate(plan, dependencies, packages, platforms, supplied_roots, strict)
       end
-      supplied_roots.each do |name, floor|
-        requirements << Gem::Dependency.new(name, ">= #{floor}")
-        requirements << Gem::Dependency.new(name, "= #{@loaded_specs[name].version}") if @loaded_specs[name]
-      end
-      requests = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms)).resolve
-      Check.new(plan: plan, needed: [], specs: requests.map(&:spec))
     rescue Gem::UnsatisfiableDependencyError => e
       if @find_specs.call(e.name).empty?
         raise LocalInstallationError, "installed dependency #{e.name} is missing; repair or reinstall Ruby4Lich5: #{e.message}"
@@ -105,6 +113,55 @@ module Lich
     rescue Gem::Exception => e
       raise PolicyError, "installed gems cannot satisfy accepted startup policy: #{e.message}"
     end
+
+    # @param floors [Hash{String => Gem::Version}] per-package startup floors
+    def evaluate(plan, dependencies, packages, platforms, supplied_roots, floors)
+      needed = needed_at(packages, platforms, floors)
+      return repair_check(plan, needed) if needed.any?
+
+      requirements = dependencies.map { |dep| Gem::Dependency.new(dep.name, *dep.requirement.as_list) }
+      packages.each_key do |name|
+        requirements << Gem::Dependency.new(name, ">= #{floors.fetch(name)}")
+        active = @loaded_specs[name]
+        requirements << Gem::Dependency.new(name, "= #{active.version}") if active
+      end
+      supplied_roots.each do |name, floor|
+        requirements << Gem::Dependency.new(name, ">= #{floor}")
+        requirements << Gem::Dependency.new(name, "= #{@loaded_specs[name].version}") if @loaded_specs[name]
+      end
+      specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms)).resolve.map(&:spec)
+      recommended = specs.select { |spec| packages.key?(spec.name) && spec.version < Gem::Version.new(packages.fetch(spec.name).fetch('version')) }.map(&:name)
+      Check.new(plan: plan, needed: [], specs: specs, recommended: recommended)
+    end
+    private :evaluate
+
+    def needed_at(packages, platforms, floors)
+      packages.filter_map do |name, _package|
+        floor = floors.fetch(name)
+        acceptable = @find_specs.call(name).select { |spec| spec.version >= floor && spec.platform.to_s == platforms.fetch(name) }
+        active = @loaded_specs[name]
+        name if acceptable.empty? || (active && (active.version < floor || active.platform.to_s != platforms.fetch(name)))
+      end
+    end
+    private :needed_at
+
+    # A repair installs every package of each affected unit at its version.
+    def repair_check(plan, needed)
+      units = plan.units.select { |unit| unit.fetch('packages').any? { |package| needed.include?(package.fetch('name')) } }
+      Check.new(plan: DependencyRecovery::Plan.new(units: units, target: plan.target), needed: needed, specs: [], recommended: [])
+    end
+    private :repair_check
+
+    def failure_names(error)
+      case error
+      when Gem::UnsatisfiableDependencyError then [error.name]
+      when Gem::DependencyResolutionError then error.conflict.conflicting_dependencies.map(&:name)
+      else []
+      end
+    rescue StandardError
+      []
+    end
+    private :failure_names
 
     def self.supplied_gems(target)
       supplied = target.dig('contract', 'ruby_inventory', 'gems') || {}
