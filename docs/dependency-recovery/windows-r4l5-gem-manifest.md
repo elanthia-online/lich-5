@@ -364,8 +364,11 @@ the presence of `unzip` do not matter. The bundle must be a single-disk,
 non-ZIP64, unencrypted archive whose entries are stored or deflated. Data
 descriptors are fine, since sizes are read from the central directory. Each
 deflated entry's compressed size must end exactly where its deflate stream
-ends. Entry names must be relative, without `..` segments, colons or control
-characters, ASCII unless the entry is flagged UTF-8, and unique: no two
+ends. Entry names must be relative and separated by `/`, without `..`
+segments, colons, backslashes or control characters, ASCII unless the entry
+is flagged UTF-8, free of segments Windows would alter (a trailing dot or
+space, or a device name such as `CON`, `NUL` or `COM1`, with or without an
+extension), and unique: no two
 entries may name the same file, compared case-insensitively, and no file may
 share a path with a directory. Any other archive fails extraction with a named
 reason, and nothing is installed.
