@@ -8,9 +8,9 @@ require 'timeout'
 require_relative '../../support/webui_browser'
 
 RSpec.describe 'bounded display geometry and cursor compatibility' do
-  # Settled B5: the example that runs retained geometry-cursors.json blocks names
+  # The example that runs retained geometry-cursors.json blocks names
   # each script, its tested version and pinned source revision, and the credited
-  # author as the source header writes them (spec/fixtures/webui/README.txt).
+  # author as written in the pinned source header.
   attribution = {
     'gemstonev'         => '[gemstonev version 3, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]',
     'highlight-manager' => '[highlight-manager version 1.2.0, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Mystienne]',
