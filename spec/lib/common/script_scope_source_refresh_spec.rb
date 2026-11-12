@@ -8,9 +8,8 @@ require 'digest'
 require 'timeout'
 
 RSpec.describe 'refreshed original script setup acceptance' do
-  # Settled B5: each script-derived example names the script, the tested version
-  # and pinned source revision, and the credited author, as the source header
-  # writes them (spec/fixtures/webui/README.txt, Attribution). Revisions are
+  # Each script-derived example names the script, tested version, pinned source
+  # revision and credited author as written in the pinned source header. Revisions are
   # those recorded in source-refresh.json; compass_and_wings cites its header
   # version (its VERSION constant, line 109, is 1.6.11).
   attribution = {
