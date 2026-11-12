@@ -49,10 +49,15 @@ checkout, then run the JavaScript suite independently of RSpec:
 
 ```sh
 npm ci --prefix spec/webui
+cd spec/webui && npx --no-install playwright install webkit && cd ../..
 npm test --prefix spec/webui
 ```
 
 These are test-only dependencies. RSpec does not automatically run the npm suite.
+The engine portion opens browser windows and requires installed Google Chrome.
+Run it on a logged-in desktop. On Linux, install the browser system dependencies
+and use `xvfb-run --auto-servernum npm test --prefix spec/webui` for a virtual
+display. Use `npm run test:logic --prefix spec/webui` for logic tests alone.
 The WebUI workflow runs npm and two Chrome shards. Each browser spec belongs to
 exactly one shard; its coverage check rejects missing and stale entries.
 
@@ -65,16 +70,18 @@ inert game/download boundaries and isolated settings. Installed Google Chrome
 and the locked Playwright dependency are required. Native window behavior is a
 separate acceptance surface, not certified by headless Chrome.
 
-The retained [fixture provenance](fixtures/webui/README.txt) records source
+The retained fixture provenance records source
 revisions, hashes, excerpts and explicit test-only repairs. Specs retain original
 failures separately from corrected candidates. Do not treat construction,
 rendering or bounded setup checks as complete gameplay acceptance. The CSS
-corpus uses [extracted provenance](fixtures/webui/css-provenance.json).
+corpus uses extracted provenance with pinned source identities.
 
 The default entrypoint acceptance spec launches a subprocess with temporary
 data, authenticates HTTP/WebSocket traffic, exercises a launcher callback and
 checks shutdown without GTK. Its protocol-only browser substitute does not
-certify browser cookies or native windows.
+certify browser cookies or native windows. Native helper preparation retains the
+production startup path but uses an isolated temporary fixture builder, requiring
+no native compiler and writing no helper output into the checkout.
 
 On a logged-in macOS desktop with the installed Swift compiler:
 

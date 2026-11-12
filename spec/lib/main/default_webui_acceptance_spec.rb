@@ -34,6 +34,12 @@ RSpec.describe 'default WebUI entrypoint acceptance' do
     )
     expect(result.fetch('launcher_start_source')).to match(%r{\Alib/common/webui_launcher\.rb:\d+\z})
     expect(result.fetch('launcher_await_source')).to match(%r{\Alib/common/webui_launcher\.rb:\d+\z})
+    native_required = OS.mac?
+    expect(result.fetch('native_preparation')).to eq(
+      'required' => native_required, 'builds' => native_required ? 1 : 0,
+      'available' => native_required, 'startup_replaced' => false, 'helper_replaced' => false
+    )
+    expect(result.fetch('effective_roots')).to have_key('NATIVE_HELPER_DIR')
   end
 
   it 'prints a verdict when the entrypoint exits between the liveness check and the group signal' do

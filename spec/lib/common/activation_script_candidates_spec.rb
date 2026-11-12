@@ -151,6 +151,10 @@ RSpec.describe 'prepared activation script setup paths' do
     { save: true, cancel: false, close: false, unchanged: false }.each do |action, edited_save|
       it "runs #{name} prepared #{action} with finite completion and retained data [#{name == 'vars' ? 'version 1.2.0, author Tillmen; maintained by Elanthia-Online' : 'version 1.0.5, author elanthia-online; contributor Tillmen'}]" do
         editor(name)
+        if name == 'alias'
+          expect(@runner).to be_alive
+          expect(owner.thread_group.list).to include(@runner)
+        end
         textbox = descendants.find { |widget| widget.is_a?(gtk::Entry) && widget.text == 'before' }
         expect(textbox).not_to be_nil
         in_viewer { textbox.text = 'after' } unless action == :unchanged
@@ -165,7 +169,6 @@ RSpec.describe 'prepared activation script setup paths' do
         else
           expect(db.get_first_value("SELECT target FROM gs_fixture WHERE trigger='kept'")).to eq(expected)
           expect($alias_setup_window).to be_nil
-          expect(owner.thread_group.list).to include(@runner) if @runner.alive?
         end
       end
     end
