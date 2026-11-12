@@ -53,6 +53,13 @@ module Lich
         # in any case, since Windows matches file names without case.
         PLUGIN_FILE = %r{(?:\A|[/\\])rubygems_plugin(?:\.[^/\\.]+)?\z}i
 
+        # Path components Windows would change or treat specially when the
+        # archive is extracted: a trailing dot or space (dropped, so
+        # 'rubygems_plugin.rb..' lands as 'rubygems_plugin.rb'), characters
+        # Windows reserves (':' also opens an alternate data stream),
+        # control characters, '.' and '..', and device names.
+        WINDOWS_AMBIGUOUS = /[. ]\z|[<>:"|?*\x00-\x1f]|\A\.{1,2}\z|\A(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\z/i
+
         # Raised by .with_lock when +wait+ runs out.
         class LockBusy < StandardError; end
 
@@ -147,6 +154,15 @@ module Lich
           File.join(DATA_DIR, 'gem-packages', 'bin')
         end
 
+        # Verified .gem files, kept so a failed deploy is retried by
+        # reinstalling these exact bytes rather than by finding a gem of
+        # that name and version in Ruby's shared gem path.
+        #
+        # @return [String]
+        def self.artifact_dir
+          File.join(DATA_DIR, 'gem-packages', 'artifacts')
+        end
+
         # ---------------------------------------------------------------
         # Commands
         # ---------------------------------------------------------------
@@ -175,6 +191,11 @@ module Lich
           StatusReporter.respond_mono("[lich5-update: Registered gem package '#{owner_repo}'.]")
           result = sync_gem(owner_repo, retried_by: :user)
           StatusReporter.respond_mono("[lich5-update: #{owner_repo} is already up to date.]") if result == :current
+          return unless result == :refused
+
+          # A refusal at the first sync would otherwise repeat at every login.
+          self.class.update_registry { |data| data.delete(owner_repo) }
+          StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' was not registered.]")
         end
 
         # Stops following a repository. The gem and the scripts its installer
@@ -233,7 +254,9 @@ module Lich
         #
         # @param owner_repo [String]
         # @param retried_by [Symbol] :login or :user, for the failure message
-        # @return [Symbol] :updated, :current, :skipped, :failed or :github_unavailable
+        # @return [Symbol] :updated, :current, :skipped, :failed, :refused (the
+        #   release's gem name is not this repository's to use) or
+        #   :github_unavailable
         def sync_gem(owner_repo, retried_by: :login)
           release = @client.fetch_github_json("https://api.github.com/repos/#{owner_repo}/releases/latest")
           unless release
@@ -252,19 +275,19 @@ module Lich
           refusal = claim_gem_name(owner_repo, asset[:name])
           if refusal
             StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}]")
-            return :failed
+            return :refused
           end
 
           state, = local_state(owner_repo, asset)
           return :current if state == :current
 
-          if state == :install
-            problem = gem_home_problem
-            if problem
-              StatusReporter.respond_mono("[lich5-update: #{asset[:name]} #{asset[:version]} not installed: #{problem}]")
-              return :failed
-            end
+          problem = gem_home_problem
+          if problem
+            StatusReporter.respond_mono("[lich5-update: #{asset[:name]} #{asset[:version]} not installed: #{problem}]")
+            return :failed
+          end
 
+          if state == :install
             # Downloaded before taking the install lock, so a slow transfer
             # does not hold up other sessions' updates.
             gem_path = download(asset)
@@ -294,12 +317,12 @@ module Lich
         # @param gem_path [String, nil] the downloaded gem, if one was needed
         # @return [Symbol] :updated, :current or :failed
         def sync_locked(owner_repo, asset, gem_path)
-          state, installed, spec = local_state(owner_repo, asset)
+          state, installed, artifact = local_state(owner_repo, asset)
           case state
           when :current
             :current
-          when :deploy
-            deploy(owner_repo, spec, spec.metadata[METADATA_KEY], asset[:version], nil)
+          when :reinstall
+            install(owner_repo, asset, artifact, installed)
           else
             unless gem_path
               StatusReporter.respond_mono("[lich5-update: #{asset[:name]} changed while waiting for another session; it will be checked at the next sync.]")
@@ -321,24 +344,48 @@ module Lich
         #
         # @param owner_repo [String]
         # @param asset [Hash] from #find_gem_asset
-        # @return [Array(Symbol, Gem::Version, Gem::Specification)] the state,
-        #   the newest installed version (for the report line), and the spec
-        #   to deploy. :current when this registration installed and deployed
-        #   the release; :deploy when it installed it but the installer
-        #   failed; :install otherwise
+        # A retry never looks the gem up by name and version: another
+        # publisher's gem of the same name and version could have replaced
+        # or shadowed it in the shared gem path. It reinstalls from the .gem
+        # this registration verified, kept in .artifact_dir and checked
+        # against the SHA-256 recorded when it was installed.
+        #
+        # @return [Array(Symbol, Gem::Version, String)] the state, the newest
+        #   installed version (for the report line), and the verified .gem
+        #   for :reinstall. :current when this registration installed and
+        #   deployed the release; :reinstall when it installed it but the
+        #   deploy failed and its verified .gem is intact; :install otherwise
         def local_state(owner_repo, asset)
           name = asset[:name]
           version = asset[:version]
           installed = self.class.installed_version(name)
           reg = self.class.all[owner_repo] || {}
-          ours = reg['installed_gem'] == name && reg['installed'] == version.to_s
-          spec = ours && Gem::Specification.find_all_by_name(name, "= #{version}").first
-          return [:install, installed, nil] unless spec
+          return [:install, installed, nil] unless reg['installed_gem'] == name && reg['installed'] == version.to_s
 
           deployed = reg['deployed_gem'] == name ? reg['deployed'] : nil
-          return [:current, installed, nil] if deployed == version.to_s
+          present = Gem::Specification.find_all_by_name(name, "= #{version}").any?
+          return [:current, installed, nil] if deployed == version.to_s && present
 
-          [:deploy, installed, spec]
+          artifact = verified_artifact(reg, name, version)
+          artifact ? [:reinstall, installed, artifact] : [:install, installed, nil]
+        end
+
+        # @param reg [Hash] the registration
+        # @param name [String]
+        # @param version [Gem::Version]
+        # @return [String, nil] the kept .gem, when its SHA-256 still matches
+        def verified_artifact(reg, name, version)
+          path = artifact_path(name, version)
+          return nil unless reg['artifact_sha256'] && File.file?(path)
+
+          Digest::SHA256.file(path).hexdigest == reg['artifact_sha256'] ? path : nil
+        end
+
+        # @param name [String]
+        # @param version [Gem::Version]
+        # @return [String]
+        def artifact_path(name, version)
+          File.join(self.class.artifact_dir, "#{name}-#{version}.gem")
         end
 
         # Ties a gem name to the registration that first installs it, in one
@@ -370,7 +417,9 @@ module Lich
             next "it publishes the gem '#{name}', which #{claimant} already provides; skipped." if claimant
 
             unless self.class.installed_version(name).nil? || from_repository?(name, owner_repo)
-              next "it publishes the gem '#{name}', which is already installed in Lich's Ruby and was not installed by this package; refused."
+              next "it publishes the gem '#{name}', which is already installed in Lich's Ruby and was not installed by this package; refused. " \
+                   "The package's next release can set source_code_uri (or homepage) to https://github.com/#{owner_repo}, " \
+                   "or uninstall the gem (gem uninstall #{name} --all --executables) and add the package again."
             end
 
             reg['gem'] = name
@@ -493,13 +542,22 @@ module Lich
             StatusReporter.respond_mono("[lich5-update: Note: #{name} declares gem dependencies (#{spec.runtime_dependencies.map(&:name).join(', ')}), which Lich does not install.]")
           end
 
-          installer = Gem::Installer.at(gem_path, install_dir: Gem.dir, bin_dir: self.class.bin_dir,
+          # The verified bytes are kept, and installed from the kept copy, so a
+          # retry reinstalls exactly what was checked here.
+          artifact = artifact_path(name, version)
+          unless File.expand_path(gem_path) == File.expand_path(artifact)
+            FileUtils.mkdir_p(self.class.artifact_dir)
+            FileUtils.cp(gem_path, artifact)
+          end
+          sha = Digest::SHA256.file(artifact).hexdigest
+
+          installer = Gem::Installer.at(artifact, install_dir: Gem.dir, bin_dir: self.class.bin_dir,
                                                   ignore_dependencies: true, wrappers: false)
           installed_spec = installer.install
           Gem::Specification.reset
-          # Provenance: this version is now one this registration verified
-          # and installed, so a later sync may deploy it without downloading.
-          remember(owner_repo, 'installed_gem' => name, 'installed' => version.to_s)
+          # Provenance: this version is one this registration verified and
+          # installed, from the kept copy whose SHA-256 is recorded.
+          remember(owner_repo, 'installed_gem' => name, 'installed' => version.to_s, 'artifact_sha256' => sha)
           result = deploy(owner_repo, installed_spec, spec.metadata[METADATA_KEY], version, installed)
           remove_older_versions(name, version) if result == :updated
           result
@@ -522,6 +580,9 @@ module Lich
         def refusal_for(spec, name, version, entries)
           return "the asset is named #{name} #{version} but contains #{spec.name} #{spec.version}" unless spec.name == name && spec.version == version
           return "#{name} #{version} builds native extensions, which a script package may not" unless spec.extensions.empty?
+          ambiguous = entries.find { |f| f.include?('\\') || f.split('/').any? { |part| WINDOWS_AMBIGUOUS.match?(part) } }
+          return "#{name} #{version} has an archive path Windows would change on extraction (#{ambiguous.inspect})" if ambiguous
+
           # A RubyGems plugin would run on every later gem command, outside
           # Lich. RubyGems finds plugins in the extracted files, not in
           # spec.files, so the archive's own entries are checked.
@@ -550,15 +611,36 @@ module Lich
         # @param version [Gem::Version] the version just deployed
         # @return [void]
         def remove_older_versions(name, version)
-          Gem::Specification.find_all_by_name(name).select { |s| s.version < version }.each do |old|
+          # Gem::Uninstaller resolves install_dir with File.realpath, loads
+          # specs from the path it was given, and removes only those whose
+          # base_dir equals the resolved path. Passing the resolved gem home
+          # makes the two agree when Gem.dir goes through a symlink. Copies
+          # in other gem directories on GEM_PATH are left alone.
+          home = real_path(Gem.dir)
+          Gem::Specification.find_all_by_name(name).select { |s| s.version < version && real_path(s.base_dir) == home }.each do |old|
             Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) do
-              Gem::Uninstaller.new(name, version: "= #{old.version}", install_dir: Gem.dir, bin_dir: self.class.bin_dir,
+              Gem::Uninstaller.new(name, version: "= #{old.version}", install_dir: home, bin_dir: self.class.bin_dir,
                                          executables: true, ignore: true, force: true).uninstall
             end
           rescue StandardError => e
             StatusReporter.respond_mono("[lich5-update: Note: could not remove #{name} #{old.version}: #{e.message}]")
           end
           Gem::Specification.reset
+
+          # The kept .gem files of older versions are no longer needed for a retry.
+          Dir[File.join(self.class.artifact_dir, "#{name}-*.gem")].each do |path|
+            kept = File.basename(path, '.gem').delete_prefix("#{name}-")
+            FileUtils.rm_f(path) if Gem::Version.correct?(kept) && Gem::Version.new(kept) < version
+          end
+        end
+
+        # @param path [String]
+        # @return [String] +path+ with symlinks resolved, or as given when it
+        #   does not exist
+        def real_path(path)
+          File.realpath(path)
+        rescue SystemCallError
+          path
         end
 
         # Checks, before anything is downloaded, every gem home directory

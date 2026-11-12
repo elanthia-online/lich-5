@@ -50,6 +50,13 @@ RSpec.describe Lich::Util::Update::GemPackages do
       expect(printed.last).to eq('[lich5-update: x/y is already up to date.]')
     end
 
+    it 'does not keep a registration whose first sync is refused' do
+      allow(manager).to receive(:sync_gem).and_return(:refused)
+      manager.add_gem('x/y')
+      expect(described_class.all).not_to have_key('x/y')
+      expect(printed.last).to eq("[lich5-update: 'x/y' was not registered.]")
+    end
+
     it 'refuses a duplicate' do
       described_class.save('x/y' => {})
       manager.add_gem('x/y')
@@ -138,7 +145,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
       described_class.save('a/b' => { 'gem' => 'tiny', 'deployed_gem' => 'tiny', 'deployed' => '1.2.0' }, 'x/y' => {})
       allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
       allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
-      expect(manager.sync_gem('x/y')).to eq(:failed)
+      expect(manager.sync_gem('x/y')).to eq(:refused)
       expect(printed.last).to include("x/y: it publishes the gem 'tiny', which a/b already provides")
       expect(described_class.all['x/y']).not_to have_key('deployed')
     end
@@ -152,7 +159,8 @@ RSpec.describe Lich::Util::Update::GemPackages do
     end
 
     context 'with a newer release' do
-      let(:tmp) { Dir.mktmpdir('gem-packages') }
+      # Resolved, since on macOS Dir.mktmpdir is under /var, a symlink.
+      let(:tmp) { File.realpath(Dir.mktmpdir('gem-packages')) }
       let(:gem_home) { File.join(tmp, 'gem_home') }
       let(:lich_dir) { File.join(tmp, 'lich') }
 
@@ -161,6 +169,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
         FileUtils.mkdir_p(lich_dir)
         stub_const('LICH_DIR', lich_dir)
         stub_const('TEMP_DIR', File.join(tmp, 'temp'))
+        stub_const('DATA_DIR', File.join(tmp, 'data'))
         allow(Gem).to receive(:dir).and_return(gem_home)
         allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.0.0'))
         allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
@@ -222,6 +231,9 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(printed.last).to include('its installer failed: LoadError')
 
         printed.clear
+        # A clean registration, so this downloads the new gem instead of
+        # reinstalling the kept one.
+        described_class.save('x/y' => { 'gem' => 'tiny' })
         serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: 'def ('))
         allow(Gem::Specification).to receive(:find_all_by_name).and_return([])
         expect(manager.sync_gem('x/y')).to eq(:failed)
@@ -258,7 +270,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
         described_class.save('x/y' => { 'gem' => 'old_name', 'deployed_gem' => 'old_name', 'deployed' => '1.2.0' })
         allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
 
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include("now publishes the gem 'tiny', but it was added for 'old_name'", '--remove-gem=x/y')
         expect(described_class.all['x/y']).to include('gem' => 'old_name', 'deployed_gem' => 'old_name')
         expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
@@ -272,8 +284,9 @@ RSpec.describe Lich::Util::Update::GemPackages do
                                                                .and_return([Gem::Specification.new { |s| s.name = 'tiny'; s.version = '9.0.0'; s.homepage = 'https://github.com/someone/else' }])
         allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
 
-        expect(manager.sync_gem('x/y')).to eq(:failed)
-        expect(printed.last).to include("already installed in Lich's Ruby and was not installed by this package")
+        expect(manager.sync_gem('x/y')).to eq(:refused)
+        expect(printed.last).to include("already installed in Lich's Ruby and was not installed by this package",
+                                        'source_code_uri (or homepage) to https://github.com/x/y', 'gem uninstall tiny --all --executables')
         expect(described_class.all['x/y']).not_to have_key('gem')
       end
 
@@ -487,18 +500,133 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(described_class.all['x/y']).to include('installed_gem' => 'tiny', 'installed' => '1.2.0')
       end
 
-      it 'retries its own installed version, not a higher one from elsewhere' do
-        described_class.save('x/y' => { 'gem' => 'tiny', 'installed_gem' => 'tiny', 'installed' => '1.2.0' })
-        allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('9.0.0'))
+      it 'retries from its verified .gem, not a same-version gem substituted in the shared Ruby' do
+        gate = File.join(tmp, 'gate')
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: <<~RUBY))
+          raise Errno::EACCES, 'scripts' unless File.exist?('#{gate.gsub('\\', '/')}')
+          FileUtils.mkdir_p(File.join(lich_dir, 'scripts'))
+          File.write(File.join(lich_dir, 'scripts', 'tiny.lic'), 'ok')
+        RUBY
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(described_class.all['x/y']).to include('installed' => '1.2.0')
+        expect(File).to exist(File.join(described_class.artifact_dir, 'tiny-1.2.0.gem'))
+
+        # Another publisher's tiny 1.2.0 replaces the installed files, and
+        # also shadows it on the gem path.
+        File.write(File.join(gem_home, 'gems', 'tiny-1.2.0', 'lib', 'tiny', 'install.rb'), <<~RUBY)
+          module Tiny
+            module Install
+              def self.install(lich_dir) = File.write(File.join(lich_dir, 'FOREIGN'), 'ran')
+            end
+          end
+        RUBY
+        allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
         allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
-        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny', '= 1.2.0').and_return([marker_spec('1.2.0', 'OURS', source: 'https://github.com/x/y')])
-        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny', '= 9.0.0').and_return([marker_spec('9.0.0', 'FOREIGN')])
+        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny', '= 1.2.0').and_return([marker_spec('1.2.0', 'FOREIGN')])
+        FileUtils.touch(gate)
         allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
 
         expect(manager.sync_gem('x/y')).to eq(:updated)
-        expect(File).to exist(File.join(lich_dir, 'OURS'))
         expect(File).not_to exist(File.join(lich_dir, 'FOREIGN'))
+        expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq('ok')
         expect(described_class.all['x/y']).to include('deployed' => '1.2.0')
+      end
+
+      it 'downloads again when the kept .gem no longer matches its recorded SHA-256' do
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Missing' }))
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        kept = File.join(described_class.artifact_dir, 'tiny-1.2.0.gem')
+        File.write(kept, 'tampered')
+
+        allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+        downloaded = false
+        allow(manager).to(receive(:download).and_wrap_original { |original, *args| downloaded = true; original.call(*args) })
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(downloaded).to be(true)
+        expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq("installed into #{lich_dir}")
+      end
+
+      it 'refuses archive paths Windows would change on extraction' do
+        # A trailing space is not listed: RubyGems' tar reader strips it, so
+        # such an entry arrives as plain rubygems_plugin.rb and the plugin
+        # check refuses it.
+        ['lib/rubygems_plugin.rb..', 'lib/rubygems_plugin.rb::$DATA', 'lib/nul.rb', 'lib/../x.rb'].each do |entry|
+          printed.clear
+          serve(add_to_archive(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }), entry, ''))
+          expect(manager.sync_gem('x/y')).to eq(:failed), entry
+          expect(printed.last).to include('has an archive path Windows would change on extraction'), entry
+        end
+        expect(gemspecs_in(gem_home)).to be_empty
+        expect(Dir[File.join(gem_home, 'plugins', '*')]).to be_empty
+      end
+
+      it 'refuses the trailing-dot plugin that a real Windows install would register', if: Gem.win_platform? do
+        gem = add_to_archive(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }), 'lib/rubygems_plugin.rb..', '')
+
+        # The bypass on this machine: RubyGems itself extracts the entry as
+        # rubygems_plugin.rb and registers a plugin loader.
+        probe_home = File.join(tmp, 'probe_home')
+        probe_copy = File.join(tmp, 'probe.gem')
+        FileUtils.cp(gem, probe_copy)
+        Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) do
+          Gem::Installer.at(probe_copy, install_dir: probe_home, ignore_dependencies: true, wrappers: false,
+                                        bin_dir: File.join(probe_home, 'bin')).install
+        end
+        expect(Dir[File.join(probe_home, 'plugins', '*')]).not_to be_empty
+
+        serve(gem)
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('has an archive path Windows would change on extraction')
+        expect(Dir[File.join(gem_home, 'plugins', '*')]).to be_empty
+      end
+
+      it 'leaves older versions in other gem directories on the gem path alone' do
+        other_home = File.join(tmp, 'other_home')
+        old = build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, version: '1.0.0')
+        old_copy = File.join(tmp, 'tiny-1.0.0.gem')
+        FileUtils.cp(old, old_copy)
+        Gem::Installer.at(old_copy, install_dir: other_home, bin_dir: File.join(other_home, 'bin'),
+                                    ignore_dependencies: true, wrappers: false).install
+        allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
+        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny') do
+          [gem_home, other_home].flat_map { |home| Dir[File.join(home, 'specifications', 'tiny-*.gemspec')] }
+                                .map { |f| Gem::Specification.load(f) }
+        end
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(printed.join).not_to include('could not remove')
+        expect(gemspecs_in(other_home)).to eq(['tiny-1.0.0.gemspec'])
+      end
+
+      it 'uninstalls older versions when the gem home path goes through a symlink' do
+        link = File.join(tmp, 'home-link')
+        begin
+          File.symlink(gem_home, link)
+        rescue NotImplementedError, SystemCallError
+          # Windows accounts without the symlink privilege can still make a
+          # directory junction, which File.realpath resolves the same way.
+          skip 'symlinks are not available to this account' unless Gem.win_platform?
+          system('cmd', '/c', 'mklink', '/J', link.tr('/', '\\'), gem_home.tr('/', '\\'), out: File::NULL, err: File::NULL)
+          skip 'neither a symlink nor a junction could be made' unless File.directory?(link)
+        end
+        expect(File.realpath(link)).to eq(File.realpath(gem_home))
+        allow(Gem).to receive(:dir).and_return(link)
+        old = build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, version: '1.0.0')
+        old_copy = File.join(tmp, 'tiny-1.0.0.gem')
+        FileUtils.cp(old, old_copy)
+        Gem::Installer.at(old_copy, install_dir: link, bin_dir: described_class.bin_dir, ignore_dependencies: true, wrappers: false).install
+        allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
+        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny') do
+          Dir[File.join(link, 'specifications', 'tiny-*.gemspec')].map { |f| Gem::Specification.load(f) }
+        end
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(printed.join).not_to include('could not remove')
+        expect(gemspecs_in(gem_home)).to eq(['tiny-1.2.0.gemspec'])
       end
 
       it 'refuses a plugin the archive carries even when the metadata leaves it out' do
@@ -654,6 +782,34 @@ RSpec.describe Lich::Util::Update::GemPackages do
         end
         allow(spec).to receive(:full_gem_path).and_return(dir)
         spec
+      end
+
+      # Adds +name+ to a built gem's data archive without touching its
+      # metadata: an entry only the archive knows about.
+      def add_to_archive(gem_path, name, content)
+        outer = {}
+        File.open(gem_path, 'rb') do |io|
+          Gem::Package::TarReader.new(io) { |tar| tar.each { |e| outer[e.full_name] = e.read } }
+        end
+        inner = []
+        Zlib::GzipReader.wrap(StringIO.new(outer['data.tar.gz'])) do |gz|
+          Gem::Package::TarReader.new(gz) { |tar| tar.each { |e| inner << [e.full_name, e.read.to_s] } }
+        end
+        inner << [name, content]
+        data = StringIO.new(+'', 'wb')
+        Zlib::GzipWriter.wrap(data) do |gz|
+          Gem::Package::TarWriter.new(gz) do |tar|
+            inner.each { |n, d| tar.add_file_simple(n, 0o644, d.bytesize) { |f| f.write(d) } }
+          end
+        end
+        outer['data.tar.gz'] = data.string
+        outer.delete('checksums.yaml.gz')
+        File.open(gem_path, 'wb') do |io|
+          Gem::Package::TarWriter.new(io) do |tar|
+            outer.each { |n, d| tar.add_file_simple(n, 0o444, d.bytesize) { |f| f.write(d) } }
+          end
+        end
+        gem_path
       end
 
       def gemspecs_in(home)

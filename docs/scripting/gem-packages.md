@@ -24,6 +24,19 @@ The gemspec names the package's installer:
 spec.metadata['lich_install'] = 'eohunter/install#EOHunter::Install'
 ```
 
+The gemspec must also name the repository it is published from, in
+`source_code_uri` or `homepage`:
+
+```ruby
+spec.metadata['source_code_uri'] = 'https://github.com/elanthia-online/eohunter'
+```
+
+Lich uses it to recognise its own package when the gem is already installed
+but no registration records installing it: after `--remove-gem` and
+`--add-gem` again, when a second Lich install on the same Ruby adds the
+package, or when the gem was installed by hand. Without it, that add is
+refused (see below).
+
 The part before `#` is a file under the gem's `require_paths`, without
 `.rb`. The part after is a constant. Lich `load`s that file from the
 installed gem and calls `EOHunter::Install.install(LICH_DIR)`. The installer
@@ -35,6 +48,12 @@ Lich refuses a gem, before installing anything, when:
 
 - its own name or version differs from the asset filename;
 - it declares native `extensions`;
+- an archive path is one Windows would change on extraction: a component
+  ending in a dot (`rubygems_plugin.rb..` lands as `rubygems_plugin.rb`),
+  a reserved character such as `:` (which also opens an alternate data
+  stream), a control character, `.` or `..`, or a device name such as
+  `nul`. Trailing spaces never reach this check, because RubyGems' tar
+  reader strips them;
 - its archive contains a `rubygems_plugin` file with any suffix RubyGems
   loads, in any folder and any case. That would run on every later `gem`
   command, outside Lich. The archive's own entries are checked, not the
@@ -62,9 +81,13 @@ The first release a registration installs pins its gem name. After that:
 - a name another registration holds is refused;
 - a name already installed in Lich's Ruby that no registration installed is
   refused. This stops a release from replacing one of Lich's own gems, such
-  as `json`, which Lich loads at every start. A gem the player installed by
-  hand is accepted when its `source_code_uri` or `homepage` is this
-  repository.
+  as `json`, which Lich loads at every start. An installed gem whose
+  `source_code_uri` or `homepage` is this repository is accepted. The
+  refusal names both ways out: set that field in the next release, or
+  uninstall the gem and add the package again.
+
+A `--add-gem` whose first sync is refused this way is not kept, so the
+refusal does not repeat at every login.
 
 The name check and the registry write happen in one locked update, so two
 sessions cannot both claim a name.
@@ -91,14 +114,15 @@ player's permissions and can write anywhere they can.
 | Its executables | `DATA_DIR/gem-packages/bin`, not Ruby's `bin`. Lich never runs them |
 | Its scripts | Wherever its installer copies them, normally `scripts/` |
 | The registry | The `gem_packages` row of `lich_settings` in this Lich install's database |
+| Verified `.gem` files | `DATA_DIR/gem-packages/artifacts`, one per installed version, for retries |
 | Registry lock | `DATA_DIR/gem_packages.lock` |
 | Install lock | `Gem.dir/.lich5-gem-packages.lock`, or `TEMP_DIR/gem-packages-install.lock` when the gem home cannot hold it |
 | Downloads | `TEMP_DIR/<pid>-<thread>-<asset>`, removed after the install or on failure |
 
-Each registration records `gem` (the pinned name), `installed_gem` and
-`installed` (the version this registration downloaded, verified and
-installed), and `deployed_gem` and `deployed` (what this Lich install last
-deployed).
+Each registration records `gem` (the pinned name), `installed_gem`,
+`installed` and `artifact_sha256` (the version this registration
+downloaded, verified and installed, and the SHA-256 of the kept `.gem`),
+and `deployed_gem` and `deployed` (what this Lich install last deployed).
 
 Only the exact version the release advertises is ever deployed, and only
 when this registration installed it. A higher version of the same name
@@ -109,8 +133,17 @@ this registration did not install it, Lich downloads, verifies and
 installs it again (reported as "reinstalled"). A package is current when
 the recorded installed and deployed versions both match the release.
 
+A deploy that failed is never retried by finding the gem by name and
+version in Ruby's gem path, where another publisher's gem of the same name
+and version could have replaced or shadowed it. Lich reinstalls from the
+kept `.gem`, after checking it still matches its recorded SHA-256, and runs
+the installer from that fresh install. A kept file that no longer matches
+is discarded in favour of a new download.
+
 After a new version is installed and deployed, older versions of that gem
-are uninstalled. They are removed only after success, so a failed update
+in Lich's gem home are uninstalled, along with their kept `.gem` files.
+Copies in other gem directories on `GEM_PATH` are left alone. A gem home
+reached through a symlink or junction is handled. They are removed only after success, so a failed update
 leaves the working version in place. Other Lich installs on the same Ruby
 keep their copied scripts and deploy the new version at their next sync.
 
@@ -129,7 +162,7 @@ gem uninstall <name> --all --executables
 | Repository or release not found | Reported for that package. The others still run |
 | Gem home not writable, or `plugins/` marked read-only | Reported before downloading, naming the directory and the fix |
 | Download fails, or is over the limit, or the digest differs | Reported. The partial file is removed |
-| The installer raises, including `LoadError` or `SyntaxError` | The gem stays installed. The next sync runs the installer again without downloading |
+| The installer raises, including `LoadError` or `SyntaxError` | The gem stays installed. The next sync reinstalls from the kept `.gem` and runs the installer again, without downloading |
 | Another session is installing | This sync waits up to 60 seconds, then leaves it for the next sync |
 
 Downloads happen before taking the install lock, so a slow transfer does not
