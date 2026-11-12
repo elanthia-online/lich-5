@@ -72,9 +72,21 @@ body is read, and one without a length is cut off once it passes the cap.
 Runtime dependencies are not installed. A gem that declares any is
 installed with a note saying so.
 
+A release refused for any of these reasons is recorded on the
+registration, with its version, its asset's digest (or size when GitHub
+publishes no digest), and the Ruby and RubyGems it was refused under. Later
+syncs do not download it again while all of those are unchanged, so the
+refusal is printed once rather than at every login. A new release, a
+re-uploaded asset, or a Ruby or RubyGems upgrade is checked afresh.
+`--gems` shows the refused version. A first `--add-gem` whose release is
+refused is not kept.
+
 ## The gem name belongs to the repository
 
-The first release a registration installs pins its gem name. After that:
+The first release a registration installs pins its gem name. The name
+is checked before downloading, but only pinned once the downloaded gem has
+passed the checks above, so a refused release (a misnamed asset, say) does
+not hold the name. After that:
 
 - a release under a different name is refused. The player has to remove the
   package and add it again to accept the new name;
@@ -161,7 +173,8 @@ gem uninstall <name> --all --executables
 | GitHub unavailable or rate limited | Reported once. The pass stops and runs again at the next sync |
 | Repository or release not found | Reported for that package. The others still run |
 | Gem home not writable, or `plugins/` marked read-only | Reported before downloading, naming the directory and the fix |
-| Download fails, or is over the limit, or the digest differs | Reported. The partial file is removed |
+| Download fails, or is over the limit, or the digest differs | Reported. The partial file is removed, and the next sync tries again |
+| The gem is refused for its contents | Reported once and recorded. Not downloaded again until the release, its asset, or the Ruby changes |
 | The installer raises, including `LoadError` or `SyntaxError` | The gem stays installed. The next sync reinstalls from the kept `.gem` and runs the installer again, without downloading |
 | Another session is installing | This sync waits up to 60 seconds, then leaves it for the next sync |
 

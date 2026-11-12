@@ -230,7 +230,9 @@ module Lich
           data.each do |owner_repo, reg|
             gem_name = reg['gem']
             installed = gem_name ? self.class.installed_version(gem_name) : nil
-            rows << [owner_repo, gem_name || '?', installed ? installed.to_s : 'none', reg['added_at'] || '?']
+            status = installed ? installed.to_s : 'none'
+            status += " (#{reg['refused'].split.first} refused)" if reg['refused']
+            rows << [owner_repo, gem_name || '?', status, reg['added_at'] || '?']
           end
           StatusReporter.respond_mono(Terminal::Table.new(title: 'Gem Packages', rows: rows).to_s)
         end
@@ -255,8 +257,8 @@ module Lich
         # @param owner_repo [String]
         # @param retried_by [Symbol] :login or :user, for the failure message
         # @return [Symbol] :updated, :current, :skipped, :failed, :refused (the
-        #   release's gem name is not this repository's to use) or
-        #   :github_unavailable
+        #   release's gem name is not this repository's to use, or its
+        #   contents are not a script package) or :github_unavailable
         def sync_gem(owner_repo, retried_by: :login)
           release = @client.fetch_github_json("https://api.github.com/repos/#{owner_repo}/releases/latest")
           unless release
@@ -277,6 +279,11 @@ module Lich
             StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}]")
             return :refused
           end
+
+          # This exact release was downloaded and refused for its contents
+          # before, under this Ruby. It is not downloaded again until the
+          # release, its asset, or the Ruby changes; --gems shows it.
+          return :refused if self.class.all.dig(owner_repo, 'refused') == refusal_signature(asset)
 
           state, = local_state(owner_repo, asset)
           return :current if state == :current
@@ -389,7 +396,10 @@ module Lich
         end
 
         # Ties a gem name to the registration that first installs it, in one
-        # registry update so two sessions cannot both claim it.
+        # registry update so two sessions cannot both claim it. The sync
+        # checks the name before downloading, without pinning it; the name is
+        # pinned only once the downloaded gem has passed #refusal_for, so a
+        # refused release does not hold the name.
         #
         # A release may not change its gem name, use a name another
         # registration holds, or take over a gem already in Lich's Ruby that
@@ -399,8 +409,10 @@ module Lich
         #
         # @param owner_repo [String]
         # @param name [String] the gem name the release publishes
+        # @param pin [Boolean] whether to record the name as this
+        #   registration's when it is accepted
         # @return [String, nil] why the release is refused, or nil
-        def claim_gem_name(owner_repo, name)
+        def claim_gem_name(owner_repo, name, pin: false)
           self.class.update_registry do |data|
             reg = data[owner_repo]
             next 'it is no longer registered.' unless reg
@@ -422,9 +434,20 @@ module Lich
                    "or uninstall the gem (gem uninstall #{name} --all --executables) and add the package again."
             end
 
-            reg['gem'] = name
+            reg['gem'] = name if pin
             nil
           end
+        end
+
+        # What identifies a refused release: its version and asset (the
+        # digest GitHub publishes, or the size when there is none), and the
+        # Ruby and RubyGems it was refused under, since an upgrade can meet a
+        # requirement that refused it.
+        #
+        # @param asset [Hash] from #find_gem_asset
+        # @return [String]
+        def refusal_signature(asset)
+          [asset[:version], asset[:digest] || "size:#{asset[:size]}", "ruby:#{Gem.ruby_version}", "rubygems:#{Gem.rubygems_version}"].join(' ')
         end
 
         # @param name [String]
@@ -534,8 +557,17 @@ module Lich
           spec = package.spec
           refusal = refusal_for(spec, name, version, package.contents)
           if refusal
-            StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}; not installed.]")
-            return :failed
+            remember(owner_repo, 'refused' => refusal_signature(asset))
+            StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}; not installed. " \
+                                        'It will not be downloaded again until a new release is published.]')
+            return :refused
+          end
+
+          # The name is the registration's from here on.
+          refusal = claim_gem_name(owner_repo, name, pin: true)
+          if refusal
+            StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}]")
+            return :refused
           end
 
           unless spec.runtime_dependencies.empty?
@@ -557,7 +589,13 @@ module Lich
           Gem::Specification.reset
           # Provenance: this version is one this registration verified and
           # installed, from the kept copy whose SHA-256 is recorded.
-          remember(owner_repo, 'installed_gem' => name, 'installed' => version.to_s, 'artifact_sha256' => sha)
+          self.class.update_registry do |data|
+            reg = data[owner_repo]
+            next unless reg
+
+            reg.delete('refused')
+            reg.merge!('installed_gem' => name, 'installed' => version.to_s, 'artifact_sha256' => sha)
+          end
           result = deploy(owner_repo, installed_spec, spec.metadata[METADATA_KEY], version, installed)
           remove_older_versions(name, version) if result == :updated
           result

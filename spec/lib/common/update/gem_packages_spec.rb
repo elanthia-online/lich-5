@@ -219,7 +219,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
       it 'refuses a gem that needs a newer Ruby' do
         serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, required_ruby: '> 99.0'))
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('needs Ruby > 99.0', 'not installed')
         expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
         expect(File).not_to exist(File.join(lich_dir, 'scripts', 'tiny.lic'))
@@ -242,14 +242,14 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
       it 'refuses a gem without lich_install metadata' do
         serve(build_gem(metadata: {}))
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include("no 'lich_install' metadata")
         expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
       end
 
       it 'refuses a gem that builds extensions' do
         serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, extensions: ['ext/extconf.rb']))
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('builds native extensions')
       end
 
@@ -339,7 +339,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
       it 'refuses a gem whose contents do not match the asset name' do
         allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.3.0.gem'))
         serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('named tiny 1.3.0 but contains tiny 1.2.0')
         expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
       end
@@ -355,7 +355,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
       it 'refuses a gem that ships a RubyGems plugin' do
         serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, plugin: true))
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('ships a RubyGems plugin')
         expect(gemspecs_in(gem_home)).to be_empty
       end
@@ -554,8 +554,9 @@ RSpec.describe Lich::Util::Update::GemPackages do
         # check refuses it.
         ['lib/rubygems_plugin.rb..', 'lib/rubygems_plugin.rb::$DATA', 'lib/nul.rb', 'lib/../x.rb'].each do |entry|
           printed.clear
+          described_class.save('x/y' => { 'gem' => 'tiny' })
           serve(add_to_archive(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }), entry, ''))
-          expect(manager.sync_gem('x/y')).to eq(:failed), entry
+          expect(manager.sync_gem('x/y')).to eq(:refused), entry
           expect(printed.last).to include('has an archive path Windows would change on extraction'), entry
         end
         expect(gemspecs_in(gem_home)).to be_empty
@@ -577,7 +578,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(Dir[File.join(probe_home, 'plugins', '*')]).not_to be_empty
 
         serve(gem)
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('has an archive path Windows would change on extraction')
         expect(Dir[File.join(gem_home, 'plugins', '*')]).to be_empty
       end
@@ -636,7 +637,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(Gem::Package.new(gem).contents).to include('lib/rubygems_plugin.rb')
         serve(gem)
 
-        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(manager.sync_gem('x/y')).to eq(:refused)
         expect(printed.last).to include('ships a RubyGems plugin')
         expect(gemspecs_in(gem_home)).to be_empty
         expect(Dir[File.join(gem_home, 'plugins', '*')]).to be_empty
@@ -645,8 +646,9 @@ RSpec.describe Lich::Util::Update::GemPackages do
       it 'refuses a plugin file whatever its case or suffix' do
         %w[RubyGems_Plugin.rb rubygems_plugin.so].each do |plugin_name|
           printed.clear
+          described_class.save('x/y' => { 'gem' => 'tiny' })
           serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, plugin: true, plugin_name: plugin_name))
-          expect(manager.sync_gem('x/y')).to eq(:failed)
+          expect(manager.sync_gem('x/y')).to eq(:refused)
           expect(printed.last).to include('ships a RubyGems plugin')
         end
       end
@@ -680,6 +682,98 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(manager.sync_gem('x/y')).to eq(:failed)
         expect(printed.last).to include('over the')
         expect(printed.last).not_to include('the body was read')
+      end
+
+      context 'when a release is refused for its contents' do
+        let(:no_entry_point) { build_gem(metadata: {}) }
+
+        def count_downloads
+          count = 0
+          allow(manager).to(receive(:download).and_wrap_original { |original, *args| count += 1; original.call(*args) })
+          -> { count }
+        end
+
+        it 'does not keep a first --add-gem, nor pin its name' do
+          described_class.save({})
+          allow(described_class).to receive(:installed_version).with('tiny').and_return(nil)
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
+          downloads = count_downloads
+          serve(no_entry_point)
+
+          manager.add_gem('x/y')
+
+          expect(described_class.all).not_to have_key('x/y')
+          expect(downloads.call).to eq(1)
+          expect(printed.last).to eq("[lich5-update: 'x/y' was not registered.]")
+        end
+
+        it 'records the refusal and does not download the same release again' do
+          downloads = count_downloads
+          serve(no_entry_point)
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed.last).to include("no 'lich_install' metadata", 'will not be downloaded again')
+          expect(described_class.all['x/y']['refused']).to start_with('1.2.0 ')
+
+          printed.clear
+          3.times { expect(manager.sync_gem('x/y')).to eq(:refused) }
+          expect(downloads.call).to eq(1)
+          expect(printed).to be_empty
+        end
+
+        it 'does not pin the name, so a corrected release under another name is accepted' do
+          # The first release's asset is misnamed: tinyy-1.2.0.gem holds tiny.
+          described_class.save('x/y' => {})
+          allow(described_class).to receive(:installed_version).with('tinyy').and_return(nil)
+          allow(described_class).to receive(:installed_version).with('tiny').and_return(nil)
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tinyy-1.2.0.gem'))
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed.last).to include('the asset is named tinyy 1.2.0 but contains tiny 1.2.0')
+          expect(described_class.all['x/y']).not_to have_key('gem')
+
+          # The publisher fixes the name; it is not refused as a rename.
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.3.0.gem'))
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, version: '1.3.0'))
+          expect(manager.sync_gem('x/y')).to eq(:updated)
+          expect(described_class.all['x/y']).to include('gem' => 'tiny', 'installed' => '1.3.0')
+          expect(described_class.all['x/y']).not_to have_key('refused')
+        end
+
+        it 'checks again when a new release, a new asset, or a new Ruby comes along' do
+          serve(no_entry_point)
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem', digest: "sha256:#{'a' * 64}"))
+          # The served bytes are not what these made-up digests describe, so
+          # the download skips the byte check; the refusal record still
+          # carries the release's digest.
+          allow(manager).to(receive(:download).and_wrap_original { |original, asset| original.call(asset.merge(digest: nil)) })
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+
+          # Same release, asset re-uploaded with a new digest.
+          printed.clear
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem', digest: "sha256:#{'b' * 64}"))
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed.last).to include("no 'lich_install' metadata")
+
+          # Same asset, Ruby upgraded.
+          printed.clear
+          allow(Gem).to receive(:ruby_version).and_return(Gem::Version.new('99.0.0'))
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed.last).to include("no 'lich_install' metadata")
+
+          # A new release.
+          printed.clear
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.3.0.gem'))
+          serve(build_gem(metadata: {}, version: '1.3.0'))
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed.last).to include('tiny 1.3.0 has no')
+        end
+
+        it 'shows the refused release in --gems' do
+          serve(no_entry_point)
+          manager.sync_gem('x/y')
+          manager.list_gems
+          expect(printed.last).to include('1.0.0 (1.2.0 refused)')
+        end
       end
 
       it 'downloads to a name unique to the process and thread, and removes it' do
@@ -818,7 +912,8 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
       def serve(gem_path)
         bytes = File.binread(gem_path)
-        allow_any_instance_of(URI::HTTP).to receive(:open).and_return(StringIO.new(bytes))
+        # A fresh body each time: the download closes the one it reads.
+        allow_any_instance_of(URI::HTTP).to receive(:open) { StringIO.new(bytes) }
       end
     end
 
