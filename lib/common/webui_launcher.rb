@@ -478,7 +478,7 @@ module Lich
         end
       end
 
-      # Treats a detach as resumable (B2): the viewer's credentials, operations,
+      # Treats a detach as resumable: the viewer's credentials, operations,
       # manual entry and dialog are kept for the WebUI reconnect window and are
       # discarded only if the same viewer has not re-attached when it expires.
       # @param viewer_id [String] departing attachment identifier
