@@ -7,6 +7,24 @@ module Lich
     module WebUIStartup
       module_function
 
+      # Prepares native hosting before either graphical login or script startup.
+      # Disabled presentation and an explicit browser perform no native build.
+      # Failures end startup before any window or script can consume an
+      # unavailable helper.
+      # @return [void]
+      # @raise [SystemExit] status 1 when a required helper could not be built
+      def prepare
+        return unless Lich::WebUI.presentation_enabled?
+
+        browser, = Lich::WebUI::BrowserLauncher.browser_override(nil, ENV)
+        return unless Lich::WebUI::BrowserLauncher.native_host(nil, browser)
+
+        Lich::WebUI::NativeHost.prepare!
+      rescue Lich::WebUI::Error => error
+        report_fatal(error.message)
+        raise SystemExit.new(1)
+      end
+
       # Starts the launcher and waits for a selection. A launcher failure (a host
       # that could not start, or one that exited before any viewer connected) is
       # reported and ends startup with exit status 1; a user closing a connected
@@ -40,8 +58,8 @@ module Lich
 
       # Writes the fatal reason to the debug log and, when stderr was redirected
       # to that log, to the terminal stream as well. With no terminal attached (a
-      # desktop launch) it is also shown through Lich.msgbox_alert, so a launcher
-      # that failed to start is not silent (1853:RC4).
+      # desktop launch), Lich.msgbox_alert shows it off Windows. On Windows,
+      # launcher failures use the launcher's own message box notification.
       # @param message [String] authored, secret-free failure message
       # @return [void]
       def report_fatal(message)

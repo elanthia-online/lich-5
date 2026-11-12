@@ -7,9 +7,9 @@ shim. There is no user-selectable GTK backend. `--no-gui` and its legacy alias
 
 ## Native pages
 
-The [author API](../lib/api/webui.rb) exposes page registration, schema lookup,
-refresh, hosting, modals and owner cleanup. The [component contract](../lib/webui/contract.rb)
-is the authoritative list of supported properties, events and child relationships.
+The author API exposes page registration, schema lookup, refresh, hosting,
+modals and owner cleanup. The component contract is the authoritative list of
+supported properties, events and child relationships.
 Its version describes the Ruby/browser contract, not a script release number.
 
 A script can create an explicitly owned page:
@@ -99,8 +99,8 @@ unsupported; use EO's Repository implementation.
 
 ## Bounded Builder
 
-The [Builder mapping](../lib/common/script_scope/gtk/builder.rb) translates a
-supported subset of GTK 3 XML into the same script-owned objects as direct Ruby
+The Builder mapping translates a supported subset of GTK 3 XML into the same
+script-owned objects as direct Ruby
 calls. It supports `add_from_string`, local `add_from_file`, `get_object`/`[]`,
 `objects`, `builder_name`, subclassing and `connect_signals`. XML does not evaluate
 Ruby. Supported families include bounded containers, labels, entries, buttons,
@@ -119,18 +119,23 @@ inspect `objects` explicitly. Unhandled Builder errors escaping `Gtk.queue` clos
 that owner's UI and request script termination, preventing a partly initialized
 setup from continuing. A rescued direct error does not discard prior objects.
 Source defects are not repaired by the shim. Regression fixtures distinguish
-unchanged source failures from explicitly corrected candidates; see their
-[provenance and limits](../spec/fixtures/webui/README.txt).
+unchanged source failures from explicitly corrected candidates, with pinned
+provenance and explicit acceptance limits.
 
 ## Hosting and presentation
 
-macOS uses an AppKit/WKWebView helper. Ruby4Lich5 tooling is the intended delivery
-mechanism; signing and Gatekeeper acceptance remain distribution work. Normal
-launches do not compile or download the helper, and a missing helper reports a
-launch failure. Developers can build it with
-`zsh lib/webui/native/macos/build.sh` using Apple's command-line tools. The source
-build targets macOS 14 or later; that build target is not a substitute for the
-maintainers' supported-platform policy.
+macOS uses an AppKit/WKWebView helper. Before graphical login or script startup,
+presentation-enabled startup checks the helper and builds it locally if missing,
+including after an update replaces the library directory. Existing helpers are
+retained without requiring write access to their installation. Concurrent
+startups share one build; resources are supplied before publishing the executable,
+and failed build output is invalidated
+so the next startup retries. A failed build reports a fatal startup error.
+Disabled presentation and an explicit browser override do not build a helper.
+The required Apple command-line build tools are supplied
+by the Ruby installation setup; signing and Gatekeeper acceptance remain
+distribution work. The source build targets macOS 14 or later; that build target
+is not a substitute for the maintainers' supported-platform policy.
 
 Windows and Linux use dedicated browser app windows. Chrome and Edge are the
 supported defaults (Edge is discovered on Windows), and distro Chromium is
@@ -186,16 +191,21 @@ configured Ruby environment. RSpec does not run the npm suite automatically:
 
 ```sh
 parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o '--seed 251026' spec
+npm ci --prefix spec/webui
+cd spec/webui && npx --no-install playwright install webkit && cd ../..
 npm test --prefix spec/webui
 NATIVE_BROWSER=1 parallel_rspec -n 2 --test-options '--tag browser' spec/lib/common spec/lib/webui
 ```
 
 The browser tests require the locked test dependencies and installed Chrome.
+The npm engine tests open browser windows; run them on a logged-in desktop, or
+under `xvfb-run --auto-servernum` on Linux after installing the browser system
+dependencies. Use `npm run test:logic --prefix spec/webui` for logic tests alone.
 The default-startup probe validates authenticated protocol traffic and shutdown;
 it is not a native-window test. On a suitable logged-in macOS desktop,
 `NATIVE_HOST=1 rspec spec/lib/webui/native_host_presentation_spec.rb` exercises the
 native host. `ruby bench/native_webui_smoke.rb` is an interactive manual check,
-not CI. See [test guidance](../spec/README.md#webui-validation).
+not CI. See the test guidance for setup and acceptance boundaries.
 
 Fixtures use pinned excerpts, explicit game boundaries and isolated persistence.
 Neither fixture passes nor source-tree historical results certify full script

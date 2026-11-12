@@ -109,12 +109,11 @@ Its top-level `fields` object documents every key, unit and status value;
 the full pinned commit. `audit_sha256` is the SHA-256 of `css-provenance.json`,
 which the corpus spec asserts.
 
-`spec/support/build_css_decoration_corpus.rb` rebuilds it from only those pinned
+The corpus builder rebuilds it from only those pinned
 Git blobs and `css-decoration-excerpts.json`, including `fields`, `source` and each
 record's `attribution` (read from the pinned source header). Its output must equal the
-committed file byte for byte. With local clones of elanthia-online/scripts and lich_repo_mirror, run
-`ruby spec/support/build_css_decoration_corpus.rb EO_REPO MIRROR_REPO | cmp - spec/fixtures/webui/css-decoration.json`,
-or set CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO for the corpus spec's
+committed file byte for byte. With local clones of elanthia-online/scripts and
+lich_repo_mirror, set CSS_CORPUS_EO_REPO and CSS_CORPUS_MIRROR_REPO for the corpus spec's
 rebuild example (skipped otherwise).
 Prism decodes selected strings; extraction never evaluates source Ruby.
 Each record's `excerpts` are synthetic: hand-written Ruby slices, kept in
@@ -143,8 +142,8 @@ tpick setup fixture (separate from the ten Builder setup fixtures)
 stylesheet and setup-data/default/tooltip blocks from mirror `lib/tpick.lic` v48
 at `2fa28f1e540e97c468af88bbc8c432d3cebf8755`. Each block/method carries its
 source SHA-256 and original line range. No source repairs are applied.
-`script_scope_header_bar_spec.rb` uses its first eight methods for narrow tests;
-`script_scope_tpick_setup_spec.rb` exercises the broader original default flows.
+Header-bar checks use its first eight methods for narrow tests;
+tpick setup checks exercise the broader original default flows.
 The harness substitutes only game-facing character/profession/spell/inventory
 answers, message/running boundaries and temporary settings destinations. It does
 not execute top-level initialization, downloads, Scan/game commands or gameplay.
@@ -328,7 +327,7 @@ as a behavior reference; converted business logic is not copied into the shim.
 
 Explicitly corrected eloot/Bigshot acceptance candidates
 
-webui_builder_source_repairs.rb applies exact-match substitutions only while
+The source-repair helper applies exact-match substitutions only while
 loading separately labeled positive tests. Fixture files remain untouched.
 eloot names its existing Exclusions label exclusions_label; Bigshot removes
 the obsolete tooltip assignment and replaces its legacy boon-flag migration.
@@ -363,8 +362,8 @@ from mirror revision `2fa28f1e540e97c468af88bbc8c432d3cebf8755`, with whole-sour
 and block SHA-256 hashes. Gemstonev lines 37-39, 52-56 and 710-715 provide cursor
 names, primary geometry and cursor assignment; highlight-manager 4275-4316 provides
 the guarded hand-cursor helpers. Tests evaluate only these blocks against the shim,
-not full scripts or game state. See `script_scope_geometry_cursor_spec.rb`
-for the accepted methods and fallback boundaries.
+not full scripts or game state. Geometry/cursor checks bound the accepted
+methods and fallback behavior.
 
 Pinned source refresh (2026-10-12 source revisions; merged in PR #56)
 
@@ -427,8 +426,8 @@ terminators; parsing the source field restores the exact bytes used by the diges
 The reconciled Map candidate differs from the older saved preparation; only the
 recorded candidate hash is accepted here.
 
-activation_script_candidates_spec.rb runs these blocks through the production
-shim/native contract. Vars/Alias cover edited Save & Close, edited Cancel, edited
+Prepared activation checks run these blocks through the production shim/native
+contract. Vars/Alias cover edited Save & Close, edited Cancel, edited
 host close and unchanged close with finite completion and owner cleanup. Vars uses
 its real provider; an explicit harness Vars.save checks SQLite persistence after
 the script's assignments, rather than claiming the script saves immediately.
@@ -445,7 +444,7 @@ Native window opening and actual browser input transport are not exercised.
 These checks do not execute complete script startup, game loops or live gameplay.
 
 The default_inventory records all ten core defaults plus GS-only ewaggle from
-lib/update.rb, their pinned source/prepared identities and acceptance limits.
+the default-script inventory, their pinned source/prepared identities and acceptance limits.
 Autostart/version inspect GTK version diagnostically and have no GUI entrypoint;
 log/logxml are stream/file loggers. Go2/Repository/Ewaggle native candidates have
 historical browser-startup evidence; their older shim fixtures above remain
