@@ -2,6 +2,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'open3'
 require 'pp'
 require 'rubygems/package'
 require 'stringio'
