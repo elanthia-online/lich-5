@@ -70,6 +70,9 @@ module Lich
         unless occurrences.all? { |entry| entry['version'] == spec.fetch('version') }
           raise Error, "recovery version mismatch for #{name}: lock requires #{spec.fetch('version')}"
         end
+        # Each package's minimum was validated against its version above;
+        # minimums are compared by version value.
+        raise Error, "recovery minimum mismatch for #{name}" unless occurrences.map { |entry| RecoveryUnitPolicy.minimum_identity(entry) }.uniq.length == 1
         # Unmodified upstream files retain the lock checksum. Built/repacked
         # packages have new digests and are checked by the producer smoke gate.
         if unit.dig('artifact', 'url')&.start_with?('https://rubygems.org/downloads/') && package['sha256'] != "sha256:#{spec.fetch('sha256')}"
