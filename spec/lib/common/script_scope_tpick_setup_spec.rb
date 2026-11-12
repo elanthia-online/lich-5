@@ -8,9 +8,9 @@ require 'json'
 require 'timeout'
 
 RSpec.describe 'Original tpick setup acceptance' do
-  # Settled B5: every example here runs the retained tpick-titlebar.json blocks,
-  # so each names the script, tested version, pinned source revision and credited
-  # author as the source header writes them (spec/fixtures/webui/README.txt).
+  # Every example runs the retained tpick-titlebar.json blocks and names the
+  # script, tested version, pinned source revision and credited author as written
+  # in the pinned source header.
   attribution = '[tpick version 48, mirror 2fa28f1e540e97c468af88bbc8c432d3cebf8755, author Dreaven]'
 
   let(:scope) { Lich::Common::ScriptScope }

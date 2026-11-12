@@ -8,9 +8,8 @@ require 'timeout'
 require 'digest'
 
 RSpec.describe 'bounded Gtk Builder compatibility' do
-  # Settled B5: each script-derived example names the script, the tested version
-  # and pinned source revision, and the credited author, as the source header
-  # writes them (spec/fixtures/webui/README.txt, Attribution). EO revisions
+  # Each script-derived example names the script, tested version, pinned source
+  # revision and credited author as written in the pinned source header. EO revisions
   # 7fd0b971 (setup fixtures) and c4a96840 (refreshed eloot setup).
   attribution = {
     'blackarts'       => '[BlackArts version 1.3.6, revision 7fd0b971387492cfd81b4bc7ef94428413965071, author elanthia-online]',
