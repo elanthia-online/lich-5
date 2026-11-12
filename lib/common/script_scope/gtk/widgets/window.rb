@@ -104,10 +104,10 @@ module Lich
           def set_titlebar(bar)
             session.synchronize do
               session.refuse(self, :set_titlebar) if destroyed?
-              # Later-layer constants (HeaderBar; defined at P13 or P14) are absent from
-              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-              # Retirement: replace these guards with plain constant references once this
-              # file is no longer shipped or tested without the later layers.
+              # HeaderBar is defined in another shim file and may be absent.
+              # Resolve it at call time; an absent class has no instances.
+              # Retirement: replace this guard with a plain constant reference once this
+              # file is always shipped and tested with the defining file.
               session.refuse(self, :set_titlebar) unless bar.nil? || (defined?(HeaderBar) && bar.is_a?(HeaderBar))
               return self if bar.equal?(@titlebar)
 
@@ -276,10 +276,10 @@ module Lich
           # @param value [Symbol] supported utility-window hint
           # @return [Window] self
           def set_type_hint(value)
-            # Later-layer constants (Gdk::WindowTypeHint; defined at P13 or P14) are absent from
-            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-            # Retirement: replace these guards with plain constant references once this
-            # file is no longer shipped or tested without the later layers.
+            # Gdk::WindowTypeHint is defined in another shim file and may be absent.
+            # Resolve it at call time; type hints are refused until it exists.
+            # Retirement: replace this guard with a plain constant reference once this
+            # file is always shipped and tested with the defining file.
             session.refuse(self, :set_type_hint) unless defined?(Gdk::WindowTypeHint::UTILITY) && value == Gdk::WindowTypeHint::UTILITY
             session.degrade(:window_type_hint, 'utility window classification is controlled by the browser host')
             self

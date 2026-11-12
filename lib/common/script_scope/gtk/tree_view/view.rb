@@ -27,10 +27,10 @@ module Lich
             return super unless state == :selected
 
             session.style_operation(self, :override_background_color) do
-              # Later-layer constant (Gdk::RGBA; first defined at P14) is absent from P13 trees;
+              # Gdk::RGBA is defined in another shim file and may be absent;
               # resolve it at call time. An absent class has no instances.
               # Retirement: replace this guard with a plain constant reference once this
-              # file is no longer shipped or tested without the later layers.
+              # file is always shipped and tested with the defining file.
               session.refuse(self, :override_background_color) if destroyed? || !(defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA))
               write(:selection_background, colour.to_h)
             end

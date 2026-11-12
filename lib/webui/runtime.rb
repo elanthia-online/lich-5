@@ -72,7 +72,7 @@ module Lich
           end
 
           log(:error, "WebUI refresh failed owner=#{owner_label(owner)} error=#{error.class}")
-          # A render block's exit stops its owner, never Lich (B3).
+          # A render block's exit stops its owner, never Lich.
           @owner_exit.call(owner) if error.is_a?(SystemExit)
         end)
         @degradation_mutex = Mutex.new

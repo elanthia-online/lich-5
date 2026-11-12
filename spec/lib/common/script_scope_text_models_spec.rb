@@ -439,9 +439,9 @@ RSpec.describe 'script compatibility models, tables and text' do
     end
   end
 
-  # Classes that a later layer first defines (images, style). hide_const makes any
-  # layer behave as P13 does, where none of them exist.
-  context 'without the classes a later layer defines' do
+  # Classes defined in other shim files (images, style). hide_const exercises
+  # calls made without those class definitions loaded.
+  context 'without classes defined in other shim files' do
     before do
       %w[Gtk::Image Gtk::Color Gdk::RGBA Pango::FontDescription].each do |name|
         hide_const("Lich::Common::ScriptScope::#{name}")

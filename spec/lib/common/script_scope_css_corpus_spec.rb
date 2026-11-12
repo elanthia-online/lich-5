@@ -12,7 +12,7 @@ RSpec.describe 'source-derived CSS decoration acceptance' do
   audit_path = File.expand_path('../../fixtures/webui/css-provenance.json', __dir__)
   excerpts_path = File.expand_path('../../fixtures/webui/css-decoration-excerpts.json', __dir__)
   corpus = JSON.parse(File.read(corpus_path))
-  # Test-level attribution (settled B5): script, tested version or exact source
+  # Test-level attribution: script, tested version or exact source
   # revision, and credited author exactly as recorded from the pinned source header.
   credit = lambda do |name|
     record = corpus.fetch('scripts').find { |r| r['name'] == name }
