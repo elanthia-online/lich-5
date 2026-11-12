@@ -27,8 +27,9 @@ module Lich
       # Environment variable naming a browser executable for every window.
       ENVIRONMENT_VARIABLE = 'LICH_WEBUI_BROWSER'
       SETTING_HINT = 'set the Browser path in the launcher Settings'
-      ROUTES_HINT = "#{SETTING_HINT} or the #{ENVIRONMENT_VARIABLE} environment variable".freeze
-      private_constant :SETTING_HINT, :ROUTES_HINT
+      ENVIRONMENT_HINT = "set the #{ENVIRONMENT_VARIABLE} environment variable".freeze
+      SNAP_REQUIREMENT = 'snap-packaged Chromium cannot open the WebUI launch files'
+      private_constant :SETTING_HINT, :ENVIRONMENT_HINT, :SNAP_REQUIREMENT
 
       MACOS_PATHS = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -139,8 +140,7 @@ module Lich
             if snap
               shown = snap.gsub(/[[:cntrl:]]/, '?')
               raise Error, "the discovered browser '#{shown}' is unusable: " \
-                           'snap-packaged Chromium cannot open the WebUI launch files; ' \
-                           "#{ROUTES_HINT} to a non-snap Chrome or Chromium"
+                           "#{SNAP_REQUIREMENT}; #{ENVIRONMENT_HINT} to a non-snap Chrome or Chromium"
             end
           end
           requirement = if windows?(platform)
@@ -151,7 +151,7 @@ module Lich
                           'Google Chrome or Chromium'
                         end
           raise Error, "#{requirement} is required to open the WebUI launcher window; install it, " \
-                       "or #{ROUTES_HINT} to another browser"
+                       "or #{ENVIRONMENT_HINT} to another browser"
         end
 
         profile_arguments = if profile_dir
@@ -186,14 +186,13 @@ module Lich
         return if path.nil?
 
         shown = path.to_s.gsub(/[[:cntrl:]]/, '?')
-        snap = 'snap-packaged Chromium cannot open the WebUI launch files'
         if origin == :environment
           fix = "fix or unset #{ENVIRONMENT_VARIABLE}"
           raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which does not exist; #{fix}" unless File.exist?(path)
           raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which is not an executable file; #{fix}" unless executable_file?(path)
           return unless snap_browser?(path)
 
-          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', but #{snap}; " \
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', but #{SNAP_REQUIREMENT}; " \
                        "point #{ENVIRONMENT_VARIABLE} at a non-snap Chrome or Chromium"
         end
 
@@ -201,7 +200,7 @@ module Lich
         raise Error, "the configured browser '#{shown}' is not an executable file; #{SETTING_HINT} or clear it" unless executable_file?(path)
         return unless snap_browser?(path)
 
-        raise Error, "the configured browser '#{shown}' is unusable: #{snap}; #{SETTING_HINT} to a non-snap " \
+        raise Error, "the configured browser '#{shown}' is unusable: #{SNAP_REQUIREMENT}; #{SETTING_HINT} to a non-snap " \
                      "Chrome or Chromium, or clear it and point #{ENVIRONMENT_VARIABLE} at one"
       end
 
