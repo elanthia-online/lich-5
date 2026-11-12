@@ -48,6 +48,11 @@ module Lich
         # dependency recovery probes them.
         GEM_HOME_WRITE_DIRS = %w[gems specifications extensions cache build_info].freeze
 
+        # A file RubyGems would register as a plugin: rubygems_plugin with
+        # any suffix it loads (.rb, .so, .dll, .bundle ...), in any folder,
+        # in any case, since Windows matches file names without case.
+        PLUGIN_FILE = %r{(?:\A|[/\\])rubygems_plugin(?:\.[^/\\.]+)?\z}i
+
         # Raised by .with_lock when +wait+ runs out.
         class LockBusy < StandardError; end
 
@@ -294,7 +299,7 @@ module Lich
           when :current
             :current
           when :deploy
-            deploy(owner_repo, spec, spec.metadata[METADATA_KEY], installed, nil)
+            deploy(owner_repo, spec, spec.metadata[METADATA_KEY], asset[:version], nil)
           else
             unless gem_path
               StatusReporter.respond_mono("[lich5-update: #{asset[:name]} changed while waiting for another session; it will be checked at the next sync.]")
@@ -306,24 +311,34 @@ module Lich
 
         # Where this Lich install stands with the release.
         #
+        # Only the exact version the release advertises counts, and only
+        # when this registration installed it after verifying the download.
+        # A higher version of the same name from anywhere else in Ruby's gem
+        # path (another Lich install, a hand-run gem install) is never
+        # adopted: its installer would run as if this repository had
+        # published it. Such a release is downloaded, verified and installed
+        # over instead.
+        #
         # @param owner_repo [String]
         # @param asset [Hash] from #find_gem_asset
-        # @return [Array(Symbol, Gem::Version, Gem::Specification)] :current
-        #   when the release is installed and deployed here; :deploy when it
-        #   is installed but its scripts are not (an installer that failed,
-        #   or another Lich install on this Ruby installed it); :install
-        #   otherwise
+        # @return [Array(Symbol, Gem::Version, Gem::Specification)] the state,
+        #   the newest installed version (for the report line), and the spec
+        #   to deploy. :current when this registration installed and deployed
+        #   the release; :deploy when it installed it but the installer
+        #   failed; :install otherwise
         def local_state(owner_repo, asset)
           name = asset[:name]
+          version = asset[:version]
           installed = self.class.installed_version(name)
-          return [:install, installed, nil] unless installed && installed >= asset[:version]
-
           reg = self.class.all[owner_repo] || {}
-          deployed = reg['deployed_gem'] == name ? reg['deployed'] : nil
-          return [:current, installed, nil] if deployed == installed.to_s
+          ours = reg['installed_gem'] == name && reg['installed'] == version.to_s
+          spec = ours && Gem::Specification.find_all_by_name(name, "= #{version}").first
+          return [:install, installed, nil] unless spec
 
-          spec = Gem::Specification.find_all_by_name(name, "= #{installed}").first
-          spec ? [:deploy, installed, spec] : [:install, installed, nil]
+          deployed = reg['deployed_gem'] == name ? reg['deployed'] : nil
+          return [:current, installed, nil] if deployed == version.to_s
+
+          [:deploy, installed, spec]
         end
 
         # Ties a gem name to the registration that first installs it, in one
@@ -430,8 +445,13 @@ module Lich
           # Every Lich session on an install shares TEMP_DIR.
           path = File.join(TEMP_DIR, "#{Process.pid}-#{Thread.current.object_id}-#{filename}")
           FileUtils.mkdir_p(TEMP_DIR)
+          # open-uri reads the whole response before returning, so the cap is
+          # enforced during the transfer: a declared length over it, or
+          # progress past it, aborts the request.
+          too_big = ->(bytes) { raise "over the #{MAX_ASSET_BYTES}-byte limit" if bytes && bytes > MAX_ASSET_BYTES }
           File.open(path, 'wb') do |file|
-            body = URI.parse(asset[:url]).open(**GitHubClient.open_uri_timeouts)
+            body = URI.parse(asset[:url]).open(**GitHubClient.open_uri_timeouts,
+                                               content_length_proc: too_big, progress_proc: too_big)
             begin
               IO.copy_stream(body, file, MAX_ASSET_BYTES + 1)
             ensure
@@ -461,8 +481,9 @@ module Lich
         def install(owner_repo, asset, gem_path, installed)
           name = asset[:name]
           version = asset[:version]
-          spec = Gem::Package.new(gem_path).spec
-          refusal = refusal_for(spec, name, version)
+          package = Gem::Package.new(gem_path)
+          spec = package.spec
+          refusal = refusal_for(spec, name, version, package.contents)
           if refusal
             StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}; not installed.]")
             return :failed
@@ -476,6 +497,9 @@ module Lich
                                                   ignore_dependencies: true, wrappers: false)
           installed_spec = installer.install
           Gem::Specification.reset
+          # Provenance: this version is now one this registration verified
+          # and installed, so a later sync may deploy it without downloading.
+          remember(owner_repo, 'installed_gem' => name, 'installed' => version.to_s)
           result = deploy(owner_repo, installed_spec, spec.metadata[METADATA_KEY], version, installed)
           remove_older_versions(name, version) if result == :updated
           result
@@ -493,12 +517,15 @@ module Lich
         # @param spec [Gem::Specification] the downloaded gem's spec
         # @param name [String] the name in the asset filename
         # @param version [Gem::Version] the version in the asset filename
+        # @param entries [Array<String>] the files actually in the gem's archive
         # @return [String, nil] why the gem is refused, or nil
-        def refusal_for(spec, name, version)
+        def refusal_for(spec, name, version, entries)
           return "the asset is named #{name} #{version} but contains #{spec.name} #{spec.version}" unless spec.name == name && spec.version == version
           return "#{name} #{version} builds native extensions, which a script package may not" unless spec.extensions.empty?
-          # A RubyGems plugin would run on every later gem command, outside Lich.
-          return "#{name} #{version} ships a RubyGems plugin, which a script package may not" if spec.files.any? { |f| File.basename(f) == 'rubygems_plugin.rb' }
+          # A RubyGems plugin would run on every later gem command, outside
+          # Lich. RubyGems finds plugins in the extracted files, not in
+          # spec.files, so the archive's own entries are checked.
+          return "#{name} #{version} ships a RubyGems plugin, which a script package may not" if entries.any? { |f| PLUGIN_FILE.match?(f) }
           return "#{name} #{version} has no '#{METADATA_KEY}' metadata, so Lich cannot install its scripts" unless spec.metadata[METADATA_KEY]
 
           # RubyGems' installer does not check these itself (its resolver
@@ -622,7 +649,13 @@ module Lich
 
           remember(owner_repo, 'deployed_gem' => spec.name, 'deployed' => version.to_s)
           name = spec.name
-          line = previous ? "#{name} updated to #{version}" : "#{name} #{version} installed"
+          line = if previous && previous < version
+                   "#{name} updated to #{version}"
+                 elsif previous == version
+                   "#{name} #{version} reinstalled"
+                 else
+                   "#{name} #{version} installed"
+                 end
           line += "; restart #{name} to use it" if defined?(Script) && Script.respond_to?(:running?) && Script.running?(name)
           StatusReporter.respond_mono("[lich5-update: #{line}.]")
           :updated

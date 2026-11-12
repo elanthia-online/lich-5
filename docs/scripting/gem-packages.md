@@ -35,16 +35,20 @@ Lich refuses a gem, before installing anything, when:
 
 - its own name or version differs from the asset filename;
 - it declares native `extensions`;
-- it ships a `rubygems_plugin.rb`, which would run on every later `gem`
-  command, outside Lich;
+- its archive contains a `rubygems_plugin` file with any suffix RubyGems
+  loads, in any folder and any case. That would run on every later `gem`
+  command, outside Lich. The archive's own entries are checked, not the
+  publisher-written `spec.files`;
 - it has no `lich_install` metadata;
 - its `required_ruby_version` or `required_rubygems_version` is not met.
   RubyGems' installer does not check these, because this install bypasses
   its resolver.
 
-It also refuses an asset GitHub reports as over 10 MB, a download that
-grows past 10 MB, and a download whose SHA-256 differs from the `digest`
-GitHub publishes for the asset. Older assets without a digest are accepted.
+It also refuses an asset GitHub reports as over 10 MB, and a download whose
+SHA-256 differs from the `digest` GitHub publishes for the asset. Older
+assets without a digest are accepted. The 10 MB cap is also enforced during
+the transfer: a response declaring a larger length is dropped before its
+body is read, and one without a length is cut off once it passes the cap.
 
 Runtime dependencies are not installed. A gem that declares any is
 installed with a note saying so.
@@ -91,10 +95,19 @@ player's permissions and can write anywhere they can.
 | Install lock | `Gem.dir/.lich5-gem-packages.lock`, or `TEMP_DIR/gem-packages-install.lock` when the gem home cannot hold it |
 | Downloads | `TEMP_DIR/<pid>-<thread>-<asset>`, removed after the install or on failure |
 
-Each registration records `gem` (the pinned name), and `deployed_gem` and
-`deployed` (what this Lich install last deployed). A package is current only
-when the installed version is at least the release's and both deployed
-fields match it.
+Each registration records `gem` (the pinned name), `installed_gem` and
+`installed` (the version this registration downloaded, verified and
+installed), and `deployed_gem` and `deployed` (what this Lich install last
+deployed).
+
+Only the exact version the release advertises is ever deployed, and only
+when this registration installed it. A higher version of the same name
+elsewhere in Ruby's gem path, from another Lich install or a hand-run
+`gem install`, is never adopted: its installer would run as if this
+repository had published it. When the release version is installed but
+this registration did not install it, Lich downloads, verifies and
+installs it again (reported as "reinstalled"). A package is current when
+the recorded installed and deployed versions both match the release.
 
 After a new version is installed and deployed, older versions of that gem
 are uninstalled. They are removed only after success, so a failed update
@@ -134,6 +147,8 @@ What protects the player today:
 - they choose which repositories to register;
 - a release cannot take over a gem name it does not own, ship native code
   or RubyGems plugins, or link commands into Ruby's `bin`;
+- only a version this registration downloaded and verified is deployed,
+  never one some other source put in the shared Ruby;
 - the downloaded bytes must match GitHub's published digest when there is
   one.
 
