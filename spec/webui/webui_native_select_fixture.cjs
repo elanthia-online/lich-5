@@ -1,4 +1,5 @@
 const { expect } = require('@playwright/test');
+const { writeFile } = require('node:fs/promises');
 const { openRenderer } = require('./webui_engine_fixture.cjs');
 
 const render = (generation, value = 'b') => ({ type: 'render', page: 'form', generation,
@@ -50,4 +51,17 @@ async function openSelect(page, value) {
   return { ...wire, control, select };
 }
 
-module.exports = { render, selectState, openSelect };
+/**
+ * Saves observations in the uploaded test output even when the example fails.
+ * @param {import('@playwright/test').TestInfo} testInfo Current example output.
+ * @param {string} name Attachment and JSON file name.
+ * @param {Object} observation Native select states collected before failure.
+ * @returns {Promise<void>} Resolves once the output file is attached.
+ */
+async function attachObservation(testInfo, name, observation) {
+  const path = testInfo.outputPath(`${name}.json`);
+  await writeFile(path, JSON.stringify(observation, null, 2));
+  await testInfo.attach(name, { contentType: 'application/json', path });
+}
+
+module.exports = { render, selectState, openSelect, attachObservation };

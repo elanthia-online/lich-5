@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { render, selectState, openSelect } = require('./webui_native_select_fixture.cjs');
+const { render, selectState, openSelect, attachObservation } = require('./webui_native_select_fixture.cjs');
 
 // Chrome's headless native select has no expanded popup on the supported macOS host.
 test.use({ headless: false });
@@ -9,10 +9,10 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
     test(`${modifier || 'plain'} ${key} holds a native select until its observed release`, async ({ page }, testInfo) => {
       const value = key === 'ArrowDown' ? 'b' : 'a';
       const { select, receive } = await openSelect(page, value);
-      if (modifier) await page.keyboard.down(modifier);
-      await page.keyboard.down(key);
       let before = null, during = null, afterKeyup = null;
       try {
+        if (modifier) await page.keyboard.down(modifier);
+        await page.keyboard.down(key);
         before = await selectState(select);
         expect(before.keys).toContainEqual({ key, trusted: true, alt: modifier === 'Alt',
           control: modifier === 'Control', meta: modifier === 'Meta', shift: modifier === 'Shift' });
@@ -43,8 +43,8 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
         }
       } finally {
         try {
-          await testInfo.attach('native-select-observation', { contentType: 'application/json',
-            body: JSON.stringify({ key, modifier, before, during, afterKeyup }, null, 2) });
+          await attachObservation(testInfo, 'native-select-observation',
+            { key, modifier, before, during, afterKeyup });
         } finally {
           await page.keyboard.up(key);
           if (modifier) await page.keyboard.up(modifier);
@@ -60,20 +60,26 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
 
 test('a pointer-opened native popup retains its delivered select through periodic renders', async ({ page }, testInfo) => {
   const { control, select, receive } = await openSelect(page, 'b');
-  await control.click();
-  const before = await selectState(select);
-  // Where available, :open verifies this really is native-popup coverage.
-  if (before.open !== null) expect(before.open).toBe(true);
-  receive(render(2));
-  receive(render(3));
-  const during = await selectState(select);
-  expect(during.connected && during.delivered).toBe(true);
-  await expect(page.locator('h1')).toHaveText('Render 1');
-  if (before.open === true) expect(during.open).toBe(true);
-  await testInfo.attach('native-popup-observation', { contentType: 'application/json',
-    body: JSON.stringify({ before, during }, null, 2) });
-  await page.keyboard.press('Escape');
-  await page.locator('button[data-cid="after"]').focus();
+  let before = null, during = null;
+  try {
+    await control.click();
+    before = await selectState(select);
+    // Where available, :open verifies this really is native-popup coverage.
+    if (before.open !== null) expect(before.open).toBe(true);
+    receive(render(2));
+    receive(render(3));
+    during = await selectState(select);
+    expect(during.connected && during.delivered).toBe(true);
+    await expect(page.locator('h1')).toHaveText('Render 1');
+    if (before.open === true) expect(during.open).toBe(true);
+  } finally {
+    try {
+      await attachObservation(testInfo, 'native-popup-observation', { before, during });
+    } finally {
+      await page.keyboard.press('Escape');
+      await page.locator('button[data-cid="after"]').focus();
+    }
+  }
   await expect(page.locator('h1')).toHaveText('Render 3');
 });
 
