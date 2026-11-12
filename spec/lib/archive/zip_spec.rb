@@ -3,12 +3,17 @@ require 'fileutils'
 require 'tmpdir'
 
 require_relative '../../../lib/archive'
+require_relative '../../support/no_process_expectations'
 require_relative '../../support/zip_builder'
 
 RSpec.describe Lich::Archive::Zip do
+  include NoProcessExpectations
+
   let(:work_dir) { Dir.mktmpdir('lich-zip-archive') }
   let(:zip_path) { File.join(work_dir, 'bundle.zip') }
   let(:destination) { File.join(work_dir, 'packages') }
+  # "cafe.gem" with an e-acute, built from its code point to keep the source ASCII.
+  let(:accented_name) { "caf#{[0xE9].pack('U')}.gem" }
 
   after { FileUtils.remove_entry(work_dir) if Dir.exist?(work_dir) }
 
@@ -76,6 +81,60 @@ RSpec.describe Lich::Archive::Zip do
       end
     end
 
+    it 'extracts names starting with "~" literally under the destination, not under a home directory' do
+      write_zip([
+                  { name: '~nosuchuser123/x.gem', data: 'unknown user' },
+                  { name: '~/y.gem', data: 'current user' },
+                  { name: '~bare', data: 'bare' }
+                ])
+
+      described_class.extract(zip_path, destination)
+
+      expect(File.read(File.join(destination, '~nosuchuser123', 'x.gem'))).to eq('unknown user')
+      expect(File.read(File.join(destination, '~', 'y.gem'))).to eq('current user')
+      expect(File.read(File.join(destination, '~bare'))).to eq('bare')
+      expect(Dir.children(work_dir).sort).to eq(%w[bundle.zip packages])
+    end
+
+    {
+      'a file and a directory of the same name'              => [['clash', false], ['clash/', true]],
+      'a directory and a file of the same name'              => [['clash/', true], ['clash', false]],
+      'a file that another entry needs as its directory'     => [['a', false], ['a/b.gem', false]],
+      'a nested file whose directory another entry names'    => [['a/b.gem', false], ['a', false]],
+      'a file and a directory differing only in case'        => [['Clash', false], ['clash/', true]],
+      'a file that a later entry uses as a deeper directory' => [['a/b', false], ['a/b/c/d.gem', false]]
+    }.each do |label, layout|
+      it "refuses #{label} and writes nothing" do
+        write_zip(layout.map { |name, directory| { name: name, data: directory ? '' : 'x', method: :store } })
+
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(Lich::Archive::Error, /archive entry is both a file and a directory/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    [%w[same.gem same.gem], %w[same.gem Same.gem], %w[same.gem ./same.gem], %w[dir/x.gem dir//x.gem]].each do |first, second|
+      it "refuses #{first.inspect} followed by #{second.inspect} as a duplicate and writes nothing" do
+        write_zip([{ name: first, data: 'first' }, { name: second, data: 'second' }])
+
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(Lich::Archive::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    it 'accepts a directory listed more than once and directories implied by their files' do
+      write_zip([
+                  { name: 'gems/', data: '', method: :store },
+                  { name: 'gems/a.gem', data: 'a' },
+                  { name: 'gems/', data: '', method: :store },
+                  { name: 'gems/native/b.gem', data: 'b' }
+                ])
+
+      expect(described_class.extract(zip_path, destination).length).to eq(4)
+      expect(extracted).to eq(%w[gems/a.gem gems/native/b.gem])
+    end
+
     it 'rejects an entry whose CRC-32 does not match' do
       write_zip([{ name: 'a.gem', data: 'payload', crc32: 1234 }])
 
@@ -92,6 +151,32 @@ RSpec.describe Lich::Archive::Zip do
       write_zip([{ name: 'a.gem', data: 'x' * 100, size: 101 }])
 
       expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /smaller than declared/)
+    end
+
+    it 'rejects bytes after the end of a deflate stream instead of writing them' do
+      # Size and CRC-32 describe the data plus the trailing bytes, so only the
+      # stream-length check stops them reaching the output file.
+      write_zip([{ name: 'a.gem', data: 'payload' * 10, trailing: 'junk', size: 74, crc32: Zlib.crc32("#{'payload' * 10}junk") }])
+
+      expect { described_class.extract(zip_path, destination) }
+        .to raise_error(Lich::Archive::Error, /data after its compressed stream: a\.gem/)
+    end
+
+    it 'rejects trailing bytes that arrive in a later chunk than the end of the stream' do
+      data = Random.new(2).bytes(200_000)
+      write_zip([{ name: 'a.gem', data: data, method: :deflate, trailing: 'x' * 70_000 }])
+
+      expect { described_class.extract(zip_path, destination) }
+        .to raise_error(Lich::Archive::Error, /data after its compressed stream: a\.gem/)
+    end
+
+    it 'rejects a deflate stream that stops before its final block' do
+      deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -Zlib::MAX_WBITS)
+      unfinished = deflater.deflate('x' * 100, Zlib::SYNC_FLUSH)
+      deflater.close
+      write_zip([{ name: 'a.gem', data: 'x' * 100, payload: unfinished }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /corrupt: a\.gem/)
     end
 
     it 'rejects corrupt deflate data' do
@@ -126,7 +211,63 @@ RSpec.describe Lich::Archive::Zip do
     it 'rejects an entry whose data offset lies outside the archive' do
       write_zip([{ name: 'a.gem', data: 'x', offset: 50_000 }])
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /outside the archive/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /entry data lies outside the archive: a\.gem/)
+    end
+
+    # Each archive below is otherwise valid, so removing the check it targets
+    # lets the extraction succeed and the example fail.
+    it 'rejects an archive that spans disks' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'x' }], disk_count: 0))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /multi-disk/)
+    end
+
+    it 'rejects an archive whose end record names another disk' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'x' }], disk: 1, directory_disk: 1))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /multi-disk/)
+    end
+
+    it 'rejects a central directory that runs into the end record' do
+      entries = [{ name: 'a.gem', data: 'x' }]
+      directory_size = ZipBuilder.build(entries).byteslice(-22, 22).unpack('VvvvvVVv')[5]
+      File.binwrite(zip_path, ZipBuilder.build(entries, directory_size: directory_size + 4))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /central directory lies outside the archive/)
+    end
+
+    it 'rejects an entry whose local header has the wrong signature' do
+      write_zip([{ name: 'a.gem', data: 'x', local_signature: 0x04034b51 }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /local header has a bad signature: a\.gem/)
+    end
+
+    it 'rejects a non-ASCII name that is not flagged as UTF-8' do
+      write_zip([{ name: accented_name, data: 'x' }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /must be ASCII unless flagged UTF-8/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+
+    it 'extracts a non-ASCII name flagged as UTF-8' do
+      write_zip([{ name: accented_name, data: 'x', flags: 0x0800 }])
+
+      expect(described_class.extract(zip_path, destination)).to eq([accented_name])
+      expect(File.read(File.join(destination, accented_name))).to eq('x')
+    end
+
+    it 'rejects a name that is not valid UTF-8' do
+      write_zip([{ name: "caf#{0xE9.chr}.gem".b, data: 'x', flags: 0x0800 }])
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /not valid UTF-8/)
+    end
+
+    ['./', '.'].each do |name|
+      it "refuses #{name.inspect}, which names the destination itself" do
+        write_zip([{ name: name, data: '', method: :store }])
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /unsafe archive entry: #{Regexp.escape(name)}\z/)
+      end
     end
 
     it 'rejects a file that is not a ZIP archive' do
@@ -143,10 +284,8 @@ RSpec.describe Lich::Archive::Zip do
     end
 
     it 'starts no external process' do
-      write_zip([{ name: 'a.gem', data: 'payload' }])
-      expect(Process).not_to receive(:spawn)
-      expect(Kernel).not_to receive(:system)
-      expect(IO).not_to receive(:popen)
+      write_zip([{ name: 'gems/', data: '', method: :store }, { name: 'gems/a.gem', data: 'payload' }, { name: 'b.gem', data: 'b', method: :store }])
+      expect_no_process(described_class)
 
       described_class.extract(zip_path, destination)
     end

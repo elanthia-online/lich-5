@@ -4,7 +4,6 @@ require 'fileutils'
 require 'json'
 require 'net/http'
 require 'open-uri'
-require 'open3'
 require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
@@ -1024,12 +1023,19 @@ module Lich
       # (accepted_gem_policy, dependency_recovery, recovery_unit_policy,
       # runtime_gem_contract, startup_policy_compatibility), so loading this
       # file must not need anything outside that set.
+      # The require stays outside the rescued block below: a rescue clause
+      # naming Archive::Error would itself raise NameError if the file
+      # failed to load, hiding the LoadError.
       require_relative 'archive'
-      Archive.extract_zip(zip_path, destination)
-    rescue Archive::Error => e
-      raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
-    rescue Errno::EACCES, Errno::EROFS => e
-      raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      begin
+        Archive.extract_zip(zip_path, destination)
+      rescue Archive::Error => e
+        raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      rescue Errno::EACCES, Errno::EROFS => e
+        raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      rescue SystemCallError => e
+        raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      end
     end
 
     # @param path [String]

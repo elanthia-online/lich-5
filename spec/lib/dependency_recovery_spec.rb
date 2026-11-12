@@ -2,15 +2,20 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'open3'
 require 'pp'
 require 'rubygems/package'
 require 'stringio'
 require 'tmpdir'
 
 require_relative '../../lib/dependency_recovery'
+require_relative '../../lib/archive'
+require_relative '../support/no_process_expectations'
 require_relative '../support/zip_builder'
 
 RSpec.describe Lich::DependencyRecovery do
+  include NoProcessExpectations
+
   let(:gem_home) { Dir.mktmpdir('lich-recovery-gems') }
   let(:manifest_url) { 'https://example.test/R4L5-gem-manifest.json' }
   let(:artifact_url) { 'https://example.test/sqlite3.gem' }
@@ -1091,9 +1096,7 @@ RSpec.describe Lich::DependencyRecovery do
     it 'extracts in-process on Windows, without PowerShell, WScript, or any other program' do
       allow(Gem).to receive(:win_platform?).and_return(true)
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk', descriptor: true }]))
-      expect(Open3).not_to receive(:capture3)
-      expect(Process).not_to receive(:spawn)
-      expect(IO).not_to receive(:popen)
+      expect_no_process(subject, Lich::Archive, Lich::Archive::Zip)
 
       subject.send(:extract_zip_file, zip_path, destination)
 
@@ -1106,6 +1109,21 @@ RSpec.describe Lich::DependencyRecovery do
 
       expect { subject.send(:extract_zip_file, zip_path, destination) }
         .to raise_error(described_class::Error, %r{Could not extract bundle\.zip into .*packages: unsafe archive entry: \.\./escape\.gem})
+    end
+
+    it 'names the archive when the destination cannot be created' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk' }]))
+      File.write(destination, 'a file where the directory should go')
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: File exists/)
+    end
+
+    it 'names the archive when two entries would collide on disk' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'clash', data: 'x' }, { name: 'clash/', data: '', method: :store }]))
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: archive entry is both a file and a directory: clash/)
     end
 
     it 'stages a real ZIP bundle for the native replacement helper' do
