@@ -6,6 +6,7 @@ require 'json'
 require 'socket'
 require 'timeout'
 require 'uri'
+require 'rbconfig'
 require_relative 'default_webui_acceptance_report'
 
 acceptance_root = ENV.fetch('LICH_CI_DEFAULT_WEBUI_ROOT')
@@ -28,11 +29,16 @@ module LichCiDefaultWebUIAcceptance
   REQUIRED_TABS = ['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'].freeze
   GTK_FAMILY_PATTERN = /(?:gtk|gdk|gobject|glib)/i
 
-  # Intercepts only browser opening after its class loads; leaves production startup/await intact.
+  # Isolates helper build inputs and intercepts browser opening after classes load.
+  # Production helper preparation, startup and await methods remain intact.
   # This subprocess probe uses authenticated HTTP/WebSocket traffic, not a browser cookie jar.
   # @return [void]
   def install!
     @installer = TracePoint.new(:end) do |trace|
+      if trace.path.end_with?('/webui/native_host.rb') && defined?(Lich::WebUI::NativeHost) &&
+         trace.self.equal?(Lich::WebUI::NativeHost)
+        install_native_fixture(Lich::WebUI::NativeHost)
+      end
       next unless trace.path.end_with?('/webui/browser_launcher.rb')
       next unless defined?(Lich::WebUI::BrowserLauncher)
       next unless trace.self.equal?(Lich::WebUI::BrowserLauncher)
@@ -47,6 +53,57 @@ module LichCiDefaultWebUIAcceptance
       @installer.disable
     end
     @installer.enable
+  end
+
+  # Supplies a local fixture builder without replacing native preparation logic.
+  # The fixture executable supplies no native-window behavior.
+  # @param host [Module] production native host with its methods already defined
+  # @return [void]
+  def install_native_fixture(host)
+    directory = File.join(TEMP_DIR, 'native-helper')
+    FileUtils.mkdir_p(directory)
+    executable = File.join(directory, 'helper.exe')
+    builder = File.join(directory, 'build.rb')
+    marker = File.join(directory, 'builds')
+    lock = File.join(directory, 'prepare.lock')
+    bridge = File.join(directory, 'window.js')
+    program = <<~'SH'
+      #!/bin/sh
+      printf '%s\n' '{"source":"unavailable","screens":[]}'
+    SH
+    File.write(builder, <<~RUBY)
+      File.open(ARGV.fetch(1), 'a') { |file| file.puts 'built' }
+      File.write(ARGV.fetch(2), 'fixture bridge')
+      File.write(ARGV.fetch(0), #{program.dump})
+      File.chmod(0o755, ARGV.fetch(0))
+    RUBY
+    host.send(:remove_const, :EXECUTABLE)
+    host.const_set(:EXECUTABLE, executable.freeze)
+    host.send(:remove_const, :HELPERS)
+    host.const_set(:HELPERS, {
+      macos: { name: 'macOS', executable: executable, resources: [bridge].freeze, lock: lock,
+               build: [{ 'RUBYOPT' => nil }, RbConfig.ruby, builder, executable, marker, bridge].freeze }.freeze,
+    }.freeze)
+    @native_fixture = { executable: executable, lock: lock, marker: marker }
+  end
+
+  # Requires production preparation and records its isolated fixture outcome.
+  # @return [Hash] native preparation evidence
+  # @raise [RuntimeError] if preparation was replaced or its outcome is wrong
+  def native_preparation_evidence
+    host = Lich::WebUI::NativeHost
+    startup_source = Lich::Main::WebUIStartup.method(:prepare).source_location.first
+    helper_source = host.method(:prepare!).source_location.first
+    raise 'startup preparation was replaced' unless startup_source.end_with?('/lib/main/webui_startup.rb')
+    raise 'native preparation was replaced' unless helper_source.end_with?('/lib/webui/native_host.rb')
+
+    required = !host.platform.nil?
+    builds = File.exist?(@native_fixture.fetch(:marker)) ? File.readlines(@native_fixture.fetch(:marker)).length : 0
+    available = File.executable?(@native_fixture.fetch(:executable))
+    raise 'native fixture preparation did not run as required' unless builds == (required ? 1 : 0) && available == required
+
+    { 'required' => required, 'builds' => builds, 'available' => available,
+      'startup_replaced' => false, 'helper_replaced' => false }
   end
 
   # Starts the probe client and publishes a structured success/failure report for the parent.
@@ -129,6 +186,7 @@ module LichCiDefaultWebUIAcceptance
       'launcher_start_source'      => start_source,
       'launcher_await_source'      => await_source,
       'entrypoint_argv'            => ARGV.dup,
+      'native_preparation'         => native_preparation_evidence,
       'effective_roots'            => effective_roots,
       'gtk_family_loaded_features' => $LOADED_FEATURES.grep(GTK_FAMILY_PATTERN)
     }
@@ -224,6 +282,7 @@ module LichCiDefaultWebUIAcceptance
       [name.to_s, File.expand_path(Object.const_get(name).to_s)]
     end
     roots['ACTIVE_SESSION_DIR'] = File.expand_path(ACTIVE_SESSION_DIR.to_s) if defined?(ACTIVE_SESSION_DIR)
+    roots['NATIVE_HELPER_DIR'] = File.dirname(@native_fixture.fetch(:executable))
     roots['working_directory'] = Dir.pwd
     roots
   end

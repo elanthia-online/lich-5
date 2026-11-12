@@ -17,6 +17,16 @@ RSpec.describe 'WebUI presentation policy at startup' do
     expect(policy).to be < started
   end
 
+  it 'prepares native hosting after policy resolution and before launcher or CLI script startup' do
+    policy = entrypoint.index('Lich::WebUI.configure_presentation(enabled: @argv_options[:gui] != false)')
+    prepare = entrypoint.index('Lich::Main::WebUIStartup.prepare')
+    started = entrypoint.index("require File.join(LIB_DIR, 'main', 'main.rb')")
+    expect([policy, prepare, started]).to all(be_a(Integer))
+    expect(policy).to be < prepare
+    expect(prepare).to be < started
+    expect(entrypoint.scan('Lich::Main::WebUIStartup.prepare').length).to eq(1)
+  end
+
   it 'records the policy before anything can activate the script scope, which fixes HAVE_GTK' do
     policy = entrypoint.index('Lich::WebUI.configure_presentation(')
     prefix = entrypoint[0...policy]
