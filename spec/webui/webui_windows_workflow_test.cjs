@@ -45,9 +45,22 @@ test('Windows coverage stays bounded and blocking with pinned read-only actions'
   for (const action of actions) assert.match(action, /^[\w/-]+@[0-9a-f]{40}(?: #.*)?$/);
   assert.match(workflow, /persist-credentials: false/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
-  assert.doesNotMatch(workflow, /bundle exec rspec[^\n]*gemcheck_spec/);
+  assert.doesNotMatch(workflow, /ruby -S rspec[^\n]*gemcheck_spec/);
   assert.match(workflow, /if: \$\{\{ !cancelled\(\) \}\}\n        uses: actions\/upload-artifact@/);
   assert.match(workflow, /\$principal\.Count -ne 1 -or \$principal\[0\]\.status -ne 'passed'/);
+});
+
+test('Windows uses production runtime preparation before separate discoverable RSpec tooling', () => {
+  assert.match(workflow, /ruby-version: '4\.0\.9'\n          windows-toolchain: none\n          bundler: none\n          bundler-cache: false/);
+  assert.doesNotMatch(workflow, /BUNDLE_WITHOUT|bundle exec|GEM_HOME=/);
+  const prepare = workflow.indexOf('run: ./.github/scripts/windows_runtime_prepare.ps1');
+  const tooling = workflow.indexOf('gem install rspec --version 3.13.2 --no-document --install-dir $toolHome');
+  const discovery = workflow.indexOf('& ruby -S rspec --version');
+  const groups = workflow.indexOf('$groups = [ordered]@{');
+  assert.ok(prepare > 0 && prepare < tooling && tooling < discovery && discovery < groups);
+  assert.match(workflow, /GEM_PATH=\$toolHome\$\(\[IO\.Path\]::PathSeparator\)\$runtimePaths/);
+  assert.match(workflow, /\(Join-Path \$toolHome 'bin'\) \| Out-File \$env:GITHUB_PATH -Append/);
+  assert.match(workflow, /& ruby -S rspec @specFiles/);
 });
 
 test('Windows selection includes the retained transport, authentication, launcher and builder boundaries', () => {
