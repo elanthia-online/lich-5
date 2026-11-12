@@ -64,6 +64,32 @@ RSpec.describe Lich::R4L5ContractCheck do
     expect { verify(lich_version: '5.23.0') }.to raise_error(described_class::Error, /version mismatch/)
   end
 
+  context 'with an ARM64 manifest' do
+    let(:arm_inventory) { { 'ruby_version' => '4.0.9', 'ruby_abi' => '4.0', 'platform' => 'aarch64-mingw-ucrt', 'gems' => {} } }
+
+    before do
+      target['platform'] = 'aarch64-mingw-ucrt'
+      contract['ruby_inventory'] = arm_inventory
+      contract['windows_contract_sha256'] = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile, platform: 'aarch64-mingw-ucrt')
+                                                                    .windows_contract_digest(arm_inventory, advertised_members: unit.fetch('members'))
+    end
+
+    it 'verifies the target for the requested platform' do
+      expect(verify(platform: 'aarch64-mingw-ucrt').fetch('packages').keys).to eq(%w[redis redis-client])
+    end
+
+    it 'does not let the default x64 check accept an ARM64-only manifest' do
+      expect { verify }.to raise_error(described_class::Error, /exactly one Windows Ruby 4.0 target/)
+    end
+
+    it 'rejects an x64 contract identity presented as ARM64' do
+      contract['windows_contract_sha256'] = Lich::RuntimeGemContract.new(gemfile: gemfile, lockfile: lockfile).windows_contract_digest(
+        contract['ruby_inventory'].merge('platform' => 'x64-mingw-ucrt'), advertised_members: unit.fetch('members')
+      )
+      expect { verify(platform: 'aarch64-mingw-ucrt') }.to raise_error(described_class::Error, /does not match this Windows projection/)
+    end
+  end
+
   it 'accepts the candidate only after matching recovery and installer are available' do
     expect(verify(candidate_sha: 'c' * 40).fetch('packages').keys).to eq(%w[redis redis-client])
   end
