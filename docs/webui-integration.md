@@ -56,7 +56,10 @@ Events dispatch on the owner's queue. Keep callbacks bounded: a callback must
 not wait for work queued behind itself. Use the existing owner scheduler for
 supported deferred work, and asynchronous modal completion rather than blocking
 the dispatcher. Native modals require an explicit no-viewer policy; cancellation
-and owner shutdown are outcomes callers must handle.
+and owner shutdown are outcomes callers must handle. Viewer presence is checked
+once, when the modal opens: a window opened moments earlier counts as no viewer
+until it attaches, so `abort` and `default` complete immediately. Use
+`no_viewer: :wait` for a modal raised right after opening its window.
 
 Owner termination refuses new work, cancels modals and scheduled callbacks,
 revokes registered files, closes owned windows and unregisters pages. A restarted
