@@ -120,6 +120,17 @@ RSpec.describe Lich::Archive::TarGz do
     expect(File.read(File.join(destination, 'r/lib/a.rb'))).to eq('a')
   end
 
+  # A trailing space cannot be tested here: RubyGems strips it when reading a
+  # tar header, so such a name never reaches the check.
+  ['r/nul', 'r/CON.rb', 'r/lib./x.rb', 'r\x.rb', "r/x#{0xE9.chr}.rb".b].each do |name|
+    it "refuses #{name.inspect}, which Windows would alter, and writes nothing" do
+      write_tarball([{ name: 'r/first.rb', data: 'first' }, { name: name, data: 'evil' }])
+
+      expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /unsafe archive entry/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+  end
+
   it 'refuses a symbolic link, even one pointing inside the archive, and writes nothing' do
     write_tarball([{ name: 'r/real.rb', data: 'x' }, { name: 'r/link.rb', type: :symlink, target: 'real.rb' }])
 

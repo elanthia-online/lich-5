@@ -59,15 +59,41 @@ module Lich
       File.join(directory, children.first)
     end
 
+    # Windows device names, reserved in any directory and with any extension
+    # (NUL.txt is still NUL), including COM and LPT with a superscript 1-3.
+    WINDOWS_DEVICE_NAME = /\A(?:con|prn|aux|nul|conin\$|conout\$|(?:com|lpt)[0-9#{[0xB9, 0xB2, 0xB3].pack('U*')}])\z/i
+
     # @param name [String] archive entry name
     # @return [Boolean] whether +name+ is empty, absolute, drive- or
-    #   stream-qualified, contains a control character, or traverses upward
+    #   stream-qualified, not UTF-8, contains a control character or backslash,
+    #   traverses upward, or has a segment Windows would rename or treat as
+    #   a device
     def unsafe_entry?(name)
-      return true if name.empty? || name.start_with?('/', '\\') || name.match?(/[[:cntrl:]]/)
+      # Tar names are raw bytes. One that is not UTF-8 is refused rather
+      # than guessed at; matching it below would raise ArgumentError.
+      name = name.dup.force_encoding(Encoding::UTF_8)
+      return true unless name.valid_encoding?
+      return true if name.empty? || name.start_with?('/') || name.match?(/[[:cntrl:]]/)
       # A colon names a drive (C:...) or an NTFS alternate data stream (a.gem:s).
       return true if name.include?(':')
+      # ZIP and tar both separate with "/". Windows also splits on "\", so
+      # a\b would be a file on one platform and a directory on another.
+      return true if name.include?('\\')
 
-      name.split(/[\\\/]/).include?('..')
+      name.split('/').any? { |segment| unsafe_segment?(segment) }
+    end
+
+    # Windows silently drops a trailing dot or space ("a.gem." and "a.gem"
+    # are one file) and opens a device for a reserved name, ignoring any
+    # extension ("nul.gem" writes nowhere).
+    # @param segment [String] one "/"-separated part of an entry name
+    # @return [Boolean]
+    def unsafe_segment?(segment)
+      return true if segment == '..'
+      return false if segment.empty? || segment == '.'
+      return true if segment.end_with?('.', ' ')
+
+      segment.split('.', 2).first.rstrip.match?(WINDOWS_DEVICE_NAME)
     end
 
     # @param name [String] archive entry name
@@ -75,12 +101,19 @@ module Lich
     # @return [String] the absolute path +name+ extracts to
     # @raise [Error] when +name+ is unsafe or would land outside +root+
     def safe_destination(name, root)
-      raise Error, "unsafe archive entry: #{name}" if unsafe_entry?(name)
+      raise Error, "unsafe archive entry: #{printable(name)}" if unsafe_entry?(name)
 
       target = resolve(name, root)
-      raise Error, "unsafe archive entry: #{name}" unless target.start_with?("#{root}/", "#{root}#{File::SEPARATOR}")
+      raise Error, "unsafe archive entry: #{printable(name)}" unless target.start_with?("#{root}/", "#{root}#{File::SEPARATOR}")
 
       target
+    end
+
+    # @param name [String] archive entry name
+    # @return [String] +name+ as UTF-8, with any invalid bytes replaced, for
+    #   an error message
+    def printable(name)
+      name.dup.force_encoding(Encoding::UTF_8).scrub
     end
 
     # Joined before expanding: File.expand_path(name, root) would read a

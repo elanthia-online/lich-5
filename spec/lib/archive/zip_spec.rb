@@ -135,6 +135,15 @@ RSpec.describe Lich::Archive::Zip do
       expect(extracted).to eq(%w[gems/a.gem gems/native/b.gem])
     end
 
+    ['nul.gem', 'gems/COM1.gem', 'a.gem.', 'gems /a.gem', 'gems\a.gem'].each do |name|
+      it "refuses #{name.inspect}, which Windows would alter, and writes nothing" do
+        write_zip([{ name: 'first.gem', data: 'first' }, { name: name, data: 'evil' }])
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /unsafe archive entry/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
     it 'rejects an entry whose CRC-32 does not match' do
       write_zip([{ name: 'a.gem', data: 'payload', crc32: 1234 }])
 

@@ -18,7 +18,7 @@ RSpec.describe Lich::Archive do
   describe '.unsafe_entry?' do
     it 'rejects empty, absolute, drive, stream, control-character, and parent-traversal names' do
       ['', '/absolute.gem', '\\absolute.gem', 'C:\\absolute.gem', 'C:/absolute.gem', 'C:relative.gem',
-       'a.gem:stream', "a\tb.gem", '../escape.gem', 'gems/../escape.gem', 'gems\\..\\escape.gem'].each do |name|
+       'a.gem:stream', "a\tb.gem", '../escape.gem', 'gems/../escape.gem', 'gems\..\escape.gem', 'gems/..'].each do |name|
         expect(described_class.unsafe_entry?(name)).to be(true), name.inspect
       end
     end
@@ -26,6 +26,25 @@ RSpec.describe Lich::Archive do
     it 'accepts safe relative filenames and subpaths' do
       %w[sqlite3.gem gems/sqlite3.gem gems/native/sqlite3.gem gems/ a..b.gem].each do |name|
         expect(described_class.unsafe_entry?(name)).to be(false), name.inspect
+      end
+    end
+  end
+
+  describe '.unsafe_entry? on names Windows would alter' do
+    superscript_one = [0xB9].pack('U')
+
+    ['dir\file.gem', 'a\b', 'a.gem.', 'a.gem ', 'dir./a.gem', 'dir /a.gem', '...', 'CON', 'con', 'nul.gem', 'NUL.tar.gz',
+     'gems/aux', 'gems/Aux.rb', 'aux .rb', 'prn', 'COM1', 'com9.txt', 'LPT0', 'lpt3.log', 'CONIN$', 'conout$.x',
+     "COM#{superscript_one}", "r/x#{0xE9.chr}.rb".b].each do |name|
+      it "refuses #{name.inspect}" do
+        expect(described_class.unsafe_entry?(name)).to be(true)
+      end
+    end
+
+    ['console.rb', 'connect/x.rb', 'nullable.rb', 'auxiliary/a.rb', 'com10.rb', 'lpt.rb', 'COMX', 'a..b.gem', '.github/x.yml',
+     './lich-5/lich.rbw', 'gems/./a.gem', 'gems//a.gem', 'lich-5-main/', '~/a.gem', 'caf' + [0xE9].pack('U') + '.gem'].each do |name|
+      it "accepts #{name.inspect}" do
+        expect(described_class.unsafe_entry?(name)).to be(false)
       end
     end
   end
