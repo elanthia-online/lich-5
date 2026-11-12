@@ -285,7 +285,7 @@ RSpec.describe Lich::Archive::Zip do
 
     it 'starts no external process' do
       write_zip([{ name: 'gems/', data: '', method: :store }, { name: 'gems/a.gem', data: 'payload' }, { name: 'b.gem', data: 'b', method: :store }])
-      expect_no_process(described_class)
+      expect_no_process(described_class, Lich::Archive)
 
       described_class.extract(zip_path, destination)
     end

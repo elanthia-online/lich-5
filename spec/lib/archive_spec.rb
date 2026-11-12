@@ -3,10 +3,13 @@ require 'fileutils'
 require 'tmpdir'
 
 require_relative '../../lib/archive'
+require_relative '../support/no_process_expectations'
 require_relative '../support/zip_builder'
 require_relative '../support/tar_gz_builder'
 
 RSpec.describe Lich::Archive do
+  include NoProcessExpectations
+
   let(:work_dir) { Dir.mktmpdir('lich-archive') }
   let(:destination) { File.join(work_dir, 'out') }
 
@@ -80,6 +83,17 @@ RSpec.describe Lich::Archive do
       expect(described_class.extract_zip(zip, destination)).to eq(['a.gem'])
       expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
     end
+  end
+
+  it 'starts no external process for either format' do
+    zip = File.join(work_dir, 'a.zip')
+    tarball = File.join(work_dir, 'a.tar.gz')
+    File.binwrite(zip, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }]))
+    File.binwrite(tarball, TarGzBuilder.build([{ name: 'r/', type: :directory }, { name: 'r/a.rb', data: 'a' }]))
+    expect_no_process(described_class, described_class::Zip, described_class::TarGz)
+
+    described_class.extract_zip(zip, File.join(destination, 'zip'))
+    described_class.extract_tar_gz_root(tarball, File.join(destination, 'tar'))
   end
 
   describe '.extract_tar_gz_root' do

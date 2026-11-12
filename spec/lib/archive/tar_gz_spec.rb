@@ -3,9 +3,12 @@ require 'fileutils'
 require 'tmpdir'
 
 require_relative '../../../lib/archive'
+require_relative '../../support/no_process_expectations'
 require_relative '../../support/tar_gz_builder'
 
 RSpec.describe Lich::Archive::TarGz do
+  include NoProcessExpectations
+
   let(:work_dir) { Dir.mktmpdir('lich-tar-gz') }
   let(:tarball) { File.join(work_dir, 'lich.tar.gz') }
   let(:destination) { File.join(work_dir, 'out') }
@@ -160,10 +163,8 @@ RSpec.describe Lich::Archive::TarGz do
   end
 
   it 'starts no external process' do
-    write_tarball([{ name: 'r/a.rb', data: 'a' }])
-    expect(Process).not_to receive(:spawn)
-    expect(Kernel).not_to receive(:system)
-    expect(IO).not_to receive(:popen)
+    write_tarball([{ name: 'r/', type: :directory }, { name: 'r/a.rb', data: 'a' }], pax_global_header: true)
+    expect_no_process(described_class, Lich::Archive)
 
     described_class.extract(tarball, destination)
   end
