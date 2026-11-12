@@ -72,8 +72,17 @@ module Lich
         RENAME_RETRY_DELAYS = [0.1, 0.2, 0.4, 0.8, 1.6].freeze
 
         # Errors Windows reports when a rename is refused because another
-        # process has the entry, or a file inside it, open.
-        TRANSIENT_RENAME_ERRORS = [Errno::EACCES, Errno::EPERM, Errno::EBUSY].freeze
+        # process has the entry, or a file inside it, open. EXDEV is here
+        # because Ruby on Windows raises it, not EACCES, when renaming a
+        # directory to a name that does not exist yet is refused with
+        # ERROR_ACCESS_DENIED: it compares the volume serial numbers of the
+        # two paths, and the missing target's never gets read (win32.c,
+        # wrename). These renames are kept on one filesystem by design: the
+        # staging directory sits in BACKUP_DIR next to its snapshot name, and
+        # revert's working directories sit inside the directory being
+        # swapped. A real cross-device EXDEV is not expected; if one did
+        # happen, the retries cost about 3 seconds before it is raised.
+        TRANSIENT_RENAME_ERRORS = [Errno::EACCES, Errno::EPERM, Errno::EBUSY, Errno::EXDEV].freeze
 
         # Creates a fresh timestamped directory under BACKUP_DIR for a
         # data-only backup (e.g. effect-list.xml with no preceding full
@@ -831,7 +840,8 @@ module Lich
         # Windows will not rename a file or directory while another process
         # (an antivirus or search indexer reading files just written) has it,
         # or a file inside it, open without delete sharing, and reports that
-        # as EACCES, EPERM or EBUSY until the other process lets go. Each retry
+        # as EACCES, EPERM or EBUSY (EXDEV for a directory; see
+        # TRANSIENT_RENAME_ERRORS) until the other process lets go. Each retry
         # waits the next of RENAME_RETRY_DELAYS. Nothing is retried on other
         # platforms, where these errors do not clear on their own, nor when
         # +to+ exists. For #publish_snapshot that is a name collision, which

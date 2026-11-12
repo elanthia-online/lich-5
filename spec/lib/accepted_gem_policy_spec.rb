@@ -123,6 +123,20 @@ RSpec.describe Lich::AcceptedGemPolicy do
     expect { policy.check(dependencies) }.to raise_error(described_class::Error, /service unavailable/)
   end
 
+  it 'reports a policy without this runtime as unsupported rather than as a policy failure' do
+    allow(recovery).to receive(:policy_plan).and_return(
+      Lich::DependencyRecovery::Plan.new(units: [], error: 'manifest has no target for Ruby 4.0 on aarch64-mingw-ucrt', error_kind: :unsupported_runtime)
+    )
+    expect { policy.check(dependencies) }.to raise_error(described_class::UnsupportedRuntimeError, /no target/) { |error|
+      expect(error).not_to be_a(described_class::PolicyError)
+    }
+  end
+
+  it 'keeps an otherwise invalid policy an InvalidPolicyError' do
+    allow(recovery).to receive(:policy_plan).and_return(Lich::DependencyRecovery::Plan.new(units: [], error: 'duplicate targets', error_kind: :invalid))
+    expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError)
+  end
+
   it 'requires declared roots to be covered by accepted policy or supplied RubyInstaller gems' do
     plan.units = []
     expect { policy.check(dependencies) }.to raise_error(described_class::Error, /does not cover/)
@@ -248,5 +262,207 @@ RSpec.describe Lich::AcceptedGemPolicy do
   it 'classifies malformed RubyInstaller inventory as policy failure rather than missing gems' do
     target['contract']['ruby_inventory']['gems'] = ['invalid']
     expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /inventory is malformed/)
+  end
+
+  context 'with a package minimum' do
+    let(:sqlite3) { unit.fetch('packages').first }
+
+    def redis_unit
+      { 'id' => 'redis', 'members' => %w[redis redis-client], 'install_order' => %w[redis-client redis],
+        'packages' => [{ 'name' => 'redis-client', 'version' => '0.26.0', 'minimum' => '0.25.0', 'filename' => 'redis-client-0.26.0.gem', 'sha256' => "sha256:#{'c' * 64}" },
+                       { 'name' => 'redis', 'version' => '5.4.1', 'filename' => 'redis-5.4.1.gem', 'sha256' => "sha256:#{'d' * 64}" }] }
+    end
+
+    before { sqlite3['minimum'] = '2.10.1' }
+
+    it 'requires a repair only below the minimum' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.0')]
+      check = policy.check(dependencies)
+      expect(check.needed).to eq(['sqlite3'])
+      expect(check.recommended).to eq([])
+      expect(check.plan.units).to eq([unit])
+    end
+
+    it 'starts on an installed version at the minimum and reports the accepted version as recommended' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.0'), spec('sqlite3', '2.10.1')]
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to eq(['sqlite3'])
+      policy.activate!(check)
+      expect(active.fetch('sqlite3').version.to_s).to eq('2.10.1')
+    end
+
+    it 'still activates the highest acceptable installed version, recommending nothing once the accepted one is present' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.1'), spec('sqlite3', '2.10.2')]
+      check = policy.check(dependencies)
+      expect(check.recommended).to eq([])
+      policy.activate!(check)
+      expect(active.fetch('sqlite3').version.to_s).to eq('2.10.2')
+    end
+
+    it 'keeps an already active version between the minimum and the accepted version without a restart' do
+      old = spec('sqlite3', '2.10.1')
+      installed['sqlite3'] = [old, spec('sqlite3', '2.10.2')]
+      active['sqlite3'] = old
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to eq(['sqlite3'])
+      policy.activate!(check)
+      expect(active.fetch('sqlite3')).to equal(old)
+    end
+
+    it 'still requires a restart when the active version is below the minimum' do
+      old = spec('sqlite3', '2.10.0')
+      installed['sqlite3'] = [old, spec('sqlite3', '2.10.2')]
+      active['sqlite3'] = old
+      expect(policy.check(dependencies).needed).to eq(['sqlite3'])
+    end
+
+    it 'repairs a recommended package together with a needed member of the same unit' do
+      unit['members'] << 'closure'
+      unit['packages'] << { 'name' => 'closure', 'version' => '1.0', 'filename' => 'closure-1.0.gem', 'sha256' => "sha256:#{'b' * 64}" }
+      unit['install_order'].unshift('closure')
+      installed['sqlite3'] = [spec('sqlite3', '2.10.1', 'closure' => '>= 1')]
+      check = policy.check(dependencies)
+      expect(check.needed).to eq(['closure'])
+      expect(check.plan.units).to eq([unit])
+      expect(check.plan.units.first.fetch('packages').map { |package| package.fetch('name') }).to include('sqlite3')
+    end
+
+    it 'repairs, instead of stopping, when an installed newer dependent needs more than a member minimum (review case B)' do
+      plan.units = [unit, redis_unit]
+      installed['sqlite3'] = [spec('sqlite3', '2.10.1')]
+      installed['redis'] = [spec('redis', '5.5.0', 'redis-client' => '>= 0.26')]
+      installed['redis-client'] = [spec('redis-client', '0.25.0')]
+      check = policy.check([Gem::Dependency.new('redis'), Gem::Dependency.new('sqlite3')])
+      expect(check.needed).to eq(['redis-client'])
+      # Only the unit named by the failure is repaired; sqlite3 stays log-only.
+      expect(check.plan.units.map { |item| item.fetch('id') }).to eq(['redis'])
+      expect(active).to be_empty
+    end
+
+    it 'repairs a case B conflict with an active member below its version' do
+      plan.units = [redis_unit]
+      old = spec('redis-client', '0.25.0')
+      installed['redis'] = [spec('redis', '5.5.0', 'redis-client' => '>= 0.26')]
+      installed['redis-client'] = [old, spec('redis-client', '0.27.0')]
+      active['redis-client'] = old
+      check = policy.check([Gem::Dependency.new('redis')])
+      expect(check.needed).to eq(['redis-client'])
+      expect(check.plan.units.map { |item| item.fetch('id') }).to eq(['redis'])
+    end
+
+    it 'falls back to the accepted versions when an unlisted transitive rejects the minimum' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.1', 'local-child' => '>= 2')]
+      installed['local-child'] = [spec('local-child', '1.0')]
+      check = policy.check(dependencies)
+      expect(check.needed).to eq(['sqlite3'])
+      expect(check.plan.units).to eq([unit])
+    end
+
+    it 'keeps local damage a LocalInstallationError' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2', 'local-child' => '>= 1')]
+      expect { policy.check(dependencies) }.to raise_error(described_class::LocalInstallationError, /local-child is missing/)
+    end
+
+    it 'keeps a client requirement the accepted version cannot meet a PolicyError' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect { policy.check([Gem::Dependency.new('sqlite3', '< 2')]) }.to raise_error(described_class::PolicyError, /cannot satisfy/)
+    end
+
+    it 'rejects units that disagree on the minimum of a shared package' do
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.0')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package/)
+    end
+
+    it 'treats an absent minimum and one equal to the version as the same package' do
+      sqlite3.delete('minimum')
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.2')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect(policy.check(dependencies).needed).to be_empty
+    end
+
+    it 'treats an absent minimum and one equal in value to the version as the same package' do
+      sqlite3.delete('minimum')
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.2.0')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect(policy.check(dependencies).needed).to be_empty
+    end
+
+    it 'still rejects an absent minimum against a lower one for the same package' do
+      sqlite3.delete('minimum')
+      plan.units << unit.merge('id' => 'other', 'packages' => [sqlite3.merge('minimum' => '2.10.1')])
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package identities for sqlite3/)
+    end
+  end
+
+  it 'gives a minimum equal to the version exactly the strict results' do
+    scenarios = [
+      [[%w[sqlite3 2.10.1]], {}],
+      [[%w[sqlite3 2.10.1], %w[sqlite3 2.10.2]], {}],
+      [[%w[sqlite3 2.10.2], %w[sqlite3 2.10.3]], {}],
+      [[%w[sqlite3 2.10.1], %w[sqlite3 2.10.2]], { 'sqlite3' => '2.10.1' }]
+    ]
+    scenarios.each do |versions, loaded|
+      results = [nil, '2.10.2'].map do |minimum|
+        package = unit.fetch('packages').first
+        minimum ? package['minimum'] = minimum : package.delete('minimum')
+        installed['sqlite3'] = versions.map { |name, version| spec(name, version) }
+        active.clear
+        loaded.each { |name, version| active[name] = installed.fetch(name).find { |item| item.version.to_s == version } }
+        check = policy.check(dependencies)
+        [check.needed, check.specs.map(&:full_name), check.plan.units.map { |item| item.fetch('id') }, check.recommended]
+      end
+      expect(results.last).to eq(results.first)
+    end
+  end
+
+  context 'when validating a served minimum' do
+    let(:artifact) { { 'url' => 'https://example.invalid/sqlite3-2.10.2.gem', 'archive' => 'gem', 'filename' => 'sqlite3-2.10.2.gem', 'sha256' => "sha256:#{'a' * 64}" } }
+
+    def served(minimum)
+      package = unit.fetch('packages').first.dup
+      minimum == :absent ? package.delete('minimum') : package['minimum'] = minimum
+      document = { 'schema' => 1, 'targets' => [{ 'ruby_abi' => RUBY_VERSION.split('.').first(2).join('.'), 'platform' => Gem::Platform.local.to_s,
+                                                  'units' => [unit.merge('artifact' => artifact, 'packages' => [package])] }] }
+      reader = Lich::DependencyRecovery.new(http_get: ->(_url) { JSON.generate(document) })
+      described_class.new(recovery: reader, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active)
+    end
+
+    it 'rejects a minimum that is not a version or is above the version' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      ['2.10.3', 'not a version', '', 2].each do |minimum|
+        expect { served(minimum).check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is (?:invalid|above its version)/)
+      end
+    end
+
+    it 'rejects a blank, padded or rewritten minimum that would otherwise pass as a version' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      [' ', ' 2.10.1', '2.10.1 ', "2.10.1\n", '2.10.1-1'].each do |minimum|
+        expect(Gem::Version.correct?(minimum)).to be(true)
+        expect { served(minimum).check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
+      end
+    end
+
+    it 'does not start on a version below the strict floor through a blank minimum' do
+      installed['sqlite3'] = [spec('sqlite3', '1.3.0')]
+      expect { served(' ').check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
+    end
+
+    it 'rejects a canonical prerelease minimum, which startup could never run on' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2.rc1')]
+      expect { served('2.10.2.rc1').check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /minimum is invalid/)
+    end
+
+    it 'applies the strict floor when the minimum is absent and the relaxed one when it is present' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.1')]
+      expect(served(:absent).check(dependencies).needed).to eq(['sqlite3'])
+      expect(served('2.10.2').check(dependencies).needed).to eq(['sqlite3'])
+      check = served('2.10.1').check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to eq(['sqlite3'])
+    end
   end
 end

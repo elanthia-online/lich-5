@@ -1,5 +1,26 @@
 # Changelog
 
+## [5.24.2](https://github.com/elanthia-online/lich-5/compare/v5.24.1...v5.24.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **all:** start on Windows runtimes the gem manifest does not cover ([#2309](https://github.com/elanthia-online/lich-5/issues/2309)) ([1e520ef](https://github.com/elanthia-online/lich-5/commit/1e520ef5c8801957c9e6ab5706b4f455f92ee4c9))
+* **all:** stop tracking logxml.lic, which left the scripts repo ([#2315](https://github.com/elanthia-online/lich-5/issues/2315)) ([8237b10](https://github.com/elanthia-online/lich-5/commit/8237b109c79cbbe245a27ef65d77b19f4ee32967))
+* **dr:** confirm a worn bucket flushed in dispose_trash, take an unflushed item back out ([#2312](https://github.com/elanthia-online/lich-5/issues/2312)) ([17bec3c](https://github.com/elanthia-online/lich-5/commit/17bec3c925f91f2de7988a31a8cf4dbe35b97bbf))
+* **dr:** count a timed-out crafting GET only when a new item came into hand ([#2320](https://github.com/elanthia-online/lich-5/issues/2320)) ([2b9a7b4](https://github.com/elanthia-online/lich-5/commit/2b9a7b403d446afcfe2cfa2093ba0a925d9f6623))
+* **dr:** count an instructions study as done only on the study's own line ([#2321](https://github.com/elanthia-online/lich-5/issues/2321)) ([f939b68](https://github.com/elanthia-online/lich-5/commit/f939b687b3a53fd26f50bd8f88f039055457437e))
+* **dr:** never GET a crafting item by an id DRCI threw away, or out of a worn trash can ([#2313](https://github.com/elanthia-online/lich-5/issues/2313)) ([a1ed8e4](https://github.com/elanthia-online/lich-5/commit/a1ed8e48c4ead293fbe39ac60250fc97ed37de48))
+
+## [5.24.1](https://github.com/elanthia-online/lich-5/compare/v5.24.0...v5.24.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **all:** check the gem home is writable before a gem repair ([#2306](https://github.com/elanthia-online/lich-5/issues/2306)) ([f6f83be](https://github.com/elanthia-online/lich-5/commit/f6f83be9a8a399a99f6d5c1686f8764c130553b1))
+* **all:** retry the Windows snapshot rename Ruby reports as EXDEV ([#2305](https://github.com/elanthia-online/lich-5/issues/2305)) ([3895a62](https://github.com/elanthia-online/lich-5/commit/3895a62fbca3ad98907984d3f44fdd3a77ff3d81))
+* **all:** wait on the Lich process handle before native gem replacement ([#2302](https://github.com/elanthia-online/lich-5/issues/2302)) ([7e359b8](https://github.com/elanthia-online/lich-5/commit/7e359b81b6611a101ad36e3a8b8fcb3258c9834f))
+
 ## [5.24.0](https://github.com/elanthia-online/lich-5/compare/v5.23.0...v5.24.0) (2026-11-09)
 
 

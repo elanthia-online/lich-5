@@ -121,6 +121,80 @@ RSpec.describe Lich::RuntimeGemContract do
     expect { contract.resolve(inventory) }.to raise_error(described_class::Error, /sqlite3 is absent/)
   end
 
+  describe 'target platform' do
+    let(:arm_lockfile) do
+      lockfile.sub("    sqlite3 (2.10.2-x64-mingw-ucrt)\n", "    sqlite3 (2.10.2-aarch64-mingw-ucrt)\n    sqlite3 (2.10.2-x64-mingw-ucrt)\n")
+              .sub("  sqlite3 (2.10.2-x64-mingw-ucrt) sha256=", "  sqlite3 (2.10.2-aarch64-mingw-ucrt) sha256=#{'1' * 64}\n  sqlite3 (2.10.2-x64-mingw-ucrt) sha256=")
+    end
+    let(:arm_inventory) { inventory.merge('platform' => 'aarch64-mingw-ucrt') }
+
+    it 'defaults to the x64 contract every published consumer reads' do
+      expect(reader.platform).to eq('x64-mingw-ucrt')
+      expect(described_class::PLATFORMS).to eq(%w[x64-mingw-ucrt aarch64-mingw-ucrt])
+    end
+
+    it 'rejects a platform with no runtime contract' do
+      expect { described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'x86-mingw-ucrt') }
+        .to raise_error(described_class::Error, /unsupported runtime contract platform/)
+    end
+
+    it 'selects the locked variant for the requested Windows platform' do
+      x64 = described_class.new(gemfile: gemfile, lockfile: arm_lockfile)
+      arm = described_class.new(gemfile: gemfile, lockfile: arm_lockfile, platform: 'aarch64-mingw-ucrt')
+      expect(x64.locked_packages.fetch('sqlite3')).to include('platform' => 'x64-mingw-ucrt', 'sha256' => '0' * 64)
+      expect(arm.locked_packages.fetch('sqlite3')).to include('platform' => 'aarch64-mingw-ucrt', 'sha256' => '1' * 64)
+    end
+
+    it 'falls back to the ruby variant when the lock has no build for the platform' do
+      arm = described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'aarch64-mingw-ucrt')
+      expect(arm.locked_packages.fetch('sqlite3')).to include('platform' => 'ruby', 'sha256' => 'f' * 64)
+    end
+
+    it 'requires inventory from the matching RubyInstaller' do
+      arm = described_class.new(gemfile: gemfile, lockfile: arm_lockfile, platform: 'aarch64-mingw-ucrt')
+      expect(arm.resolve(arm_inventory).fetch('packages').keys).to include('sqlite3')
+      expect { arm.resolve(inventory) }.to raise_error(described_class::Error, /target Windows/)
+      expect { reader.resolve(arm_inventory) }.to raise_error(described_class::Error, /target Windows/)
+    end
+
+    it 'keeps the x64 digest unchanged by an explicit default platform' do
+      explicit = described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'x64-mingw-ucrt')
+      expect(explicit.windows_contract_digest(inventory)).to eq(reader.windows_contract_digest(inventory))
+    end
+
+    # Golden digests for this fixture. The x64 value is what the reader gave
+    # before platforms existed, so it must not move. Update either value only
+    # when the projection changes on purpose.
+    it 'pins the x64 contract digest for the default and an explicit platform' do
+      explicit = described_class.new(gemfile: gemfile, lockfile: lockfile, platform: 'x64-mingw-ucrt')
+      expect(reader.windows_contract_digest(inventory)).to eq('5082ffb937a1960ea017e4aa42f31b884a06d21f151a73311a922cd3342a82cf')
+      expect(explicit.windows_contract_digest(inventory)).to eq('5082ffb937a1960ea017e4aa42f31b884a06d21f151a73311a922cd3342a82cf')
+    end
+
+    it 'pins the ARM64 contract digest' do
+      arm = described_class.new(gemfile: gemfile, lockfile: arm_lockfile, platform: 'aarch64-mingw-ucrt')
+      expect(arm.windows_contract_digest(arm_inventory)).to eq('ccd41ba53c722daf2607d9fcc7abcc95e4367126b1cc384727ea446367688a5d')
+    end
+
+    it 'treats every Windows selector as applying to ARM64, matching Bundler' do
+      source = "gem 'a', platforms: :x64_mingw\ngem 'b', platforms: :windows\ngem 'c', platforms: :mingw\ngem 'd', platforms: :jruby"
+      arm = described_class.new(gemfile: source, platform: 'aarch64-mingw-ucrt')
+      expect(arm.roots.keys).to eq(%w[a b c])
+    end
+
+    it 'maps the running Ruby to its contract platform, defaulting when unpublished' do
+      expect(described_class.runtime_platform('aarch64-mingw-ucrt')).to eq('aarch64-mingw-ucrt')
+      expect(described_class.runtime_platform('x64-mingw-ucrt')).to eq('x64-mingw-ucrt')
+      expect(described_class.runtime_platform('x86-mingw-ucrt')).to eq('x64-mingw-ucrt')
+    end
+
+    it 'maps a Gem::Platform the same way as its string' do
+      expect(described_class.runtime_platform(Gem::Platform.new('aarch64-mingw-ucrt'))).to eq('aarch64-mingw-ucrt')
+      expect(described_class.runtime_platform(Gem::Platform.new('x64-mingw-ucrt'))).to eq('x64-mingw-ucrt')
+      expect(described_class.runtime_platform(Gem::Platform.new('x86-mingw32'))).to eq('x64-mingw-ucrt')
+    end
+  end
+
   it 'canonicalizes contract hashes independently of key order' do
     expect(described_class.digest('b' => 2, 'a' => { 'z' => 1, 'y' => 2 })).to eq(described_class.digest('a' => { 'y' => 2, 'z' => 1 }, 'b' => 2))
   end
