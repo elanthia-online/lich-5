@@ -11,13 +11,14 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
       const { select, receive } = await openSelect(page, value);
       if (modifier) await page.keyboard.down(modifier);
       await page.keyboard.down(key);
+      let before = null, during = null, afterKeyup = null;
       try {
-        const before = await selectState(select);
+        before = await selectState(select);
         expect(before.keys).toContainEqual({ key, trusted: true, alt: modifier === 'Alt',
           control: modifier === 'Control', meta: modifier === 'Meta', shift: modifier === 'Shift' });
         receive(render(2, value));
         receive(render(3, value));
-        const during = await selectState(select);
+        during = await selectState(select);
         // Native change/focusout may already have released this gesture. Otherwise
         // a potential opening key holds the original node, even when ignored natively.
         if (before.open === true || (before.changes === 0 && before.focusouts === 0)) {
@@ -27,7 +28,7 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
           await expect(page.locator('h1')).toHaveText('Render 3');
         }
         await page.keyboard.up(key);
-        const afterKeyup = await selectState(select);
+        afterKeyup = await selectState(select);
         if (during.delivered && afterKeyup.open === false) {
           // In particular, last-option ArrowDown with no popup must not strand a
           // periodic render when the engine supports select :open.
@@ -40,14 +41,17 @@ for (const key of ['ArrowUp', 'ArrowDown']) {
           expect(afterKeyup.connected && afterKeyup.delivered).toBe(true);
           await expect(page.locator('h1')).toHaveText('Render 1');
         }
-        await testInfo.attach('native-select-observation', { contentType: 'application/json',
-          body: JSON.stringify({ key, modifier, before, during, afterKeyup }, null, 2) });
       } finally {
-        await page.keyboard.up(key);
-        if (modifier) await page.keyboard.up(modifier);
-        await page.keyboard.press('Escape');
-        // Focusout is the documented fallback when a native popup consumes Escape.
-        await page.locator('button[data-cid="after"]').focus();
+        try {
+          await testInfo.attach('native-select-observation', { contentType: 'application/json',
+            body: JSON.stringify({ key, modifier, before, during, afterKeyup }, null, 2) });
+        } finally {
+          await page.keyboard.up(key);
+          if (modifier) await page.keyboard.up(modifier);
+          await page.keyboard.press('Escape');
+          // Focusout is the documented fallback when a native popup consumes Escape.
+          await page.locator('button[data-cid="after"]').focus();
+        }
       }
       await expect(page.locator('h1')).toHaveText('Render 3');
     });

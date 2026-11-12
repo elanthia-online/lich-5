@@ -1,5 +1,5 @@
 // DOM unit checks, independent of a browser or live account. Install the locked
-// test dependencies with npm ci --prefix spec/webui; see spec/README.md.
+// test dependencies with npm ci --prefix spec/webui.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
