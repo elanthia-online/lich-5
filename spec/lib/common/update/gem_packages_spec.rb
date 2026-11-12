@@ -110,7 +110,8 @@ RSpec.describe Lich::Util::Update::GemPackages do
       expect(printed.last).to eq('[lich5-update: x/y: release v2 has no .gem attached; skipped.]')
     end
 
-    it 'does nothing, silently, when the installed gem is as new' do
+    it 'does nothing, silently, when the installed gem is as new and its scripts were deployed' do
+      described_class.save('x/y' => { 'deployed' => '1.2.0' })
       allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.2.0.gem'))
       allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
       expect(manager.sync_gem('x/y')).to eq(:current)
@@ -144,6 +145,55 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq("installed into #{lich_dir}")
         expect(Dir.children(TEMP_DIR)).to be_empty
         expect(printed.last).to eq('[lich5-update: tiny updated to 1.2.0.]')
+        expect(described_class.all['x/y']['deployed']).to eq('1.2.0')
+      end
+
+      it 'retries the script installer at the next sync when it failed, without downloading again' do
+        gate = File.join(tmp, 'gate')
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: <<~RUBY))
+          raise Errno::EACCES, 'scripts' unless File.exist?('#{gate.gsub('\\', '/')}')
+          FileUtils.mkdir_p(File.join(lich_dir, 'scripts'))
+          File.write(File.join(lich_dir, 'scripts', 'tiny.lic'), 'ok')
+        RUBY
+
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(described_class.all['x/y']).not_to have_key('deployed')
+        expect(File).not_to exist(File.join(lich_dir, 'scripts', 'tiny.lic'))
+
+        # Now the gem is installed at 1.2.0 but its scripts are not.
+        allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+        allow(Gem::Specification).to receive(:find_all_by_name).and_call_original
+        allow(Gem::Specification).to receive(:find_all_by_name).with('tiny', '= 1.2.0')
+                                                               .and_return([Gem::Specification.load(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))])
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('the next sync tries again')
+
+        FileUtils.touch(gate)
+        allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download again')
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq('ok')
+        expect(described_class.all['x/y']['deployed']).to eq('1.2.0')
+        expect(manager.sync_gem('x/y')).to eq(:current)
+      end
+
+      it 'refuses a gem that needs a newer Ruby' do
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, required_ruby: '> 99.0'))
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('needs Ruby > 99.0', 'not installed')
+        expect(File).not_to exist(File.join(gem_home, 'specifications', 'tiny-1.2.0.gemspec'))
+        expect(File).not_to exist(File.join(lich_dir, 'scripts', 'tiny.lic'))
+      end
+
+      it 'reports an installer that fails to load and lets the sync go on' do
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: "require 'no_such_gem_anywhere'"))
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('its installer failed: LoadError')
+
+        printed.clear
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: 'def ('))
+        allow(Gem::Specification).to receive(:find_all_by_name).and_return([])
+        expect(manager.sync_gem('x/y')).to eq(:failed)
+        expect(printed.last).to include('its installer failed: SyntaxError')
       end
 
       it 'refuses a gem without lich_install metadata' do
@@ -180,15 +230,22 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(printed.last).to include('cannot write to', 'GEM_HOME')
       end
 
-      def build_gem(metadata:, extensions: [])
+      let(:default_installer) do
+        <<~RUBY
+          FileUtils.mkdir_p(File.join(lich_dir, 'scripts'))
+          File.write(File.join(lich_dir, 'scripts', 'tiny.lic'), "installed into \#{lich_dir}")
+        RUBY
+      end
+
+      def build_gem(metadata:, extensions: [], installer: default_installer, required_ruby: nil)
         src = File.join(tmp, 'src')
+        FileUtils.rm_rf(src)
         FileUtils.mkdir_p(File.join(src, 'lib', 'tiny'))
         File.write(File.join(src, 'lib', 'tiny', 'install.rb'), <<~RUBY)
           module Tiny
             module Install
               def self.install(lich_dir)
-                FileUtils.mkdir_p(File.join(lich_dir, 'scripts'))
-                File.write(File.join(lich_dir, 'scripts', 'tiny.lic'), "installed into \#{lich_dir}")
+          #{installer}
               end
             end
           end
@@ -202,6 +259,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
           s.files = ['lib/tiny/install.rb'] + extensions
           s.metadata = metadata
           s.extensions = extensions
+          s.required_ruby_version = required_ruby if required_ruby
         end
         Dir.chdir(src) { Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec) } }
         File.join(src, 'tiny-1.2.0.gem')

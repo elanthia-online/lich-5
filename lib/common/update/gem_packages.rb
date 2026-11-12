@@ -166,7 +166,15 @@ module Lich
           version = asset[:version]
           remember(owner_repo, 'gem' => name)
           installed = self.class.installed_version(name)
-          return :current if installed && installed >= version
+          deployed = self.class.all.dig(owner_repo, 'deployed')
+          return :current if installed && installed >= version && deployed == installed.to_s
+
+          # The gem is installed but its scripts never were (its installer
+          # failed last time): run the installer again without downloading.
+          if installed && installed >= version
+            spec = Gem::Specification.find_all_by_name(name, "= #{installed}").first
+            return deploy(owner_repo, spec, spec.metadata[METADATA_KEY], installed, nil) if spec
+          end
 
           gem_path = download(asset[:url], asset[:filename])
           return :failed unless gem_path
@@ -239,16 +247,23 @@ module Lich
             return :failed
           end
 
-          installer = Gem::Installer.at(gem_path, install_dir: Gem.dir, ignore_dependencies: true, wrappers: false, force: true)
+          # RubyGems' installer does not check these itself (its resolver
+          # does, and this install bypasses the resolver), so a release built
+          # for a newer Ruby is refused here instead of overwriting working
+          # scripts with code this Lich cannot run.
+          unless spec.required_ruby_version.satisfied_by?(Gem.ruby_version)
+            StatusReporter.respond_mono("[lich5-update: #{name} #{version} needs Ruby #{spec.required_ruby_version}, and this Lich runs #{Gem.ruby_version}; not installed.]")
+            return :failed
+          end
+          unless spec.required_rubygems_version.satisfied_by?(Gem.rubygems_version)
+            StatusReporter.respond_mono("[lich5-update: #{name} #{version} needs RubyGems #{spec.required_rubygems_version}, and this Lich has #{Gem.rubygems_version}; not installed.]")
+            return :failed
+          end
+
+          installer = Gem::Installer.at(gem_path, install_dir: Gem.dir, ignore_dependencies: true, wrappers: false)
           installed_spec = installer.install
           Gem::Specification.reset
-          result = run_entry_point(installed_spec, entry)
-          return :failed unless result
-
-          line = installed ? "#{name} updated to #{version}" : "#{name} #{version} installed"
-          line += "; restart #{name} to use it" if defined?(Script) && Script.respond_to?(:running?) && Script.running?(name)
-          StatusReporter.respond_mono("[lich5-update: #{line}.]")
-          :updated
+          deploy(owner_repo, installed_spec, entry, version, installed)
         rescue Errno::EACCES, Errno::EROFS => e
           StatusReporter.respond_mono("[lich5-update: #{name} #{version} not installed: cannot write to #{Gem.dir} (#{e.message}).]")
           :failed
@@ -295,9 +310,37 @@ module Lich
           installer = Object.const_get(const_name)
           installer.install(LICH_DIR)
           true
-        rescue StandardError => e
-          StatusReporter.respond_mono("[lich5-update: #{spec.name}: its installer failed: #{e.class}: #{e.message}. The gem is installed but its scripts were not copied.]")
+        rescue StandardError, ScriptError => e
+          # ScriptError covers a LoadError from a missing dependency and a
+          # SyntaxError in the installer file: one broken package must not
+          # end the sync for the others.
+          StatusReporter.respond_mono("[lich5-update: #{spec.name}: its installer failed: #{e.class}: #{e.message}. The gem is installed but its scripts were not copied; the next sync tries again.]")
           false
+        end
+
+        # Runs the gem's installer and records the deployed version for this
+        # Lich install, so a failed deployment is retried at the next sync
+        # instead of being taken for current.
+        #
+        # @param owner_repo [String]
+        # @param spec [Gem::Specification] the installed gem
+        # @param entry [String, nil] the lich_install metadata
+        # @param version [Gem::Version] the version being deployed
+        # @param previous [Gem::Version, nil] the version installed before, if any
+        # @return [Symbol] :updated or :failed
+        def deploy(owner_repo, spec, entry, version, previous)
+          unless entry
+            StatusReporter.respond_mono("[lich5-update: #{spec.name} #{version} has no '#{METADATA_KEY}' metadata, so Lich cannot install its scripts.]")
+            return :failed
+          end
+          return :failed unless run_entry_point(spec, entry)
+
+          remember(owner_repo, 'deployed' => version.to_s)
+          name = spec.name
+          line = previous ? "#{name} updated to #{version}" : "#{name} #{version} installed"
+          line += "; restart #{name} to use it" if defined?(Script) && Script.respond_to?(:running?) && Script.running?(name)
+          StatusReporter.respond_mono("[lich5-update: #{line}.]")
+          :updated
         end
       end
     end
