@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
-require 'open3'
-require 'rbconfig'
 
 # Shim callbacks that call exit stop their Script owner (1843:RC3, settled
 # decision B3): a queued or timed block, a signal handler, a close handler and
@@ -11,6 +10,8 @@ require 'rbconfig'
 # owner stop, which asks the Script to kill itself. Fresh process with a real
 # host service and a Script-shaped owner that records kill requests.
 RSpec.describe 'script compatibility owner stop' do
+  include WebUIFreshProcess
+
   def run_fresh(body)
     prelude = <<~RUBY_CODE
       require 'webui'
@@ -72,7 +73,9 @@ RSpec.describe 'script compatibility owner stop' do
         false
       end
     RUBY_CODE
-    Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    output, errors, status = run_ruby_with_deadline(prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    expect_child_within_deadline(status, output, errors, RSpec.current_example.full_description)
+    [output, errors, status]
   end
 
   it 'stops the Script owner from a queued block, a timer, a signal handler and a close handler' do
@@ -210,7 +213,9 @@ RSpec.describe 'script compatibility owner stop' do
         [label, stopped, Array.new(rec.size) { rec.pop }]
       end
     RUBY_CODE
-    Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    output, errors, status = run_ruby_with_deadline(prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    expect_child_within_deadline(status, output, errors, RSpec.current_example.full_description)
+    [output, errors, status]
   end
 
   it 'completes a killed thread queue-then-wait without a timeout and finishes the owner stop' do
