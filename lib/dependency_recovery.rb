@@ -1030,6 +1030,8 @@ module Lich
       raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+    rescue SystemCallError => e
+      raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
     end
 
     # @param path [String]

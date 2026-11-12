@@ -1108,6 +1108,21 @@ RSpec.describe Lich::DependencyRecovery do
         .to raise_error(described_class::Error, %r{Could not extract bundle\.zip into .*packages: unsafe archive entry: \.\./escape\.gem})
     end
 
+    it 'names the archive when the destination cannot be created' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk' }]))
+      File.write(destination, 'a file where the directory should go')
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: File exists/)
+    end
+
+    it 'names the archive when two entries would collide on disk' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'clash', data: 'x' }, { name: 'clash/', data: '', method: :store }]))
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: archive entry is both a file and a directory: clash/)
+    end
+
     it 'stages a real ZIP bundle for the native replacement helper' do
       allow(Gem).to receive(:win_platform?).and_return(true)
       bundle_url = 'https://example.test/R4L5-gem-bundle.zip'
