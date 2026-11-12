@@ -181,8 +181,8 @@ module Lich
         futures.each { |future| future.cancel(reason: :terminated) }
       end
 
-      # Reapplies each modal's policy when its owner has no active viewers.
-      # Disconnected attachments remain resumable, but do not count as active.
+      # Reapplies each modal's policy when neither an active nor a resumable
+      # viewer remains for its owner.
       # A failed availability check is logged and leaves registered modals live;
       # it must not turn a post-registration notification into a setup failure.
       # @param owner [Object] owner whose viewer availability changed
