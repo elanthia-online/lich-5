@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../support/webui_fresh_process'
 require 'webui'
-require 'open3'
-require 'rbconfig'
 require_relative '../../../lib/common/script_scope/gtk/session'
 require_relative '../../../lib/common/script_scope/gtk/widgets'
 require_relative '../../../lib/common/script_scope/gtk/size_group'
@@ -13,6 +12,8 @@ require_relative '../../../lib/common/script_scope/gtk/scheduling'
 # 1832:RC1 and 1853:RC1, plus 1843:RC2, RC3, RC5, RC8, RC9, RC10, RC12, RC13, RC14, RC20 and RC21.
 # Exit and LoadError paths run in a fresh process; the rest use a recording port.
 RSpec.describe 'script compatibility widget boundaries' do
+  include WebUIFreshProcess
+
   port_class = Class.new do
     attr_reader :sets, :bindings, :destroyed
     attr_accessor :fail_destroy
@@ -94,7 +95,9 @@ RSpec.describe 'script compatibility widget boundaries' do
       def stopped?(owner) = (SERVICE.registry.ensure_active!(owner) rescue :stopped) == :stopped
       def logs = Array.new(LOGS.size) { LOGS.pop }
     RUBY_CODE
-    Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-e', prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    output, errors, status = run_ruby_with_deadline(prelude + body + "\nSERVICE.stop\nputs 'ready'\n")
+    expect_child_within_deadline(status, output, errors, RSpec.current_example.full_description)
+    [output, errors, status]
   end
 
   it 'routes a queued or timed exit to the owner-stop hook and contains other script errors (1843:RC3, 1832:RC1)' do
