@@ -25,18 +25,49 @@ module Lich
     Check = Struct.new(:plan, :needed, :specs, :recommended, keyword_init: true)
 
     class InstalledSet < Gem::Resolver::Set
-      def initialize(find_specs, platforms)
+      # @param find_specs [#call] installed specs by name
+      # @param platforms [Hash{String => String}] accepted package platforms
+      # @param accepted [Hash{String => Gem::Version}, nil] versions a self-built
+      #   gem must exceed, or nil to accept only the accepted builds
+      def initialize(find_specs, platforms, accepted)
         super()
         @find_specs = find_specs
         @platforms = platforms
+        @accepted = accepted
         self.remote = false
       end
 
       def find_all(request)
         @find_specs.call(request.name).select do |spec|
-          request.match?(spec) && (@platforms.key?(spec.name) ? spec.platform.to_s == @platforms[spec.name] : Gem::Platform.match_spec?(spec))
+          request.match?(spec) && (@platforms.key?(spec.name) ? AcceptedGemPolicy.acceptable_build?(spec, @platforms[spec.name], @accepted&.fetch(spec.name)) : Gem::Platform.match_spec?(spec))
         end
       end
+    end
+
+    # Whether an installed copy of a manifest package may satisfy startup.
+    # The accepted build (the manifest's platform) always may. A build for
+    # another platform this runtime can load, typically a gem the user
+    # compiled with `gem install` or `gem update`, may only when it is
+    # strictly newer than the accepted version and its native extension
+    # finished building. Startup then keeps the user's newer gem instead of
+    # replacing it with the older accepted build.
+    #
+    # The version must be strictly newer, not merely at a minimum. Ruby-GNOME
+    # pins its gems to one exact version across the GTK stack, so a strictly
+    # newer self-built gtk3 can only resolve with an equally new self-built
+    # glib2 and the rest of the stack, never with an R4L5 build that bundles
+    # its own DLLs. At the accepted version itself the R4L5 build is
+    # preferred, because Ruby4Lich5 patches the GTK stack.
+    # @param spec [Gem::Specification]
+    # @param platform [String] the accepted package platform
+    # @param accepted [Gem::Version, nil] the accepted package version, or nil
+    #   to accept only the accepted build
+    # @return [Boolean]
+    def self.acceptable_build?(spec, platform, accepted)
+      return true if spec.platform.to_s == platform
+      return false unless accepted
+
+      spec.version > accepted && Gem::Platform.match_spec?(spec) && !spec.missing_extensions?
     end
 
     def initialize(recovery: DependencyRecovery.new, find_specs: Gem::Specification.method(:find_all_by_name), loaded_specs: Gem.loaded_specs)
@@ -87,23 +118,17 @@ module Lich
       end
       strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
       minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
-      return evaluate(plan, dependencies, packages, platforms, supplied_roots, strict) if minimums == strict
-
       begin
-        evaluate(plan, dependencies, packages, platforms, supplied_roots, minimums)
-      rescue Gem::Exception => e
-        # A lower floor must never stop startup where the accepted versions
-        # would repair it, such as an installed newer dependent requiring more
-        # than another member's minimum. Raise the floors of the units named by
-        # the failure; if that requires no repair, decide exactly as without
-        # minimums.
-        names = failure_names(e) & packages.keys
-        units = plan.units.select { |unit| unit.fetch('packages').any? { |package| names.include?(package.fetch('name')) } }
-        floors = minimums.merge(units.flat_map { |unit| unit.fetch('packages') }.to_h { |package| [package.fetch('name'), strict.fetch(package.fetch('name'))] })
-        needed = needed_at(packages, platforms, floors)
-        return repair_check(plan, needed) if needed.any?
+        decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, strict)
+      rescue Gem::Exception
+        # A newer self-built gem can be acceptable on its own and still leave
+        # no consistent set, for example a self-built gtk3 4.4.0 whose glib2
+        # 4.4.0 is not installed. RubyGems' resolver does not fall back to an
+        # older candidate then, so decide again exactly as before self-built
+        # gems were accepted: the accepted builds, or a repair to them.
+        raise unless self_built_candidates?(packages, platforms, strict)
 
-        evaluate(plan, dependencies, packages, platforms, supplied_roots, strict)
+        decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, nil)
       end
     rescue Gem::UnsatisfiableDependencyError => e
       if @find_specs.call(e.name).empty?
@@ -115,8 +140,10 @@ module Lich
     end
 
     # @param floors [Hash{String => Gem::Version}] per-package startup floors
-    def evaluate(plan, dependencies, packages, platforms, supplied_roots, floors)
-      needed = needed_at(packages, platforms, floors)
+    # @param accepted [Hash{String => Gem::Version}, nil] accepted package
+    #   versions a self-built gem must exceed, or nil for accepted builds only
+    def evaluate(plan, dependencies, packages, platforms, supplied_roots, floors, accepted)
+      needed = needed_at(packages, platforms, floors, accepted)
       return repair_check(plan, needed) if needed.any?
 
       requirements = dependencies.map { |dep| Gem::Dependency.new(dep.name, *dep.requirement.as_list) }
@@ -129,18 +156,53 @@ module Lich
         requirements << Gem::Dependency.new(name, ">= #{floor}")
         requirements << Gem::Dependency.new(name, "= #{@loaded_specs[name].version}") if @loaded_specs[name]
       end
-      specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms)).resolve.map(&:spec)
+      specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, accepted)).resolve.map(&:spec)
       recommended = specs.select { |spec| packages.key?(spec.name) && spec.version < Gem::Version.new(packages.fetch(spec.name).fetch('version')) }.map(&:name)
       Check.new(plan: plan, needed: [], specs: specs, recommended: recommended)
     end
     private :evaluate
 
-    def needed_at(packages, platforms, floors)
+    # Applies the package minimums, then the accepted versions where the
+    # minimums cannot resolve.
+    # @param self_built [Hash{String => Gem::Version}, nil] accepted versions a
+    #   self-built gem must exceed, or nil to accept only the accepted builds
+    def decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, self_built)
+      return evaluate(plan, dependencies, packages, platforms, supplied_roots, strict, self_built) if minimums == strict
+
+      begin
+        evaluate(plan, dependencies, packages, platforms, supplied_roots, minimums, self_built)
+      rescue Gem::Exception => e
+        # A lower floor must never stop startup where the accepted versions
+        # would repair it, such as an installed newer dependent requiring more
+        # than another member's minimum. Raise the floors of the units named by
+        # the failure; if that requires no repair, decide exactly as without
+        # minimums.
+        names = failure_names(e) & packages.keys
+        units = plan.units.select { |unit| unit.fetch('packages').any? { |package| names.include?(package.fetch('name')) } }
+        floors = minimums.merge(units.flat_map { |unit| unit.fetch('packages') }.to_h { |package| [package.fetch('name'), strict.fetch(package.fetch('name'))] })
+        needed = needed_at(packages, platforms, floors, self_built)
+        return repair_check(plan, needed) if needed.any?
+
+        evaluate(plan, dependencies, packages, platforms, supplied_roots, strict, self_built)
+      end
+    end
+    private :decide
+
+    # @return [Boolean] whether any installed gem is acceptable only as a
+    #   newer self-built gem
+    def self_built_candidates?(packages, platforms, strict)
+      packages.each_key.any? do |name|
+        @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), strict.fetch(name)) }
+      end
+    end
+    private :self_built_candidates?
+
+    def needed_at(packages, platforms, floors, accepted)
       packages.filter_map do |name, _package|
         floor = floors.fetch(name)
-        acceptable = @find_specs.call(name).select { |spec| spec.version >= floor && spec.platform.to_s == platforms.fetch(name) }
+        usable = ->(spec) { spec.version >= floor && self.class.acceptable_build?(spec, platforms.fetch(name), accepted&.fetch(name)) }
         active = @loaded_specs[name]
-        name if acceptable.empty? || (active && (active.version < floor || active.platform.to_s != platforms.fetch(name)))
+        name if @find_specs.call(name).none?(&usable) || (active && !usable.call(active))
       end
     end
     private :needed_at

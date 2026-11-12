@@ -264,6 +264,132 @@ RSpec.describe Lich::AcceptedGemPolicy do
     expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /inventory is malformed/)
   end
 
+  context 'with a native package built for this runtime platform' do
+    # The manifest supplies prebuilt gems for the runtime platform (R4L5's
+    # x64-mingw-ucrt builds). A gem the user compiled with `gem install` or
+    # `gem update` has the generic "ruby" platform instead.
+    let(:local) { Gem::Platform.local.to_s }
+    let(:glib_package) { { 'name' => 'glib2', 'version' => '4.3.9', 'filename' => "glib2-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'e' * 64}" } }
+    let(:gtk_package) { { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => "gtk3-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'f' * 64}" } }
+    let(:gtk_unit) do
+      { 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3], 'install_order' => %w[glib2 gtk3], 'packages' => [glib_package, gtk_package] }
+    end
+    let(:dependencies) { [Gem::Dependency.new('gtk3')] }
+
+    before { plan.units = [gtk_unit] }
+
+    def accepted_build(name, version, dependencies = {})
+      spec(name, version, dependencies).tap { |item| item.platform = Gem::Platform.local }
+    end
+
+    def self_built(name, version, dependencies = {}, extension_built: true)
+      spec(name, version, dependencies).tap do |item|
+        item.extensions = ['ext/extconf.rb']
+        item.define_singleton_method(:missing_extensions?) { !extension_built }
+      end
+    end
+
+    def stack(version, build)
+      { 'glib2' => [send(build, 'glib2', version)], 'gtk3' => [send(build, 'gtk3', version, { 'glib2' => "= #{version}" })] }
+    end
+
+    it 'accepts the accepted build itself' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+    end
+
+    it 'keeps a newer self-built stack instead of repairing it down to the accepted builds' do
+      installed.merge!(stack('4.4.0', :self_built))
+      expect(recovery).not_to receive(:recover)
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to eq([])
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => %w[4.4.0 ruby], 'gtk3' => %w[4.4.0 ruby])
+    end
+
+    it 'prefers the newer self-built stack when the accepted builds are installed beside it' do
+      installed.merge!(stack('4.3.9', :accepted_build)) { |_name, accepted, newer| accepted + newer }
+      installed.merge!(stack('4.4.0', :self_built)) { |_name, accepted, newer| accepted + newer }
+      policy.activate!(policy.check(dependencies))
+      expect(active.transform_values { |item| item.version.to_s }).to eq('glib2' => '4.4.0', 'gtk3' => '4.4.0')
+    end
+
+    it 'still repairs a self-built gem at the accepted version, since the accepted build is patched' do
+      installed.merge!(stack('4.3.9', :self_built))
+      check = policy.check(dependencies)
+      expect(check.needed).to contain_exactly('glib2', 'gtk3')
+      expect(check.plan.units).to eq([gtk_unit])
+    end
+
+    it 'never mixes a newer self-built gtk3 with an accepted glib2 it cannot use' do
+      installed['glib2'] = [accepted_build('glib2', '4.3.9')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      policy.activate!(policy.check(dependencies))
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+    end
+
+    it 'repairs when a newer self-built gtk3 has no matching glib2 and no accepted build to fall back to' do
+      installed['glib2'] = [accepted_build('glib2', '4.3.9')]
+      installed['gtk3'] = [self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      check = policy.check(dependencies)
+      expect(check.needed).to eq(['gtk3'])
+      expect(check.plan.units).to eq([gtk_unit])
+    end
+
+    it 'keeps reporting a policy failure that self-built gems did not cause' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      expect { policy.check([Gem::Dependency.new('gtk3', '< 4')]) }.to raise_error(described_class::PolicyError)
+    end
+
+    it 'repairs a newer self-built gem whose native extension did not finish building' do
+      installed.merge!(stack('4.4.0', :self_built))
+      installed['gtk3'] = [self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' }, extension_built: false)]
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'repairs a newer build for a platform this runtime cannot load' do
+      foreign = Gem::Platform.new(local.start_with?('x86_64') ? 'aarch64-linux' : 'x86_64-linux')
+      installed.merge!(stack('4.4.0', :self_built))
+      installed['gtk3'] = [spec('gtk3', '4.4.0', 'glib2' => '= 4.4.0').tap { |item| item.platform = foreign }]
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'does not restart for an already active newer self-built gem' do
+      installed.merge!(stack('4.4.0', :self_built))
+      active['glib2'] = installed['glib2'].first
+      active['gtk3'] = installed['gtk3'].first
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.fetch('gtk3').version.to_s).to eq('4.4.0')
+    end
+
+    it 'restarts when a self-built gem at the accepted version is already active' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      active['gtk3'] = self_built('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' })
+      installed['gtk3'] << active['gtk3']
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'measures "newer" against the accepted version, not a lower minimum' do
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed.merge!(stack('4.3.5', :self_built))
+      expect(policy.check(dependencies).needed).to contain_exactly('glib2', 'gtk3')
+      installed.merge!(stack('4.3.5', :accepted_build))
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to contain_exactly('glib2', 'gtk3')
+    end
+  end
+
   context 'with a package minimum' do
     let(:sqlite3) { unit.fetch('packages').first }
 
