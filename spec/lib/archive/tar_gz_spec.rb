@@ -339,17 +339,26 @@ RSpec.describe Lich::Archive::TarGz do
       expect(links).to be_empty, "symbolic links in the tree: #{links.join(', ')}"
     end
 
-    # A path too long for a ustar header makes `git archive` write a pax
-    # path record, which TarGz refuses. GitHub's root is lich-5-<commit>/.
-    it 'keeps every path short enough for a ustar header under the GitHub archive root', skip: (in_git ? false : 'not a git checkout') do
+    # A name too long for a tar header is written as an entry TarGz refuses.
+    # `git archive` (branch tarballs, root lich-5-<commit>/) writes a pax path
+    # record once a path no longer fits the ustar name and prefix fields.
+    # The release workflows build lich-5.tar.gz with GNU tar's default
+    # format (`tar -czvf lich-5.tar.gz Lich5/`), which writes a GNU long name
+    # entry for any name over 100 bytes, directories included.
+    it 'keeps every path short enough for the tar headers of both update archives', skip: (in_git ? false : 'not a git checkout') do
       listing, status = Open3.capture2('git', '-C', root, 'ls-files', '-z')
       expect(status).to be_success
-      prefix = "lich-5-#{'0' * 40}/"
-      fits = lambda do |path|
+      paths = listing.split("\0")
+      ustar = lambda do |path|
         path.bytesize <= 100 || (0..[path.bytesize - 1, 155].min).any? { |i| path.getbyte(i) == 47 && path.bytesize - i - 1 <= 100 }
       end
-      too_long = listing.split("\0").reject { |path| fits.call(prefix + path) }
-      expect(too_long).to be_empty, "paths too long for ustar: #{too_long.join(', ')}"
+      branch_prefix = "lich-5-#{'0' * 40}/"
+      too_long = paths.reject { |path| ustar.call(branch_prefix + path) }
+      expect(too_long).to be_empty, "paths too long for a git archive ustar header: #{too_long.join(', ')}"
+
+      release_names = paths.flat_map { |path| ["Lich5/#{path}", *path.split('/')[0...-1].each_index.map { |i| "Lich5/#{path.split('/')[0..i].join('/')}/" }] }
+      too_long = release_names.uniq.select { |name| name.bytesize > 100 }
+      expect(too_long).to be_empty, "names over 100 bytes, which GNU tar writes as long-name entries: #{too_long.join(', ')}"
     end
   end
 end
