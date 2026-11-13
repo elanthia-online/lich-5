@@ -1,5 +1,6 @@
 # spec/lib/archive/tar_gz_spec.rb
 require 'fileutils'
+require 'open3'
 require 'tmpdir'
 
 require_relative '../../../lib/archive'
@@ -189,6 +190,51 @@ RSpec.describe Lich::Archive::TarGz do
     File.binwrite(tarball, Zlib.gzip('x' * 1024))
 
     expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /not a valid tar archive/)
+  end
+
+  describe 'gzip integrity' do
+    let(:version) { "LICH_VERSION = '5.99.0'\n" }
+    # Level 0 stores the tar bytes verbatim, so a byte of version.rb can be
+    # changed without breaking the deflate stream: only the CRC catches it.
+    let(:good) { TarGzBuilder.build([{ name: 'r/lib/version.rb', data: version }], level: 0) }
+
+    def gzip_rejects?(path)
+      _out, status = Open3.capture2e('gzip', '-t', path)
+      !status.success?
+    end
+
+    {
+      'a changed byte of file data'   => ->(bytes) { bytes.sub("5.99.0", "6.99.0") },
+      'a wrong CRC-32 in the trailer' => ->(bytes) { bytes.dup.tap { |b| b.setbyte(-8, b.getbyte(-8) ^ 0xFF) } },
+      'a wrong length in the trailer' => ->(bytes) { bytes.dup.tap { |b| b.setbyte(-4, b.getbyte(-4) ^ 0x01) } }
+    }.each do |label, corrupt|
+      it "refuses a tarball with #{label} and writes nothing" do
+        bytes = corrupt.call(good.b)
+        expect(bytes).not_to eq(good)
+        File.binwrite(tarball, bytes)
+        expect(gzip_rejects?(tarball)).to be(true) if system('gzip', '--version', out: File::NULL, err: File::NULL)
+
+        expect { described_class.extract(tarball, destination) }
+          .to raise_error(Lich::Archive::Error, /not a valid gzip archive: .*(crc|length) error/i)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    it 'still extracts the uncorrupted tarball' do
+      File.binwrite(tarball, good)
+
+      described_class.extract(tarball, destination)
+
+      expect(File.read(File.join(destination, 'r/lib/version.rb'))).to eq(version)
+    end
+  end
+
+  it 'refuses an entry whose declared size runs past the end of the data, and writes nothing' do
+    write_tarball([{ name: 'r/a.rb', data: 'a' }, { name: 'r/short.rb', type: :raw, typeflag: '0', data: 'only this', size: 4096, pad: false }],
+                  end_blocks: false)
+
+    expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /truncated/)
+    expect(Dir.exist?(destination)).to be(false)
   end
 
   it 'closes the tarball, so it can be deleted (Windows refuses to delete an open file)' do
