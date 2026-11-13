@@ -119,7 +119,7 @@ module Lich
         end
         unless [FILE_TYPE, DIRECTORY_TYPE].include?(typeflag)
           kind = REFUSED_TYPES.fetch(typeflag) { "unknown type #{typeflag.inspect}" }
-          raise Error, "archive entry is a #{kind}, which Lich does not extract: #{Archive.printable(entry.full_name)}"
+          raise Error, "unsupported archive entry type (#{kind}), which Lich does not extract: #{Archive.printable(entry.full_name)}"
         end
 
         !root_directory?(entry, root)

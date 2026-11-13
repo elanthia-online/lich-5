@@ -226,7 +226,7 @@ RSpec.describe Lich::Archive::TarGz do
     { '7' => 'contiguous file', '6' => 'FIFO', '3' => 'character device', '4' => 'block device',
       'K' => 'GNU long link name', 'S' => 'GNU sparse file', 'Z' => 'unknown type "Z"' }.each do |typeflag, kind|
       it "refuses typeflag #{typeflag} (#{kind}) instead of dropping it" do
-        refuses([first, { name: 'r/odd', type: :raw, typeflag: typeflag, data: '' }], /is a #{Regexp.escape(kind)}, which Lich does not extract: r\/odd/)
+        refuses([first, { name: 'r/odd', type: :raw, typeflag: typeflag, data: '' }], /unsupported archive entry type \(#{Regexp.escape(kind)}\), which Lich does not extract: r\/odd/)
       end
     end
   end
