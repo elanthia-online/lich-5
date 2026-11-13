@@ -14,6 +14,67 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
       File.chmod(0o755, path)
     end
   end
+  let(:browser_bundle) { File.join(browser_directory, 'Fixture Browser.app') }
+  let(:bundle_browser) { File.join(browser_bundle, 'Contents', 'MacOS', 'Fixture Browser') }
+
+  context 'with an explicit macOS application bundle' do
+    before do
+      FileUtils.mkdir_p(File.dirname(bundle_browser))
+      File.write(bundle_browser, '')
+      File.chmod(0o755, bundle_browser)
+      File.write(File.join(browser_bundle, 'Contents', 'Info.plist'), <<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict>
+          <key>CFBundleExecutable</key><string>Fixture Browser</string>
+        </dict></plist>
+      XML
+    end
+
+    %w[environment argument].each do |origin|
+      it "launches the resolved bundle executable from the #{origin}" do
+        options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
+        calls = []
+
+        expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                    spawn: ->(*argv, **_options) { calls << argv; 42 },
+                                    waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+        expect(calls.first.first).to eq(bundle_browser)
+        expect(calls.first).to include('--new-window')
+      end
+
+      it "names an unresolved bundle from the #{origin} in the failure message" do
+        File.delete(bundle_browser)
+        options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
+        failures = []
+        spawned = []
+
+        expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                    spawn: ->(*) { spawned << true }, on_failure: ->(message) { failures << message })).to be(false)
+
+        expect(failures).to eq(["unable to open WebUI window: the browser application '#{browser_bundle}' has no executable; choose an installed browser application or its executable"])
+        expect(spawned).to be_empty
+      end
+    end
+
+    it 'resolves a binary property list with the native property-list reader' do
+      plist = File.join(browser_bundle, 'Contents', 'Info.plist')
+      File.write(plist, '<plist><dict>')
+      status = instance_double(Process::Status, success?: true)
+      allow(Open3).to receive(:capture3).with('/usr/bin/plutil', '-extract', 'CFBundleExecutable', 'raw', '--', plist)
+                                        .and_return(["Fixture Browser\n", '', status])
+
+      expect(described_class.command_for('http://127.0.0.1/', platform: 'darwin', browser_path: browser_bundle, environment: {}).first)
+        .to eq(bundle_browser)
+    end
+
+    %w[linux mingw].each do |platform|
+      it "keeps explicit application bundle paths unchanged on #{platform}" do
+        expect(described_class.command_for('http://127.0.0.1/', platform: platform, browser_path: browser_bundle, environment: {}).first)
+          .to eq(browser_bundle)
+      end
+    end
+  end
 
   after do
     described_class.native_unavailable = false

@@ -6,6 +6,7 @@ require 'fileutils'
 require 'digest'
 require 'time'
 require 'open3'
+require 'timeout'
 require_relative 'errors'
 
 module Lich
@@ -69,8 +70,8 @@ module Lich
       # Builds a missing helper for the current OS using its existing local build.
       # Serializes concurrent startups and rechecks after locking. Failed builds
       # discard their executable and remember source and toolchain fingerprints
-      # in DATA_DIR. Toolchain discovery runs after failures and before skips,
-      # never for a normal successful build or a complete installed helper.
+      # in DATA_DIR. Toolchain discovery runs at most daily after failures and
+      # before skips, never for a normal successful build or a complete helper.
       # A remembered fingerprint skips the build unless the caller asks to retry;
       # changed sources or toolchain, or deleting the marker, permits another attempt.
       # Incomplete installed executables are removed before rebuilding resources.
@@ -100,10 +101,12 @@ module Lich
           end
 
           source = source_fingerprint(helper)
-          fingerprint = nil
-          if !retry_failed && (previous = failed_fingerprint(source))
-            fingerprint = failure_fingerprint(source)
-            if previous == fingerprint
+          previous = failed_fingerprint(source)
+          sample = nil
+          if !retry_failed && previous
+            sample = failure_fingerprint(source, previous)
+            if previous['fingerprint'] == sample.first
+              write_failure_record(previous.merge('toolchain_sampled_at' => sample.last))
               Lich.log 'macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'
               raise BuildFailure.new('macOS WebUI helper build previously failed', skipped: true)
             end
@@ -117,7 +120,7 @@ module Lich
             status = $?&.exitstatus
             ready = built && complete?(helper)
             unless ready
-              record_failure(source, fingerprint || failure_fingerprint(source), status)
+              record_failure(source, sample || failure_fingerprint(source, previous), status)
               raise BuildFailure, "#{helper.fetch(:name)} WebUI helper build failed"
             end
             clear_failure
@@ -160,43 +163,85 @@ module Lich
         nil
       end
 
-      # Combines the source digest with compiler identity or command failure text.
+      # Samples compiler identity at most daily; a timeout keeps the old digest.
       # @param source [String] current build-source fingerprint
-      # @return [String] SHA-256 fingerprint of sources and toolchain identity
+      # @param previous [Hash, nil] remembered failure with its last sample time
+      # @return [Array(String, String)] combined fingerprint and UTC sample time
       # @api private
-      def failure_fingerprint(source)
+      def failure_fingerprint(source, previous = nil)
+        sampled_at = previous && previous['toolchain_sampled_at']
+        sampled_time = begin
+          Time.iso8601(sampled_at) if sampled_at.is_a?(String)
+        rescue ArgumentError
+          nil
+        end
+        return [previous.fetch('fingerprint'), sampled_at] if sampled_time && Time.now - sampled_time < 86_400
+
         identity = begin
-          Open3.capture2e('xcrun', 'swiftc', '--version').first
+          toolchain_identity
         rescue SystemCallError => error
           error.message
         end
-        Digest::SHA256.hexdigest("#{source}\0#{identity}")
+        fingerprint = identity ? Digest::SHA256.hexdigest("#{source}\0#{identity}") : previous&.fetch('fingerprint', nil) || source
+        [fingerprint, Time.now.utc.iso8601]
+      end
+
+      # Bounds compiler discovery and reaps the process, including after timeout.
+      # @return [String, nil] combined output or nil when discovery times out
+      # @api private
+      def toolchain_identity
+        Open3.popen3('xcrun', 'swiftc', '--version') do |input, output, errors, process|
+          input.close
+          begin
+            Timeout.timeout(3) do
+              result = output.read + errors.read
+              process.value
+              result
+            end
+          ensure
+            unless process.join(0)
+              Process.kill('KILL', process.pid) rescue nil
+              process.join
+            end
+          end
+        end
+      rescue Timeout::Error
+        nil
       end
 
       # Reads a matching source record while the preparation lock is held.
-      # Legacy source-only markers are returned so their next attempt migrates.
+      # A marker without a source fingerprint permits a fresh attempt.
       # @param source [String] current build-source fingerprint
-      # @return [String, nil] stored fingerprint, absent for new or changed sources
+      # @return [Hash, nil] stored failure, absent for new or changed sources
       # @api private
       def failed_fingerprint(source)
         record = JSON.parse(File.read(failure_marker))
         return unless record.is_a?(Hash)
-        return unless record['source_fingerprint'] == source || record['fingerprint'] == source
+        return unless record['source_fingerprint'] == source
+        return unless record['fingerprint'].is_a?(String) && !record['fingerprint'].empty?
 
-        record['fingerprint']
+        record
       rescue Errno::ENOENT, JSON::ParserError
         nil
       end
 
       # Remembers a failed attempt while the preparation lock is held.
       # @param source [String] attempted build-source fingerprint
-      # @param fingerprint [String] combined source and toolchain fingerprint
+      # @param sample [Array(String, String)] combined fingerprint and sample time
       # @param status [Integer, nil] build exit status, absent if no process exited
       # @return [void]
       # @api private
-      def record_failure(source, fingerprint, status)
-        record = { source_fingerprint: source, fingerprint: fingerprint, time: Time.now.utc.iso8601,
+      def record_failure(source, sample, status)
+        record = { source_fingerprint: source, fingerprint: sample.first, toolchain_sampled_at: sample.last, time: Time.now.utc.iso8601,
                    build_exit_status: status, debug_log_path: debug_log_path }
+        write_failure_record(record)
+      end
+
+      # Persists failure metadata or refreshes a remembered toolchain sample.
+      # @param record [Hash] failure metadata with source and toolchain fingerprints
+      # @return [void]
+      # @api private
+      def write_failure_record(record)
         File.open(failure_marker, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
           file.write(JSON.generate(record))
         end
