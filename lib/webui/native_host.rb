@@ -68,16 +68,19 @@ module Lich
       # Builds a missing helper for the current OS using its existing local build.
       # Serializes concurrent startups and rechecks after locking. Failed builds
       # discard their executable and remember the source fingerprint in DATA_DIR.
-      # A changed source fingerprint or deleting the marker permits another attempt.
+      # A remembered fingerprint skips the build unless the caller asks to retry;
+      # a changed source fingerprint or deleting the marker permits another attempt.
       # Incomplete installed executables are removed before rebuilding resources.
       # Complete installed helpers need no writable lock. Builders publish their
       # executable last, after supplying all resources. Browser-only platforms
       # do no build work. Announces builds before they run and sends both build
       # output streams to the startup debug log through redirected stderr.
       # @param platform [String, nil] explicit test/discovery override
+      # @param retry_failed [Boolean] attempt the build even when these sources
+      #   already failed; startup passes true when no browser fallback exists
       # @return [Boolean] whether a native helper is available for this platform
       # @raise [Error] if preparation fails or leaves no executable helper
-      def prepare!(platform: nil)
+      def prepare!(platform: nil, retry_failed: false)
         helper = HELPERS[self.platform(platform)]
         return false unless helper
         return true if complete?(helper)
@@ -88,7 +91,7 @@ module Lich
           return true if complete?(helper)
 
           fingerprint = source_fingerprint(helper)
-          if failed_fingerprint?(fingerprint)
+          if !retry_failed && failed_fingerprint?(fingerprint)
             Lich.log 'macOS WebUI helper build skipped: unchanged sources previously failed; using browser degraded mode if available.'
             raise BuildFailure.new('macOS WebUI helper build previously failed', skipped: true)
           end
