@@ -274,4 +274,18 @@ RSpec.describe Lich::Archive::TarGz do
     expect(File.binread(File.join(destination, 'lich-5-abc', 'blob'))).to eq(File.binread(File.join(source, 'blob')))
     expect(File.read(File.join(destination, 'lich-5-abc', 'lib', 'version.rb'))).to eq("LICH_VERSION = '1'\n")
   end
+
+  # TarGz refuses every link, so a symlink committed to lich-5 would make
+  # every client refuse the release that carries it. Catch it here instead.
+  describe 'release tree' do
+    root = File.expand_path('../../..', __dir__)
+    in_git = system('git', '-C', root, 'rev-parse', '--is-inside-work-tree', out: File::NULL, err: File::NULL)
+
+    it 'commits no symbolic links, which update extraction would refuse', skip: (in_git ? false : 'not a git checkout') do
+      listing, status = Open3.capture2('git', '-C', root, 'ls-files', '-s', '-z')
+      expect(status).to be_success
+      links = listing.split("\0").select { |line| line.start_with?('120000 ') }.map { |line| line.split("\t", 2).last }
+      expect(links).to be_empty, "symbolic links in the tree: #{links.join(', ')}"
+    end
+  end
 end

@@ -14,8 +14,16 @@ module Lich
     #
     # Regular files and directories are extracted. Global and per-file pax
     # headers and other metadata entries are skipped, as RubyGems skipped
-    # them. Symbolic and hard links are refused: Lich ships none, and Windows
-    # cannot create symlinks without extra privileges.
+    # them.
+    #
+    # Symbolic and hard links are refused, deliberately. RubyGems created
+    # in-tree symlinks, falling back to a copy where File.symlink failed (as
+    # it does on Windows without extra privileges), so refusing is not about
+    # an old crash: it keeps the extractor simple, with no link targets to
+    # resolve or confine. The cost is that a release containing a link would
+    # be refused by every client, so lich-5 ships none, and a spec
+    # (release tree, in spec/lib/archive/tar_gz_spec.rb) fails if a symlink
+    # (git mode 120000) is ever committed.
     module TarGz
       FILE_MODE_MASK = 0o755
       OWNER_READ_WRITE = 0o600
