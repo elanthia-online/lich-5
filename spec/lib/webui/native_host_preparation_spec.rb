@@ -585,6 +585,30 @@ RSpec.describe Lich::WebUI::NativeHost do
         expect(Lich::Main::WebUIStartup).not_to have_received(:system)
         expect(File.exist?(executable)).to be(false)
       end
+
+      it 'retries a remembered failure on every start without a browser and names that start\'s debug file' do
+        expect { Lich::Main::WebUIStartup.prepare }.to raise_error(SystemExit)
+        expect(File.exist?(failure_marker)).to be(true)
+        message = "error: macOS WebUI helper build failed. See #{$stderr.path} and contact Elanthia Online support."
+
+        expect { Lich::Main::WebUIStartup.prepare }
+          .to raise_error(SystemExit) { |exit| expect(exit.status).to eq(1) }
+
+        expect(described_class).to have_received(:system).twice
+        expect(Lich).to have_received(:log).with(message).twice
+        expect(Lich).not_to have_received(:log).with(a_string_including('build skipped'))
+      end
+
+      it 'clears the remembered failure when a later start without a browser builds the helper' do
+        expect { Lich::Main::WebUIStartup.prepare }.to raise_error(SystemExit)
+        allow(described_class).to receive(:system).with(*build_command, out: $stderr, err: $stderr).and_call_original
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(File.executable?(executable)).to be(true)
+        expect(File.exist?(failure_marker)).to be(false)
+        expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to eq(:macos)
+      end
     end
   end
 end

@@ -137,17 +137,21 @@ presentation-enabled startup checks the helper and builds it locally if missing,
 including after an update replaces the library directory. Existing helpers are
 retained without requiring write access to their installation. Concurrent
 startups share one build; resources are supplied before publishing the executable,
-and failed build output is invalidated
-so the next startup retries. A failed build reports a fatal startup error.
+and failed build output is invalidated. If the build fails and Chrome or Chromium
+is installed, Lich shows one notice and continues in that browser (degraded mode:
+windows do not stay on top). The failure is remembered in the data directory, so
+later starts use the browser without rebuilding until the helper sources change
+or that record is deleted. Without such a browser, every start retries the build
+and a failure is a fatal startup error naming the debug log.
 Disabled presentation and an explicit browser override do not build a helper.
 The required Apple command-line build tools are supplied
 by the Ruby installation setup; signing and Gatekeeper acceptance remain
 distribution work. The source build targets macOS 14 or later; that build target
 is not a substitute for the maintainers' supported-platform policy.
 
-Windows and Linux use dedicated browser app windows. Chrome and Edge are the
-supported defaults (Edge is discovered on Windows), and distro Chromium is
-discovered on Linux. Other Chromium-based browsers may work at the user's own
+Windows and Linux use dedicated browser app windows, as does macOS in degraded
+mode. Chrome and Edge are the supported defaults (Edge is discovered on Windows),
+and distro Chromium is discovered on Linux. Other Chromium-based browsers may work at the user's own
 risk. The launcher's saved Browser path applies only to the launcher window;
 script windows do not inherit it. Set `LICH_WEBUI_BROWSER` to a Chromium-based
 browser's executable path to select it for both launcher and script windows.
