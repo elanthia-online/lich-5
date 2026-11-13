@@ -1,0 +1,52 @@
+name: Windows Locked-Down Gem Recovery
+
+# Locks a Windows runner down like a stock client (execution policy
+# Restricted, then Windows Script Host disabled) and runs gem recovery
+# against the live Ruby4Lich5 manifest and bundles. The old wscript ->
+# powershell -File extractor must fail there; the current recovery must
+# stage, verify and install real units. See the driver script for details.
+#
+# Kept apart from windows_file_handoff.yaml: it changes machine-wide policy,
+# downloads about 70 MB of release assets, and only needs to run when the
+# recovery code changes.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lib/dependency_recovery.rb"
+      - "lib/recovery_unit_policy.rb"
+      - "lib/zip_archive.rb"
+      - ".github/scripts/windows_restricted_recovery.rb"
+      - ".github/workflows/windows_restricted_recovery.yaml"
+  pull_request:
+    paths:
+      - "lib/dependency_recovery.rb"
+      - "lib/recovery_unit_policy.rb"
+      - "lib/zip_archive.rb"
+      - ".github/scripts/windows_restricted_recovery.rb"
+      - ".github/workflows/windows_restricted_recovery.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restricted_recovery:
+    name: Recover gems on a locked-down Windows runner
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler-cache: false
+      # One step, and cmd rather than powershell/pwsh: the lockdown happens
+      # inside it, and GitHub runs powershell steps as script files, which
+      # Restricted refuses. Nothing runs after it that depends on the policy.
+      - name: Lock down the runner and run recovery
+        shell: cmd
+        run: ruby .github/scripts/windows_restricted_recovery.rb
