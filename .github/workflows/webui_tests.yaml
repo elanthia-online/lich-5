@@ -68,6 +68,7 @@ jobs:
               'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
               'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
               '.github/workflows/windows_webui.yaml', '.github/scripts/windows_runtime_',
+              '.github/workflows/macos_webui.yaml', '.github/scripts/macos_webui_smoke.py',
               // setup-ruby in the browser job passes no ruby-version, so it reads this file.
               '.ruby-version',
             ];
