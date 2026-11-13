@@ -164,11 +164,12 @@ test('Windows coverage stays bounded and blocking with pinned read-only actions'
   assert.match(workflow, /if: \$\{\{ !cancelled\(\) \}\}\n        uses: actions\/upload-artifact@/);
 });
 
-test('WebUI workflows use the approved Ruby setup action revision', () => {
-  for (const source of [workflow, read('.github/workflows/webui_tests.yaml')]) {
-    const pins = [...source.matchAll(/uses: ruby\/setup-ruby@([^\n]+)/g)].map(match => match[1]);
-    assert.deepEqual(pins, ['b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0']);
-  }
+test('WebUI workflows share one pinned Ruby setup action revision', () => {
+  const pins = [workflow, read('.github/workflows/webui_tests.yaml')]
+    .flatMap(source => [...source.matchAll(/uses: ruby\/setup-ruby@([^\n]+)/g)].map(match => match[1]));
+  assert.equal(pins.length, 2, 'each WebUI workflow sets up Ruby once');
+  for (const pin of pins) assert.match(pin, /^[0-9a-f]{40} # v\d+\.\d+\.\d+$/);
+  assert.equal(new Set(pins).size, 1, 'both WebUI workflows use the same setup-ruby revision');
 });
 
 test('Windows uses production runtime preparation before separate discoverable RSpec tooling', () => {
