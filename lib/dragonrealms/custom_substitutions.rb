@@ -75,7 +75,84 @@ module Lich
           memoize(key) { (Array(defaults) + validated_additions(key, type)).uniq }
         end
 
+        # Returns the validated user entries listed under one section of a
+        # settings key whose value is a map of section name => list, memoized
+        # per section. Only the player's entries are returned: the callers'
+        # built-in lists are kept apart from them on purpose (see
+        # {Lich::DragonRealms::DRCI.item_bput}).
+        #
+        # The map is read and checked once: a value that is not a map is
+        # reported and treated as empty, and each section name not in
+        # +sections+ is reported once (a misspelt verb would otherwise be
+        # silently ignored). Section names may be Strings or Symbols.
+        #
+        # @param key [Symbol, String] the settings key holding the map
+        #   (e.g. +:custom_item_success_patterns+)
+        # @param section [Symbol, String] the section to return (e.g. +:remove+)
+        # @param type [Symbol] one of {SUPPORTED_TYPES}; selects the validator
+        # @param sections [Array<String>] every section name the caller reads
+        # @return [Array] the valid, deduplicated entries for +section+
+        #   (possibly empty)
+        # @raise [ArgumentError] if +type+ is not in {SUPPORTED_TYPES} or
+        #   +section+ is not in +sections+
+        # @example
+        #   resolve_section(:custom_item_success_patterns, 'remove', type: :regexes, sections: %w[remove wear])
+        # @see #reset!
+        def resolve_section(key, section, type:, sections:)
+          raise ArgumentError, "unsupported type #{type.inspect}" unless SUPPORTED_TYPES.include?(type)
+
+          name = section.to_s
+          raise ArgumentError, "unknown section #{name.inspect} for #{key}" unless sections.include?(name)
+
+          # Read before memoize: memoize holds a non-reentrant lock while it
+          # computes, so it must not be nested.
+          table = section_table(key, sections)
+          memoize([key, name]) do
+            label = "#{key}[#{name}]"
+            validate_entries(table[name], label) { |entry, index| validate_entry(entry, type, label, index) }.uniq
+          end
+        end
+
+        # Reports that a player's pattern under +key+ / +section+ ran past
+        # {REGEX_TIMEOUT_SECONDS} while matching game text, for callers that
+        # match outside {apply_regexes} and so catch the
+        # +Regexp::TimeoutError+ themselves.
+        #
+        # @param key [Symbol, String] the settings key
+        # @param section [Symbol, String] the section whose pattern timed out
+        # @param consequence [String] what the caller did instead, for the player
+        # @return [void]
+        def report_section_timeout(key, section, consequence)
+          report("#{key}[#{section}] -- a custom regular expression took too long (over #{REGEX_TIMEOUT_SECONDS}s) on game text. " \
+                 "#{consequence} Consider simplifying it.")
+        end
+
         private
+
+        # The player's map at +key+ with String section names, memoized. A
+        # value that is not a map, and each unknown section name, is reported
+        # here, once per session.
+        #
+        # @param key [Symbol, String] settings key
+        # @param sections [Array<String>] the section names the caller reads
+        # @return [Hash{String => Object}] section name => raw list
+        def section_table(key, sections)
+          memoize([key, :table]) do
+            raw = user_setting(key)
+            if raw.nil?
+              {}
+            elsif !raw.is_a?(Hash)
+              report("#{key} ignored -- expected a map of verb => list of patterns, got #{raw.class}. No custom entries were loaded.")
+              {}
+            else
+              table = raw.to_h { |name, list| [name.to_s, list] }
+              (table.keys - sections).each do |name|
+                report("#{key}[#{name}] ignored -- #{name.inspect} is not a supported verb (supported: #{sections.join(', ')}). These entries will not be applied.")
+              end
+              table
+            end
+          end
+        end
 
         # Reads, validates, and returns the user additions at +key+.
         #

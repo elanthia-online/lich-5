@@ -183,4 +183,91 @@ RSpec.describe Lich::DragonRealms::CustomSubstitutions do
       expect(last_messages).not_to include('took too long') # deduplicated by source
     end
   end
+
+  describe '.resolve_section' do
+    let(:verbs) { %w[remove wear] }
+
+    def section(name, sections: verbs)
+      described_class.resolve_section(:custom_map, name, type: :regexes, sections: sections)
+    end
+
+    it 'returns only the entries of the asked section, compiled with the timeout' do
+      stub_settings(:custom_map, { 'remove' => ['^You unhook'], 'wear' => ['^You hook'] })
+      patterns = section('remove')
+      expect(patterns.map(&:source)).to eq(['^You unhook'])
+      expect(patterns.first.timeout).to eq(described_class::REGEX_TIMEOUT_SECONDS)
+    end
+
+    it 'accepts Symbol section names in the settings and in the call' do
+      stub_settings(:custom_map, { remove: ['^You unhook'] })
+      expect(section(:remove).map(&:source)).to eq(['^You unhook'])
+    end
+
+    it 'returns an empty list for an absent section or an unset key' do
+      stub_settings(:custom_map, { 'wear' => ['^You hook'] })
+      expect(section('remove')).to eq([])
+      described_class.reset!
+      stub_settings(:custom_map, nil)
+      expect(section('remove')).to eq([])
+      expect(last_messages).to eq('')
+    end
+
+    it 'deduplicates entries within a section' do
+      stub_settings(:custom_map, { 'remove' => ['^You unhook', '^You unhook'] })
+      expect(section('remove').size).to eq(1)
+    end
+
+    it 'drops an invalid entry with its section and index named, and keeps the rest' do
+      stub_settings(:custom_map, { 'remove' => ['^You unhook', '(unclosed', 42] })
+      expect(section('remove').map(&:source)).to eq(['^You unhook'])
+      expect(last_messages).to include('custom_map[remove][1] skipped -- invalid regular expression')
+      expect(last_messages).to include('custom_map[remove][2] skipped')
+    end
+
+    it 'reports a section whose value is not a list' do
+      stub_settings(:custom_map, { 'remove' => '^You unhook' })
+      expect(section('remove')).to eq([])
+      expect(last_messages).to include('custom_map[remove] ignored -- expected a list, got String')
+    end
+
+    it 'reports a value that is not a map, once' do
+      stub_settings(:custom_map, ['^You unhook'])
+      expect(section('remove')).to eq([])
+      expect(section('wear')).to eq([])
+      expect(last_messages.scan('custom_map ignored -- expected a map').size).to eq(1)
+    end
+
+    it 'reports each unknown section name once, naming the supported ones' do
+      stub_settings(:custom_map, { 'remvoe' => ['^You unhook'], 'wear' => ['^You hook'] })
+      section('remove')
+      section('wear')
+      expect(last_messages.scan('custom_map[remvoe] ignored').size).to eq(1)
+      expect(last_messages).to include('supported: remove, wear')
+    end
+
+    it 'caches each section until reset!' do
+      stub_settings(:custom_map, { 'remove' => ['^You unhook'] })
+      first = section('remove')
+      stub_settings(:custom_map, { 'remove' => ['^You yank'] })
+      expect(section('remove')).to equal(first)
+      described_class.reset!
+      expect(section('remove').map(&:source)).to eq(['^You yank'])
+    end
+
+    it 'raises for a section the caller does not list' do
+      expect { section('drop') }.to raise_error(ArgumentError, /unknown section "drop"/)
+    end
+
+    it 'raises for an unsupported type' do
+      expect { described_class.resolve_section(:custom_map, 'remove', type: :bogus, sections: verbs) }
+        .to raise_error(ArgumentError, /unsupported type/)
+    end
+  end
+
+  describe '.report_section_timeout' do
+    it 'names the key, section and consequence' do
+      described_class.report_section_timeout(:custom_map, 'remove', "'remove my cloak' was treated as unanswered.")
+      expect(last_messages).to include('[CustomSubstitutions] custom_map[remove]', 'took too long', "'remove my cloak' was treated as unanswered.")
+    end
+  end
 end
