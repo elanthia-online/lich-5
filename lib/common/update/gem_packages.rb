@@ -34,6 +34,13 @@ module Lich
         SETTING_NAME = 'gem_packages'
         METADATA_KEY = 'lich_install'
         OWNER_REPO = %r{\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\z}
+
+        # Owners whose new releases install automatically at login and on
+        # --sync. A followed repository under any other owner is announced
+        # instead, and installs only when the player runs --update-gem for
+        # it. Decided on #2322 / #2323 (option c). Add an owner here to trust
+        # it.
+        TRUSTED_OWNERS = %w[elanthia-online].freeze
         ASSET_NAME = /\A(?<name>[A-Za-z0-9_-]+)-(?<version>\d[\w.]*)\.gem\z/
 
         # A script package is scripts and an installer; anything near this
@@ -86,6 +93,17 @@ module Lich
         def self.save(data)
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('#{SETTING_NAME}', ?);",
                           [JSON.generate(data)])
+        end
+
+        # Whether +owner_repo+'s releases update without asking. The owner
+        # is compared whole and without case: Elanthia-Online/x is trusted,
+        # elanthia-online-fork/x is not.
+        #
+        # @param owner_repo [String] "owner/repo"
+        # @return [Boolean]
+        def self.trusted?(owner_repo)
+          owner = owner_repo.to_s.split('/', 2).first.to_s
+          TRUSTED_OWNERS.any? { |trusted| trusted.casecmp?(owner) }
         end
 
         # @param gem_name [String]
@@ -191,11 +209,33 @@ module Lich
           StatusReporter.respond_mono("[lich5-update: Registered gem package '#{owner_repo}'.]")
           result = sync_gem(owner_repo, retried_by: :user, first_add: true)
           StatusReporter.respond_mono("[lich5-update: #{owner_repo} is already up to date.]") if result == :current
-          return unless result == :refused
+          unless result == :refused
+            unless self.class.trusted?(owner_repo)
+              StatusReporter.respond_mono("[lich5-update: #{owner_repo} is not from a trusted owner, so its later releases are announced at login " \
+                                          "rather than installed. Install one with #{$clean_lich_char}lich5-update --update-gem=#{owner_repo}]")
+            end
+            return
+          end
 
           # A refusal at the first sync would otherwise repeat at every login.
           self.class.update_registry { |data| data.delete(owner_repo) }
           StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' was not registered.]")
+        end
+
+        # Installs the latest release of a followed repository now: the
+        # player's go-ahead for an owner that is not trusted, whose releases
+        # are otherwise only announced.
+        #
+        # @param owner_repo [String] "owner/repo"
+        # @return [void]
+        def update_gem(owner_repo)
+          unless self.class.all.key?(owner_repo)
+            StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is not a registered gem package. Use --add-gem=#{owner_repo} to follow it.]")
+            return
+          end
+
+          result = sync_gem(owner_repo, retried_by: :user, consent: true)
+          StatusReporter.respond_mono("[lich5-update: #{owner_repo} is already up to date.]") if result == :current
         end
 
         # Stops following a repository. The gem and the scripts its installer
@@ -258,11 +298,16 @@ module Lich
         # @param retried_by [Symbol] :login or :user, for the failure message
         # @param first_add [Boolean] this sync is the one --add-gem runs, so
         #   a refused release ends the registration rather than being skipped
-        #   at later syncs
+        #   at later syncs. The player named the repository, so it installs
+        #   whoever the owner is
+        # @param consent [Boolean] the player asked for this repository's
+        #   release (--update-gem), so it installs whoever the owner is
         # @return [Symbol] :updated, :current, :skipped, :failed, :refused (the
         #   release's gem name is not this repository's to use, or its
-        #   contents are not a script package) or :github_unavailable
-        def sync_gem(owner_repo, retried_by: :login, first_add: false)
+        #   contents are not a script package), :announced (a new release from
+        #   an owner that is not trusted, waiting for --update-gem) or
+        #   :github_unavailable
+        def sync_gem(owner_repo, retried_by: :login, first_add: false, consent: false)
           release = @client.fetch_github_json("https://api.github.com/repos/#{owner_repo}/releases/latest")
           unless release
             error = @client.last_error
@@ -290,6 +335,15 @@ module Lich
 
           state, = local_state(owner_repo, asset)
           return :current if state == :current
+
+          # A new release from an owner that is not trusted waits for the
+          # player. A :reinstall retry is not new code: it reinstalls the
+          # exact bytes the player already installed, so it goes ahead.
+          if state == :install && !first_add && !consent && !self.class.trusted?(owner_repo)
+            StatusReporter.respond_mono("[lich5-update: #{owner_repo} has #{asset[:name]} #{asset[:version]} available. " \
+                                        "Its owner is not trusted for automatic updates; install it with #{$clean_lich_char}lich5-update --update-gem=#{owner_repo}]")
+            return :announced
+          end
 
           problem = gem_home_problem
           if problem

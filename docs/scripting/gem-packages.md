@@ -8,9 +8,14 @@ repository sync and `;repository` cannot place. Code lives in
 
 ```
 ;lich5-update --add-gem=owner/repo      register it, and install the latest release now
+;lich5-update --update-gem=owner/repo   install its latest release now
 ;lich5-update --remove-gem=owner/repo   stop following it
 ;lich5-update --gems                    list what is followed
 ```
+
+New releases install automatically only for trusted owners, today
+`elanthia-online`. Other owners' releases are announced and wait for
+`--update-gem`. See [Trust model](#trust-model).
 
 ## The gem contract
 
@@ -106,11 +111,19 @@ sessions cannot both claim a name.
 
 ## When and where it runs
 
-- `--add-gem` registers the repository and runs a sync for it at once.
+- `--add-gem` registers the repository and installs its latest release at
+  once, whoever the owner is.
+- `--update-gem` installs a followed repository's latest release at once,
+  whoever the owner is.
 - `--sync` with no repository runs the script repositories, then every
   registered package.
 - At login, the same pass runs on the background sync thread in
   `lib/games.rb`, after the script repositories.
+
+At login and on `--sync`, a new release installs only when its owner is
+trusted. Otherwise the pass prints one line naming the release and the
+`--update-gem` command, and moves on. `--sync` is not consent: it refreshes
+everything the player follows at once, not one package.
 
 The gem pass is skipped when the script repository sync stopped on a
 GitHub-wide failure. One package failing does not stop the others.
@@ -184,11 +197,32 @@ another session may have installed the release in the meantime.
 
 ## Trust model
 
-A registered package is code from that repository's release, installed and
-run without asking at `--add-gem` and at every later login, in every Lich
-session on the install.
+A registered package is code from that repository's release. Its
+installer runs in the Lich process with the player's permissions and can
+write anywhere they can.
 
-What protects the player today:
+**The rule (decided on #2322 and #2323, option c):**
+
+- **Trusted owners update automatically.** At login and on `--sync`, a new
+  release from an owner in `GemPackages::TRUSTED_OWNERS` is downloaded,
+  verified, installed and deployed with no player action. The list is
+  `elanthia-online` today. An owner is added by adding it to that list.
+  The owner part of `owner/repo` is compared whole and without case:
+  `Elanthia-Online/x` is trusted, `elanthia-online-fork/x` is not.
+- **Everyone else waits for the player.** A new release from any other
+  owner is announced at login and on `--sync`, one line with the release
+  and the command, and nothing is downloaded. It installs only when the
+  player runs `--update-gem=owner/repo`.
+- **`--add-gem` installs at once, whoever the owner is.** The player named
+  that repository, which is the go-ahead for its current release. For an
+  owner that is not trusted, it also says that later releases will be
+  announced rather than installed.
+- **A failed deploy is retried at login, whoever the owner is.** The
+  retry reinstalls the exact `.gem` the player already installed, checked
+  against its recorded SHA-256, so it runs no code the player has not
+  approved.
+
+What protects the player besides that rule:
 
 - they choose which repositories to register;
 - a release cannot take over a gem name it does not own, ship native code
@@ -198,17 +232,6 @@ What protects the player today:
 - the downloaded bytes must match GitHub's published digest when there is
   one.
 
-What it does not protect against: a release from a registered repository
-can run any Ruby code in Lich at the next login, and its installer can
-write anywhere the player can. This is more than a custom repository
-script, which syncs at login but runs only when the player starts it.
-
-**Open decision.** Whether an update should run without the player's
-confirmation is for the maintainers to decide on #2322. The options raised
-in review are:
-
-- (a) `--add-gem` asks for `--confirm` after showing the gem name, version,
-  SHA-256 and entry point;
-- (b) the digest check above, which is in place;
-- (c) automatic updates only for allowlisted owners; for anyone else, the
-  release is announced and waits for the player to run a command.
+What it does not protect against: an installed release can run any Ruby
+code in Lich, and a trusted owner's new release does so at the next login
+without asking. Trusting an owner means trusting everything it publishes.

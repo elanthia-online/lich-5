@@ -12,6 +12,32 @@ RSpec.describe Lich::Util::Update::GemPackages do
   before do
     Lich.db.reset!
     allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+    # Most examples follow x/y and expect it to update on its own, so x is
+    # trusted here; the allowlist examples below set the real list back.
+    stub_const("#{described_class}::TRUSTED_OWNERS", %w[elanthia-online x])
+  end
+
+  # The allowlist as shipped, so x/y is an owner that is not trusted.
+  def untrust_x
+    stub_const("#{described_class}::TRUSTED_OWNERS", %w[elanthia-online])
+  end
+
+  describe '.trusted?' do
+    before { untrust_x }
+
+    it 'trusts an allowlisted owner whatever its case' do
+      expect(described_class.trusted?('elanthia-online/eohunter')).to be(true)
+      expect(described_class.trusted?('Elanthia-Online/eohunter')).to be(true)
+    end
+
+    it 'does not trust an owner that only starts or ends like one' do
+      expect(described_class.trusted?('elanthia-online-fork/eohunter')).to be(false)
+      expect(described_class.trusted?('my-elanthia-online/eohunter')).to be(false)
+    end
+
+    it 'looks at the owner, not the repository name' do
+      expect(described_class.trusted?('someone/elanthia-online')).to be(false)
+    end
   end
 
   describe '.all and .save' do
@@ -57,10 +83,48 @@ RSpec.describe Lich::Util::Update::GemPackages do
       expect(printed.last).to eq("[lich5-update: 'x/y' was not registered.]")
     end
 
+    it 'tells the player a package from an owner that is not trusted will only be announced later' do
+      untrust_x
+      allow(manager).to receive(:sync_gem).and_return(:updated)
+      manager.add_gem('x/y')
+      expect(manager).to have_received(:sync_gem).with('x/y', retried_by: :user, first_add: true)
+      expect(printed.last).to include('x/y is not from a trusted owner', '--update-gem=x/y')
+      expect(described_class.all).to have_key('x/y')
+    end
+
+    it 'says nothing more for a trusted owner' do
+      allow(manager).to receive(:sync_gem).and_return(:updated)
+      manager.add_gem('elanthia-online/eohunter')
+      expect(printed.last).to eq("[lich5-update: Registered gem package 'elanthia-online/eohunter'.]")
+    end
+
     it 'refuses a duplicate' do
       described_class.save('x/y' => {})
       manager.add_gem('x/y')
       expect(printed.last).to include('already registered')
+    end
+  end
+
+  describe '#update_gem' do
+    it 'installs with the player\'s consent' do
+      described_class.save('x/y' => { 'gem' => 'tiny' })
+      allow(manager).to receive(:sync_gem).and_return(:updated)
+      manager.update_gem('x/y')
+      expect(manager).to have_received(:sync_gem).with('x/y', retried_by: :user, consent: true)
+    end
+
+    it 'says so when the package is already current' do
+      described_class.save('x/y' => { 'gem' => 'tiny' })
+      allow(manager).to receive(:sync_gem).and_return(:current)
+      manager.update_gem('x/y')
+      expect(printed.last).to eq('[lich5-update: x/y is already up to date.]')
+    end
+
+    it 'refuses a repository that is not followed' do
+      allow(manager).to receive(:sync_gem)
+      manager.update_gem('x/y')
+      expect(manager).not_to have_received(:sync_gem)
+      expect(printed.last).to include("'x/y' is not a registered gem package", '--add-gem=x/y')
     end
   end
 
@@ -682,6 +746,74 @@ RSpec.describe Lich::Util::Update::GemPackages do
         expect(manager.sync_gem('x/y')).to eq(:failed)
         expect(printed.last).to include('over the')
         expect(printed.last).not_to include('the body was read')
+      end
+
+      context 'when the owner is not trusted' do
+        before { untrust_x }
+
+        it 'announces a new release at login instead of downloading it' do
+          allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
+          expect(manager.sync_gem('x/y')).to eq(:announced)
+          expect(printed.size).to eq(1)
+          expect(printed.last).to start_with('[lich5-update: x/y has tiny 1.2.0 available. Its owner is not trusted for automatic updates; install it with ')
+          expect(printed.last).to end_with('lich5-update --update-gem=x/y]')
+          expect(gemspecs_in(gem_home)).to be_empty
+        end
+
+        it 'keeps the rest of the sync going after an announcement' do
+          described_class.save('x/y' => { 'gem' => 'tiny' }, 'elanthia-online/other' => {})
+          allow(manager).to receive(:sync_gem).and_call_original
+          allow(manager).to receive(:sync_gem).with('elanthia-online/other').and_return(:current)
+          allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
+          manager.sync_all
+          expect(manager).to have_received(:sync_gem).with('elanthia-online/other')
+        end
+
+        it 'installs the release when the player runs --update-gem' do
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+          manager.update_gem('x/y')
+          expect(printed.last).to eq('[lich5-update: tiny updated to 1.2.0.]')
+          expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq("installed into #{lich_dir}")
+        end
+
+        it 'installs at --add-gem, since the player named the repository' do
+          described_class.save({})
+          allow(described_class).to receive(:installed_version).with('tiny').and_return(nil)
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+          manager.add_gem('x/y')
+          expect(described_class.all['x/y']).to include('installed' => '1.2.0', 'deployed' => '1.2.0')
+          expect(printed.last).to include('is not from a trusted owner')
+        end
+
+        it 'still retries a failed deploy at login from the kept .gem, which the player already approved' do
+          gate = File.join(tmp, 'gate')
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, installer: <<~RUBY))
+            raise Errno::EACCES, 'scripts' unless File.exist?('#{gate.tr('\\', '/')}')
+            FileUtils.mkdir_p(File.join(lich_dir, 'scripts'))
+            File.write(File.join(lich_dir, 'scripts', 'tiny.lic'), 'ok')
+          RUBY
+          manager.update_gem('x/y')
+          expect(described_class.all['x/y']).to include('installed' => '1.2.0')
+          expect(described_class.all['x/y']).not_to have_key('deployed')
+
+          FileUtils.touch(gate)
+          allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+          allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
+          expect(manager.sync_gem('x/y')).to eq(:updated)
+          expect(File.read(File.join(lich_dir, 'scripts', 'tiny.lic'))).to eq('ok')
+        end
+
+        it 'announces, rather than installs, a newer release after one was installed with consent' do
+          serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }))
+          manager.update_gem('x/y')
+          printed.clear
+
+          allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-1.3.0.gem'))
+          allow(described_class).to receive(:installed_version).with('tiny').and_return(Gem::Version.new('1.2.0'))
+          allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
+          expect(manager.sync_gem('x/y')).to eq(:announced)
+          expect(printed.last).to include('x/y has tiny 1.3.0 available')
+        end
       end
 
       context 'when a release is refused for its contents' do

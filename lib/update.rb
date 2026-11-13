@@ -131,6 +131,8 @@ module Lich
           custom_repos_manager.list_custom_repos
         when /^--add-gem=(\S+)$/
           gem_packages_manager.add_gem($1)
+        when /^--update-gem=(\S+)$/
+          gem_packages_manager.update_gem($1)
         when /^--remove-gem=(\S+)$/
           gem_packages_manager.remove_gem($1)
         when /^--gems$/
@@ -219,9 +221,11 @@ module Lich
 
   [Scripts shipped as a gem on GitHub releases]
     #{$clean_lich_char}lich5-update --add-gem=owner/repo                Follow a repository's releases and install its .gem now
+    #{$clean_lich_char}lich5-update --update-gem=owner/repo             Install the latest release now (needed for owners not trusted for automatic updates)
     #{$clean_lich_char}lich5-update --remove-gem=owner/repo             Stop following it (the gem and its scripts stay)
     #{$clean_lich_char}lich5-update --gems                              List followed gem packages
-    Followed packages are checked at login and on --sync, for the whole Lich install
+    Followed packages are checked at login and on --sync, for the whole Lich install.
+    Releases install automatically only from trusted owners (elanthia-online); others are announced
 
   [Beta testing]
     #{$clean_lich_char}lich5-update --beta                              Show the beta notice; confirm within #{ReleaseInstaller::BETA_CONFIRM_WINDOW} seconds
