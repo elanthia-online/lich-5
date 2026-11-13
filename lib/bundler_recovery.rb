@@ -6,6 +6,7 @@ require 'open3'
 require 'rbconfig'
 require 'rubygems/installer'
 require 'tmpdir'
+require_relative 'common/cli/one_shot_commands'
 
 module Lich
   # Recovers missing non-GTK runtime gems on macOS. Bundler resolves and builds
@@ -208,8 +209,18 @@ module Lich
       {
         'schema' => 1, 'parent_pid' => Process.pid, 'lich_dir' => @lich_dir,
         'gem_home' => @gem_home, 'temp_dir' => temp_dir, 'work_dir' => work_dir,
-        'packages' => packages, 'restart' => { 'program' => File.join(@lich_dir, 'lich.rbw'), 'argv' => ARGV, 'chdir' => @lich_dir }
+        'packages' => packages, 'restart' => restart_target
       }
+    end
+
+    # What the helper relaunches once the repair is done, or nil for a one-shot
+    # command: its relaunch would run with output discarded, and its arguments
+    # can carry passwords that would otherwise be written into the payload.
+    # GemCheck.exit_after_scheduled_repair! tells the user to rerun it instead.
+    def restart_target
+      return nil if Lich::Common::CLI::OneShotCommands.present?(ARGV)
+
+      { 'program' => File.join(@lich_dir, 'lich.rbw'), 'argv' => ARGV, 'chdir' => @lich_dir }
     end
 
     def launch_macos_helper(payload_path)
@@ -244,7 +255,7 @@ module Lich
           raise
         end
       end
-      restart_lich(payload.fetch('restart'))
+      restart_lich(payload.fetch('restart')) if payload.fetch('restart')
     ensure
       FileUtils.rm_rf(cleanup_target) if defined?(cleanup_target) && cleanup_target
     end

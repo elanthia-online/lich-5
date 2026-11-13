@@ -14,6 +14,7 @@ require 'timeout'
 require 'tmpdir'
 require 'uri'
 require_relative 'recovery_unit_policy'
+require_relative 'common/cli/one_shot_commands'
 
 module Lich
   # Restores approved runtime gems from the Ruby4Lich5 manifest when an
@@ -613,16 +614,24 @@ module Lich
         'work_dir'       => work_dir,
         'packages'       => packages.values,
         'preserve_newer' => preserve_newer,
-        'restart'        => {
-          'program' => File.expand_path($PROGRAM_NAME),
-          'argv'    => ARGV,
-          'chdir'   => Dir.pwd
-        }
+        'restart'        => restart_target
       }
       File.write(payload_path, JSON.generate(payload))
       @helper_launcher.call(payload_path)
     rescue SystemCallError => e
       raise Error, "Could not start the hidden native gem replacement helper: #{e.message}"
+    end
+
+    # What the helper relaunches once the replacement is done, or nil for a
+    # one-shot command: its relaunch would run with output discarded, and its
+    # arguments can carry passwords that would otherwise be written into the
+    # payload. GemCheck.exit_after_scheduled_repair! tells the user to rerun it.
+    #
+    # @return [Hash, nil] program, argv and chdir for the relaunch
+    def restart_target
+      return nil if Lich::Common::CLI::OneShotCommands.present?(ARGV)
+
+      { 'program' => File.expand_path($PROGRAM_NAME), 'argv' => ARGV, 'chdir' => Dir.pwd }
     end
 
     # @param payload_path [String]
@@ -700,7 +709,7 @@ module Lich
         cleanup_workspace(rollback_dir)
       end
       cleanup_workspace(payload.fetch('work_dir'))
-      restart_lich(payload.fetch('restart'))
+      restart_lich(payload.fetch('restart')) if payload.fetch('restart')
     end
 
     # @param payload [Hash]
@@ -711,14 +720,23 @@ module Lich
         raise Error, "native runtime replacement payload is missing #{key}" unless payload.key?(key)
       end
       raise Error, 'native runtime replacement packages must be an array' unless payload['packages'].is_a?(Array) && !payload['packages'].empty?
-      raise Error, 'native runtime replacement restart data must be an object' unless payload['restart'].is_a?(Hash)
-      raise Error, 'native runtime replacement restart arguments must be an array' unless payload['restart']['argv'].is_a?(Array)
-      raise Error, 'native runtime replacement program is invalid' unless File.file?(payload['restart']['program'])
-      raise Error, 'native runtime replacement working directory is invalid' unless Dir.exist?(payload['restart']['chdir'])
+      validate_restart!(payload['restart']) unless payload['restart'].nil?
       payload['packages'].each { |package| validate_package!(package, 'native runtime replacement') }
       unless payload['packages'].all? { |package| File.file?(package['path']) && path_within?(package['path'], payload['work_dir']) }
         raise Error, 'native runtime replacement package path is unsafe'
       end
+    end
+
+    # A nil restart (a one-shot command, see #restart_target) is valid and
+    # means the helper relaunches nothing.
+    #
+    # @param restart [Object] the payload's restart entry
+    # @return [void]
+    def validate_restart!(restart)
+      raise Error, 'native runtime replacement restart data must be an object' unless restart.is_a?(Hash)
+      raise Error, 'native runtime replacement restart arguments must be an array' unless restart['argv'].is_a?(Array)
+      raise Error, 'native runtime replacement program is invalid' unless File.file?(restart['program'])
+      raise Error, 'native runtime replacement working directory is invalid' unless Dir.exist?(restart['chdir'])
     end
 
     # @param pid [Integer, String] process id of the Lich that scheduled the replacement

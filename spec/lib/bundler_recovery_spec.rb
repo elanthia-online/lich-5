@@ -135,6 +135,30 @@ RSpec.describe Lich::BundlerRecovery do
     end
   end
 
+  describe 'restart payload' do
+    let(:packages) { [{ 'name' => 'ox', 'version' => '1.0.0', 'full_name' => 'ox-1.0.0', 'path' => '/tmp/ox-1.0.0.gem' }] }
+
+    it 'relaunches a session with its original arguments' do
+      stub_const('ARGV', ['--login', 'Doug', '--frontend', 'wizard'])
+
+      payload = recovery { |_| }.send(:promotion_payload, @lich_dir, packages)
+
+      expect(payload.fetch('restart')).to eq(
+        'program' => File.join(@lich_dir, 'lich.rbw'), 'argv' => ['--login', 'Doug', '--frontend', 'wizard'], 'chdir' => @lich_dir
+      )
+    end
+
+    it 'leaves a one-shot command and its password out of the payload' do
+      stub_const('ARGV', ['--change-master-password', 'old-master-pw', 'new-master-pw'])
+
+      payload = recovery { |_| }.send(:promotion_payload, @lich_dir, packages)
+
+      expect(payload).to have_key('restart')
+      expect(payload.fetch('restart')).to be_nil
+      expect(JSON.generate(payload)).not_to include('master-pw')
+    end
+  end
+
   describe 'detached promotion transaction' do
     def write_installed_spec(name, version, marker:)
       spec = Gem::Specification.new do |entry|
@@ -182,6 +206,22 @@ RSpec.describe Lich::BundlerRecovery do
 
       expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
       expect(File.read(File.join(@gem_home, 'gems', original.full_name, 'marker'))).to eq('preserve')
+      expect(File).not_to exist(work_dir)
+    end
+
+    it 'promotes the package without relaunching when the payload has no restart' do
+      replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'old')
+      work_dir = Dir.mktmpdir('promotion-', @lich_dir)
+      payload, path = payload_for(work_dir, replacement)
+      payload['restart'] = nil
+      subject = recovery(installer: ->(_) { install_spec(replacement, marker: 'new') }) { |_| }
+      allow(subject).to receive(:wait_for_parent_exit)
+      expect(subject).not_to receive(:restart_lich)
+      expect(Process).not_to receive(:spawn)
+
+      subject.send(:run_macos_replacement!, payload, payload_path: path)
+
+      expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
       expect(File).not_to exist(work_dir)
     end
 

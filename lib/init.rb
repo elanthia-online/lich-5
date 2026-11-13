@@ -380,7 +380,7 @@ rescue LoadError => sqlite_load_error
   if result.nil?
     exit 1
   elsif result.restart_required
-    exit 0
+    Lich::GemCheck.exit_after_scheduled_repair!
   elsif result.success?
     begin
       require 'sqlite3'
@@ -408,7 +408,7 @@ unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
       if result.nil?
         exit 1
       elsif result.restart_required
-        exit 0
+        Lich::GemCheck.exit_after_scheduled_repair!
       elsif result.success?
         begin
           require 'gtk3'

@@ -69,6 +69,18 @@ RSpec.describe 'init.rb late-load dependency recovery' do
         end
       end
 
+      context 'when recovery schedules a restart for a one-shot command' do
+        let(:result) { Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true) }
+
+        it 'asks for a rerun and exits 1 because the command did not run' do
+          stub_const('ARGV', ['--change-master-password', 'old', 'new'])
+          expect(Lich::GemCheck).not_to receive(:alert)
+
+          expect { expect { loader.instance_eval(recovery_block, init_path) }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) } }
+            .to output(/Your command did not run/).to_stdout
+        end
+      end
+
       context 'when recovery is declined' do
         let(:result) { nil }
 
