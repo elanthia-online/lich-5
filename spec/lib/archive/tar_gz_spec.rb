@@ -180,6 +180,57 @@ RSpec.describe Lich::Archive::TarGz do
     expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /link/)
   end
 
+  describe 'entry types other than files and directories' do
+    let(:first) { { name: 'r/first.rb', data: 'first' } }
+    let(:long_name) { "r/#{'d' * 120}.rb" }
+
+    def pax(typeflag, records, name: 'r/PaxHeaders/x.rb')
+      { name: name, type: :raw, typeflag: typeflag, data: TarGzBuilder.pax_records(records) }
+    end
+
+    def refuses(entries, message)
+      write_tarball(entries)
+
+      expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, message)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+
+    it 'refuses a GNU long name instead of extracting under the truncated name' do
+      refuses([first, { name: '././@LongLink', type: :raw, typeflag: 'L', data: "#{long_name}\0" },
+               { name: long_name[0, 100], data: 'long' }], /GNU long name.*@LongLink/)
+    end
+
+    it 'refuses a pax header that sets path' do
+      refuses([first, pax('x', { 'path' => long_name }), { name: long_name[0, 100], data: 'long' }], /pax header sets path/)
+    end
+
+    it 'refuses a pax header that sets linkpath' do
+      refuses([first, pax('x', { 'linkpath' => 'r/first.rb' }), { name: 'r/second.rb', data: 'x' }], /pax header sets linkpath/)
+    end
+
+    it 'refuses a global pax header that sets path' do
+      refuses([pax('g', { 'path' => 'elsewhere' }, name: 'pax_global_header'), first], /pax header sets path/)
+    end
+
+    it 'refuses a malformed pax header' do
+      refuses([first, { name: 'r/PaxHeaders/x.rb', type: :raw, typeflag: 'x', data: "not a record\n" }], /malformed pax header/)
+    end
+
+    it 'skips a per-file pax header that does not rename the entry' do
+      write_tarball([pax('x', { 'mtime' => '1700000000.5', 'uname' => 'lich' }), first])
+
+      expect(described_class.extract(tarball, destination)).to eq(['r/first.rb'])
+      expect(extracted).to eq(%w[r r/first.rb])
+    end
+
+    { '7' => 'contiguous file', '6' => 'FIFO', '3' => 'character device', '4' => 'block device',
+      'K' => 'GNU long link name', 'S' => 'GNU sparse file', 'Z' => 'unknown type "Z"' }.each do |typeflag, kind|
+      it "refuses typeflag #{typeflag} (#{kind}) instead of dropping it" do
+        refuses([first, { name: 'r/odd', type: :raw, typeflag: typeflag, data: '' }], /is a #{Regexp.escape(kind)}, which Lich does not extract: r\/odd/)
+      end
+    end
+  end
+
   it 'reports a file that is not gzip' do
     File.binwrite(tarball, 'not a gzip archive')
 

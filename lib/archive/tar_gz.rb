@@ -13,8 +13,12 @@ module Lich
     # open handle keeps the tarball from being deleted afterwards.
     #
     # Regular files and directories are extracted. Global and per-file pax
-    # headers and other metadata entries are skipped, as RubyGems skipped
-    # them.
+    # headers are skipped, as RubyGems skipped them (`git archive` writes a
+    # global one holding the commit id), unless they carry a path or
+    # linkpath record: TarReader ignores those, so the entry would land
+    # under its truncated ustar name. Every other entry type (GNU long
+    # names, devices, FIFOs, contiguous files, unknown typeflags) is refused
+    # by name rather than dropped while extraction reports success.
     #
     # Symbolic and hard links are refused, deliberately. RubyGems created
     # in-tree symlinks, falling back to a copy where File.symlink failed (as
@@ -28,6 +32,18 @@ module Lich
       FILE_MODE_MASK = 0o755
       OWNER_READ_WRITE = 0o600
       LINK_TYPES = %w[1 2].freeze
+      FILE_TYPE = '0' # TarHeader also reads a NUL (pre-POSIX) typeflag as "0"
+      DIRECTORY_TYPE = '5'
+      PAX_TYPES = %w[g x].freeze
+      # Pax records that change which file an entry names; TarReader ignores
+      # them, so an entry carrying one cannot be extracted faithfully.
+      PAX_PATH_KEYS = %w[path linkpath].freeze
+      MAX_PAX_HEADER_SIZE = 1 << 20
+      REFUSED_TYPES = {
+        '3' => 'character device', '4' => 'block device', '6' => 'FIFO', '7' => 'contiguous file',
+        'K' => 'GNU long link name', 'L' => 'GNU long name', 'M' => 'GNU multi-volume continuation',
+        'S' => 'GNU sparse file', 'V' => 'GNU volume header'
+      }.freeze
       CHUNK_SIZE = 1 << 16
 
       module_function
@@ -36,6 +52,7 @@ module Lich
       # @param destination [String] directory to extract into (created if absent)
       # @return [Array<String>] extracted entry names
       # @raise [Error] when the archive is corrupt, unsafe, or contains a link
+      #   or an entry type other than a regular file or directory
       def extract(path, destination)
         root = File.expand_path(destination)
         # The first pass reads only headers, so nothing is written for an
@@ -46,7 +63,7 @@ module Lich
         FileUtils.mkdir_p(root)
         names = []
         each_entry(path) do |entry|
-          next unless entry.file? || entry.directory?
+          next unless [FILE_TYPE, DIRECTORY_TYPE].include?(entry.header.typeflag)
           next if root_directory?(entry, root)
 
           write_entry(entry, Archive.safe_destination(entry.full_name, root))
@@ -89,14 +106,63 @@ module Lich
       # @param entry [Gem::Package::TarReader::Entry]
       # @param root [String]
       # @return [Boolean] whether the entry will be extracted
-      # @raise [Error] when the entry is a link
+      # @raise [Error] when the entry is a link, a pax header naming a path,
+      #   or any type other than a regular file or directory
       def validate!(entry, root)
-        if entry.symlink? || LINK_TYPES.include?(entry.header.typeflag)
-          raise Error, "archive entry is a link, which Lich does not extract: #{entry.full_name}"
+        typeflag = entry.header.typeflag
+        if LINK_TYPES.include?(typeflag)
+          raise Error, "archive entry is a link, which Lich does not extract: #{Archive.printable(entry.full_name)}"
         end
-        return false unless entry.file? || entry.directory?
+        if PAX_TYPES.include?(typeflag)
+          check_pax_header!(entry)
+          return false
+        end
+        unless [FILE_TYPE, DIRECTORY_TYPE].include?(typeflag)
+          kind = REFUSED_TYPES.fetch(typeflag) { "unknown type #{typeflag.inspect}" }
+          raise Error, "archive entry is a #{kind}, which Lich does not extract: #{Archive.printable(entry.full_name)}"
+        end
 
         !root_directory?(entry, root)
+      end
+
+      # Refuses a pax header whose records rename the next entry (or every
+      # entry, for a global header), since TarReader would not apply them.
+      # @param entry [Gem::Package::TarReader::Entry] a "g" or "x" header
+      # @return [void]
+      # @raise [Error]
+      def check_pax_header!(entry)
+        name = Archive.printable(entry.full_name)
+        raise Error, "pax header is too large: #{name}" if entry.header.size > MAX_PAX_HEADER_SIZE
+
+        keys = pax_keys(entry.read.to_s.b)
+        raise Error, "malformed pax header: #{name}" unless keys
+
+        overridden = keys & PAX_PATH_KEYS
+        return if overridden.empty?
+
+        raise Error, "pax header sets #{overridden.join(' and ')}, which Lich does not apply: #{name}"
+      end
+
+      # @param data [String] binary pax header body
+      # @return [Array<String>, nil] the record keys, or nil when malformed
+      def pax_keys(data)
+        keys = []
+        position = 0
+        while position < data.bytesize
+          digits = data.byteslice(position, 20)[/\A[0-9]+ /]
+          return nil unless digits
+
+          length = digits.to_i
+          record = data.byteslice(position, length)
+          return nil unless length > digits.bytesize && record && record.bytesize == length && record.end_with?("\n")
+
+          key, separator, = record.byteslice(digits.bytesize..).partition('=')
+          return nil if separator.empty? || key.empty?
+
+          keys << key
+          position += length
+        end
+        keys
       end
 
       # `tar -czf x.tar.gz .` starts with a "./" entry for the root itself.
