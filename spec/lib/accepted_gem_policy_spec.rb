@@ -402,6 +402,76 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
         .to eq('glib2' => ['4.3.5', local], 'gtk3' => ['4.3.5', local])
     end
+
+    context 'with cairo, which cairo-gobject does not pin exactly' do
+      let(:cairo_package) { { 'name' => 'cairo', 'version' => '1.18.5', 'filename' => "cairo-1.18.5-#{local}.gem", 'sha256' => "sha256:#{'1' * 64}" } }
+      let(:cairo_gobject_package) { { 'name' => 'cairo-gobject', 'version' => '4.3.9', 'filename' => "cairo-gobject-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'2' * 64}" } }
+
+      before do
+        gtk_unit['members'] = %w[glib2 cairo cairo-gobject gtk3]
+        gtk_unit['install_order'] = %w[glib2 cairo cairo-gobject gtk3]
+        gtk_unit['packages'] = [glib_package, cairo_package, cairo_gobject_package, gtk_package]
+      end
+
+      # Ruby-GNOME's own dependencies: cairo-gobject requires `cairo >= 1.16.2`.
+      def gnome_stack(version, build)
+        { 'glib2'         => [send(build, 'glib2', version)],
+          'cairo-gobject' => [send(build, 'cairo-gobject', version, { 'cairo' => '>= 1.16.2', 'glib2' => "= #{version}" })],
+          'gtk3'          => [send(build, 'gtk3', version, { 'cairo-gobject' => "= #{version}", 'glib2' => "= #{version}" })] }
+      end
+
+      def platforms_of(specs)
+        specs.transform_values { |item| [item.version.to_s, item.platform.to_s] }
+      end
+
+      it 'uses the accepted cairo, not a newer self-built one, next to the accepted cairo-gobject' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5'), self_built('cairo', '1.18.6')]
+        expect(recovery).not_to receive(:recover)
+        check = policy.check(dependencies)
+        expect(check.needed).to be_empty
+        policy.activate!(check)
+        expect(platforms_of(active)).to eq('glib2' => ['4.3.9', local], 'cairo' => ['1.18.5', local],
+                                           'cairo-gobject' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+      end
+
+      it 'repairs a newer self-built cairo when no accepted cairo is installed' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [self_built('cairo', '1.18.6')]
+        check = policy.check(dependencies)
+        expect(check.needed).to eq(['cairo'])
+        expect(check.plan.units).to eq([gtk_unit])
+      end
+
+      it 'keeps a newer self-built Ruby-GNOME stack over the accepted cairo' do
+        installed.merge!(gnome_stack('4.4.0', :self_built))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5')]
+        check = policy.check(dependencies)
+        expect(check.needed).to be_empty
+        policy.activate!(check)
+        expect(platforms_of(active)).to eq('glib2' => %w[4.4.0 ruby], 'cairo' => ['1.18.5', local],
+                                           'cairo-gobject' => %w[4.4.0 ruby], 'gtk3' => %w[4.4.0 ruby])
+      end
+    end
+  end
+
+  context 'with a standalone native package' do
+    let(:local) { Gem::Platform.local.to_s }
+    let(:ox_unit) do
+      { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+        'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+    end
+
+    before { plan.units = [ox_unit] }
+
+    it 'keeps a newer self-built copy, since no package of its unit depends on it' do
+      ox = spec('ox', '2.14.30')
+      installed['ox'] = [spec('ox', '2.14.29').tap { |item| item.platform = Gem::Platform.local }, ox]
+      check = policy.check([Gem::Dependency.new('ox')])
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.fetch('ox')).to equal(ox)
+    end
   end
 
   context 'with a package minimum' do
