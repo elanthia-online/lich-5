@@ -147,7 +147,7 @@ RSpec.describe Lich::Archive::Zip do
         write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
 
         expect { described_class.extract(zip_path, destination) }
-          .to raise_error(described_class::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+          .to raise_error(Lich::Archive::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
         expect(Dir.exist?(destination)).to be(false)
       end
     end
@@ -156,7 +156,7 @@ RSpec.describe Lich::Archive::Zip do
       write_zip([{ name: u('caf<E9>'), data: 'x', flags: 0x0800 }, { name: u('cafe<301>/a.gem'), data: 'a', flags: 0x0800 }])
 
       expect { described_class.extract(zip_path, destination) }
-        .to raise_error(described_class::Error, /archive entry is both a file and a directory/)
+        .to raise_error(Lich::Archive::Error, /archive entry is both a file and a directory/)
       expect(Dir.exist?(destination)).to be(false)
     end
 

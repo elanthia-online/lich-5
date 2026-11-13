@@ -1046,7 +1046,7 @@ module Lich
 
     # @param error [LoadError]
     # @return [String] the file +error+ could not load, relative to the
-    #   directory above lib/ when it lies inside it (lib/zip_archive.rb)
+    #   directory above lib/ when it lies inside it (lib/archive.rb)
     def missing_library(error)
       return 'a recovery library' unless error.path
 

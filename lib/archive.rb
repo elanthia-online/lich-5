@@ -142,9 +142,10 @@ module Lich
 
     # Refuses entries that would overwrite each other or need one path to be
     # both a file and a directory (+a+ and +a/+, or +a+ and +a/b+), which
-    # would otherwise fail midway with an OS error. Paths are compared
-    # case-insensitively because Windows treats +A.gem+ and +a.gem+ as one
-    # file. Repeated directory entries are allowed.
+    # would otherwise fail midway with an OS error. Paths are compared by
+    # layout_key, so names a case-insensitive or normalising file system
+    # would store as one file collide here too. Repeated directory entries
+    # are allowed.
     # @param entries [Array<Array(String, String, Boolean)>] name, target, directory?
     # @param root [String] expanded extraction directory
     # @return [void]
@@ -153,7 +154,7 @@ module Lich
       files = {}
       directories = {}
       entries.each do |name, target, directory|
-        key = target.downcase
+        key = layout_key(target, root)
         if directory
           directories[key] ||= name
         else
@@ -163,12 +164,35 @@ module Lich
         end
         parent = File.dirname(target)
         while parent.length > root.length
-          directories[parent.downcase] ||= name
+          directories[layout_key(parent, root)] ||= name
           parent = File.dirname(parent)
         end
       end
       clash = files.keys.find { |key| directories.key?(key) }
       raise Error, "archive entry is both a file and a directory: #{files[clash]}" if clash
+    end
+
+    # The part of +path+ below +root+, in the form two names take when a file
+    # system would store them as one file: Unicode NFC (macOS normalises
+    # names, so a decomposed and a precomposed e-acute are one file), then
+    # full case folding (Windows and macOS ignore case, and fold final and
+    # medial sigma, long s and s, and micro sign and mu together).
+    #
+    # This is deliberately stricter than any one file system: full folding
+    # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
+    # pair costs nothing for the archives Lich reads, and a name that could
+    # collide anywhere is refused everywhere.
+    #
+    # The bytes are read as UTF-8 whatever the string's encoding tag:
+    # unsafe_entry? has already refused names that are not valid UTF-8.
+    # @param path [String] expanded path at or below +root+
+    # @param root [String] expanded extraction directory
+    # @return [String]
+    def layout_key(path, root)
+      below = path.byteslice(root.bytesize..).force_encoding(Encoding::UTF_8)
+      # Folding can leave a name unnormalised again (U+01F0, j with caron,
+      # folds to j and a combining caron), hence the second NFC.
+      below.unicode_normalize(:nfc).downcase(:fold).unicode_normalize(:nfc)
     end
   end
 end

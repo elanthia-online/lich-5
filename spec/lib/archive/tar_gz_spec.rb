@@ -112,6 +112,41 @@ RSpec.describe Lich::Archive::TarGz do
     end
   end
 
+  # Names a normalising or case-insensitive file system stores as one file,
+  # spelled in ASCII source as hex code points ("caf<E9>"). Tar names reach
+  # the check as binary strings, unlike ZIP names.
+  def self.u(text)
+    text.gsub(/<(\h+)>/) { [Regexp.last_match(1).hex].pack('U') }
+  end
+
+  def u(text)
+    self.class.u(text)
+  end
+
+  {
+    'NFC and NFD e-acute'    => [u('r/caf<E9>.rb'), u('r/cafe<301>.rb')],
+    'final and medial sigma' => [u('r/<3C2>.rb'), u('r/<3C3>.rb')],
+    'long s and s'           => [u('r/<17F>.rb'), 'r/s.rb'],
+    'micro sign and mu'      => [u('r/<B5>.rb'), u('r/<3BC>.rb')],
+    'sharp s and ss'         => [u('r/<DF>.rb'), 'r/ss.rb']
+  }.each do |label, (first, second)|
+    it "refuses #{label} as a duplicate and writes nothing" do
+      write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])
+
+      expect { described_class.extract(tarball, destination) }
+        .to raise_error(Lich::Archive::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+  end
+
+  it 'refuses a file and a directory whose names differ only in Unicode normalisation' do
+    write_tarball([{ name: u('r/caf<E9>'), data: 'x' }, { name: u('r/cafe<301>/a.rb'), data: 'a' }])
+
+    expect { described_class.extract(tarball, destination) }
+      .to raise_error(Lich::Archive::Error, /archive entry is both a file and a directory/)
+    expect(Dir.exist?(destination)).to be(false)
+  end
+
   it 'accepts a directory listed more than once and directories implied by their files' do
     write_tarball([{ name: 'r/', type: :directory }, { name: 'r/lib/a.rb', data: 'a' }, { name: 'r/', type: :directory },
                    { name: 'r/lib/', type: :directory }])
