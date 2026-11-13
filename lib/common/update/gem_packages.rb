@@ -189,7 +189,7 @@ module Lich
           end
 
           StatusReporter.respond_mono("[lich5-update: Registered gem package '#{owner_repo}'.]")
-          result = sync_gem(owner_repo, retried_by: :user)
+          result = sync_gem(owner_repo, retried_by: :user, first_add: true)
           StatusReporter.respond_mono("[lich5-update: #{owner_repo} is already up to date.]") if result == :current
           return unless result == :refused
 
@@ -256,10 +256,13 @@ module Lich
         #
         # @param owner_repo [String]
         # @param retried_by [Symbol] :login or :user, for the failure message
+        # @param first_add [Boolean] this sync is the one --add-gem runs, so
+        #   a refused release ends the registration rather than being skipped
+        #   at later syncs
         # @return [Symbol] :updated, :current, :skipped, :failed, :refused (the
         #   release's gem name is not this repository's to use, or its
         #   contents are not a script package) or :github_unavailable
-        def sync_gem(owner_repo, retried_by: :login)
+        def sync_gem(owner_repo, retried_by: :login, first_add: false)
           release = @client.fetch_github_json("https://api.github.com/repos/#{owner_repo}/releases/latest")
           unless release
             error = @client.last_error
@@ -305,7 +308,7 @@ module Lich
           # RubyGems clears a gem's directory before extracting into it. The
           # recheck, install and deploy run under one lock so a second
           # session cannot pull files out from under the first.
-          self.class.with_lock(install_lock_path, wait: INSTALL_LOCK_WAIT) { sync_locked(owner_repo, asset, gem_path) }
+          self.class.with_lock(install_lock_path, wait: INSTALL_LOCK_WAIT) { sync_locked(owner_repo, asset, gem_path, first_add: first_add) }
         rescue LockBusy
           StatusReporter.respond_mono("[lich5-update: Another Lich session is installing a gem package; #{asset[:name]} will be checked at the next sync.]")
           :failed
@@ -322,20 +325,21 @@ module Lich
         # @param owner_repo [String]
         # @param asset [Hash] from #find_gem_asset
         # @param gem_path [String, nil] the downloaded gem, if one was needed
+        # @param first_add [Boolean] see #sync_gem
         # @return [Symbol] :updated, :current or :failed
-        def sync_locked(owner_repo, asset, gem_path)
+        def sync_locked(owner_repo, asset, gem_path, first_add: false)
           state, installed, artifact = local_state(owner_repo, asset)
           case state
           when :current
             :current
           when :reinstall
-            install(owner_repo, asset, artifact, installed)
+            install(owner_repo, asset, artifact, installed, first_add: first_add)
           else
             unless gem_path
               StatusReporter.respond_mono("[lich5-update: #{asset[:name]} changed while waiting for another session; it will be checked at the next sync.]")
               return :failed
             end
-            install(owner_repo, asset, gem_path, installed)
+            install(owner_repo, asset, gem_path, installed, first_add: first_add)
           end
         end
 
@@ -549,8 +553,9 @@ module Lich
         # @param asset [Hash] from #find_gem_asset
         # @param gem_path [String] the downloaded gem
         # @param installed [Gem::Version, nil] the version installed before
+        # @param first_add [Boolean] see #sync_gem
         # @return [Symbol] :updated or :failed
-        def install(owner_repo, asset, gem_path, installed)
+        def install(owner_repo, asset, gem_path, installed, first_add: false)
           name = asset[:name]
           version = asset[:version]
           package = Gem::Package.new(gem_path)
@@ -558,8 +563,12 @@ module Lich
           refusal = refusal_for(spec, name, version, package.contents)
           if refusal
             remember(owner_repo, 'refused' => refusal_signature(asset))
-            StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{refusal}; not installed. " \
-                                        'It will not be downloaded again until a new release is published.]')
+            # On --add-gem the registration is dropped next, and says so; a
+            # followed package skips this release until refusal_signature
+            # changes.
+            line = "[lich5-update: #{owner_repo}: #{refusal}; not installed."
+            line += ' It will not be downloaded again until the release, its asset, or Ruby changes.' unless first_add
+            StatusReporter.respond_mono("#{line}]")
             return :refused
           end
 

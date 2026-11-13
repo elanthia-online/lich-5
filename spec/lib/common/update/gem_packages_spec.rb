@@ -38,7 +38,7 @@ RSpec.describe Lich::Util::Update::GemPackages do
     end
 
     it 'registers the repository and checks it at once' do
-      allow(manager).to receive(:sync_gem).with('x/y', retried_by: :user).and_return(:updated)
+      allow(manager).to receive(:sync_gem).with('x/y', retried_by: :user, first_add: true).and_return(:updated)
       manager.add_gem('x/y')
       expect(described_class.all).to have_key('x/y')
       expect(printed).to include("[lich5-update: Registered gem package 'x/y'.]")
@@ -317,9 +317,9 @@ RSpec.describe Lich::Util::Update::GemPackages do
         held.pop
 
         seen = nil
-        allow(manager).to receive(:sync_locked).and_wrap_original do |original, *args|
+        allow(manager).to receive(:sync_locked).and_wrap_original do |original, *args, **kwargs|
           seen = released
-          original.call(*args)
+          original.call(*args, **kwargs)
         end
         expect(manager.sync_gem('x/y')).to eq(:updated)
         other.join
@@ -704,14 +704,19 @@ RSpec.describe Lich::Util::Update::GemPackages do
 
           expect(described_class.all).not_to have_key('x/y')
           expect(downloads.call).to eq(1)
-          expect(printed.last).to eq("[lich5-update: 'x/y' was not registered.]")
+          # No promise of a later download: the package is no longer followed.
+          expect(printed).to eq([
+                                  "[lich5-update: Registered gem package 'x/y'.]",
+                                  "[lich5-update: x/y: tiny 1.2.0 has no 'lich_install' metadata, so Lich cannot install its scripts; not installed.]",
+                                  "[lich5-update: 'x/y' was not registered.]"
+                                ])
         end
 
         it 'records the refusal and does not download the same release again' do
           downloads = count_downloads
           serve(no_entry_point)
           expect(manager.sync_gem('x/y')).to eq(:refused)
-          expect(printed.last).to include("no 'lich_install' metadata", 'will not be downloaded again')
+          expect(printed.last).to end_with('not installed. It will not be downloaded again until the release, its asset, or Ruby changes.]')
           expect(described_class.all['x/y']['refused']).to start_with('1.2.0 ')
 
           printed.clear
