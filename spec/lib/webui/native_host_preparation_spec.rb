@@ -6,12 +6,16 @@ require 'tmpdir'
 require 'rbconfig'
 require 'open3'
 require 'timeout'
+require 'stringio'
 require_relative '../../../lib/main/webui_startup'
 
 RSpec.describe Lich::WebUI::NativeHost do
   let(:data_directory) { File.join(@directory, 'data') }
   let(:failure_marker) { File.join(data_directory, 'webui-helper-build-failed.json') }
   let(:toolchain_identity) { 'Apple Swift version fixture' }
+  let(:sample_clock) { { now: Time.utc(2026, 11, 13, 12) } }
+  let(:toolchain_result) { { output: toolchain_identity } }
+  let(:toolchain_process) { double('toolchain process', value: nil, join: true, pid: 12_345) }
   let(:source_paths) do
     %w[Host.swift ExternalLinks.swift Info.plist window.js].map { |name| File.join(@directory, "source-#{name}") } + [build_script]
   end
@@ -51,7 +55,13 @@ RSpec.describe Lich::WebUI::NativeHost do
     allow(Lich).to receive(:log)
     FileUtils.mkdir_p([data_directory, File.dirname(executable)])
     stub_const('DATA_DIR', data_directory)
-    allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return([toolchain_identity, nil])
+    allow(Time).to receive(:now) { sample_clock.fetch(:now) }
+    allow(Open3).to receive(:popen3).and_call_original
+    allow(Open3).to receive(:popen3).with('xcrun', 'swiftc', '--version') do |*_arguments, &operation|
+      raise toolchain_result.fetch(:error) if toolchain_result[:error]
+
+      operation.call(StringIO.new, StringIO.new(toolchain_result.fetch(:output)), StringIO.new, toolchain_process)
+    end
     source_paths[0...-1].each { |path| File.write(path, "fixture source #{File.basename(path)}") }
     File.write(notification_script, "File.open(ARGV.fetch(0), 'a') { |file| file.puts ARGV.fetch(1) }\n")
     File.write(build_script, build_source)
@@ -66,7 +76,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     expect(File.executable?(executable)).to be(true)
     expect(described_class.prepare!(platform: 'darwin')).to be(true)
     expect(File.readlines(marker)).to eq(["built\n"])
-    expect(Open3).not_to have_received(:capture2e)
+    expect(Open3).not_to have_received(:popen3)
   end
 
   it 'logs and detaches the desktop notice before starting the build' do
@@ -142,7 +152,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     expect(File.read(executable)).to eq('existing helper')
     expect(File.exist?(marker)).to be(false)
     expect(File.exist?(failure_marker)).to be(false)
-    expect(Open3).not_to have_received(:capture2e)
+    expect(Open3).not_to have_received(:popen3)
   end
 
   it 'clears a remembered failure when another startup completes the helper before the lock recheck' do
@@ -162,7 +172,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
     expect(File.exist?(marker)).to be(false)
     expect(File.exist?(failure_marker)).to be(false)
-    expect(Open3).not_to have_received(:capture2e)
+    expect(Open3).not_to have_received(:popen3)
   end
 
   it 'accepts a complete helper when another startup already removed the failure marker' do
@@ -181,7 +191,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
     expect(File.exist?(failure_marker)).to be(false)
     expect(File.exist?(marker)).to be(false)
-    expect(Open3).not_to have_received(:capture2e)
+    expect(Open3).not_to have_received(:popen3)
   end
 
   context 'when the installed helper is shared without a writable lock' do
@@ -293,9 +303,10 @@ RSpec.describe Lich::WebUI::NativeHost do
       expect(record.fetch('build_exit_status')).to eq(1)
       expect(Time.iso8601(record.fetch('time'))).to be_within(5).of(Time.now)
       expect(record).to have_key('debug_log_path')
+      expect(Time.iso8601(record.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
       expect(File.exist?(File.join(File.dirname(executable), 'webui-helper-build-failed.json'))).to be(false)
       expect(File.exist?(File.join(File.dirname(lock_path), 'webui-helper-build-failed.json'))).to be(false)
-      expect(Open3).to have_received(:capture2e).with('xcrun', 'swiftc', '--version').once
+      expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
     end
   end
 
@@ -542,7 +553,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
         expect(described_class).to have_received(:system).once
         expect(Lich::Main::WebUIStartup).to have_received(:system).once
-        expect(Open3).to have_received(:capture2e).twice
+        expect(Open3).to have_received(:popen3).once
         expect(notices).to eq(['macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'])
         expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to be_nil
       end
@@ -553,7 +564,8 @@ RSpec.describe Lich::WebUI::NativeHost do
         original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
         Lich::WebUI::BrowserLauncher.native_unavailable = false
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
-        allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return(['repaired Swift compiler', nil])
+        toolchain_result[:output] = 'repaired Swift compiler'
+        sample_clock[:now] += 86_401
         Lich::WebUI::BrowserLauncher.native_unavailable = false
 
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
@@ -564,23 +576,109 @@ RSpec.describe Lich::WebUI::NativeHost do
         expect(updated).not_to eq(original)
         expect(described_class).to have_received(:system).twice
         expect(Lich::Main::WebUIStartup).to have_received(:system).twice
-        expect(Open3).to have_received(:capture2e).exactly(4).times
+        expect(Open3).to have_received(:popen3).twice
+      end
+
+      it 'skips without sampling a toolchain identity less than a day old' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        original = JSON.parse(File.read(failure_marker))
+        sample_clock[:now] += 86_399
+        toolchain_result[:output] = 'repaired Swift compiler'
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
+        expect(described_class).to have_received(:system).once
+        expect(JSON.parse(File.read(failure_marker))).to eq(original)
+      end
+
+      it 'refreshes an unchanged daily sample and skips the next immediate check' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+        sample_clock[:now] += 86_400
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        updated = JSON.parse(File.read(failure_marker))
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(updated.fetch('fingerprint')).to eq(original)
+        expect(Time.iso8601(updated.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').twice
+        expect(described_class).to have_received(:system).once
+      end
+
+      it 'kills and reaps a timed out daily sample without retrying or immediately sampling again' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+        sample_clock[:now] += 86_401
+        toolchain_result[:output] = 'unobserved replacement compiler'
+        allow(Timeout).to receive(:timeout).and_call_original
+        allow(Timeout).to receive(:timeout).with(3).and_raise(Timeout::Error)
+        allow(toolchain_process).to receive(:join).with(0).and_return(nil)
+        allow(toolchain_process).to receive(:join).with(no_args).and_return(true)
+        allow(Process).to receive(:kill).with('KILL', toolchain_process.pid).and_return(1)
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        updated = JSON.parse(File.read(failure_marker))
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(updated.fetch('fingerprint')).to eq(original)
+        expect(Time.iso8601(updated.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
+        expect(Process).to have_received(:kill).with('KILL', toolchain_process.pid).once
+        expect(toolchain_process).to have_received(:join).with(no_args).once
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').twice
+        expect(described_class).to have_received(:system).once
+      end
+
+      it 'remembers a first-failure timeout until the next daily sample' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        allow(Timeout).to receive(:timeout).and_call_original
+        allow(Timeout).to receive(:timeout).with(3).and_raise(Timeout::Error)
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        record = JSON.parse(File.read(failure_marker))
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(record.fetch('fingerprint')).to eq(record.fetch('source_fingerprint'))
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
+        expect(described_class).to have_received(:system).once
+      end
+
+      it 'retries when a sampled marker has no usable combined fingerprint' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        source = described_class.source_fingerprint(described_class::HELPERS.fetch(:macos))
+        File.write(failure_marker, JSON.generate(source_fingerprint: source, toolchain_sampled_at: sample_clock.fetch(:now).iso8601))
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(described_class).to have_received(:system).once
+        expect(JSON.parse(File.read(failure_marker)).fetch('fingerprint')).to be_a(String)
       end
 
       %w[unsuccessful missing].each do |failure|
         it "retries once after #{failure} toolchain discovery becomes available" do
           allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
-          probe = allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version')
           if failure == 'missing'
-            probe.and_raise(Errno::ENOENT, 'xcrun')
+            toolchain_result[:error] = Errno::ENOENT.new('xcrun')
           else
-            probe.and_return(['xcrun: compiler unavailable', nil])
+            toolchain_result[:output] = 'xcrun: compiler unavailable'
           end
           expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
           original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
           Lich::WebUI::BrowserLauncher.native_unavailable = false
           expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
-          allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return([toolchain_identity, nil])
+          toolchain_result.delete(:error)
+          toolchain_result[:output] = toolchain_identity
+          sample_clock[:now] += 86_401
           Lich::WebUI::BrowserLauncher.native_unavailable = false
 
           expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
@@ -590,14 +688,15 @@ RSpec.describe Lich::WebUI::NativeHost do
 
           expect(updated).not_to eq(original)
           expect(described_class).to have_received(:system).twice
-          expect(Open3).to have_received(:capture2e).exactly(4).times
+          expect(Open3).to have_received(:popen3).twice
         end
       end
 
-      it 'retries once to migrate a legacy source-only failure marker' do
+      it 'retries when a marker has no source fingerprint' do
         allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
         source = described_class.source_fingerprint(described_class::HELPERS.fetch(:macos))
         File.write(failure_marker, JSON.generate(fingerprint: source))
+        expect(described_class.failed_fingerprint(source)).to be_nil
 
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         migrated = JSON.parse(File.read(failure_marker))
@@ -607,7 +706,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         expect(migrated.fetch('source_fingerprint')).to eq(source)
         expect(migrated.fetch('fingerprint')).not_to eq(source)
         expect(described_class).to have_received(:system).once
-        expect(Open3).to have_received(:capture2e).twice
+        expect(Open3).to have_received(:popen3).once
       end
 
       it 'reports browser capabilities and presentation degradations after native preparation falls back' do
@@ -655,7 +754,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
           expect(described_class.source_fingerprint(described_class::HELPERS.fetch(:macos))).not_to eq(failed)
           expect(described_class).to have_received(:system).twice
-          expect(Open3).to have_received(:capture2e).once
+          expect(Open3).to have_received(:popen3).once
           expect(File.exist?(failure_marker)).to be(false)
           expect(File.executable?(executable)).to be(true)
           expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to eq(:macos)

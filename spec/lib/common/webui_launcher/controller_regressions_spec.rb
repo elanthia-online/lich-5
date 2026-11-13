@@ -268,9 +268,33 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
     end
 
+    def application_bundle
+      directory = Dir.mktmpdir('webui-browser-bundle')
+      browser_directories << directory
+      bundle = File.join(directory, 'Fixture Browser.app')
+      executable = File.join(bundle, 'Contents', 'MacOS', 'Fixture Browser')
+      FileUtils.mkdir_p(File.dirname(executable))
+      File.write(executable, '')
+      File.chmod(0o755, executable)
+      File.write(File.join(bundle, 'Contents', 'Info.plist'), <<~XML)
+        <plist version="1.0"><dict>
+          <key>CFBundleExecutable</key><string>Fixture Browser</string>
+        </dict></plist>
+      XML
+      [bundle, executable]
+    end
+
     it 'opens the window with the saved browser path' do
       saved = executable_file
       expect(start_with(saved: saved).map { |arguments| arguments[:browser_path] }).to eq([saved])
+    end
+
+    it 'resolves a saved macOS browser bundle before opening the launcher' do
+      allow(OS).to receive(:mac?).and_return(true)
+      bundle, executable = application_bundle
+
+      expect(start_with(saved: bundle).map { |arguments| arguments[:browser_path] }).to eq([executable])
+      expect(messages).to be_empty
     end
 
     context 'when the saved browser path is stale' do
@@ -299,6 +323,31 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
         expect(start_with(saved: plain).map { |arguments| arguments[:browser_path] }).to eq([nil])
         expect(start_with(saved: directory).map { |arguments| arguments[:browser_path] }).to eq([nil])
+      end
+
+      it 'skips an unresolved saved macOS browser bundle and names it in the notice' do
+        allow(OS).to receive(:mac?).and_return(true)
+        bundle, executable = application_bundle
+        File.delete(executable)
+        configured = nil
+
+        opened = start_with(saved: bundle) { |instance| configured = instance }
+
+        expect(opened.map { |arguments| arguments[:browser_path] }).to eq([nil])
+        expect(messages).to include([:warning, a_string_including('saved browser path', bundle)])
+        expect(delivered_notice(configured)).to eq(
+          text: "The saved Browser path '#{bundle}' no longer exists or is not an executable file, so it was skipped. " \
+                'Save a new path in Settings, or clear it.', level: 'warn'
+        )
+      end
+
+      it 'skips a saved macOS bundle whose executable is snap-packaged' do
+        allow(OS).to receive(:mac?).and_return(true)
+        bundle, executable = application_bundle
+        File.write(executable, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
+
+        expect(start_with(saved: bundle).map { |arguments| arguments[:browser_path] }).to eq([nil])
+        expect(messages).to include([:warning, a_string_including('snap-packaged', bundle)])
       end
 
       it 'tries a working saved path first and the variable once the saved path is stale' do
@@ -487,6 +536,50 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         expect(launcher.send(:render_state)[:browser_path]).to eq(path)
         expect(launcher.send(:render_state)[:notice]).to include(level: 'info')
         expect(launcher.instance_variable_get(:@browser_path)).to eq(path)
+      end
+
+      it 'saves a macOS application in Settings and launches its executable on the next launcher start' do
+        allow(OS).to receive(:mac?).and_return(true)
+        bundle, executable = application_bundle
+        persisted = stored
+        catalog.define_singleton_method(:browser_path) { persisted.last }
+        spawned = []
+        allow(Lich::WebUI::BrowserLauncher).to receive(:open).and_wrap_original do |original, url, **arguments|
+          original.call(url, **arguments, platform: 'darwin', environment: {},
+                                          spawn: ->(*argv, **_options) { spawned.push(argv).length + 4241 },
+                                          waitpid: ->(*) {}, thread_factory: ->(&_work) {})
+        end
+
+        save_browser(bundle)
+
+        expect(stored).to eq([bundle])
+        expect(launcher.send(:render_state)[:browser_path]).to eq(bundle)
+        expect(launcher.send(:render_state)[:notice]).to include(level: 'info')
+        configured = described_class.new(
+          data_dir: '/fixture', catalog: catalog, service: started_service, on_launch: proc {},
+          frontend_locator: WebUISpecSupport::Launcher::WorkflowFrontendLocator, browser_terminate: ->(_signal, _pid) {},
+          recovery: ->(message) { feedback << message }, logger: ->(level, message) { messages << [level, message] }
+        )
+
+        expect(configured.start).to be(configured)
+        expect(spawned.map(&:first)).to eq([executable])
+        expect(messages).to be_empty
+      ensure
+        configured&.close
+        spawned&.flatten&.grep(/\A--user-data-dir=/)&.each do |argument|
+          FileUtils.remove_entry(argument.delete_prefix('--user-data-dir='), true)
+        end
+      end
+
+      it 'refuses an unresolved macOS application in Settings without saving it' do
+        allow(OS).to receive(:mac?).and_return(true)
+        bundle, executable = application_bundle
+        File.delete(executable)
+
+        save_browser(bundle)
+
+        expect(stored).to be_empty
+        expect(launcher.send(:render_state)[:notice]).to include(level: 'error', text: a_string_including(bundle))
       end
 
       it 'refuses a path that is not an absolute executable file, storing nothing' do

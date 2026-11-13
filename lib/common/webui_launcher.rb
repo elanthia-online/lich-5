@@ -409,16 +409,22 @@ module Lich
       # Saves the browser used for the launcher window. The window is already open, so
       # the choice applies the next time the launcher opens. An empty value restores
       # automatic Chrome or Edge detection; anything else must be an absolute path to
-      # an executable file that is not snap-packaged Chromium.
+      # an executable file or a macOS application bundle resolving to one, and must
+      # not be snap-packaged Chromium. Saves the selected path for later resolution.
       # @param event [WebUI::Runtime::EventContext] submission holding the path field
       # @param path_cid [String] submitted browser-path field
       # @return [void]
       def browser_path_changed(event, path_cid)
         value = event.submission.fetch(path_cid).to_s.strip
-        unless value.empty? || (File.absolute_path?(value) && File.file?(value) && File.executable?(value))
+        resolved = begin
+          Lich::WebUI::BrowserLauncher.resolve_browser_path(value)
+        rescue Lich::WebUI::Error => error
+          return set_notice(error.message, :error)
+        end
+        unless value.empty? || (File.absolute_path?(value) && File.file?(resolved) && File.executable?(resolved))
           return set_notice('Browser path must be the full path of an executable file.', :error)
         end
-        if !value.empty? && Lich::WebUI::BrowserLauncher.snap_browser?(value)
+        if !value.empty? && Lich::WebUI::BrowserLauncher.snap_browser?(resolved)
           return set_notice('Browser path is snap-packaged Chromium, which cannot open the launcher. ' \
                             'Choose a non-snap Chrome or Chromium.', :error)
         end
@@ -1082,8 +1088,8 @@ module Lich
 
       # Chooses the browser for the launcher window. A path given to the constructor
       # is passed through as is and fails the launch if it is missing. The saved
-      # Settings path is used while it is an executable file that is not
-      # snap-packaged Chromium; otherwise it is skipped so LICH_WEBUI_BROWSER and
+      # Settings path resolves macOS bundles and is used while its executable is
+      # not snap-packaged Chromium; otherwise it is skipped so LICH_WEBUI_BROWSER and
       # automatic detection can still open the window that would be needed to change it.
       # @return [String, nil] path for the launcher, or nil for variable and detection
       # @api private
@@ -1091,9 +1097,14 @@ module Lich
         path, explicit = @mutex.synchronize { [@browser_path, @browser_path_explicit] }
         return path if path.nil? || explicit
 
-        executable = File.file?(path) && File.executable?(path)
-        snap = executable && Lich::WebUI::BrowserLauncher.snap_browser?(path)
-        return path if executable && !snap
+        resolved = begin
+          Lich::WebUI::BrowserLauncher.resolve_browser_path(path)
+        rescue Lich::WebUI::Error
+          nil
+        end
+        executable = resolved && File.file?(resolved) && File.executable?(resolved)
+        snap = executable && Lich::WebUI::BrowserLauncher.snap_browser?(resolved)
+        return resolved if executable && !snap
 
         skip_saved_browser_path(path, snap: snap)
         nil

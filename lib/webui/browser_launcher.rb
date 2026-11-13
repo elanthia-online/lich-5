@@ -7,6 +7,7 @@ require 'tmpdir'
 require 'fileutils'
 require 'cgi/escape'
 require 'uri'
+require 'rexml/document'
 require_relative 'errors'
 require_relative 'native_host'
 
@@ -66,7 +67,8 @@ module Lich
       # @param spawn [#call] process creator accepting an argv array and options
       # @param platform [String, nil] discovery override; nil uses the current OS
       # @param browser_path [String, nil] explicit browser, bypassing the native host;
-      #   when absent a non-empty LICH_WEBUI_BROWSER takes its place
+      #   a macOS .app bundle resolves to its executable; when absent a non-empty
+      #   LICH_WEBUI_BROWSER takes its place
       # @param chrome_path [String, nil] legacy alias for browser_path
       # @param environment [#[]] environment source for LICH_WEBUI_BROWSER
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
@@ -82,6 +84,7 @@ module Lich
                on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
         chosen, origin = browser_override(browser_path || chrome_path, environment)
+        chosen = resolve_browser_path(chosen, platform: platform)
         verify_browser_path(chosen, origin: origin)
         native = native_host(platform, chosen)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
@@ -117,7 +120,8 @@ module Lich
         "unable to open WebUI window: #{detail}"
       end
 
-      # Selects native or browser argv without invoking a shell or starting a process.
+      # Selects native or browser argv without invoking a shell or opening a window.
+      # Explicit macOS application bundles resolve to their executable first.
       # Failed automatic Linux discovery names any skipped snap browser so the
       # recovery message can direct the user to a non-snap installation.
       # @param url [String] private launch-file path (native) or file URL (browser)
@@ -132,6 +136,7 @@ module Lich
       def command_for(url, platform: nil, browser_path: nil, chrome_path: nil, environment: ENV,
                       geometry: nil, profile_dir: nil)
         override, = browser_override(browser_path || chrome_path, environment)
+        override = resolve_browser_path(override, platform: platform)
         return NativeHost.command_for(url, geometry: geometry) if native_host(platform, override)
 
         platform ||= OS.host_os
@@ -174,6 +179,46 @@ module Lich
 
         value = environment[ENVIRONMENT_VARIABLE].to_s.strip
         value.empty? ? [nil, nil] : [value, :environment]
+      end
+
+      # Resolves explicit macOS application bundles before executable verification.
+      # @param path [String, nil] explicit browser path or automatic discovery
+      # @param platform [String, nil] discovery override; nil uses the current OS
+      # @return [String, nil] executable path, unchanged off macOS or for plain files
+      # @raise [Error] if an application bundle has no executable
+      # @api private
+      def resolve_browser_path(path, platform: nil)
+        return path unless path && path.end_with?('.app') && (platform ? platform.match?(/darwin/i) : OS.mac?)
+
+        name = bundle_executable(path)
+        if name && !name.empty? && File.basename(name) == name && !%w[. ..].include?(name)
+          executable = File.join(path, 'Contents', 'MacOS', name)
+          return executable if executable_file?(executable)
+        end
+
+        shown = path.gsub(/[[:cntrl:]]/, '?')
+        raise Error, "the browser application '#{shown}' has no executable; choose an installed browser application or its executable"
+      end
+
+      # Reads an application's executable name from XML or a binary property list.
+      # @param bundle [String] macOS application bundle path
+      # @return [String, nil] CFBundleExecutable value, absent for an invalid bundle
+      # @api private
+      def bundle_executable(bundle)
+        plist = File.join(bundle, 'Contents', 'Info.plist')
+        document = REXML::Document.new(File.read(plist))
+        key = document.elements.to_a('plist/dict/key').find { |element| element.text == 'CFBundleExecutable' }
+        value = key&.next_element
+        value.text if value&.name == 'string'
+      rescue REXML::ParseException
+        begin
+          output, _error, status = Open3.capture3('/usr/bin/plutil', '-extract', 'CFBundleExecutable', 'raw', '--', plist)
+          status.success? ? output.strip : nil
+        rescue SystemCallError
+          nil
+        end
+      rescue SystemCallError
+        nil
       end
 
       # Refuses an explicit browser that is not an executable file, so a stale or
