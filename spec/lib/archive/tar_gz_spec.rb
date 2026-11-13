@@ -338,5 +338,18 @@ RSpec.describe Lich::Archive::TarGz do
       links = listing.split("\0").select { |line| line.start_with?('120000 ') }.map { |line| line.split("\t", 2).last }
       expect(links).to be_empty, "symbolic links in the tree: #{links.join(', ')}"
     end
+
+    # A path too long for a ustar header makes `git archive` write a pax
+    # path record, which TarGz refuses. GitHub's root is lich-5-<commit>/.
+    it 'keeps every path short enough for a ustar header under the GitHub archive root', skip: (in_git ? false : 'not a git checkout') do
+      listing, status = Open3.capture2('git', '-C', root, 'ls-files', '-z')
+      expect(status).to be_success
+      prefix = "lich-5-#{'0' * 40}/"
+      fits = lambda do |path|
+        path.bytesize <= 100 || (0..[path.bytesize - 1, 155].min).any? { |i| path.getbyte(i) == 47 && path.bytesize - i - 1 <= 100 }
+      end
+      too_long = listing.split("\0").reject { |path| fits.call(prefix + path) }
+      expect(too_long).to be_empty, "paths too long for ustar: #{too_long.join(', ')}"
+    end
   end
 end
