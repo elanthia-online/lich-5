@@ -129,7 +129,10 @@ RSpec.describe Lich::Archive::TarGz do
     'final and medial sigma' => [u('r/<3C2>.rb'), u('r/<3C3>.rb')],
     'long s and s'           => [u('r/<17F>.rb'), 'r/s.rb'],
     'micro sign and mu'      => [u('r/<B5>.rb'), u('r/<3BC>.rb')],
-    'sharp s and ss'         => [u('r/<DF>.rb'), 'r/ss.rb']
+    'sharp s and ss'         => [u('r/<DF>.rb'), 'r/ss.rb'],
+    # Folding U+01F0 leaves the caron before the dot below; only a second
+    # NFC puts the marks back in canonical order.
+    'out-of-order marks'     => [u('r/<1F0><323>.rb'), u('r/J<323><30C>.rb')]
   }.each do |label, (first, second)|
     it "refuses #{label} as a duplicate and writes nothing" do
       write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])

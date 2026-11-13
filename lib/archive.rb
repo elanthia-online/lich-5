@@ -184,8 +184,11 @@ module Lich
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
-    # pair costs nothing for the archives Lich reads, and a name that could
-    # collide anywhere is refused everywhere.
+    # pair costs nothing for the archives Lich reads. The key follows
+    # Unicode's default folding, so the Turkic dotless and dotted i stay
+    # apart from i and I; spec/lib/archive/zip_spec.rb checks on each file
+    # system its CI runs on that every such pair the file system merges is
+    # refused here too.
     #
     # The bytes are read as UTF-8 whatever the string's encoding tag:
     # unsafe_entry? has already refused names that are not valid UTF-8.
@@ -194,8 +197,11 @@ module Lich
     # @return [String]
     def layout_key(path, root)
       below = path.byteslice(root.bytesize..).force_encoding(Encoding::UTF_8)
-      # Folding can leave a name unnormalised again (U+01F0, j with caron,
-      # folds to j and a combining caron), hence the second NFC.
+      # Folding can leave combining marks out of canonical order: j with
+      # caron (U+01F0) folds to j and a combining caron, so U+01F0 followed
+      # by a dot below folds to j, caron, dot below, while J, dot below,
+      # caron folds to j, dot below, caron. Both are one name on APFS; the
+      # second NFC reorders the marks so their keys match.
       below.unicode_normalize(:nfc).downcase(:fold).unicode_normalize(:nfc)
     end
   end
