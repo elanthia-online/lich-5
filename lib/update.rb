@@ -116,10 +116,12 @@ module Lich
           help
         when /^--status\b/
           show_status
-        # Before --update, whose \b would also match --update-gem.
+        # Before --update. That route is anchored to a space or the end, so
+        # a malformed --update-gem (no '=', a space, --update-gems) is
+        # reported as unknown instead of starting a Lich update.
         when /^--update-gem=(\S+)$/
           gem_packages_manager.update_gem($1)
-        when /^(?:--update|-u)\b/
+        when /^(?:--update|-u)(?:\s|$)/
           release_installer.download_release_update
         when /^--refresh\b/
           respond

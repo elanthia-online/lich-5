@@ -301,6 +301,30 @@ RSpec.describe 'Lich::Util::Update.request gem package routing' do
     update.request('--gems')
   end
 
+  describe 'malformed --update-gem' do
+    let(:release_installer) { instance_double(Lich::Util::Update::ReleaseInstaller, download_release_update: nil) }
+
+    before { allow(update).to receive(:release_installer).and_return(release_installer) }
+
+    ['--update-gem x/y', '--update-gem', '--update-gem=', '--update-gems=x/y'].each do |form|
+      it "does not start a Lich update for '#{form}'" do
+        allow(manager).to receive(:update_gem)
+        update.request(form)
+
+        expect(release_installer).not_to have_received(:download_release_update)
+        expect(manager).not_to have_received(:update_gem)
+        expect(messages).to include("Command '#{form}' unknown, illegitimate and ignored.  Exiting . . .")
+      end
+    end
+
+    ['--update', '-u', '--update now'].each do |form|
+      it "still routes '#{form}' to the Lich update" do
+        update.request(form)
+        expect(release_installer).to have_received(:download_release_update)
+      end
+    end
+  end
+
   it 'documents --update-gem and the trusted-owner rule in the help text' do
     update.request('--help')
     help = messages.join("\n")
