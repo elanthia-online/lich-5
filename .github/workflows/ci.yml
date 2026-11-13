@@ -125,7 +125,7 @@ jobs:
     # fast instead of occupying a runner up to GitHub's 6h default.
     timeout-minutes: 15
     env:
-      BUNDLE_WITHOUT: 'vscode:profanity'
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     name: Run tests on Ruby
     steps:
       - name: Classify changed files (preflight)
@@ -231,7 +231,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      BUNDLE_WITHOUT: 'vscode:profanity'
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     name: Changed spec files on their own
     steps:
       - name: List changed spec files
