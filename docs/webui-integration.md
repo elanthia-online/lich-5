@@ -62,9 +62,9 @@ opened moments earlier counts as no viewer until it attaches. Use
 `no_viewer: :wait` for a modal raised right after opening its window.
 
 Callbacks and background renders run on a host thread outside the script's own
-thread group, so `Script.current` is nil there and `fput`, `echo` and pause context
-are unavailable. Keep callbacks short and hand game I/O back to the script's own
-thread.
+thread group, so `Script.current` is nil there, `fput` and pause context are
+unavailable, and `echo` loses the script's name, printing "(unknown script)".
+Keep callbacks short and hand game I/O back to the script's own thread.
 
 Owner termination refuses new work, cancels modals and scheduled callbacks,
 revokes registered files, closes owned windows and unregisters pages. A restarted
@@ -137,11 +137,11 @@ presentation-enabled startup checks the helper and builds it locally if missing,
 including after an update replaces the library directory. Existing helpers are
 retained without requiring write access to their installation. Concurrent
 startups share one build; resources are supplied before publishing the executable,
-and failed build output is invalidated. If the build fails and Chrome or Chromium
+and failed build output is invalidated. If the build fails and Chrome
 is installed, Lich shows one notice and continues in that browser (degraded mode:
 windows do not stay on top). The failure is remembered in the data directory, so
-later starts use the browser without rebuilding until the helper sources change
-or that record is deleted. Without such a browser, every start retries the build
+later starts use the browser without rebuilding until the helper sources or
+toolchain change or that record is deleted. Without such a browser, every start retries the build
 and a failure is a fatal startup error naming the debug log.
 Disabled presentation and an explicit browser override do not build a helper.
 The required Apple command-line build tools are supplied
