@@ -75,9 +75,16 @@ RSpec.describe 'macOS native host presentation' do
                  HTML
           client.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
         end
-        client.close
+      rescue Errno::ECONNRESET, Errno::EPIPE
+        # WebKit may abandon a connection before sending its request. Close only
+        # that client and keep serving; native assertions still require every
+        # requested transition and the helper retains its execution timeout.
+        next
+      ensure
+        client&.close
+        client = nil
       end
-    rescue IOError, Errno::EBADF, Errno::EPIPE
+    rescue IOError, Errno::EBADF
       nil # The test owns and closes this disposable server.
     ensure
       client&.close
@@ -98,6 +105,23 @@ RSpec.describe 'macOS native host presentation' do
         client.close_write
         expect(IO.select([client], nil, nil, 2)).not_to be_nil
         expect(client.read).to eq('')
+      end
+      TCPSocket.open('127.0.0.1', port) do |client|
+        client.write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        expect(IO.select([client], nil, nil, 2)).not_to be_nil
+        expect(client.read).to include('HTTP/1.1 200 OK', 'new WebSocket')
+      end
+      ["Verified visible\n", instance_double(Process::Status, success?: true)]
+    end
+
+    check_presentation(['visible'])
+  end
+
+  it 'serves a normal request after an abandoned connection resets' do
+    allow(Open3).to receive(:capture2e) do |_executable, address, _steps|
+      port = address.split(':').last.to_i
+      TCPSocket.open('127.0.0.1', port) do |client|
+        client.setsockopt(Socket::SOL_SOCKET, Socket::SO_LINGER, [1, 0].pack('ii'))
       end
       TCPSocket.open('127.0.0.1', port) do |client|
         client.write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
