@@ -18,7 +18,8 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
   let(:bundle_browser) { File.join(browser_bundle, 'Contents', 'MacOS', 'Fixture Browser') }
 
   context 'with an explicit macOS application bundle' do
-    before do
+    before do |example|
+      skip 'macOS bundle executables: extensionless files are not executable on native Windows' if example.metadata[:macos_bundle_executable] && OS.windows?
       FileUtils.mkdir_p(File.dirname(bundle_browser))
       File.write(bundle_browser, '')
       File.chmod(0o755, bundle_browser)
@@ -31,7 +32,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     end
 
     %w[environment argument].each do |origin|
-      it "launches the resolved bundle executable from the #{origin}" do
+      it "launches the resolved bundle executable from the #{origin}", :macos_bundle_executable do
         options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
         calls = []
 
@@ -57,7 +58,7 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
       end
     end
 
-    it 'resolves a binary property list with the native property-list reader' do
+    it 'resolves a binary property list with the native property-list reader', :macos_bundle_executable do
       plist = File.join(browser_bundle, 'Contents', 'Info.plist')
       File.write(plist, '<plist><dict>')
       status = instance_double(Process::Status, success?: true)

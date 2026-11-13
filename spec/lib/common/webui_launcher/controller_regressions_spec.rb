@@ -290,6 +290,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
     end
 
     it 'resolves a saved macOS browser bundle before opening the launcher' do
+      skip 'macOS bundle executables: extensionless files are not executable on native Windows' if OS.windows?
       allow(OS).to receive(:mac?).and_return(true)
       bundle, executable = application_bundle
 
@@ -342,6 +343,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
 
       it 'skips a saved macOS bundle whose executable is snap-packaged' do
+        skip 'macOS bundle executables: extensionless files are not executable on native Windows' if OS.windows?
         allow(OS).to receive(:mac?).and_return(true)
         bundle, executable = application_bundle
         File.write(executable, "#!/bin/sh\nexec /snap/bin/chromium \"$@\"\n")
@@ -539,6 +541,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
       end
 
       it 'saves a macOS application in Settings and launches its executable on the next launcher start' do
+        skip 'macOS bundle executables: extensionless files are not executable on native Windows' if OS.windows?
         allow(OS).to receive(:mac?).and_return(true)
         bundle, executable = application_bundle
         persisted = stored
