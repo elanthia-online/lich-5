@@ -142,9 +142,11 @@ RSpec.describe Lich::ZipArchive do
       'long s and s'           => [u('<17F>.gem'), 's.gem'],
       'micro sign and mu'      => [u('<B5>.gem'), u('<3BC>.gem')],
       'sharp s and ss'         => [u('<DF>.gem'), 'ss.gem'],
-      # Folding U+01F0 leaves the caron before the dot below; only a second
-      # NFC puts the marks back in canonical order.
-      'out-of-order marks'     => [u('<1F0><323>.gem'), u('J<323><30C>.gem')]
+      # Folding U+01F0 after NFC leaves the caron before the dot below.
+      'out-of-order marks'     => [u('<1F0><323>.gem'), u('J<323><30C>.gem')],
+      # NFC keeps the iota subscript composed, and folding then puts the
+      # iota ahead of the diaeresis; only NFD before folding matches them.
+      'iota subscript'         => [u('<1FB3><308>.gem'), u('<391><308><399>.gem')]
     }.each do |label, (first, second)|
       it "refuses #{label} as a duplicate and writes nothing" do
         write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
@@ -284,6 +286,31 @@ RSpec.describe Lich::ZipArchive do
 
     # Each archive below is otherwise valid, so removing the check it targets
     # lets the extraction succeed and the example fail.
+    # The archive comment is free text, so it can hold the end record's own
+    # signature; the record is the one whose comment ends the file.
+    it 'extracts an archive whose comment contains the end record signature' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }], comment: "metadata PK\x05\x06".b))
+
+      described_class.extract(zip_path, destination)
+      expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    it 'extracts an archive whose comment holds a fake end record that does not end the file' do
+      fake = [0x06054b50, 0, 0, 9, 9, 0, 0, 9].pack('VvvvvVVv')
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }], comment: "#{fake}tail".b))
+
+      described_class.extract(zip_path, destination)
+      expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    # unzip warns about bytes after the comment but extracts; so does this.
+    it 'still extracts an archive with bytes after its end record' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }]) + 'trailer'.b)
+
+      described_class.extract(zip_path, destination)
+      expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
     it 'rejects an archive that spans disks' do
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'x' }], disk_count: 0))
 

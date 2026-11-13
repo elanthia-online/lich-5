@@ -1028,14 +1028,21 @@ module Lich
       # failed to load. A missing file (LoadError) or one cut short on disk,
       # say by an interrupted update (SyntaxError), raises a ScriptError,
       # which is not a StandardError: left alone it would escape #recover's
-      # boot guard and GemCheck (a silent crash under rubyw). Either is
-      # reported as a recovery Error naming the file.
+      # boot guard and GemCheck (a silent crash under rubyw). A file cut
+      # mid-word can instead raise a NameError as it loads, and one cut at a
+      # line boundary, or emptied (FileUtils.copy_entry truncates before it
+      # writes), can load cleanly and define nothing, which the check after
+      # the require catches. Each is reported as a recovery Error naming the
+      # file.
       begin
         require_relative 'zip_archive'
       rescue LoadError => e
         raise Error, "Recovery cannot extract archives: #{library_path(e)} is missing (#{e.message})"
-      rescue ScriptError => e
-        raise Error, "Recovery cannot extract archives: #{library_path(e)} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
+      rescue ScriptError, StandardError => e
+        raise Error, "Recovery cannot extract archives: #{library_path(e, 'lib/zip_archive.rb')} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
+      end
+      unless defined?(ZipArchive::Error) && ZipArchive.respond_to?(:extract)
+        raise Error, 'Recovery cannot extract archives: lib/zip_archive.rb loaded but does not define Lich::ZipArchive'
       end
       begin
         ZipArchive.extract(zip_path, destination)
@@ -1048,11 +1055,12 @@ module Lich
       end
     end
 
-    # @param error [ScriptError]
+    # @param error [Exception] raised while loading a library
+    # @param default [String] what to name when +error+ carries no path
     # @return [String] the file +error+ could not load, relative to the
     #   directory above lib/ when it lies inside it (lib/zip_archive.rb)
-    def library_path(error)
-      return 'a recovery library' unless error.respond_to?(:path) && error.path
+    def library_path(error, default = 'a recovery library')
+      return default unless error.respond_to?(:path) && error.path
 
       path = error.path.end_with?('.rb') ? error.path : "#{error.path}.rb"
       top = "#{File.dirname(__dir__)}/"

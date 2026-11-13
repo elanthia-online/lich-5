@@ -14,7 +14,8 @@ module ZipBuilder
   #   (bytes appended to the payload and counted in its compressed size),
   #   :local_signature
   # @param end_record [Hash] optional :disk, :directory_disk, :disk_count,
-  #   :total_count, :directory_size, :directory_offset overrides
+  #   :total_count, :directory_size, :directory_offset overrides, and an
+  #   archive :comment
   # @return [String] binary ZIP
   def build(entries, end_record = {})
     body = +''.b
@@ -41,10 +42,11 @@ module ZipBuilder
       central << name
     end
     count = entries.length
+    comment = end_record.fetch(:comment, '').b
     fields = { disk: 0, directory_disk: 0, disk_count: count, total_count: count,
-               directory_size: central.bytesize, directory_offset: body.bytesize }.merge(end_record)
+               directory_size: central.bytesize, directory_offset: body.bytesize }.merge(end_record.except(:comment))
     body + central + [0x06054b50, *fields.values_at(:disk, :directory_disk, :disk_count, :total_count,
-                                                    :directory_size, :directory_offset), 0].pack('VvvvvVVv')
+                                                    :directory_size, :directory_offset), comment.bytesize].pack('VvvvvVVv') + comment
   end
 
   # @param data [String]

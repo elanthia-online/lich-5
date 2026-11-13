@@ -124,10 +124,20 @@ module Lich
     end
 
     # The part of +path+ below +root+, in the form two names take when a file
-    # system would store them as one file: Unicode NFC (macOS normalises
-    # names, so a decomposed and a precomposed e-acute are one file), then
-    # full case folding (Windows and macOS ignore case, and fold final and
-    # medial sigma, long s and s, and micro sign and mu together).
+    # system would store them as one file. macOS normalises names, so a
+    # decomposed and a precomposed e-acute are one file; Windows and macOS
+    # ignore case, and fold final and medial sigma, long s and s, and micro
+    # sign and mu together. The key is Unicode's canonical caseless form,
+    # NFD(fold(NFD(name))) (Unicode 3.13, D145):
+    # - The first NFD has to come before folding. NFC would keep a
+    #   precomposed letter with iota subscript (U+1FB3) whole, and folding
+    #   it then puts the iota ahead of any mark that follows, so U+1FB3
+    #   with a diaeresis and its uppercase spelling would get different
+    #   keys although APFS stores them as one file. In NFD the marks are
+    #   already in canonical order, which also covers j with caron (U+01F0)
+    #   followed by a dot below.
+    # - The final NFD completes the standard form. No name tried, including
+    #   every code point with and without a following mark, needs it.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
@@ -141,12 +151,7 @@ module Lich
     # @return [String]
     def layout_key(path, root)
       below = path.byteslice(root.bytesize..).force_encoding(Encoding::UTF_8)
-      # Folding can leave combining marks out of canonical order: j with
-      # caron (U+01F0) folds to j and a combining caron, so U+01F0 followed
-      # by a dot below folds to j, caron, dot below, while J, dot below,
-      # caron folds to j, dot below, caron. Both are one name on APFS; the
-      # second NFC reorders the marks so their keys match.
-      below.unicode_normalize(:nfc).downcase(:fold).unicode_normalize(:nfc)
+      below.unicode_normalize(:nfd).downcase(:fold).unicode_normalize(:nfd)
     end
 
     # @param name [String] archive entry name
@@ -176,8 +181,8 @@ module Lich
       tail_size = [file_size, END_RECORD_SIZE + MAX_COMMENT_SIZE].min
       file.seek(file_size - tail_size)
       tail = file.read(tail_size)
-      record_at = tail.rindex(END_OF_CENTRAL_DIRECTORY)
-      raise Error, 'not a ZIP archive (no end of central directory record)' unless record_at && tail.bytesize - record_at >= END_RECORD_SIZE
+      record_at = end_record_at(tail)
+      raise Error, 'not a ZIP archive (no end of central directory record)' unless record_at
 
       _signature, disk, directory_disk, disk_count, total_count, directory_size, directory_offset, _comment =
         tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
@@ -194,6 +199,28 @@ module Lich
       raise Error, 'central directory is truncated' unless directory && directory.bytesize == directory_size
 
       parse_central_directory(directory, total_count, record_offset)
+    end
+
+    # Finds the end of central directory record in the last bytes of the
+    # archive. The archive comment may itself contain the record's
+    # signature, so the last signature is not always the record: the record
+    # is the last signature whose declared comment length ends exactly at
+    # the end of the file. An archive with bytes after its comment, which
+    # unzip accepts with a warning, has no such candidate; there the last
+    # signature with a whole record after it is used, as before.
+    # @param tail [String] the last bytes of the archive
+    # @return [Integer, nil] offset of the record in +tail+
+    def end_record_at(tail)
+      fallback = nil
+      search_at = tail.bytesize - END_RECORD_SIZE
+      while search_at >= 0 && (candidate = tail.rindex(END_OF_CENTRAL_DIRECTORY, search_at))
+        fallback ||= candidate
+        comment_size = tail.byteslice(candidate + END_RECORD_SIZE - 2, 2).unpack1('v')
+        return candidate if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
+
+        search_at = candidate - 1
+      end
+      fallback
     end
 
     # @param directory [String] binary central directory
