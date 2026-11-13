@@ -112,6 +112,12 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(patterns.any? { |p| p.match?('A brisk chill leaves you as you remove the gloves') }).to be(true),
                                                                                                        'REMOVE_ITEM_SUCCESS_PATTERNS should include cold-enchanted item removal pattern'
       end
+
+      it 'matches yanking a sling off a belt' do
+        line = 'You yank your sling off your belt and place the finger loop of the retention cord over one of your ' \
+               'fingers.  You let the release cord rest lightly in the palm of your hand and the pouch dangle loose, ready for loading.'
+        expect(patterns.any? { |p| p.match?(line) }).to be(true)
+      end
     end
 
     describe 'LIFT_FAILURE_PATTERNS' do
