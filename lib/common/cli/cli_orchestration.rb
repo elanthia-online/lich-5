@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'cli_options_registry'
+require_relative 'one_shot_commands'
 require_relative 'active_sessions_query'
 require_relative '../authentication/cli_password'
 require_relative 'cli_conversion'
@@ -25,26 +26,8 @@ module Lich
           ActiveSessionsQuery.execute
 
           ARGV.each do |arg|
-            case arg
-            when /^--change-account-password$/, /^-cap$/
-              handle_change_account_password
-            when /^--add-account$/, /^-aa$/
-              handle_add_account
-            when /^--refresh-characters$/, /^-rc$/
-              handle_refresh_characters
-            when /^--add-character$/, /^-ac$/
-              handle_add_character
-            when /^--change-master-password$/, /^-cmp$/
-              handle_change_master_password
-            when /^--recover-master-password$/, /^-rmp$/
-              handle_recover_master_password
-            when /^--convert-entries$/
-              handle_convert_entries
-            when /^--change-encryption-mode$/, /^-cem$/
-              handle_change_encryption_mode
-            when /^--web-login-test$/
-              handle_web_login_test
-            end
+            handler = OneShotCommands::HANDLERS[arg]
+            send(handler) if handler
           end
 
           # Check for conversion needed before login attempt

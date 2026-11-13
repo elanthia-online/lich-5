@@ -1,6 +1,7 @@
 # lib/gemcheck.rb
 require 'timeout'
 require_relative 'bundler_recovery'
+require_relative 'common/cli/one_shot_commands'
 require_relative 'dependency_recovery'
 require_relative 'accepted_gem_policy'
 require_relative 'runtime_gem_contract'
@@ -21,6 +22,10 @@ module Lich
     CONSENT_TIMEOUT_SECONDS = 120
     BUNDLER_RECOVERY_TIMEOUT_SECONDS = 120
     ALERT_TIMEOUT_SECONDS = 120
+    # Shown when a gem repair finishes after this process exits and the
+    # one-shot command that triggered it is not relaunched.
+    ONE_SHOT_RERUN_MESSAGE = "Lich is finishing the install of missing Ruby gems in the background.\n" \
+                             'Your command did not run. Wait a minute, then run it again.'
 
     # Records why a recovery did not run without treating that decision as a
     # manifest or Bundler failure.
@@ -53,7 +58,8 @@ module Lich
 
         if result.success?
           write_bundler_recovery_log(missing: missing, groups: groups, result: result)
-          exit(result.restart_required ? 0 : 1)
+          exit_after_scheduled_repair! if result.restart_required
+          exit 1
         end
 
         alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
@@ -88,7 +94,21 @@ module Lich
       result = recovery.recover(check.needed, force: true, plan: check.plan, restart: true, preserve_newer: true)
       raise recovery_error(result) unless result.success?
       raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
-      exit 0
+      exit_after_scheduled_repair!
+    end
+
+    # Exits once a gem repair has been scheduled to finish after this process
+    # is gone. A session is relaunched by the repair helper. A one-shot command
+    # is not (see Lich::Common::CLI::OneShotCommands), so the user is told to run
+    # it again, and the exit status says it did not run.
+    #
+    # @param argv [Array<String>] the command line
+    # @return [void] never returns
+    def exit_after_scheduled_repair!(argv = ARGV)
+      return exit(0) unless Lich::Common::CLI::OneShotCommands.present?(argv)
+
+      $stdout.puts ONE_SHOT_RERUN_MESSAGE
+      exit 1
     end
 
     # The accepted manifest publishes no target for this Windows Ruby (for

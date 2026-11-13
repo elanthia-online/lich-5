@@ -76,6 +76,18 @@ RSpec.describe Lich::GemCheck do
       expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
     end
 
+    it 'tells the user to rerun a one-shot command after macOS recovery, and exits 1 because it did not run' do
+      stub_const('ARGV', ['--add-account', 'DOUG', 'secret'])
+      allow(described_class).to receive(:missing_gems).and_return(['ox'])
+      allow(described_class).to receive(:bundler_recovery_supported?).and_return(true)
+      result = Lich::BundlerRecovery::Result.new(log_path: '/tmp/fixture', restart_required: true)
+      allow(described_class).to receive(:recover_with_bundler_consent!).and_return(result)
+      allow(described_class).to receive(:write_bundler_recovery_log)
+
+      expect { expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) } }
+        .to output(/Your command did not run\. Wait a minute, then run it again\./).to_stdout
+    end
+
     {
       'a macOS Bundler preflight refusal'   => 'Xcode Command Line Tools are required to build native Ruby gems',
       'a failed macOS Bundler installation' => 'Bundler install failed (see fixture log)'
@@ -135,6 +147,15 @@ RSpec.describe Lich::GemCheck do
                                              .and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true))
         expect(policy).not_to receive(:activate!)
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
+      end
+
+      it 'asks for a rerun of a one-shot command after scheduling the repair, and exits 1' do
+        stub_const('ARGV', ['-cem', 'enhanced', '-mp', 'master-pw-fixture'])
+        check.needed = ['sqlite3']
+        allow(recovery).to receive(:recover).and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true))
+
+        expect { expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) } }
+          .to output(/Your command did not run/).to_stdout
       end
 
       it 'preserves the staging timeout type through Windows startup failure reporting' do
@@ -1150,5 +1171,31 @@ RSpec.describe Lich::GemCheck do
     latest = contents.split('Lich5 GemCheck failure').last
     expect(latest).to include('Check your network connection', 'Underlying error:')
     expect(latest).not_to include('Download:', "You're missing")
+  end
+
+  describe '.exit_after_scheduled_repair!' do
+    it 'exits 0 silently for a session, which the repair helper relaunches' do
+      expect { expect { described_class.exit_after_scheduled_repair!(['--login', 'Doug']) }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) } }
+        .not_to output.to_stdout
+    end
+
+    it 'exits 0 silently for a bare launch' do
+      expect { expect { described_class.exit_after_scheduled_repair!([]) }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) } }
+        .not_to output.to_stdout
+    end
+
+    it 'exits 1 and asks for a rerun for each one-shot command' do
+      %w[-aa -cap -cmp -rmp -cem --convert-entries --web-login-test --active-sessions --session-info=Doug].each do |flag|
+        expect { expect { described_class.exit_after_scheduled_repair!([flag, 'x']) }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) } }
+          .to output(/Your command did not run/).to_stdout
+      end
+    end
+
+    it 'reads ARGV by default' do
+      stub_const('ARGV', ['-rmp'])
+
+      expect { expect { described_class.exit_after_scheduled_repair! }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) } }
+        .to output(/did not run/).to_stdout
+    end
   end
 end
