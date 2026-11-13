@@ -365,7 +365,8 @@ non-ZIP64, unencrypted archive whose entries are stored or deflated. Data
 descriptors are fine, since sizes are read from the central directory. Each
 deflated entry's compressed size must end exactly where its deflate stream
 ends. Entry names must be relative and separated by `/`, without `..`
-segments, colons, backslashes or control characters, ASCII unless the entry
+segments, colons, backslashes, control characters or any of `< > " | ? *`
+(which Windows refuses in file names), ASCII unless the entry
 is flagged UTF-8, free of segments Windows would alter (a trailing dot or
 space, or a device name such as `CON`, `NUL` or `COM1`, with or without an
 extension), and unique: no two entries may name the same file, and no file

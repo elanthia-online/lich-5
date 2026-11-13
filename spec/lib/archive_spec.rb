@@ -35,7 +35,7 @@ RSpec.describe Lich::Archive do
 
     ['dir\file.gem', 'a\b', 'a.gem.', 'a.gem ', 'dir./a.gem', 'dir /a.gem', '...', 'CON', 'con', 'nul.gem', 'NUL.tar.gz',
      'gems/aux', 'gems/Aux.rb', 'aux .rb', 'prn', 'COM1', 'com9.txt', 'LPT0', 'lpt3.log', 'CONIN$', 'conout$.x',
-     "COM#{superscript_one}", "r/x#{0xE9.chr}.rb".b].each do |name|
+     "COM#{superscript_one}", "r/x#{0xE9.chr}.rb".b, 'a<b.gem', 'a>b.gem', 'say"hi".rb', 'a|b', 'what?.rb', 'gems/*.gem'].each do |name|
       it "refuses #{name.inspect}" do
         expect(described_class.unsafe_entry?(name)).to be(true)
       end
@@ -101,6 +101,22 @@ RSpec.describe Lich::Archive do
 
       expect(described_class.extract_zip(zip, destination)).to eq(['a.gem'])
       expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+  end
+
+  # Windows refuses these characters in any file name, so extraction would
+  # fail partway there with a raw Errno. Both formats refuse them up front.
+  %w[< > " | ? *].each do |char|
+    it "refuses an entry name containing #{char.inspect} in either format, writing nothing" do
+      name = "r/a#{char}b.rb"
+      zip = File.join(work_dir, 'a.zip')
+      tarball = File.join(work_dir, 'a.tar.gz')
+      File.binwrite(zip, ZipBuilder.build([{ name: 'r/ok.rb', data: 'ok' }, { name: name, data: 'x' }]))
+      File.binwrite(tarball, TarGzBuilder.build([{ name: 'r/ok.rb', data: 'ok' }, { name: name, data: 'x' }]))
+
+      expect { described_class.extract_zip(zip, destination) }.to raise_error(described_class::Error, /unsafe archive entry: #{Regexp.escape(name)}/)
+      expect { described_class.extract_tar_gz(tarball, destination) }.to raise_error(described_class::Error, /unsafe archive entry: #{Regexp.escape(name)}/)
+      expect(Dir.exist?(destination)).to be(false)
     end
   end
 

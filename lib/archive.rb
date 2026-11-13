@@ -65,7 +65,8 @@ module Lich
 
     # @param name [String] archive entry name
     # @return [Boolean] whether +name+ is empty, absolute, drive- or
-    #   stream-qualified, not UTF-8, contains a control character or backslash,
+    #   stream-qualified, not UTF-8, contains a control character, backslash
+    #   or a character Windows forbids in file names (< > " | ? *),
     #   traverses upward, or has a segment Windows would rename or treat as
     #   a device
     def unsafe_entry?(name)
@@ -76,6 +77,9 @@ module Lich
       return true if name.empty? || name.start_with?('/') || name.match?(/[[:cntrl:]]/)
       # A colon names a drive (C:...) or an NTFS alternate data stream (a.gem:s).
       return true if name.include?(':')
+      # Windows refuses these in any file name, so File.open would fail
+      # partway with a raw Errno; refuse them before anything is written.
+      return true if name.match?(/[<>"|?*]/)
       # ZIP and tar both separate with "/". Windows also splits on "\", so
       # a\b would be a file on one platform and a directory on another.
       return true if name.include?('\\')
