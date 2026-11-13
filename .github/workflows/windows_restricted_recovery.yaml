@@ -44,9 +44,20 @@ jobs:
       - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler-cache: false
-      # One step, and cmd rather than powershell/pwsh: the lockdown happens
-      # inside it, and GitHub runs powershell steps as script files, which
-      # Restricted refuses. Nothing runs after it that depends on the policy.
+      # The script sets Windows PowerShell 5.1's LocalMachine policy to
+      # Restricted (the policy the old extractor ran under), disables Windows
+      # Script Host for its second phase, and puts both back before it exits.
+      # pwsh 7 keeps its own execution policy, so this pwsh step is unaffected.
       - name: Lock down the runner and run recovery
-        shell: cmd
+        shell: pwsh
         run: ruby .github/scripts/windows_restricted_recovery.rb
+      # Belt and braces: if the script died before restoring, put the runner
+      # back anyway, and show the final policy either way.
+      - name: Restore execution policy and Windows Script Host
+        if: always()
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -NonInteractive -Command 'if ((Get-ExecutionPolicy -Scope LocalMachine) -eq ''Restricted'') { Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope LocalMachine -Force }; Get-ExecutionPolicy -List | Format-Table -AutoSize | Out-String'
+          foreach ($key in 'HKLM:\SOFTWARE\Microsoft\Windows Script Host\Settings', 'HKCU:\SOFTWARE\Microsoft\Windows Script Host\Settings') {
+            Remove-ItemProperty -Path $key -Name Enabled -ErrorAction SilentlyContinue
+          }
