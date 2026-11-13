@@ -51,6 +51,12 @@ module WindowsRestrictedRecovery
   # replaced by the detached rubyw helper. os is a pure-Ruby unit from the
   # stable-tag zip, installed in-process.
   RECOVERY_GEMS = %w[gtk3 os].freeze
+  # Whether each unit must go through the detached replacement helper. If a
+  # manifest change made gtk3 install in-process (or os need the helper),
+  # the run would no longer exercise the path it exists to prove, so the
+  # job fails instead of passing quietly. Read with fetch, so a gem added to
+  # RECOVERY_GEMS without an expectation fails loudly too.
+  RESTART_REQUIRED = { 'gtk3' => true, 'os' => false }.freeze
   PS_SHELL_ID_KEY = 'HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.PowerShell'
   PS_GPO_KEYS = %w[
     HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell
@@ -568,6 +574,13 @@ module WindowsRestrictedRecovery
       staged_names = outcome.fetch('staged').map { |entry| entry['name'] }.sort
       unless staged_names == packages.map { |package| package['name'] }.sort
         return fail!("[#{phase}] #{label}: staged #{staged_names} but unit #{unit['id']} has #{packages.map { |p| p['name'] }.sort}")
+      end
+
+      expected_restart = RESTART_REQUIRED.fetch(gem_name)
+      unless (outcome['restart_required'] == true) == expected_restart
+        kill_tree(outcome['helper_pid']) if outcome['helper_pid']
+        how = expected_restart ? 'the native replacement helper' : 'an in-process install'
+        return fail!("[#{phase}] #{label}: expected #{how}, but restart_required was #{outcome['restart_required'].inspect}")
       end
 
       if outcome['restart_required']
