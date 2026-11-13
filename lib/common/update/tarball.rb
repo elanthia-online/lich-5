@@ -26,6 +26,7 @@ module Lich
         # @raise [OpenURI::HTTPError, SocketError, SystemCallError] when the
         #   download fails
         def with_extracted(url, name)
+          name = safe_name(name)
           tarball_path = File.join(TEMP_DIR, "#{name}.tar.gz")
           extract_dir = File.join(TEMP_DIR, name)
           remove(extract_dir, tarball_path)
@@ -33,6 +34,30 @@ module Lich
           yield Lich::Archive.extract_tar_gz_root(tarball_path, extract_dir)
         ensure
           remove(extract_dir, tarball_path) if tarball_path
+        end
+
+        # The base name for TEMP_DIR entries, which are deleted before the
+        # download. The name comes from what the player typed (a branch name
+        # for --branch), so anything but letters, digits, ".", "_" and "-"
+        # becomes "-": on Windows x\..\..\data would otherwise resolve
+        # to Lich's data directory and be deleted. Trailing dots become "-"
+        # as well, since Windows drops them (TEMP_DIR/... is TEMP_DIR), and a
+        # Windows device name gets a prefix.
+        # @param name [String]
+        # @return [String] a single path segment that names an entry strictly
+        #   inside TEMP_DIR
+        # @raise [ArgumentError] when nothing usable is left
+        def safe_name(name)
+          safe = name.to_s.gsub(/[^A-Za-z0-9._-]/, '-').sub(/\.+\z/) { |dots| '-' * dots.length }
+          raise ArgumentError, "unusable name for the update download: #{name.inspect}" if safe.empty?
+
+          safe = "lich5-#{safe}" if Lich::Archive.unsafe_segment?(safe)
+          root = File.expand_path(TEMP_DIR)
+          unless File.dirname(File.expand_path(safe, root)) == root
+            raise ArgumentError, "unusable name for the update download: #{name.inspect}"
+          end
+
+          safe
         end
 
         # @param url [String]

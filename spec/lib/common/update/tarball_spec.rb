@@ -59,6 +59,56 @@ RSpec.describe Lich::Util::Update::Tarball do
     end
   end
 
+  describe 'the name, which comes from what the player typed' do
+    let(:base) { Dir.mktmpdir('lich-update-base') }
+    let(:temp_dir) { File.join(base, 'temp').tap { |dir| FileUtils.mkdir_p(dir) } }
+    let(:keep) { File.join(base, 'data', 'keep.txt') }
+
+    before do
+      FileUtils.mkdir_p(File.dirname(keep))
+      File.write(keep, 'keep')
+    end
+
+    after { FileUtils.remove_entry(base) if Dir.exist?(base) }
+
+    ['x\\..\\..\\data', '../data', '../../data', '..', '.', '...', 'a/../../data', 'CON', ''].each do |name|
+      it "never removes anything outside TEMP_DIR for #{name.inspect}" do
+        removed = []
+        allow(FileUtils).to receive(:rm_rf).and_wrap_original do |original, paths, **options|
+          removed.concat(Array(paths))
+          original.call(paths, **options)
+        end
+
+        begin
+          described_class.with_extracted(url, name) { |source_dir| expect(source_dir).to start_with("#{temp_dir}/") }
+        rescue ArgumentError
+          # An unusable name is refused before anything is removed.
+        end
+
+        expect(File.read(keep)).to eq('keep')
+        removed.each do |path|
+          expect(File.dirname(File.expand_path(path))).to eq(File.expand_path(temp_dir)), path
+        end
+      end
+    end
+
+    # Windows drops trailing dots, so "..." would name TEMP_DIR itself there,
+    # and opens a device for CON whatever follows it. Neither shows on POSIX.
+    it 'never returns a name Windows would shorten or treat as a device' do
+      ['...', 'x.', 'x..', 'CON', 'nul.x', 'COM1'].each do |name|
+        safe = described_class.safe_name(name)
+        expect(safe).not_to end_with('.'), name
+        expect(Lich::Archive.unsafe_segment?(safe)).to be(false), name
+      end
+    end
+
+    it 'keeps an ordinary release or branch name as it is' do
+      described_class.with_extracted(url, 'lich5-branch-feature-x_1.2') do |source_dir|
+        expect(source_dir).to eq(File.join(temp_dir, 'lich5-branch-feature-x_1.2', 'lich-5-abc'))
+      end
+    end
+  end
+
   it 'leaves nothing behind when the download fails' do
     allow(URI).to receive(:parse).with(url).and_return(double('uri').tap { |uri| allow(uri).to receive(:open).and_raise(SocketError, 'offline') })
 
