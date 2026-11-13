@@ -14,7 +14,7 @@ module Lich
   module WebUI
     # Opens an authenticated loopback URL in a native helper or a
     # dedicated browser app process. Automatic discovery finds Chrome (plus Edge
-    # on Windows and distro Chromium on Linux). Any other Chromium-based browser
+    # on Windows and Chromium on macOS or Linux). Any other Chromium-based browser
     # is chosen at the user's risk by an explicit path: the launcher Settings
     # "Browser path", or LICH_WEBUI_BROWSER, which is read before any window
     # exists so a host without Chrome can still reach one. Precedence: explicit
@@ -34,6 +34,10 @@ module Lich
       MACOS_PATHS = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         File.join(Dir.home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+      ].freeze
+      MACOS_CHROMIUM_PATHS = [
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        File.join(Dir.home, 'Applications/Chromium.app/Contents/MacOS/Chromium'),
       ].freeze
       LINUX_PATHS = [
         '/usr/bin/google-chrome',
@@ -145,8 +149,6 @@ module Lich
           end
           requirement = if windows?(platform)
                           'Google Chrome or Microsoft Edge'
-                        elsif platform.match?(/darwin/i)
-                          'Google Chrome'
                         else
                           'Google Chrome or Chromium'
                         end
@@ -250,9 +252,17 @@ module Lich
       # the os gem rather than guessing from a Ruby build-platform string.
       # @param platform [String, nil] discovery override
       # @param browser_path [String, nil] explicit browser that disables native selection
-      # @return [Symbol, nil] native host kind, absent for explicit browsers
+      # @return [Symbol, nil] native host kind, absent for explicit browsers or a
+      #   session whose native preparation failed
       def native_host(platform, browser_path)
         NativeHost.platform(platform) unless browser_path
+      end
+
+      # Updates the shared native selection and capabilities after preparation fails.
+      # @param unavailable [Boolean] whether this session must use a browser
+      # @return [Boolean] assigned session state
+      def native_unavailable=(unavailable)
+        NativeHost.unavailable = unavailable
       end
 
       # Stores the one-use credential inside the launch directory (0700 on POSIX).
@@ -331,7 +341,7 @@ module Lich
       end
 
       # Selects the first executable Chrome candidate, then Edge on Windows or
-      # distro Chromium on Linux, skipping snap-packaged Chromium. Injected
+      # Chromium on macOS or Linux, skipping snap-packaged Chromium. Injected
       # platform/environment/probes allow discovery tests without launching a browser.
       # @param platform [String] Ruby platform string selecting the candidate lists
       # @param executable [#call] admits a candidate; defaults to an executable regular file
@@ -368,14 +378,15 @@ module Lich
         end
       end
 
-      # Lists Linux distro Chromium paths, then absolute PATH entries; none on
-      # macOS or Windows. Relative PATH entries are skipped so the working
-      # directory can never supply the browser.
-      # @param platform [String] Ruby platform string; only Linux yields candidates
+      # Lists macOS Chromium installations, or Linux distro paths followed by
+      # absolute PATH entries; none on Windows. Relative PATH entries are skipped
+      # so the working directory can never supply the browser.
+      # @param platform [String] Ruby platform string selecting Chromium candidates
       # @param environment [#[]] environment source for PATH
       # @return [Array<String>] ordered discovery candidates
       def chromium_candidates(platform: RUBY_PLATFORM, environment: ENV)
-        return [] if platform.match?(/darwin/i) || windows?(platform)
+        return MACOS_CHROMIUM_PATHS if platform.match?(/darwin/i)
+        return [] if windows?(platform)
 
         directories = environment['PATH'].to_s.split(File::PATH_SEPARATOR).select do |directory|
           directory.start_with?('/')

@@ -442,13 +442,3 @@ tabs and closes cleanly. Offline option/catalog/action/directory substitutes and
 Browser.show(load:false) exclude manifest fetching and package operations.
 Native window opening and actual browser input transport are not exercised.
 These checks do not execute complete script startup, game loops or live gameplay.
-
-The default_inventory records all ten core defaults plus GS-only ewaggle from
-the default-script inventory, their pinned source/prepared identities and acceptance limits.
-Autostart/version inspect GTK version diagnostically and have no GUI entrypoint;
-log/logxml are stream/file loggers. Go2/Repository/Ewaggle native candidates have
-historical browser-startup evidence; their older shim fixtures above remain
-separate. Published release points are unset. Existing background login sync is
-an upgrade route, but does not delay autostart or establish candidate availability
-before first use or after a failed/offline sync. Delivery and platform acceptance
-remain release obligations; fixture passes do not close them.
