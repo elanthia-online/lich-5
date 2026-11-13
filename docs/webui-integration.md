@@ -137,11 +137,12 @@ presentation-enabled startup checks the helper and builds it locally if missing,
 including after an update replaces the library directory. Existing helpers are
 retained without requiring write access to their installation. Concurrent
 startups share one build; resources are supplied before publishing the executable,
-and failed build output is invalidated. If the build fails and Chrome
+and failed build output is invalidated. If the build fails and Chrome / Chromium
 is installed, Lich shows one notice and continues in that browser (degraded mode:
 windows do not stay on top). The failure is remembered in the data directory, so
 later starts use the browser without rebuilding until the helper sources or
-toolchain change or that record is deleted. Without such a browser, every start retries the build
+toolchain change or that record is deleted. A toolchain change is noticed within
+a day. Without such a browser, every start retries the build
 and a failure is a fatal startup error naming the debug log.
 Disabled presentation and an explicit browser override do not build a helper.
 The required Apple command-line build tools are supplied
@@ -150,11 +151,12 @@ distribution work. The source build targets macOS 14 or later; that build target
 is not a substitute for the maintainers' supported-platform policy.
 
 Windows and Linux use dedicated browser app windows, as does macOS in degraded
-mode. Chrome and Edge are the supported defaults (Edge is discovered on Windows),
-and distro Chromium is discovered on Linux. Other Chromium-based browsers may work at the user's own
-risk. The launcher's saved Browser path applies only to the launcher window;
-script windows do not inherit it. Set `LICH_WEBUI_BROWSER` to a Chromium-based
-browser's executable path to select it for both launcher and script windows.
+mode. Chrome, Edge, Brave or Arc are supported; other browsers are not actively
+supported. Chrome is discovered automatically, along with Edge on Windows and
+Chromium on macOS or Linux. The launcher's saved Browser path applies only to
+the launcher window; script windows do not inherit it. Set `LICH_WEBUI_BROWSER`
+to the browser application or its executable to select it for both launcher
+and script windows.
 An explicit launcher path takes precedence for that launcher. Linux discovery
 skips snap-packaged Chromium, and an explicit snap path is refused; use a
 non-snap Chrome or Chromium installation.

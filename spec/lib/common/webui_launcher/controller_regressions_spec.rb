@@ -526,7 +526,7 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
 
         expect(find(rendered, 'text_input:browser-path').props[:value]).to eq(chromium)
         support = find(rendered, 'text:browser-support').props[:content]
-        expect(support).to include('Google Chrome and Microsoft Edge are supported', 'at your own risk')
+        expect(support).to include('Chrome, Edge, Brave or Arc are supported', 'other browsers are not actively supported')
         expect(support).to include('LICH_WEBUI_BROWSER')
       end
 
@@ -582,7 +582,31 @@ RSpec.describe Lich::Common::WebUILauncher, 'controller corrections' do
         save_browser(bundle)
 
         expect(stored).to be_empty
-        expect(launcher.send(:render_state)[:notice]).to include(level: 'error', text: a_string_including(bundle))
+        expect(launcher.send(:render_state)[:notice]).to include(
+          level: 'error',
+          text: "the configured browser application '#{bundle}' has no executable; set the Browser path in the launcher Settings or clear it"
+        )
+      end
+
+      %w[trailing-slash uppercase].each do |variant|
+        it "saves a #{variant} macOS bundle in Settings and resolves it on the next start" do
+          skip 'macOS bundle executables: extensionless files are not executable on native Windows' if OS.windows?
+          allow(OS).to receive(:mac?).and_return(true)
+          bundle, executable = application_bundle
+          if variant == 'uppercase'
+            original = bundle
+            bundle = bundle.sub(/\.app\z/, '.APP')
+            File.rename(original, bundle)
+            executable = File.join(bundle, 'Contents', 'MacOS', 'Fixture Browser')
+          end
+          path = variant == 'trailing-slash' ? "#{bundle}/" : bundle
+
+          save_browser(path)
+
+          expect(stored).to eq([path])
+          expect(launcher.send(:render_state)[:notice]).to include(level: 'info')
+          expect(start_with(saved: stored.last).map { |arguments| arguments[:browser_path] }).to eq([executable])
+        end
       end
 
       it 'refuses a path that is not an absolute executable file, storing nothing' do

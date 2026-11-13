@@ -56,11 +56,19 @@ RSpec.describe Lich::WebUI::NativeHost do
     FileUtils.mkdir_p([data_directory, File.dirname(executable)])
     stub_const('DATA_DIR', data_directory)
     allow(Time).to receive(:now) { sample_clock.fetch(:now) }
-    allow(Open3).to receive(:popen3).and_call_original
-    allow(Open3).to receive(:popen3).with('xcrun', 'swiftc', '--version') do |*_arguments, &operation|
-      raise toolchain_result.fetch(:error) if toolchain_result[:error]
+    allow(Process).to receive(:kill).and_call_original
+    allow(Process).to receive(:kill).with('KILL', toolchain_process.pid).and_return(1)
+    allow(Process).to receive(:kill).with('KILL', -toolchain_process.pid).and_return(1)
+    allow(Open3).to receive(:popen3).and_wrap_original do |original, *arguments, **options, &operation|
+      if arguments.first == 'xcrun'
+        expect(arguments).to eq(%w[xcrun swiftc --version])
+        expect(options).to eq(pgroup: true)
+        raise toolchain_result.fetch(:error) if toolchain_result[:error]
 
-      operation.call(StringIO.new, StringIO.new(toolchain_result.fetch(:output)), StringIO.new, toolchain_process)
+        operation.call(StringIO.new, StringIO.new(toolchain_result.fetch(:output)), StringIO.new, toolchain_process)
+      else
+        original.call(*arguments, **options, &operation)
+      end
     end
     source_paths[0...-1].each { |path| File.write(path, "fixture source #{File.basename(path)}") }
     File.write(notification_script, "File.open(ARGV.fetch(0), 'a') { |file| file.puts ARGV.fetch(1) }\n")
@@ -77,6 +85,49 @@ RSpec.describe Lich::WebUI::NativeHost do
     expect(described_class.prepare!(platform: 'darwin')).to be(true)
     expect(File.readlines(marker)).to eq(["built\n"])
     expect(Open3).not_to have_received(:popen3)
+  end
+
+  it 'kills a sleeping probe child after its leader exits and returns within the discovery bound' do
+    skip 'POSIX process groups and fork are unavailable on native Windows' if OS.windows?
+    child_file = File.join(@directory, 'probe-child.pid')
+    probe = nil
+    fixture = <<~RUBY
+      child = fork { sleep 30 }
+      File.write(ARGV.fetch(0), child.to_s)
+      exit! 0
+    RUBY
+    allow(Open3).to receive(:popen3).and_wrap_original do |original, *arguments, **options, &operation|
+      expect(arguments).to eq(%w[xcrun swiftc --version])
+      expect(options).to eq(pgroup: true)
+      original.call(RbConfig.ruby, '-e', fixture, child_file, **options) do |input, output, errors, waiter|
+        probe = waiter
+        operation.call(input, output, errors, waiter)
+      end
+    end
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+    result = Timeout.timeout(6) { described_class.toolchain_identity }
+
+    expect(result).to be_nil
+    expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 5
+    expect(probe.value).to be_success
+    child_pid = Integer(File.read(child_file))
+    running = lambda do
+      state, status = Open3.capture2('ps', '-o', 'stat=', '-p', child_pid.to_s)
+      status.success? && !state.strip.empty? && !state.strip.start_with?('Z')
+    end
+    stopped = begin
+      Timeout.timeout(2) { sleep 0.01 while running.call }
+      true
+    rescue Timeout::Error
+      false
+    end
+    expect(stopped).to be(true), 'the sleeping probe child outlived toolchain discovery'
+  ensure
+    if probe
+      Process.kill('KILL', -probe.pid) rescue nil
+      probe.join
+    end
   end
 
   it 'logs and detaches the desktop notice before starting the build' do
@@ -306,7 +357,7 @@ RSpec.describe Lich::WebUI::NativeHost do
       expect(Time.iso8601(record.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
       expect(File.exist?(File.join(File.dirname(executable), 'webui-helper-build-failed.json'))).to be(false)
       expect(File.exist?(File.join(File.dirname(lock_path), 'webui-helper-build-failed.json'))).to be(false)
-      expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
+      expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).once
     end
   end
 
@@ -554,7 +605,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         expect(described_class).to have_received(:system).once
         expect(Lich::Main::WebUIStartup).to have_received(:system).once
         expect(Open3).to have_received(:popen3).once
-        expect(notices).to eq(['macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'])
+        expect(notices).to eq(['macOS WebUI helper build skipped: these sources previously failed; using browser degraded mode if available.'])
         expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to be_nil
       end
 
@@ -589,9 +640,29 @@ RSpec.describe Lich::WebUI::NativeHost do
 
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
 
-        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).once
         expect(described_class).to have_received(:system).once
         expect(JSON.parse(File.read(failure_marker))).to eq(original)
+      end
+
+      it 'resamples a future toolchain timestamp and retries once when its identity changed' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        record = JSON.parse(File.read(failure_marker))
+        record['toolchain_sampled_at'] = (sample_clock.fetch(:now) + 3600).iso8601
+        File.write(failure_marker, JSON.generate(record))
+        toolchain_result[:output] = 'repaired Swift compiler'
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        updated = JSON.parse(File.read(failure_marker))
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(updated.fetch('fingerprint')).not_to eq(record.fetch('fingerprint'))
+        expect(Time.iso8601(updated.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).twice
+        expect(described_class).to have_received(:system).twice
       end
 
       it 'refreshes an unchanged daily sample and skips the next immediate check' do
@@ -608,7 +679,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
         expect(updated.fetch('fingerprint')).to eq(original)
         expect(Time.iso8601(updated.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
-        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').twice
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).twice
         expect(described_class).to have_received(:system).once
       end
 
@@ -622,7 +693,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         allow(Timeout).to receive(:timeout).with(3).and_raise(Timeout::Error)
         allow(toolchain_process).to receive(:join).with(0).and_return(nil)
         allow(toolchain_process).to receive(:join).with(no_args).and_return(true)
-        allow(Process).to receive(:kill).with('KILL', toolchain_process.pid).and_return(1)
+        allow(Process).to receive(:kill).with('KILL', -toolchain_process.pid).and_return(1)
         Lich::WebUI::BrowserLauncher.native_unavailable = false
 
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
@@ -632,9 +703,9 @@ RSpec.describe Lich::WebUI::NativeHost do
 
         expect(updated.fetch('fingerprint')).to eq(original)
         expect(Time.iso8601(updated.fetch('toolchain_sampled_at'))).to eq(sample_clock.fetch(:now))
-        expect(Process).to have_received(:kill).with('KILL', toolchain_process.pid).once
+        expect(Process).to have_received(:kill).with('KILL', -toolchain_process.pid).once
         expect(toolchain_process).to have_received(:join).with(no_args).once
-        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').twice
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).twice
         expect(described_class).to have_received(:system).once
       end
 
@@ -649,7 +720,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
 
         expect(record.fetch('fingerprint')).to eq(record.fetch('source_fingerprint'))
-        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version').once
+        expect(Open3).to have_received(:popen3).with('xcrun', 'swiftc', '--version', pgroup: true).once
         expect(described_class).to have_received(:system).once
       end
 

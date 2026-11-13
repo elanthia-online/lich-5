@@ -72,6 +72,7 @@ module Lich
       # discard their executable and remember source and toolchain fingerprints
       # in DATA_DIR. Toolchain discovery runs at most daily after failures and
       # before skips, never for a normal successful build or a complete helper.
+      # Skips retain the last sampled identity until its next daily check.
       # A remembered fingerprint skips the build unless the caller asks to retry;
       # changed sources or toolchain, or deleting the marker, permits another attempt.
       # Incomplete installed executables are removed before rebuilding resources.
@@ -107,7 +108,7 @@ module Lich
             sample = failure_fingerprint(source, previous)
             if previous['fingerprint'] == sample.first
               write_failure_record(previous.merge('toolchain_sampled_at' => sample.last))
-              Lich.log 'macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'
+              Lich.log 'macOS WebUI helper build skipped: these sources previously failed; using browser degraded mode if available.'
               raise BuildFailure.new('macOS WebUI helper build previously failed', skipped: true)
             end
           end
@@ -163,7 +164,8 @@ module Lich
         nil
       end
 
-      # Samples compiler identity at most daily; a timeout keeps the old digest.
+      # Samples compiler identity at most daily; future sample times are stale.
+      # A timeout keeps the old digest until the next daily sample.
       # @param source [String] current build-source fingerprint
       # @param previous [Hash, nil] remembered failure with its last sample time
       # @return [Array(String, String)] combined fingerprint and UTC sample time
@@ -175,7 +177,8 @@ module Lich
         rescue ArgumentError
           nil
         end
-        return [previous.fetch('fingerprint'), sampled_at] if sampled_time && Time.now - sampled_time < 86_400
+        age = Time.now - sampled_time if sampled_time
+        return [previous.fetch('fingerprint'), sampled_at] if age && age >= 0 && age < 86_400
 
         identity = begin
           toolchain_identity
@@ -186,27 +189,31 @@ module Lich
         [fingerprint, Time.now.utc.iso8601]
       end
 
-      # Bounds compiler discovery and reaps the process, including after timeout.
+      # Bounds compiler discovery and kills its entire process group on timeout,
+      # even if the leader exited while a child retained the output pipes.
+      # Reaps the owned leader before returning.
       # @return [String, nil] combined output or nil when discovery times out
       # @api private
       def toolchain_identity
-        Open3.popen3('xcrun', 'swiftc', '--version') do |input, output, errors, process|
+        Open3.popen3('xcrun', 'swiftc', '--version', pgroup: true) do |input, output, errors, process|
           input.close
+          timed_out = false
           begin
             Timeout.timeout(3) do
               result = output.read + errors.read
               process.value
               result
             end
+          rescue Timeout::Error
+            timed_out = true
+            nil
           ensure
-            unless process.join(0)
-              Process.kill('KILL', process.pid) rescue nil
+            if timed_out || !process.join(0)
+              Process.kill('KILL', -process.pid) rescue nil
               process.join
             end
           end
         end
-      rescue Timeout::Error
-        nil
       end
 
       # Reads a matching source record while the preparation lock is held.
