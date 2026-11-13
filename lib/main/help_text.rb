@@ -68,7 +68,7 @@ module Lich
             lich --login CHARACTER
             lich --login CHARACTER --headless PORT
             lich --login CHARACTER --headless auto
-            lich --add-account ACCOUNT PASSWORD
+            lich --add-account ACCOUNT
 
           Help topics:
             lich --help login
@@ -143,7 +143,7 @@ module Lich
             lich [account command] [options]
 
           Commands:
-            --add-account ACCOUNT PASSWORD [--frontend FRONTEND]
+            --add-account ACCOUNT [--password-stdin] [--frontend FRONTEND]
             --refresh-characters ACCOUNT [--frontend FRONTEND]
             --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD
@@ -164,7 +164,8 @@ module Lich
                                           DRF  DragonRealms Fallen
 
           Examples:
-            lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront
+            lich --add-account MYACCOUNT --frontend stormfront
+            printf '%s\\n' "$PASSWORD" | lich --add-account MYACCOUNT --password-stdin
             lich --refresh-characters MYACCOUNT
             lich --add-character MYACCOUNT NewCharName --game-code DR
             lich --change-account-password MYACCOUNT NEWPASSWORD
