@@ -222,7 +222,18 @@ exact version across its gems, so a strictly newer self-built gtk3 only
 resolves with equally new self-built glib2 and the rest of the stack, never
 with an R4L5 build. If the self-built gems cannot resolve together (a
 self-built gtk3 4.4.0 without glib2 4.4.0, say), startup decides again as if
-only R4L5 builds counted: it uses them, or repairs to them.
+only R4L5 builds counted: it uses them, or repairs to them. It also does so
+when a package `minimum` turns that failure into a repair: if the R4L5 builds
+alone need no repair, startup uses them.
+
+A self-built copy is only considered when every other package of its unit
+that depends on it pins it exactly (`= version`), judged from the installed
+gemspecs. **cairo** is the exception in the GTK unit: cairo-gobject requires
+`cairo >= 1.16.2`, so a newer self-built cairo next to the R4L5 cairo-gobject
+is ignored and the R4L5 cairo is used (or repaired to). The reverse mix, a
+newer self-built Ruby-GNOME stack (glib2, cairo-gobject, gtk3 and the rest)
+over the R4L5 cairo, is kept. Standalone packages such as `ox` and `curses`,
+which no other package of their unit depends on, are kept when strictly newer.
 
 If a kept self-built gtk3 or sqlite3 then fails to load, the existing
 load-failure repair in `init.rb` installs the R4L5 build and moves the
