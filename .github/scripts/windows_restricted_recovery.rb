@@ -205,6 +205,8 @@ module WindowsRestrictedRecovery
         windows_run
       end
       finish
+    ensure
+      restore_runner # an unexpected exception must not leave the runner locked down
     end
 
     private
@@ -231,6 +233,7 @@ module WindowsRestrictedRecovery
 
     def finish
       log('::endgroup::') # an abort can land inside a group; keep the summary visible
+      restore_runner
       log('')
       log('Summary')
       @summary.each { |phase, check, outcome| log("  [#{phase}] #{check}: #{outcome}") }
@@ -411,6 +414,25 @@ module WindowsRestrictedRecovery
 
       line = result.stdout.lines.find { |l| l.strip.start_with?("#{name} ") }
       line&.strip&.split(/\s{2,}|\t/, 3)&.last
+    end
+
+    # Puts the runner back however the run ends: the LocalMachine execution
+    # policy recorded at baseline, and Windows Script Host re-enabled. Runs
+    # once, from finish (every normal or aborted exit) or run's ensure.
+    def restore_runner
+      return if @restored || !windows? || @initial_local_machine.nil?
+
+      @restored = true
+      log('::group::restore: put the runner back')
+      policy = powershell("Set-ExecutionPolicy -ExecutionPolicy #{@initial_local_machine} -Scope LocalMachine -Force -ErrorAction Stop")
+      show('Set-ExecutionPolicy (restore)', policy)
+      fail!("could not restore LocalMachine policy #{@initial_local_machine}") unless policy.success?
+      WSH_KEYS.each do |key|
+        result = run_process(['reg.exe', 'delete', key, '/v', 'Enabled', '/f'], timeout: 30)
+        show("reg delete #{key} Enabled", result) # absent already is fine
+      end
+      record('restore', 'runner', "LocalMachine=#{@initial_local_machine}; Windows Script Host Enabled values removed")
+      log('::endgroup::')
     end
 
     def reg_set_dword(key, name, value)
