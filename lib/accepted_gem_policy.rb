@@ -136,11 +136,16 @@ module Lich
         return decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, nil)
       end
       # With a package minimum, decide's own fallback can turn that same
-      # resolver failure into a repair instead of raising. Start without a
-      # repair whenever the accepted builds alone need none, which is exactly
-      # the decision made before self-built gems were accepted. When both
-      # need a repair, keep this one: it repairs the same units and does not
-      # also replace the self-built gems it kept.
+      # resolver failure into a repair instead of raising. So when this pass
+      # needs a repair, decide again on the accepted builds alone, exactly
+      # as before self-built gems were accepted, and use that decision when
+      # it needs no repair or repairs different units. Otherwise the repair
+      # could install units the accepted builds never needed and leave the
+      # one they do need for a second repair on the next start. Either
+      # repair runs with preserve_newer, so it leaves strictly newer
+      # self-built gems installed. Only when both repair the same units is
+      # this one kept, since it does not list a usable self-built gem as
+      # needed.
       return check unless check.needed.any? && self_built_candidates?(packages, platforms, newer)
 
       begin
@@ -148,7 +153,9 @@ module Lich
       rescue Gem::Exception
         return check
       end
-      accepted_only.needed.empty? ? accepted_only : check
+      return accepted_only if accepted_only.needed.empty? || unit_ids(accepted_only) != unit_ids(check)
+
+      check
     rescue Gem::UnsatisfiableDependencyError => e
       if @find_specs.call(e.name).empty?
         raise LocalInstallationError, "installed dependency #{e.name} is missing; repair or reinstall Ruby4Lich5: #{e.message}"
@@ -180,6 +187,13 @@ module Lich
       Check.new(plan: plan, needed: [], specs: specs, recommended: recommended)
     end
     private :evaluate
+
+    # @param check [Check]
+    # @return [Array<String>] the ids of the units +check+ would repair
+    def unit_ids(check)
+      check.plan.units.map { |unit| unit.fetch('id') }.sort
+    end
+    private :unit_ids
 
     # Applies the package minimums, then the accepted versions where the
     # minimums cannot resolve.

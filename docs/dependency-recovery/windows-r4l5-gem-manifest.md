@@ -224,7 +224,8 @@ with an R4L5 build. If the self-built gems cannot resolve together (a
 self-built gtk3 4.4.0 without glib2 4.4.0, say), startup decides again as if
 only R4L5 builds counted: it uses them, or repairs to them. It also does so
 when a package `minimum` turns that failure into a repair: if the R4L5 builds
-alone need no repair, startup uses them.
+alone need no repair, or repair different units, startup uses that decision,
+so it never repairs a unit the R4L5 builds did not need.
 
 A self-built copy is only considered when every other package of its unit
 that depends on it pins it exactly (`= version`), judged from the installed

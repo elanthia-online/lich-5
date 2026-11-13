@@ -403,6 +403,26 @@ RSpec.describe Lich::AcceptedGemPolicy do
         .to eq('glib2' => ['4.3.5', local], 'gtk3' => ['4.3.5', local])
     end
 
+    # The self-built pass and the accepted-only pass can each need a repair,
+    # of different units: here the self-built pass keeps ox but turns the
+    # gtk3 conflict into a GTK repair, while the accepted-only pass starts
+    # on the accepted GTK stack and repairs only ox. Repairing ox alone is
+    # what startup did before self-built gems were accepted, and the only
+    # repair that does not lead to a second one on the next start.
+    it 'repairs only the unit the accepted builds need when the self-built pass would repair a different one' do
+      ox_unit = { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+                  'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+      plan.units = [gtk_unit, ox_unit]
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed['glib2'] = [accepted_build('glib2', '4.3.5')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.5', { 'glib2' => '= 4.3.5' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      installed['ox'] = [self_built('ox', '2.14.30')]
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.needed).to eq(['ox'])
+      expect(check.plan.units.map { |item| item['id'] }).to eq(['ox'])
+    end
+
     context 'with cairo, which cairo-gobject does not pin exactly' do
       let(:cairo_package) { { 'name' => 'cairo', 'version' => '1.18.5', 'filename' => "cairo-1.18.5-#{local}.gem", 'sha256' => "sha256:#{'1' * 64}" } }
       let(:cairo_gobject_package) { { 'name' => 'cairo-gobject', 'version' => '4.3.9', 'filename' => "cairo-gobject-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'2' * 64}" } }
