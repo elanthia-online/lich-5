@@ -46,9 +46,10 @@ RSpec.describe 'reviewed startup policy files' do
   end
 
   # The ZIP reader is loaded only when recovery extracts a bundle. Should it
-  # ever be missing, the failure must name the missing file, not surface as
-  # a NameError from a rescue clause that refers to the reader's error class.
-  it 'reports a missing ZIP reader as a LoadError when recovery extracts a bundle' do
+  # ever be missing, the failure must name the missing file and stay a
+  # recovery Error: a LoadError is not a StandardError, so it would escape
+  # #recover's boot guard and GemCheck, and crash a windowless rubyw Lich.
+  it 'reports a missing ZIP reader as a recovery Error naming the file' do
     program = <<~'RUBY'
       require ARGV.fetch(0)
       begin
@@ -61,7 +62,7 @@ RSpec.describe 'reviewed startup policy files' do
     output, error, status = run_reviewed(reviewed, root, program)
     expect(status).to be_success, error
     raised, message = output.lines(chomp: true)
-    expect(raised).to eq('LoadError')
-    expect(message).to match(/zip_archive/)
+    expect(raised).to eq('Lich::DependencyRecovery::Error')
+    expect(message).to start_with('Recovery cannot extract archives: lib/zip_archive.rb is missing')
   end
 end

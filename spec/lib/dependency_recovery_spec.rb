@@ -1162,6 +1162,35 @@ RSpec.describe Lich::DependencyRecovery do
       expect(result.restart_required).to be(true)
       expect(staged).to eq([%w[glib2 glib], %w[gtk3 gtk]])
     end
+
+    # LoadError is not a StandardError: unless extract_zip_file turns it into
+    # a recovery Error, it escapes #recover's boot guard and GemCheck.
+    it 'returns a failed result naming the reader when the ZIP reader cannot be loaded' do
+      bundle_url = 'https://example.test/R4L5-gem-bundle.zip'
+      package = { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => 'gtk3.gem', 'sha256' => sha256('gtk') }
+      bundle_body = ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk' }])
+      unit = {
+        'id'            => 'gtk3-runtime',
+        'members'       => %w[gtk3],
+        'artifact'      => { 'url' => bundle_url, 'filename' => 'R4L5-gem-bundle.zip', 'sha256' => sha256(bundle_body), 'archive' => 'zip' },
+        'packages'      => [package],
+        'install_order' => %w[gtk3]
+      }
+      engine = described_class.new(
+        manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+        http_get: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), bundle_url => bundle_body }.method(:fetch),
+        install_gem: ->(path, home) { installed << [File.basename(path), home] }
+      )
+      missing = File.expand_path('../../lib/zip_archive', __dir__)
+      allow(engine).to receive(:require_relative).with('zip_archive')
+                                                 .and_raise(LoadError.new("cannot load such file -- #{missing}").tap { |e| e.define_singleton_method(:path) { missing } })
+
+      result = nil
+      expect { result = engine.recover(['gtk3'], force: true) }.not_to raise_error
+      expect(result).not_to be_success
+      expect(result.error).to include('Recovery cannot extract archives: lib/zip_archive.rb is missing')
+      expect(installed).to be_empty
+    end
   end
 
   describe '#require_filename!' do
