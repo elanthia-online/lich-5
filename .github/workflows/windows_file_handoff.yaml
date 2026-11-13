@@ -33,6 +33,9 @@ on:
       - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
       - "lib/common/update/tarball.rb"
       - "spec/lib/common/update/tarball_spec.rb"
+      - "spec/lib/common/update/live_download_spec.rb"
+      - "lib/common/update/release_installer.rb"
+      - "lib/common/update/branch_installer.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   pull_request:
     paths:
@@ -64,6 +67,9 @@ on:
       - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
       - "lib/common/update/tarball.rb"
       - "spec/lib/common/update/tarball_spec.rb"
+      - "spec/lib/common/update/live_download_spec.rb"
+      - "lib/common/update/release_installer.rb"
+      - "lib/common/update/branch_installer.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   workflow_dispatch:
 
@@ -98,3 +104,11 @@ jobs:
       - name: Run snapshot rename specs (lich5-update)
         if: ${{ !cancelled() }}
         run: bundle exec rspec spec/lib/common/update/snapshot_manager_windows_spec.rb spec/lib/common/update/tarball_spec.rb
+      # Real GitHub downloads: the v5.24.2 release asset through ReleaseInstaller
+      # and the main branch tarball through BranchInstaller, extracted on Windows
+      # and stopped just before perform_update would install anything.
+      - name: Download and extract real update tarballs (lich5-update)
+        if: ${{ !cancelled() }}
+        env:
+          LICH_LIVE_UPDATE_DOWNLOAD: '1'
+        run: bundle exec rspec spec/lib/common/update/live_download_spec.rb
