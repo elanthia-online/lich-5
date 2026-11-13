@@ -19,69 +19,238 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
   end
 
   describe '.handle_add_account' do
+    let(:cli_password) { Lich::Common::Authentication::CLIPassword }
+
+    # Stands in for a terminal: io/console's IO#getpass reads one line with
+    # echo off and returns it without the line ending, or nil at end-of-input.
+    let(:terminal) do
+      Class.new do
+        attr_reader :prompts
+
+        def initialize(line)
+          @line = line
+          @prompts = []
+        end
+
+        def tty? = true
+
+        # A prompt passed here would go to $stderr, which Lich points at
+        # the debug log, so callers must print their own and pass none.
+        def getpass(prompt = nil)
+          @prompts << prompt
+          @line
+        end
+
+        def gets
+          raise 'a terminal password must be read with getpass, not gets'
+        end
+      end
+    end
+
+    around do |example|
+      original_stdin = $stdin
+      example.run
+    ensure
+      $stdin = original_stdin
+    end
+
     before do
       allow(Lich::Common::Authentication::EntryStore).to receive(:yaml_file_path).and_return('/nonexistent/entry.yaml')
       allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(false)
       allow(Lich::Common::CLI::CLIConversion).to receive(:convert).and_return(true)
-      allow(Lich::Common::Authentication::CLIPassword).to receive(:add_account).and_return(0)
+      allow(cli_password).to receive(:add_account).and_return(0)
     end
 
-    it 'passes an explicit valid --frontend through' do
-      stub_const('ARGV', ['--add-account', 'DOUG', 'secret', '--frontend', 'wizard'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', 'wizard')
+    def run_add_account(argv, stdin:)
+      stub_const('ARGV', argv)
+      $stdin = stdin
+      status = nil
+      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| status = e.status }
+      status
     end
 
-    it 'passes nil when --frontend is omitted' do
-      stub_const('ARGV', ['-aa', 'DOUG', 'secret'])
+    def expect_deprecation_warning
+      expect($stdout.string).to include('Passing PASSWORD on the command line is deprecated')
+      expect($stdout.string).to include("error starting with Lich #{described_class::POSITIONAL_PASSWORD_REMOVAL}")
+    end
 
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', nil)
+    context 'with the password on the command line (deprecated)' do
+      # A pipe that would fail the example if anything read the password from it.
+      let(:untouched_stdin) { StringIO.new("should-not-be-read\n") }
+
+      it 'passes an explicit valid --frontend through and warns' do
+        expect(run_add_account(['--add-account', 'DOUG', 'secret', '--frontend', 'wizard'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'secret', 'wizard', prompt_frontend: true)
+        expect_deprecation_warning
+        expect(untouched_stdin.pos).to eq(0)
+      end
+
+      it 'passes nil when --frontend is omitted' do
+        expect(run_add_account(['-aa', 'DOUG', 'secret'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'secret', nil, prompt_frontend: true)
+        expect_deprecation_warning
+      end
+
+      it 'never echoes the password in the warning or on stdout' do
+        run_add_account(['-aa', 'DOUG', 'hunter2-unique'], stdin: untouched_stdin)
+
+        expect($stdout.string).not_to include('hunter2-unique')
+      end
+
+      it 'accepts a PASSWORD that starts with a dash' do
+        expect(run_add_account(['--add-account', 'DOUG', '-secret'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '-secret', nil, prompt_frontend: true)
+        expect_deprecation_warning
+      end
+
+      it 'accepts a PASSWORD that is literally --frontend' do
+        expect(run_add_account(['--add-account', 'DOUG', '--frontend'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '--frontend', nil, prompt_frontend: true)
+        expect_deprecation_warning
+      end
+
+      it 'reads --frontend after a PASSWORD that is literally --frontend' do
+        expect(run_add_account(['--add-account', 'DOUG', '--frontend', '--frontend', 'wizard'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '--frontend', 'wizard', prompt_frontend: true)
+      end
+
+      it 'keeps --frontend as the PASSWORD when a later --frontend supplies the frontend' do
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', 'wizard', '--frontend', 'avalon'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '--frontend', 'avalon', prompt_frontend: true)
+      end
+
+      it 'reads a PASSWORD of literally --frontend when the next word is a flag' do
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', '-x'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '--frontend', nil, prompt_frontend: true)
+      end
+
+      it 'reads --frontend given before the command' do
+        expect(run_add_account(['--frontend', 'wizard', '--add-account', 'DOUG', 'secret'], stdin: untouched_stdin)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'secret', 'wizard', prompt_frontend: true)
+      end
+
+      it 'exits 1 without reading stdin or adding the account when --password-stdin is also given' do
+        expect(run_add_account(['-aa', 'DOUG', 'secret', '--password-stdin'], stdin: untouched_stdin)).to eq(1)
+        expect($stdout.string).to include('not both')
+        expect(untouched_stdin.pos).to eq(0)
+        expect(cli_password).not_to have_received(:add_account)
+      end
+
+      it 'treats --frontend followed by --password-stdin as a password plus the flag, and rejects the pair' do
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', '--password-stdin'], stdin: untouched_stdin)).to eq(1)
+        expect(cli_password).not_to have_received(:add_account)
+      end
+    end
+
+    context 'with a terminal prompt' do
+      it 'prompts without echo and passes the typed password through, whitespace intact' do
+        tty = terminal.new('  pass word ')
+
+        expect(run_add_account(['-aa', 'DOUG'], stdin: tty)).to eq(0)
+        expect(tty.prompts).to eq([nil])
+        expect($stdout.string).to start_with("Password: \n")
+        expect(cli_password).to have_received(:add_account).with('DOUG', '  pass word ', nil, prompt_frontend: true)
+        expect($stdout.string).not_to include('deprecated')
+      end
+
+      it 'reads -aa DOUG --frontend wizard as the flag and prompts for the password' do
+        tty = terminal.new('typed')
+
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', 'wizard'], stdin: tty)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'typed', 'wizard', prompt_frontend: true)
+        expect($stdout.string).not_to include('deprecated')
+      end
+
+      it 'exits 1 without prompting when --frontend is invalid' do
+        tty = terminal.new('typed')
+
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', 'bogus'], stdin: tty)).to eq(1)
+        expect(tty.prompts).to be_empty
+        expect(cli_password).not_to have_received(:add_account)
+      end
+
+      it 'exits 1 without converting legacy entries when the prompt hits end-of-input' do
+        allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(true)
+
+        expect(run_add_account(['-aa', 'DOUG'], stdin: terminal.new(nil))).to eq(1)
+        expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+        expect(cli_password).not_to have_received(:add_account)
+      end
+
+      it 'exits 1 without adding the account when the typed password is empty' do
+        expect(run_add_account(['-aa', 'DOUG'], stdin: terminal.new(''))).to eq(1)
+        expect($stdout.string).to include('Password cannot be empty')
+        expect(cli_password).not_to have_received(:add_account)
+      end
+    end
+
+    context 'with --password-stdin' do
+      it 'reads one line, keeps surrounding spaces, and skips the frontend prompt' do
+        pipe = StringIO.new("  pass word \nsecond line\n")
+
+        expect(run_add_account(['-aa', 'DOUG', '--password-stdin'], stdin: pipe)).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', '  pass word ', nil, prompt_frontend: false)
+        expect(pipe.gets).to eq("second line\n")
+        expect($stdout.string).not_to include('deprecated')
+      end
+
+      it 'removes a Windows line ending' do
+        expect(run_add_account(['-aa', 'DOUG', '--password-stdin'], stdin: StringIO.new("secret\r\n"))).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'secret', nil, prompt_frontend: false)
+      end
+
+      it 'reads --frontend given after the flag' do
+        expect(run_add_account(['-aa', 'DOUG', '--password-stdin', '--frontend', 'avalon'], stdin: StringIO.new("pw\n"))).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'pw', 'avalon', prompt_frontend: false)
+      end
+
+      it 'reads --frontend given before the flag' do
+        expect(run_add_account(['-aa', 'DOUG', '--frontend', 'avalon', '--password-stdin'], stdin: StringIO.new("pw\n"))).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'pw', 'avalon', prompt_frontend: false)
+      end
+
+      it 'accepts a password with no trailing newline' do
+        expect(run_add_account(['-aa', 'DOUG', '--password-stdin'], stdin: StringIO.new('pw'))).to eq(0)
+        expect(cli_password).to have_received(:add_account).with('DOUG', 'pw', nil, prompt_frontend: false)
+      end
+
+      it 'exits 1 without converting legacy entries at end-of-input' do
+        allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(true)
+
+        expect(run_add_account(['-aa', 'DOUG', '--password-stdin'], stdin: StringIO.new(''))).to eq(1)
+        expect($stdout.string).to include('Unable to read password')
+        expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+        expect(cli_password).not_to have_received(:add_account)
+      end
+    end
+
+    context 'with no terminal and no --password-stdin' do
+      it 'exits 1 without reading the pipe and points at --password-stdin' do
+        pipe = StringIO.new("unrelated bytes\n")
+
+        expect(run_add_account(['-aa', 'DOUG'], stdin: pipe)).to eq(1)
+        expect(pipe.pos).to eq(0)
+        expect($stdout.string).to include('--password-stdin')
+        expect(cli_password).not_to have_received(:add_account)
+      end
     end
 
     it 'exits 1 without converting legacy entries or adding the account when --frontend is invalid' do
       allow(Lich::Common::CLI::CLIConversion).to receive(:conversion_needed?).and_return(true)
-      stub_const('ARGV', ['--add-account', 'DOUG', 'secret', '--frontend', 'bogus'])
 
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(run_add_account(['--add-account', 'DOUG', 'secret', '--frontend', 'bogus'], stdin: StringIO.new)).to eq(1)
       expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
-      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_account)
+      expect(cli_password).not_to have_received(:add_account)
     end
 
     it 'exits 1 without adding the account when ACCOUNT is missing and a flag takes its place' do
-      stub_const('ARGV', ['--add-account', '--frontend', 'wizard'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
-      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_account)
+      expect(run_add_account(['--add-account', '--frontend', 'wizard'], stdin: StringIO.new)).to eq(1)
+      expect(cli_password).not_to have_received(:add_account)
     end
 
-    it 'accepts a PASSWORD that starts with a dash' do
-      stub_const('ARGV', ['--add-account', 'DOUG', '-secret'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '-secret', nil)
-    end
-
-    it 'accepts a PASSWORD that is literally --frontend' do
-      stub_const('ARGV', ['--add-account', 'DOUG', '--frontend'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '--frontend', nil)
-    end
-
-    it 'reads --frontend after a PASSWORD that is literally --frontend' do
-      stub_const('ARGV', ['--add-account', 'DOUG', '--frontend', '--frontend', 'wizard'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', '--frontend', 'wizard')
-    end
-
-    it 'reads --frontend given before the command' do
-      stub_const('ARGV', ['--frontend', 'wizard', '--add-account', 'DOUG', 'secret'])
-
-      expect { described_class.handle_add_account }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_account).with('DOUG', 'secret', 'wizard')
+    it 'exits 1 when ACCOUNT is missing' do
+      expect(run_add_account(['-aa'], stdin: StringIO.new)).to eq(1)
+      expect(cli_password).not_to have_received(:add_account)
     end
   end
 

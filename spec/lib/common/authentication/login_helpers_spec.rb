@@ -503,7 +503,7 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
         --help --version --active-sessions --session-info
         --add-account --add-character --refresh-characters --convert-entries
         --change-account-password --change-master-password --recover-master-password
-        --change-encryption-mode --game-code --master-password
+        --change-encryption-mode --game-code --master-password --password-stdin
         --test --platinum
       ]
       help = ([nil] + Lich::Main::HelpText::HELP_TOPICS).map { |topic| Lich::Main::HelpText.render(topic) }.join("\n")

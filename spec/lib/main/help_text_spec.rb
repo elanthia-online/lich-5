@@ -35,6 +35,14 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--add-character ACCOUNT CHAR_NAME')
     end
 
+    it 'documents --add-account without a password argument' do
+      [described_class.render(nil), described_class.render('accounts')].each do |output|
+        expect(output).not_to match(/--add-account \S+ \S*PASSWORD/)
+      end
+      expect(described_class.render('accounts')).to include('--add-account ACCOUNT [--password-stdin] [--frontend FRONTEND]')
+      expect(described_class.render('accounts')).to include(%(printf '%s\\n' "$PASSWORD" | lich --add-account MYACCOUNT --password-stdin))
+    end
+
     it 'lists every game code --game-code accepts' do
       output = described_class.render('accounts')
 

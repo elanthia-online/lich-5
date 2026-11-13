@@ -18,6 +18,68 @@ module Lich
       # @example
       #   Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'NewPass123')
       module CLIPassword
+        # Raised by {read_secret} when no secret can be read. The message is
+        # user-facing and never contains the secret.
+        class SecretInputError < StandardError; end
+
+        # Reads a secret without it ever appearing on the command line.
+        #
+        # With +from_stdin+ (the caller saw --password-stdin) one line is read
+        # from +input+ and only its line ending is removed, so leading and
+        # trailing spaces are kept as the GUI keeps them. Without it, the
+        # secret is only read from a terminal, with echo off: a pipe is never
+        # taken as a secret unless the caller asked for that, because a
+        # launcher or wrapper that leaves stdin attached to something else
+        # would otherwise send unrelated bytes to the auth server.
+        #
+        # The prompt is written to +output+, not passed to IO#getpass: getpass
+        # writes its prompt and closing newline to $stderr, which lib/init.rb
+        # has already pointed at the debug log by the time CLI commands run.
+        #
+        # @param prompt [String] prompt shown on the terminal
+        # @param from_stdin [Boolean] true when --password-stdin was given
+        # @param input [IO] where to read from (defaults to $stdin)
+        # @param output [IO] where the terminal prompt goes (defaults to $stdout)
+        # @return [String] the secret, without its trailing line ending
+        # @raise [SecretInputError] at end-of-input, on an empty secret, or when
+        #   there is no terminal to prompt on and +from_stdin+ is false
+        def self.read_secret(prompt, from_stdin:, input: $stdin, output: $stdout)
+          unless from_stdin || input.tty?
+            raise SecretInputError, 'No terminal to prompt for the password on. ' \
+                                    'To read it from a pipe, add --password-stdin.'
+          end
+
+          secret = if input.tty?
+                     read_hidden_line(prompt, input, output)
+                   else
+                     input.gets&.chomp
+                   end
+          raise SecretInputError, 'Unable to read password from STDIN / terminal' if secret.nil?
+          # Matches the GUI's Add Account tab, which refuses an empty password
+          # rather than sending one to the auth server.
+          raise SecretInputError, 'Password cannot be empty' if secret.empty?
+
+          secret
+        end
+
+        # @api private
+        # Reads one line from a terminal with echo off.
+        #
+        # @param prompt [String] prompt shown before reading
+        # @param input [IO] the terminal
+        # @param output [IO] where the prompt goes
+        # @return [String, nil] the line without its line ending, or nil at end-of-input
+        def self.read_hidden_line(prompt, input, output)
+          require 'io/console'
+          output.print prompt
+          output.flush
+          input.getpass
+        ensure
+          # Echo was off, so the Enter the user pressed never reached the screen.
+          output.puts
+        end
+        private_class_method :read_hidden_line
+
         # Changes account password in entry.yaml
         # Handles all encryption modes (plaintext, standard, enhanced)
         #
@@ -109,8 +171,12 @@ module Lich
         # @param account [String] Account username
         # @param password [String] Account password
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @param prompt_frontend [Boolean] false when stdin has already been
+        #   consumed (the password came in with --password-stdin), so asking for
+        #   a frontend would only hit end-of-input; the frontend is then left
+        #   unset, the same as pressing Enter at the prompt
         # @return [Integer] Exit code (0=success, 1=error, 2=auth failed)
-        def self.add_account(account, password, frontend = nil)
+        def self.add_account(account, password, frontend = nil, prompt_frontend: true)
           # Normalize account name to uppercase (accounts are stored uppercase)
           account = account.upcase
 
@@ -160,8 +226,7 @@ module Lich
                                     puts "Using predominant frontend: #{predominant}"
                                     Lich.log "info: Using predominant frontend: #{predominant}"
                                     predominant
-                                  else
-                                    # Prompt user
+                                  elsif prompt_frontend
                                     prompt_for_frontend
                                   end
                                 end
