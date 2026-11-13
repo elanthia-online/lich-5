@@ -141,13 +141,37 @@ RSpec.describe Lich::ZipArchive do
       'final and medial sigma' => [u('<3C2>.gem'), u('<3C3>.gem')],
       'long s and s'           => [u('<17F>.gem'), 's.gem'],
       'micro sign and mu'      => [u('<B5>.gem'), u('<3BC>.gem')],
-      'sharp s and ss'         => [u('<DF>.gem'), 'ss.gem']
+      'sharp s and ss'         => [u('<DF>.gem'), 'ss.gem'],
+      # Folding U+01F0 leaves the caron before the dot below; only a second
+      # NFC puts the marks back in canonical order.
+      'out-of-order marks'     => [u('<1F0><323>.gem'), u('J<323><30C>.gem')]
     }.each do |label, (first, second)|
       it "refuses #{label} as a duplicate and writes nothing" do
         write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
 
         expect { described_class.extract(zip_path, destination) }
           .to raise_error(described_class::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    # The key follows Unicode's default folding, which keeps the Turkic
+    # dotless i and dotted capital I apart from i and I. NTFS compares names
+    # through its own upcase table instead, so on each file system CI runs
+    # on (Windows included), any of these pairs it stores as one file must
+    # be refused. A pair the file system keeps apart is reported as pending.
+    [%w[<131> I], %w[<131> i], %w[<130> i], %w[<130> I]].each do |first, second|
+      it "refuses #{u(first)}.gem and #{u(second)}.gem whenever this file system stores them as one file" do
+        names = [u("#{first}.gem"), u("#{second}.gem")]
+        merged = Dir.mktmpdir do |dir|
+          names.each { |name| File.write(File.join(dir, name), name) }
+          Dir.children(dir).size == 1
+        end
+        skip "this file system keeps #{names.join(' and ')} apart" unless merged
+
+        write_zip(names.map { |name| { name: name, data: name, flags: 0x0800 } })
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(described_class::Error, /duplicate archive entry/)
         expect(Dir.exist?(destination)).to be(false)
       end
     end

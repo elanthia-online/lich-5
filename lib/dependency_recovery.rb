@@ -1025,13 +1025,17 @@ module Lich
       # file must not need anything outside that set.
       # The require stays outside the rescued block below: a rescue clause
       # naming ZipArchive::Error would itself raise NameError if the file
-      # failed to load. LoadError is not a StandardError, so left alone it
-      # would also escape #recover's boot guard and GemCheck (a silent crash
-      # under rubyw); it is reported as a recovery Error naming the file.
+      # failed to load. A missing file (LoadError) or one cut short on disk,
+      # say by an interrupted update (SyntaxError), raises a ScriptError,
+      # which is not a StandardError: left alone it would escape #recover's
+      # boot guard and GemCheck (a silent crash under rubyw). Either is
+      # reported as a recovery Error naming the file.
       begin
         require_relative 'zip_archive'
       rescue LoadError => e
-        raise Error, "Recovery cannot extract archives: #{missing_library(e)} is missing (#{e.message})"
+        raise Error, "Recovery cannot extract archives: #{library_path(e)} is missing (#{e.message})"
+      rescue ScriptError => e
+        raise Error, "Recovery cannot extract archives: #{library_path(e)} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
       end
       begin
         ZipArchive.extract(zip_path, destination)
@@ -1044,11 +1048,11 @@ module Lich
       end
     end
 
-    # @param error [LoadError]
+    # @param error [ScriptError]
     # @return [String] the file +error+ could not load, relative to the
     #   directory above lib/ when it lies inside it (lib/zip_archive.rb)
-    def missing_library(error)
-      return 'a recovery library' unless error.path
+    def library_path(error)
+      return 'a recovery library' unless error.respond_to?(:path) && error.path
 
       path = error.path.end_with?('.rb') ? error.path : "#{error.path}.rb"
       top = "#{File.dirname(__dir__)}/"
