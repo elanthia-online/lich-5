@@ -487,6 +487,22 @@ RSpec.describe Lich::Util::Update::GemPackages do
         other.join
       end
 
+      it "removes only this gem's older kept .gem files, not another gem's named like it" do
+        dir = described_class.artifact_dir
+        FileUtils.mkdir_p(dir)
+        File.write(File.join(dir, 'tiny-1.0.0.gem'), 'old tiny')
+        File.write(File.join(dir, 'tiny-2-1.0.0.gem'), 'gem tiny-2, version 1.0.0')
+        # Past 2, where "2-1.0.0" read as a tiny version (a 2.x prerelease)
+        # counts as older.
+        allow(client).to receive(:fetch_github_json).and_return(release_with('tiny-3.0.0.gem'))
+        serve(build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, version: '3.0.0'))
+
+        expect(manager.sync_gem('x/y')).to eq(:updated)
+        expect(File).not_to exist(File.join(dir, 'tiny-1.0.0.gem'))
+        expect(File).to exist(File.join(dir, 'tiny-2-1.0.0.gem'))
+        expect(File).to exist(File.join(dir, 'tiny-3.0.0.gem'))
+      end
+
       it 'uninstalls older versions only after the new one is installed and deployed' do
         stub_const('DATA_DIR', File.join(tmp, 'data'))
         old = build_gem(metadata: { 'lich_install' => 'tiny/install#Tiny::Install' }, version: '1.0.0')
@@ -842,6 +858,19 @@ RSpec.describe Lich::Util::Update::GemPackages do
                                   "[lich5-update: x/y: tiny 1.2.0 has no 'lich_install' metadata, so Lich cannot install its scripts; not installed.]",
                                   "[lich5-update: 'x/y' was not registered.]"
                                 ])
+        end
+
+        it 'tells a player who runs --update-gem that the release was already refused' do
+          serve(no_entry_point)
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          printed.clear
+          allow_any_instance_of(URI::HTTP).to receive(:open).and_raise('must not download')
+
+          expect(manager.sync_gem('x/y')).to eq(:refused)
+          expect(printed).to be_empty
+
+          manager.update_gem('x/y')
+          expect(printed).to eq(['[lich5-update: x/y: tiny 1.2.0 was refused earlier; it is checked again when the release, its asset, or Ruby changes.]'])
         end
 
         it 'records the refusal and does not download the same release again' do

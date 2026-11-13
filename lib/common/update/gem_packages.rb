@@ -331,7 +331,14 @@ module Lich
           # This exact release was downloaded and refused for its contents
           # before, under this Ruby. It is not downloaded again until the
           # release, its asset, or the Ruby changes; --gems shows it.
-          return :refused if self.class.all.dig(owner_repo, 'refused') == refusal_signature(asset)
+          if self.class.all.dig(owner_repo, 'refused') == refusal_signature(asset)
+            # Logins stay quiet; a player who asked for it hears why nothing happened.
+            if consent
+              StatusReporter.respond_mono("[lich5-update: #{owner_repo}: #{asset[:name]} #{asset[:version]} was refused earlier; " \
+                                          'it is checked again when the release, its asset, or Ruby changes.]')
+            end
+            return :refused
+          end
 
           state, = local_state(owner_repo, asset)
           return :current if state == :current
@@ -728,10 +735,15 @@ module Lich
           end
           Gem::Specification.reset
 
-          # The kept .gem files of older versions are no longer needed for a retry.
+          # The kept .gem files of older versions are no longer needed for a
+          # retry. The glob also matches other gems whose names start with
+          # this one (tiny-2-1.0.0.gem for tiny), so each file name is parsed
+          # the way release assets are, and only this gem's files count.
           Dir[File.join(self.class.artifact_dir, "#{name}-*.gem")].each do |path|
-            kept = File.basename(path, '.gem').delete_prefix("#{name}-")
-            FileUtils.rm_f(path) if Gem::Version.correct?(kept) && Gem::Version.new(kept) < version
+            m = ASSET_NAME.match(File.basename(path))
+            next unless m && m[:name] == name && Gem::Version.correct?(m[:version])
+
+            FileUtils.rm_f(path) if Gem::Version.new(m[:version]) < version
           end
         end
 
