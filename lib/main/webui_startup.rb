@@ -10,9 +10,10 @@ module Lich
       # Prepares native hosting before either graphical login or script startup.
       # Disabled presentation and an explicit browser perform no native build.
       # A failed macOS build uses a discovered browser for this session, and a
-      # remembered failure skips the build. Without a browser every start retries
-      # the build, and a failure ends startup before a window or script can
-      # consume a missing helper.
+      # remembered failure skips unchanged sources and toolchain. Without a
+      # browser every start retries the build, and a failure ends startup before a window or script can
+      # consume a missing helper. Fatal output names the debug log and recovery
+      # options for an explicit browser or disabled graphical presentation.
       # @return [void]
       # @raise [SystemExit] status 1 when neither helper nor browser is available
       def prepare
@@ -24,8 +25,6 @@ module Lich
         fallback = Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
         Lich::WebUI::NativeHost.prepare!(retry_failed: fallback.nil?)
       rescue Lich::WebUI::Error => error
-        # Errors before discovery (an invalid browser override) still look for a fallback.
-        fallback ||= Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
         if fallback
           Lich::WebUI::BrowserLauncher.native_unavailable = true
           report_degraded(fallback) unless error.is_a?(Lich::WebUI::NativeHost::BuildFailure) && error.skipped
@@ -33,7 +32,9 @@ module Lich
         end
 
         debug_log = Lich::WebUI::NativeHost.debug_log_path || 'the startup debug log'
-        report_fatal("#{error.message}. See #{debug_log} and contact Elanthia Online support.")
+        report_fatal("#{error.message}. See #{debug_log} and contact Elanthia Online support. " \
+                     'To start anyway, set LICH_WEBUI_BROWSER to the Chrome, Edge, Brave or Arc application ' \
+                     '(other browsers are not actively supported), or start with --no-gui.')
         raise SystemExit.new(1)
       end
 

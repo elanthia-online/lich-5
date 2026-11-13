@@ -9,19 +9,21 @@ require 'timeout'
 require_relative '../../../lib/main/webui_startup'
 
 RSpec.describe Lich::WebUI::NativeHost do
-  let(:failure_marker) { File.join(@directory, 'webui-helper-build-failed.json') }
+  let(:data_directory) { File.join(@directory, 'data') }
+  let(:failure_marker) { File.join(data_directory, 'webui-helper-build-failed.json') }
+  let(:toolchain_identity) { 'Apple Swift version fixture' }
   let(:source_paths) do
     %w[Host.swift ExternalLinks.swift Info.plist window.js].map { |name| File.join(@directory, "source-#{name}") } + [build_script]
   end
-  let(:executable) { File.join(@directory, 'helper.exe') }
+  let(:executable) { File.join(@directory, 'helper', 'helper.exe') }
   let(:marker) { File.join(@directory, 'builds') }
-  let(:lock_path) { File.join(@directory, 'prepare.lock') }
+  let(:lock_path) { File.join(@directory, 'lock', 'prepare.lock') }
   let(:build_script) { File.join(@directory, 'build.rb') }
   let(:notification_script) { File.join(@directory, 'notify.rb') }
   let(:notification_marker) { File.join(@directory, 'notifications') }
   let(:notification_command) { [RbConfig.ruby, notification_script, notification_marker] }
-  let(:bridge) { File.join(@directory, 'window.js') }
-  let(:info) { File.join(@directory, 'Info.plist') }
+  let(:bridge) { File.join(File.dirname(executable), 'window.js') }
+  let(:info) { File.join(File.dirname(executable), 'Info.plist') }
   let(:build_command) { [RbConfig.ruby, build_script, executable, marker, bridge, info] }
   let(:build_source) do
     <<~RUBY
@@ -47,7 +49,9 @@ RSpec.describe Lich::WebUI::NativeHost do
 
   before do
     allow(Lich).to receive(:log)
-    stub_const('DATA_DIR', @directory)
+    FileUtils.mkdir_p([data_directory, File.dirname(executable)])
+    stub_const('DATA_DIR', data_directory)
+    allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return([toolchain_identity, nil])
     source_paths[0...-1].each { |path| File.write(path, "fixture source #{File.basename(path)}") }
     File.write(notification_script, "File.open(ARGV.fetch(0), 'a') { |file| file.puts ARGV.fetch(1) }\n")
     File.write(build_script, build_source)
@@ -62,6 +66,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     expect(File.executable?(executable)).to be(true)
     expect(described_class.prepare!(platform: 'darwin')).to be(true)
     expect(File.readlines(marker)).to eq(["built\n"])
+    expect(Open3).not_to have_received(:capture2e)
   end
 
   it 'logs and detaches the desktop notice before starting the build' do
@@ -131,10 +136,52 @@ RSpec.describe Lich::WebUI::NativeHost do
     File.chmod(0o755, executable)
     File.write(bridge, 'existing bridge')
     File.write(info, 'existing bundle metadata')
+    File.write(failure_marker, '{}')
 
     expect(described_class.prepare!(platform: 'darwin')).to be(true)
     expect(File.read(executable)).to eq('existing helper')
     expect(File.exist?(marker)).to be(false)
+    expect(File.exist?(failure_marker)).to be(false)
+    expect(Open3).not_to have_received(:capture2e)
+  end
+
+  it 'clears a remembered failure when another startup completes the helper before the lock recheck' do
+    File.write(failure_marker, '{}')
+    allow(described_class).to receive(:complete?).and_wrap_original do |original, helper|
+      ready = original.call(helper)
+      unless ready
+        File.write(executable, 'concurrently completed helper')
+        File.chmod(0o755, executable)
+        File.write(bridge, 'concurrently completed bridge')
+        File.write(info, 'concurrently completed metadata')
+      end
+      ready
+    end
+
+    expect(described_class.prepare!(platform: 'darwin')).to be(true)
+
+    expect(File.exist?(marker)).to be(false)
+    expect(File.exist?(failure_marker)).to be(false)
+    expect(Open3).not_to have_received(:capture2e)
+  end
+
+  it 'accepts a complete helper when another startup already removed the failure marker' do
+    File.write(executable, 'existing helper')
+    File.chmod(0o755, executable)
+    File.write(bridge, 'existing bridge')
+    File.write(info, 'existing bundle metadata')
+    File.write(failure_marker, '{}')
+    allow(File).to receive(:delete).and_call_original
+    allow(File).to receive(:delete).with(failure_marker).and_wrap_original do |original, path|
+      original.call(path)
+      original.call(path)
+    end
+
+    expect(described_class.prepare!(platform: 'darwin')).to be(true)
+
+    expect(File.exist?(failure_marker)).to be(false)
+    expect(File.exist?(marker)).to be(false)
+    expect(Open3).not_to have_received(:capture2e)
   end
 
   context 'when the installed helper is shared without a writable lock' do
@@ -232,7 +279,7 @@ RSpec.describe Lich::WebUI::NativeHost do
       expect(File.exist?(executable)).to be(false)
     end
 
-    it 'records the five-source SHA-256 fingerprint and failed build status in DATA_DIR' do
+    it 'records the combined source and toolchain fingerprint and failed build status in DATA_DIR' do
       expect { described_class.prepare!(platform: 'darwin') }.to raise_error(described_class::BuildFailure)
 
       expected = Digest::SHA256.new
@@ -241,11 +288,14 @@ RSpec.describe Lich::WebUI::NativeHost do
         expected << File.basename(path) << "\0" << contents.bytesize.to_s << "\0" << contents
       end
       record = JSON.parse(File.read(failure_marker))
-      expect(record.fetch('fingerprint')).to eq(expected.hexdigest)
+      expect(record.fetch('source_fingerprint')).to eq(expected.hexdigest)
+      expect(record.fetch('fingerprint')).to eq(Digest::SHA256.hexdigest("#{expected.hexdigest}\0#{toolchain_identity}"))
       expect(record.fetch('build_exit_status')).to eq(1)
       expect(Time.iso8601(record.fetch('time'))).to be_within(5).of(Time.now)
       expect(record).to have_key('debug_log_path')
-      expect(File.exist?(File.join(File.dirname(executable), 'build', 'webui-helper-build-failed.json'))).to be(false)
+      expect(File.exist?(File.join(File.dirname(executable), 'webui-helper-build-failed.json'))).to be(false)
+      expect(File.exist?(File.join(File.dirname(lock_path), 'webui-helper-build-failed.json'))).to be(false)
+      expect(Open3).to have_received(:capture2e).with('xcrun', 'swiftc', '--version').once
     end
   end
 
@@ -289,7 +339,7 @@ RSpec.describe Lich::WebUI::NativeHost do
     RUBY
     child = <<~RUBY
       require #{File.expand_path('../../../lib/webui/native_host', __dir__).dump}
-      DATA_DIR = #{@directory.dump}
+      DATA_DIR = #{data_directory.dump}
       host = Lich::WebUI::NativeHost
       def Lich.log(message)
         File.open(ARGV.fetch(1), 'a') { |file| file.puts message }
@@ -468,6 +518,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         allow(launcher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
 
         expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        expect(launcher).to have_received(:app_browser_path).once
 
         message = 'Building the macOS WebUI helper failed. Lich will start in degraded mode with Google Chrome; windows will not stay on top.'
         expect(Lich).to have_received(:log).with(message).once
@@ -482,7 +533,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
       it 'skips a repeated failed source fingerprint with one log line and no new dialog or build' do
         allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
-        Lich::Main::WebUIStartup.prepare
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         Lich::WebUI::BrowserLauncher.native_unavailable = false
         notices = []
         allow(Lich).to receive(:log) { |message| notices << message }
@@ -491,8 +542,72 @@ RSpec.describe Lich::WebUI::NativeHost do
 
         expect(described_class).to have_received(:system).once
         expect(Lich::Main::WebUIStartup).to have_received(:system).once
-        expect(notices).to eq(['macOS WebUI helper build skipped: unchanged sources previously failed; using browser degraded mode if available.'])
+        expect(Open3).to have_received(:capture2e).twice
+        expect(notices).to eq(['macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'])
         expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to be_nil
+      end
+
+      it 'retries once after the toolchain identity changes and remembers the new failure' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return(['repaired Swift compiler', nil])
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        updated = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(updated).not_to eq(original)
+        expect(described_class).to have_received(:system).twice
+        expect(Lich::Main::WebUIStartup).to have_received(:system).twice
+        expect(Open3).to have_received(:capture2e).exactly(4).times
+      end
+
+      %w[unsuccessful missing].each do |failure|
+        it "retries once after #{failure} toolchain discovery becomes available" do
+          allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+          probe = allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version')
+          if failure == 'missing'
+            probe.and_raise(Errno::ENOENT, 'xcrun')
+          else
+            probe.and_return(['xcrun: compiler unavailable', nil])
+          end
+          expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+          original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+          Lich::WebUI::BrowserLauncher.native_unavailable = false
+          expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+          allow(Open3).to receive(:capture2e).with('xcrun', 'swiftc', '--version').and_return([toolchain_identity, nil])
+          Lich::WebUI::BrowserLauncher.native_unavailable = false
+
+          expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+          updated = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+          Lich::WebUI::BrowserLauncher.native_unavailable = false
+          expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+          expect(updated).not_to eq(original)
+          expect(described_class).to have_received(:system).twice
+          expect(Open3).to have_received(:capture2e).exactly(4).times
+        end
+      end
+
+      it 'retries once to migrate a legacy source-only failure marker' do
+        allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+        source = described_class.source_fingerprint(described_class::HELPERS.fetch(:macos))
+        File.write(failure_marker, JSON.generate(fingerprint: source))
+
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+        migrated = JSON.parse(File.read(failure_marker))
+        Lich::WebUI::BrowserLauncher.native_unavailable = false
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+
+        expect(migrated.fetch('source_fingerprint')).to eq(source)
+        expect(migrated.fetch('fingerprint')).not_to eq(source)
+        expect(described_class).to have_received(:system).once
+        expect(Open3).to have_received(:capture2e).twice
       end
 
       it 'reports browser capabilities and presentation degradations after native preparation falls back' do
@@ -504,7 +619,7 @@ RSpec.describe Lich::WebUI::NativeHost do
         end)
         expect(runtime.presentation_support).to include(always_on_top: true, borderless: true, hidden: true, minimized: true)
 
-        Lich::Main::WebUIStartup.prepare
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         runtime.refresh(page)
 
         expect(described_class.platform).to be_nil
@@ -524,8 +639,8 @@ RSpec.describe Lich::WebUI::NativeHost do
       5.times do |index|
         it "retries after changing source input #{index + 1} and clears the marker on success" do
           allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
-          Lich::Main::WebUIStartup.prepare
-          failed = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
+          expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
+          failed = JSON.parse(File.read(failure_marker)).fetch('source_fingerprint')
           File.open(source_paths.fetch(index), 'a') { |file| file.write('\nchanged source') }
           Lich::WebUI::BrowserLauncher.native_unavailable = false
           allow(described_class).to receive(:system).with(*build_command, out: $stderr, err: $stderr) do
@@ -540,6 +655,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
           expect(described_class.source_fingerprint(described_class::HELPERS.fetch(:macos))).not_to eq(failed)
           expect(described_class).to have_received(:system).twice
+          expect(Open3).to have_received(:capture2e).once
           expect(File.exist?(failure_marker)).to be(false)
           expect(File.executable?(executable)).to be(true)
           expect(Lich::WebUI::BrowserLauncher.native_host('darwin', nil)).to eq(:macos)
@@ -548,7 +664,7 @@ RSpec.describe Lich::WebUI::NativeHost do
 
       it 'retries once after deleting the marker even when source contents are unchanged' do
         allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
-        Lich::Main::WebUIStartup.prepare
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         File.delete(failure_marker)
         Lich::WebUI::BrowserLauncher.native_unavailable = false
 
@@ -561,11 +677,11 @@ RSpec.describe Lich::WebUI::NativeHost do
 
       it 'remembers a newly failed fingerprint after a source change and skips its next attempt' do
         allow(Lich::WebUI::BrowserLauncher).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
-        Lich::Main::WebUIStartup.prepare
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         original = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
         File.write(source_paths.first, 'updated source that still fails to build')
         Lich::WebUI::BrowserLauncher.native_unavailable = false
-        Lich::Main::WebUIStartup.prepare
+        expect { Lich::Main::WebUIStartup.prepare }.not_to raise_error
         updated = JSON.parse(File.read(failure_marker)).fetch('fingerprint')
         Lich::WebUI::BrowserLauncher.native_unavailable = false
 
@@ -577,7 +693,9 @@ RSpec.describe Lich::WebUI::NativeHost do
       end
 
       it 'exits only without a browser and names the exact debug file and Elanthia Online support' do
-        message = "error: macOS WebUI helper build failed. See #{$stderr.path} and contact Elanthia Online support."
+        message = "error: macOS WebUI helper build failed. See #{$stderr.path} and contact Elanthia Online support. " \
+                  'To start anyway, set LICH_WEBUI_BROWSER to the Chrome, Edge, Brave or Arc application ' \
+                  '(other browsers are not actively supported), or start with --no-gui.'
 
         expect { Lich::Main::WebUIStartup.prepare }
           .to raise_error(SystemExit) { |exit| expect(exit.status).to eq(1) }
@@ -589,7 +707,9 @@ RSpec.describe Lich::WebUI::NativeHost do
       it 'retries a remembered failure on every start without a browser and names that start\'s debug file' do
         expect { Lich::Main::WebUIStartup.prepare }.to raise_error(SystemExit)
         expect(File.exist?(failure_marker)).to be(true)
-        message = "error: macOS WebUI helper build failed. See #{$stderr.path} and contact Elanthia Online support."
+        message = "error: macOS WebUI helper build failed. See #{$stderr.path} and contact Elanthia Online support. " \
+                  'To start anyway, set LICH_WEBUI_BROWSER to the Chrome, Edge, Brave or Arc application ' \
+                  '(other browsers are not actively supported), or start with --no-gui.'
 
         expect { Lich::Main::WebUIStartup.prepare }
           .to raise_error(SystemExit) { |exit| expect(exit.status).to eq(1) }
