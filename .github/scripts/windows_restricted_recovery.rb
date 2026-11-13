@@ -62,8 +62,11 @@ module WindowsRestrictedRecovery
   ].freeze
   # Process-scope policy and parent Ruby/Bundler settings must not reach the
   # PowerShell probes or the code under test.
+  # PSModulePath: the job step runs under pwsh 7, whose module path a
+  # powershell.exe 5.1 child would inherit and then fail to load its own
+  # Microsoft.PowerShell.Security module. A player's Lich has none of these.
   SCRUBBED_ENV = %w[
-    PSExecutionPolicyPreference RUBYOPT RUBYLIB GEM_HOME GEM_PATH
+    PSModulePath PSExecutionPolicyPreference RUBYOPT RUBYLIB GEM_HOME GEM_PATH
     BUNDLER_SETUP BUNDLER_VERSION RUBYGEMS_GEMDEPS
   ].freeze
   OLD_ERROR = /Could not extract .+ \(PowerShell exit \d+\)/
@@ -248,7 +251,7 @@ module WindowsRestrictedRecovery
       return unless path
 
       lines = ['## Windows locked-down gem recovery', '', '| Phase | Check | Outcome |', '|---|---|---|']
-      @summary.each { |row| lines << "| #{row.map { |cell| cell.to_s.gsub('|', '\\|').gsub("\n", ' ') }.join(' | ')} |" }
+      @summary.each { |row| lines << "| #{row.map { |cell| cell.to_s.gsub(/[\\|]/) { |char| "\\#{char}" }.gsub("\n", ' ') }.join(' | ')} |" }
       lines << ''
       @warnings.each { |message| lines << "- warning: #{message}" }
       @failures.each { |message| lines << "- **failed:** #{message}" }
