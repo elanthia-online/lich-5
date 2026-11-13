@@ -78,8 +78,8 @@ module Lich
         tail_size = [file_size, END_RECORD_SIZE + MAX_COMMENT_SIZE].min
         file.seek(file_size - tail_size)
         tail = file.read(tail_size)
-        record_at = tail.rindex(END_OF_CENTRAL_DIRECTORY)
-        raise Error, 'not a ZIP archive (no end of central directory record)' unless record_at && tail.bytesize - record_at >= END_RECORD_SIZE
+        record_at = end_record_at(tail)
+        raise Error, 'not a ZIP archive (no end of central directory record)' unless record_at
 
         _signature, disk, directory_disk, disk_count, total_count, directory_size, directory_offset, _comment =
           tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
@@ -96,6 +96,28 @@ module Lich
         raise Error, 'central directory is truncated' unless directory && directory.bytesize == directory_size
 
         parse_central_directory(directory, total_count, record_offset)
+      end
+
+      # Finds the end of central directory record in the last bytes of the
+      # archive. The archive comment may itself contain the record's
+      # signature, so the last signature is not always the record: the record
+      # is the last signature whose declared comment length ends exactly at
+      # the end of the file. An archive with bytes after its comment, which
+      # unzip accepts with a warning, has no such candidate; there the last
+      # signature with a whole record after it is used, as before.
+      # @param tail [String] the last bytes of the archive
+      # @return [Integer, nil] offset of the record in +tail+
+      def end_record_at(tail)
+        fallback = nil
+        search_at = tail.bytesize - END_RECORD_SIZE
+        while search_at >= 0 && (candidate = tail.rindex(END_OF_CENTRAL_DIRECTORY, search_at))
+          fallback ||= candidate
+          comment_size = tail.byteslice(candidate + END_RECORD_SIZE - 2, 2).unpack1('v')
+          return candidate if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
+
+          search_at = candidate - 1
+        end
+        fallback
       end
 
       # @param directory [String] binary central directory

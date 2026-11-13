@@ -157,4 +157,14 @@ RSpec.describe Lich::Archive do
       expect { described_class.extract_tar_gz_root(tarball, destination) }.to raise_error(described_class::Error, /found lich\.rbw/)
     end
   end
+
+  # Lich::Archive::Zip replaced lib/zip_archive.rb. Merging main into this
+  # branch after the reader's own PR was squash-merged would bring the old
+  # file and its spec back without a conflict; the old spec would still
+  # pass, and Ruby4Lich5 would seal the dead file as part of the reader.
+  it 'leaves no copy of the old single-file ZIP reader' do
+    root = File.expand_path('../..', __dir__)
+
+    expect(%w[lib/zip_archive.rb spec/lib/zip_archive_spec.rb].select { |path| File.exist?(File.join(root, path)) }).to eq([])
+  end
 end

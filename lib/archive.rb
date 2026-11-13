@@ -177,10 +177,20 @@ module Lich
     end
 
     # The part of +path+ below +root+, in the form two names take when a file
-    # system would store them as one file: Unicode NFC (macOS normalises
-    # names, so a decomposed and a precomposed e-acute are one file), then
-    # full case folding (Windows and macOS ignore case, and fold final and
-    # medial sigma, long s and s, and micro sign and mu together).
+    # system would store them as one file. macOS normalises names, so a
+    # decomposed and a precomposed e-acute are one file; Windows and macOS
+    # ignore case, and fold final and medial sigma, long s and s, and micro
+    # sign and mu together. The key is Unicode's canonical caseless form,
+    # NFD(fold(NFD(name))) (Unicode 3.13, D145):
+    # - The first NFD has to come before folding. NFC would keep a
+    #   precomposed letter with iota subscript (U+1FB3) whole, and folding
+    #   it then puts the iota ahead of any mark that follows, so U+1FB3
+    #   with a diaeresis and its uppercase spelling would get different
+    #   keys although APFS stores them as one file. In NFD the marks are
+    #   already in canonical order, which also covers j with caron (U+01F0)
+    #   followed by a dot below.
+    # - The final NFD completes the standard form. No name tried, including
+    #   every code point with and without a following mark, needs it.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
@@ -197,12 +207,7 @@ module Lich
     # @return [String]
     def layout_key(path, root)
       below = path.byteslice(root.bytesize..).force_encoding(Encoding::UTF_8)
-      # Folding can leave combining marks out of canonical order: j with
-      # caron (U+01F0) folds to j and a combining caron, so U+01F0 followed
-      # by a dot below folds to j, caron, dot below, while J, dot below,
-      # caron folds to j, dot below, caron. Both are one name on APFS; the
-      # second NFC reorders the marks so their keys match.
-      below.unicode_normalize(:nfc).downcase(:fold).unicode_normalize(:nfc)
+      below.unicode_normalize(:nfd).downcase(:fold).unicode_normalize(:nfd)
     end
   end
 end

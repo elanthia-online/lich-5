@@ -130,9 +130,11 @@ RSpec.describe Lich::Archive::TarGz do
     'long s and s'           => [u('r/<17F>.rb'), 'r/s.rb'],
     'micro sign and mu'      => [u('r/<B5>.rb'), u('r/<3BC>.rb')],
     'sharp s and ss'         => [u('r/<DF>.rb'), 'r/ss.rb'],
-    # Folding U+01F0 leaves the caron before the dot below; only a second
-    # NFC puts the marks back in canonical order.
-    'out-of-order marks'     => [u('r/<1F0><323>.rb'), u('r/J<323><30C>.rb')]
+    # Folding U+01F0 after NFC leaves the caron before the dot below.
+    'out-of-order marks'     => [u('r/<1F0><323>.rb'), u('r/J<323><30C>.rb')],
+    # NFC keeps the iota subscript composed, and folding then puts the
+    # iota ahead of the diaeresis; only NFD before folding matches them.
+    'iota subscript'         => [u('r/<1FB3><308>.rb'), u('r/<391><308><399>.rb')]
   }.each do |label, (first, second)|
     it "refuses #{label} as a duplicate and writes nothing" do
       write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])
@@ -244,6 +246,12 @@ RSpec.describe Lich::Archive::TarGz do
       refuses([first, { name: 'r/PaxHeaders/x.rb', type: :raw, typeflag: 'x', data: "not a record\n" }], /malformed pax header/)
     end
 
+    # A length too large for a native integer would otherwise raise
+    # RangeError from byteslice instead of the named refusal.
+    it 'refuses a pax record whose length runs past the header' do
+      refuses([first, { name: 'r/PaxHeaders/x.rb', type: :raw, typeflag: 'x', data: "9999999999999999999 x=y\n" }], /malformed pax header/)
+    end
+
     it 'skips a per-file pax header that does not rename the entry' do
       write_tarball([pax('x', { 'mtime' => '1700000000.5', 'uname' => 'lich' }), first])
 
@@ -292,6 +300,32 @@ RSpec.describe Lich::Archive::TarGz do
 
     it 'refuses junk after the gzip member' do
       refuses(TarGzBuilder.gzip(tar) + 'junk', /gzip archive has data after its first member/)
+    end
+
+    # GzipReader reads the file 2 KiB at a time. A member ending exactly on
+    # that boundary leaves nothing in #unused, so only the file still
+    # holds what follows it.
+    it 'refuses junk after a gzip member that ends on the read boundary' do
+      unpadded = TarGzBuilder.gzip(tar, name: 'a').bytesize
+      member = TarGzBuilder.gzip(tar, name: 'a' * (1 + ((2048 - (unpadded % 2048)) % 2048)))
+      expect(member.bytesize % 2048).to eq(0)
+
+      refuses(member + 'junk', /gzip archive has data after its first member/)
+    end
+
+    it 'refuses junk after zero padding after the gzip member' do
+      refuses(TarGzBuilder.gzip(tar) + ("\0" * 20_000) + 'junk', /gzip archive has data after its first member/)
+    end
+
+    # bsdtar (macOS's /usr/bin/tar) pads to its block size when it writes
+    # to a pipe: tar -czf - ... > f.tar.gz.
+    it 'extracts a gzip member followed by zero padding, as bsdtar writes it to a pipe' do
+      member = TarGzBuilder.gzip(tar)
+      File.binwrite(tarball, member + ("\0" * (10_240 - member.bytesize)))
+
+      described_class.extract(tarball, destination)
+
+      expect(File.read(File.join(destination, 'r/lib/version.rb'))).to eq(version)
     end
 
     it 'refuses data after the end blocks' do

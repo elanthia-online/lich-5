@@ -50,9 +50,14 @@ module TarGzBuilder
   # @param bytes [String]
   # @param level [Integer]
   # @return [String] one gzip member holding +bytes+
-  def gzip(bytes, level: Zlib::DEFAULT_COMPRESSION)
+  # @param name [String, nil] original file name for the gzip header, which
+  #   also sets the member's length exactly
+  def gzip(bytes, level: Zlib::DEFAULT_COMPRESSION, name: nil)
     gzip = StringIO.new(+''.b)
-    Zlib::GzipWriter.wrap(gzip, level) { |gz| gz.write(bytes) }
+    Zlib::GzipWriter.wrap(gzip, level) do |gz|
+      gz.orig_name = name if name
+      gz.write(bytes)
+    end
     gzip.string
   end
 

@@ -119,4 +119,49 @@ RSpec.describe 'reviewed startup policy files' do
     expect(raised).to eq('Lich::DependencyRecovery::Error')
     expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb cannot be loaded (SyntaxError: ')
   end
+
+  # Cut mid-word, the reader raises NameError as it loads instead.
+  it 'reports an archive reader cut mid-word as a recovery Error naming the file' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+      path = File.join(dir, 'lib/archive.rb')
+      source = File.binread(path)
+      File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
+    end
+    expect(status).to be_success, error
+    raised, message = output.lines(chomp: true)
+    expect(raised).to eq('Lich::DependencyRecovery::Error')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb cannot be loaded (NameError: ')
+  end
+
+  # An interrupted copy can also leave a reader file empty, or cut at a line
+  # boundary before its module is defined; that loads without error.
+  {
+    'lib/archive.rb'     => 'an empty archive facade',
+    'lib/archive/zip.rb' => 'an empty ZIP reader'
+  }.each do |emptied, label|
+    it "reports #{label} as a recovery Error naming #{emptied}" do
+      reader = tracked_reader.call.grep(reader_pattern)
+      output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+        File.binwrite(File.join(dir, emptied), '')
+      end
+      expect(status).to be_success, error
+      raised, message = output.lines(chomp: true)
+      expect(raised).to eq('Lich::DependencyRecovery::Error')
+      expect(message).to eq("Recovery cannot extract archives: #{emptied} loaded but does not define the archive reader")
+    end
+  end
+
+  # Cut just before it loads the formats, the facade defines Archive but
+  # not Archive::Zip.
+  it 'names the archive facade when it stops before loading the ZIP reader' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+      path = File.join(dir, 'lib/archive.rb')
+      source = File.binread(path)
+      File.binwrite(path, source.byteslice(0, source.index("require_relative 'archive/zip'")))
+    end
+    expect(status).to be_success, error
+    expect(output.lines(chomp: true).last).to eq('Recovery cannot extract archives: lib/archive.rb loaded but does not define the archive reader')
+  end
 end

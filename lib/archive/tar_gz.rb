@@ -115,8 +115,8 @@ module Lich
       # and length. An update tarball has no other checksum (RubyGems does
       # not verify the tar header checksum either), so a corrupt download
       # must fail here, in the validation pass, before anything is written.
-      # GzipReader reads only the first member, so data after it is refused
-      # too rather than ignored.
+      # GzipReader reads only the first member, so data after it, other than
+      # zero padding, is refused too rather than ignored.
       # @param gzip [Zlib::GzipReader]
       # @param file [File] the file +gzip+ reads
       # @return [void]
@@ -129,7 +129,15 @@ module Lich
         while (chunk = gzip.read(CHUNK_SIZE))
           raise Error, 'tar archive has data after its end blocks' if chunk.match?(/[^\0]/n)
         end
-        raise Error, 'gzip archive has data after its first member' if gzip.unused || !file.eof?
+        # bsdtar pads its compressed output with zeros to its block size when
+        # it writes to a pipe, so zeros after the member are allowed. Anything
+        # else, including a second member (which starts 1f 8b), is refused.
+        # GzipReader keeps what it read past the member in #unused; the rest
+        # is still in the file, which is all that holds it when the member
+        # ends on GzipReader's read boundary.
+        trailing = [gzip.unused]
+        trailing << chunk while (chunk = file.read(CHUNK_SIZE))
+        raise Error, 'gzip archive has data after its first member' if trailing.compact.any? { |bytes| bytes.match?(/[^\0]/n) }
       end
 
       # @param entry [Gem::Package::TarReader::Entry]
@@ -186,6 +194,8 @@ module Lich
           return nil unless digits
 
           length = digits.to_i
+          return nil if length > data.bytesize - position
+
           record = data.byteslice(position, length)
           return nil unless length > digits.bytesize && record && record.bytesize == length && record.end_with?("\n")
 
