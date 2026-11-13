@@ -44,6 +44,22 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
         expect(calls.first).to include('--new-window')
       end
 
+      %w[trailing-slash uppercase].each do |variant|
+        it "launches a #{variant} bundle path from the #{origin}", :macos_bundle_executable do
+          bundle = variant == 'uppercase' ? browser_bundle.sub(/\.app\z/, '.APP') : browser_bundle
+          File.rename(browser_bundle, bundle) if variant == 'uppercase'
+          path = variant == 'trailing-slash' ? "#{bundle}/" : bundle
+          options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => path } } : { browser_path: path, environment: {} }
+          calls = []
+
+          expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                      spawn: ->(*argv, **_options) { calls << argv; 42 },
+                                      waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+          expect(calls.first.first).to eq(File.join(bundle, 'Contents', 'MacOS', 'Fixture Browser'))
+        end
+      end
+
       it "names an unresolved bundle from the #{origin} in the failure message" do
         File.delete(bundle_browser)
         options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
@@ -53,8 +69,15 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
         expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
                                     spawn: ->(*) { spawned << true }, on_failure: ->(message) { failures << message })).to be(false)
 
-        expect(failures).to eq(["unable to open WebUI window: the browser application '#{browser_bundle}' has no executable; choose an installed browser application or its executable"])
+        detail = if origin == 'environment'
+                   "LICH_WEBUI_BROWSER names '#{browser_bundle}', which has no executable; fix or unset LICH_WEBUI_BROWSER"
+                 else
+                   "the configured browser application '#{browser_bundle}' has no executable; set the Browser path in the launcher Settings or clear it"
+                 end
+        expect(failures).to eq(["unable to open WebUI window: #{detail}"])
         expect(spawned).to be_empty
+        expect { described_class.command_for('http://127.0.0.1/', platform: 'darwin', **options) }
+          .to raise_error(Lich::WebUI::Error, detail)
       end
     end
 
