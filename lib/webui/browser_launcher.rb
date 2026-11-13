@@ -15,8 +15,9 @@ module Lich
   module WebUI
     # Opens an authenticated loopback URL in a native helper or a
     # dedicated browser app process. Automatic discovery finds Chrome (plus Edge
-    # on Windows and Chromium on macOS or Linux). Any other Chromium-based browser
-    # is chosen at the user's risk by an explicit path: the launcher Settings
+    # on Windows and Chromium on macOS or Linux). Chrome, Edge, Brave or Arc are
+    # supported; other browsers are not actively supported. A browser other than
+    # snap-packaged Chromium can be chosen by an explicit path: the launcher Settings
     # "Browser path", or LICH_WEBUI_BROWSER, which is read before any window
     # exists so a host without Chrome can still reach one. Precedence: explicit
     # argument, then LICH_WEBUI_BROWSER, then automatic discovery. Snap-packaged

@@ -88,18 +88,15 @@ RSpec.describe Lich::WebUI::NativeHost do
   end
 
   it 'kills a sleeping probe child after its leader exits and returns within the discovery bound' do
-    skip 'POSIX process groups and fork are unavailable on native Windows' if OS.windows?
+    skip 'POSIX process groups and a POSIX shell are unavailable on native Windows' if OS.windows?
     child_file = File.join(@directory, 'probe-child.pid')
     probe = nil
-    fixture = <<~RUBY
-      child = fork { sleep 30 }
-      File.write(ARGV.fetch(0), child.to_s)
-      exit! 0
-    RUBY
+    # A shell starts in milliseconds, so the child exists well inside the bound.
+    fixture = 'sleep 30 & echo $! > "$1"; exit 0'
     allow(Open3).to receive(:popen3).and_wrap_original do |original, *arguments, **options, &operation|
       expect(arguments).to eq(%w[xcrun swiftc --version])
       expect(options).to eq(pgroup: true)
-      original.call(RbConfig.ruby, '-e', fixture, child_file, **options) do |input, output, errors, waiter|
+      original.call('/bin/sh', '-c', fixture, 'sh', child_file, **options) do |input, output, errors, waiter|
         probe = waiter
         operation.call(input, output, errors, waiter)
       end
