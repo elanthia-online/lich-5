@@ -278,3 +278,34 @@ RSpec.describe 'Lich::Util::Update.request beta routing' do
     expect(help).to include('lich5-update --beta --library=<name>')
   end
 end
+
+RSpec.describe 'Lich::Util::Update.request gem package routing' do
+  let(:update) { Lich::Util::Update }
+  let(:manager) { instance_double(Lich::Util::Update::GemPackages) }
+  let(:messages) { [] }
+
+  before do
+    allow(update).to receive(:gem_packages_manager).and_return(manager)
+    allow(update).to receive(:respond) { |message = ''| messages << message }
+  end
+
+  it 'routes --add-gem, --update-gem, --remove-gem and --gems to the gem package manager' do
+    expect(manager).to receive(:add_gem).with('elanthia-online/eohunter')
+    expect(manager).to receive(:update_gem).with('someone/pkg')
+    expect(manager).to receive(:remove_gem).with('someone/pkg')
+    expect(manager).to receive(:list_gems)
+
+    update.request('--add-gem=elanthia-online/eohunter')
+    update.request('--update-gem=someone/pkg')
+    update.request('--remove-gem=someone/pkg')
+    update.request('--gems')
+  end
+
+  it 'documents --update-gem and the trusted-owner rule in the help text' do
+    update.request('--help')
+    help = messages.join("\n")
+
+    expect(help).to include('lich5-update --update-gem=owner/repo')
+    expect(help).to include('Releases install automatically only from trusted owners (elanthia-online)')
+  end
+end

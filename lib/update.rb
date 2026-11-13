@@ -116,6 +116,9 @@ module Lich
           help
         when /^--status\b/
           show_status
+        # Before --update, whose \b would also match --update-gem.
+        when /^--update-gem=(\S+)$/
+          gem_packages_manager.update_gem($1)
         when /^(?:--update|-u)\b/
           release_installer.download_release_update
         when /^--refresh\b/
@@ -131,8 +134,6 @@ module Lich
           custom_repos_manager.list_custom_repos
         when /^--add-gem=(\S+)$/
           gem_packages_manager.add_gem($1)
-        when /^--update-gem=(\S+)$/
-          gem_packages_manager.update_gem($1)
         when /^--remove-gem=(\S+)$/
           gem_packages_manager.remove_gem($1)
         when /^--gems$/
