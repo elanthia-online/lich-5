@@ -70,6 +70,11 @@ module LichCiDefaultWebUIAcceptance
     marker = File.join(directory, 'builds')
     lock = File.join(directory, 'prepare.lock')
     bridge = File.join(directory, 'window.js')
+    sources = %w[Host.swift ExternalLinks.swift Info.plist window.js build.sh].map do |name|
+      path = File.join(directory, "source-#{name}")
+      File.write(path, "fixture source #{name}")
+      path
+    end.freeze
     program = <<~'SH'
       #!/bin/sh
       printf '%s\n' '{"source":"unavailable","screens":[]}'
@@ -87,7 +92,7 @@ module LichCiDefaultWebUIAcceptance
     host.const_set(:EXECUTABLE, executable.freeze)
     host.send(:remove_const, :HELPERS)
     host.const_set(:HELPERS, {
-      macos: { name: 'macOS', executable: executable, resources: [bridge].freeze, lock: lock,
+      macos: { name: 'macOS', executable: executable, sources: sources, resources: [bridge].freeze, lock: lock,
                notification: [{ 'RUBYOPT' => nil }, RbConfig.ruby, notifier, notification].freeze,
                build: [{ 'RUBYOPT' => nil }, RbConfig.ruby, builder, executable, marker, bridge].freeze }.freeze,
     }.freeze)

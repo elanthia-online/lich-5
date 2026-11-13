@@ -57,9 +57,14 @@ not wait for work queued behind itself. Use the existing owner scheduler for
 supported deferred work, and asynchronous modal completion rather than blocking
 the dispatcher. Native modals require an explicit no-viewer policy; cancellation
 and owner shutdown are outcomes callers must handle. Viewer presence is checked
-once, when the modal opens: a window opened moments earlier counts as no viewer
-until it attaches, so `abort` and `default` complete immediately. Use
+when the modal opens, and again when the owner's last viewer is lost. A window
+opened moments earlier counts as no viewer until it attaches. Use
 `no_viewer: :wait` for a modal raised right after opening its window.
+
+Callbacks and background renders run on a host thread outside the script's own
+thread group, so `Script.current` is nil there and `fput`, `echo` and pause context
+are unavailable. Keep callbacks short and hand game I/O back to the script's own
+thread.
 
 Owner termination refuses new work, cancels modals and scheduled callbacks,
 revokes registered files, closes owned windows and unregisters pages. A restarted

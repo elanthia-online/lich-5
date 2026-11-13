@@ -9,10 +9,10 @@ module Lich
 
       # Prepares native hosting before either graphical login or script startup.
       # Disabled presentation and an explicit browser perform no native build.
-      # Failures end startup before any window or script can consume an
-      # unavailable helper.
+      # A failed macOS build uses a discovered browser for this session; without
+      # one, startup ends before a window or script can consume a missing helper.
       # @return [void]
-      # @raise [SystemExit] status 1 when a required helper could not be built
+      # @raise [SystemExit] status 1 when neither helper nor browser is available
       def prepare
         return unless Lich::WebUI.presentation_enabled?
 
@@ -21,8 +21,30 @@ module Lich
 
         Lich::WebUI::NativeHost.prepare!
       rescue Lich::WebUI::Error => error
-        report_fatal(error.message)
+        browser = Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
+        if browser
+          Lich::WebUI::BrowserLauncher.native_unavailable = true
+          report_degraded(browser) unless error.is_a?(Lich::WebUI::NativeHost::BuildFailure) && error.skipped
+          return
+        end
+
+        debug_log = Lich::WebUI::NativeHost.debug_log_path || 'the startup debug log'
+        report_fatal("#{error.message}. See #{debug_log} and contact Elanthia Online support.")
         raise SystemExit.new(1)
+      end
+
+      # Announces browser fallback once for a newly failed native build.
+      # The dialog is independent of the unavailable helper.
+      # @param browser [String] discovered Chrome or Chromium executable
+      # @return [void]
+      def report_degraded(browser)
+        name = File.basename(browser)
+        message = "Building the macOS WebUI helper failed. Lich will start in degraded mode with #{name}; windows will not stay on top."
+        Lich.log message
+        system('osascript', '-e', "display dialog #{message.dump} with title \"Lich WebUI\" buttons {\"Continue\"} default button \"Continue\"", out: $stderr, err: $stderr)
+      rescue SystemCallError
+        # The diagnostic is already logged; a missing dialog must not block fallback.
+        nil
       end
 
       # Starts the launcher and waits for a selection. A launcher failure (a host

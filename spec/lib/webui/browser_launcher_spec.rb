@@ -15,7 +15,10 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     end
   end
 
-  after { FileUtils.remove_entry(browser_directory) if File.directory?(browser_directory) }
+  after do
+    described_class.native_unavailable = false
+    FileUtils.remove_entry(browser_directory) if File.directory?(browser_directory)
+  end
 
   %w[darwin mingw linux].each do |platform|
     it "keeps launch credentials off #{platform} process arguments" do
@@ -55,6 +58,30 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     allow(File).to receive(:executable?).with(Lich::WebUI::NativeHost::EXECUTABLE).and_return(false)
     expect(described_class).not_to receive(:app_browser_path)
     expect { described_class.command_for('http://127.0.0.1:1234/', environment: {}) }.to raise_error(Lich::WebUI::Error, /helper is missing/)
+  end
+
+  it 'opens an isolated browser launch file when native hosting is unavailable for the session' do
+    allow(OS).to receive(:mac?).and_return(true)
+    allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+    expect(Lich::WebUI::NativeHost).not_to receive(:command_for)
+    described_class.native_unavailable = true
+    arguments = nil
+    launch_path = nil
+
+    expect(described_class.open('http://127.0.0.1:1234/auth?token=fixture-token', platform: 'darwin', environment: {},
+                                spawn: lambda { |*argv, **_options|
+                                  arguments = argv
+                                  launch_path = URI::DEFAULT_PARSER.unescape(URI(argv.last.delete_prefix('--app=')).path).sub(%r{\A/(?=[A-Za-z]:/)}, '')
+                                  expect(File.read(launch_path)).to include('fixture-token')
+                                  42
+                                },
+                                waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+    expect(arguments.first).to eq(browser)
+    expect(arguments).to include(a_string_starting_with('--user-data-dir='))
+    expect(arguments.join(' ')).not_to include('fixture-token')
+    expect(launch_path).to end_with('/launch.html')
+    expect(File.exist?(File.dirname(launch_path))).to be(false)
   end
 
   it 'uses ordinary platform discovery off macOS without needing the native helper' do
@@ -212,6 +239,19 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
   it 'does not consider Microsoft Edge outside Windows' do
     expect(described_class.app_browser_path(platform: 'darwin', environment: {}, executable: ->(*) { false })).to be_nil
     expect(described_class.chrome_candidates(platform: 'darwin', environment: {})).not_to include(/Microsoft Edge/)
+  end
+
+  it 'prefers Chrome then discovers system or user Chromium installations on macOS' do
+    chrome = described_class::MACOS_PATHS.first
+    chromium = described_class::MACOS_CHROMIUM_PATHS.first
+    available = [chromium, chrome]
+    expect(described_class.app_browser_path(platform: 'darwin', environment: {},
+                                            executable: ->(path) { available.include?(path) })).to eq(chrome)
+
+    described_class::MACOS_CHROMIUM_PATHS.each do |candidate|
+      expect(described_class.app_browser_path(platform: 'darwin', environment: {},
+                                              executable: ->(path) { path == candidate })).to eq(candidate)
+    end
   end
 
   it 'raises when Google Chrome is not installed' do
