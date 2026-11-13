@@ -9,8 +9,10 @@ module Lich
 
       # Prepares native hosting before either graphical login or script startup.
       # Disabled presentation and an explicit browser perform no native build.
-      # A failed macOS build uses a discovered browser for this session; without
-      # one, startup ends before a window or script can consume a missing helper.
+      # A failed macOS build uses a discovered browser for this session, and a
+      # remembered failure skips the build. Without a browser every start retries
+      # the build, and a failure ends startup before a window or script can
+      # consume a missing helper.
       # @return [void]
       # @raise [SystemExit] status 1 when neither helper nor browser is available
       def prepare
@@ -19,12 +21,14 @@ module Lich
         browser, = Lich::WebUI::BrowserLauncher.browser_override(nil, ENV)
         return unless Lich::WebUI::BrowserLauncher.native_host(nil, browser)
 
-        Lich::WebUI::NativeHost.prepare!
+        fallback = Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
+        Lich::WebUI::NativeHost.prepare!(retry_failed: fallback.nil?)
       rescue Lich::WebUI::Error => error
-        browser = Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
-        if browser
+        # Errors before discovery (an invalid browser override) still look for a fallback.
+        fallback ||= Lich::WebUI::BrowserLauncher.app_browser_path(platform: 'darwin')
+        if fallback
           Lich::WebUI::BrowserLauncher.native_unavailable = true
-          report_degraded(browser) unless error.is_a?(Lich::WebUI::NativeHost::BuildFailure) && error.skipped
+          report_degraded(fallback) unless error.is_a?(Lich::WebUI::NativeHost::BuildFailure) && error.skipped
           return
         end
 
@@ -41,10 +45,8 @@ module Lich
         name = File.basename(browser)
         message = "Building the macOS WebUI helper failed. Lich will start in degraded mode with #{name}; windows will not stay on top."
         Lich.log message
+        # Kernel#system returns nil when osascript cannot run; the log line stands.
         system('osascript', '-e', "display dialog #{message.dump} with title \"Lich WebUI\" buttons {\"Continue\"} default button \"Continue\"", out: $stderr, err: $stderr)
-      rescue SystemCallError
-        # The diagnostic is already logged; a missing dialog must not block fallback.
-        nil
       end
 
       # Starts the launcher and waits for a selection. A launcher failure (a host
