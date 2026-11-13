@@ -5,6 +5,7 @@ require 'json'
 require 'fileutils'
 require 'digest'
 require 'time'
+require 'open3'
 require_relative 'errors'
 
 module Lich
@@ -32,7 +33,7 @@ module Lich
 
         # Carries safe failure text and whether this startup skipped the build.
         # @param message [String] authored build-failure message
-        # @param skipped [Boolean] whether unchanged sources already failed
+        # @param skipped [Boolean] whether unchanged sources and toolchain already failed
         # @return [BuildFailure] initialized failure
         def initialize(message, skipped: false)
           super(message)
@@ -67,9 +68,11 @@ module Lich
 
       # Builds a missing helper for the current OS using its existing local build.
       # Serializes concurrent startups and rechecks after locking. Failed builds
-      # discard their executable and remember the source fingerprint in DATA_DIR.
+      # discard their executable and remember source and toolchain fingerprints
+      # in DATA_DIR. Toolchain discovery runs after failures and before skips,
+      # never for a normal successful build or a complete installed helper.
       # A remembered fingerprint skips the build unless the caller asks to retry;
-      # a changed source fingerprint or deleting the marker permits another attempt.
+      # changed sources or toolchain, or deleting the marker, permits another attempt.
       # Incomplete installed executables are removed before rebuilding resources.
       # Complete installed helpers need no writable lock. Builders publish their
       # executable last, after supplying all resources. Browser-only platforms
@@ -83,17 +86,27 @@ module Lich
       def prepare!(platform: nil, retry_failed: false)
         helper = HELPERS[self.platform(platform)]
         return false unless helper
-        return true if complete?(helper)
+        if complete?(helper)
+          clear_failure
+          return true
+        end
 
         FileUtils.mkdir_p(File.dirname(helper.fetch(:lock)))
         File.open(helper.fetch(:lock), File::RDWR | File::CREAT, 0o600) do |lock|
           lock.flock(File::LOCK_EX)
-          return true if complete?(helper)
+          if complete?(helper)
+            clear_failure
+            return true
+          end
 
-          fingerprint = source_fingerprint(helper)
-          if !retry_failed && failed_fingerprint?(fingerprint)
-            Lich.log 'macOS WebUI helper build skipped: unchanged sources previously failed; using browser degraded mode if available.'
-            raise BuildFailure.new('macOS WebUI helper build previously failed', skipped: true)
+          source = source_fingerprint(helper)
+          fingerprint = nil
+          if !retry_failed && (previous = failed_fingerprint(source))
+            fingerprint = failure_fingerprint(source)
+            if previous == fingerprint
+              Lich.log 'macOS WebUI helper build skipped: unchanged sources and toolchain previously failed; using browser degraded mode if available.'
+              raise BuildFailure.new('macOS WebUI helper build previously failed', skipped: true)
+            end
           end
 
           ready = false
@@ -104,10 +117,10 @@ module Lich
             status = $?&.exitstatus
             ready = built && complete?(helper)
             unless ready
-              record_failure(fingerprint, status)
+              record_failure(source, fingerprint || failure_fingerprint(source), status)
               raise BuildFailure, "#{helper.fetch(:name)} WebUI helper build failed"
             end
-            File.delete(failure_marker) if File.exist?(failure_marker)
+            clear_failure
           ensure
             File.delete(helper.fetch(:executable)) if !ready && File.exist?(helper.fetch(:executable))
           end
@@ -138,25 +151,51 @@ module Lich
         File.join(DATA_DIR, 'webui-helper-build-failed.json')
       end
 
-      # Reads a remembered failure while the preparation lock is held.
-      # An absent or incomplete marker permits a fresh attempt.
-      # @param fingerprint [String] current build-source fingerprint
-      # @return [Boolean] whether these sources already failed to build
+      # Clears remembered failure even if another startup already removed it.
+      # @return [void]
       # @api private
-      def failed_fingerprint?(fingerprint)
+      def clear_failure
+        File.delete(failure_marker)
+      rescue Errno::ENOENT
+        nil
+      end
+
+      # Combines the source digest with compiler identity or command failure text.
+      # @param source [String] current build-source fingerprint
+      # @return [String] SHA-256 fingerprint of sources and toolchain identity
+      # @api private
+      def failure_fingerprint(source)
+        identity = begin
+          Open3.capture2e('xcrun', 'swiftc', '--version').first
+        rescue SystemCallError => error
+          error.message
+        end
+        Digest::SHA256.hexdigest("#{source}\0#{identity}")
+      end
+
+      # Reads a matching source record while the preparation lock is held.
+      # Legacy source-only markers are returned so their next attempt migrates.
+      # @param source [String] current build-source fingerprint
+      # @return [String, nil] stored fingerprint, absent for new or changed sources
+      # @api private
+      def failed_fingerprint(source)
         record = JSON.parse(File.read(failure_marker))
-        record.is_a?(Hash) && record['fingerprint'] == fingerprint
+        return unless record.is_a?(Hash)
+        return unless record['source_fingerprint'] == source || record['fingerprint'] == source
+
+        record['fingerprint']
       rescue Errno::ENOENT, JSON::ParserError
-        false
+        nil
       end
 
       # Remembers a failed attempt while the preparation lock is held.
-      # @param fingerprint [String] attempted build-source fingerprint
+      # @param source [String] attempted build-source fingerprint
+      # @param fingerprint [String] combined source and toolchain fingerprint
       # @param status [Integer, nil] build exit status, absent if no process exited
       # @return [void]
       # @api private
-      def record_failure(fingerprint, status)
-        record = { fingerprint: fingerprint, time: Time.now.utc.iso8601,
+      def record_failure(source, fingerprint, status)
+        record = { source_fingerprint: source, fingerprint: fingerprint, time: Time.now.utc.iso8601,
                    build_exit_status: status, debug_log_path: debug_log_path }
         File.open(failure_marker, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
           file.write(JSON.generate(record))
