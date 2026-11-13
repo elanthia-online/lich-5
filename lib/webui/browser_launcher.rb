@@ -61,6 +61,7 @@ module Lich
 
       # Spawns one app host using a private launch file instead of secret argv.
       # Every browser receives an isolated profile, removed after process exit.
+      # Invalid application bundles name their setting or environment source.
       # The start callback runs before the exit monitor is installed, so callers
       # must defer termination until this method returns.
       # @param url [String] authenticated loopback launch URL
@@ -84,7 +85,7 @@ module Lich
                on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
         chosen, origin = browser_override(browser_path || chrome_path, environment)
-        chosen = resolve_browser_path(chosen, platform: platform)
+        chosen = resolve_browser_path(chosen, platform: platform, origin: origin)
         verify_browser_path(chosen, origin: origin)
         native = native_host(platform, chosen)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
@@ -122,6 +123,7 @@ module Lich
 
       # Selects native or browser argv without invoking a shell or opening a window.
       # Explicit macOS application bundles resolve to their executable first.
+      # Invalid bundles name the setting or environment override that selected them.
       # Failed automatic Linux discovery names any skipped snap browser so the
       # recovery message can direct the user to a non-snap installation.
       # @param url [String] private launch-file path (native) or file URL (browser)
@@ -135,8 +137,8 @@ module Lich
       # @raise [Error] if the required native helper or browser is unavailable
       def command_for(url, platform: nil, browser_path: nil, chrome_path: nil, environment: ENV,
                       geometry: nil, profile_dir: nil)
-        override, = browser_override(browser_path || chrome_path, environment)
-        override = resolve_browser_path(override, platform: platform)
+        override, origin = browser_override(browser_path || chrome_path, environment)
+        override = resolve_browser_path(override, platform: platform, origin: origin)
         return NativeHost.command_for(url, geometry: geometry) if native_host(platform, override)
 
         platform ||= OS.host_os
@@ -181,23 +183,32 @@ module Lich
         value.empty? ? [nil, nil] : [value, :environment]
       end
 
-      # Resolves explicit macOS application bundles before executable verification.
+      # Resolves macOS bundles after normalizing trailing slashes and extension case.
+      # Refusals name the source of the explicit path before executable verification.
       # @param path [String, nil] explicit browser path or automatic discovery
       # @param platform [String, nil] discovery override; nil uses the current OS
+      # @param origin [Symbol, nil] :argument (setting) or :environment (LICH_WEBUI_BROWSER)
       # @return [String, nil] executable path, unchanged off macOS or for plain files
       # @raise [Error] if an application bundle has no executable
       # @api private
-      def resolve_browser_path(path, platform: nil)
-        return path unless path && path.end_with?('.app') && (platform ? platform.match?(/darwin/i) : OS.mac?)
+      def resolve_browser_path(path, platform: nil, origin: :argument)
+        return path unless path && (platform ? platform.match?(/darwin/i) : OS.mac?)
 
-        name = bundle_executable(path)
+        bundle = path.sub(%r{/+\z}, '')
+        return path unless File.extname(bundle).casecmp?('.app')
+
+        name = bundle_executable(bundle)
         if name && !name.empty? && File.basename(name) == name && !%w[. ..].include?(name)
-          executable = File.join(path, 'Contents', 'MacOS', name)
+          executable = File.join(bundle, 'Contents', 'MacOS', name)
           return executable if executable_file?(executable)
         end
 
         shown = path.gsub(/[[:cntrl:]]/, '?')
-        raise Error, "the browser application '#{shown}' has no executable; choose an installed browser application or its executable"
+        if origin == :environment
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which has no executable; fix or unset #{ENVIRONMENT_VARIABLE}"
+        end
+
+        raise Error, "the configured browser application '#{shown}' has no executable; #{SETTING_HINT} or clear it"
       end
 
       # Reads an application's executable name from XML or a binary property list.

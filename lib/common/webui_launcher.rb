@@ -41,8 +41,8 @@ module Lich
                                     'master password when asked, then retry.'
       LEGACY_CONVERSION_GUIDANCE = "#{Catalog::LEGACY_CONVERSION_NOTICE} " \
                                    'See the Lich release notes for conversion guidance.'
-      BROWSER_SUPPORT_NOTE = 'Google Chrome and Microsoft Edge are supported. Another Chromium-based browser can be ' \
-                             'chosen here and is used at your own risk. Leave blank to detect a browser automatically. ' \
+      BROWSER_SUPPORT_NOTE = 'Chrome, Edge, Brave or Arc are supported; other browsers are not actively supported. ' \
+                             'Leave blank to detect a browser automatically. ' \
                              'This window cannot open without a browser: to name one before starting Lich, set the ' \
                              'LICH_WEBUI_BROWSER environment variable to its full path. A path saved here is tried ' \
                              'first and, if it no longer exists, skipped in favor of that variable and detection.'
