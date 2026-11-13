@@ -9,20 +9,54 @@ permissions:
   contents: read
 
 concurrency:
-  # An ineligible dispatch/re-run must not cancel an eligible owner's run.
+  # Keep dispatches/re-runs by different actors in separate cancellation groups.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.actor_id }}-${{ github.triggering_actor }}
   cancel-in-progress: true
 
 jobs:
-  windows_webui:
-    # Both the original actor and a re-run actor must be the authorized owner.
-    # This guard runs before checkout; no PR code or external signal starts this job.
+  authorize:
+    # Check repository roles before any checkout or Windows execution.
     if: >-
       github.repository == 'elanthia-online/lich-5' &&
-      github.actor == 'OSXLich-Doug' && github.actor_id == '17682675' &&
-      github.triggering_actor == 'OSXLich-Doug' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
        github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      allowed: ${{ steps.admin.outputs.allowed }}
+      attempt: ${{ steps.admin.outputs.attempt }}
+    steps:
+      - name: Require repository admin permission for both actors
+        id: admin
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ORIGINAL_ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          AUTHORIZATION_ATTEMPT: ${{ github.run_attempt }}
+        with:
+          script: |
+            core.setOutput('allowed', 'false');
+            try {
+              for (const actor of [process.env.ORIGINAL_ACTOR, process.env.TRIGGERING_ACTOR]) {
+                if (!actor) throw new Error('Missing workflow actor');
+                const response = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...context.repo, username: actor,
+                });
+                if (response?.status !== 200 || response.data?.permission !== 'admin') {
+                  core.notice('Both workflow actors must have repository admin permission.');
+                  return;
+                }
+              }
+              core.setOutput('attempt', process.env.AUTHORIZATION_ATTEMPT);
+              core.setOutput('allowed', 'true');
+            } catch (error) {
+              core.setFailed(`Could not verify repository admin permissions: ${error.message}`);
+            }
+
+  windows_webui:
+    needs: authorize
+    # Partial re-runs must not reuse authorization from an earlier attempt.
+    if: needs.authorize.outputs.allowed == 'true' && needs.authorize.outputs.attempt == github.run_attempt
     name: Native Windows WebUI coverage
     runs-on: windows-latest
     timeout-minutes: 45
@@ -30,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: '4.0.9'
           windows-toolchain: none
