@@ -215,6 +215,31 @@ RSpec.describe Lich::Archive::TarGz do
       refuses([pax('g', { 'path' => 'elsewhere' }, name: 'pax_global_header'), first], /pax header sets path/)
     end
 
+    # macOS bsdtar writes a non-ASCII name both as a pax path and in full in
+    # the ustar name. Any pax path is refused, matching or not.
+    it 'refuses a pax path even when it repeats the ustar name' do
+      refuses([first, pax('x', { 'path' => 'r/second.rb' }), { name: 'r/second.rb', data: 'x' }], /pax header sets path/)
+    end
+
+    it 'refuses a pax size, which TarReader would not apply' do
+      refuses([first, pax('x', { 'size' => '5' }), { name: 'r/second.rb', data: 'x' }], /pax header sets size/)
+    end
+
+    # GNU tar's pax sparse format names the entry GNUSparseFile.0/<name> and
+    # stores the sparse map in its data; extracting it would write the map.
+    it 'refuses a GNU pax sparse file instead of extracting its sparse map' do
+      records = { 'GNU.sparse.major' => '1', 'GNU.sparse.minor' => '0', 'GNU.sparse.name' => 'r/sparse.rb', 'GNU.sparse.realsize' => '4096' }
+      refuses([first, pax('x', records), { name: 'r/GNUSparseFile.0/sparse.rb', data: "1\n0\n4096\n" }],
+              /pax header sets GNU\.sparse\.major and GNU\.sparse\.minor and GNU\.sparse\.name and GNU\.sparse\.realsize/)
+    end
+
+    ['0', "\0"].each do |typeflag|
+      it "refuses a pre-POSIX directory (typeflag #{typeflag.inspect}, name ending in a slash) instead of writing a file" do
+        refuses([first, { name: 'r/old/', type: :raw, typeflag: typeflag, data: '' }, { name: 'r/old/a.rb', data: 'a' }],
+                /unsupported archive entry type \(pre-POSIX directory\), which Lich does not extract: r\/old\//)
+      end
+    end
+
     it 'refuses a malformed pax header' do
       refuses([first, { name: 'r/PaxHeaders/x.rb', type: :raw, typeflag: 'x', data: "not a record\n" }], /malformed pax header/)
     end
@@ -231,6 +256,54 @@ RSpec.describe Lich::Archive::TarGz do
       it "refuses typeflag #{typeflag} (#{kind}) instead of dropping it" do
         refuses([first, { name: 'r/odd', type: :raw, typeflag: typeflag, data: '' }], /unsupported archive entry type \(#{Regexp.escape(kind)}\), which Lich does not extract: r\/odd/)
       end
+    end
+  end
+
+  # TarReader returns quietly at the end of the data, reading a header cut
+  # short as an empty file, and GzipReader reads only the first member.
+  describe 'the end of the archive' do
+    let(:version) { "LICH_VERSION = '5.99.0'\n" }
+    # One complete tar stream: r/a.rb (header and one data block), then
+    # r/lib/version.rb at byte 1024, then the two end blocks.
+    let(:tar) { Zlib.gunzip(TarGzBuilder.build([{ name: 'r/a.rb', data: 'a' }, { name: 'r/lib/version.rb', data: version }])) }
+
+    def refuses(bytes, message)
+      File.binwrite(tarball, bytes)
+
+      expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, message)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+
+    it 'refuses a tar stream cut short inside its last header, instead of writing an empty file' do
+      refuses(TarGzBuilder.gzip(tar.byteslice(0, 1024 + 110)), /truncated: it does not end with two zero blocks/)
+    end
+
+    it 'refuses a tar stream with only one end block' do
+      refuses(TarGzBuilder.gzip(tar.byteslice(0, tar.bytesize - 512)), /truncated: it does not end with two zero blocks/)
+    end
+
+    it 'refuses a tar stream split across two gzip members' do
+      refuses(TarGzBuilder.gzip(tar.byteslice(0, 1024)) + TarGzBuilder.gzip(tar.byteslice(1024..)), /truncated: it does not end with two zero blocks/)
+    end
+
+    it 'refuses a second gzip member after a complete tar stream' do
+      refuses(TarGzBuilder.gzip(tar) + TarGzBuilder.gzip(tar), /gzip archive has data after its first member/)
+    end
+
+    it 'refuses junk after the gzip member' do
+      refuses(TarGzBuilder.gzip(tar) + 'junk', /gzip archive has data after its first member/)
+    end
+
+    it 'refuses data after the end blocks' do
+      refuses(TarGzBuilder.gzip(tar + 'x'), /tar archive has data after its end blocks/)
+    end
+
+    it 'extracts a tar stream zero-padded to the 10240-byte record, as tar and git archive write it' do
+      File.binwrite(tarball, TarGzBuilder.gzip(tar + ("\0" * (10_240 - tar.bytesize))))
+
+      described_class.extract(tarball, destination)
+
+      expect(File.read(File.join(destination, 'r/lib/version.rb'))).to eq(version)
     end
   end
 

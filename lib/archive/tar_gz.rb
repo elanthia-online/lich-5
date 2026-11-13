@@ -14,11 +14,15 @@ module Lich
     #
     # Regular files and directories are extracted. Global and per-file pax
     # headers are skipped, as RubyGems skipped them (`git archive` writes a
-    # global one holding the commit id), unless they carry a path or
-    # linkpath record: TarReader ignores those, so the entry would land
-    # under its truncated ustar name. Every other entry type (GNU long
-    # names, devices, FIFOs, contiguous files, unknown typeflags) is refused
-    # by name rather than dropped while extraction reports success.
+    # global one holding the commit id), unless they carry a record
+    # TarReader would not apply: any path or linkpath (even one that only
+    # repeats the ustar name, as macOS bsdtar writes for non-ASCII names),
+    # a size, or GNU sparse-file records. Every other entry type (GNU long
+    # names, devices, FIFOs, contiguous files, unknown typeflags, and
+    # pre-POSIX directories) is refused by name rather than extracted
+    # wrongly or dropped while extraction reports success. So is an archive
+    # whose tar stream does not end with its two zero blocks, or has data
+    # after them or after its gzip member.
     #
     # Symbolic and hard links are refused, deliberately. RubyGems created
     # in-tree symlinks, falling back to a copy where File.symlink failed (as
@@ -32,12 +36,16 @@ module Lich
       FILE_MODE_MASK = 0o755
       OWNER_READ_WRITE = 0o600
       LINK_TYPES = %w[1 2].freeze
-      FILE_TYPE = '0' # TarHeader also reads a NUL (pre-POSIX) typeflag as "0"
+      # TarHeader also reads a NUL (pre-POSIX) typeflag as "0". A pre-POSIX
+      # directory, such an entry whose name ends in "/", is refused.
+      FILE_TYPE = '0'
       DIRECTORY_TYPE = '5'
       PAX_TYPES = %w[g x].freeze
-      # Pax records that change which file an entry names; TarReader ignores
-      # them, so an entry carrying one cannot be extracted faithfully.
-      PAX_PATH_KEYS = %w[path linkpath].freeze
+      # Pax records that change which file an entry names or what it holds;
+      # TarReader ignores them, so an entry carrying one cannot be extracted
+      # faithfully.
+      PAX_REFUSED_KEYS = %w[path linkpath size].freeze
+      PAX_SPARSE_PREFIX = 'GNU.sparse.'
       MAX_PAX_HEADER_SIZE = 1 << 20
       REFUSED_TYPES = {
         '3' => 'character device', '4' => 'block device', '6' => 'FIFO', '7' => 'contiguous file',
@@ -45,6 +53,8 @@ module Lich
         'S' => 'GNU sparse file', 'V' => 'GNU volume header'
       }.freeze
       CHUNK_SIZE = 1 << 16
+      BLOCK_SIZE = 512
+      ZERO_BLOCK = ("\0" * BLOCK_SIZE).b.freeze
 
       module_function
 
@@ -79,7 +89,7 @@ module Lich
         File.open(path, 'rb') do |file|
           Zlib::GzipReader.wrap(file) do |gzip|
             Gem::Package::TarReader.new(gzip) { |tar| tar.each(&block) }
-            drain(gzip)
+            finish(gzip, file)
           end
         end
       rescue Zlib::Error => e
@@ -91,23 +101,42 @@ module Lich
         raise Error, 'tar archive is truncated: an entry runs past the end of the data'
       end
 
-      # Reads the rest of the gzip member. TarReader stops at the tar end
-      # blocks, before the gzip trailer, and only reading to the end makes
-      # GzipReader check the trailer's CRC-32 and length. An update tarball
-      # has no other checksum (RubyGems does not verify the tar header
-      # checksum either), so a corrupt download must fail here, in the
-      # validation pass, before anything is written.
+      # Checks the end of the archive and reads the rest of the gzip member.
+      #
+      # TarReader returns at the first zero block, or quietly at the end of
+      # the data, reading a header cut short as an empty file. Every tar
+      # writer ends with two zero blocks, so the next block must be the
+      # second one; anything after it may only be zero padding to the
+      # record size. Without this, a tar stream that ends early inside a
+      # valid gzip member extracts as success, missing files or with an
+      # empty lib/version.rb.
+      #
+      # Reading to the end also makes GzipReader check the trailer's CRC-32
+      # and length. An update tarball has no other checksum (RubyGems does
+      # not verify the tar header checksum either), so a corrupt download
+      # must fail here, in the validation pass, before anything is written.
+      # GzipReader reads only the first member, so data after it is refused
+      # too rather than ignored.
       # @param gzip [Zlib::GzipReader]
+      # @param file [File] the file +gzip+ reads
       # @return [void]
-      def drain(gzip)
-        nil while gzip.read(CHUNK_SIZE)
+      # @raise [Error]
+      def finish(gzip, file)
+        unless gzip.read(BLOCK_SIZE) == ZERO_BLOCK
+          raise Error, 'tar archive is truncated: it does not end with two zero blocks'
+        end
+
+        while (chunk = gzip.read(CHUNK_SIZE))
+          raise Error, 'tar archive has data after its end blocks' if chunk.match?(/[^\0]/n)
+        end
+        raise Error, 'gzip archive has data after its first member' if gzip.unused || !file.eof?
       end
 
       # @param entry [Gem::Package::TarReader::Entry]
       # @param root [String]
       # @return [Boolean] whether the entry will be extracted
-      # @raise [Error] when the entry is a link, a pax header naming a path,
-      #   or any type other than a regular file or directory
+      # @raise [Error] when the entry is a link, a pax header TarReader would
+      #   not apply, or any type other than a regular file or directory
       def validate!(entry, root)
         typeflag = entry.header.typeflag
         if LINK_TYPES.include?(typeflag)
@@ -121,12 +150,16 @@ module Lich
           kind = REFUSED_TYPES.fetch(typeflag) { "unknown type #{typeflag.inspect}" }
           raise Error, "unsupported archive entry type (#{kind}), which Lich does not extract: #{Archive.printable(entry.full_name)}"
         end
+        if typeflag == FILE_TYPE && entry.full_name.end_with?('/')
+          raise Error, "unsupported archive entry type (pre-POSIX directory), which Lich does not extract: #{Archive.printable(entry.full_name)}"
+        end
 
         !root_directory?(entry, root)
       end
 
-      # Refuses a pax header whose records rename the next entry (or every
-      # entry, for a global header), since TarReader would not apply them.
+      # Refuses a pax header whose records rename or resize the next entry
+      # (or every entry, for a global header), or describe a GNU sparse
+      # file, since TarReader would not apply them.
       # @param entry [Gem::Package::TarReader::Entry] a "g" or "x" header
       # @return [void]
       # @raise [Error]
@@ -137,7 +170,7 @@ module Lich
         keys = pax_keys(entry.read.to_s.b)
         raise Error, "malformed pax header: #{name}" unless keys
 
-        overridden = keys & PAX_PATH_KEYS
+        overridden = keys.select { |key| PAX_REFUSED_KEYS.include?(key) || key.start_with?(PAX_SPARSE_PREFIX) }.uniq
         return if overridden.empty?
 
         raise Error, "pax header sets #{overridden.join(' and ')}, which Lich does not apply: #{name}"
