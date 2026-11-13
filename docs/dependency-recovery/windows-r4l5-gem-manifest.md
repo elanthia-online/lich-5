@@ -368,10 +368,12 @@ ends. Entry names must be relative and separated by `/`, without `..`
 segments, colons, backslashes or control characters, ASCII unless the entry
 is flagged UTF-8, free of segments Windows would alter (a trailing dot or
 space, or a device name such as `CON`, `NUL` or `COM1`, with or without an
-extension), and unique: no two
-entries may name the same file, compared case-insensitively, and no file may
-share a path with a directory. Any other archive fails extraction with a named
-reason, and nothing is installed.
+extension), and unique: no two entries may name the same file, and no file
+may share a path with a directory. Names are compared after Unicode NFC
+normalisation and full case folding, so `A.gem` and `a.gem`, or a
+precomposed and a decomposed `é`, count as the same file. This is stricter
+than NTFS: `ß` and `ss` also count as the same. Any other archive fails
+extraction with a named reason, and nothing is installed.
 
 The generator should derive package names, versions, filenames, and SHA-256
 values from the exact staged `.gem` files used by the clean-runtime smoke test.
