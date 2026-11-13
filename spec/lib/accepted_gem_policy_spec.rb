@@ -435,6 +435,13 @@ RSpec.describe Lich::AcceptedGemPolicy do
                                            'cairo-gobject' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
       end
 
+      it 'restarts when a newer self-built cairo is already active next to the accepted cairo-gobject' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5'), self_built('cairo', '1.18.6')]
+        active['cairo'] = installed['cairo'].last
+        expect(policy.check(dependencies).needed).to eq(['cairo'])
+      end
+
       it 'repairs a newer self-built cairo when no accepted cairo is installed' do
         installed.merge!(gnome_stack('4.3.9', :accepted_build))
         installed['cairo'] = [self_built('cairo', '1.18.6')]
