@@ -310,10 +310,10 @@ RSpec.describe Lich::Common::SessionLauncher do
   end
 
   it 'inherits this process active_session_dir when the launch context omits it' do
-    # Production GUI launch contexts (GuiLogin#handle_play_action) carry account
-    # and frontend keys only, never directory overrides. Without inheritance the
-    # parent's --active-session-dir is dropped on every child, and each one
-    # coordinates through its own TEMP_DIR instead of the shared registry.
+    # Launch contexts can carry account and frontend keys without directory
+    # overrides. Without inheritance the parent's --active-session-dir is
+    # dropped on every child, and each one coordinates through its own TEMP_DIR
+    # instead of the shared registry.
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(nil)
     stub_const('LICH_DIR', '/tmp/lich-home')

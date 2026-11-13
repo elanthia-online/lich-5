@@ -174,7 +174,7 @@ for (const filename of [
 for (const filename of [
   'spec/lib/common/webui_launcher_presentation_browser_spec.rb', 'spec/support/data_dir.rb',
   '.rspec', '.rspec_parallel',
-  'lib/common/authentication/entry_store.rb', 'lib/common/gui/master_password_manager.rb', 'lib/common/gui_login.rb',
+  'lib/common/authentication/entry_store.rb', 'lib/common/gui/master_password_manager.rb',
   'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_editor.rb',
   'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
   'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
@@ -327,7 +327,7 @@ for (const filename of [
   'lib/common/webui_launcher.rb.bak', 'lib/common/webui_launcher_extra.rb',
   'lib/common/webui_launcher_other/catalog.rb',
   'spec/login_spec_helper.rb.bak', 'spec/support/frontend_mock.rb.bak', 'spec/support/real_keychain_fence.rb.bak',
-  'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
+  'lib/common/gui_login.rb', 'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
   'spec/lib/main/unrelated_spec.rb', 'spec/lib/main/default_webui_acceptance_report_spec.rb.bak',
   'spec/lib/real_keychain_fence_spec.rb.bak', 'spec/lib/common/authentication/unrelated_spec.rb',
   'lich.rbw.bak', 'lib/gemcheck.rb.bak', 'lib/main/early_exit_extra.rb', 'lib/gemcheck_extra.rb', 'lib/main/webui_startup_extra.rb',
