@@ -21,6 +21,16 @@ RSpec.describe Lich::Archive::Zip do
     File.binwrite(zip_path, ZipBuilder.build(entries))
   end
 
+  # Spells non-ASCII names in ASCII source: "caf<E9>" is "cafe" with an
+  # acute e, as code points in hex.
+  def self.u(text)
+    text.gsub(/<(\h+)>/) { [Regexp.last_match(1).hex].pack('U') }
+  end
+
+  def u(text)
+    self.class.u(text)
+  end
+
   def extracted
     Dir.glob('**/*', base: destination).select { |path| File.file?(File.join(destination, path)) }.sort
   end
@@ -121,6 +131,40 @@ RSpec.describe Lich::Archive::Zip do
           .to raise_error(Lich::Archive::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
         expect(Dir.exist?(destination)).to be(false)
       end
+    end
+
+    # Pairs a normalising or case-insensitive file system stores as one file
+    # (spelled with u to keep the source ASCII). Sharp s and "ss" are kept apart by
+    # NTFS, but full case folding joins them, and refusing is the safe side.
+    {
+      'NFC and NFD e-acute'    => [u('caf<E9>.gem'), u('cafe<301>.gem')],
+      'final and medial sigma' => [u('<3C2>.gem'), u('<3C3>.gem')],
+      'long s and s'           => [u('<17F>.gem'), 's.gem'],
+      'micro sign and mu'      => [u('<B5>.gem'), u('<3BC>.gem')],
+      'sharp s and ss'         => [u('<DF>.gem'), 'ss.gem']
+    }.each do |label, (first, second)|
+      it "refuses #{label} as a duplicate and writes nothing" do
+        write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
+
+        expect { described_class.extract(zip_path, destination) }
+          .to raise_error(described_class::Error, /duplicate archive entry: #{Regexp.escape(second)}/)
+        expect(Dir.exist?(destination)).to be(false)
+      end
+    end
+
+    it 'refuses a file and a directory whose names differ only in Unicode normalisation' do
+      write_zip([{ name: u('caf<E9>'), data: 'x', flags: 0x0800 }, { name: u('cafe<301>/a.gem'), data: 'a', flags: 0x0800 }])
+
+      expect { described_class.extract(zip_path, destination) }
+        .to raise_error(described_class::Error, /archive entry is both a file and a directory/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
+
+    it 'extracts into a destination whose own name is not ASCII' do
+      destination = File.join(work_dir, u('CAF<C9>'))
+      write_zip([{ name: 'a.gem', data: 'a' }])
+
+      expect(described_class.extract(zip_path, destination)).to eq(['a.gem'])
     end
 
     it 'accepts a directory listed more than once and directories implied by their files' do
