@@ -119,7 +119,7 @@ module Lich
       strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
       minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
       begin
-        decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, strict)
+        check = decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, strict)
       rescue Gem::Exception
         # A newer self-built gem can be acceptable on its own and still leave
         # no consistent set, for example a self-built gtk3 4.4.0 whose glib2
@@ -128,8 +128,22 @@ module Lich
         # gems were accepted: the accepted builds, or a repair to them.
         raise unless self_built_candidates?(packages, platforms, strict)
 
-        decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, nil)
+        return decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, nil)
       end
+      # With a package minimum, decide's own fallback can turn that same
+      # resolver failure into a repair instead of raising. Start without a
+      # repair whenever the accepted builds alone need none, which is exactly
+      # the decision made before self-built gems were accepted. When both
+      # need a repair, keep this one: it repairs the same units and does not
+      # also replace the self-built gems it kept.
+      return check unless check.needed.any? && self_built_candidates?(packages, platforms, strict)
+
+      begin
+        accepted_only = decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, nil)
+      rescue Gem::Exception
+        return check
+      end
+      accepted_only.needed.empty? ? accepted_only : check
     rescue Gem::UnsatisfiableDependencyError => e
       if @find_specs.call(e.name).empty?
         raise LocalInstallationError, "installed dependency #{e.name} is missing; repair or reinstall Ruby4Lich5: #{e.message}"

@@ -388,6 +388,20 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(check.needed).to be_empty
       expect(check.recommended).to contain_exactly('glib2', 'gtk3')
     end
+
+    it 'starts on accepted builds between the minimum and the version when a newer self-built gtk3 has no matching glib2' do
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed['glib2'] = [accepted_build('glib2', '4.3.5')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.5', { 'glib2' => '= 4.3.5' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      expect(recovery).not_to receive(:recover)
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to contain_exactly('glib2', 'gtk3')
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.5', local], 'gtk3' => ['4.3.5', local])
+    end
   end
 
   context 'with a package minimum' do
