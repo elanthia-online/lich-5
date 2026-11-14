@@ -28,6 +28,10 @@ module Lich
 
     END_OF_CENTRAL_DIRECTORY = "PK\x05\x06".b
     CENTRAL_DIRECTORY_HEADER = 0x02014b50
+    # ZIP64 end of central directory locator, written just before the end
+    # record of a ZIP64 archive.
+    ZIP64_LOCATOR = 0x07064b50
+    ZIP64_LOCATOR_SIZE = 20
     LOCAL_FILE_HEADER = 0x04034b50
     END_RECORD_SIZE = 22
     CENTRAL_HEADER_SIZE = 46
@@ -144,8 +148,10 @@ module Lich
     #   - before folding, because folding turns U+0345 into iota, a starter
     #     that no later NFD can move past, so x U+0345 U+0F73 and
     #     x U+0345 U+0F71 U+0F72 must be ordered before it;
-    #   - after folding, which reorders the U+0300 U+0F73 case and any
-    #     marks folding itself produces.
+    #   - after folding, as Unicode's canonical caseless form ends. With the
+    #     doubled NFD before folding, no name tried (every code point, with
+    #     marks on either side) needs this last step; it is kept because the
+    #     standard form includes it.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
@@ -193,14 +199,14 @@ module Lich
       raise Error, 'not a ZIP archive (no end of central directory record)' unless exact || last
 
       entries = central_directory_at(file, tail, exact || last, file_size - tail_size)
-      # unzip, bsdtar and Python's zipfile take the last signature with a
-      # whole record after it (+probe+), and find that record's central
-      # directory just in front of it, so an archive embedded in the comment
-      # is what they show. Rather than extract something other than what
-      # those tools show, an archive whose comment holds one is refused.
-      # Only the record and directory structure is checked, not Lich's
-      # entry rules: those tools list an embedded archive whose entries
-      # Lich itself would refuse, too.
+      # unzip and bsdtar take the last signature with a whole record after
+      # it (+probe+); Python's zipfile takes the last signature and rejects
+      # the file when no whole record follows. All three find that record's
+      # central directory just in front of it, so an archive embedded in
+      # the comment is what they show. Rather than extract something other
+      # than what those tools show, an archive whose comment holds one is
+      # refused. Lich's entry rules are not applied to it: those tools list
+      # an embedded archive whose entries Lich itself would refuse, too.
       if exact && probe && probe > exact && embedded_archive?(file, tail, probe, file_size - tail_size)
         raise Error, 'ambiguous ZIP archive: its comment holds another archive'
       end
@@ -224,6 +230,11 @@ module Lich
 
       record_offset = tail_offset + record_at
       raise Error, 'central directory lies outside the archive' if directory_offset + directory_size > record_offset
+      # The tools find the directory just in front of the record. A record
+      # whose stored offset points anywhere else (an archive appended to
+      # another, or one stored in another's comment) would have Lich read a
+      # different directory from the one they list.
+      raise Error, 'central directory does not end at the end record' unless directory_offset + directory_size == record_offset
 
       file.seek(directory_offset)
       directory = file.read(directory_size)
@@ -232,31 +243,31 @@ module Lich
       parse_central_directory(directory, total_count, record_offset)
     end
 
+    # Whether the end record at +record_at+ starts an archive the other
+    # tools would read: a ZIP64 locator just in front of it, an empty
+    # directory, or a central directory header where the record says its
+    # directory starts, counted back from the record. Python and bsdtar walk
+    # a directory by its size, not its entry count, so the count is not
+    # checked.
     # @param file [File]
     # @param tail [String] the last bytes of the archive
     # @param record_at [Integer] offset of an end record in +tail+
     # @param tail_offset [Integer] offset of +tail+ in the file
-    # @return [Boolean] whether a central directory of the declared size,
-    #   ending where the record starts, holds the declared number of
-    #   well-formed headers
+    # @return [Boolean]
     def embedded_archive?(file, tail, record_at, tail_offset)
       _signature, _disk, _directory_disk, _disk_count, total_count, directory_size, = tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
-      directory_start = tail_offset + record_at - directory_size
+      record_offset = tail_offset + record_at
+      if record_offset >= ZIP64_LOCATOR_SIZE
+        file.seek(record_offset - ZIP64_LOCATOR_SIZE)
+        return true if file.read(4).unpack1('V') == ZIP64_LOCATOR
+      end
+      return true if total_count.zero? && directory_size.zero?
+
+      directory_start = record_offset - directory_size
       return false if directory_start.negative?
 
       file.seek(directory_start)
-      directory = file.read(directory_size).to_s
-      position = 0
-      total_count.times do
-        return false if position + CENTRAL_HEADER_SIZE > directory.bytesize
-
-        signature, = directory.byteslice(position, 4).unpack('V')
-        name_length, extra_length, comment_length = directory.byteslice(position + 28, 6).unpack('vvv')
-        return false unless signature == CENTRAL_DIRECTORY_HEADER
-
-        position += CENTRAL_HEADER_SIZE + name_length + extra_length + comment_length
-      end
-      position == directory_size
+      file.read(4).to_s.unpack1('V') == CENTRAL_DIRECTORY_HEADER
     end
 
     # Finds the end of central directory record in the last bytes of the
@@ -291,7 +302,7 @@ module Lich
     # @return [Array<Entry>]
     def parse_central_directory(directory, count, limit)
       position = 0
-      Array.new(count) do
+      entries = Array.new(count) do
         raise Error, 'central directory is truncated' if position + CENTRAL_HEADER_SIZE > directory.bytesize
 
         fields = directory.byteslice(position, CENTRAL_HEADER_SIZE).unpack('VvvvvvvVVVvvvvvVV')
@@ -308,6 +319,11 @@ module Lich
         Entry.new(name: name, compression: compression, flags: flags, crc32: crc32,
                   compressed_size: compressed_size, uncompressed_size: size, local_header_offset: local_offset)
       end
+      # Other tools walk the directory by its size, so a count too low would
+      # have Lich extract only some of the entries they list.
+      raise Error, 'central directory holds more entries than its record declares' unless position == directory.bytesize
+
+      entries
     end
 
     # Entry names are compared as text; a name that is not valid UTF-8 (or
