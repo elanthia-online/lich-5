@@ -103,16 +103,22 @@ module Lich
       # patterns for the command's verb (its first word) tried after every
       # pattern the caller passes.
       #
-      # bput tries its patterns in order on each line, so a built-in pattern --
-      # success or failure -- always wins over a player's pattern on the same
-      # line; the player's patterns only end the wait on a line nothing built in
-      # knows. When one of them matched, the reply comes back as a
-      # {PlayerSuccess}. That is decided on the returned text: it is a
-      # PlayerSuccess only if a player's pattern matches it and none of the
-      # caller's patterns does, which holds as long as each built-in pattern
-      # matches its own match text (the item pattern lists do; a lookbehind
-      # would not). So a broad player pattern such as +^You+ cannot turn a
-      # built-in failure into a success.
+      # bput tries its patterns in order on each line, so on any one line a
+      # built-in pattern -- success or failure -- wins over a player's pattern.
+      # But bput reads every line that arrives while it waits, not only the
+      # reply to this command: room text, other scripts' commands and their
+      # replies. A broad player pattern such as +^You+ can therefore match an
+      # unrelated line before the reply arrives and count a failed command as
+      # a success. Player patterns should match the exact wording of the reply.
+      #
+      # When a player's pattern ended the wait, the reply comes back as a
+      # {PlayerSuccess}. bput returns non-empty text only from a pattern match,
+      # so a non-empty reply that none of the caller's patterns matches came
+      # from a player's pattern. That needs every built-in pattern to match its
+      # own match text (bput returns only the matched part of the line): no
+      # positive lookahead or lookbehind and no +\B+, which
+      # common_items_item_bput_spec.rb checks for the routed pattern lists.
+      # Player patterns have no such limit; a lookaround in one works.
       #
       # A player's pattern that runs past its match timeout is reported, and
       # the command counts as unanswered: the empty String bput returns when
@@ -135,23 +141,25 @@ module Lich
         return DRC.bput(command, *patterns) if custom.empty?
 
         result = DRC.bput(command, *patterns, *custom)
-        player_only_match?(result, patterns, custom) ? PlayerSuccess.new(result).freeze : result
+        player_match?(result, patterns) ? PlayerSuccess.new(result).freeze : result
       rescue Regexp::TimeoutError
         CustomSubstitutions.report_section_timeout(CUSTOM_SUCCESS_KEY, verb, "'#{command}' was treated as unanswered.")
         ''
       end
 
-      # Whether +result+ came from one of the player's +custom+ patterns rather
-      # than any of the caller's +patterns+; see {item_bput}.
+      # Whether +result+, a reply from a bput that was given the player's
+      # patterns after the caller's +patterns+, came from a player's pattern:
+      # it is non-empty and none of the caller's patterns matches it. See
+      # {item_bput} for why that is exact. The player's patterns are not
+      # matched again: bput returns only the matched text, which a pattern
+      # with a lookaround need not match a second time.
       #
       # @param result [String] bput's reply
       # @param patterns [Array] the caller's bput arguments
-      # @param custom [Array<Regexp>] the player's patterns
       # @return [Boolean]
       # @api private
-      def player_only_match?(result, patterns, custom)
+      def player_match?(result, patterns)
         return false if result.nil? || result.empty?
-        return false unless custom.any? { |pattern| pattern.match?(result) }
 
         # The conversion bput applies to a non-Regexp pattern.
         built_in = patterns.flatten.reject { |item| item.is_a?(Hash) }.map { |item| item.is_a?(Regexp) ? item : /#{item}/i }
