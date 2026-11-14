@@ -346,7 +346,7 @@ jobs:
             const WINDOWS_STARTUP_PATHS = [
               'lich.rbw', 'lib/main/early_exit.rb', 'lib/gemcheck.rb', 'lib/bundler_recovery.rb',
               'lib/dependency_recovery.rb', 'lib/accepted_gem_policy.rb', 'lib/runtime_gem_contract.rb',
-              'lib/recovery_unit_policy.rb',
+              'lib/recovery_unit_policy.rb', 'lib/main/webui_startup.rb',
             ];
             // Helpers that carry the default-startup acceptance result between
             // processes; the Windows job is where that file handling is proven.
