@@ -75,6 +75,97 @@ module Lich
         CustomSubstitutions.resolve(:custom_trash_storage, TRASH_STORAGE, type: :names)
       end
 
+      # Settings key holding a player's extra success patterns, a map of verb
+      # => list of regular expressions; see {item_bput}.
+      CUSTOM_SUCCESS_KEY = :custom_item_success_patterns
+
+      # Verbs whose success patterns a player may extend through
+      # {CUSTOM_SUCCESS_KEY}: the first word of each command {item_bput} sends.
+      CUSTOM_SUCCESS_VERBS = %w[close get give lift lower open put remove sheath stow swap tie unload untie wear wield].freeze
+
+      # A {item_bput} reply that only one of the player's own success patterns
+      # matched -- none of the built-in patterns of that call did. Callers count
+      # it as success: +when PlayerSuccess+ in a +case+, or
+      # +PlayerSuccess === result+. It is otherwise the reply String itself.
+      class PlayerSuccess < String; end
+
+      # The player's extra success patterns for +verb+ from
+      # {CUSTOM_SUCCESS_KEY}, validated and compiled with a match timeout.
+      #
+      # @param verb [String] one of {CUSTOM_SUCCESS_VERBS}
+      # @return [Array<Regexp>] the patterns (possibly empty)
+      # @see CustomSubstitutions.resolve_section
+      def custom_success_patterns(verb)
+        CustomSubstitutions.resolve_section(CUSTOM_SUCCESS_KEY, verb, type: :regexes, sections: CUSTOM_SUCCESS_VERBS)
+      end
+
+      # {DRC.bput} for an item command, with the player's extra success
+      # patterns for the command's verb (its first word) tried after every
+      # pattern the caller passes.
+      #
+      # bput tries its patterns in order on each line, so on any one line a
+      # built-in pattern -- success or failure -- wins over a player's pattern.
+      # But bput reads every line that arrives while it waits, not only the
+      # reply to this command: room text, other scripts' commands and their
+      # replies. A broad player pattern such as +^You+ can therefore match an
+      # unrelated line before the reply arrives and count a failed command as
+      # a success. Player patterns should match the exact wording of the reply.
+      #
+      # When a player's pattern ended the wait, the reply comes back as a
+      # {PlayerSuccess}. bput returns non-empty text only from a pattern match,
+      # so a non-empty reply that none of the caller's patterns matches came
+      # from a player's pattern. That needs every built-in pattern to match its
+      # own match text (bput returns only the matched part of the line): no
+      # positive lookahead or lookbehind and no +\B+, which
+      # common_items_item_bput_spec.rb checks for the routed pattern lists.
+      # Player patterns have no such limit; a lookaround in one works.
+      #
+      # A player's pattern that runs past its match timeout is reported, and
+      # the command counts as unanswered: the empty String bput returns when
+      # nothing matched.
+      #
+      # @param command [String] the command to send; its first word selects
+      #   the player's patterns
+      # @param patterns [Array<Hash, Regexp, String, Array>] bput's own
+      #   arguments: an optional options Hash first, then patterns or lists of
+      #   patterns, in bput's order
+      # @return [String, PlayerSuccess] bput's reply
+      # @example
+      #   case DRCI.item_bput("remove my cloak", REMOVE_ITEM_SUCCESS_PATTERNS, REMOVE_ITEM_FAILURE_PATTERNS)
+      #   when *REMOVE_ITEM_SUCCESS_PATTERNS, PlayerSuccess then true
+      #   else false
+      #   end
+      def item_bput(command, *patterns)
+        verb = command.to_s[/\A\s*(\w+)/, 1]&.downcase
+        custom = CUSTOM_SUCCESS_VERBS.include?(verb) ? custom_success_patterns(verb) : []
+        return DRC.bput(command, *patterns) if custom.empty?
+
+        result = DRC.bput(command, *patterns, *custom)
+        player_match?(result, patterns) ? PlayerSuccess.new(result).freeze : result
+      rescue Regexp::TimeoutError
+        CustomSubstitutions.report_section_timeout(CUSTOM_SUCCESS_KEY, verb, "'#{command}' was treated as unanswered.")
+        ''
+      end
+
+      # Whether +result+, a reply from a bput that was given the player's
+      # patterns after the caller's +patterns+, came from a player's pattern:
+      # it is non-empty and none of the caller's patterns matches it. See
+      # {item_bput} for why that is exact. The player's patterns are not
+      # matched again: bput returns only the matched text, which a pattern
+      # with a lookaround need not match a second time.
+      #
+      # @param result [String] bput's reply
+      # @param patterns [Array] the caller's bput arguments
+      # @return [Boolean]
+      # @api private
+      def player_match?(result, patterns)
+        return false if result.nil? || result.empty?
+
+        # The conversion bput applies to a non-Regexp pattern.
+        built_in = patterns.flatten.reject { |item| item.is_a?(Hash) }.map { |item| item.is_a?(Regexp) ? item : /#{item}/i }
+        built_in.none? { |pattern| pattern.match?(result) }
+      end
+
       DROP_TRASH_SUCCESS_PATTERNS = [
         /^You drop/,
         /^You put/,
@@ -1899,13 +1990,13 @@ module Lich
           return false
         end
 
-        result = DRC.bput("stow #{hand}", BRAID_TOO_LONG_PATTERN, CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
+        result = item_bput("stow #{hand}", BRAID_TOO_LONG_PATTERN, CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
         braid_match = result&.match(BRAID_TOO_LONG_PATTERN)
         if braid_match
           dispose_trash(DRC.get_noun(braid_match[:braid_name]))
         elsif STOW_ITEM_RETRY_PATTERNS.any? { |pat| pat.match?(result) }
           stow_hand(hand, retries: retries - 1)
-        elsif STOW_ITEM_SUCCESS_PATTERNS.any? { |pat| pat.match?(result) }
+        elsif PlayerSuccess === result || STOW_ITEM_SUCCESS_PATTERNS.any? { |pat| pat.match?(result) }
           true
         else
           false
@@ -2028,7 +2119,7 @@ module Lich
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)
 
         target = item.to_s.match?(ITEM_ID_REF_PATTERN) ? item : DRC.get_noun(item)
-        DRC.bput("get #{item} #{from}", GET_ITEM_FAILURE_PATTERNS, GET_ITEM_SUCCESS_PATTERNS)
+        item_bput("get #{item} #{from}", GET_ITEM_FAILURE_PATTERNS, GET_ITEM_SUCCESS_PATTERNS)
 
         10.times do
           break if in_hands?(target)
@@ -2058,8 +2149,8 @@ module Lich
 
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)
-        case DRC.bput("get #{item} #{from}", GET_ITEM_SUCCESS_PATTERNS, GET_ITEM_FAILURE_PATTERNS)
-        when *GET_ITEM_SUCCESS_PATTERNS
+        case item_bput("get #{item} #{from}", GET_ITEM_SUCCESS_PATTERNS, GET_ITEM_FAILURE_PATTERNS)
+        when *GET_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           return true
         else
           return false
@@ -2102,10 +2193,10 @@ module Lich
       # @see .tie_item?
       def tie_item_result(item, container = nil)
         place = container ? "to #{item_ref(container)}" : nil
-        case DRC.bput("tie #{item_ref(item)} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_EMPTY_PATTERN, TIE_ITEM_FAILURE_PATTERNS)
+        case item_bput("tie #{item_ref(item)} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_EMPTY_PATTERN, TIE_ITEM_FAILURE_PATTERNS)
         when TIE_ITEM_ALREADY_TIED_PATTERN
           :already_tied
-        when *TIE_ITEM_SUCCESS_PATTERNS
+        when *TIE_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           :tied
         when TIE_ITEM_EMPTY_PATTERN
           :empty
@@ -2123,8 +2214,8 @@ module Lich
       # @see .tie_item? Inverse operation
       def untie_item?(item, container = nil)
         place = container ? "from #{item_ref(container)}" : nil
-        case DRC.bput("untie #{item_ref(item)} #{place}", UNTIE_ITEM_SUCCESS_PATTERNS, UNTIE_ITEM_FAILURE_PATTERNS)
-        when *UNTIE_ITEM_SUCCESS_PATTERNS
+        case item_bput("untie #{item_ref(item)} #{place}", UNTIE_ITEM_SUCCESS_PATTERNS, UNTIE_ITEM_FAILURE_PATTERNS)
+        when *UNTIE_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           true
         else
           false
@@ -2165,8 +2256,8 @@ module Lich
       # @return [Boolean] true if item was worn successfully
       # @api private
       def wear_item_unsafe?(item)
-        case DRC.bput("wear #{item}", WEAR_ITEM_SUCCESS_PATTERNS, WEAR_ITEM_FAILURE_PATTERNS)
-        when *WEAR_ITEM_SUCCESS_PATTERNS
+        case item_bput("wear #{item}", WEAR_ITEM_SUCCESS_PATTERNS, WEAR_ITEM_FAILURE_PATTERNS)
+        when *WEAR_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           return true
         else
           return false
@@ -2207,8 +2298,8 @@ module Lich
       # @return [Boolean] true if item was removed successfully
       # @api private
       def remove_item_unsafe?(item)
-        case DRC.bput("remove #{item}", REMOVE_ITEM_SUCCESS_PATTERNS, REMOVE_ITEM_FAILURE_PATTERNS)
-        when *REMOVE_ITEM_SUCCESS_PATTERNS
+        case item_bput("remove #{item}", REMOVE_ITEM_SUCCESS_PATTERNS, REMOVE_ITEM_FAILURE_PATTERNS)
+        when *REMOVE_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           return true
         else
           return false
@@ -2259,10 +2350,10 @@ module Lich
           return false
         end
 
-        case DRC.bput("stow #{item}", CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
+        case item_bput("stow #{item}", CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
         when *STOW_ITEM_RETRY_PATTERNS
           return stow_item_unsafe?(item, retries: retries - 1)
-        when *STOW_ITEM_SUCCESS_PATTERNS
+        when *STOW_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           return true
         else
           return false
@@ -2286,8 +2377,8 @@ module Lich
         return false unless in_hands?(item)
 
         hand = in_left_hand?(item) ? 'left' : 'right'
-        case DRC.bput("lower ground #{hand}", *LOWER_SUCCESS_PATTERNS, *LOWER_FAILURE_PATTERNS)
-        when *LOWER_SUCCESS_PATTERNS
+        case item_bput("lower ground #{hand}", *LOWER_SUCCESS_PATTERNS, *LOWER_FAILURE_PATTERNS)
+        when *LOWER_SUCCESS_PATTERNS, PlayerSuccess
           true
         else
           false
@@ -2313,8 +2404,8 @@ module Lich
         return false unless item
 
         item = item.split.last # Necessary until adjectives are implemented for lift
-        case DRC.bput("lift #{item}", LIFT_SUCCESS_PATTERNS, LIFT_FAILURE_PATTERNS)
-        when *LIFT_SUCCESS_PATTERNS
+        case item_bput("lift #{item}", LIFT_SUCCESS_PATTERNS, LIFT_FAILURE_PATTERNS)
+        when *LIFT_SUCCESS_PATTERNS, PlayerSuccess
           if stow.is_a?(String)
             put_away_item?(item, stow)
           elsif stow
@@ -2541,7 +2632,7 @@ module Lich
 
         command = "put #{item} #{preposition} #{container}" if container
         command = "stow #{item}" unless container
-        result = DRC.bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS, PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
+        result = item_bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS, PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
         case result
         when *CONTAINER_IS_CLOSED_PATTERNS
           return false unless container && open_container?(container)
@@ -2549,7 +2640,7 @@ module Lich
           return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_RETRY_PATTERNS
           return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
-        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
+        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           return true
         when *PUT_AWAY_ITEM_FAILURE_PATTERNS
           return false
@@ -2624,16 +2715,16 @@ module Lich
         # pattern matched: "You just can't get the brazier to fit in the
         # satchel, no matter how you arrange it." must come back as "no
         # matter how you arrange it", not "You just can't get".
-        case DRC.bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS,
-                      PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS, PUT_AWAY_ITEM_MISSING_PATTERNS, PUT_AWAY_ITEM_NO_ROOM_PATTERNS,
-                      PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
+        case item_bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+                       PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS, PUT_AWAY_ITEM_MISSING_PATTERNS, PUT_AWAY_ITEM_NO_ROOM_PATTERNS,
+                       PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
         when *CONTAINER_IS_CLOSED_PATTERNS
           return :closed unless container && open_container?(container)
 
           put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_RETRY_PATTERNS
           put_away_item_result(item, container, preposition: preposition, retries: retries - 1)
-        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
+        when *PUT_AWAY_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           :put
         when *PUT_AWAY_ITEM_NOT_HOLDING_PATTERNS
           :not_holding
@@ -2662,8 +2753,8 @@ module Lich
       #
       # @see .close_container?
       def open_container?(container)
-        case DRC.bput("open #{container}", OPEN_CONTAINER_SUCCESS_PATTERNS, OPEN_CONTAINER_FAILURE_PATTERNS)
-        when *OPEN_CONTAINER_SUCCESS_PATTERNS
+        case item_bput("open #{container}", OPEN_CONTAINER_SUCCESS_PATTERNS, OPEN_CONTAINER_FAILURE_PATTERNS)
+        when *OPEN_CONTAINER_SUCCESS_PATTERNS, PlayerSuccess
           return true
         end
         return false
@@ -2676,8 +2767,8 @@ module Lich
       #
       # @see .open_container?
       def close_container?(container)
-        case DRC.bput("close #{container}", CLOSE_CONTAINER_SUCCESS_PATTERNS, CLOSE_CONTAINER_FAILURE_PATTERNS)
-        when *CLOSE_CONTAINER_SUCCESS_PATTERNS
+        case item_bput("close #{container}", CLOSE_CONTAINER_SUCCESS_PATTERNS, CLOSE_CONTAINER_FAILURE_PATTERNS)
+        when *CLOSE_CONTAINER_SUCCESS_PATTERNS, PlayerSuccess
           return true
         end
         return false
@@ -2708,8 +2799,8 @@ module Lich
         end
 
         command = item ? "give #{item_ref(item)} to #{target}" : "give #{target}"
-        case DRC.bput(command, { 'timeout' => 35 }, /GIVE it again/, /give it to me again/, /^You don't need to specify the object/, /already has an outstanding offer/, GIVE_ITEM_SUCCESS_PATTERNS, GIVE_ITEM_FAILURE_PATTERNS)
-        when *GIVE_ITEM_SUCCESS_PATTERNS
+        case item_bput(command, { 'timeout' => 35 }, /GIVE it again/, /give it to me again/, /^You don't need to specify the object/, /already has an outstanding offer/, GIVE_ITEM_SUCCESS_PATTERNS, GIVE_ITEM_FAILURE_PATTERNS)
+        when *GIVE_ITEM_SUCCESS_PATTERNS, PlayerSuccess
           true
         when *GIVE_ITEM_FAILURE_PATTERNS
           false
@@ -2725,8 +2816,8 @@ module Lich
           if in_right_hand?(item)
             give_item?(target, retries: retries - 1)
           elsif in_left_hand?(item)
-            case DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
-            when *SWAP_HANDS_SUCCESS_PATTERNS
+            case item_bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
+            when *SWAP_HANDS_SUCCESS_PATTERNS, PlayerSuccess
               give_item?(target, retries: retries - 1)
             else
               false

@@ -350,7 +350,7 @@ module Lich
           return false
         end
 
-        result = DRC.bput("remove my #{item.short_name}", *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, *DRCI::REMOVE_ITEM_FAILURE_PATTERNS, "then constricts tighter around your")
+        result = DRCI.item_bput("remove my #{item.short_name}", *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, *DRCI::REMOVE_ITEM_FAILURE_PATTERNS, "then constricts tighter around your")
         waitrt?
         case result
         when /then constricts tighter around your/
@@ -384,12 +384,12 @@ module Lich
           pick_up_lowered_items(lowered, item.short_name)
           # In case they end up in different hands, swap.
           if DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item
-            swap_result = DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
-            unless DRCI::SWAP_HANDS_SUCCESS_PATTERNS.any? { |p| p.match?(swap_result) }
+            swap_result = DRCI.item_bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+            unless DRCI::PlayerSuccess === swap_result || DRCI::SWAP_HANDS_SUCCESS_PATTERNS.any? { |p| p.match?(swap_result) }
               Lich::Messaging.msg("bold", "EquipmentManager: Unable to restore hand order after removing #{item.short_name}")
             end
           end
-        when *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS
+        when *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, DRCI::PlayerSuccess
           # If removing item transforms it (e.g. exoskeletal armor => orb) then continue with the transformed item.
           if item.transforms_to && DRCI.in_hands?(item.transforms_to)
             transform_desc = item.transforms_to
@@ -401,7 +401,7 @@ module Lich
           end
           if item.tie_to || item.wield || item.container
             stow_by_type(item)
-          elsif /more room|too long to fit/ =~ DRC.bput("stow my #{item.short_name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
+          elsif /more room|too long to fit/ =~ DRCI.item_bput("stow my #{item.short_name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
             wear_item?(item)
           end
         end
@@ -448,8 +448,8 @@ module Lich
         # (e.g. get placed it there), swap it over; if it's already in the left
         # hand, we're done -- previously this returned false in that case.
         if DRCI.in_right_hand?(weapon)
-          case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
-          when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
+          case DRCI.item_bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+          when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, DRCI::PlayerSuccess
             return true
           else
             return false
@@ -488,8 +488,8 @@ module Lich
           swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
 
           if offhand && DRCI.in_right_hand?(weapon)
-            case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
-            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
+            case DRCI.item_bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, DRCI::PlayerSuccess
               return true
             else
               return false
@@ -516,8 +516,8 @@ module Lich
         return true if DRCI.in_hands?(item)
 
         if item.wield
-          case DRC.bput("wield my #{item.short_name}", *DRCI::WIELD_ITEM_SUCCESS_PATTERNS, *DRCI::WIELD_ITEM_FAILURE_PATTERNS)
-          when *DRCI::WIELD_ITEM_SUCCESS_PATTERNS
+          case DRCI.item_bput("wield my #{item.short_name}", *DRCI::WIELD_ITEM_SUCCESS_PATTERNS, *DRCI::WIELD_ITEM_FAILURE_PATTERNS)
+          when *DRCI::WIELD_ITEM_SUCCESS_PATTERNS, DRCI::PlayerSuccess
             return true
           else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to wield #{item.short_name}")
@@ -730,7 +730,7 @@ module Lich
         data = verb_data(item)[type]
         snapshot = [DRC.left_hand, DRC.right_hand]
         waitrt?
-        response = DRC.bput("#{data[:verb]} my #{item.short_name}", *data[:matches])
+        response = DRCI.item_bput("#{data[:verb]} my #{item.short_name}", *data[:matches])
         waitrt?
 
         # Handle empty/nil response (bput timeout) as failure
@@ -915,7 +915,7 @@ module Lich
       # @see DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS
       # @see DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS
       def unload_weapon(name)
-        result = DRC.bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
+        result = DRCI.item_bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
         waitrt? # wait out the unload roundtime so the ammo/hand state has settled before we act on it
         return if result&.match?(/As you release the string.* fades and disappears/)
 
@@ -936,7 +936,7 @@ module Lich
           unless pick_up_lowered_item?(name, from_hand: weapon_hand)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
-        elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
+        elsif result && (DRCI::PlayerSuccess === result || DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) })
           # Unload succeeded with the ammo now in a hand. Stow whichever hand is NOT
           # the weapon, comparing by NOUN against the actual hand contents -- robust to
           # the <dialogData ...AimTimer...> tag the game prepends (which the old
@@ -1075,7 +1075,7 @@ module Lich
         hands_before = { 'left' => DRC.left_hand, 'right' => DRC.right_hand }
         attempts.times do |attempt|
           pause 1 if attempt.positive?
-          result = DRC.bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
+          result = DRCI.item_bput("get #{DRCI.item_ref(item)}", *DRCI::GET_ITEM_FAILURE_PATTERNS, *DRCI::GET_ITEM_SUCCESS_PATTERNS)
           break unless DRC::IMMOBILE_PATTERN.match?(result)
         end
 
@@ -1150,7 +1150,7 @@ module Lich
           return false
         end
 
-        result = DRC.bput(action, *accept_strings, *failure_patterns, *STOW_RECOVERY_PATTERNS)
+        result = DRCI.item_bput(action, *accept_strings, *failure_patterns, *STOW_RECOVERY_PATTERNS)
         if result.nil? || result.empty?
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper got no response for '#{action}'")
           return false
