@@ -539,6 +539,15 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         expect($stdout.string).to be_empty
       end
 
+      it 'shows the prompt when stdin is a terminal, and still asks once' do
+        tty = terminal.new('typed pass')
+
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', '--password-stdin'], stdin: tty)).to eq(0)
+        expect(tty.reads).to eq(1)
+        expect($stdout.string).to eq("New password: \n")
+        expect(cli_password).to have_received(:change_account_password).with('DOUG', 'typed pass')
+      end
+
       it 'exits 1 at end-of-input' do
         expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', '--password-stdin'], stdin: StringIO.new(''))).to eq(1)
         expect($stdout.string).to include('Unable to read password')
@@ -621,6 +630,14 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         expect($stdout.string).to be_empty
       end
 
+      it 'names each line it is waiting for when stdin is a terminal' do
+        tty = terminal.new('old pass', 'new-master-pass')
+
+        expect(run_handler(:handle_change_master_password, ['-cmp', '--password-stdin'], stdin: tty)).to eq(0)
+        expect($stdout.string).to eq("Current master password: \nNew master password: \n")
+        expect(cli_password).to have_received(:change_master_password).with('old pass', 'new-master-pass')
+      end
+
       it 'exits 1 when the second line is missing, and says which lines are read' do
         expect(run_handler(:handle_change_master_password, ['-cmp', '--password-stdin'], stdin: StringIO.new("old pass\n"))).to eq(1)
         expect($stdout.string).to include('Unable to read password')
@@ -679,6 +696,15 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     it 'reads one line with --password-stdin, edge spaces intact' do
       expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: StringIO.new(" padded \n"))).to eq(0)
       expect(cli_password).to have_received(:recover_master_password).with(' padded ')
+    end
+
+    it 'prints no prompt for a piped line, and shows one when stdin is a terminal' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: StringIO.new("piped\n"))).to eq(0)
+      expect($stdout.string).to be_empty
+
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: terminal.new('typed'))).to eq(0)
+      expect($stdout.string).to eq("Enter master password: \n")
+      expect(cli_password).to have_received(:recover_master_password).with('typed')
     end
 
     it 'exits 1 at end-of-input with --password-stdin' do

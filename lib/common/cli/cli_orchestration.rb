@@ -60,7 +60,7 @@ module Lich
           new_password = command_line_secret(ARGV[idx + 2], name: 'NEWPASSWORD', after: 'ACCOUNT', command: ARGV[idx],
                                                             password_stdin: password_stdin, usage: usage)
           new_password ||= if password_stdin
-                             read_secret_or_exit('', from_stdin: true, usage: usage)
+                             read_secret_or_exit('New password: ', from_stdin: true, usage: usage)
                            else
                              read_confirmed_secret_or_exit('New password: ', 'Confirm new password: ', usage: usage)
                            end
@@ -342,8 +342,8 @@ module Lich
             # NEWPASSWORD is only read behind an OLDPASSWORD; the warning above covers both.
             new_password = ARGV[idx + 2]
           elsif password_stdin
-            old_password = read_secret_or_exit('', from_stdin: true, usage: usage)
-            new_password = read_secret_or_exit('', from_stdin: true, usage: usage)
+            old_password = read_secret_or_exit('Current master password: ', from_stdin: true, usage: usage)
+            new_password = read_secret_or_exit('New master password: ', from_stdin: true, usage: usage)
           else
             # The new password is prompted for once this one has been checked.
             old_password = read_secret_or_exit('Current master password: ', from_stdin: false, usage: usage)
@@ -363,7 +363,7 @@ module Lich
           password_stdin = ARGV.include?(PASSWORD_STDIN_FLAG)
           master_password = command_line_secret(ARGV[idx + 1], name: 'PASSWORD', after: ARGV[idx], command: ARGV[idx],
                                                                password_stdin: password_stdin, usage: usage)
-          master_password ||= read_secret_or_exit('', from_stdin: true, usage: usage) if password_stdin
+          master_password ||= read_secret_or_exit('Enter master password: ', from_stdin: true, usage: usage) if password_stdin
 
           # Left nil, recover_master_password prompts for it.
           exit Lich::Common::Authentication::CLIPassword.recover_master_password(master_password)
@@ -431,7 +431,7 @@ module Lich
           lich_script = File.join(LICH_DIR, 'lich.rbw')
           usage = "Usage: ruby #{lich_script} --convert-entries enhanced [--password-stdin]\n" \
                   'Prompts for the new master password; with --password-stdin, reads one line from stdin instead.'
-          password = read_secret_or_exit('', from_stdin: true, usage: usage)
+          password = read_secret_or_exit('Enter new master password: ', from_stdin: true, usage: usage)
           refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(password)
           return password unless refusal
 

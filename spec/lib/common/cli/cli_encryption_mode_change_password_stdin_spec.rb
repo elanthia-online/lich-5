@@ -16,6 +16,14 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
   let(:entry_store) { Lich::Common::Authentication::EntryStore }
   let(:manager) { Lich::Common::GUI::MasterPasswordManager }
   let(:cli_password) { Lich::Common::Authentication::CLIPassword }
+  # Stands in for a terminal: getpass returns one line without its ending.
+  let(:terminal) do
+    Class.new do
+      def initialize(*lines) = @lines = lines
+      def tty? = true
+      def getpass(_prompt = nil) = @lines.shift
+    end
+  end
 
   around do |example|
     original_stdin = $stdin
@@ -49,6 +57,21 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
 
       expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
       expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass')
+    end
+
+    it 'prints no prompt for a piped line' do
+      $stdin = StringIO.new("piped-master-pass\n")
+
+      expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
+      expect($stdout).not_to have_received(:print).with('Enter new master password: ')
+    end
+
+    it 'shows which password it is waiting for when stdin is a terminal' do
+      $stdin = terminal.new('typed-master-pass')
+
+      expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
+      expect($stdout).to have_received(:print).with('Enter new master password: ')
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'typed-master-pass')
     end
 
     it 'applies the shared new-password rule to the piped line, writing nothing' do
@@ -90,6 +113,15 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
 
       expect(described_class.change_mode(:plaintext, password_stdin: true)).to eq(0)
       expect(entry_store).to have_received(:change_encryption_mode).with(anything, :plaintext, nil)
+    end
+
+    it 'asks for the current master password by name when stdin is a terminal' do
+      tty = terminal.new(' padded secret ')
+      tty.define_singleton_method(:gets) { "yes\n" }
+      $stdin = tty
+
+      expect(described_class.change_mode(:plaintext, password_stdin: true)).to eq(0)
+      expect($stdout).to have_received(:print).with('Enter master password: ')
     end
   end
 

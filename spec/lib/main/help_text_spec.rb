@@ -60,6 +60,8 @@ RSpec.describe Lich::Main::HelpText do
 
       expect(output).to include('what you type is not shown')
       expect(output).to include('--change-master-password reads two lines')
+      expect(output).to include('Changing to plaintext')
+      expect(output).to include('it must be "yes".')
       expect(output).to include('master password cannot begin or end with a space.')
       expect(output).to include(%(printf '%s\\n%s\\n' "$OLD" "$NEW" | lich --change-master-password --password-stdin))
     end

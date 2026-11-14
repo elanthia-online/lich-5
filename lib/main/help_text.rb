@@ -156,7 +156,8 @@ module Lich
             Prompted for on the terminal; what you type is not shown.
             --password-stdin reads the password from standard input instead,
             one line each. --change-master-password reads two lines: the
-            current master password, then the new one.
+            current master password, then the new one. Changing to plaintext
+            mode also reads a line after the password; it must be "yes".
             Leading and trailing spaces are part of an account password. A new
             master password cannot begin or end with a space.
             A password on the command line still works but is deprecated: it
