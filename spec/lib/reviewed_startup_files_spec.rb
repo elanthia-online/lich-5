@@ -26,8 +26,11 @@ RSpec.describe 'reviewed startup policy files' do
   # reviewed files.
   # @return [Array(String, String, Process::Status)]
   # @yieldparam dir [String] the copy, to change before the program runs
-  def run_reviewed(reviewed, root, program)
-    Dir.mktmpdir do |dir|
+  # @param parent [String, nil] a directory name to run the copy under, for
+  #   paths with characters a pattern would have to escape
+  def run_reviewed(reviewed, root, program, parent: nil)
+    Dir.mktmpdir do |tmp|
+      dir = parent ? File.join(tmp, parent) : tmp
       reviewed.each do |path|
         FileUtils.mkdir_p(File.join(dir, File.dirname(path)))
         FileUtils.cp(File.join(root, path), File.join(dir, path))
@@ -120,11 +123,15 @@ RSpec.describe 'reviewed startup policy files' do
     expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb cannot be loaded (SyntaxError: ')
   end
 
+  # Lich is often installed under a directory such as "Program Files (x86)",
+  # whose characters a path pattern must escape.
+  windows_parent = 'Lich (x86)+ [1]'
+
   # Cut mid-word, the reader raises NameError as it loads instead.
   %w[lib/archive.rb lib/archive/zip.rb lib/archive/tar_gz.rb].each do |cut|
     it "reports #{cut} cut mid-word as a recovery Error naming that file" do
       reader = tracked_reader.call.grep(reader_pattern)
-      output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+      output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
         path = File.join(dir, cut)
         source = File.binread(path)
         File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
@@ -171,7 +178,7 @@ RSpec.describe 'reviewed startup policy files' do
   # its first frame; the reader file is the one named.
   it 'names the reader file when it raises inside a gem as it loads' do
     reader = tracked_reader.call.grep(reader_pattern)
-    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
       path = File.join(dir, 'lib/archive/zip.rb')
       File.binwrite(path, File.binread(path).sub("require 'zlib'\n", "require 'zlib'\nFileUtils.mkdir_p(nil)\n"))
     end
@@ -185,7 +192,7 @@ RSpec.describe 'reviewed startup policy files' do
   # in a reader file; the message carries its path.
   it 'names the reader file when the loader refuses it' do
     reader = tracked_reader.call.grep(reader_pattern)
-    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
       path = File.join(dir, 'lib/archive/zip.rb')
       File.binwrite(path, File.binread(path).sub('# frozen_string_literal: true', '# encoding: bogus'))
     end

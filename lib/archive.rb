@@ -197,8 +197,10 @@ module Lich
     #   - before folding, because folding turns U+0345 into iota, a starter
     #     that no later NFD can move past, so x U+0345 U+0F73 and
     #     x U+0345 U+0F71 U+0F72 must be ordered before it;
-    #   - after folding, which reorders the U+0300 U+0F73 case and any
-    #     marks folding itself produces.
+    #   - after folding, as Unicode's canonical caseless form ends. With the
+    #     doubled NFD before folding, no name tried (every code point, with
+    #     marks on either side) needs this last step; it is kept because the
+    #     standard form includes it.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a

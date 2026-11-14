@@ -135,8 +135,8 @@ RSpec.describe Lich::Archive::TarGz do
     # NFC keeps the iota subscript composed, and folding then puts the
     # iota ahead of the diaeresis; only NFD before folding matches them.
     'iota subscript'         => [u('r/<1FB3><308>.rb'), u('r/<391><308><399>.rb')],
-    # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
-    # final NFD reorders it.
+    # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; a second
+    # NFD reorders it.
     'Tibetan vowel sign'     => [u('r/<300><F73>.rb'), u('r/<F71><F72><300>.rb')],
     # The same misordering before U+0345, which folding turns into a
     # starter; only a second NFD before folding matches them.
