@@ -14,8 +14,96 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
       File.chmod(0o755, path)
     end
   end
+  let(:browser_bundle) { File.join(browser_directory, 'Fixture Browser.app') }
+  let(:bundle_browser) { File.join(browser_bundle, 'Contents', 'MacOS', 'Fixture Browser') }
 
-  after { FileUtils.remove_entry(browser_directory) if File.directory?(browser_directory) }
+  context 'with an explicit macOS application bundle' do
+    before do |example|
+      skip 'macOS bundle executables: extensionless files are not executable on native Windows' if example.metadata[:macos_bundle_executable] && OS.windows?
+      FileUtils.mkdir_p(File.dirname(bundle_browser))
+      File.write(bundle_browser, '')
+      File.chmod(0o755, bundle_browser)
+      File.write(File.join(browser_bundle, 'Contents', 'Info.plist'), <<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict>
+          <key>CFBundleExecutable</key><string>Fixture Browser</string>
+        </dict></plist>
+      XML
+    end
+
+    %w[environment argument].each do |origin|
+      it "launches the resolved bundle executable from the #{origin}", :macos_bundle_executable do
+        options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
+        calls = []
+
+        expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                    spawn: ->(*argv, **_options) { calls << argv; 42 },
+                                    waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+        expect(calls.first.first).to eq(bundle_browser)
+        expect(calls.first).to include('--new-window')
+      end
+
+      %w[trailing-slash uppercase].each do |variant|
+        it "launches a #{variant} bundle path from the #{origin}", :macos_bundle_executable do
+          bundle = variant == 'uppercase' ? browser_bundle.sub(/\.app\z/, '.APP') : browser_bundle
+          File.rename(browser_bundle, bundle) if variant == 'uppercase'
+          path = variant == 'trailing-slash' ? "#{bundle}/" : bundle
+          options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => path } } : { browser_path: path, environment: {} }
+          calls = []
+
+          expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                      spawn: ->(*argv, **_options) { calls << argv; 42 },
+                                      waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+          expect(calls.first.first).to eq(File.join(bundle, 'Contents', 'MacOS', 'Fixture Browser'))
+        end
+      end
+
+      it "names an unresolved bundle from the #{origin} in the failure message" do
+        File.delete(bundle_browser)
+        options = origin == 'environment' ? { environment: { 'LICH_WEBUI_BROWSER' => browser_bundle } } : { browser_path: browser_bundle, environment: {} }
+        failures = []
+        spawned = []
+
+        expect(described_class.open('http://127.0.0.1/', platform: 'darwin', **options,
+                                    spawn: ->(*) { spawned << true }, on_failure: ->(message) { failures << message })).to be(false)
+
+        detail = if origin == 'environment'
+                   "LICH_WEBUI_BROWSER names '#{browser_bundle}', which has no executable; fix or unset LICH_WEBUI_BROWSER"
+                 else
+                   "the configured browser application '#{browser_bundle}' has no executable; set the Browser path in the launcher Settings or clear it"
+                 end
+        expect(failures).to eq(["unable to open WebUI window: #{detail}"])
+        expect(spawned).to be_empty
+        expect { described_class.command_for('http://127.0.0.1/', platform: 'darwin', **options) }
+          .to raise_error(Lich::WebUI::Error, detail)
+      end
+    end
+
+    it 'resolves a binary property list with the native property-list reader', :macos_bundle_executable do
+      plist = File.join(browser_bundle, 'Contents', 'Info.plist')
+      File.write(plist, '<plist><dict>')
+      status = instance_double(Process::Status, success?: true)
+      allow(Open3).to receive(:capture3).with('/usr/bin/plutil', '-extract', 'CFBundleExecutable', 'raw', '--', plist)
+                                        .and_return(["Fixture Browser\n", '', status])
+
+      expect(described_class.command_for('http://127.0.0.1/', platform: 'darwin', browser_path: browser_bundle, environment: {}).first)
+        .to eq(bundle_browser)
+    end
+
+    %w[linux mingw].each do |platform|
+      it "keeps explicit application bundle paths unchanged on #{platform}" do
+        expect(described_class.command_for('http://127.0.0.1/', platform: platform, browser_path: browser_bundle, environment: {}).first)
+          .to eq(browser_bundle)
+      end
+    end
+  end
+
+  after do
+    described_class.native_unavailable = false
+    FileUtils.remove_entry(browser_directory) if File.directory?(browser_directory)
+  end
 
   %w[darwin mingw linux].each do |platform|
     it "keeps launch credentials off #{platform} process arguments" do
@@ -55,6 +143,30 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
     allow(File).to receive(:executable?).with(Lich::WebUI::NativeHost::EXECUTABLE).and_return(false)
     expect(described_class).not_to receive(:app_browser_path)
     expect { described_class.command_for('http://127.0.0.1:1234/', environment: {}) }.to raise_error(Lich::WebUI::Error, /helper is missing/)
+  end
+
+  it 'opens an isolated browser launch file when native hosting is unavailable for the session' do
+    allow(OS).to receive(:mac?).and_return(true)
+    allow(described_class).to receive(:app_browser_path).with(hash_including(platform: 'darwin')).and_return(browser)
+    expect(Lich::WebUI::NativeHost).not_to receive(:command_for)
+    described_class.native_unavailable = true
+    arguments = nil
+    launch_path = nil
+
+    expect(described_class.open('http://127.0.0.1:1234/auth?token=fixture-token', platform: 'darwin', environment: {},
+                                spawn: lambda { |*argv, **_options|
+                                  arguments = argv
+                                  launch_path = URI::DEFAULT_PARSER.unescape(URI(argv.last.delete_prefix('--app=')).path).sub(%r{\A/(?=[A-Za-z]:/)}, '')
+                                  expect(File.read(launch_path)).to include('fixture-token')
+                                  42
+                                },
+                                waitpid: ->(*) {}, thread_factory: ->(&work) { work.call })).to be(true)
+
+    expect(arguments.first).to eq(browser)
+    expect(arguments).to include(a_string_starting_with('--user-data-dir='))
+    expect(arguments.join(' ')).not_to include('fixture-token')
+    expect(launch_path).to end_with('/launch.html')
+    expect(File.exist?(File.dirname(launch_path))).to be(false)
   end
 
   it 'uses ordinary platform discovery off macOS without needing the native helper' do
@@ -212,6 +324,19 @@ RSpec.describe Lich::WebUI::BrowserLauncher do
   it 'does not consider Microsoft Edge outside Windows' do
     expect(described_class.app_browser_path(platform: 'darwin', environment: {}, executable: ->(*) { false })).to be_nil
     expect(described_class.chrome_candidates(platform: 'darwin', environment: {})).not_to include(/Microsoft Edge/)
+  end
+
+  it 'prefers Chrome then discovers system or user Chromium installations on macOS' do
+    chrome = described_class::MACOS_PATHS.first
+    chromium = described_class::MACOS_CHROMIUM_PATHS.first
+    available = [chromium, chrome]
+    expect(described_class.app_browser_path(platform: 'darwin', environment: {},
+                                            executable: ->(path) { available.include?(path) })).to eq(chrome)
+
+    described_class::MACOS_CHROMIUM_PATHS.each do |candidate|
+      expect(described_class.app_browser_path(platform: 'darwin', environment: {},
+                                              executable: ->(path) { path == candidate })).to eq(candidate)
+    end
   end
 
   it 'raises when Google Chrome is not installed' do

@@ -7,8 +7,8 @@ module Lich
     # Commands that print to stdout and exit without starting a session.
     #
     # lich.rbw dispatches these before Lich::GemCheck.verify! and before
-    # lib/init.rb requires GTK, so they stay usable on a runtime that cannot
-    # load a toolkit. Without that ordering, `--help` cannot report the very
+    # lib/init.rb initializes the application, so they stay usable on a runtime
+    # with missing dependencies. Without that ordering, `--help` cannot report the very
     # options that make a headless launch work.
     #
     # The allow-list is deliberately syntactic. It reads ARGV and nothing else.
@@ -16,7 +16,7 @@ module Lich
     # the guarantee that #1439 introduced.
     #
     # Membership is limited to commands that need no directory, no log file,
-    # and no database. lib/init.rb creates all three after the GTK require, so
+    # and no database. lib/init.rb creates all three, so
     # a command that needs any of them cannot move into this module.
     module EarlyExit
       HELP_FLAGS = ['-h', '--help'].freeze

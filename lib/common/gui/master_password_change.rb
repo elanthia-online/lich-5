@@ -299,7 +299,7 @@ module Lich
 
               # Share CLI publication and handled-failure keychain rollback.
               Lich::Common::Authentication::EntryStore.write_yaml_with_master_password(
-                yaml_file, yaml_data, new_password
+                yaml_file, yaml_data, new_password, manager: MasterPasswordManager
               )
 
               Lich.log "info: Master password changed successfully"

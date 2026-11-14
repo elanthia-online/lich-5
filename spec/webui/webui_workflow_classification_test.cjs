@@ -97,7 +97,7 @@ const MACOS_FILES = [
 const WINDOWS_STARTUP_FILES = [
   'lich.rbw', 'lib/main/early_exit.rb', 'lib/gemcheck.rb', 'lib/bundler_recovery.rb',
   'lib/dependency_recovery.rb', 'lib/accepted_gem_policy.rb', 'lib/runtime_gem_contract.rb',
-  'lib/recovery_unit_policy.rb',
+  'lib/recovery_unit_policy.rb', 'lib/main/webui_startup.rb',
 ];
 
 // Default-startup acceptance helpers, which only the Windows job exercises.
@@ -330,7 +330,7 @@ for (const filename of [
   'lib/common/gui_login.rb.bak', 'spec/support/data_dir.rb.bak',
   'spec/lib/main/unrelated_spec.rb', 'spec/lib/main/default_webui_acceptance_report_spec.rb.bak',
   'spec/lib/real_keychain_fence_spec.rb.bak', 'spec/lib/common/authentication/unrelated_spec.rb',
-  'lich.rbw.bak', 'lib/gemcheck.rb.bak', 'lib/main/early_exit_extra.rb', 'lib/gemcheck_extra.rb',
+  'lich.rbw.bak', 'lib/gemcheck.rb.bak', 'lib/main/early_exit_extra.rb', 'lib/gemcheck_extra.rb', 'lib/main/webui_startup_extra.rb',
   '.github/workflows/lint_pr.yaml', '.github/workflows/ci.yml.bak', '.github/scripts/check_r4l5_contract.rb',
 ]) {
   test(`unrelated or near-prefix path selects nothing: ${filename}`, async () => {

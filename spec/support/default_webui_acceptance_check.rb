@@ -30,6 +30,7 @@ nil
 begin
   env = {
     'RUBYOPT'                      => "-r#{probe}",
+    'LICH_WEBUI_BROWSER'           => nil,
     'LICH_CI_DEFAULT_WEBUI_REPORT' => report_path,
     'LICH_CI_DEFAULT_WEBUI_ROOT'   => acceptance_root
   }

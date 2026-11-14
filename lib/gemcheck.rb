@@ -143,7 +143,7 @@ module Lich
     end
 
     # The initial non-Windows recovery is deliberately macOS-only and only
-    # covers default runtime gems. GTK remains outside this Bundler path.
+    # covers the default runtime group used by current startup.
     # @param groups [Array<Symbol>]
     # @return [Boolean]
     def bundler_recovery_supported?(groups)
@@ -151,16 +151,12 @@ module Lich
     end
 
     # Chooses the dependency groups that must be present before normal startup.
-    # Only Windows verifies GTK here, because Ruby4Lich5 publishes a Windows
-    # recovery unit for it. On every platform, init.rb treats GTK as required
-    # unless the user explicitly passes --no-gtk or --no-gui.
+    # The native WebUI launcher has no GUI gem dependency.
     #
-    # @param argv [Array<String>] command-line arguments
+    # @param _argv [Array<String>] retained compatibility argument; WebUI needs only the default group
     # @return [Array<Symbol>]
-    def startup_groups(argv = ARGV)
-      groups = [:default]
-      groups << :gtk if self_healing_supported? && !Array(argv).any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
-      groups
+    def startup_groups(_argv = ARGV)
+      [:default]
     end
 
     # Fetches and validates the manifest, requests consent for each affected
@@ -182,7 +178,7 @@ module Lich
       recovery.recover(gem_names, force: force, plan: plan)
     end
 
-    # Runs a consented Bundler repair for the default non-GTK runtime gems on
+    # Runs a consented Bundler repair for the default runtime gem group on
     # macOS. The recovery object uses a shipped lockfile when present, or
     # resolves only within staging before making the private RubyGems home
     # active.
@@ -601,22 +597,25 @@ module Lich
 
     # Shows an error without the normal missing-gem alert's release-page link.
     # @param body [String]
+    # @param title [String] dialog title; Lich.msgbox passes its own for errors
+    #   that are not about missing gems
     # @return [void]
-    def show_notice(body)
+    def show_notice(body, title: TITLE)
       case RUBY_PLATFORM
-      when /mswin|mingw|cygwin/ then notice_windows(body)
-      when /darwin/             then alert_macos(body)
-      else                           alert_linux(body)
+      when /mswin|mingw|cygwin/ then notice_windows(body, title: title)
+      when /darwin/             then alert_macos(body, title: title)
+      else                           alert_linux(body, title: title)
       end
     rescue StandardError
       warn "!!ALERT!! #{body}"
     end
 
     # @param body [String]
+    # @param title [String]
     # @return [void]
-    def notice_windows(body)
+    def notice_windows(body, title: TITLE)
       require 'win32ole'
-      WIN32OLE.new('WScript.Shell').Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, 64) # OK + information icon
+      WIN32OLE.new('WScript.Shell').Popup(body, CONSENT_TIMEOUT_SECONDS, title, 64) # OK + information icon
     end
 
     # @param body [String]
@@ -630,10 +629,11 @@ module Lich
     end
 
     # @param body [String]
+    # @param title [String]
     # @return [void]
-    def alert_macos(body)
+    def alert_macos(body, title: TITLE)
       script = %(display dialog #{macos_dialog_body(body)} ) +
-               %(with title #{TITLE.inspect} ) +
+               %(with title #{title.inspect} ) +
                %(buttons {"OK"} default button "OK" with icon caution)
       IO.popen(['osascript', '-'], 'r+') do |io|
         io.write(script)
@@ -666,8 +666,9 @@ module Lich
     # one.
     #
     # @param body [String]
+    # @param title [String]
     # @return [void]
-    def alert_linux(body)
+    def alert_linux(body, title: TITLE)
       # Always say it on stderr, whether or not a dialog follows. It costs
       # nothing, it is the whole message rather than a pointer to it, and when
       # stderr is captured (a launcher's output, a service log) it is the only
@@ -678,9 +679,9 @@ module Lich
       return if $stdout.isatty || $stderr.isatty
 
       if cmd_available?('zenity')
-        run_with_timeout(['zenity', '--info', '--title', TITLE, '--text', body], ALERT_TIMEOUT_SECONDS)
+        run_with_timeout(['zenity', '--info', '--title', title, '--text', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('kdialog')
-        run_with_timeout(['kdialog', '--title', TITLE, '--msgbox', body], ALERT_TIMEOUT_SECONDS)
+        run_with_timeout(['kdialog', '--title', title, '--msgbox', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('xmessage')
         run_with_timeout(['xmessage', '-center', body], ALERT_TIMEOUT_SECONDS)
       end
