@@ -13,9 +13,12 @@ module Lich
         # Change encryption mode for all accounts
         #
         # @param new_mode [Symbol] Target encryption mode (:plaintext, :standard, :enhanced)
-        # @param provided_password [String, nil] Optional master password (for automated scripts)
+        # @param provided_password [String, nil] New master password for Enhanced
+        #   mode, when the caller already has it (the deprecated --master-password)
+        # @param password_stdin [Boolean] true when --password-stdin was given: the
+        #   master password this change needs is the next line of stdin
         # @return [Integer] Exit code (0=success, 1=error, 2=not found, 3=invalid mode, 4=cancelled)
-        def self.change_mode(new_mode, provided_password = nil)
+        def self.change_mode(new_mode, provided_password = nil, password_stdin: false)
           data_dir = DATA_DIR
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
@@ -60,10 +63,21 @@ module Lich
           # Handle password requirements based on mode transition
           new_master_password = nil
 
+          # A change needs at most one master password: the current one when
+          # leaving Enhanced mode, the new one when entering it. With
+          # --password-stdin that one is read here, before anything is asked.
+          piped_password = nil
+          if password_stdin && [current_mode, new_mode].include?(:enhanced)
+            piped_password = read_piped_master_password
+            return 1 if piped_password.nil?
+
+            provided_password = piped_password if new_mode == :enhanced
+          end
+
           # If leaving Enhanced mode, validate current password
           if current_mode == :enhanced
             puts "Current mode is Enhanced encryption."
-            master_password = Lich::Common::Authentication::CLIPassword.prompt_for_master_password
+            master_password = piped_password || Lich::Common::Authentication::CLIPassword.prompt_for_master_password
             if master_password.nil?
               puts "Cancelled"
               Lich.log "info: CLI encryption mode change cancelled by user"
@@ -86,6 +100,13 @@ module Lich
 
           # If entering Enhanced mode, get/create master password
           if new_mode == :enhanced
+            refusal = provided_password && Lich::Common::GUI::MasterPasswordManager.new_password_refusal(provided_password)
+            if refusal
+              puts "error: #{refusal}"
+              Lich.log "error: CLI encryption mode change failed - #{refusal}"
+              return 1
+            end
+
             new_master_password = if provided_password
                                     provided_password
                                   else
@@ -140,6 +161,19 @@ module Lich
           Lich.log "error: CLI encryption mode change failed: #{e.class}: #{e.message}"
           1
         end
+
+        # @api private
+        # Reads the master password from stdin for --password-stdin.
+        #
+        # @return [String, nil] the password, or nil after printing why it could not be read
+        def self.read_piped_master_password
+          Lich::Common::Authentication::CLIPassword.read_secret('', from_stdin: true)
+        rescue Lich::Common::Authentication::CLIPassword::SecretInputError => e
+          puts "error: #{e.message}"
+          Lich.log "error: CLI encryption mode change failed - #{e.message}"
+          nil
+        end
+        private_class_method :read_piped_master_password
       end
     end
   end
