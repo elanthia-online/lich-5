@@ -188,10 +188,17 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       allow(client).to receive(:fetch_github_json).and_return(nil)
       allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :unavailable, status: 401))
 
-      sync.sync_all_repos
+      expect(sync.sync_all_repos).to eq(:github_unavailable)
 
       expect(client).to have_received(:fetch_github_json).once
       expect(printed).to eq(['[lich5-update: GitHub check failed. No scripts have been updated this run. This is a temporary error that should resolve itself by your next login.]'])
+    end
+
+    it 'returns nil when every repo was reached' do
+      allow(Lich::Util::Update::CustomRepos).to receive(:all).and_return({})
+      allow(client).to receive(:fetch_github_json).and_return({ 'tree' => [] })
+
+      expect(sync.sync_all_repos).to be_nil
     end
 
     it 'keeps going after a repo-specific 404 and names that repo' do

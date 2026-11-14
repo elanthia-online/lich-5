@@ -21,15 +21,17 @@ module Lich
         # Stops at the first GitHub-wide failure: the remaining repos would
         # fail the same way, and one message is enough.
         #
-        # @return [void]
+        # @return [Symbol, nil] :github_unavailable when the sync stopped on a
+        #   GitHub-wide failure, else nil
         def sync_all_repos
           synced = false
           (SCRIPT_REPOS.keys + CustomRepos.all.keys).each do |repo_key|
             result = sync_repo(repo_key, after_synced_repo: synced)
-            break if result == :github_unavailable
+            return :github_unavailable if result == :github_unavailable
 
             synced ||= result == :synced
           end
+          nil
         end
 
         # Syncs a single repository by key (built-in or custom).

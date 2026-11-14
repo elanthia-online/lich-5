@@ -24,6 +24,7 @@ require_relative 'common/update/channel_resolver'
 require_relative 'common/update/snapshot_manager'
 require_relative 'common/update/tracked_scripts'
 require_relative 'common/update/custom_repos'
+require_relative 'common/update/gem_packages'
 require_relative 'common/update/script_sync'
 require_relative 'common/update/file_updater'
 require_relative 'common/update/release_installer'
@@ -115,7 +116,12 @@ module Lich
           help
         when /^--status\b/
           show_status
-        when /^(?:--update|-u)\b/
+        # Before --update. That route is anchored to a space or the end, so
+        # a malformed --update-gem (no '=', a space, --update-gems) is
+        # reported as unknown instead of starting a Lich update.
+        when /^--update-gem=(\S+)$/
+          gem_packages_manager.update_gem($1)
+        when /^(?:--update|-u)(?:\s|$)/
           release_installer.download_release_update
         when /^--refresh\b/
           respond
@@ -128,11 +134,17 @@ module Lich
           custom_repos_manager.remove_custom_repo($1)
         when /^--custom-repos$/
           custom_repos_manager.list_custom_repos
+        when /^--add-gem=(\S+)$/
+          gem_packages_manager.add_gem($1)
+        when /^--remove-gem=(\S+)$/
+          gem_packages_manager.remove_gem($1)
+        when /^--gems$/
+          gem_packages_manager.list_gems
         when /^--sync(?:=(\S+))?$/
           if $1
             script_sync.sync_repo($1)
           else
-            script_sync.sync_all_repos
+            sync_all_repos
           end
         when /^--track=(\S+):(\S+)$/
           tracked_scripts_manager.track_script($1, $2)
@@ -164,7 +176,9 @@ module Lich
       #
       # @return [void]
       def self.sync_all_repos
-        script_sync.sync_all_repos
+        return if script_sync.sync_all_repos == :github_unavailable
+
+        gem_packages_manager.sync_all
       end
 
       # Updates core data files and scripts to specified version.
@@ -207,6 +221,14 @@ module Lich
     #{$clean_lich_char}lich5-update --sync=owner/repo                   Sync a custom repo
     Custom scripts install to #{$clean_lich_char}scripts/custom/<owner-repo>/ (name collisions rejected)
     Only .lic files at the top level of a custom repo can be tracked
+
+  [Scripts shipped as a gem on GitHub releases]
+    #{$clean_lich_char}lich5-update --add-gem=owner/repo                Follow a repository's releases and install its .gem now
+    #{$clean_lich_char}lich5-update --update-gem=owner/repo             Install the latest release now (needed for owners not trusted for automatic updates)
+    #{$clean_lich_char}lich5-update --remove-gem=owner/repo             Stop following it (the gem and its scripts stay)
+    #{$clean_lich_char}lich5-update --gems                              List followed gem packages
+    Followed packages are checked at login and on --sync, for the whole Lich install.
+    Releases install automatically only from trusted owners (elanthia-online); others are announced
 
   [Beta testing]
     #{$clean_lich_char}lich5-update --beta                              Show the beta notice; confirm within #{ReleaseInstaller::BETA_CONFIRM_WINDOW} seconds
@@ -353,6 +375,10 @@ module Lich
         @custom_repos_manager ||= CustomRepos.new
       end
 
+      def self.gem_packages_manager
+        @gem_packages_manager ||= GemPackages.new(client)
+      end
+
       def self.file_updater
         @file_updater ||= FileUpdater.new(client, resolver, snapshot_manager)
       end
@@ -360,7 +386,7 @@ module Lich
       private_class_method :client, :resolver, :snapshot_manager,
                            :release_installer, :branch_installer,
                            :script_sync, :tracked_scripts_manager,
-                           :custom_repos_manager, :file_updater
+                           :custom_repos_manager, :gem_packages_manager, :file_updater
     end
   end
 end
