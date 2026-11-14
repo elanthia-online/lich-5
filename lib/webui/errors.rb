@@ -2,6 +2,11 @@
 
 module Lich
   module WebUI
+    # Script failures contained per callback, matching the script runner's set.
+    # SystemExit is handled apart (it stops the owner, never Lich) and fatal VM
+    # exceptions outside this set keep propagating.
+    CONTAINED_EXCEPTIONS = [ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError].freeze
+
     # Diagnostic formatting and sink isolation; labels never establish ownership.
     module Diagnostics
       # Preserves explicit owner IDs and truthy names, including an empty name.
