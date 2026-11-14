@@ -367,9 +367,9 @@ deflated entry's compressed size must end exactly where its deflate stream
 ends. Entry names must be relative, without `..` segments, colons or control
 characters, ASCII unless the entry is flagged UTF-8, and unique: no two
 entries may name the same file, and no file may share a path with a
-directory. Names are compared after Unicode NFC normalisation and full case
-folding, so `A.gem` and `a.gem`, or a precomposed and a decomposed `é`,
-count as the same file. This is stricter than NTFS: `ß` and `ss` also count
+directory. Names are compared in Unicode's canonical caseless form (NFD
+normalisation, full case folding, then NFD again), so `A.gem` and `a.gem`,
+or a precomposed and a decomposed `é`, count as the same file. This is stricter than NTFS: `ß` and `ss` also count
 as the same. Any other archive fails extraction with a named reason, and
 nothing is installed.
 
