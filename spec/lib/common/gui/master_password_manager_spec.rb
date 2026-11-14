@@ -282,8 +282,8 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
       [0, 44, 36].each do |code|
         it "distinguishes success, absence and read failure for exit status #{code}" do
           status = instance_double(Process::Status, success?: code.zero?, exitstatus: code)
-          output = code.zero? ? "#{test_password}\n" : ''
-          expect(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-w').and_return([output, 'synthetic command diagnostic', status])
+          report = code.zero? ? %(password: "#{test_password}"\n) : 'synthetic command diagnostic'
+          expect(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-g').and_return(['', report, status])
 
           if code == 36
             expect { described_class.retrieve_master_password(strict: true) }.to raise_error(IOError, /state is unknown/)
@@ -380,9 +380,9 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
     context 'on macOS' do
       before { allow(OS).to receive(:mac?).and_return(true) }
 
-      it 'removes only the trailing line terminator on the strict read' do
-        allow(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-w')
-                                          .and_return(["#{padded}\n", '', success], ["#{test_password}\n", '', success])
+      it 'returns the reported password with its edge spaces on the strict read' do
+        allow(Open3).to receive(:capture3).with('/usr/bin/security', 'find-generic-password', '-s', keychain_service, '-g')
+                                          .and_return(['', %(password: "#{padded}"\n), success], ['', %(password: "#{test_password}"\n), success])
 
         expect(described_class.retrieve_master_password(strict: true)).to eq(padded)
         expect(described_class.retrieve_master_password(strict: true)).to eq(test_password)
