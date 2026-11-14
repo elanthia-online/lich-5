@@ -140,6 +140,14 @@ RSpec.describe Lich::Common::Move do
     expect(move.last_failure.cause).to eq(:denied)
   end
 
+  it 'returns nil (keep the exit) at once when a group member is unable to follow' do
+    g = game(['Dreadt is unable to follow you.'])
+    expect(move.move('north')).to be_nil
+    expect(g.sent).to eq(['north'])
+    expect(move.last_failure.cause).to eq(:denied)
+    expect(move.last_failure.line).to eq('Dreadt is unable to follow you.')
+  end
+
   describe 'the stand loop' do
     let(:cannot) { 'You must be standing to do that.' }
 
