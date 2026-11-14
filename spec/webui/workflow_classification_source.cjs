@@ -5,26 +5,33 @@ const vm = require('node:vm');
 
 // Normalized once so markers and regexes also work on CRLF checkouts.
 const lf = text => text.replace(/\r\n/g, '\n');
-const workflow = lf(fs.readFileSync(path.join(__dirname, '../../.github/workflows/webui_tests.yaml'), 'utf8'));
+const read = name => lf(fs.readFileSync(path.join(__dirname, '../..', name), 'utf8'));
+const ci = read('.github/workflows/ci.yml');
+const workflow = read('.github/workflows/webui_tests.yaml');
 
-// Extract the production block rather than maintaining a copied policy.
-function classifierSource(text = workflow) {
+// The lines of one top-level job, from its key to the next job key.
+function jobBlock(text, job) {
   const lines = text.split('\n');
-  const anchors = lines.flatMap((line, index) => line === '      - &classify' ? [index] : []);
-  assert.equal(anchors.length, 1, 'expected one shared classify step');
-  const start = anchors[0];
-  const end = lines.findIndex((line, index) => index > start && line.startsWith('      - '));
-  assert.ok(end > start, 'expected another step after classify');
-  const step = lines.slice(start, end);
-  assert.ok(step.includes('        id: classify'));
-  assert.ok(step.includes('        with:'));
-  const scripts = step.flatMap((line, index) => line === '          script: |' ? [index] : []);
-  assert.equal(scripts.length, 1, 'expected one literal classify script');
-  const body = step.slice(scripts[0] + 1);
-  assert.ok(body.some(line => line.trim()), 'classify script must not be empty');
-  assert.ok(body.every(line => !line.trim() || line.startsWith('            ')), 'unexpected script indentation');
+  const starts = lines.flatMap((line, index) => line === `  ${job}:` ? [index] : []);
+  assert.equal(starts.length, 1, `expected one ${job} job`);
+  const next = lines.findIndex((line, index) => index > starts[0] && /^ {2}[A-Za-z_][\w-]*:$/.test(line));
+  return lines.slice(starts[0], next < 0 ? lines.length : next);
+}
+
+// Extract the production script rather than maintaining a copied policy.
+function inlineScript(text, job) {
+  const block = jobBlock(text, job);
+  const scripts = block.flatMap((line, index) => line === '          script: |' ? [index] : []);
+  assert.equal(scripts.length, 1, `expected one literal script in the ${job} job`);
+  const rest = block.slice(scripts[0] + 1);
+  const end = rest.findIndex(line => line.trim() && !line.startsWith('            '));
+  const body = end < 0 ? rest : rest.slice(0, end);
+  assert.ok(body.some(line => line.trim()), `${job} script must not be empty`);
   return body.map(line => line.slice(12)).join('\n');
 }
+
+const classifierSource = (text = ci) => inlineScript(text, 'classify');
+const gateSource = (text = ci) => inlineScript(text, 'ci-gate');
 
 // The guard and classifier use the very same table parser. Only this named
 // function is evaluated here; the workflow content it receives stays data.
@@ -33,4 +40,4 @@ assert.equal(parsers.length, 1, 'expected one production Windows selection parse
 const parse = vm.runInNewContext(`(${parsers[0][0]})`, {}, { timeout: 1000 });
 const windowsSpecPaths = text => Array.from(parse(text));
 
-module.exports = { lf, workflow, classifierSource, windowsSpecPaths };
+module.exports = { lf, read, ci, workflow, jobBlock, classifierSource, gateSource, windowsSpecPaths };

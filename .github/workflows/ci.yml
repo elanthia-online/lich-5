@@ -281,15 +281,219 @@ jobs:
         if: steps.list.outputs.specs == ''
         run: echo "No *_spec.rb files changed; nothing to run alone."
 
+  # ----------------------------------------------------------------------------
+  # WebUI suites
+  #
+  # One job decides, from the changed files, which WebUI suites this change can
+  # affect: the JavaScript renderer, the Chrome browser specs, native Windows
+  # and native macOS. Each suite is a called workflow that runs only when
+  # selected, and ci-gate requires every selected suite to pass. Pull requests
+  # and pushes to main are classified the same way. If the changed files or the
+  # Windows selection table cannot be read, every suite runs.
+  # ----------------------------------------------------------------------------
+  classify:
+    name: Classify WebUI suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      renderer: ${{ steps.classify.outputs.renderer }}
+      browser: ${{ steps.classify.outputs.browser }}
+      windows: ${{ steps.classify.outputs.windows }}
+      macos: ${{ steps.classify.outputs.macos }}
+    steps:
+      - name: Classify changed files
+        id: classify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // Shared with the Windows selection guard through its source helper.
+            // Parse data only; never execute code from the pull request.
+            function windowsSpecPaths(workflow) {
+              const groups = workflow.replace(/\r\n/g, '\n').match(/^          \$groups = \[ordered\]@\{\n([\s\S]*?)^          \}/m)?.[1];
+              if (!groups) throw new Error('expected the Windows RSpec selection table');
+              const selected = [...groups.matchAll(/'(spec\/[^']+)'/g)].map(match => match[1]);
+              if (!selected.length) throw new Error('expected selected Windows specs');
+              return selected;
+            }
+            // In every list below an entry ending in '/' or '_' is a prefix;
+            // any other entry is an exact path.
+            //
+            // Paths the renderer, browser and Windows jobs depend on.
+            const WEBUI_PATHS = [
+              'lib/webui/', 'lib/webui.rb',
+              'lib/common/script_scope/', 'lib/common/script_scope.rb', 'lib/common/script_death.rb',
+              'lib/common/webui_launcher.rb', 'lib/common/webui_launcher/',
+              'spec/webui/', 'spec/fixtures/webui/', 'spec/lib/webui/', 'spec/lib/common/script_scope_',
+              'spec/support/webui_', 'spec/spec_helper.rb', 'spec/login_spec_helper.rb', 'spec/support/frontend_mock.rb',
+              'spec/support/data_dir.rb', 'spec/support/real_keychain_fence.rb',
+              'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
+              '.rspec', '.rspec_parallel',
+              // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
+              'lib/common/authentication/', 'lib/common/gui/', 'lib/common/gui_login.rb',
+              'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_',
+              'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
+              'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
+              'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
+              'Gemfile', 'Gemfile.lock',
+              // setup-ruby in the browser job passes no ruby-version, so it reads this file.
+              '.ruby-version',
+            ];
+            // Startup and gem recovery, which only the Windows job runs end to
+            // end. lib/version.rb is left out: every release rewrites it.
+            const WINDOWS_STARTUP_PATHS = [
+              'lich.rbw', 'lib/main/early_exit.rb', 'lib/gemcheck.rb', 'lib/bundler_recovery.rb',
+              'lib/dependency_recovery.rb', 'lib/accepted_gem_policy.rb', 'lib/runtime_gem_contract.rb',
+              'lib/recovery_unit_policy.rb',
+            ];
+            // What the macOS job compiles and runs: the native host, its
+            // presentation spec, and the helpers every rspec process loads.
+            const MACOS_PATHS = [
+              'lib/webui/native/',
+              'spec/lib/webui/native_host_presentation_spec.rb', 'spec/webui/native_presentation.swift',
+              'spec/spec_helper.rb', 'spec/support/data_dir.rb', 'spec/support/frontend_mock.rb',
+              'spec/support/real_keychain_fence.rb', '.rspec',
+            ];
+            // A change to how the suites are selected or run selects all of them.
+            const ALL_SUITE_PATHS = [
+              '.github/workflows/ci.yml', '.github/workflows/webui_tests.yaml',
+              '.github/workflows/windows_webui.yaml', '.github/workflows/macos_webui.yaml',
+              '.github/scripts/windows_runtime_', '.github/scripts/macos_webui_smoke.py',
+            ];
+            const SUITES = ['renderer', 'browser', 'windows', 'macos'];
+            const runEverySuite = reason => {
+              core.notice(`${reason}; running every WebUI suite.`);
+              for (const suite of SUITES) core.setOutput(suite, 'true');
+            };
+            const within = paths => path => paths.some(p => p.endsWith('/') || p.endsWith('_') ? path.startsWith(p) : path === p);
+            try {
+              const { owner, repo } = context.repo;
+              let files, source;
+              if (context.eventName === 'pull_request') {
+                files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner, repo, pull_number: context.payload.pull_request.number, per_page: 100,
+                });
+                // The API returns at most 3,000 files; a capped list may hide a path.
+                if (files.length >= 3000) return runEverySuite('Changed-file list reached the API limit');
+                const head = context.payload.pull_request.head;
+                source = { owner: head.repo.owner.login, repo: head.repo.name, ref: head.sha };
+              } else if (context.eventName === 'push') {
+                const before = (context.payload.before || '').trim();
+                if (!before || /^0+$/.test(before)) return runEverySuite('No previous commit to compare with');
+                const { data } = await github.rest.repos.compareCommits({ owner, repo, base: before, head: context.sha });
+                // The comparison lists at most 300 files, and may omit the list.
+                if (!Array.isArray(data.files) || data.files.length >= 300) return runEverySuite('Changed-file list is missing or reached the API limit');
+                files = data.files;
+                source = { owner, repo, ref: context.sha };
+              } else {
+                return runEverySuite(`Event ${context.eventName} has no changed-file list`);
+              }
+              const { data } = await github.rest.repos.getContent({ ...source, path: '.github/workflows/windows_webui.yaml' });
+              if (data.encoding !== 'base64' || typeof data.content !== 'string') {
+                throw new Error('expected the Windows workflow file content');
+              }
+              const selected = windowsSpecPaths(Buffer.from(data.content, 'base64').toString('utf8'));
+              const windowsSpec = path => selected.some(p => path === p || (!p.endsWith('.rb') && path.startsWith(`${p}/`)));
+              const webui = within(WEBUI_PATHS), startup = within(WINDOWS_STARTUP_PATHS);
+              const everySuite = within(ALL_SUITE_PATHS), macos = within(MACOS_PATHS);
+              const shared = path => everySuite(path) || webui(path) || windowsSpec(path);
+              const reaches = {
+                renderer: shared,
+                browser: shared,
+                windows: path => shared(path) || startup(path),
+                macos: path => everySuite(path) || macos(path),
+              };
+              // A rename or deletion out of a suite's paths still counts: check the old name too.
+              const paths = [...new Set(files.flatMap(file => file.previous_filename ? [file.filename, file.previous_filename] : [file.filename]))];
+              core.info(`Changed files = ${files.length}`);
+              for (const suite of SUITES) {
+                const hits = paths.filter(reaches[suite]);
+                core.info(hits.length ? `${suite}: selected by ${hits.slice(0, 20).join(', ')}${hits.length > 20 ? `, and ${hits.length - 20} more` : ''}` : `${suite}: not needed`);
+                core.setOutput(suite, hits.length > 0 ? 'true' : 'false');
+              }
+            } catch (error) {
+              runEverySuite(`Could not classify changed files (${error.message})`);
+            }
+
+  # The Node tests for the classifier, the gate rule and the called workflows.
+  # They use no packages, so they run on every change without an install.
+  webui_policy:
+    name: WebUI workflow policy tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.5.0'
+      - name: Run the workflow policy tests
+        run: >-
+          node --test
+          spec/webui/webui_workflow_classification_test.cjs
+          spec/webui/webui_windows_workflow_test.cjs
+          spec/webui/webui_macos_workflow_test.cjs
+          spec/webui/webui_ci_gate_test.cjs
+
+  webui_renderer:
+    needs: classify
+    if: needs.classify.outputs.renderer == 'true'
+    uses: ./.github/workflows/webui_tests.yaml
+    with:
+      suite: renderer
+
+  webui_browser:
+    needs: classify
+    if: needs.classify.outputs.browser == 'true'
+    uses: ./.github/workflows/webui_tests.yaml
+    with:
+      suite: browser
+
+  windows_webui:
+    needs: classify
+    if: needs.classify.outputs.windows == 'true'
+    uses: ./.github/workflows/windows_webui.yaml
+
+  macos_webui:
+    needs: classify
+    if: needs.classify.outputs.macos == 'true'
+    uses: ./.github/workflows/macos_webui.yaml
+
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [ruby, workflow_guard, test, changed_specs, windows_contract]
+    needs: [ruby, workflow_guard, test, changed_specs, windows_contract, classify, webui_policy, webui_renderer, webui_browser, windows_webui, macos_webui]
     runs-on: ubuntu-latest
     steps:
-      - name: Require every job to pass
+      - name: Require every applicable job to pass
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
+        with:
+          script: |
+            // A WebUI suite the classifier selected must succeed. One it did
+            // not select must be skipped. Every other job must succeed.
+            // Anything else fails, including a missing or malformed decision.
+            const needs = JSON.parse(process.env.NEEDS);
+            const SUITE_JOBS = { renderer: 'webui_renderer', browser: 'webui_browser', windows: 'windows_webui', macos: 'macos_webui' };
+            const decisions = needs.classify?.outputs || {};
+            const failures = [];
+            for (const job of ['classify', ...Object.values(SUITE_JOBS)]) {
+              if (!(job in needs)) failures.push(`${job}: missing from the gate`);
+            }
+            for (const [job, need] of Object.entries(needs)) {
+              const suite = Object.keys(SUITE_JOBS).find(name => SUITE_JOBS[name] === job);
+              let expected = 'success';
+              if (suite) {
+                const decision = decisions[suite];
+                if (decision !== 'true' && decision !== 'false') {
+                  core.info(`${job}: ${need.result} (no ${suite} decision)`);
+                  failures.push(`${job}: classify gave no ${suite} decision`);
+                  continue;
+                }
+                expected = decision === 'true' ? 'success' : 'skipped';
+              }
+              core.info(`${job}: ${need.result} (expected ${expected})`);
+              if (need.result !== expected) failures.push(`${job}: ${need.result}, expected ${expected}`);
+            }
+            if (failures.length) core.setFailed(`ci-gate failed: ${failures.join('; ')}`);
