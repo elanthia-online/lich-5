@@ -3,8 +3,8 @@
 require_relative '../../spec_helper'
 require 'webui'
 
-# Pre-terminate hooks on script death: the P05 share of 1836:RC20. ScriptDeath
-# has no handler order, so a later layer registers here to close its own
+# Pre-terminate hooks on script death. ScriptDeath
+# has no handler order, so a compatibility shim registers here to close its own
 # resources before the core handler retires the dying owner's pages.
 RSpec.describe 'WebUI pre-terminate hooks on script death' do
   let(:owner) { Object.new }
@@ -70,7 +70,7 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     expect(failures).to contain_exactly('error=LoadError', 'error=SystemExit')
   end
 
-  it 'records, per owner, that its hooks are done only once they have run (1836:RC22)' do
+  it 'records, per owner, that its hooks are done only once they have run' do
     other = Object.new
     during = []
     register { |dying| during << Lich::WebUI.owner_terminate_hooks_done?(dying) }
@@ -100,7 +100,7 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     release&.push(true)
   end
 
-  it 'refuses an owner-bound registration once the owner\'s hooks have started, and still accepts an owner that has not (1836:RC22)' do
+  it 'refuses an owner-bound registration once the owner\'s hooks have started, and still accepts an owner that has not' do
     other = Object.new
     attempts = []
     register do |dying|
@@ -123,7 +123,7 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     expect(seen).to eq([other])
   end
 
-  it 'refuses a registration from the dying owner\'s own worker while its hooks are still running (1836:RC22)' do
+  it 'refuses a registration from the dying owner\'s own worker while its hooks are still running' do
     started = Queue.new
     release = Queue.new
     late_attempt = Queue.new
@@ -150,7 +150,7 @@ RSpec.describe 'WebUI pre-terminate hooks on script death' do
     worker&.join(10)
   end
 
-  it 'keeps registering owner-bound hooks for an owner that has not started, even after another owner died (1836:RC22)' do
+  it 'keeps registering owner-bound hooks for an owner that has not started, even after another owner died' do
     Lich::Common::ScriptDeath.run(owner)
     fresh = Object.new
     seen = []

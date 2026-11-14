@@ -128,7 +128,7 @@ module Lich
 
           # Reports whether this widget or an ancestor is inside its owner's destroy
           # sequence: from the start of port teardown until the shadow subtree is
-          # marked destroyed. Reads in that window use shadow state only (1844:RC8).
+          # marked destroyed. Reads in that window use shadow state only.
           # @return [Boolean]
           # @api private
           def retiring? = @retiring == true || (!parent.nil? && parent.retiring?)

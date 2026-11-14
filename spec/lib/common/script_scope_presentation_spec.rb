@@ -58,7 +58,7 @@ RSpec.describe 'script compatibility and the core presentation policy' do
     output
   end
 
-  it 'hides Gtk, GLib and Gdk from script scope when startup disabled presentation (1853:RC2@S7)' do
+  it 'hides Gtk, GLib and Gdk from script scope when startup disabled presentation' do
     expect(gtk_visibility_after('Lich::WebUI.configure_presentation(enabled: false)')).to eq('[[[nil, nil, nil]], ["LoadError"]]')
   end
 

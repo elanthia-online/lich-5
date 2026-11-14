@@ -1179,7 +1179,7 @@ RSpec.describe Lich::WebUI::Runtime do
     teardown&.join(2)
   end
 
-  it 'cancels and cleans up an event queued behind a running callback when the owner terminates (1837:RC1)' do
+  it 'cancels and cleans up an event queued behind a running callback when the owner terminates' do
     entered, release, ran, cleaned = Queue.new, Queue.new, Queue.new, Queue.new
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'queued-ending', title: 'Ending') do
       # The parked wait outlasts the disposal wait below, so a skipped

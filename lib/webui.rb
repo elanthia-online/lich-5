@@ -259,7 +259,7 @@ module Lich
       # snapshot or is refused, never silently dropped. The owner's workers can
       # still be unwinding then (for example a killed worker's ensure), so a
       # layer that registers a hook lazily must treat the refusal as "this owner
-      # is dying" and create no resource that needs the hook (1836:RC22). A
+      # is dying" and create no resource that needs the hook. A
       # check before registering is not enough: the owner can start between the
       # check and the call.
       # @param owner [Object, nil] script the hook is for, or nil for every script
@@ -371,7 +371,7 @@ module Lich
     # This applies to native script pages as well as imperative consumers.
     # Do not initialize a host merely because a non-UI script has ended.
     # Later layers' before_owner_terminate hooks run first, so their resources
-    # close while the owner is still admitted (1836:RC20).
+    # close while the owner is still admitted.
     Common::ScriptDeath.on_death do |owner|
       run_before_terminate_hooks(owner)
       current = INITIALIZATION_MUTEX.synchronize { @service }

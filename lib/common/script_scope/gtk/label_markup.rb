@@ -75,10 +75,10 @@ module Lich
                 result[:scale] = scale
               end
               if attributes['font_desc']
-                # Later-layer constants (Pango::FontDescription and Color; defined at P13 or P14) are absent from
-                # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-                # Retirement: replace these guards with plain constant references once this
-                # file is no longer shipped or tested without the later layers.
+                # Pango::FontDescription is defined in another shim file and may be absent.
+                # Resolve it at call time; an absent class has no instances.
+                # Retirement: replace this guard with a plain constant reference once this
+                # file is always shipped and tested with the defining file.
                 refuse unless defined?(Pango::FontDescription)
                 font = Pango::FontDescription.new(attributes['font_desc'])
                 result.merge!(font.properties)

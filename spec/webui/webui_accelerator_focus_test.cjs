@@ -45,8 +45,8 @@ function fixture(t) {
 
 const button = (cid, props = {}) => ({ type: 'button', cid, props: { label: cid, ...props } });
 
-// 1835:RC1 and 1839:RC1 share these focus cases. Each case records its own
-// activations so a failure names every case that regressed.
+// Each focus case records its own activations so a failure names every case
+// that regressed.
 test('bare keys stay with focused entries, buttons and modal Cancel while modified shortcuts and entry Enter still work', async t => {
   const { dom, receive, sent, press, activations } = fixture(t);
   const { document } = dom.window;

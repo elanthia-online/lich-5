@@ -43,10 +43,10 @@ module Lich
           # @return [void] result is not part of the supported script contract
           # @api private
           def validate_vertical_parent(alignment)
-            # Later-layer constants (Table, EventBox, Overlay and ScrolledWindow; defined at P13 or P14) are absent from
-            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
+            # Table, EventBox, Overlay and ScrolledWindow are defined in other shim files.
+            # Resolve them at call time; absent classes have no instances.
             # Retirement: replace these guards with plain constant references once this
-            # file is no longer shipped or tested without the later layers.
+            # file is always shipped and tested with those defining files.
             supported = (defined?(Table) && parent.is_a?(Table)) || parent.is_a?(Frame) ||
                         (defined?(EventBox) && parent.is_a?(EventBox)) || (defined?(Overlay) && parent.is_a?(Overlay)) ||
                         (defined?(ScrolledWindow) && parent.is_a?(ScrolledWindow) && parent.children.length == 1) ||
@@ -172,7 +172,7 @@ module Lich
           end
 
           # Reads current viewer input only inside a live callback; otherwise uses committed/default shadow state.
-          # A widget in its owner's destroy sequence never reads live: its handle is retired (1844:RC8).
+          # A widget in its owner's destroy sequence never reads live: its handle is retired.
           # @param property [Symbol] shared shadow or port property name
           # @return [Object] synchronous script-visible value
           # @api private

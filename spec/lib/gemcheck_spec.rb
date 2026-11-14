@@ -896,8 +896,8 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
-  # Lich.msgbox routes non-Windows startup errors here with its own title
-  # (1853:RC4@S7). Every dialog tool is a stub: no real dialog is shown.
+  # Lich.msgbox routes non-Windows startup errors here with its own title.
+  # Every dialog tool is a stub: no real dialog is shown.
   describe '.show_notice titles' do
     it 'defaults to the missing-gems title and dispatches by platform' do
       stub_const('RUBY_PLATFORM', 'x86_64-darwin23')

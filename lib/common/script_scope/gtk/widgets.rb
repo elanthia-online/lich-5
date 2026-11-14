@@ -133,10 +133,10 @@ module Lich
           # @return [Widget] self
           # @raise [UnsupportedOperation] for widgets without a text-style contract
           def override_font(font)
-            # Later-layer constants (Pango::FontDescription; defined at P13 or P14) are absent from
-            # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-            # Retirement: replace these guards with plain constant references once this
-            # file is no longer shipped or tested without the later layers.
+            # Pango::FontDescription is defined in another shim file and may be absent.
+            # Resolve it at call time; an absent class has no instances.
+            # Retirement: replace this guard with a plain constant reference once this
+            # file is always shipped and tested with the defining file.
             valid = defined?(Pango::FontDescription) && font.is_a?(Pango::FontDescription) && %i[text button text_input].include?(component_type)
             session.refuse(self, :override_font) unless valid
             font.properties.each { |property, value| write(property, value) }
@@ -152,10 +152,10 @@ module Lich
           # @return [StyleContext]
           def style_context
             session.style_operation(self, :style_context) do
-              # Later-layer constants (StyleContext; defined at P13 or P14) are absent from
-              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-              # Retirement: replace these guards with plain constant references once this
-              # file is no longer shipped or tested without the later layers.
+              # StyleContext is defined in another shim file and may be absent.
+              # Resolve it at call time; an absent class has no instances.
+              # Retirement: replace this guard with a plain constant reference once this
+              # file is always shipped and tested with the defining file.
               session.refuse(self, :style_context) if destroyed? || !defined?(StyleContext)
               @style_context ||= StyleContext.new(self)
             end

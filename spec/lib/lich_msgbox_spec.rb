@@ -80,8 +80,8 @@ RSpec.describe 'Lich.msgbox without a graphical toolkit' do
     expect(stderr.strip).to eq('Unavailable frontend')
   end
 
-  # Non-Windows errors reach a desktop launch through the GemCheck alert helpers
-  # (1853:RC4@S7). The helper is a recording stub here: no real dialog is ever shown.
+  # Non-Windows errors reach a desktop launch through the GemCheck alert helpers.
+  # The helper is a recording stub here: no real dialog is ever shown.
   describe 'with no terminal attached' do
     def run_msgbox(setup, call)
       source = <<~SOURCE

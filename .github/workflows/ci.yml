@@ -332,7 +332,7 @@ jobs:
               'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
               '.rspec', '.rspec_parallel',
               // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
-              'lib/common/authentication/', 'lib/common/gui/', 'lib/common/gui_login.rb',
+              'lib/common/authentication/', 'lib/common/gui/',
               'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_',
               'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
               'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',

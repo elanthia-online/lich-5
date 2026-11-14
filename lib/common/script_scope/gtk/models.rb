@@ -532,7 +532,7 @@ module Lich
           # session fence is queued, later writes check only their own rows with
           # observers that support it (tables and cell combos) and publish to
           # them together at the next session barrier; other observers stay
-          # immediate (1844:RC4). The restore snapshot is the row list plus the
+          # immediate. The restore snapshot is the row list plus the
           # cells this mutation overwrote, never a copy of every row.
           # @yield model mutation under the reentrant session monitor
           # @return [Object] mutation result

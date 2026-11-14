@@ -5,7 +5,7 @@ require 'webui'
 require_relative '../../../lib/common/script_scope/gtk/session'
 require_relative '../../../lib/common/script_scope/gtk/widgets'
 
-# P12 share of 1844:RC8: a destroy handler that reads a sibling input while the
+# A destroy handler that reads a sibling input while the
 # owner's destroy sequence runs must get the sibling's last value from shadow
 # state. The recording port retires handles on destroy and raises on any later
 # read, as the adapter does.
@@ -71,7 +71,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     [first, second, button].each { |child| box.add(child) }
     window.add(box)
     # Each entry's destroy handler reads its sibling; the first one runs while
-    # the second is not yet marked destroyed, the case 1844:RC8 reports.
+    # the second is not yet marked destroyed.
     first.signal_connect('destroy') { seen << [:first, second.text] }
     second.signal_connect('destroy') { seen << [:second, first.text] }
     window.materialize
@@ -88,7 +88,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     port.gets.select { |handle, property| property == :value && handles.include?(handle) }
   end
 
-  it 'serves the sibling value when a button click destroys the window (1844:RC8)' do
+  it 'serves the sibling value when a button click destroys the window' do
     button.signal_connect('clicked') { window.destroy }
 
     port.bindings.fetch([handle_of(button), :activate]).call(event_context.new('viewer', {}))
@@ -98,7 +98,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     expect(window.destroyed?).to be(true)
   end
 
-  it 'serves the sibling value on the browser close path, delete_event to destroy (1844:RC8)' do
+  it 'serves the sibling value on the browser close path, delete_event to destroy' do
     window.signal_connect('delete_event') { false }
 
     port.bindings.fetch([handle_of(window), :close]).call(event_context.new('viewer', {}))
@@ -108,7 +108,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     expect(window.destroyed?).to be(true)
   end
 
-  it 'serves the sibling value when a handler closes the window through Window#close (1844:RC8)' do
+  it 'serves the sibling value when a handler closes the window through Window#close' do
     button.signal_connect('clicked') { window.close }
 
     port.bindings.fetch([handle_of(button), :activate]).call(event_context.new('viewer', {}))
@@ -117,7 +117,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     expect(seen).to eq([[:first, 'typed-two'], [:second, 'typed-one']])
   end
 
-  it 'adds no port traffic during the destroy sequence beyond the terminal commit (1844:RC8)' do
+  it 'adds no port traffic during the destroy sequence beyond the terminal commit' do
     button.signal_connect('clicked') { window.destroy }
     port.bindings.fetch([handle_of(button), :activate]).call(event_context.new('viewer', {}))
 
@@ -126,7 +126,7 @@ RSpec.describe 'script compatibility destroy-time sibling reads' do
     expect(input_reads([first, second]).size).to eq(2)
   end
 
-  it 'keeps live reads for a widget outside a destroy sequence (1844:RC8)' do
+  it 'keeps live reads for a widget outside a destroy sequence' do
     value = nil
     button.signal_connect('clicked') do
       port.seed(handle_of(first), :value, 'edited')

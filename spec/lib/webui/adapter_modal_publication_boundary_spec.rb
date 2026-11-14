@@ -4,7 +4,7 @@ require_relative '../../spec_helper'
 require 'webui'
 
 # Adapter owner attribution, per-root publication, retired-root publication
-# and attach diagnostics: 1836:RC1, 1836:RC2, 1836:RC19 and 1836:RC3.
+# and attach diagnostics.
 RSpec.describe 'WebUI adapter modal and publication boundaries' do
   let(:owner) { Object.new }
   let(:registry) { Lich::WebUI::Registry.new }
@@ -26,7 +26,7 @@ RSpec.describe 'WebUI adapter modal and publication boundaries' do
 
   after { service.stop }
 
-  describe 'modal owner attribution (1836:RC1)' do
+  describe 'modal owner attribution' do
     it 'refuses a foreign or same owner prop and registers a plain modal under the adapter owner' do
       foreign = Object.new
       expect { adapter.modal(modal_options.merge(owner: foreign)) }
@@ -43,7 +43,7 @@ RSpec.describe 'WebUI adapter modal and publication boundaries' do
     end
   end
 
-  describe 'per-root publication (1836:RC2)' do
+  describe 'per-root publication' do
     it 'publishes later roots after one fails and retries only the unpublished root' do
       first = adapter.create(:page, title: 'First')
       adapter.create(:page, title: 'Second')
@@ -74,7 +74,7 @@ RSpec.describe 'WebUI adapter modal and publication boundaries' do
     end
   end
 
-  describe 'retired-root publication (1836:RC19)' do
+  describe 'retired-root publication' do
     it 'discards a publication whose root another thread destroyed after the snapshot' do
       root = adapter.create(:page, title: 'Closing')
       adapter.send(:flush!)
@@ -94,7 +94,7 @@ RSpec.describe 'WebUI adapter modal and publication boundaries' do
     end
   end
 
-  describe 'attach diagnostics (1836:RC3)' do
+  describe 'attach diagnostics' do
     it 'reports an invalid placement name as itself, not as an index error' do
       parent = adapter.create(:page, title: 'Parent')
       child = adapter.create(:button, label: 'Go')

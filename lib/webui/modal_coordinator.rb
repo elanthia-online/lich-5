@@ -12,7 +12,7 @@ module Lich
 
       # Modal completion whose callbacks belong to one owner. Each callback stays
       # contained exactly as in Future; a callback's SystemExit additionally
-      # requests that owner's stop, never Lich's (B3).
+      # requests that owner's stop, never Lich's.
       # @api private
       class OwnerFuture < Future
         # @param on_exit [#call] owner-stop request, called after a callback exits
