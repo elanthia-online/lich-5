@@ -271,8 +271,9 @@ module Lich
             end
           end
 
-          # Enlists a model lazily in the current dispatcher callback. Synchronous
-          # calls outside a callback retain immediate validation and publication.
+          # Enlists a model lazily in the current dispatcher callback. Calls
+          # outside a callback validate at once; see coalesce_model? for when
+          # their publication is coalesced.
           # @return [Boolean] whether this callback defers the model's publication
           # @api private
           def defer_model(model)
@@ -284,17 +285,60 @@ module Lich
             true
           end
 
+          # A write outside a callback publishes at once and fences its model.
+          # Until the one queued fence job runs, later writes to that model check
+          # only their own rows and publish together at the next barrier: the
+          # fence job's callback flush, or an earlier widget read, write or
+          # callback flush. No timer is involved (1844:RC4).
+          # @param model [ListStore] model being mutated outside a callback
+          # @return [Boolean] whether the mutation may defer its publication
+          # @api private
+          def coalesce_model?(model) = !stopping? && @model_fences&.key?(model) == true
+
+          # Records an immediate publication and, for coalescing observers, fences later writes.
+          # @param model [ListStore] model just published outside a callback
+          # @param fence [Boolean] whether any observer can defer its publication
+          # @return [void]
+          # @api private
+          def model_published(model, fence:)
+            @script_models&.delete(model)
+            return unless fence && !stopping?
+
+            (@model_fences ||= {}.compare_by_identity)[model] = true
+            return if @model_fence_queued
+
+            @model_fence_queued = true
+            # The job runs on the owner's dispatcher, ahead of the adapter's own
+            # publication of the first write, so the browser render carries the batch.
+            release_model_fences unless queue { release_model_fences }
+          rescue Lich::WebUI::Error
+            # Without a fence job, later writes keep publishing at once.
+            release_model_fences
+          end
+
+          # Holds a fenced model's validated change for the next barrier.
+          # @param model [ListStore] model whose observers deferred publication
+          # @return [void]
+          # @api private
+          def defer_model_publication(model)
+            (@script_models ||= {}.compare_by_identity)[model] = true
+          end
+
           # Validates all candidates before publishing any model. Widget operations
           # use this barrier to retain synchronous script-visible UI behavior.
+          # Coalesced writes from outside a callback publish here first.
           # @api private
           def flush_models!
             synchronize do
+              publish_script_models!
               return if !@model_batch || @model_batch.empty? || @flushing_models
               @flushing_models = true
               models = @model_batch.keys
               begin
                 models.each(&:validate_batch!)
                 models.each(&:publish_batch!)
+                # A published batch carries any coalesced change to the same model.
+                models.each { |model| @script_models&.delete(model) }
                 models.each(&:finish_batch!)
                 @model_batch.clear
               ensure
@@ -394,6 +438,35 @@ module Lich
               @model_batch.each_key(&:rollback_batch!)
               @model_batch = nil
             end
+          end
+
+          # Publishes coalesced script-thread changes once each. A model staged in
+          # the current callback waits: its candidate is not validated yet, and a
+          # rollback leaves its coalesced change for a later barrier. Each entry is
+          # removed before its publication, so a failure is raised once, not retried.
+          # @return [void]
+          def publish_script_models!
+            return if @publishing_script_models || !@script_models || @script_models.empty?
+
+            models = @script_models.keys.reject { |model| @model_batch&.key?(model) }
+            return if models.empty?
+
+            @publishing_script_models = true
+            begin
+              models.each do |model|
+                @script_models.delete(model)
+                model.publish_script_changes!
+              end
+            ensure
+              @publishing_script_models = false
+            end
+          end
+
+          # Ends the current coalescing window; the caller's barrier publishes what it held.
+          # @return [void]
+          def release_model_fences
+            @model_fences = nil
+            @model_fence_queued = false
           end
 
           # Restore nested attribution even when a handler raises. The immutable
