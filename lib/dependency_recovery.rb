@@ -1009,7 +1009,7 @@ module Lich
     # must place declared .gem files at its archive root; package filenames are
     # constrained to prevent manifest-controlled path traversal.
     #
-    # Extraction runs in-process (ZipArchive, Zlib) on every platform. It used
+    # Extraction runs in-process (Lich::Archive) on every platform. It used
     # to start PowerShell through a hidden WScript launcher on Windows, which
     # failed with no diagnostics wherever the execution policy blocked scripts
     # (Restricted is the Windows client default), Windows Script Host was
@@ -1024,7 +1024,7 @@ module Lich
       # runtime_gem_contract, startup_policy_compatibility), so loading this
       # file must not need anything outside that set.
       # The require stays outside the rescued block below: a rescue clause
-      # naming ZipArchive::Error would itself raise NameError if the file
+      # naming Archive::Error would itself raise NameError if the file
       # failed to load. A missing file (LoadError) or one cut short on disk,
       # say by an interrupted update (SyntaxError), raises a ScriptError,
       # which is not a StandardError: left alone it would escape #recover's
@@ -1035,18 +1035,18 @@ module Lich
       # the require catches. Each is reported as a recovery Error naming the
       # file.
       begin
-        require_relative 'zip_archive'
+        require_relative 'archive'
       rescue LoadError => e
         raise Error, "Recovery cannot extract archives: #{library_path(e)} is missing (#{e.message})"
       rescue ScriptError, StandardError => e
-        raise Error, "Recovery cannot extract archives: #{library_path(e, 'lib/zip_archive.rb')} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
+        raise Error, "Recovery cannot extract archives: #{library_path(e, 'lib/archive.rb')} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
       end
-      unless defined?(ZipArchive::Error) && ZipArchive.respond_to?(:extract)
-        raise Error, 'Recovery cannot extract archives: lib/zip_archive.rb loaded but does not define Lich::ZipArchive'
+      if (undefined = undefined_archive_reader)
+        raise Error, "Recovery cannot extract archives: #{undefined} loaded but does not define the archive reader"
       end
       begin
-        ZipArchive.extract(zip_path, destination)
-      rescue ZipArchive::Error => e
+        Archive.extract_zip(zip_path, destination)
+      rescue Archive::Error => e
         raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
       rescue Errno::EACCES, Errno::EROFS => e
         raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
@@ -1055,14 +1055,29 @@ module Lich
       end
     end
 
+    # @return [String, nil] the reader file that loaded without defining
+    #   what extraction needs, or nil when the reader is complete
+    def undefined_archive_reader
+      return 'lib/archive.rb' unless defined?(Archive::Error) && Archive.respond_to?(:extract_zip)
+      return nil if defined?(Archive::Zip) && Archive::Zip.respond_to?(:extract)
+
+      zip = File.expand_path('archive/zip.rb', __dir__)
+      $LOADED_FEATURES.include?(zip) ? 'lib/archive/zip.rb' : 'lib/archive.rb'
+    end
+
     # @param error [Exception] raised while loading a library
     # @param default [String] what to name when +error+ carries no path
     # @return [String] the file +error+ could not load, relative to the
-    #   directory above lib/ when it lies inside it (lib/zip_archive.rb)
+    #   directory above lib/ when it lies inside it (lib/archive.rb)
     def library_path(error, default = 'a recovery library')
-      return default unless error.respond_to?(:path) && error.path
+      path = error.path if error.respond_to?(:path)
+      # A NameError raised while a file loads carries no path; the first
+      # backtrace frame in this lib/ directory is the file that raised it.
+      # (The very first frame can be inside a gem such as fileutils.)
+      path ||= error.backtrace_locations&.map(&:path)&.find { |frame| frame.start_with?("#{__dir__}/") }
+      return default unless path
 
-      path = error.path.end_with?('.rb') ? error.path : "#{error.path}.rb"
+      path = "#{path}.rb" unless path.end_with?('.rb')
       top = "#{File.dirname(__dir__)}/"
       path.start_with?(top) ? path.delete_prefix(top) : path
     end

@@ -275,35 +275,11 @@ module Lich
               respond
               respond "Downloading Lich5 version #{@update_to}"
               respond
-              filename = "lich5-#{@update_to}"
-              File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-                file.write URI.parse(@zipfile).open(**GitHubClient.open_uri_timeouts).read
+              installed = Tarball.with_extracted(@zipfile, "lich5-#{@update_to}") do |source_dir|
+                check_ruby_compatibility(source_dir, @update_to) &&
+                  perform_update(source_dir, @update_to, snapshot_dir)
               end
-
-              FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
-              Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"),
-                                                  File.join(TEMP_DIR, filename))
-              new_target = Dir.children(File.join(TEMP_DIR, filename))
-              FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
-              FileUtils.remove_dir(File.join(TEMP_DIR, filename))
-              FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-
-              source_dir = File.join(TEMP_DIR, filename)
-
-              unless check_ruby_compatibility(source_dir, @update_to)
-                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-                next
-              end
-
-              unless perform_update(source_dir, @update_to, snapshot_dir)
-                FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
-                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
-                next
-              end
-
-              FileUtils.remove_dir(source_dir)
-              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+              next unless installed
 
               Lich::Util::Update.clear_branch_tracking
 

@@ -7,10 +7,13 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
-      - "lib/zip_archive.rb"
-      - "spec/lib/zip_archive_spec.rb"
+      - "lib/archive.rb"
+      - "lib/archive/**"
+      - "spec/lib/archive_spec.rb"
+      - "spec/lib/archive/**"
       - "spec/support/zip_builder.rb"
       - "spec/support/no_process_expectations.rb"
+      - "spec/support/tar_gz_builder.rb"
       - "spec/support/native_dll_holder.rb"
       - "spec/lib/native_dll_holder_spec.rb"
       - "lib/internal_api/active_sessions.rb"
@@ -28,15 +31,23 @@ on:
       - "spec/support/pipe_io_spawn_child.rb"
       - "lib/common/update/snapshot_manager.rb"
       - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
+      - "lib/common/update/tarball.rb"
+      - "spec/lib/common/update/tarball_spec.rb"
+      - "spec/lib/common/update/live_download_spec.rb"
+      - "lib/common/update/release_installer.rb"
+      - "lib/common/update/branch_installer.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   pull_request:
     paths:
       - "lib/dependency_recovery.rb"
       - "spec/lib/dependency_recovery_spec.rb"
-      - "lib/zip_archive.rb"
-      - "spec/lib/zip_archive_spec.rb"
+      - "lib/archive.rb"
+      - "lib/archive/**"
+      - "spec/lib/archive_spec.rb"
+      - "spec/lib/archive/**"
       - "spec/support/zip_builder.rb"
       - "spec/support/no_process_expectations.rb"
+      - "spec/support/tar_gz_builder.rb"
       - "spec/support/native_dll_holder.rb"
       - "spec/lib/native_dll_holder_spec.rb"
       - "lib/internal_api/active_sessions.rb"
@@ -54,6 +65,11 @@ on:
       - "spec/support/pipe_io_spawn_child.rb"
       - "lib/common/update/snapshot_manager.rb"
       - "spec/lib/common/update/snapshot_manager_windows_spec.rb"
+      - "lib/common/update/tarball.rb"
+      - "spec/lib/common/update/tarball_spec.rb"
+      - "spec/lib/common/update/live_download_spec.rb"
+      - "lib/common/update/release_installer.rb"
+      - "lib/common/update/branch_installer.rb"
       - ".github/workflows/windows_file_handoff.yaml"
   workflow_dispatch:
 
@@ -81,10 +97,18 @@ jobs:
         run: bundle exec rspec spec/lib/common/frontend_settings_spec.rb spec/lib/common/sharing_violation_retry_spec.rb
       - name: Run dependency recovery specs
         if: ${{ !cancelled() }}
-        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb spec/lib/zip_archive_spec.rb spec/lib/native_dll_holder_spec.rb
+        run: bundle exec rspec spec/lib/dependency_recovery_spec.rb spec/lib/archive_spec.rb spec/lib/archive spec/lib/native_dll_holder_spec.rb
       - name: Run PipeIO specs (--pipe front-end transport)
         if: ${{ !cancelled() }}
         run: bundle exec rspec spec/lib/common/pipe_io_spec.rb spec/lib/common/pipe_io_windows_spec.rb
       - name: Run snapshot rename specs (lich5-update)
         if: ${{ !cancelled() }}
-        run: bundle exec rspec spec/lib/common/update/snapshot_manager_windows_spec.rb
+        run: bundle exec rspec spec/lib/common/update/snapshot_manager_windows_spec.rb spec/lib/common/update/tarball_spec.rb
+      # Real GitHub downloads: the v5.24.2 release asset through ReleaseInstaller
+      # and the main branch tarball through BranchInstaller, extracted on Windows
+      # and stopped just before perform_update would install anything.
+      - name: Download and extract real update tarballs (lich5-update)
+        if: ${{ !cancelled() }}
+        env:
+          LICH_LIVE_UPDATE_DOWNLOAD: '1'
+        run: bundle exec rspec spec/lib/common/update/live_download_spec.rb
