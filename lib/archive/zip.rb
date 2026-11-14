@@ -116,6 +116,10 @@ module Lich
         end
 
         record_offset = tail_offset + record_at
+        # Info-ZIP writing from a pipe, and bsdtar's zip64 option, put a ZIP64
+        # end record and locator between the directory and an ordinary end
+        # record whose fields need no ZIP64 marker.
+        raise Error, 'ZIP64 archives are not supported' if zip64_locator_before?(file, record_offset)
         raise Error, 'central directory lies outside the archive' if directory_offset + directory_size > record_offset
         # The tools find the directory just in front of the record. A record
         # whose stored offset points anywhere else (an archive appended to
@@ -144,10 +148,7 @@ module Lich
       def embedded_archive?(file, tail, record_at, tail_offset)
         _signature, _disk, _directory_disk, _disk_count, total_count, directory_size, = tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
         record_offset = tail_offset + record_at
-        if record_offset >= ZIP64_LOCATOR_SIZE
-          file.seek(record_offset - ZIP64_LOCATOR_SIZE)
-          return true if file.read(4).unpack1('V') == ZIP64_LOCATOR
-        end
+        return true if zip64_locator_before?(file, record_offset)
         return true if total_count.zero? && directory_size.zero?
 
         directory_start = record_offset - directory_size
@@ -155,6 +156,16 @@ module Lich
 
         file.seek(directory_start)
         file.read(4).to_s.unpack1('V') == CENTRAL_DIRECTORY_HEADER
+      end
+
+      # @param file [File]
+      # @param record_offset [Integer] offset of an end record in the file
+      # @return [Boolean] whether a ZIP64 locator sits just before it
+      def zip64_locator_before?(file, record_offset)
+        return false if record_offset < ZIP64_LOCATOR_SIZE
+
+        file.seek(record_offset - ZIP64_LOCATOR_SIZE)
+        file.read(4).unpack1('V') == ZIP64_LOCATOR
       end
 
       # Finds the end of central directory record in the last bytes of the
@@ -208,7 +219,11 @@ module Lich
         end
         # Other tools walk the directory by its size, so a count too low would
         # have Lich extract only some of the entries they list.
-        raise Error, 'central directory holds more entries than its record declares' unless position == directory.bytesize
+        if position < directory.bytesize
+          raise Error, 'central directory holds more entries than its record declares' if directory.byteslice(position, 4).unpack1('V') == CENTRAL_DIRECTORY_HEADER
+
+          raise Error, 'central directory has bytes after its last entry'
+        end
 
         entries
       end

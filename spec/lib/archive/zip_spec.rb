@@ -356,9 +356,13 @@ RSpec.describe Lich::Archive::Zip do
       expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
     end
 
-    # Python and bsdtar walk an embedded directory by its size, so a wrong
-    # entry count, a last header running past the declared size, or a ZIP64
-    # record does not stop them listing it.
+    # Shapes another tool lists although a count walk would miss them:
+    # Python and bsdtar walk a directory by its size, so they list an inner
+    # archive with a wrong count; Python and unzip list one whose last
+    # header runs past its declared size (bsdtar refuses it); the locator
+    # row stands for a genuine `zip -fz` inner archive, which Python and
+    # unzip list (a bare locator, as here, nothing lists); and an empty
+    # inner record is read as an empty archive.
     {
       'a wrong entry count'    => ->(inner) { inner.dup.tap { |zip| zip[-12, 2] = [5].pack('v'); zip[-14, 2] = [5].pack('v') } },
       # The last header's comment length reaches over the record itself.
@@ -397,6 +401,26 @@ RSpec.describe Lich::Archive::Zip do
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'first' }]) + ZipBuilder.build([{ name: 'a.gem', data: 'second' }]))
 
       expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /central directory does not end at the end record/)
+    end
+
+    # Info-ZIP writing from a pipe (printf x | zip -q m.zip -) adds a ZIP64
+    # end record and locator in front of an ordinary end record.
+    it 'refuses a ZIP64-structured archive as ZIP64' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: '-', data: 'x' }], zip64_end: true))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /ZIP64 archives are not supported/)
+    end
+
+    it 'refuses a central directory with bytes after its last entry' do
+      entries = [{ name: 'a.gem', data: 'a' }]
+      zip = ZipBuilder.build(entries)
+      directory_offset, = zip.byteslice(-6, 4).unpack('V')
+      directory_size = zip.byteslice(-10, 4).unpack1('V')
+      padded = zip.byteslice(0, directory_offset + directory_size) + ("\0" * 4) +
+               zip.byteslice(-22, 22).tap { |record| record[12, 4] = [directory_size + 4].pack('V') }
+      File.binwrite(zip_path, padded)
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /central directory has bytes after its last entry/)
     end
 
     it 'refuses a record whose entry count is lower than its directory holds' do

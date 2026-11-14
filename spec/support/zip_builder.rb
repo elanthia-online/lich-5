@@ -14,8 +14,9 @@ module ZipBuilder
   #   (bytes appended to the payload and counted in its compressed size),
   #   :local_signature
   # @param end_record [Hash] optional :disk, :directory_disk, :disk_count,
-  #   :total_count, :directory_size, :directory_offset overrides, and an
-  #   archive :comment
+  #   :total_count, :directory_size, :directory_offset overrides, an
+  #   archive :comment, and :zip64_end to write a ZIP64 end record and
+  #   locator before the end record, as Info-ZIP does writing from a pipe
   # @return [String] binary ZIP
   def build(entries, end_record = {})
     body = +''.b
@@ -44,9 +45,15 @@ module ZipBuilder
     count = entries.length
     comment = end_record.fetch(:comment, '').b
     fields = { disk: 0, directory_disk: 0, disk_count: count, total_count: count,
-               directory_size: central.bytesize, directory_offset: body.bytesize }.merge(end_record.except(:comment))
-    body + central + [0x06054b50, *fields.values_at(:disk, :directory_disk, :disk_count, :total_count,
-                                                    :directory_size, :directory_offset), comment.bytesize].pack('VvvvvVVv') + comment
+               directory_size: central.bytesize, directory_offset: body.bytesize }.merge(end_record.except(:comment, :zip64_end))
+    zip64 = +''.b
+    if end_record[:zip64_end]
+      zip64_at = body.bytesize + central.bytesize
+      zip64 << [0x06064b50, 44, 45, 45, 0, 0, count, count, central.bytesize, body.bytesize].pack('VQ<vvVVQ<Q<Q<Q<')
+      zip64 << [0x07064b50, 0, zip64_at, 1].pack('VVQ<V')
+    end
+    body + central + zip64 + [0x06054b50, *fields.values_at(:disk, :directory_disk, :disk_count, :total_count,
+                                                            :directory_size, :directory_offset), comment.bytesize].pack('VvvvvVVv') + comment
   end
 
   # @param data [String]
