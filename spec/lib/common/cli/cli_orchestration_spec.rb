@@ -499,17 +499,25 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     # echo off and returns it without the line ending, or nil at end-of-input.
     let(:terminal) do
       Class.new do
-        attr_reader :reads
+        attr_reader :reads, :shown_at_read
 
         def initialize(*lines)
           @lines = lines
           @reads = 0
+          @shown_at_read = []
         end
 
         def tty? = true
 
-        def getpass(_prompt = nil)
+        # Discards type-ahead; the reader calls it before showing its prompt.
+        def iflush; end
+
+        # Takes no prompt: the reader prints its own, because io/console
+        # would send a passed prompt to $stderr. Records what the terminal
+        # showed by the time each hidden read began.
+        def getpass
           @reads += 1
+          @shown_at_read << $stdout.string.dup
           @lines.shift
         end
 
@@ -558,6 +566,7 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
 
         expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG'], stdin: tty)).to eq(0)
         expect(tty.reads).to eq(2)
+        expect(tty.shown_at_read).to eq(['New password: ', "New password: \nConfirm new password: "])
         expect($stdout.string).to eq("New password: \nConfirm new password: \n")
         expect(cli_password).to have_received(:change_account_password).with('DOUG', ' new pass ')
       end

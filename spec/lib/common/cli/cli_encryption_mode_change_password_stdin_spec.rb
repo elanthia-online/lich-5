@@ -16,12 +16,15 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
   let(:entry_store) { Lich::Common::Authentication::EntryStore }
   let(:manager) { Lich::Common::GUI::MasterPasswordManager }
   let(:cli_password) { Lich::Common::Authentication::CLIPassword }
-  # Stands in for a terminal: getpass returns one line without its ending.
+  # Stands in for a terminal: iflush discards type-ahead, and getpass returns
+  # one line without its ending. getpass takes no prompt: the reader prints
+  # its own, because io/console would send a passed prompt to $stderr.
   let(:terminal) do
     Class.new do
       def initialize(*lines) = @lines = lines
       def tty? = true
-      def getpass(_prompt = nil) = @lines.shift
+      def iflush = nil
+      def getpass = @lines.shift
     end
   end
 
@@ -56,6 +59,17 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
       $stdin = StringIO.new("piped-master-pass\r\n")
 
       expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass')
+    end
+
+    it 'validates and stores the piped password without the UTF-8 byte-order mark Windows PowerShell 5.1 puts in front' do
+      # U+FEFF, built from its code point: the AsciiOnlySource cop rejects it
+      # as a literal or escape.
+      $stdin = StringIO.new("#{[0xFEFF].pack('U')}piped-master-pass\r\n")
+      allow(manager).to receive(:new_password_refusal).and_call_original
+
+      expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
+      expect(manager).to have_received(:new_password_refusal).with('piped-master-pass')
       expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass')
     end
 

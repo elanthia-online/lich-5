@@ -168,7 +168,7 @@ module Lich
 
           warn_unflagged_pipe(output)
           output.print prompt
-          input.gets
+          strip_byte_order_mark(input.gets)
         end
 
         # @api private

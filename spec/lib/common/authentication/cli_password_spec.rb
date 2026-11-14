@@ -834,22 +834,44 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
   describe '.read_master_password_line' do
     let(:output) { StringIO.new }
+    # iflush discards type-ahead; getpass takes no prompt, because the reader
+    # prints its own, and records what +shown+ held when the hidden read began.
     let(:hidden_terminal) do
       Class.new do
-        def initialize(line) = @line = line
+        attr_reader :shown_at_read
+
+        def initialize(line, shown = nil)
+          @line = line
+          @shown = shown
+          @shown_at_read = []
+        end
+
         def tty? = true
-        def getpass(_prompt = nil) = @line
+        def iflush = nil
+
+        def getpass
+          @shown_at_read << @shown&.string.to_s.dup
+          @line
+        end
+
         def gets = raise('a terminal password must be read with getpass, not gets')
       end
     end
+
+    # U+FEFF and a non-ASCII letter, built from code points: the
+    # AsciiOnlySource cop rejects them as literals or escapes.
+    let(:bom) { [0xFEFF].pack('U') }
+    let(:a_umlaut) { [0xE4].pack('U') }
 
     before { described_class.instance_variable_set(:@unflagged_pipe_warned, nil) }
     after { described_class.instance_variable_set(:@unflagged_pipe_warned, nil) }
 
     it 'reads a terminal with echo off, printing its own prompt and no warning' do
-      line = described_class.read_master_password_line('Enter master password: ', input: hidden_terminal.new(' typed '), output: output)
+      tty = hidden_terminal.new(' typed ', output)
+      line = described_class.read_master_password_line('Enter master password: ', input: tty, output: output)
 
       expect(line).to eq(' typed ')
+      expect(tty.shown_at_read).to eq(['Enter master password: '])
       expect(output.string).to eq("Enter master password: \n")
     end
 
@@ -878,15 +900,53 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'returns nil at end-of-input on a pipe' do
       expect(described_class.read_master_password_line('Enter: ', input: StringIO.new(''), output: output)).to be_nil
     end
+
+    it 'removes a UTF-8 byte-order mark from the front of a piped line, keeping its line ending' do
+      line = described_class.read_master_password_line('Enter: ', input: StringIO.new("#{bom}piped pass\r\n"), output: output)
+
+      expect(line).to eq("piped pass\r\n")
+    end
+
+    it 'leaves a piped line without a byte-order mark unchanged, non-ASCII bytes included' do
+      line = described_class.read_master_password_line('Enter: ', input: StringIO.new("p#{a_umlaut}ss #{bom}\n"), output: output)
+
+      expect(line).to eq("p#{a_umlaut}ss #{bom}\n")
+      expect(line.b).to eq("p#{a_umlaut}ss #{bom}\n".b)
+    end
+
+    it 'matches an entry and its confirmation from one pipe when only the first line has a byte-order mark' do
+      pipe = StringIO.new("#{bom}p#{a_umlaut}ss word\np#{a_umlaut}ss word\n")
+      manager = Lich::Common::GUI::MasterPasswordManager
+
+      entered = manager.normalize_entry(described_class.read_master_password_line('Enter: ', input: pipe, output: output))
+      confirmed = manager.normalize_entry(described_class.read_master_password_line('Confirm: ', input: pipe, output: output))
+
+      expect(entered).to eq("p#{a_umlaut}ss word")
+      expect(entered).to eq(confirmed)
+    end
   end
 
   describe 'master-password prompts on a terminal' do
     let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    # iflush discards type-ahead; getpass takes no prompt, because the reader
+    # prints its own, and records what $stdout held when each hidden read began.
     let(:hidden_terminal) do
       Class.new do
-        def initialize(*lines) = @lines = lines
+        attr_reader :shown_at_read
+
+        def initialize(*lines)
+          @lines = lines
+          @shown_at_read = []
+        end
+
         def tty? = true
-        def getpass(_prompt = nil) = @lines.shift
+        def iflush = nil
+
+        def getpass
+          @shown_at_read << $stdout.string.dup
+          @lines.shift
+        end
+
         def gets = raise('a terminal password must be read with getpass, not gets')
       end
     end
@@ -905,6 +965,8 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       $stdin = hidden_terminal.new('inner spaces ok', 'inner spaces ok')
 
       expect(described_class.prompt_and_confirm_password('Enter new master password')).to eq('inner spaces ok')
+      expect($stdin.shown_at_read).to eq(['Enter new master password: ',
+                                          "Enter new master password: \nConfirm enter new master password: "])
       expect($stdout.string).to eq("Enter new master password: \nConfirm enter new master password: \n")
     end
 
