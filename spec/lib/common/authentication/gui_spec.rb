@@ -87,7 +87,8 @@ RSpec.describe Lich::Common::Authentication::GUI do
         account: 'testuser',
         password: 'testpass',
         character: 'TestChar',
-        game_code: 'GS3'
+        game_code: 'GS3',
+        generator: false
       ).and_return(auth_data)
 
       described_class.authenticate_and_launch(
@@ -95,6 +96,38 @@ RSpec.describe Lich::Common::Authentication::GUI do
         login_info: login_info,
         on_success: ->(_data) {}
       )
+    end
+
+    it 'logs a saved character literally named New in normally, not into the generator' do
+      expect(Lich::Common::Authentication).to receive(:authenticate).with(
+        hash_including(character: 'New', generator: false)
+      ).and_return(auth_data)
+
+      described_class.authenticate_and_launch(
+        button: mock_button,
+        login_info: login_info.merge(char_name: 'New'),
+        on_success: ->(_data) {}
+      )
+    end
+
+    it 'requests the character generator when login_info carries generator: true' do
+      generator_info = login_info.merge(char_name: nil, generator: true)
+      expect(Lich::Common::Authentication).to receive(:authenticate).with(
+        account: 'testuser',
+        password: 'testpass',
+        character: nil,
+        game_code: 'GS3',
+        generator: true
+      ).and_return(auth_data)
+      received = nil
+
+      described_class.authenticate_and_launch(
+        button: mock_button,
+        login_info: generator_info,
+        on_success: ->(data, context) { received = [data, context] }
+      )
+
+      expect(received).to eq([launch_data, generator_info])
     end
 
     it 'calls LaunchData.prepare with auth data and frontend' do
