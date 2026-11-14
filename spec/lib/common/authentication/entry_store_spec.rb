@@ -57,7 +57,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       end
       expect(File).to receive(:rename).and_wrap_original do |rename, source, destination|
         expect(File.dirname(source)).to eq(File.dirname(yaml_file))
-        expect(File.stat(source).mode & 0o777).to eq(0o600)
+        expect(File.stat(source).mode & 0o777).to eq(0o600) unless OS.windows?
         expect(prepared_file).to be_closed
         expect(File.binread(yaml_file)).to eq(original_bytes)
         rename.call(source, destination)
@@ -74,7 +74,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       described_class.write_yaml_file(yaml_file, yaml_data)
 
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
     end
 
     it 'refuses to replace an owner read-only file and preserves its bytes' do
@@ -82,7 +82,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(Errno::EACCES)
 
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o400)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o400) unless OS.windows?
       expect(File.binread(yaml_file)).to eq(original_bytes)
       expect(Dir.children(data_dir)).to eq(['entry.yaml'])
     end
@@ -152,7 +152,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       described_class.write_yaml_file(yaml_file, yaml_data)
 
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
     end
 
     it 'retains the original bytes when serialization fails' do
@@ -178,7 +178,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       expect { described_class.write_yaml_file(yaml_file, yaml_data) }.to raise_error(IOError)
 
       expect(File.binread(yaml_file)).to eq(original_bytes)
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
       expect(Dir.children(data_dir)).to eq(['entry.yaml'])
     end
 
@@ -260,7 +260,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
     # @return [void]
     def expect_original_accounts(bytes)
       expect(File.binread(yaml_file)).to eq(bytes)
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
       loaded = described_class.load_saved_entries(data_dir, false)
       expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
     end
@@ -275,7 +275,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         expect(data['encryption_mode']).to eq(new_mode.to_s)
         loaded = described_class.load_saved_entries(data_dir, false)
         expect(loaded.to_h { |entry| [entry[:user_id], entry[:password]] }).to eq(passwords)
-        expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+        expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
         expect(File.exist?("#{yaml_file}.bak")).to be(false)
         if new_mode == :enhanced
           expect(keychain[:password]).to eq(new_master_password)
@@ -297,7 +297,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         expect(keychain[:password]).to eq(previous)
         expect_original_accounts(original)
         expect(File.binread("#{yaml_file}.bak")).to eq(original)
-        expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+        expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600) unless OS.windows?
         expect(Dir.children(data_dir).sort).to eq(['entry.yaml', 'entry.yaml.bak'])
       end
     end
@@ -437,7 +437,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       expect_original_accounts(original)
       expect(File.binread("#{yaml_file}.bak")).to eq(original)
-      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600) unless OS.windows?
     end
   end
 

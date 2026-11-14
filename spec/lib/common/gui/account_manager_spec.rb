@@ -93,10 +93,10 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     end
 
     it 'creates owner-only credentials and tightens an existing permissive file' do
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
       File.chmod(0o644, yaml_file)
       expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(true)
-      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600)
+      expect(File.stat(yaml_file).mode & 0o777).to eq(0o600) unless OS.windows?
       expect(YAML.safe_load_file(yaml_file)['accounts'][username.upcase]['password']).to eq('SyntheticChanged123!')
     end
 
@@ -107,7 +107,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       expect(described_class.change_password(data_dir, username, 'SyntheticChanged123!')).to be(true)
 
       expect(File.binread("#{yaml_file}.bak")).to eq(original)
-      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600) unless OS.windows?
       previous = File.binread(yaml_file)
       expect(described_class.remove_account(data_dir, username)).to be(true)
       expect(File.binread("#{yaml_file}.bak")).to eq(previous)
@@ -124,7 +124,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
 
       expect(File.binread(yaml_file)).to eq(original)
       expect(File.binread("#{yaml_file}.bak")).to eq(original)
-      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600)
+      expect(File.stat("#{yaml_file}.bak").mode & 0o777).to eq(0o600) unless OS.windows?
       expect(Lich).to have_received(:log).with("error: Could not save account data to #{yaml_file.inspect}: Errno::EACCES (errno=#{Errno::EACCES::Errno})")
       expect(Lich).not_to have_received(:log).with(/SyntheticSecretMustNotAppear/)
     end

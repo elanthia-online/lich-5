@@ -1,53 +1,17 @@
+# Native macOS WebUI coverage. ci.yml calls this workflow when a change
+# reaches the native host, and requires it to pass. It can also be started by
+# hand on any branch; a manual run does not report to ci-gate.
 name: macOS Native WebUI
+
 on:
+  workflow_call:
   workflow_dispatch:
+
 permissions:
   contents: read
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.actor_id }}-${{ github.triggering_actor }}
-  cancel-in-progress: true
-jobs:
-  authorize:
-    # Check repository roles before any checkout or macOS execution.
-    if: >-
-      github.repository == 'elanthia-online/lich-5' &&
-      github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    outputs:
-      allowed: ${{ steps.admin.outputs.allowed }}
-      attempt: ${{ steps.admin.outputs.attempt }}
-    steps:
-      - name: Require repository admin permission for both actors
-        id: admin
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          ORIGINAL_ACTOR: ${{ github.actor }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
-          AUTHORIZATION_ATTEMPT: ${{ github.run_attempt }}
-        with:
-          script: |
-            core.setOutput('allowed', 'false');
-            try {
-              for (const actor of [process.env.ORIGINAL_ACTOR, process.env.TRIGGERING_ACTOR]) {
-                if (!actor) throw new Error('Missing workflow actor');
-                const response = await github.rest.repos.getCollaboratorPermissionLevel({
-                  ...context.repo, username: actor,
-                });
-                if (response?.status !== 200 || response.data?.permission !== 'admin') {
-                  core.notice('Both workflow actors must have repository admin permission.');
-                  return;
-                }
-              }
-              core.setOutput('attempt', process.env.AUTHORIZATION_ATTEMPT);
-              core.setOutput('allowed', 'true');
-            } catch (error) {
-              core.setFailed(`Could not verify repository admin permissions: ${error.message}`);
-            }
 
+jobs:
   macos_native:
-    needs: authorize
-    if: needs.authorize.outputs.allowed == 'true' && needs.authorize.outputs.attempt == github.run_attempt
     runs-on: macos-15
     timeout-minutes: 10
     steps:

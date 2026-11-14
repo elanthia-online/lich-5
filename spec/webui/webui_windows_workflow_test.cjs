@@ -2,7 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const { windowsSpecPaths } = require('./workflow_classification_source.cjs');
 
 const root = path.join(__dirname, '../..');
@@ -10,142 +9,20 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/\r\
 const workflow = read('.github/workflows/windows_webui.yaml');
 const selected = windowsSpecPaths(workflow);
 const renderer = read('.github/workflows/webui_tests.yaml').split('\n  browser:\n')[0];
-const authorization = workflow.split('\n  authorize:\n')[1]?.split('\n  windows_webui:\n')[0];
-assert.ok(authorization, 'expected an authorization job before Windows coverage');
-const guard = authorization.match(/^    if: >-\n((?:      .+\n)+)/m)?.[1].trim();
-const gateSource = authorization.match(/^          script: \|\n((?:            .*\n)+)/m)?.[1];
-assert.ok(guard, 'expected a job-level event guard before any checkout');
-assert.ok(gateSource, 'expected the inline repository-permission gate');
 const windows = workflow.split('\n  windows_webui:\n')[1];
-const windowsGuard = windows.match(/^    if: (.+)$/m)?.[1];
+assert.ok(windows, 'expected the Windows coverage job');
 
-function eligible(overrides = {}) {
-  const github = {
-    repository: 'elanthia-online/lich-5',
-    event_name: 'push', ref: 'refs/heads/main', ...overrides,
-  };
-  return vm.runInNewContext(guard, { github }, { timeout: 1000 });
-}
-
-async function authorize(responses = {}, actors = {}, attempt = '1') {
-  const calls = [];
-  const outputs = {};
-  const failures = [];
-  const env = {
-    ORIGINAL_ACTOR: 'original-admin', TRIGGERING_ACTOR: 'rerun-admin',
-    AUTHORIZATION_ATTEMPT: attempt, ...actors,
-  };
-  const github = { rest: { repos: { getCollaboratorPermissionLevel: async params => {
-    calls.push(params);
-    const response = Object.hasOwn(responses, params.username) ? responses[params.username] :
-      { status: 200, data: { permission: 'admin' } };
-    if (response instanceof Error) throw response;
-    return response;
-  } } } };
-  const core = {
-    setOutput: (name, value) => { outputs[name] = value; },
-    setFailed: message => { failures.push(message); },
-    notice: () => {},
-  };
-  await vm.runInNewContext(`(async () => {\n${gateSource}\n})()`, {
-    github, core, context: { repo: { owner: 'elanthia-online', repo: 'lich-5' } }, process: { env },
-  }, { timeout: 1000 });
-  return { calls, outputs, failures };
-}
-
-test('Windows authorization permits main pushes and dispatches and rejects external events', () => {
-  assert.equal(eligible(), true);
-  assert.equal(eligible({ event_name: 'workflow_dispatch', ref: 'refs/heads/webui/candidate' }), true);
-  for (const overrides of [
-    { repository: 'other/lich-5' },
-    { event_name: 'pull_request' }, { event_name: 'pull_request_target' }, { event_name: 'workflow_run' },
-    { event_name: 'push', ref: 'refs/heads/contributor' },
-    { event_name: 'push', ref: 'refs/tags/main' },
-    { event_name: 'schedule' }, { event_name: 'repository_dispatch' },
-  ]) assert.equal(eligible(overrides), false, JSON.stringify(overrides));
-  assert.ok(workflow.indexOf('    if: >-') < workflow.indexOf('uses: actions/checkout@'));
-  assert.doesNotMatch(workflow, /^  (pull_request(?:_target)?|workflow_run):/m);
-  assert.match(workflow, /push:\n    branches: \[main\]/);
-  assert.match(workflow, /group: .*github\.actor_id.*github\.triggering_actor/);
+test('Windows coverage runs when CI calls it or on a manual dispatch, and on no other event', () => {
+  assert.match(workflow, /^on:\n  workflow_call:\n  workflow_dispatch:\n\npermissions:/m);
+  assert.doesNotMatch(workflow, /^  (push|pull_request|pull_request_target|pull_request_review|workflow_run|schedule):/m);
+  assert.doesNotMatch(workflow, /^\s*concurrency:/m);
 });
 
-test('Windows permission gate reads both actor roles from the repository API before checkout', async () => {
-  const result = await authorize();
-  assert.deepEqual(result.outputs, { allowed: 'true', attempt: '1' });
-  assert.deepEqual(result.failures, []);
-  assert.equal(result.calls.length, 2);
-  assert.deepEqual(result.calls.map(call => ({ ...call })), [
-    { owner: 'elanthia-online', repo: 'lich-5', username: 'original-admin' },
-    { owner: 'elanthia-online', repo: 'lich-5', username: 'rerun-admin' },
-  ]);
-  const sameActor = await authorize({}, { ORIGINAL_ACTOR: 'another-admin', TRIGGERING_ACTOR: 'another-admin' });
-  assert.equal(sameActor.outputs.allowed, 'true');
-  assert.deepEqual(sameActor.calls.map(call => call.username), ['another-admin', 'another-admin']);
-  assert.doesNotMatch(authorization, /uses: actions\/checkout@/);
-  assert.ok(workflow.indexOf('\n  authorize:\n') < workflow.indexOf('uses: actions/checkout@'));
-  assert.match(authorization, /ORIGINAL_ACTOR: \$\{\{ github\.actor \}\}/);
-  assert.match(authorization, /TRIGGERING_ACTOR: \$\{\{ github\.triggering_actor \}\}/);
-  assert.match(authorization, /AUTHORIZATION_ATTEMPT: \$\{\{ github\.run_attempt \}\}/);
-  assert.match(authorization, /allowed: \$\{\{ steps\.admin\.outputs\.allowed \}\}/);
-  assert.match(authorization, /attempt: \$\{\{ steps\.admin\.outputs\.attempt \}\}/);
-  assert.match(authorization, /^        id: admin$/m);
-});
-
-test('Windows permission gate requires admin for each actor and fails closed at the API boundary', async () => {
-  const rejected = [
-    ...['maintain', 'write', 'read', 'triage', 'none', 'unknown', 'ADMIN', ''].map(permission =>
-      ({ status: 200, data: { permission } })),
-    { status: 403, data: { permission: 'admin' } },
-    { status: 404, data: { permission: 'admin' } },
-    { status: 500, data: { permission: 'admin' } },
-    { data: { permission: 'admin' } }, { status: 200, data: {} },
-    { status: 200, data: { permission: null } },
-    { status: 200 }, {}, null, undefined, new Error('permission request failed'),
-  ];
-  for (const actor of ['original-admin', 'rerun-admin']) {
-    for (const response of rejected) {
-      const result = await authorize({ [actor]: response });
-      assert.equal(result.outputs.allowed, 'false', `${actor}: ${JSON.stringify(response)}`);
-      assert.equal(result.calls.at(-1).username, actor);
-      if (response instanceof Error) assert.equal(result.failures.length, 1);
-    }
-  }
-  for (const actor of ['ORIGINAL_ACTOR', 'TRIGGERING_ACTOR']) {
-    const result = await authorize({}, { [actor]: '' });
-    assert.equal(result.outputs.allowed, 'false', actor);
-    assert.equal(result.failures.length, 1);
-  }
-});
-
-test('Windows execution depends on a successful admin gate with explicit approval', () => {
-  assert.match(windows, /^    needs: authorize$/m);
-  assert.ok(windowsGuard, 'expected the Windows approval guard');
-  for (const allowed of ['true', 'false', '', undefined]) {
-    const needs = { authorize: { outputs: { allowed, attempt: '1' } } };
-    const github = { run_attempt: '1' };
-    assert.equal(vm.runInNewContext(windowsGuard, { needs, github }, { timeout: 1000 }), allowed === 'true');
-  }
-});
-
-test('Windows rejects retained authorization on partial reruns and rechecks actors on full reruns', async () => {
-  const executionAllowed = (outputs, attempt) => vm.runInNewContext(windowsGuard, {
-    needs: { authorize: { outputs } }, github: { run_attempt: attempt },
-  }, { timeout: 1000 });
-  const original = await authorize({}, {}, '1');
-  assert.equal(executionAllowed(original.outputs, '1'), true);
-  // A failed-jobs or selected-job re-run can retain successful dependency outputs.
-  assert.equal(executionAllowed(original.outputs, '2'), false);
-  assert.equal(executionAllowed({ allowed: 'true' }, '2'), false);
-  assert.equal(executionAllowed({ allowed: 'true', attempt: '' }, '2'), false);
-  const adminRerun = await authorize({}, {}, '2');
-  assert.equal(adminRerun.outputs.attempt, '2');
-  assert.equal(executionAllowed(adminRerun.outputs, '2'), true);
-  assert.deepEqual(adminRerun.calls.map(call => call.username), ['original-admin', 'rerun-admin']);
-  const nonadminRerun = await authorize({
-    contributor: { status: 200, data: { permission: 'write' } },
-  }, { TRIGGERING_ACTOR: 'contributor' }, '2');
-  assert.deepEqual(nonadminRerun.calls.map(call => call.username), ['original-admin', 'contributor']);
-  assert.equal(executionAllowed(nonadminRerun.outputs, '2'), false);
+test('Windows coverage has no gate of its own: CI decides whether to call it', () => {
+  const jobs = [...workflow.slice(workflow.indexOf('\njobs:\n')).matchAll(/^ {2}([A-Za-z_][\w-]*):$/gm)].map(match => match[1]);
+  assert.deepEqual(jobs, ['windows_webui']);
+  assert.doesNotMatch(windows, /^    (if|needs):/m);
+  assert.doesNotMatch(workflow, /getCollaboratorPermissionLevel|github\.actor|triggering_actor|github\.repository ==/);
 });
 
 test('Windows coverage stays bounded and blocking with pinned read-only actions', () => {

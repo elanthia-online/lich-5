@@ -1,11 +1,9 @@
 # ------------------------------------------------------------------------------
 # WebUI Tests
 #
-# On pull requests the jobs do their work only when a WebUI-relevant path
-# changed (see WEBUI_PATHS in the classify step); otherwise their steps are
-# skipped and the job passes. Pushes to main and manual runs always run, so
-# anything a PR filter misses is still caught on main. If the changed-file
-# list or Windows selection table cannot be read, the jobs run.
+# Called by ci.yml, which decides from the changed files whether the renderer
+# suite, the browser suite, both or neither is needed, and calls this workflow
+# once per needed suite. This workflow has no triggers of its own.
 #
 # The browser job is split into two shards (matrix), each running its spec
 # files with two parallel workers. A new browser spec file must be added to
@@ -15,117 +13,41 @@
 name: WebUI Tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      suite:
+        description: "Which suite to run: renderer or browser"
+        required: true
+        type: string
 
 permissions:
   contents: read
-  pull-requests: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   renderer:
     name: JavaScript renderer
+    if: inputs.suite == 'renderer'
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - &classify
-        name: Classify changed files
-        id: classify
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            // Shared with the Windows selection guard through its source helper.
-            // Parse data only; never execute code from the pull request.
-            function windowsSpecPaths(workflow) {
-              const groups = workflow.replace(/\r\n/g, '\n').match(/^          \$groups = \[ordered\]@\{\n([\s\S]*?)^          \}/m)?.[1];
-              if (!groups) throw new Error('expected the Windows RSpec selection table');
-              const selected = [...groups.matchAll(/'(spec\/[^']+)'/g)].map(match => match[1]);
-              if (!selected.length) throw new Error('expected selected Windows specs');
-              return selected;
-            }
-            // Paths the renderer and browser jobs depend on. Prefix match for
-            // entries ending in '/' or '_', exact match otherwise.
-            const WEBUI_PATHS = [
-              'lib/webui/', 'lib/webui.rb',
-              'lib/common/script_scope/', 'lib/common/script_scope.rb', 'lib/common/script_death.rb',
-              'lib/common/webui_launcher.rb', 'lib/common/webui_launcher/',
-              'spec/webui/', 'spec/fixtures/webui/', 'spec/lib/webui/', 'spec/lib/common/script_scope_',
-              'spec/support/webui_', 'spec/spec_helper.rb', 'spec/login_spec_helper.rb', 'spec/support/frontend_mock.rb',
-              'spec/support/data_dir.rb', 'spec/support/real_keychain_fence.rb',
-              'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
-              '.rspec', '.rspec_parallel',
-              // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
-              'lib/common/authentication/', 'lib/common/gui/', 'lib/common/gui_login.rb',
-              'lib/common/front-end.rb', 'lib/common/frontend.rb', 'lib/common/frontend_',
-              'lib/common/session_launcher.rb', 'lib/common/saga_launch_policy.rb', 'lib/common/saga_managed_launcher.rb',
-              'lib/common/process_launcher.rb', 'lib/common/ruby_executable.rb', 'lib/common/sharing_violation_retry.rb',
-              'lib/common/windows_command_line.rb', 'lib/util/deep_freeze.rb',
-              'Gemfile', 'Gemfile.lock', '.github/workflows/webui_tests.yaml',
-              '.github/workflows/windows_webui.yaml', '.github/scripts/windows_runtime_',
-              '.github/workflows/macos_webui.yaml', '.github/scripts/macos_webui_smoke.py',
-              // setup-ruby in the browser job passes no ruby-version, so it reads this file.
-              '.ruby-version',
-            ];
-            if (context.eventName !== 'pull_request') {
-              core.info(`Event ${context.eventName}: running WebUI jobs.`);
-              core.setOutput('webui', 'true');
-              return;
-            }
-            try {
-              const files = await github.paginate(github.rest.pulls.listFiles, {
-                owner: context.repo.owner, repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number, per_page: 100,
-              });
-              const head = context.payload.pull_request.head;
-              const { data } = await github.rest.repos.getContent({
-                owner: head.repo.owner.login, repo: head.repo.name, ref: head.sha,
-                path: '.github/workflows/windows_webui.yaml',
-              });
-              if (data.encoding !== 'base64' || typeof data.content !== 'string') {
-                throw new Error('expected the Windows workflow file content');
-              }
-              const selected = windowsSpecPaths(Buffer.from(data.content, 'base64').toString('utf8'));
-              const matches = path => WEBUI_PATHS.some(p => p.endsWith('/') || p.endsWith('_') ? path.startsWith(p) : path === p) ||
-                selected.some(p => path === p || (!p.endsWith('.rb') && path.startsWith(`${p}/`)));
-              // A rename out of a WebUI path still counts: check the old name too.
-              const hits = files.filter(f => matches(f.filename) || (f.previous_filename && matches(f.previous_filename)));
-              // The API returns at most 3,000 files; a capped list may hide a WebUI path.
-              const capped = files.length >= 3000;
-              core.info(`Changed files = ${files.length}${capped ? ' (API limit reached)' : ''}, WebUI-relevant = ${hits.length}`);
-              core.setOutput('webui', capped || hits.length > 0 ? 'true' : 'false');
-            } catch (error) {
-              core.notice(`Could not classify changed files (${error.message}); running WebUI jobs.`);
-              core.setOutput('webui', 'true');
-            }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.classify.outputs.webui == 'true'
         with:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        if: steps.classify.outputs.webui == 'true'
         with:
           node-version: '26.5.0'
           cache: npm
           cache-dependency-path: spec/webui/package-lock.json
-      - if: steps.classify.outputs.webui == 'true'
-        run: npm ci --prefix spec/webui
+      - run: npm ci --prefix spec/webui
       - name: Install renderer engines and headed display dependencies
-        if: steps.classify.outputs.webui == 'true'
         working-directory: spec/webui
         run: |
           npx --no-install playwright install --with-deps webkit
           npx --no-install playwright install-deps chrome
           google-chrome --version || npx --no-install playwright install chrome
-      - if: steps.classify.outputs.webui == 'true'
-        run: xvfb-run --auto-servernum npm test --prefix spec/webui
+      - run: xvfb-run --auto-servernum npm test --prefix spec/webui
       - name: Upload renderer engine diagnostics
-        if: failure() && steps.classify.outputs.webui == 'true'
+        if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: webui-renderer-failures
@@ -135,6 +57,7 @@ jobs:
 
   browser:
     name: Chrome browser integration (${{ matrix.shard }}/2)
+    if: inputs.suite == 'browser'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
@@ -164,32 +87,26 @@ jobs:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
       NATIVE_BROWSER: '1'
     steps:
-      - *classify
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.classify.outputs.webui == 'true'
         with:
           persist-credentials: false
       - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-        if: steps.classify.outputs.webui == 'true'
         with:
           bundler-cache: true
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        if: steps.classify.outputs.webui == 'true'
         with:
           node-version: '26.5.0'
           cache: npm
           cache-dependency-path: spec/webui/package-lock.json
-      - if: steps.classify.outputs.webui == 'true'
-        run: npm ci --prefix spec/webui
+      - run: npm ci --prefix spec/webui
       - name: Install browser system dependencies (reuse the image's Chrome)
-        if: steps.classify.outputs.webui == 'true'
         working-directory: spec/webui
         run: |
           npx --no-install playwright install-deps chrome
           # The runner image ships Google Chrome; install it only if missing.
           google-chrome --version || npx --no-install playwright install chrome
       - name: Check every browser spec file is in a shard
-        if: steps.classify.outputs.webui == 'true' && matrix.shard == 1
+        if: matrix.shard == 1
         run: |
           ruby -ryaml -e '
             jobs = YAML.load_file(".github/workflows/webui_tests.yaml", aliases: true)["jobs"]
@@ -203,14 +120,12 @@ jobs:
             exit 1 unless missing.empty? && stale.empty?
             puts "All #{browser.size} browser spec files are in a shard."'
       - name: Restore shard runtime log
-        if: steps.classify.outputs.webui == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: tmp/parallel_runtime_rspec.log
           key: webui-runtime-${{ matrix.shard }}-${{ github.run_id }}
           restore-keys: webui-runtime-${{ matrix.shard }}-
       - name: Exercise shim controls and file bootstrap
-        if: steps.classify.outputs.webui == 'true'
         env:
           # End-to-end Chrome scenarios take seconds by design; 60s here only
           # flags pathological examples (the 2s default is for unit examples).
@@ -218,7 +133,7 @@ jobs:
           SHARD_FILES: ${{ matrix.files }}
         run: bundle exec parallel_rspec -n 2 --serialize-stdout --verbose-rerun-command -o '--tag browser' $SHARD_FILES
       - name: Upload browser failure diagnostics
-        if: failure() && steps.classify.outputs.webui == 'true'
+        if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: webui-browser-failures-${{ matrix.shard }}
