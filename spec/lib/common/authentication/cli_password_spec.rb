@@ -654,6 +654,102 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
   end
 
+  describe '.read_master_password_line' do
+    let(:output) { StringIO.new }
+    let(:hidden_terminal) do
+      Class.new do
+        def initialize(line) = @line = line
+        def tty? = true
+        def getpass(_prompt = nil) = @line
+        def gets = raise('a terminal password must be read with getpass, not gets')
+      end
+    end
+
+    before { described_class.instance_variable_set(:@unflagged_pipe_warned, nil) }
+    after { described_class.instance_variable_set(:@unflagged_pipe_warned, nil) }
+
+    it 'reads a terminal with echo off, printing its own prompt and no warning' do
+      line = described_class.read_master_password_line('Enter master password: ', input: hidden_terminal.new(' typed '), output: output)
+
+      expect(line).to eq(' typed ')
+      expect(output.string).to eq("Enter master password: \n")
+    end
+
+    it 'returns nil at end-of-input on a terminal' do
+      expect(described_class.read_master_password_line('Enter master password: ', input: hidden_terminal.new(nil), output: output)).to be_nil
+    end
+
+    it 'still reads piped input, line ending included, and warns that this ends' do
+      line = described_class.read_master_password_line('Enter master password: ', input: StringIO.new(" hunter-two \r\nnext\n"), output: output)
+
+      expect(line).to eq(" hunter-two \r\n")
+      expect(output.string).to include('without --password-stdin is deprecated')
+      expect(output.string).to include("error starting with Lich #{described_class::UNFLAGGED_PIPE_REMOVAL}")
+      expect(output.string).to end_with('Enter master password: ')
+      expect(output.string).not_to include('hunter-two')
+    end
+
+    it 'warns once for a prompt and its confirmation' do
+      pipe = StringIO.new("one\none\n")
+
+      2.times { described_class.read_master_password_line('Enter: ', input: pipe, output: output) }
+
+      expect(output.string.scan('is deprecated').length).to eq(1)
+    end
+
+    it 'returns nil at end-of-input on a pipe' do
+      expect(described_class.read_master_password_line('Enter: ', input: StringIO.new(''), output: output)).to be_nil
+    end
+  end
+
+  describe 'master-password prompts on a terminal' do
+    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:hidden_terminal) do
+      Class.new do
+        def initialize(*lines) = @lines = lines
+        def tty? = true
+        def getpass(_prompt = nil) = @lines.shift
+        def gets = raise('a terminal password must be read with getpass, not gets')
+      end
+    end
+
+    around do |example|
+      original_stdin = $stdin
+      original_stdout = $stdout
+      $stdout = StringIO.new
+      example.run
+    ensure
+      $stdin = original_stdin
+      $stdout = original_stdout
+    end
+
+    it 'reads a new master password and its confirmation hidden, and returns it as typed' do
+      $stdin = hidden_terminal.new('inner spaces ok', 'inner spaces ok')
+
+      expect(described_class.prompt_and_confirm_password('Enter new master password')).to eq('inner spaces ok')
+      expect($stdout.string).to eq("Enter new master password: \nConfirm enter new master password: \n")
+    end
+
+    it 'reads the single unlock prompt hidden, edge spaces intact' do
+      $stdin = hidden_terminal.new(' padded ')
+
+      expect(described_class.prompt_for_master_password).to eq(' padded ')
+      expect($stdout.string).to eq("Enter master password: \n")
+    end
+
+    it 'reads the recovery prompt hidden and stores the password as typed' do
+      File.write(yaml_file, YAML.dump('encryption_mode'                 => 'enhanced',
+                                      'master_password_validation_test' => manager.create_validation_test(' padded secret '),
+                                      'accounts'                        => { 'DOUG' => { 'password' => 'encrypted_pass' } }))
+      allow(manager).to receive(:store_master_password).and_return(true)
+      $stdin = hidden_terminal.new(' padded secret ')
+
+      expect(described_class.recover_master_password).to eq(0)
+      expect(manager).to have_received(:store_master_password).with(' padded secret ')
+      expect($stdout.string).not_to include('padded secret')
+    end
+  end
+
   describe '.refresh_characters' do
     before do
       yaml_data = {
@@ -1480,11 +1576,23 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         expect(exit_code).to eq(1)
       end
 
-      it 'returns 1 when password is too short' do
-        allow($stdin).to receive(:gets).and_return("short\n", "short\n")
+      it 'recovers a short existing master password that matches the validation test' do
+        allow($stdin).to receive(:gets).and_return("short\n")
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(true)
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password
-        expect(exit_code).to eq(1)
+
+        expect(exit_code).to eq(0)
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password).with('short')
+      end
+
+      it 'still refuses a short password the validation test rejects' do
+        allow($stdin).to receive(:gets).and_return("short\n")
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(false)
+        expect(Lich::Common::GUI::MasterPasswordManager).not_to receive(:store_master_password)
+
+        expect(Lich::Common::Authentication::CLIPassword.recover_master_password).to eq(1)
       end
 
       it 'returns 1 when stdin is unavailable' do
@@ -1578,9 +1686,21 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         Lich::Common::Authentication::CLIPassword.recover_master_password('directpassword')
       end
 
-      it 'returns 1 when direct password is too short' do
+      it 'recovers a short direct password that matches the validation test' do
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(true)
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
+
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password('short')
-        expect(exit_code).to eq(1)
+
+        expect(exit_code).to eq(0)
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password).with('short')
+      end
+
+      it 'returns 1 for a short direct password the validation test rejects' do
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password).and_return(false)
+        expect(Lich::Common::GUI::MasterPasswordManager).not_to receive(:store_master_password)
+
+        expect(Lich::Common::Authentication::CLIPassword.recover_master_password('short')).to eq(1)
       end
 
       it 'returns 0 with valid direct password' do
@@ -1618,6 +1738,94 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         expect(Lich).not_to receive(:log).with(/newpassword/)
 
         Lich::Common::Authentication::CLIPassword.recover_master_password
+      end
+    end
+  end
+
+  describe 'one master-password rule for every CLI path' do
+    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:edge_refusal) { 'error: New master password cannot begin or end with whitespace.' }
+
+    before do
+      allow(manager).to receive(:new_password_refusal).and_call_original
+      allow(manager).to receive(:normalize_entry).and_call_original
+      allow($stdout).to receive(:puts)
+      allow($stdout).to receive(:print)
+    end
+
+    def write_enhanced(existing)
+      File.write(yaml_file, YAML.dump('encryption_mode'                 => 'enhanced',
+                                      'master_password_validation_test' => manager.create_validation_test(existing),
+                                      'accounts'                        => { 'DOUG' => { 'password' => 'encrypted_pass' } }))
+    end
+
+    context 'when changing the master password' do
+      before do
+        write_enhanced('current-pass')
+        allow(described_class).to receive(:validate_master_password_available).and_return(true)
+      end
+
+      it 'refuses an edge-space replacement typed at the prompt, writing nothing' do
+        allow($stdin).to receive(:gets).and_return("replacement-secret \n", "replacement-secret \n")
+        expect(manager).not_to receive(:create_validation_test)
+
+        expect(described_class.change_master_password('current-pass')).to eq(1)
+        expect(manager).to have_received(:normalize_entry).twice
+        expect(manager).to have_received(:new_password_refusal).with('replacement-secret ')
+        expect($stdout).to have_received(:puts).with(edge_refusal)
+      end
+
+      it 'refuses an edge-space replacement given as an argument' do
+        expect(described_class.change_master_password('current-pass', ' replacement-secret')).to eq(1)
+        expect(manager).to have_received(:new_password_refusal).with(' replacement-secret')
+        expect($stdout).to have_received(:puts).with(edge_refusal)
+      end
+    end
+
+    context 'when creating a master password at the confirmation prompt' do
+      it 'refuses edge spaces with the shared message' do
+        allow($stdin).to receive(:gets).and_return("\tnew-secret-value\n", "\tnew-secret-value\n")
+
+        expect(described_class.prompt_and_confirm_password('Enter new master password')).to be_nil
+        expect(manager).to have_received(:new_password_refusal).with("\tnew-secret-value")
+        expect($stdout).to have_received(:puts).with(edge_refusal)
+      end
+
+      it 'returns an acceptable password exactly as typed' do
+        allow($stdin).to receive(:gets).and_return("inner spaces ok\n", "inner spaces ok\n")
+
+        expect(described_class.prompt_and_confirm_password).to eq('inner spaces ok')
+      end
+    end
+
+    context 'when recovering an existing master password' do
+      it 'recovers a padded password typed at the prompt, storing it as typed' do
+        write_enhanced('  padded secret ')
+        allow($stdin).to receive(:gets).and_return("  padded secret \n")
+        allow(manager).to receive(:store_master_password).and_return(true)
+
+        expect(described_class.recover_master_password).to eq(0)
+        expect(manager).to have_received(:store_master_password).with('  padded secret ')
+        expect(manager).not_to have_received(:new_password_refusal)
+      end
+
+      it 'recovers a short password through the real validation test' do
+        write_enhanced('short')
+        allow($stdin).to receive(:gets).and_return("short\n")
+        allow(manager).to receive(:store_master_password).and_return(true)
+
+        expect(described_class.recover_master_password).to eq(0)
+        expect(manager).to have_received(:store_master_password).with('short')
+      end
+    end
+
+    context 'when unlocking at the single master-password prompt' do
+      it 'returns a short or padded password with only the line terminator removed' do
+        allow($stdin).to receive(:gets).and_return("short\n", " padded \r\n")
+
+        expect(described_class.prompt_for_master_password).to eq('short')
+        expect(described_class.prompt_for_master_password).to eq(' padded ')
+        expect(manager).not_to have_received(:new_password_refusal)
       end
     end
   end

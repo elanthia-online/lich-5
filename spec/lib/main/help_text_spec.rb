@@ -43,6 +43,27 @@ RSpec.describe Lich::Main::HelpText do
       expect(described_class.render('accounts')).to include(%(printf '%s\\n' "$PASSWORD" | lich --add-account MYACCOUNT --password-stdin))
     end
 
+    it 'documents the password commands without a password argument' do
+      output = described_class.render('accounts')
+
+      expect(output).not_to match(/--(?:change-account-password|change-master-password|recover-master-password) [^\n]*PASSWORD/)
+      expect(output).not_to include('--master-password')
+      expect(output).to include('--change-account-password ACCOUNT [--password-stdin]')
+      expect(output).to include('--change-master-password [--password-stdin]')
+      expect(output).to include('--recover-master-password [--password-stdin]')
+      expect(output).to include('--convert-entries MODE [--password-stdin]')
+      expect(output).to include('--change-encryption-mode MODE [--password-stdin]')
+    end
+
+    it 'says how passwords are supplied and how spaces are treated' do
+      output = described_class.render('accounts')
+
+      expect(output).to include('what you type is not shown')
+      expect(output).to include('--change-master-password reads two lines')
+      expect(output).to include('master password cannot begin or end with a space.')
+      expect(output).to include(%(printf '%s\\n%s\\n' "$OLD" "$NEW" | lich --change-master-password --password-stdin))
+    end
+
     it 'lists every game code --game-code accepts' do
       output = described_class.render('accounts')
 

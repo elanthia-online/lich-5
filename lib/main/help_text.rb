@@ -146,11 +146,21 @@ module Lich
             --add-account ACCOUNT [--password-stdin] [--frontend FRONTEND]
             --refresh-characters ACCOUNT [--frontend FRONTEND]
             --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
-            --change-account-password ACCOUNT NEWPASSWORD
-            --change-master-password OLDPASSWORD [NEWPASSWORD]
-            --recover-master-password [NEWPASSWORD]
-            --convert-entries MODE
-            --change-encryption-mode MODE [--master-password PASSWORD]
+            --change-account-password ACCOUNT [--password-stdin]
+            --change-master-password [--password-stdin]
+            --recover-master-password [--password-stdin]
+            --convert-entries MODE [--password-stdin]
+            --change-encryption-mode MODE [--password-stdin]
+
+          Passwords for the commands above:
+            Prompted for on the terminal; what you type is not shown.
+            --password-stdin reads the password from standard input instead,
+            one line each. --change-master-password reads two lines: the
+            current master password, then the new one.
+            Leading and trailing spaces are part of an account password. A new
+            master password cannot begin or end with a space.
+            A password on the command line still works but is deprecated: it
+            is saved in shell history and shown in the process list.
 
           Modes:
             plaintext
@@ -168,9 +178,12 @@ module Lich
             printf '%s\\n' "$PASSWORD" | lich --add-account MYACCOUNT --password-stdin
             lich --refresh-characters MYACCOUNT
             lich --add-character MYACCOUNT NewCharName --game-code DR
-            lich --change-account-password MYACCOUNT NEWPASSWORD
+            lich --change-account-password MYACCOUNT
+            lich --change-master-password
             lich --convert-entries enhanced
-            lich --change-encryption-mode enhanced --master-password SECRET
+            lich --change-encryption-mode enhanced
+            printf '%s\\n' "$MASTER" | lich --change-encryption-mode enhanced --password-stdin
+            printf '%s\\n%s\\n' "$OLD" "$NEW" | lich --change-master-password --password-stdin
         TEXT
       end
 
