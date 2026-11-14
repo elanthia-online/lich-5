@@ -114,9 +114,12 @@ module Lich
           if OS.windows?
             return WindowsCredentialManager.retrieve_credential(KEYCHAIN_SERVICE, strict: true)
           elsif OS.mac?
-            output, _error, status = Open3.capture3('/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-w')
+            password, status = read_macos_keychain
             # errSecItemNotFound (-25300), represented as an 8-bit process status.
             return nil if status.exitstatus == 44
+            raise IOError, "Keychain read failed; previous master password state is unknown" unless status.success? && password && !password.empty?
+
+            return password
           elsif OS.linux?
             attributes = ['service', KEYCHAIN_SERVICE, 'user', 'lich5']
             output, error, status = Open3.capture3('secret-tool', 'lookup', *attributes)
@@ -209,18 +212,64 @@ module Lich
           false
         end
 
+        # Stores the password without putting it on a command line, where the
+        # process list would show it. The security tool reads the command from
+        # its standard input, and the password travels as hexadecimal so no
+        # character in it needs quoting. -U replaces an existing item in place.
+        # @param password [String] master password to store
+        # @return [Boolean] true when the tool reports the item stored
         private_class_method def self.store_macos_keychain(password)
-          escaped = password.shellescape
-          # Delete existing entry (ignore result)
-          system("security delete-generic-password -s #{KEYCHAIN_SERVICE.shellescape} 2>/dev/null")
-          # Add new entry and return actual result
-          system("security add-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -a lich5 -w #{escaped}")
+          return false if password.nil? || password.empty?
+
+          command = ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', 'lich5',
+                     '-X', password.unpack1('H*'), *macos_keychain_target].join(' ')
+          _output, _diagnostics, status = Open3.capture3('/usr/bin/security', '-i', stdin_data: "#{command}\n")
+          status.success?
         end
 
         private_class_method def self.retrieve_macos_keychain
-          stored_password(`security find-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -w 2>/dev/null`)
+          password, _status = read_macos_keychain
+          password.nil? || password.empty? ? nil : password
         rescue
           nil
+        end
+
+        # Reads the stored password with the tool's -g form. Its -w form prints
+        # a password as text or, when any byte is not plain printable ASCII, as
+        # bare hexadecimal, and the two cannot be told apart. -g marks which
+        # one it printed.
+        # @return [Array(String, Process::Status), Array(nil, Process::Status)]
+        #   the password as stored (nil when the tool printed none) and the
+        #   tool's exit status
+        private_class_method def self.read_macos_keychain
+          _attributes, password_report, status = Open3.capture3(
+            '/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-g', *macos_keychain_target
+          )
+          [status.success? ? macos_reported_password(password_report) : nil, status]
+        end
+
+        # Extracts the password from the line -g prints: `password: "text"` for
+        # plain printable ASCII, otherwise `password: 0xHEX  "escaped text"`.
+        # The hexadecimal form is exact, so it is decoded and the escaped text
+        # is ignored.
+        # @param report [String] what the tool printed about the password
+        # @return [String, nil] the stored password, or nil when none is reported
+        private_class_method def self.macos_reported_password(report)
+          line = report.each_line(chomp: true).find { |candidate| candidate.start_with?('password: ') }
+          return nil unless line
+
+          if (hex = line[/\Apassword: 0x([0-9A-Fa-f]+)/, 1])
+            [hex].pack('H*').force_encoding(Encoding::UTF_8)
+          else
+            line[/\Apassword: "(.*)"\z/, 1]
+          end
+        end
+
+        # Keychain the macOS store and read act on. Empty selects the user's
+        # default keychain.
+        # @return [Array<String>] trailing keychain argument for the security tool
+        private_class_method def self.macos_keychain_target
+          []
         end
 
         # Reads a keychain tool's output as the stored password: only the line
