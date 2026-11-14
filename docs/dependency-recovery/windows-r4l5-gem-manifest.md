@@ -370,10 +370,10 @@ segments, colons, backslashes, control characters or any of `< > " | ? *`
 is flagged UTF-8, free of segments Windows would alter (a trailing dot or
 space, or a device name such as `CON`, `NUL` or `COM1`, with or without an
 extension), and unique: no two entries may name the same file, and no file
-may share a path with a directory. Names are compared after Unicode NFC
-normalisation and full case folding, so `A.gem` and `a.gem`, or a
-precomposed and a decomposed `é`, count as the same file. This is stricter
-than NTFS: `ß` and `ss` also count as the same. Any other archive fails
+may share a path with a directory. Names are compared in Unicode's
+canonical caseless form (NFD normalisation, full case folding, then NFD
+again), so `A.gem` and `a.gem`, or a precomposed and a decomposed `é`,
+count as the same file. This is stricter than NTFS: `ß` and `ss` also count as the same. Any other archive fails
 extraction with a named reason, and nothing is installed.
 
 The generator should derive package names, versions, filenames, and SHA-256

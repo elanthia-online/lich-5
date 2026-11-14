@@ -121,17 +121,19 @@ RSpec.describe 'reviewed startup policy files' do
   end
 
   # Cut mid-word, the reader raises NameError as it loads instead.
-  it 'reports an archive reader cut mid-word as a recovery Error naming the file' do
-    reader = tracked_reader.call.grep(reader_pattern)
-    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
-      path = File.join(dir, 'lib/archive.rb')
-      source = File.binread(path)
-      File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
+  %w[lib/archive.rb lib/archive/zip.rb lib/archive/tar_gz.rb].each do |cut|
+    it "reports #{cut} cut mid-word as a recovery Error naming that file" do
+      reader = tracked_reader.call.grep(reader_pattern)
+      output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+        path = File.join(dir, cut)
+        source = File.binread(path)
+        File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
+      end
+      expect(status).to be_success, error
+      raised, message = output.lines(chomp: true)
+      expect(raised).to eq('Lich::DependencyRecovery::Error')
+      expect(message).to start_with("Recovery cannot extract archives: #{cut} cannot be loaded (NameError: ")
     end
-    expect(status).to be_success, error
-    raised, message = output.lines(chomp: true)
-    expect(raised).to eq('Lich::DependencyRecovery::Error')
-    expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb cannot be loaded (NameError: ')
   end
 
   # An interrupted copy can also leave a reader file empty, or cut at a line

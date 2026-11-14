@@ -1070,9 +1070,14 @@ module Lich
     # @return [String] the file +error+ could not load, relative to the
     #   directory above lib/ when it lies inside it (lib/archive.rb)
     def library_path(error, default = 'a recovery library')
-      return default unless error.respond_to?(:path) && error.path
+      path = error.path if error.respond_to?(:path)
+      # A NameError raised while a file loads carries no path; the first
+      # backtrace frame in this lib/ directory is the file that raised it.
+      # (The very first frame can be inside a gem such as fileutils.)
+      path ||= error.backtrace_locations&.map(&:path)&.find { |frame| frame.start_with?("#{__dir__}/") }
+      return default unless path
 
-      path = error.path.end_with?('.rb') ? error.path : "#{error.path}.rb"
+      path = "#{path}.rb" unless path.end_with?('.rb')
       top = "#{File.dirname(__dir__)}/"
       path.start_with?(top) ? path.delete_prefix(top) : path
     end

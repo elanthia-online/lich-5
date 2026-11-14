@@ -146,7 +146,10 @@ RSpec.describe Lich::Archive::Zip do
       'out-of-order marks'     => [u('<1F0><323>.gem'), u('J<323><30C>.gem')],
       # NFC keeps the iota subscript composed, and folding then puts the
       # iota ahead of the diaeresis; only NFD before folding matches them.
-      'iota subscript'         => [u('<1FB3><308>.gem'), u('<391><308><399>.gem')]
+      'iota subscript'         => [u('<1FB3><308>.gem'), u('<391><308><399>.gem')],
+      # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
+      # final NFD reorders it.
+      'Tibetan vowel sign'     => [u('<300><F73>.gem'), u('<F71><F72><300>.gem')]
     }.each do |label, (first, second)|
       it "refuses #{label} as a duplicate and writes nothing" do
         write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
@@ -310,6 +313,26 @@ RSpec.describe Lich::Archive::Zip do
 
       described_class.extract(zip_path, destination)
       expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    # unzip, bsdtar and Python's zipfile take the last signature, so for
+    # them this archive is the inner one; Lich would take the outer record,
+    # whose comment ends the file. Neither is extracted.
+    it 'refuses an archive whose comment holds another valid archive' do
+      inner = ZipBuilder.build([{ name: 'a.gem', data: 'inner' }])
+      outer = ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}x".b)
+      File.binwrite(zip_path, outer)
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /ambiguous ZIP archive/)
+      expect(Dir.exist?(destination) && !Dir.empty?(destination)).to be(false)
+    end
+
+    # As before, the last signature is the record when no candidate's
+    # comment ends the file, and it must have a whole record after it.
+    it 'still refuses an archive whose last signature has no whole record after it' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }]) + "trailer PK\x05\x06".b)
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /no end of central directory record/)
     end
 
     # unzip warns about bytes after the comment but extracts; so does this.

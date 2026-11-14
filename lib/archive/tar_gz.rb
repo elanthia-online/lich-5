@@ -96,6 +96,14 @@ module Lich
         raise Error, "not a valid gzip archive: #{e.message}"
       rescue Gem::Package::Error => e
         raise Error, "not a valid tar archive: #{e.message}"
+      rescue ArgumentError => e
+        # RubyGems reads a uid or gid starting 0x80 or 0xff as base-256, and
+        # unpack raises ArgumentError when the rest of the field is NULs or
+        # spaces. Only an error from RubyGems' tar code is the archive's
+        # fault; one from Lich's own code is re-raised.
+        raise unless e.backtrace_locations&.first&.path.to_s.include?('rubygems/package/')
+
+        raise Error, "not a valid tar archive: #{e.message}"
       rescue EOFError
         # An entry whose header declares more data than the archive holds.
         raise Error, 'tar archive is truncated: an entry runs past the end of the data'
@@ -134,10 +142,14 @@ module Lich
         # else, including a second member (which starts 1f 8b), is refused.
         # GzipReader keeps what it read past the member in #unused; the rest
         # is still in the file, which is all that holds it when the member
-        # ends on GzipReader's read boundary.
-        trailing = [gzip.unused]
-        trailing << chunk while (chunk = file.read(CHUNK_SIZE))
-        raise Error, 'gzip archive has data after its first member' if trailing.compact.any? { |bytes| bytes.match?(/[^\0]/n) }
+        # ends on GzipReader's read boundary. Each chunk is checked as it is
+        # read, so a long trailer is never held in memory.
+        chunk = gzip.unused || file.read(CHUNK_SIZE)
+        while chunk
+          raise Error, 'gzip archive has data after its first member' if chunk.match?(/[^\0]/n)
+
+          chunk = file.read(CHUNK_SIZE)
+        end
       end
 
       # @param entry [Gem::Package::TarReader::Entry]

@@ -189,8 +189,11 @@ module Lich
     #   keys although APFS stores them as one file. In NFD the marks are
     #   already in canonical order, which also covers j with caron (U+01F0)
     #   followed by a dot below.
-    # - The final NFD completes the standard form. No name tried, including
-    #   every code point with and without a following mark, needs it.
+    # - The final NFD is needed too. Ruby's NFD does not put a mark in
+    #   canonical order before U+0F73, U+0F75 or U+0F81: U+0300 U+0F73
+    #   becomes U+0300 U+0F71 U+0F72, while U+0F71 U+0F72 U+0300 stays as
+    #   it is, and APFS stores the two as one file. Normalising again
+    #   reorders the marks.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a

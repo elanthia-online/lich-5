@@ -134,7 +134,10 @@ RSpec.describe Lich::Archive::TarGz do
     'out-of-order marks'     => [u('r/<1F0><323>.rb'), u('r/J<323><30C>.rb')],
     # NFC keeps the iota subscript composed, and folding then puts the
     # iota ahead of the diaeresis; only NFD before folding matches them.
-    'iota subscript'         => [u('r/<1FB3><308>.rb'), u('r/<391><308><399>.rb')]
+    'iota subscript'         => [u('r/<1FB3><308>.rb'), u('r/<391><308><399>.rb')],
+    # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
+    # final NFD reorders it.
+    'Tibetan vowel sign'     => [u('r/<300><F73>.rb'), u('r/<F71><F72><300>.rb')]
   }.each do |label, (first, second)|
     it "refuses #{label} as a duplicate and writes nothing" do
       write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])
@@ -351,6 +354,19 @@ RSpec.describe Lich::Archive::TarGz do
     File.binwrite(tarball, Zlib.gzip('x' * 1024))
 
     expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /not a valid tar archive/)
+  end
+
+  # RubyGems reads a uid or gid field starting 0x80 or 0xff as base-256;
+  # with NULs after it, its unpack raises ArgumentError.
+  { 'uid' => 108, 'gid' => 116 }.each do |field, offset|
+    it "reports a base-256 #{field} field with nothing after it as an invalid tar archive" do
+      tar = Zlib.gunzip(TarGzBuilder.build([{ name: 'r/a.rb', data: 'a' }]))
+      tar[offset, 8] = [0x80, 0, 0, 0, 0, 0, 0, 0].pack("C*")
+      File.binwrite(tarball, TarGzBuilder.gzip(tar))
+
+      expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /not a valid tar archive/)
+      expect(Dir.exist?(destination)).to be(false)
+    end
   end
 
   describe 'gzip integrity' do

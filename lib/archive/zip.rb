@@ -78,9 +78,28 @@ module Lich
         tail_size = [file_size, END_RECORD_SIZE + MAX_COMMENT_SIZE].min
         file.seek(file_size - tail_size)
         tail = file.read(tail_size)
-        record_at = end_record_at(tail)
-        raise Error, 'not a ZIP archive (no end of central directory record)' unless record_at
+        exact, last = end_record_candidates(tail)
+        raise Error, 'not a ZIP archive (no end of central directory record)' unless exact || last
 
+        entries = central_directory_at(file, tail, exact || last, file_size - tail_size)
+        # A record inside the comment that also leads to a valid central
+        # directory is what unzip, bsdtar and Python's zipfile would read,
+        # since they take the last signature. Rather than extract something
+        # other than what those tools show, refuse the archive.
+        if exact && last && last > exact && valid_central_directory?(file, tail, last, file_size - tail_size)
+          raise Error, 'ambiguous ZIP archive: its comment holds another end of central directory record'
+        end
+
+        entries
+      end
+
+      # @param file [File]
+      # @param tail [String] the last bytes of the archive
+      # @param record_at [Integer] offset of an end record in +tail+
+      # @param tail_offset [Integer] offset of +tail+ in the file
+      # @return [Array<Entry>] the entries that record's central directory lists
+      # @raise [Error]
+      def central_directory_at(file, tail, record_at, tail_offset)
         _signature, disk, directory_disk, disk_count, total_count, directory_size, directory_offset, _comment =
           tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
         raise Error, 'multi-disk ZIP archives are not supported' unless disk.zero? && directory_disk.zero? && disk_count == total_count
@@ -88,7 +107,7 @@ module Lich
           raise Error, 'ZIP64 archives are not supported'
         end
 
-        record_offset = file_size - tail_size + record_at
+        record_offset = tail_offset + record_at
         raise Error, 'central directory lies outside the archive' if directory_offset + directory_size > record_offset
 
         file.seek(directory_offset)
@@ -98,26 +117,37 @@ module Lich
         parse_central_directory(directory, total_count, record_offset)
       end
 
+      # @return [Boolean] whether the end record at +record_at+ leads to a
+      #   central directory that parses
+      def valid_central_directory?(file, tail, record_at, tail_offset)
+        central_directory_at(file, tail, record_at, tail_offset)
+        true
+      rescue Error
+        false
+      end
+
       # Finds the end of central directory record in the last bytes of the
       # archive. The archive comment may itself contain the record's
       # signature, so the last signature is not always the record: the record
       # is the last signature whose declared comment length ends exactly at
-      # the end of the file. An archive with bytes after its comment, which
-      # unzip accepts with a warning, has no such candidate; there the last
-      # signature with a whole record after it is used, as before.
+      # the end of the file (+exact+). An archive with bytes after its
+      # comment, which unzip accepts with a warning, has no such candidate;
+      # there the last signature is used as before, and refused as before if
+      # it has no whole record after it (+last+).
       # @param tail [String] the last bytes of the archive
-      # @return [Integer, nil] offset of the record in +tail+
-      def end_record_at(tail)
-        fallback = nil
+      # @return [Array(Integer, Integer)] +exact+ and +last+, offsets in
+      #   +tail+, each nil when there is none
+      def end_record_candidates(tail)
+        last = tail.rindex(END_OF_CENTRAL_DIRECTORY)
+        last = nil unless last && tail.bytesize - last >= END_RECORD_SIZE
         search_at = tail.bytesize - END_RECORD_SIZE
         while search_at >= 0 && (candidate = tail.rindex(END_OF_CENTRAL_DIRECTORY, search_at))
-          fallback ||= candidate
           comment_size = tail.byteslice(candidate + END_RECORD_SIZE - 2, 2).unpack1('v')
-          return candidate if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
+          return [candidate, last] if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
 
           search_at = candidate - 1
         end
-        fallback
+        [nil, last]
       end
 
       # @param directory [String] binary central directory
