@@ -293,9 +293,12 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       lich_version = File.read(version_file)[/^LICH_VERSION = '([^']+)'/, 1]
       removal = described_class::POSITIONAL_PASSWORD_REMOVAL
 
-      message = "Lich #{lich_version} reaches POSITIONAL_PASSWORD_REMOVAL (#{removal}): make a password on the " \
-                '--add-account command line an error and retire positional_add_account_password, or move the ' \
-                'constant to a later release and update the warning'
+      message = "Lich #{lich_version} reaches POSITIONAL_PASSWORD_REMOVAL (#{removal}): retire every site marked " \
+                "\"RETIRE in #{removal}\". Make a password on the --add-account command line an error and retire " \
+                'positional_add_account_password; make a password on the command line of the other password ' \
+                'commands an error and retire command_line_secret; and stop reading an unflagged master-password ' \
+                'pipe in CLIPassword.read_master_password_line (UNFLAGGED_PIPE_REMOVAL). Or move the constants ' \
+                'to a later release and update the warnings'
 
       expect(Gem::Version.new(lich_version).release).to be < Gem::Version.new(removal), message
     end

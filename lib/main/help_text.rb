@@ -162,6 +162,9 @@ module Lich
             master password cannot begin or end with a space.
             A password on the command line still works but is deprecated: it
             is saved in shell history and shown in the process list.
+            On Windows, pipe a password from PowerShell 7 (pwsh) or cmd.
+            Windows PowerShell 5.1 changes non-ASCII characters in a pipe, and
+            the changed text becomes the password.
 
           Password for --add-account:
             Prompted for on the terminal; what you type is not shown.
@@ -193,6 +196,7 @@ module Lich
             lich --change-master-password
             lich --convert-entries enhanced
             lich --change-encryption-mode enhanced
+            # sh, bash, zsh:
             printf '%s\\n' "$MASTER" | lich --change-encryption-mode enhanced --password-stdin
             printf '%s\\n%s\\n' "$OLD" "$NEW" | lich --change-master-password --password-stdin
         TEXT

@@ -77,6 +77,21 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include(%(printf '%s\\n%s\\n' "$OLD" "$NEW" | lich --change-master-password --password-stdin))
     end
 
+    it 'gives the Windows piping advice for every password command, not only --add-account' do
+      output = described_class.render('accounts')
+      shared = output[/Passwords for the commands above:.*?(?=\n\s*Password for --add-account:)/m]
+
+      expect(shared).to include('On Windows, pipe a password from PowerShell 7 (pwsh) or cmd.')
+      expect(shared).to include('Windows PowerShell 5.1 changes non-ASCII characters in a pipe')
+      expect(shared).to include('the changed text becomes the password')
+    end
+
+    it 'labels the master-password pipe examples with the shells they work in' do
+      output = described_class.render('accounts')
+
+      expect(output).to match(/# sh, bash, zsh:\n\s+printf '%s\\n' "\$MASTER" \| lich --change-encryption-mode enhanced --password-stdin\n\s+printf '%s\\n%s\\n' "\$OLD" "\$NEW" \| lich --change-master-password --password-stdin/)
+    end
+
     it 'lists every game code --game-code accepts' do
       output = described_class.render('accounts')
 
