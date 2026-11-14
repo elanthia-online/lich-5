@@ -1,1 +1,2 @@
+--require ./spec/support/terminal_fence
 --require ./spec/support/frontend_mock

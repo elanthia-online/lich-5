@@ -80,6 +80,53 @@ module Lich
         end
         private_class_method :read_hidden_line
 
+        # Release in which a master-password prompt stops reading piped input it
+        # was not told to read with --password-stdin. Named in the warning, and
+        # kept equal to CLIOrchestration::POSITIONAL_PASSWORD_REMOVAL.
+        UNFLAGGED_PIPE_REMOVAL = '5.26.0'
+
+        # @api private
+        # Reads one line for a master-password prompt.
+        #
+        # On a terminal the line is read with echo off. The caller removes the
+        # line ending with MasterPasswordManager.normalize_entry, so what was
+        # typed is otherwise used as typed.
+        #
+        # RETIRE in 5.26.0 (UNFLAGGED_PIPE_REMOVAL): without a terminal the line
+        # is still read from +input+, as these prompts always have, and a
+        # deprecation warning is printed. Scripts that pipe a master password in
+        # keep working for one release while they move to --password-stdin.
+        # From 5.26.0 this branch returns nil, and with it a pipe is read only
+        # when the command asked for that.
+        #
+        # @param prompt [String] prompt shown before reading
+        # @param input [IO] where to read from (defaults to $stdin)
+        # @param output [IO] where the prompt and warning go (defaults to $stdout)
+        # @return [String, nil] the line as entered, or nil at end-of-input
+        def self.read_master_password_line(prompt, input: $stdin, output: $stdout)
+          return read_hidden_line(prompt, input, output) if input.tty?
+
+          warn_unflagged_pipe(output)
+          output.print prompt
+          input.gets
+        end
+
+        # @api private
+        # Prints the piped-input deprecation warning once per process, so a
+        # prompt and its confirmation do not repeat it.
+        #
+        # @param output [IO] where the warning goes
+        # @return [void]
+        def self.warn_unflagged_pipe(output)
+          return if @unflagged_pipe_warned
+
+          @unflagged_pipe_warned = true
+          output.puts 'warning: Reading a master password from piped input without --password-stdin is deprecated.'
+          output.puts "warning: It will be an error starting with Lich #{UNFLAGGED_PIPE_REMOVAL}. " \
+                      'Pipe it in with --password-stdin instead (see: lich --help accounts).'
+        end
+        private_class_method :warn_unflagged_pipe
+
         # Changes account password in entry.yaml
         # Handles all encryption modes (plaintext, standard, enhanced)
         #
@@ -498,25 +545,23 @@ module Lich
 
             # Use provided password or prompt for new password
             if new_password.nil?
-              print "Enter new master password: "
-              input = $stdin.gets
+              input = read_master_password_line("Enter new master password: ")
               if input.nil?
                 puts 'error: Unable to read password from STDIN / terminal'
                 puts 'Please run this command interactively (not in a pipe or automated script without input)'
                 Lich.log 'error: CLI change master password failed - stdin unavailable'
                 return 1
               end
-              new_password = input.strip
+              new_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
-              print "Confirm new master password: "
-              input = $stdin.gets
+              input = read_master_password_line("Confirm new master password: ")
               if input.nil?
                 puts 'error: Unable to read password from STDIN / terminal'
                 puts 'Please run this command interactively (not in a pipe or automated script without input)'
                 Lich.log 'error: CLI change master password failed - stdin unavailable'
                 return 1
               end
-              confirm_password = input.strip
+              confirm_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
               unless new_password == confirm_password
                 puts "error: Passwords do not match"
@@ -525,9 +570,10 @@ module Lich
               end
             end
 
-            if new_password.length < 8
-              puts "error: Password must be at least 8 characters"
-              Lich.log "error: CLI change master password failed - password too short"
+            refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(new_password)
+            if refusal
+              puts "error: #{refusal}"
+              Lich.log "error: CLI change master password failed - #{refusal}"
               return 1
             end
 
@@ -746,23 +792,18 @@ module Lich
 
             # Get password to validate
             if master_password.nil?
-              print "Enter master password: "
-              input = $stdin.gets
+              input = read_master_password_line("Enter master password: ")
               if input.nil?
                 puts 'error: Unable to read password from STDIN / terminal'
                 puts 'Please run this command interactively (not in a pipe or automated script without input)'
                 Lich.log 'error: CLI recover master password failed - stdin unavailable'
                 return 1
               end
-              master_password = input.strip
+              master_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
             end
 
-            if master_password.length < 8
-              puts "error: Password must be at least 8 characters"
-              Lich.log "error: CLI recover master password failed - password too short"
-              return 1
-            end
-
+            # The validation test decides, not the length: a password created before
+            # the creation minimum existed must still be recoverable.
             # Validate password against validation test
             unless Lich::Common::GUI::MasterPasswordManager.validate_master_password(master_password, validation_test)
               puts "error: Password validation failed"
@@ -797,25 +838,23 @@ module Lich
         # @param prompt [String] Prompt to show user (default: "Enter password")
         # @return [String, nil] Password if valid, nil if cancelled or error
         def self.prompt_and_confirm_password(prompt = "Enter password")
-          print "#{prompt}: "
-          input = $stdin.gets
+          input = read_master_password_line("#{prompt}: ")
           if input.nil?
             puts 'error: Unable to read password from STDIN / terminal'
             puts 'Please run this command interactively (not in a pipe or automated script without input)'
             Lich.log 'error: Password prompt failed - stdin unavailable'
             return nil
           end
-          password = input.strip
+          password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
-          print "Confirm #{prompt.downcase}: "
-          input = $stdin.gets
+          input = read_master_password_line("Confirm #{prompt.downcase}: ")
           if input.nil?
             puts 'error: Unable to read password from STDIN / terminal'
             puts 'Please run this command interactively (not in a pipe or automated script without input)'
             Lich.log 'error: Password confirmation failed - stdin unavailable'
             return nil
           end
-          confirm_password = input.strip
+          confirm_password = Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
 
           unless password == confirm_password
             puts "error: Passwords do not match"
@@ -823,9 +862,10 @@ module Lich
             return nil
           end
 
-          if password.length < 8
-            puts "error: Password must be at least 8 characters"
-            Lich.log "error: Password too short (minimum 8 characters)"
+          refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(password)
+          if refusal
+            puts "error: #{refusal}"
+            Lich.log "error: New master password refused - #{refusal}"
             return nil
           end
 
@@ -856,14 +896,13 @@ module Lich
         #
         # @return [String, nil] Master password or nil if unavailable
         def self.prompt_for_master_password
-          print "Enter master password: "
-          input = $stdin.gets
+          input = read_master_password_line("Enter master password: ")
           if input.nil?
             puts 'error: Unable to read password from STDIN / terminal'
             Lich.log 'error: Master password prompt failed - stdin unavailable'
             return nil
           end
-          input.strip
+          Lich::Common::GUI::MasterPasswordManager.normalize_entry(input)
         rescue StandardError => e
           Lich.log "error: Master password prompt failed: #{e.message}"
           nil

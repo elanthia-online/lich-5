@@ -48,24 +48,106 @@ module Lich
         def self.handle_change_account_password
           idx = ARGV.index { |a| a =~ /^--change-account-password$|^-cap$/ }
           account = ARGV[idx + 1]
-          new_password = ARGV[idx + 2]
 
-          if account.nil? || new_password.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
-            $stdout.puts 'error: Missing required arguments'
-            $stdout.puts "Usage: ruby #{lich_script} --change-account-password ACCOUNT NEWPASSWORD"
-            $stdout.puts "   or: ruby #{lich_script} -cap ACCOUNT NEWPASSWORD"
-            exit 1
-          end
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --change-account-password ACCOUNT [--password-stdin]\n" \
+                  "   or: ruby #{lich_script} -cap ACCOUNT [--password-stdin]\n" \
+                  'Prompts for the new password; with --password-stdin, reads one line from stdin instead.'
+
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+
+          password_stdin = ARGV.include?(PASSWORD_STDIN_FLAG)
+          new_password = command_line_secret(ARGV[idx + 2], name: 'NEWPASSWORD', after: 'ACCOUNT', command: ARGV[idx],
+                                                            password_stdin: password_stdin, usage: usage)
+          new_password ||= if password_stdin
+                             read_secret_or_exit('New password: ', from_stdin: true, usage: usage)
+                           else
+                             read_confirmed_secret_or_exit('New password: ', 'Confirm new password: ', usage: usage)
+                           end
 
           exit Lich::Common::Authentication::CLIPassword.change_account_password(account, new_password)
         end
 
-        # Flag that tells --add-account to read the password from stdin.
+        # Returns a secret given on the command line, after warning that the
+        # form is deprecated, or nil when the slot holds no secret.
+        #
+        # RETIRE in 5.26.0 (POSITIONAL_PASSWORD_REMOVAL): once a command-line
+        # secret is an error, the callers stop reading these slots and this
+        # method goes away with its warning.
+        #
+        # Until then the slot keeps the meaning it has always had: whatever word
+        # is there is the secret, option-shaped or not. The one exception is
+        # --password-stdin, which is new, so no existing command changes meaning.
+        # The warning never includes the secret.
+        #
+        # @param slot [String, nil] the word in the secret's position
+        # @param name [String] the secret's name in the usage text
+        # @param after [String, nil] what the slot follows, when the user may
+        #   have meant the word there as another option
+        # @param command [String] the command flag as typed
+        # @param password_stdin [Boolean] true when --password-stdin was given
+        # @param usage [String] usage text printed with an error
+        # @return [String, nil] the secret, or nil if none was given
+        def self.command_line_secret(slot, name:, command:, password_stdin:, usage:, after: nil)
+          return nil if slot.nil? || slot == PASSWORD_STDIN_FLAG
+
+          if password_stdin
+            $stdout.puts 'error: Give the password either on the command line or with --password-stdin, not both'
+            $stdout.puts usage
+            exit 1
+          end
+          if slot.empty?
+            $stdout.puts 'error: Password cannot be empty'
+            $stdout.puts usage
+            exit 1
+          end
+
+          # On $stdout like every other CLI message: lib/init.rb has already
+          # pointed $stderr at the debug log, where the user would never see it.
+          $stdout.puts "warning: Passing #{name} on the command line is deprecated: it is saved in your shell history " \
+                       'and visible to other users in the process list.'
+          $stdout.puts "warning: It will be an error starting with Lich #{POSITIONAL_PASSWORD_REMOVAL}. " \
+                       "Leave #{name} off to be prompted for it, or pipe it in with --password-stdin."
+          $stdout.puts "warning: The word after #{after} was read as #{name}. Put any other option before #{command}." if after
+          slot
+        end
+
+        # Reads a secret for a command handler, exiting with the usage text
+        # when it cannot be read.
+        #
+        # @param prompt [String] prompt shown on the terminal
+        # @param from_stdin [Boolean] true when --password-stdin was given
+        # @param usage [String] usage text printed with an error
+        # @return [String] the secret
+        def self.read_secret_or_exit(prompt, from_stdin:, usage:)
+          Lich::Common::Authentication::CLIPassword.read_secret(prompt, from_stdin: from_stdin)
+        rescue Lich::Common::Authentication::CLIPassword::SecretInputError => e
+          $stdout.puts "error: #{e.message}"
+          $stdout.puts usage
+          exit 1
+        end
+
+        # Prompts on the terminal for a new secret and its confirmation. What
+        # is typed is hidden, so a mistyped secret would otherwise be stored
+        # unseen.
+        #
+        # @param prompt [String] prompt for the secret
+        # @param confirm_prompt [String] prompt for the confirmation
+        # @param usage [String] usage text printed with an error
+        # @return [String] the confirmed secret
+        def self.read_confirmed_secret_or_exit(prompt, confirm_prompt, usage:)
+          secret = read_secret_or_exit(prompt, from_stdin: false, usage: usage)
+          return secret if secret == read_secret_or_exit(confirm_prompt, from_stdin: false, usage: usage)
+
+          $stdout.puts 'error: Passwords do not match'
+          exit 1
+        end
+
+        # Flag that tells a command to read its password from stdin.
         PASSWORD_STDIN_FLAG = '--password-stdin'
 
-        # Release in which a PASSWORD given on the --add-account command line
-        # stops being accepted. Named in the deprecation warning.
+        # Release in which a password given on the command line stops being
+        # accepted. Named in the deprecation warnings.
         POSITIONAL_PASSWORD_REMOVAL = '5.26.0'
 
         def self.handle_add_account
@@ -245,16 +327,26 @@ module Lich
 
         def self.handle_change_master_password
           idx = ARGV.index { |a| a =~ /^--change-master-password$|^-cmp$/ }
-          old_password = ARGV[idx + 1]
-          new_password = ARGV[idx + 2]
 
-          if old_password.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
-            $stdout.puts 'error: Missing required arguments'
-            $stdout.puts "Usage: ruby #{lich_script} --change-master-password OLDPASSWORD [NEWPASSWORD]"
-            $stdout.puts "   or: ruby #{lich_script} -cmp OLDPASSWORD [NEWPASSWORD]"
-            $stdout.puts 'Note: If NEWPASSWORD is not provided, you will be prompted for confirmation'
-            exit 1
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --change-master-password [--password-stdin]\n" \
+                  "   or: ruby #{lich_script} -cmp [--password-stdin]\n" \
+                  "Prompts for the current master password, then the new one.\n" \
+                  'With --password-stdin, reads the current password from the first line of stdin and the new one from the second.'
+
+          password_stdin = ARGV.include?(PASSWORD_STDIN_FLAG)
+          old_password = command_line_secret(ARGV[idx + 1], name: 'OLDPASSWORD', after: ARGV[idx], command: ARGV[idx],
+                                                            password_stdin: password_stdin, usage: usage)
+          new_password = nil
+          if old_password
+            # NEWPASSWORD is only read behind an OLDPASSWORD; the warning above covers both.
+            new_password = ARGV[idx + 2]
+          elsif password_stdin
+            old_password = read_secret_or_exit('Current master password: ', from_stdin: true, usage: usage)
+            new_password = read_secret_or_exit('New master password: ', from_stdin: true, usage: usage)
+          else
+            # The new password is prompted for once this one has been checked.
+            old_password = read_secret_or_exit('Current master password: ', from_stdin: false, usage: usage)
           end
 
           exit Lich::Common::Authentication::CLIPassword.change_master_password(old_password, new_password)
@@ -262,10 +354,19 @@ module Lich
 
         def self.handle_recover_master_password
           idx = ARGV.index { |a| a =~ /^--recover-master-password$|^-rmp$/ }
-          new_password = ARGV[idx + 1]
 
-          # new_password is optional - if not provided, user will be prompted interactively
-          exit Lich::Common::Authentication::CLIPassword.recover_master_password(new_password)
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --recover-master-password [--password-stdin]\n" \
+                  "   or: ruby #{lich_script} -rmp [--password-stdin]\n" \
+                  'Prompts for the master password; with --password-stdin, reads one line from stdin instead.'
+
+          password_stdin = ARGV.include?(PASSWORD_STDIN_FLAG)
+          master_password = command_line_secret(ARGV[idx + 1], name: 'PASSWORD', after: ARGV[idx], command: ARGV[idx],
+                                                               password_stdin: password_stdin, usage: usage)
+          master_password ||= read_secret_or_exit('Enter master password: ', from_stdin: true, usage: usage) if password_stdin
+
+          # Left nil, recover_master_password prompts for it.
+          exit Lich::Common::Authentication::CLIPassword.recover_master_password(master_password)
         end
 
         def self.handle_convert_entries
@@ -288,14 +389,18 @@ module Lich
           # For enhanced mode, prompt for master password and store in keychain before conversion
           # This way migrate_from_legacy will find it in keychain and not try to show GUI dialog
           if encryption_mode_str == 'enhanced'
-            master_password = Lich::Common::Authentication::CLIPassword.prompt_and_confirm_password('Enter new master password for enhanced encryption')
+            require_relative '../gui/master_password_manager'
+            master_password = if ARGV.include?(PASSWORD_STDIN_FLAG)
+                                piped_new_master_password
+                              else
+                                Lich::Common::Authentication::CLIPassword.prompt_and_confirm_password('Enter new master password for enhanced encryption')
+                              end
             if master_password.nil?
               puts 'error: Master password creation cancelled'
               exit 1
             end
 
             # Store password in keychain so ensure_master_password_exists finds it
-            require_relative '../gui/master_password_manager'
             stored = Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
             unless stored
               puts 'error: Failed to store master password in keychain'
@@ -318,26 +423,49 @@ module Lich
           end
         end
 
+        # Reads the new master password for --convert-entries enhanced from
+        # stdin and applies the rule every new master password must pass.
+        #
+        # @return [String] the accepted password
+        def self.piped_new_master_password
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --convert-entries enhanced [--password-stdin]\n" \
+                  'Prompts for the new master password; with --password-stdin, reads one line from stdin instead.'
+          password = read_secret_or_exit('Enter new master password: ', from_stdin: true, usage: usage)
+          refusal = Lich::Common::GUI::MasterPasswordManager.new_password_refusal(password)
+          return password unless refusal
+
+          $stdout.puts "error: #{refusal}"
+          exit 1
+        end
+
         def self.handle_change_encryption_mode
           idx = ARGV.index { |a| a =~ /^--change-encryption-mode$|^-cem$/ }
           mode_arg = ARGV[idx + 1]
 
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --change-encryption-mode MODE [--password-stdin]\n" \
+                  "       ruby #{lich_script} -cem MODE [--password-stdin]\n" \
+                  "Modes: plaintext, standard, enhanced\n" \
+                  'Prompts for the master password when the change needs one; with --password-stdin, reads it from stdin instead.'
+
           if mode_arg.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
             $stdout.puts 'error: Missing encryption mode'
-            $stdout.puts "Usage: ruby #{lich_script} --change-encryption-mode MODE [--master-password PASSWORD]"
-            $stdout.puts "       ruby #{lich_script} -cem MODE [-mp PASSWORD]"
-            $stdout.puts 'Modes: plaintext, standard, enhanced'
+            $stdout.puts usage
             exit 1
           end
 
           new_mode = mode_arg.to_sym
 
-          # Check for optional master password (for Enhanced mode, if automating)
+          # The deprecated way to supply the new master password for Enhanced mode.
+          password_stdin = ARGV.include?(PASSWORD_STDIN_FLAG)
           mp_index = ARGV.index('--master-password') || ARGV.index('-mp')
-          master_password = ARGV[mp_index + 1] if mp_index
+          master_password = if mp_index
+                              command_line_secret(ARGV[mp_index + 1], name: "#{ARGV[mp_index]} PASSWORD", command: ARGV[idx],
+                                                                      password_stdin: password_stdin, usage: usage)
+                            end
 
-          exit Lich::Common::CLI::EncryptionModeChange.change_mode(new_mode, master_password)
+          exit Lich::Common::CLI::EncryptionModeChange.change_mode(new_mode, master_password, password_stdin: password_stdin)
         end
 
         # Standalone probe of the HTTPS web-login fallback path (see

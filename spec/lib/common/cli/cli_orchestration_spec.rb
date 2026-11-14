@@ -443,70 +443,285 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     end
   end
 
+  # Shared by the commands that read a secret: a stand-in terminal, a
+  # replaceable $stdin, and a runner that returns the handler's exit status.
+  shared_context 'with a replaceable stdin' do
+    let(:cli_password) { Lich::Common::Authentication::CLIPassword }
+
+    # Stands in for a terminal: io/console's IO#getpass reads one line with
+    # echo off and returns it without the line ending, or nil at end-of-input.
+    let(:terminal) do
+      Class.new do
+        attr_reader :reads
+
+        def initialize(*lines)
+          @lines = lines
+          @reads = 0
+        end
+
+        def tty? = true
+
+        def getpass(_prompt = nil)
+          @reads += 1
+          @lines.shift
+        end
+
+        def gets
+          raise 'a terminal password must be read with getpass, not gets'
+        end
+      end
+    end
+
+    around do |example|
+      original_stdin = $stdin
+      example.run
+    ensure
+      $stdin = original_stdin
+    end
+
+    def run_handler(handler, argv, stdin:)
+      stub_const('ARGV', argv)
+      $stdin = stdin
+      status = nil
+      expect { described_class.public_send(handler) }.to raise_error(SystemExit) { |e| status = e.status }
+      status
+    end
+
+    def expect_deprecation_warning(name)
+      expect($stdout.string).to include("Passing #{name} on the command line is deprecated")
+      expect($stdout.string).to include("error starting with Lich #{described_class::POSITIONAL_PASSWORD_REMOVAL}")
+    end
+  end
+
+  describe 'the release that ends the deprecated password forms' do
+    it 'is the same for command-line passwords and unflagged piped master passwords' do
+      expect(Lich::Common::Authentication::CLIPassword::UNFLAGGED_PIPE_REMOVAL)
+        .to eq(described_class::POSITIONAL_PASSWORD_REMOVAL)
+    end
+  end
+
+  describe '.handle_change_account_password' do
+    include_context 'with a replaceable stdin'
+
+    before { allow(cli_password).to receive(:change_account_password).and_return(0) }
+
+    context 'with a terminal prompt' do
+      it 'prompts twice without echo and passes the typed password through, whitespace intact' do
+        tty = terminal.new(' new pass ', ' new pass ')
+
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG'], stdin: tty)).to eq(0)
+        expect(tty.reads).to eq(2)
+        expect($stdout.string).to eq("New password: \nConfirm new password: \n")
+        expect(cli_password).to have_received(:change_account_password).with('DOUG', ' new pass ')
+      end
+
+      it 'exits 1 without changing anything when the confirmation differs' do
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG'], stdin: terminal.new('one', 'two'))).to eq(1)
+        expect($stdout.string).to include('Passwords do not match')
+        expect($stdout.string).not_to include('one', 'two')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+
+      it 'exits 1 when the typed password is empty' do
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG'], stdin: terminal.new(''))).to eq(1)
+        expect($stdout.string).to include('Password cannot be empty')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+    end
+
+    context 'with --password-stdin' do
+      it 'reads one line, keeps surrounding spaces, and asks for no confirmation' do
+        pipe = StringIO.new("  pass word \r\nsecond line\n")
+
+        expect(run_handler(:handle_change_account_password, ['--change-account-password', 'DOUG', '--password-stdin'], stdin: pipe)).to eq(0)
+        expect(cli_password).to have_received(:change_account_password).with('DOUG', '  pass word ')
+        expect(pipe.gets).to eq("second line\n")
+        expect($stdout.string).to be_empty
+      end
+
+      it 'shows the prompt when stdin is a terminal, and still asks once' do
+        tty = terminal.new('typed pass')
+
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', '--password-stdin'], stdin: tty)).to eq(0)
+        expect(tty.reads).to eq(1)
+        expect($stdout.string).to eq("New password: \n")
+        expect(cli_password).to have_received(:change_account_password).with('DOUG', 'typed pass')
+      end
+
+      it 'exits 1 at end-of-input' do
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', '--password-stdin'], stdin: StringIO.new(''))).to eq(1)
+        expect($stdout.string).to include('Unable to read password')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+    end
+
+    context 'with no terminal and no --password-stdin' do
+      it 'exits 1 without reading the pipe and points at --password-stdin' do
+        pipe = StringIO.new("unrelated bytes\n")
+
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG'], stdin: pipe)).to eq(1)
+        expect(pipe.pos).to eq(0)
+        expect($stdout.string).to include('--password-stdin')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+    end
+
+    context 'with the password on the command line (deprecated)' do
+      it 'still passes it through, warns, and never echoes it' do
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', 's3cret-value'], stdin: StringIO.new)).to eq(0)
+        expect(cli_password).to have_received(:change_account_password).with('DOUG', 's3cret-value')
+        expect_deprecation_warning('NEWPASSWORD')
+        expect($stdout.string).to include('The word after ACCOUNT was read as NEWPASSWORD. Put any other option before -cap.')
+        expect($stdout.string).not_to include('s3cret-value')
+      end
+
+      it 'exits 1 without reading stdin when --password-stdin is also given' do
+        pipe = StringIO.new("piped\n")
+
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', 'secret', '--password-stdin'], stdin: pipe)).to eq(1)
+        expect(pipe.pos).to eq(0)
+        expect($stdout.string).to include('not both')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+
+      it 'refuses an empty password' do
+        expect(run_handler(:handle_change_account_password, ['-cap', 'DOUG', ''], stdin: StringIO.new)).to eq(1)
+        expect($stdout.string).to include('Password cannot be empty')
+        expect(cli_password).not_to have_received(:change_account_password)
+      end
+    end
+
+    it 'exits 1 when ACCOUNT is missing or a flag takes its place' do
+      [['-cap'], ['-cap', '--password-stdin']].each do |argv|
+        expect(run_handler(:handle_change_account_password, argv, stdin: StringIO.new("pw\n"))).to eq(1)
+      end
+      expect(cli_password).not_to have_received(:change_account_password)
+    end
+  end
+
   describe '.handle_change_master_password' do
-    before do
-      allow(Lich::Common::Authentication::CLIPassword).to receive(:change_master_password).and_return(0)
+    include_context 'with a replaceable stdin'
+
+    before { allow(cli_password).to receive(:change_master_password).and_return(0) }
+
+    context 'with a terminal prompt' do
+      it 'prompts for the current password only and leaves the new one to be asked after it is checked' do
+        tty = terminal.new(' current ')
+
+        expect(run_handler(:handle_change_master_password, ['--change-master-password'], stdin: tty)).to eq(0)
+        expect(tty.reads).to eq(1)
+        expect($stdout.string).to eq("Current master password: \n")
+        expect(cli_password).to have_received(:change_master_password).with(' current ', nil)
+      end
+
+      it 'exits 1 when the prompt hits end-of-input' do
+        expect(run_handler(:handle_change_master_password, ['-cmp'], stdin: terminal.new(nil))).to eq(1)
+        expect(cli_password).not_to have_received(:change_master_password)
+      end
     end
 
-    it 'passes both OLDPASSWORD and NEWPASSWORD through when provided' do
-      stub_const('ARGV', ['--change-master-password', 'oldpass', 'newpass'])
+    context 'with --password-stdin' do
+      it 'reads the current password from the first line and the new one from the second' do
+        pipe = StringIO.new(" old pass \nnew-master-pass\nthird\n")
 
-      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
-        .with('oldpass', 'newpass')
+        expect(run_handler(:handle_change_master_password, ['-cmp', '--password-stdin'], stdin: pipe)).to eq(0)
+        expect(cli_password).to have_received(:change_master_password).with(' old pass ', 'new-master-pass')
+        expect(pipe.gets).to eq("third\n")
+        expect($stdout.string).to be_empty
+      end
+
+      it 'names each line it is waiting for when stdin is a terminal' do
+        tty = terminal.new('old pass', 'new-master-pass')
+
+        expect(run_handler(:handle_change_master_password, ['-cmp', '--password-stdin'], stdin: tty)).to eq(0)
+        expect($stdout.string).to eq("Current master password: \nNew master password: \n")
+        expect(cli_password).to have_received(:change_master_password).with('old pass', 'new-master-pass')
+      end
+
+      it 'exits 1 when the second line is missing, and says which lines are read' do
+        expect(run_handler(:handle_change_master_password, ['-cmp', '--password-stdin'], stdin: StringIO.new("old pass\n"))).to eq(1)
+        expect($stdout.string).to include('Unable to read password')
+        expect($stdout.string).to include('first line of stdin and the new one from the second')
+        expect(cli_password).not_to have_received(:change_master_password)
+      end
     end
 
-    it 'passes nil for NEWPASSWORD when omitted' do
-      stub_const('ARGV', ['--change-master-password', 'oldpass'])
+    context 'with no terminal and no --password-stdin' do
+      it 'exits 1 without reading the pipe' do
+        pipe = StringIO.new("unrelated bytes\n")
 
-      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
-        .with('oldpass', nil)
+        expect(run_handler(:handle_change_master_password, ['-cmp'], stdin: pipe)).to eq(1)
+        expect(pipe.pos).to eq(0)
+        expect($stdout.string).to include('--password-stdin')
+        expect(cli_password).not_to have_received(:change_master_password)
+      end
     end
 
-    it 'accepts the -cmp short flag' do
-      stub_const('ARGV', ['-cmp', 'oldpass', 'newpass'])
+    context 'with passwords on the command line (deprecated)' do
+      it 'passes both OLDPASSWORD and NEWPASSWORD through and warns without echoing either' do
+        expect(run_handler(:handle_change_master_password, ['--change-master-password', 'oldpass', 'newpass'], stdin: StringIO.new)).to eq(0)
+        expect(cli_password).to have_received(:change_master_password).with('oldpass', 'newpass')
+        expect_deprecation_warning('OLDPASSWORD')
+        expect($stdout.string).to include('The word after --change-master-password was read as OLDPASSWORD.')
+        expect($stdout.string).not_to include('oldpass', 'newpass')
+      end
 
-      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
-        .with('oldpass', 'newpass')
-    end
+      it 'passes nil for NEWPASSWORD when omitted' do
+        expect(run_handler(:handle_change_master_password, ['-cmp', 'oldpass'], stdin: StringIO.new)).to eq(0)
+        expect(cli_password).to have_received(:change_master_password).with('oldpass', nil)
+      end
 
-    it 'exits 1 without authenticating when OLDPASSWORD is missing' do
-      stub_const('ARGV', ['--change-master-password'])
+      it 'exits 1 without reading stdin when --password-stdin is also given' do
+        pipe = StringIO.new("a\nb\n")
 
-      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:change_master_password)
+        expect(run_handler(:handle_change_master_password, ['-cmp', 'oldpass', '--password-stdin'], stdin: pipe)).to eq(1)
+        expect(pipe.pos).to eq(0)
+        expect($stdout.string).to include('not both')
+        expect(cli_password).not_to have_received(:change_master_password)
+      end
     end
   end
 
   describe '.handle_recover_master_password' do
-    before do
-      allow(Lich::Common::Authentication::CLIPassword).to receive(:recover_master_password).and_return(0)
+    include_context 'with a replaceable stdin'
+
+    before { allow(cli_password).to receive(:recover_master_password).and_return(0) }
+
+    it 'passes nil when no password is given, deferring to the hidden prompt' do
+      expect(run_handler(:handle_recover_master_password, ['--recover-master-password'], stdin: StringIO.new)).to eq(0)
+      expect(cli_password).to have_received(:recover_master_password).with(nil)
+      expect($stdout.string).to be_empty
     end
 
-    it 'passes NEWPASSWORD through when provided' do
-      stub_const('ARGV', ['--recover-master-password', 'recoveredpass'])
-
-      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
-        .with('recoveredpass')
+    it 'reads one line with --password-stdin, edge spaces intact' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: StringIO.new(" padded \n"))).to eq(0)
+      expect(cli_password).to have_received(:recover_master_password).with(' padded ')
     end
 
-    it 'passes nil when NEWPASSWORD is omitted, deferring to interactive prompt' do
-      stub_const('ARGV', ['--recover-master-password'])
+    it 'prints no prompt for a piped line, and shows one when stdin is a terminal' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: StringIO.new("piped\n"))).to eq(0)
+      expect($stdout.string).to be_empty
 
-      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
-        .with(nil)
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: terminal.new('typed'))).to eq(0)
+      expect($stdout.string).to eq("Enter master password: \n")
+      expect(cli_password).to have_received(:recover_master_password).with('typed')
     end
 
-    it 'accepts the -rmp short flag' do
-      stub_const('ARGV', ['-rmp', 'recoveredpass'])
+    it 'exits 1 at end-of-input with --password-stdin' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', '--password-stdin'], stdin: StringIO.new(''))).to eq(1)
+      expect(cli_password).not_to have_received(:recover_master_password)
+    end
 
-      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
-      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
-        .with('recoveredpass')
+    it 'still passes a command-line password through, and warns without echoing it' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', 'recoveredpass'], stdin: StringIO.new)).to eq(0)
+      expect(cli_password).to have_received(:recover_master_password).with('recoveredpass')
+      expect_deprecation_warning('PASSWORD')
+      expect($stdout.string).not_to include('recoveredpass')
+    end
+
+    it 'exits 1 when a command-line password and --password-stdin are both given' do
+      expect(run_handler(:handle_recover_master_password, ['-rmp', 'recoveredpass', '--password-stdin'], stdin: StringIO.new("x\n"))).to eq(1)
+      expect(cli_password).not_to have_received(:recover_master_password)
     end
   end
 
@@ -564,6 +779,46 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
       end
 
+      context 'with --password-stdin' do
+        around do |example|
+          original_stdin = $stdin
+          example.run
+        ensure
+          $stdin = original_stdin
+        end
+
+        it 'reads the new master password from one line instead of prompting' do
+          $stdin = StringIO.new("piped-master-pass\n")
+          stub_const('ARGV', ['--convert-entries', 'enhanced', '--password-stdin'])
+
+          expect { described_class.handle_convert_entries }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+          expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:prompt_and_confirm_password)
+          expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password).with('piped-master-pass')
+          expect(Lich::Common::CLI::CLIConversion).to have_received(:convert).with(DATA_DIR, 'enhanced')
+        end
+
+        it 'refuses a piped password the new-master-password rule refuses, storing nothing' do
+          [" padded-secret\n", "short\n"].each do |line|
+            $stdin = StringIO.new(line)
+            stub_const('ARGV', ['--convert-entries', 'enhanced', '--password-stdin'])
+
+            expect { described_class.handle_convert_entries }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          end
+          expect($stdout.string).to include('cannot begin or end with whitespace', 'must be at least')
+          expect($stdout.string).not_to include('padded-secret')
+          expect(Lich::Common::GUI::MasterPasswordManager).not_to have_received(:store_master_password)
+          expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+        end
+
+        it 'exits 1 at end-of-input' do
+          $stdin = StringIO.new('')
+          stub_const('ARGV', ['--convert-entries', 'enhanced', '--password-stdin'])
+
+          expect { described_class.handle_convert_entries }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+        end
+      end
+
       it 'exits 1 without converting when storing the password in the keychain fails' do
         allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(false)
         stub_const('ARGV', ['--convert-entries', 'enhanced'])
@@ -582,43 +837,61 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
   end
 
   describe '.handle_change_encryption_mode' do
+    let(:mode_change) { Lich::Common::CLI::EncryptionModeChange }
+
     before do
-      allow(Lich::Common::CLI::EncryptionModeChange).to receive(:change_mode).and_return(0)
+      allow(mode_change).to receive(:change_mode).and_return(0)
     end
 
     it 'passes the mode as a symbol through' do
       stub_const('ARGV', ['--change-encryption-mode', 'enhanced'])
 
       expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
-      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, nil)
+      expect(mode_change).to have_received(:change_mode).with(:enhanced, nil, password_stdin: false)
+      expect($stdout.string).to be_empty
     end
 
-    it 'passes an explicit --master-password through' do
-      stub_const('ARGV', ['--change-encryption-mode', 'enhanced', '--master-password', 'secret'])
+    it 'tells change_mode to read stdin when --password-stdin is given' do
+      stub_const('ARGV', ['-cem', 'enhanced', '--password-stdin'])
 
       expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
-      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, 'secret')
+      expect(mode_change).to have_received(:change_mode).with(:enhanced, nil, password_stdin: true)
     end
 
-    it 'accepts the -mp short flag for the master password' do
-      stub_const('ARGV', ['--change-encryption-mode', 'enhanced', '-mp', 'secret'])
+    %w[--master-password -mp].each do |flag|
+      it "still passes a #{flag} value through, and warns without echoing it" do
+        stub_const('ARGV', ['--change-encryption-mode', 'enhanced', flag, 's3cret-value'])
 
-      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
-      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, 'secret')
+        expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+        expect(mode_change).to have_received(:change_mode).with(:enhanced, 's3cret-value', password_stdin: false)
+        expect($stdout.string).to include("Passing #{flag} PASSWORD on the command line is deprecated")
+        expect($stdout.string).to include("error starting with Lich #{described_class::POSITIONAL_PASSWORD_REMOVAL}")
+        expect($stdout.string).not_to include('s3cret-value')
+      end
+    end
+
+    it 'exits 1 without changing mode when --master-password and --password-stdin are both given' do
+      stub_const('ARGV', ['-cem', 'enhanced', '--master-password', 'secret', '--password-stdin'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect($stdout.string).to include('not both')
+      expect(mode_change).not_to have_received(:change_mode)
     end
 
     it 'accepts the -cem short flag' do
       stub_const('ARGV', ['-cem', 'standard'])
 
       expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
-      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:standard, nil)
+      expect(mode_change).to have_received(:change_mode).with(:standard, nil, password_stdin: false)
     end
 
-    it 'exits 1 without changing mode when MODE is missing' do
+    it 'exits 1 without changing mode when MODE is missing, and shows the new usage' do
       stub_const('ARGV', ['--change-encryption-mode'])
 
       expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
-      expect(Lich::Common::CLI::EncryptionModeChange).not_to have_received(:change_mode)
+      expect($stdout.string).to include('--change-encryption-mode MODE [--password-stdin]')
+      expect($stdout.string).not_to include('--master-password')
+      expect(mode_change).not_to have_received(:change_mode)
     end
   end
 end
