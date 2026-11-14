@@ -264,6 +264,243 @@ RSpec.describe Lich::AcceptedGemPolicy do
     expect { policy.check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /inventory is malformed/)
   end
 
+  context 'with a native package built for this runtime platform' do
+    # The manifest supplies prebuilt gems for the runtime platform (R4L5's
+    # x64-mingw-ucrt builds). A gem the user compiled with `gem install` or
+    # `gem update` has the generic "ruby" platform instead.
+    let(:local) { Gem::Platform.local.to_s }
+    let(:glib_package) { { 'name' => 'glib2', 'version' => '4.3.9', 'filename' => "glib2-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'e' * 64}" } }
+    let(:gtk_package) { { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => "gtk3-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'f' * 64}" } }
+    let(:gtk_unit) do
+      { 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3], 'install_order' => %w[glib2 gtk3], 'packages' => [glib_package, gtk_package] }
+    end
+    let(:dependencies) { [Gem::Dependency.new('gtk3')] }
+
+    before { plan.units = [gtk_unit] }
+
+    def accepted_build(name, version, dependencies = {})
+      spec(name, version, dependencies).tap { |item| item.platform = Gem::Platform.local }
+    end
+
+    def self_built(name, version, dependencies = {}, extension_built: true)
+      spec(name, version, dependencies).tap do |item|
+        item.extensions = ['ext/extconf.rb']
+        item.define_singleton_method(:missing_extensions?) { !extension_built }
+      end
+    end
+
+    def stack(version, build)
+      { 'glib2' => [send(build, 'glib2', version)], 'gtk3' => [send(build, 'gtk3', version, { 'glib2' => "= #{version}" })] }
+    end
+
+    it 'accepts the accepted build itself' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+    end
+
+    it 'keeps a newer self-built stack instead of repairing it down to the accepted builds' do
+      installed.merge!(stack('4.4.0', :self_built))
+      expect(recovery).not_to receive(:recover)
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to eq([])
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => %w[4.4.0 ruby], 'gtk3' => %w[4.4.0 ruby])
+    end
+
+    it 'prefers the newer self-built stack when the accepted builds are installed beside it' do
+      installed.merge!(stack('4.3.9', :accepted_build)) { |_name, accepted, newer| accepted + newer }
+      installed.merge!(stack('4.4.0', :self_built)) { |_name, accepted, newer| accepted + newer }
+      policy.activate!(policy.check(dependencies))
+      expect(active.transform_values { |item| item.version.to_s }).to eq('glib2' => '4.4.0', 'gtk3' => '4.4.0')
+    end
+
+    it 'still repairs a self-built gem at the accepted version, since the accepted build is patched' do
+      installed.merge!(stack('4.3.9', :self_built))
+      check = policy.check(dependencies)
+      expect(check.needed).to contain_exactly('glib2', 'gtk3')
+      expect(check.plan.units).to eq([gtk_unit])
+    end
+
+    it 'never mixes a newer self-built gtk3 with an accepted glib2 it cannot use' do
+      installed['glib2'] = [accepted_build('glib2', '4.3.9')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      policy.activate!(policy.check(dependencies))
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+    end
+
+    it 'repairs when a newer self-built gtk3 has no matching glib2 and no accepted build to fall back to' do
+      installed['glib2'] = [accepted_build('glib2', '4.3.9')]
+      installed['gtk3'] = [self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      check = policy.check(dependencies)
+      expect(check.needed).to eq(['gtk3'])
+      expect(check.plan.units).to eq([gtk_unit])
+    end
+
+    it 'keeps reporting a policy failure that self-built gems did not cause' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      expect { policy.check([Gem::Dependency.new('gtk3', '< 4')]) }.to raise_error(described_class::PolicyError)
+    end
+
+    it 'repairs a newer self-built gem whose native extension did not finish building' do
+      installed.merge!(stack('4.4.0', :self_built))
+      installed['gtk3'] = [self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' }, extension_built: false)]
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'repairs a newer build for a platform this runtime cannot load' do
+      foreign = Gem::Platform.new(local.start_with?('x86_64') ? 'aarch64-linux' : 'x86_64-linux')
+      installed.merge!(stack('4.4.0', :self_built))
+      installed['gtk3'] = [spec('gtk3', '4.4.0', 'glib2' => '= 4.4.0').tap { |item| item.platform = foreign }]
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'does not restart for an already active newer self-built gem' do
+      installed.merge!(stack('4.4.0', :self_built))
+      active['glib2'] = installed['glib2'].first
+      active['gtk3'] = installed['gtk3'].first
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.fetch('gtk3').version.to_s).to eq('4.4.0')
+    end
+
+    it 'restarts when a self-built gem at the accepted version is already active' do
+      installed.merge!(stack('4.3.9', :accepted_build))
+      active['gtk3'] = self_built('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' })
+      installed['gtk3'] << active['gtk3']
+      expect(policy.check(dependencies).needed).to eq(['gtk3'])
+    end
+
+    it 'measures "newer" against the accepted version, not a lower minimum' do
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed.merge!(stack('4.3.5', :self_built))
+      expect(policy.check(dependencies).needed).to contain_exactly('glib2', 'gtk3')
+      installed.merge!(stack('4.3.5', :accepted_build))
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to contain_exactly('glib2', 'gtk3')
+    end
+
+    it 'starts on accepted builds between the minimum and the version when a newer self-built gtk3 has no matching glib2' do
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed['glib2'] = [accepted_build('glib2', '4.3.5')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.5', { 'glib2' => '= 4.3.5' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      expect(recovery).not_to receive(:recover)
+      check = policy.check(dependencies)
+      expect(check.needed).to be_empty
+      expect(check.recommended).to contain_exactly('glib2', 'gtk3')
+      policy.activate!(check)
+      expect(active.transform_values { |item| [item.version.to_s, item.platform.to_s] })
+        .to eq('glib2' => ['4.3.5', local], 'gtk3' => ['4.3.5', local])
+    end
+
+    # The self-built pass and the accepted-only pass can each need a repair,
+    # of different units: here the self-built pass keeps ox but turns the
+    # gtk3 conflict into a GTK repair, while the accepted-only pass starts
+    # on the accepted GTK stack and repairs only ox. Repairing ox alone is
+    # what startup did before self-built gems were accepted, and the only
+    # repair that does not lead to a second one on the next start.
+    it 'repairs only the unit the accepted builds need when the self-built pass would repair a different one' do
+      ox_unit = { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+                  'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+      plan.units = [gtk_unit, ox_unit]
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed['glib2'] = [accepted_build('glib2', '4.3.5')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.5', { 'glib2' => '= 4.3.5' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      installed['ox'] = [self_built('ox', '2.14.30')]
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.needed).to eq(['ox'])
+      expect(check.plan.units.map { |item| item['id'] }).to eq(['ox'])
+    end
+
+    context 'with cairo, which cairo-gobject does not pin exactly' do
+      let(:cairo_package) { { 'name' => 'cairo', 'version' => '1.18.5', 'filename' => "cairo-1.18.5-#{local}.gem", 'sha256' => "sha256:#{'1' * 64}" } }
+      let(:cairo_gobject_package) { { 'name' => 'cairo-gobject', 'version' => '4.3.9', 'filename' => "cairo-gobject-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'2' * 64}" } }
+
+      before do
+        gtk_unit['members'] = %w[glib2 cairo cairo-gobject gtk3]
+        gtk_unit['install_order'] = %w[glib2 cairo cairo-gobject gtk3]
+        gtk_unit['packages'] = [glib_package, cairo_package, cairo_gobject_package, gtk_package]
+      end
+
+      # Ruby-GNOME's own dependencies: cairo-gobject requires `cairo >= 1.16.2`.
+      def gnome_stack(version, build)
+        { 'glib2'         => [send(build, 'glib2', version)],
+          'cairo-gobject' => [send(build, 'cairo-gobject', version, { 'cairo' => '>= 1.16.2', 'glib2' => "= #{version}" })],
+          'gtk3'          => [send(build, 'gtk3', version, { 'cairo-gobject' => "= #{version}", 'glib2' => "= #{version}" })] }
+      end
+
+      def platforms_of(specs)
+        specs.transform_values { |item| [item.version.to_s, item.platform.to_s] }
+      end
+
+      it 'uses the accepted cairo, not a newer self-built one, next to the accepted cairo-gobject' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5'), self_built('cairo', '1.18.6')]
+        expect(recovery).not_to receive(:recover)
+        check = policy.check(dependencies)
+        expect(check.needed).to be_empty
+        policy.activate!(check)
+        expect(platforms_of(active)).to eq('glib2' => ['4.3.9', local], 'cairo' => ['1.18.5', local],
+                                           'cairo-gobject' => ['4.3.9', local], 'gtk3' => ['4.3.9', local])
+      end
+
+      it 'restarts when a newer self-built cairo is already active next to the accepted cairo-gobject' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5'), self_built('cairo', '1.18.6')]
+        active['cairo'] = installed['cairo'].last
+        expect(policy.check(dependencies).needed).to eq(['cairo'])
+      end
+
+      it 'repairs a newer self-built cairo when no accepted cairo is installed' do
+        installed.merge!(gnome_stack('4.3.9', :accepted_build))
+        installed['cairo'] = [self_built('cairo', '1.18.6')]
+        check = policy.check(dependencies)
+        expect(check.needed).to eq(['cairo'])
+        expect(check.plan.units).to eq([gtk_unit])
+      end
+
+      it 'keeps a newer self-built Ruby-GNOME stack over the accepted cairo' do
+        installed.merge!(gnome_stack('4.4.0', :self_built))
+        installed['cairo'] = [accepted_build('cairo', '1.18.5')]
+        check = policy.check(dependencies)
+        expect(check.needed).to be_empty
+        policy.activate!(check)
+        expect(platforms_of(active)).to eq('glib2' => %w[4.4.0 ruby], 'cairo' => ['1.18.5', local],
+                                           'cairo-gobject' => %w[4.4.0 ruby], 'gtk3' => %w[4.4.0 ruby])
+      end
+    end
+  end
+
+  context 'with a standalone native package' do
+    let(:local) { Gem::Platform.local.to_s }
+    let(:ox_unit) do
+      { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+        'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+    end
+
+    before { plan.units = [ox_unit] }
+
+    it 'keeps a newer self-built copy, since no package of its unit depends on it' do
+      ox = spec('ox', '2.14.30')
+      installed['ox'] = [spec('ox', '2.14.29').tap { |item| item.platform = Gem::Platform.local }, ox]
+      check = policy.check([Gem::Dependency.new('ox')])
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.fetch('ox')).to equal(ox)
+    end
+  end
+
   context 'with a package minimum' do
     let(:sqlite3) { unit.fetch('packages').first }
 
