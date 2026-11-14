@@ -100,6 +100,41 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
       end
     end
 
+    # The documented limit (DRCI.item_bput): bput reads every line while it
+    # waits, so a broad pattern can match an unrelated line before the reply.
+    context 'with a broad player pattern and an unrelated line before the refusal' do
+      let(:replies) { ['You hear the distant howl of a wolf.', not_worn] }
+
+      it 'counts the unrelated line as success' do
+        player_patterns('remove' => ['^You'])
+        expect(bounded { drci.remove_item?('cloak') }).to be(true)
+      end
+
+      it 'returns false with no player patterns' do
+        player_patterns(nil)
+        expect(bounded { drci.remove_item?('cloak') }).to be(false)
+      end
+
+      it 'returns false with a pattern for the exact reply' do
+        player_patterns('remove' => ['^You unhook your .* from your belt'])
+        expect(bounded { drci.remove_item?('cloak') }).to be(false)
+      end
+    end
+
+    # bput returns only the matched text, which a lookaround pattern need not
+    # match a second time; item_bput must not match the player's patterns again.
+    ['^You unhook(?= your)', '(?<=^You )unhook'].each do |pattern|
+      context "with a player pattern using a lookaround (#{pattern})" do
+        before { player_patterns('remove' => [pattern]) }
+
+        let(:replies) { [unknown_reply] }
+
+        it 'returns true' do
+          expect(bounded { drci.remove_item?('quiver') }).to be(true)
+        end
+      end
+    end
+
     context 'with a player pattern that also matches the built-in failure text' do
       before { player_patterns('remove' => ["aren't wearing"]) }
 
@@ -118,6 +153,34 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
       it 'reports it and returns false instead of hanging or raising' do
         expect(bounded { drci.remove_item?('cloak') }).to be(false)
         expect(warnings).to include('custom_item_success_patterns[remove]', 'took too long', "'remove my cloak' was treated as unanswered")
+      end
+    end
+  end
+
+  # item_bput tells a player's match from a built-in one by matching the
+  # built-in patterns against bput's return value, the matched text alone. A
+  # built-in pattern that does not match its own match text (a positive
+  # lookahead or lookbehind, or \B) would have its replies counted as player
+  # successes.
+  describe 'the built-in patterns item_bput classifies against' do
+    not_self_matching = /\(\?<?=|\\B/
+
+    it 'has no positive lookaround or \\B in any DRCI or EquipmentManager pattern constant' do
+      [Lich::DragonRealms::DRCI, Lich::DragonRealms::EquipmentManager].each do |mod|
+        mod.constants.each do |name|
+          Array(mod.const_get(name)).grep(Regexp).each do |pattern|
+            expect(pattern.source).not_to match(not_self_matching), "#{mod}::#{name} has #{pattern.inspect}"
+          end
+        end
+      end
+    end
+
+    it 'has none in the inline patterns either, apart from one String#sub' do
+      %w[common-items.rb equipmanager.rb].each do |file|
+        lines = File.readlines(File.join(LIB_DIR, 'dragonrealms', 'commons', file))
+        offenders = lines.each_with_index.select { |line, _| line.match?(not_self_matching) }
+                         .reject { |line, _| line.include?('.sub(/ and (?=a|an|some)/') || line.lstrip.start_with?('#') }
+        expect(offenders.map { |line, index| "#{file}:#{index + 1}: #{line.strip}" }).to eq([])
       end
     end
   end
