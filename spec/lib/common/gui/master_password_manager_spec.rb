@@ -62,6 +62,11 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
         allow(OS).to receive(:mac?).and_return(true)
       end
 
+      it 'holds the security command to 4094 bytes, leaving 2016 bytes for the password' do
+        expect(described_class::MACOS_SECURITY_COMMAND_LIMIT).to eq(4094)
+        expect(described_class::MACOS_KEYCHAIN_PASSWORD_BYTES).to eq(2016)
+      end
+
       it 'accepts a password of exactly the limit' do
         expect(described_class.new_password_refusal('x' * limit)).to be_nil
       end

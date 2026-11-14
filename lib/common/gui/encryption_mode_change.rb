@@ -217,7 +217,7 @@ module Lich
                   # Validate entering new mode
                   if selected_mode == :enhanced
                     Lich.log "debug: showing password dialog"
-                    new_master_password = MasterPasswordPromptUI.show_dialog
+                    new_master_password = prompt_for_new_master_password(parent)
                     Lich.log "debug: password_nil?=#{new_master_password.nil?}"
                     unless new_master_password
                       Lich.log "debug: password entry cancelled"
@@ -358,6 +358,45 @@ module Lich
 
             mutex.synchronize { condition.wait(mutex) }
             result
+          end
+
+          # Asks for the new master password until one is entered that the
+          # keychain can store, or the user cancels. A refused password is
+          # explained in an error dialog before asking again. Runs on the
+          # mode-change thread, not the GTK thread.
+          #
+          # @param parent [Gtk::Window] Parent window for the error dialog
+          # @return [String, nil] the new master password, or nil if cancelled
+          def prompt_for_new_master_password(parent)
+            loop do
+              password = MasterPasswordPromptUI.show_dialog
+              return nil unless password
+
+              too_long = MasterPasswordManager.keychain_length_refusal(password)
+              return password unless too_long
+
+              Lich.log "info: Master password refused: too long for the keychain"
+              show_error_dialog_and_wait(parent, too_long)
+            end
+          end
+
+          # Shows an error dialog on the GTK thread and waits until the user
+          # closes it. For callers off the GTK thread.
+          def show_error_dialog_and_wait(parent, message)
+            closed = false
+            mutex = Mutex.new
+            condition = ConditionVariable.new
+
+            Gtk.queue do
+              show_error_dialog(parent, message)
+            ensure
+              mutex.synchronize do
+                closed = true
+                condition.signal
+              end
+            end
+
+            mutex.synchronize { condition.wait(mutex) until closed }
           end
 
           # Shows error dialog

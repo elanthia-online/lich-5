@@ -252,6 +252,53 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
     end
   end
 
+  describe 'asking for the new master password when switching to enhanced' do
+    let(:parent_window) { double('Gtk::Window') }
+    let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+    let(:prompt_ui) { Lich::Common::GUI::MasterPasswordPromptUI }
+    let(:refusal) { manager::NEW_PASSWORD_TOO_LONG_FOR_MACOS }
+
+    before do
+      allow(manager).to receive(:keychain_length_refusal).and_return(nil)
+      allow(manager).to receive(:keychain_length_refusal).with('far-too-long').and_return(refusal)
+      allow(described_class).to receive(:show_error_dialog)
+    end
+
+    def prompt_for_new_master_password
+      described_class.send(:prompt_for_new_master_password, parent_window)
+    end
+
+    it 'returns a password that fits without showing an error' do
+      allow(prompt_ui).to receive(:show_dialog).and_return('fits-fine')
+
+      expect(prompt_for_new_master_password).to eq('fits-fine')
+      expect(prompt_ui).to have_received(:show_dialog).once
+      expect(described_class).not_to have_received(:show_error_dialog)
+    end
+
+    it 'shows the too-long refusal and asks again' do
+      allow(prompt_ui).to receive(:show_dialog).and_return('far-too-long', 'fits-fine')
+
+      expect(prompt_for_new_master_password).to eq('fits-fine')
+      expect(described_class).to have_received(:show_error_dialog).with(parent_window, refusal).once
+      expect(prompt_ui).to have_received(:show_dialog).twice
+    end
+
+    it 'cancels when the user cancels the prompt asked again after a refusal' do
+      allow(prompt_ui).to receive(:show_dialog).and_return('far-too-long', nil)
+
+      expect(prompt_for_new_master_password).to be_nil
+      expect(described_class).to have_received(:show_error_dialog).with(parent_window, refusal).once
+    end
+
+    it 'cancels on the first prompt without checking a password' do
+      allow(prompt_ui).to receive(:show_dialog).and_return(nil)
+
+      expect(prompt_for_new_master_password).to be_nil
+      expect(manager).not_to have_received(:keychain_length_refusal)
+    end
+  end
+
   describe 'mode change flow' do
     let(:parent_window) { double('Gtk::Window') }
 
