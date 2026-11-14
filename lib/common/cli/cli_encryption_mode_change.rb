@@ -68,7 +68,7 @@ module Lich
           # --password-stdin that one is read here, before anything is asked.
           piped_password = nil
           if password_stdin && [current_mode, new_mode].include?(:enhanced)
-            piped_password = read_piped_master_password
+            piped_password = read_piped_master_password(new_mode == :enhanced ? 'Enter new master password: ' : 'Enter master password: ')
             return 1 if piped_password.nil?
 
             provided_password = piped_password if new_mode == :enhanced
@@ -163,11 +163,13 @@ module Lich
         end
 
         # @api private
-        # Reads the master password from stdin for --password-stdin.
+        # Reads the master password from stdin for --password-stdin. The prompt
+        # is shown only when stdin is a terminal; a pipe is read silently.
         #
+        # @param prompt [String] prompt shown on a terminal
         # @return [String, nil] the password, or nil after printing why it could not be read
-        def self.read_piped_master_password
-          Lich::Common::Authentication::CLIPassword.read_secret('', from_stdin: true)
+        def self.read_piped_master_password(prompt)
+          Lich::Common::Authentication::CLIPassword.read_secret(prompt, from_stdin: true)
         rescue Lich::Common::Authentication::CLIPassword::SecretInputError => e
           puts "error: #{e.message}"
           Lich.log "error: CLI encryption mode change failed - #{e.message}"

@@ -20,9 +20,10 @@ module Lich
         VALIDATION_ITERATIONS = 100_000
         VALIDATION_KEY_LENGTH = 32
         VALIDATION_SALT_PREFIX = 'lich5-master-password-validation-v1'
-        # Shortest master password accepted when one is created or replaced, by the
-        # launcher and the CLI alike. Applies to new passwords only: an existing
-        # password is checked against the stored validation test, never by length.
+        # Shortest master password the CLI accepts when one is created or replaced.
+        # The GTK dialogs keep their own length checks. Applies to new passwords
+        # only: an existing password is checked against the stored validation
+        # test, never by length.
         MIN_PASSWORD_LENGTH = 8
         # Fixed refusals for a new master password; none includes the password.
         NEW_PASSWORD_EMPTY = 'Master password cannot be empty.'
@@ -38,9 +39,10 @@ module Lich
           input.chomp
         end
 
-        # The one acceptance rule for a new master password (create and change), on
-        # the CLI and in the WebUI launcher alike. Existing passwords (unlock and
-        # recovery) are never checked here; the validation test decides them.
+        # The one acceptance rule for a new master password on every CLI create and
+        # change path. The GTK dialogs keep their own checks. Existing passwords
+        # (unlock and recovery) are never checked here; the validation test
+        # decides them.
         # @param password [String, nil] proposed new master password
         # @return [String, nil] fixed refusal message, or nil when acceptable
         def self.new_password_refusal(password)
