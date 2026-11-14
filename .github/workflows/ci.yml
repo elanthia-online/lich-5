@@ -76,9 +76,12 @@ permissions:
   contents: read
   pull-requests: read
 
+# A newer push to a pull request cancels that pull request's older run. Each push
+# to main has its own group, so its run is neither cancelled nor made to wait
+# behind another, and every merge finishes the suites its own changes selected.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   windows_contract:
@@ -345,6 +348,11 @@ jobs:
               'lib/dependency_recovery.rb', 'lib/accepted_gem_policy.rb', 'lib/runtime_gem_contract.rb',
               'lib/recovery_unit_policy.rb',
             ];
+            // Helpers that carry the default-startup acceptance result between
+            // processes; the Windows job is where that file handling is proven.
+            const WINDOWS_ACCEPTANCE_PATHS = [
+              'spec/support/default_webui_acceptance_',
+            ];
             // What the macOS job compiles and runs: the native host, its
             // presentation spec, and the helpers every rspec process loads.
             const MACOS_PATHS = [
@@ -393,13 +401,13 @@ jobs:
               }
               const selected = windowsSpecPaths(Buffer.from(data.content, 'base64').toString('utf8'));
               const windowsSpec = path => selected.some(p => path === p || (!p.endsWith('.rb') && path.startsWith(`${p}/`)));
-              const webui = within(WEBUI_PATHS), startup = within(WINDOWS_STARTUP_PATHS);
+              const webui = within(WEBUI_PATHS), startup = within(WINDOWS_STARTUP_PATHS), acceptance = within(WINDOWS_ACCEPTANCE_PATHS);
               const everySuite = within(ALL_SUITE_PATHS), macos = within(MACOS_PATHS);
               const shared = path => everySuite(path) || webui(path) || windowsSpec(path);
               const reaches = {
                 renderer: shared,
                 browser: shared,
-                windows: path => shared(path) || startup(path),
+                windows: path => shared(path) || startup(path) || acceptance(path),
                 macos: path => everySuite(path) || macos(path),
               };
               // A rename or deletion out of a suite's paths still counts: check the old name too.
