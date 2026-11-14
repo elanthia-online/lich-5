@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.24.3](https://github.com/elanthia-online/lich-5/compare/v5.24.2...v5.24.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **all:** accept an optional per-package gem manifest minimum ([#2316](https://github.com/elanthia-online/lich-5/issues/2316)) ([b890c63](https://github.com/elanthia-online/lich-5/commit/b890c635cb35624ebac7c59ec2b23d5be1487a4d))
+* **all:** describe a runtime contract for a chosen Windows platform ([#2310](https://github.com/elanthia-online/lich-5/issues/2310)) ([68634cd](https://github.com/elanthia-online/lich-5/commit/68634cdd4b252c62072582b78b9758a92f18a340))
+* **all:** lock aarch64-mingw-ucrt so Windows ARM64 resolves the ffi build ([#2363](https://github.com/elanthia-online/lich-5/issues/2363)) ([db08c4e](https://github.com/elanthia-online/lich-5/commit/db08c4ee7691c6315f9755d35d6c3cd10c4a9874))
+* **all:** match a named character in move's "unable to follow" refusal ([#2402](https://github.com/elanthia-online/lich-5/issues/2402)) ([00cb62d](https://github.com/elanthia-online/lich-5/commit/00cb62de037fc0873700b8a6c14cda655c6477d2))
+
 ## [5.24.2](https://github.com/elanthia-online/lich-5/compare/v5.24.1...v5.24.2) (2026-11-11)
 
 
