@@ -443,6 +443,20 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(active.transform_values { |item| item.version.to_s }).to include('glib2' => '4.4.0', 'gtk3' => '4.4.0')
     end
 
+    # A self-built glib2 resolves on its own, but not beside the accepted
+    # gtk3, which pins glib2 exactly. Repairing ox alone would leave GTK
+    # for a second repair on the next start, so both are repaired at once.
+    it 'repairs both units at once when a self-built glib2 cannot work with the accepted gtk3' do
+      ox_unit = { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+                  'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+      plan.units = [gtk_unit, ox_unit]
+      installed['glib2'] = [self_built('glib2', '4.4.0')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' })]
+      installed['ox'] = [self_built('ox', '2.14.29')]
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.plan.units.map { |item| item['id'] }).to contain_exactly('gtk3-runtime', 'ox')
+    end
+
     # The reverse of the case above: the accepted GTK stack is below its
     # minimum, so both passes need a GTK repair, and the self-built gtk3
     # has no glib2 of its own. The accepted-only repair covers both units

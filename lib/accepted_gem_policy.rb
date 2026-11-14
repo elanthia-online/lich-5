@@ -140,11 +140,13 @@ module Lich
       # needs a repair, decide again on the accepted builds alone, exactly
       # as before self-built gems were accepted:
       # - If that needs no repair, it is used.
-      # - If the newer self-built gems resolve among themselves, this pass's
-      #   repair is kept. It leaves them in use, so the next start needs
-      #   nothing more, and the accepted-only repair would list and repair
-      #   every unit holding one, for example a complete self-built GTK
-      #   stack beside an ox that needs repair.
+      # - If what stays installed after this pass's repair holds together
+      #   (every package outside the units it repairs, at its floor, with
+      #   the newer self-built gems), this pass's repair is kept. It leaves
+      #   those gems in use, so the next start has nothing left to repair,
+      #   while the accepted-only repair would list and repair every unit
+      #   holding one, for example a complete self-built GTK stack beside an
+      #   ox that needs repair.
       # - Otherwise this pass may have turned the self-built gems' conflict
       #   into a repair of units the accepted builds never needed, leaving
       #   the one they do need for a second repair on the next start, so
@@ -159,7 +161,7 @@ module Lich
         return check
       end
       return accepted_only if accepted_only.needed.empty?
-      return check if self_built_consistent?(packages, platforms, newer)
+      return check if self_built_consistent?(check, packages, platforms, minimums, newer)
       return accepted_only if unit_ids(accepted_only) != unit_ids(check)
 
       check
@@ -240,13 +242,18 @@ module Lich
     end
     private :self_built_candidates?
 
-    # Whether the newer self-built gems that may be used all resolve
-    # together, each above its accepted version, with whatever else is
-    # installed. A self-built gtk3 4.4.0 without a self-built glib2 4.4.0
-    # does not.
+    # Whether what stays installed after +check+'s repair holds together:
+    # every package outside the units it repairs, at its floor, and each
+    # newer self-built gem that may be used, above its accepted version.
+    # A self-built gtk3 4.4.0 without a self-built glib2 4.4.0 does not, and
+    # neither does a self-built glib2 4.4.0 beside an R4L5 gtk3 4.3.9, which
+    # pins glib2 exactly.
+    # @param check [Check] the repair the self-built pass chose
     # @return [Boolean]
-    def self_built_consistent?(packages, platforms, newer)
-      requirements = packages.each_key.filter_map do |name|
+    def self_built_consistent?(check, packages, platforms, minimums, newer)
+      repaired = check.plan.units.flat_map { |unit| unit_package_names(unit) }
+      kept = (packages.keys - repaired).map { |name| Gem::Dependency.new(name, ">= #{minimums.fetch(name)}") }
+      requirements = kept + packages.each_key.filter_map do |name|
         next unless newer.fetch(name)
         next unless @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name)) }
 
