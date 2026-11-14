@@ -147,8 +147,8 @@ RSpec.describe Lich::ZipArchive do
       # NFC keeps the iota subscript composed, and folding then puts the
       # iota ahead of the diaeresis; only NFD before folding matches them.
       'iota subscript'         => [u('<1FB3><308>.gem'), u('<391><308><399>.gem')],
-      # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
-      # final NFD reorders it.
+      # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; a second
+      # NFD reorders it.
       'Tibetan vowel sign'     => [u('<300><F73>.gem'), u('<F71><F72><300>.gem')],
       # The same misordering before U+0345, which folding turns into a
       # starter; only a second NFD before folding matches them.
@@ -337,14 +337,64 @@ RSpec.describe Lich::ZipArchive do
       end
     end
 
-    # A record is only taken for an embedded archive when its headers fill
-    # exactly the directory size it declares.
-    it 'extracts an archive whose comment holds a record its headers do not fill' do
+    # A record is only taken for an embedded archive when a central
+    # directory header starts where its directory would.
+    it 'extracts an archive whose comment holds a record with no directory in front of it' do
       fake = [0x06054b50, 0, 0, 0, 0, 4, 0, 0].pack('VvvvvVVv')
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }], comment: "abcd#{fake}x".b))
 
       described_class.extract(zip_path, destination)
       expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    # Python and bsdtar walk an embedded directory by its size, so a wrong
+    # entry count, a last header running past the declared size, or a ZIP64
+    # record does not stop them listing it.
+    {
+      'a wrong entry count'    => ->(inner) { inner.dup.tap { |zip| zip[-12, 2] = [5].pack('v'); zip[-14, 2] = [5].pack('v') } },
+      # The last header's comment length reaches over the record itself.
+      'a header past its size' => ->(inner) { inner.dup.tap { |zip| zip[zip.byteslice(-6, 4).unpack1('V') + 32, 2] = [22].pack('v') } },
+      'a ZIP64 locator'        => ->(inner) { inner.byteslice(0...-22) + [0x07064b50, 0, 0, 1].pack('VVQ<V') + inner.byteslice(-22, 22) },
+      'an empty directory'     => ->(_inner) { [0x06054b50, 0, 0, 0, 0, 0, 0, 0].pack('VvvvvVVv') }
+    }.each do |label, shape|
+      it "refuses an archive whose comment holds an archive with #{label}" do
+        inner = shape.call(ZipBuilder.build([{ name: 'a.gem', data: 'inner and longer' }]))
+        File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}x".b))
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive/)
+      end
+    end
+
+    # A record near the start of the file whose directory size reaches back
+    # before it is not an archive, and is not read from before the file.
+    it 'extracts an archive whose comment holds a record with a directory larger than the file before it' do
+      fake = [0x06054b50, 0, 0, 1, 1, 0x7fffffff, 0, 0].pack('VvvvvVVv')
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }], comment: "#{fake}x".b))
+
+      described_class.extract(zip_path, destination)
+      expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    # The tools find the directory just in front of the record, so the
+    # record's own offset must point there too.
+    it 'refuses an archive whose comment is a whole archive laid out like it' do
+      inner = ZipBuilder.build([{ name: 'a.gem', data: 'inner' }])
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: inner))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /central directory does not end at the end record/)
+    end
+
+    it 'refuses one archive appended to another' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'first' }]) + ZipBuilder.build([{ name: 'a.gem', data: 'second' }]))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /central directory does not end at the end record/)
+    end
+
+    it 'refuses a record whose entry count is lower than its directory holds' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'a' }, { name: 'b.gem', data: 'b' }], disk_count: 1, total_count: 1))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /holds more entries than its record declares/)
+      expect(Dir.exist?(destination) && !Dir.empty?(destination)).to be(false)
     end
 
     # Other tools skip a signature without a whole record after it and read
