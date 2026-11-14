@@ -90,13 +90,38 @@ module Lich
       class PlayerSuccess < String; end
 
       # The player's extra success patterns for +verb+ from
-      # {CUSTOM_SUCCESS_KEY}, validated and compiled with a match timeout.
+      # {CUSTOM_SUCCESS_KEY}, validated and compiled with a match timeout,
+      # each extended by {through_end_of_line}.
       #
       # @param verb [String] one of {CUSTOM_SUCCESS_VERBS}
       # @return [Array<Regexp>] the patterns (possibly empty)
       # @see CustomSubstitutions.resolve_section
       def custom_success_patterns(verb)
         CustomSubstitutions.resolve_section(CUSTOM_SUCCESS_KEY, verb, type: :regexes, sections: CUSTOM_SUCCESS_VERBS)
+                           .map { |pattern| through_end_of_line(pattern) }
+      end
+
+      # +pattern+ followed by +.*+, keeping its options and match timeout.
+      #
+      # bput returns only the text its pattern matched, and the empty String
+      # when nothing matched. A player pattern made only of lookaheads, such
+      # as +^(?=.*unhook)(?=.*belt)+, matches no characters, so its reply would
+      # read as no reply. With +.*+ the match runs on to the end of the line:
+      # the same lines match, and the reply is never empty unless the pattern
+      # matched only at the very end of a line.
+      #
+      # In extended mode a trailing +#+ comment runs to the end of the line, so
+      # the group is closed on a new line there.
+      #
+      # @param pattern [Regexp] a validated player pattern
+      # @return [Regexp] the extended pattern, or +pattern+ itself if it cannot
+      #   be extended
+      # @api private
+      def through_end_of_line(pattern)
+        close = (pattern.options & Regexp::EXTENDED).zero? ? ')' : "\n)"
+        Regexp.new("(?:#{pattern.source}#{close}.*", pattern.options, timeout: pattern.timeout)
+      rescue RegexpError
+        pattern
       end
 
       # {DRC.bput} for an item command, with the player's extra success
@@ -116,9 +141,11 @@ module Lich
       # so a non-empty reply that none of the caller's patterns matches came
       # from a player's pattern. That needs every built-in pattern to match its
       # own match text (bput returns only the matched part of the line): no
-      # positive lookahead or lookbehind and no +\B+, which
-      # common_items_item_bput_spec.rb checks for the routed pattern lists.
-      # Player patterns have no such limit; a lookaround in one works.
+      # positive lookahead or lookbehind, no +\B+ or +\G+, and no +\b+ next to
+      # a non-word character at either end, which common_items_item_bput_spec.rb
+      # checks for the routed pattern lists. Player patterns have no such
+      # limit: each runs on to the end of the line ({through_end_of_line}), so
+      # lookarounds work, including a pattern made only of lookaheads.
       #
       # A player's pattern that runs past its match timeout is reported, and
       # the command counts as unanswered: the empty String bput returns when

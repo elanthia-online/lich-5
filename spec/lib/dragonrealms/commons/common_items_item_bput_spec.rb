@@ -73,7 +73,7 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
       it 'marks the reply as a PlayerSuccess' do
         result = bounded { drci.item_bput('remove my quiver', drci::REMOVE_ITEM_SUCCESS_PATTERNS, drci::REMOVE_ITEM_FAILURE_PATTERNS) }
         expect(result).to be_a(player_success)
-        expect(result).to eq('You unhook')
+        expect(result).to eq(unknown_reply) # the match runs on to the end of the line
         expect(result).to be_frozen
       end
     end
@@ -123,7 +123,9 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
 
     # bput returns only the matched text, which a lookaround pattern need not
     # match a second time; item_bput must not match the player's patterns again.
-    ['^You unhook(?= your)', '(?<=^You )unhook'].each do |pattern|
+    # Each player pattern runs on to the end of the line, so even one that
+    # matches no characters (lookaheads only) gives a non-empty reply.
+    ['^You unhook(?= your)', '(?<=^You )unhook', '^(?=You unhook)', '^(?=.*unhook)(?=.*belt)'].each do |pattern|
       context "with a player pattern using a lookaround (#{pattern})" do
         before { player_patterns('remove' => [pattern]) }
 
@@ -132,6 +134,21 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
         it 'returns true' do
           expect(bounded { drci.remove_item?('quiver') }).to be(true)
         end
+      end
+    end
+
+    context 'with a player pattern compiled from YAML (a Regexp with its own flags)' do
+      let(:replies) { [unknown_reply] }
+
+      it 'keeps case-insensitivity' do
+        player_patterns('remove' => [/^you UNHOOK/i])
+        expect(bounded { drci.remove_item?('quiver') }).to be(true)
+      end
+
+      it 'keeps extended mode, even with a trailing comment' do
+        player_patterns('remove' => [/^(?= You \s unhook ) # the belt sling, lookahead only/x])
+        expect(bounded { drci.remove_item?('quiver') }).to be(true)
+        expect(warnings).to eq('')
       end
     end
 
@@ -163,9 +180,22 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
   # lookahead or lookbehind, or \B) would have its replies counted as player
   # successes.
   describe 'the built-in patterns item_bput classifies against' do
-    not_self_matching = /\(\?<?=|\\B/
+    # A positive lookaround, \B or \G anywhere, or a \b next to a non-word
+    # character at the start or end of the pattern.
+    not_self_matching = /\(\?<?=|\\[BG]|\A\^?\\b(?:(?!\#\{)[^\w\\(\[]|\\[sW])|(?:[^\w\\)\]}*+?]|\\[sW])\\b\$?\z/
+    # A /.../ regex literal on a source line (these files have no division).
+    regex_literal = %r{(?<![\w)\]])/((?:\\.|[^/\\\n])+)/[imxo]*}
 
-    it 'has no positive lookaround or \\B in any DRCI or EquipmentManager pattern constant' do
+    it 'recognises each form it rejects' do
+      ['^You (?=x)', '(?<=x)y', 'a\\B', '\\Gx', '^Dropping your shoulder \\b', '^\\b x', 'a\\s\\b', '\\b\\Wx'].each do |source|
+        expect(source).to match(not_self_matching), source
+      end
+      ['^You (?:\\w+ly )?tie\\b', '\\bsword', "\\b\#{noun}\\b", "you draw (?!\\w+'s wounds)", '^You .*\\bsling'].each do |source|
+        expect(source).not_to match(not_self_matching), source
+      end
+    end
+
+    it 'has none of them in any DRCI or EquipmentManager pattern constant' do
       [Lich::DragonRealms::DRCI, Lich::DragonRealms::EquipmentManager].each do |mod|
         mod.constants.each do |name|
           Array(mod.const_get(name)).grep(Regexp).each do |pattern|
@@ -175,12 +205,19 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
       end
     end
 
+    it 'finds the regex literals on a line' do
+      expect('x = [/^You (?=y)/, /b\\/c/i] if a'.scan(regex_literal).flatten).to eq(['^You (?=y)', 'b\\/c'])
+    end
+
     it 'has none in the inline patterns either, apart from one String#sub' do
       %w[common-items.rb equipmanager.rb].each do |file|
         lines = File.readlines(File.join(LIB_DIR, 'dragonrealms', 'commons', file))
-        offenders = lines.each_with_index.select { |line, _| line.match?(not_self_matching) }
-                         .reject { |line, _| line.include?('.sub(/ and (?=a|an|some)/') || line.lstrip.start_with?('#') }
-        expect(offenders.map { |line, index| "#{file}:#{index + 1}: #{line.strip}" }).to eq([])
+        offenders = lines.each_with_index.flat_map do |line, index|
+          next [] if line.lstrip.start_with?('#') || line.include?('.sub(/ and (?=a|an|some)/')
+
+          line.scan(regex_literal).flatten.select { |source| source.match?(not_self_matching) }.map { |source| "#{file}:#{index + 1}: /#{source}/" }
+        end
+        expect(offenders).to eq([])
       end
     end
   end
@@ -217,7 +254,7 @@ RSpec.describe 'DRCI.item_bput through the real DRC.bput' do
       expect(drc).to receive(:bput) do |command, *args|
         expect(command).to eq('give my sword to Ragge')
         expect(args.first).to eq('timeout' => 35)
-        expect(args.last.source).to eq('^You hand')
+        expect(args.last.source).to eq('(?:^You hand).*')
         ''
       end
       drci.give_item?('Ragge', 'sword')
