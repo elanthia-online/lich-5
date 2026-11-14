@@ -149,7 +149,10 @@ RSpec.describe Lich::ZipArchive do
       'iota subscript'         => [u('<1FB3><308>.gem'), u('<391><308><399>.gem')],
       # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
       # final NFD reorders it.
-      'Tibetan vowel sign'     => [u('<300><F73>.gem'), u('<F71><F72><300>.gem')]
+      'Tibetan vowel sign'     => [u('<300><F73>.gem'), u('<F71><F72><300>.gem')],
+      # The same misordering before U+0345, which folding turns into a
+      # starter; only a second NFD before folding matches them.
+      'iota before Tibetan'    => [u('x<345><F73>.gem'), u('x<345><F71><F72>.gem')]
     }.each do |label, (first, second)|
       it "refuses #{label} as a duplicate and writes nothing" do
         write_zip([{ name: first, data: 'first', flags: 0x0800 }, { name: second, data: 'second', flags: 0x0800 }])
@@ -314,8 +317,43 @@ RSpec.describe Lich::ZipArchive do
       outer = ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}x".b)
       File.binwrite(zip_path, outer)
 
-      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive/)
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive: its comment holds another archive/)
       expect(Dir.exist?(destination) && !Dir.empty?(destination)).to be(false)
+    end
+
+    # The embedded archive's offsets count from its own start, so its
+    # layout need not match the outer archive's.
+    {
+      'longer data'     => [{ name: 'a.gem', data: 'inner and longer' }],
+      'two entries'     => [{ name: 'a.gem', data: 'inner' }, { name: 'b.gem', data: 'second' }],
+      'a longer name'   => [{ name: 'a-longer-name.gem', data: 'inner' }],
+      'refused entries' => [{ name: 'a.gem', data: 'inner', method_id: 12 }]
+    }.each do |label, inner_entries|
+      it "refuses an archive whose comment holds an archive with #{label}" do
+        inner = ZipBuilder.build(inner_entries)
+        File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}x".b))
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive/)
+      end
+    end
+
+    # A record is only taken for an embedded archive when its headers fill
+    # exactly the directory size it declares.
+    it 'extracts an archive whose comment holds a record its headers do not fill' do
+      fake = [0x06054b50, 0, 0, 0, 0, 4, 0, 0].pack('VvvvvVVv')
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'gem' }], comment: "abcd#{fake}x".b))
+
+      described_class.extract(zip_path, destination)
+      expect(File.binread(File.join(destination, 'a.gem'))).to eq('gem')
+    end
+
+    # Other tools skip a signature without a whole record after it and read
+    # the archive before it.
+    it 'refuses an archive whose comment holds an archive and then a bare signature' do
+      inner = ZipBuilder.build([{ name: 'a.gem', data: 'inner and longer' }])
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}PK\x05\x06".b))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive/)
     end
 
     # As before, the last signature is the record when no candidate's
