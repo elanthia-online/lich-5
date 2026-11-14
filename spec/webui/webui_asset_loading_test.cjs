@@ -74,3 +74,12 @@ test('standalone menu fixture loads the same family sequence as the production e
   const scripts = [...html.matchAll(/<script src="\.\.\/\.\.\/lib\/webui\/assets\/([a-z_]+\.js)"><\/script>/g)];
   assert.deepEqual(scripts.map(match => match[1]), assets.map(asset => asset.name));
 });
+
+test('fixture element double runs every listener for an event in registration order', () => {
+  const element = fixture(null).document.createElement('button');
+  const calls = [];
+  element.addEventListener('click', () => calls.push('first'));
+  element.addEventListener('click', () => calls.push('second'));
+  for (let i = 0; i < 3; i += 1) element.listeners.click({});
+  assert.deepEqual(calls, ['first', 'second', 'first', 'second', 'first', 'second']);
+});
