@@ -100,6 +100,13 @@ const WINDOWS_STARTUP_FILES = [
   'lib/recovery_unit_policy.rb',
 ];
 
+// Default-startup acceptance helpers, which only the Windows job exercises.
+const WINDOWS_ACCEPTANCE_FILES = [
+  'spec/support/default_webui_acceptance_report.rb',
+  'spec/support/default_webui_acceptance_check.rb',
+  'spec/support/default_webui_acceptance_probe.rb',
+];
+
 // A change to how the suites are selected or run must run all of them.
 const ALL_SUITE_FILES = [
   '.github/workflows/ci.yml', '.github/workflows/webui_tests.yaml',
@@ -211,6 +218,28 @@ test('the Windows startup list names files that exist, and leaves the release ve
   for (const filename of WINDOWS_STARTUP_FILES) assert.ok(fs.existsSync(path.join(root, filename)), filename);
   // Every release rewrites lib/version.rb; it must not start a Windows run.
   assert.deepEqual(await decisionsFor('lib/version.rb'), NONE);
+});
+
+for (const filename of WINDOWS_ACCEPTANCE_FILES) {
+  test(`default-startup acceptance helper selects only Windows: ${filename}`, async () => {
+    const result = await classify({ files: [{ filename }] });
+    assert.deepEqual(result.decisions, WINDOWS_ONLY);
+    assert.ok(result.infos.some(message => message.startsWith('windows:') && message.includes(filename)), 'the matched path is explained');
+    assert.ok(result.infos.includes('macos: not needed'));
+  });
+}
+
+test('the acceptance helper list names files that exist, and near-miss paths select nothing', async () => {
+  const root = path.join(__dirname, '../..');
+  for (const filename of WINDOWS_ACCEPTANCE_FILES) assert.ok(fs.existsSync(path.join(root, filename)), filename);
+  for (const filename of ['spec/support/default_webui_acceptance.rb', 'spec/support/default_webui_report.rb']) {
+    assert.deepEqual(await decisionsFor(filename), NONE, filename);
+  }
+});
+
+test('a rename out of the acceptance helper prefix still selects Windows', async () => {
+  const result = await classify({ files: [{ filename: 'spec/support/retired_helper.rb', previous_filename: WINDOWS_ACCEPTANCE_FILES[0], status: 'renamed' }] });
+  assert.deepEqual(result.decisions, WINDOWS_ONLY);
 });
 
 for (const filename of ALL_SUITE_FILES) {

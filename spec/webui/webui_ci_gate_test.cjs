@@ -152,6 +152,11 @@ test('each suite runs only on its own decision, through its called workflow', ()
   assert.match(jobBlock(webui, 'browser').join('\n'), /^    if: inputs\.suite == 'browser'$/m);
 });
 
+test('pull request runs share a cancelling group; each push to main runs in its own', () => {
+  assert.match(ci, /^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}\n  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n/m);
+  assert.doesNotMatch(ci, /cancel-in-progress: true/);
+});
+
 test('only the caller sets concurrency, and it triggers on pull requests and pushes to main', () => {
   assert.match(ci, /^on:\n  push:\n    branches:\n      - main\n  pull_request:\n\npermissions:/m);
   assert.doesNotMatch(ci, /pull_request_review|pull_request_target|^\s+types:/m);
