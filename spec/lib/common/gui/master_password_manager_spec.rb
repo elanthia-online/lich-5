@@ -53,6 +53,61 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
         expect(refusal).not_to include(password.strip)
       end
     end
+
+    context 'when the password is longer than the macOS keychain can hold' do
+      let(:limit) { described_class::MACOS_KEYCHAIN_PASSWORD_BYTES }
+      let(:two_byte_character) { [0xE4].pack('U') }
+
+      before do
+        allow(OS).to receive(:mac?).and_return(true)
+      end
+
+      it 'accepts a password of exactly the limit' do
+        expect(described_class.new_password_refusal('x' * limit)).to be_nil
+      end
+
+      it 'refuses one byte more with a message that names the limit and not the password' do
+        refusal = described_class.new_password_refusal('x' * (limit + 1))
+
+        expect(refusal).to eq(described_class::NEW_PASSWORD_TOO_LONG_FOR_MACOS)
+        expect(refusal).to include('too long for the macOS keychain', limit.to_s)
+        expect(refusal).not_to include('xxxx')
+      end
+
+      it 'counts bytes, so fewer accented characters fit' do
+        characters = (limit / 2) + 1
+
+        expect(characters).to be < limit
+        expect(described_class.new_password_refusal(two_byte_character * characters))
+          .to eq(described_class::NEW_PASSWORD_TOO_LONG_FOR_MACOS)
+      end
+
+      it 'has nothing to refuse when no password is given' do
+        expect(described_class.keychain_length_refusal(nil)).to be_nil
+      end
+
+      it 'has no such limit on other platforms' do
+        allow(OS).to receive(:mac?).and_return(false)
+
+        expect(described_class.new_password_refusal('x' * (limit + 1))).to be_nil
+      end
+
+      # Drives the store itself, with the security tool stubbed below.
+      it 'agrees with the store: the longest accepted password is sent whole, and one byte more is not sent', :real_keychain do
+        allow(OS).to receive(:linux?).and_return(false)
+        allow(OS).to receive(:windows?).and_return(false)
+        allow(described_class).to receive(:keychain_available?).and_return(true)
+        allow(Lich).to receive(:log)
+        allow(Open3).to receive(:capture3)
+          .and_return(['', '', instance_double(Process::Status, success?: true, exitstatus: 0)])
+
+        expect(described_class.store_master_password('x' * limit)).to be(true)
+        expect(Open3).to have_received(:capture3).once
+
+        expect(described_class.store_master_password('x' * (limit + 1))).to be(false)
+        expect(Open3).to have_received(:capture3).once
+      end
+    end
   end
 
   describe '.keychain_available?' do

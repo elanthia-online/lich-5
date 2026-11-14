@@ -61,6 +61,33 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager, :real_keychain do
       expect(described_class.store_master_password('')).to be(false)
       expect(Open3).not_to have_received(:capture3)
     end
+
+    describe 'at the length one command can carry' do
+      let(:command_prefix) { "add-generic-password -U -s #{probe_service} -a lich5 -X " }
+      let(:longest) { (described_class::MACOS_SECURITY_COMMAND_LIMIT - command_prefix.bytesize) / 2 }
+
+      it 'stores the longest password that fits in one command' do
+        expect(described_class.store_master_password('a' * longest)).to be(true)
+
+        expect(Open3).to have_received(:capture3).once do |*_arguments, stdin_data:|
+          expect(stdin_data).to eq("#{command_prefix}#{'61' * longest}\n")
+        end
+      end
+
+      it 'refuses a password one byte too long without running the tool, and logs why' do
+        expect(described_class.store_master_password('a' * (longest + 1))).to be(false)
+        expect(Open3).not_to have_received(:capture3)
+        expect(Lich).to have_received(:log).with(/too long to store in the macOS keychain/)
+      end
+
+      it 'counts bytes, not characters, for a non-ASCII password' do
+        two_byte_character = [0xE4].pack('U')
+        characters = (longest / 2) + 1
+        expect(two_byte_character.bytesize).to eq(2)
+        expect(described_class.store_master_password(two_byte_character * characters)).to be(false)
+        expect(Open3).not_to have_received(:capture3)
+      end
+    end
   end
 
   describe 'reading, with the security tool stubbed' do

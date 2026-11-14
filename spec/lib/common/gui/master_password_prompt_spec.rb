@@ -66,6 +66,34 @@ RSpec.describe Lich::Common::GUI::MasterPasswordPrompt do
       end
     end
 
+    context 'when the password is too long for the keychain' do
+      let(:manager) { Lich::Common::GUI::MasterPasswordManager }
+      let(:refusal) { manager::NEW_PASSWORD_TOO_LONG_FOR_MACOS }
+
+      before do
+        allow(manager).to receive(:keychain_length_refusal).and_return(nil)
+        allow(manager).to receive(:keychain_length_refusal).with('far-too-long').and_return(refusal)
+        allow(Lich::Common::GUI::MasterPasswordPromptUI).to receive(:show_dialog)
+          .and_return('far-too-long', 'StrongPassword123!')
+      end
+
+      it 'says why and asks again when the user chooses to pick another' do
+        allow(described_class).to receive(:show_warning_dialog)
+          .with('Password Too Long', a_string_starting_with(refusal)).and_return(true)
+
+        expect(described_class.show_create_master_password_dialog).to eq('StrongPassword123!')
+        expect(described_class).to have_received(:show_warning_dialog).once
+      end
+
+      it 'returns nothing when the user declines to pick another' do
+        allow(described_class).to receive(:show_warning_dialog)
+          .with('Password Too Long', a_string_starting_with(refusal)).and_return(false)
+
+        expect(described_class.show_create_master_password_dialog).to be_nil
+        expect(Lich::Common::GUI::MasterPasswordPromptUI).to have_received(:show_dialog).once
+      end
+    end
+
     context 'when password is less than 8 characters' do
       it 'shows weak password warning' do
         allow(Lich::Common::GUI::MasterPasswordPromptUI).to receive(:show_dialog)

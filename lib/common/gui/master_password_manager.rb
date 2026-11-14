@@ -17,6 +17,15 @@ module Lich
       #           Runtime decryption uses 10k iterations (via PasswordCipher)
       module MasterPasswordManager
         KEYCHAIN_SERVICE = 'lich5.master_password'
+        # Longest command the macOS security tool runs whole when it reads
+        # commands from standard input. It cuts a longer line and runs the rest
+        # as a second command.
+        MACOS_SECURITY_COMMAND_LIMIT = 4094
+        # Largest master password, in bytes, that one such command can carry: the
+        # password travels as two hexadecimal digits per byte after the command
+        # words.
+        MACOS_KEYCHAIN_PASSWORD_BYTES =
+          (MACOS_SECURITY_COMMAND_LIMIT - "add-generic-password -U -s #{KEYCHAIN_SERVICE} -a lich5 -X ".bytesize) / 2
         VALIDATION_ITERATIONS = 100_000
         VALIDATION_KEY_LENGTH = 32
         VALIDATION_SALT_PREFIX = 'lich5-master-password-validation-v1'
@@ -29,6 +38,9 @@ module Lich
         NEW_PASSWORD_EMPTY = 'Master password cannot be empty.'
         NEW_PASSWORD_TOO_SHORT = "New master password must be at least #{MIN_PASSWORD_LENGTH} characters."
         NEW_PASSWORD_EDGE_WHITESPACE = 'New master password cannot begin or end with whitespace.'
+        NEW_PASSWORD_TOO_LONG_FOR_MACOS =
+          "New master password is too long for the macOS keychain. Use at most #{MACOS_KEYCHAIN_PASSWORD_BYTES} " \
+          'plain characters; accented and non-Latin characters each count as two or more.'
 
         # The one entry rule for every CLI master-password prompt: removes only the
         # line terminator, never surrounding whitespace, so an existing password is
@@ -40,7 +52,8 @@ module Lich
         end
 
         # The one acceptance rule for a new master password on every CLI create and
-        # change path. The GTK dialogs keep their own checks. Existing passwords
+        # change path. The GTK dialogs keep their own checks and share only the
+        # keychain length refusal below. Existing passwords
         # (unlock and recovery) are never checked here; the validation test
         # decides them.
         # @param password [String, nil] proposed new master password
@@ -50,7 +63,18 @@ module Lich
           return NEW_PASSWORD_TOO_SHORT if password.length < MIN_PASSWORD_LENGTH
           return NEW_PASSWORD_EDGE_WHITESPACE if password.match?(/\A[[:space:]]|[[:space:]]\z/)
 
-          nil
+          keychain_length_refusal(password)
+        end
+
+        # Refuses a new master password the platform's keychain cannot hold, so
+        # the person choosing it is told before anything is stored. Shared by the
+        # CLI rule and the GTK dialogs. Only macOS has such a limit here.
+        # @param password [String, nil] proposed new master password
+        # @return [String, nil] fixed refusal message, or nil when it fits
+        def self.keychain_length_refusal(password)
+          return nil unless OS.mac? && password
+
+          password.bytesize > MACOS_KEYCHAIN_PASSWORD_BYTES ? NEW_PASSWORD_TOO_LONG_FOR_MACOS : nil
         end
 
         def self.keychain_available?
@@ -216,6 +240,8 @@ module Lich
         # process list would show it. The security tool reads the command from
         # its standard input, and the password travels as hexadecimal so no
         # character in it needs quoting. -U replaces an existing item in place.
+        # A password too long for one command is refused rather than stored cut
+        # short.
         # @param password [String] master password to store
         # @return [Boolean] true when the tool reports the item stored
         private_class_method def self.store_macos_keychain(password)
@@ -223,6 +249,11 @@ module Lich
 
           command = ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', 'lich5',
                      '-X', password.unpack1('H*'), *macos_keychain_target].join(' ')
+          if command.bytesize > MACOS_SECURITY_COMMAND_LIMIT
+            Lich.log 'error: Master password is too long to store in the macOS keychain'
+            return false
+          end
+
           _output, _diagnostics, status = Open3.capture3('/usr/bin/security', '-i', stdin_data: "#{command}\n")
           status.success?
         end

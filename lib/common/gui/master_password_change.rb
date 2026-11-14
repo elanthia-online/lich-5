@@ -161,6 +161,12 @@ module Lich
                 next
               end
 
+              too_long = MasterPasswordManager.keychain_length_refusal(new_password)
+              if too_long
+                status_label.set_markup("<span foreground='red'>#{too_long}</span>")
+                next
+              end
+
               if new_password != confirm_password
                 status_label.set_markup("<span foreground='red'>New passwords do not match.</span>")
                 next
