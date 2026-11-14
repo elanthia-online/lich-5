@@ -225,7 +225,10 @@ self-built gtk3 4.4.0 without glib2 4.4.0, say), startup decides again as if
 only R4L5 builds counted: it uses them, or repairs to them. It also does so
 when a package `minimum` turns that failure into a repair: if the R4L5 builds
 alone need no repair, or repair different units, startup uses that decision,
-so it never repairs a unit the R4L5 builds did not need.
+so it never repairs a unit the R4L5 builds did not need. When the self-built
+gems do resolve together, a repair another unit needs (a same-version
+self-built ox, say) repairs only that unit, and a complete self-built GTK stack
+is neither listed as missing nor repaired.
 
 A self-built copy is only considered when every other package of its unit
 that depends on it pins it exactly (`= version`), judged from the installed

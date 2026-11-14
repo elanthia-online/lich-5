@@ -423,6 +423,44 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(check.plan.units.map { |item| item['id'] }).to eq(['ox'])
     end
 
+    # A complete self-built stack resolves on its own, so a repair of
+    # another unit leaves it alone: listing it as needed would only repair
+    # it down to the accepted builds' units for nothing, as main did.
+    it 'repairs only the other unit when a complete self-built stack is kept' do
+      ox_unit = { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+                  'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+      plan.units = [gtk_unit, ox_unit]
+      installed.merge!(stack('4.4.0', :self_built))
+      installed['ox'] = [self_built('ox', '2.14.29')]
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.needed).to eq(['ox'])
+      expect(check.plan.units.map { |item| item['id'] }).to eq(['ox'])
+      # After that repair the next start needs nothing, on the self-built stack.
+      installed['ox'] << accepted_build('ox', '2.14.29')
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.needed).to be_empty
+      policy.activate!(check)
+      expect(active.transform_values { |item| item.version.to_s }).to include('glib2' => '4.4.0', 'gtk3' => '4.4.0')
+    end
+
+    # The reverse of the case above: the accepted GTK stack is below its
+    # minimum, so both passes need a GTK repair, and the self-built gtk3
+    # has no glib2 of its own. The accepted-only repair covers both units
+    # at once; the self-built pass's GTK repair alone would leave ox for a
+    # second repair.
+    it 'repairs both units at once when the self-built stack is incomplete and the accepted stack is below its minimum' do
+      ox_unit = { 'id' => 'ox', 'members' => ['ox'], 'install_order' => ['ox'],
+                  'packages' => [{ 'name' => 'ox', 'version' => '2.14.29', 'filename' => "ox-2.14.29-#{local}.gem", 'sha256' => "sha256:#{'3' * 64}" }] }
+      plan.units = [gtk_unit, ox_unit]
+      glib_package['minimum'] = '4.3.0'
+      gtk_package['minimum'] = '4.3.0'
+      installed['glib2'] = [accepted_build('glib2', '4.2.0')]
+      installed['gtk3'] = [accepted_build('gtk3', '4.2.0', { 'glib2' => '= 4.2.0' }), self_built('gtk3', '4.4.0', { 'glib2' => '= 4.4.0' })]
+      installed['ox'] = [self_built('ox', '2.14.30')]
+      check = policy.check([Gem::Dependency.new('gtk3'), Gem::Dependency.new('ox')])
+      expect(check.plan.units.map { |item| item['id'] }).to contain_exactly('gtk3-runtime', 'ox')
+    end
+
     context 'with cairo, which cairo-gobject does not pin exactly' do
       let(:cairo_package) { { 'name' => 'cairo', 'version' => '1.18.5', 'filename' => "cairo-1.18.5-#{local}.gem", 'sha256' => "sha256:#{'1' * 64}" } }
       let(:cairo_gobject_package) { { 'name' => 'cairo-gobject', 'version' => '4.3.9', 'filename' => "cairo-gobject-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'2' * 64}" } }
