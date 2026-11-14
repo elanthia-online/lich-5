@@ -1,0 +1,118 @@
+# Native Windows WebUI coverage. ci.yml calls this workflow when a change
+# reaches the Windows job's code, and requires it to pass. It can also be
+# started by hand on any branch; a manual run does not report to ci-gate.
+name: Windows WebUI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows_webui:
+    name: Native Windows WebUI coverage
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: '4.0.9'
+          windows-toolchain: none
+          bundler: none
+          bundler-cache: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: spec/webui/package-lock.json
+      - run: npm ci --prefix spec/webui
+      - name: Install renderer engines
+        working-directory: spec/webui
+        shell: pwsh
+        run: |
+          npx --no-install playwright install webkit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe", "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe")
+          if (-not ($chrome | Where-Object { Test-Path $_ })) {
+            npx --no-install playwright install chrome
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Record runner and candidate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force tmp/windows-webui | Out-Null
+          [ordered]@{
+            sha = $env:GITHUB_SHA
+            run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            attempt = $env:GITHUB_RUN_ATTEMPT
+            os = $env:RUNNER_OS
+            image = $env:ImageVersion
+            ruby = (& ruby --version)
+            node = (& node --version)
+            devkit = $env:RI_DEVKIT
+            gem_home = (& ruby -e 'puts Gem.dir')
+          } | ConvertTo-Json | Set-Content tmp/windows-webui/runner.json
+      - name: Prepare the production Windows runtime
+        shell: pwsh
+        run: ./.github/scripts/windows_runtime_prepare.ps1
+      - name: Install RSpec separately from the runtime
+        shell: pwsh
+        run: |
+          # Test tooling must not select or replace production runtime gems.
+          $toolHome = Join-Path $env:RUNNER_TEMP 'lich-test-gems'
+          & gem install rspec --version 3.13.2 --no-document --install-dir $toolHome
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $runtimePaths = & ruby -e 'puts Gem.path.join(File::PATH_SEPARATOR)'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "GEM_PATH=$toolHome$([IO.Path]::PathSeparator)$runtimePaths" | Out-File $env:GITHUB_ENV -Append
+          (Join-Path $toolHome 'bin') | Out-File $env:GITHUB_PATH -Append
+      - name: Verify nested RSpec executable discovery
+        shell: pwsh
+        run: |
+          & ruby -S rspec --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run native Windows Ruby coverage
+        shell: pwsh
+        run: |
+          $groups = [ordered]@{
+            webui = @('spec/lib/webui')
+            authentication = @('spec/lib/real_keychain_fence_spec.rb', 'spec/lib/common/authentication/entry_store_spec.rb', 'spec/lib/common/authentication/cli_password_spec.rb', 'spec/lib/common/cli/cli_encryption_mode_change_spec.rb', 'spec/lib/common/gui/account_manager_spec.rb', 'spec/lib/common/gui/master_password_manager_spec.rb')
+            launcher = @('spec/lib/common/webui_launcher/controller_regressions_spec.rb', 'spec/lib/common/webui_launcher/catalog_browser_path_spec.rb', 'spec/lib/common/webui_launcher/catalog_password_changes_spec.rb', 'spec/lib/common/webui_launcher/window_geometry_store_spec.rb', 'spec/lib/common/webui_launcher_workflows_spec.rb', 'spec/lib/common/frontend_choices_spec.rb', 'spec/lib/util/memoryreleaser_spec.rb')
+            builder = @('spec/lib/common/script_scope_builder_spec.rb', 'spec/lib/common/script_scope_builder_remaining_spec.rb', 'spec/lib/common/script_scope_destroy_sibling_reads_spec.rb', 'spec/lib/common/script_scope_model_coalescing_spec.rb', 'spec/lib/common/script_scope_css_corpus_spec.rb')
+            reports = @('spec/lib/main/default_webui_acceptance_report_spec.rb')
+          }
+          # Every selected group is blocking; unrelated gem checks are omitted.
+          $failed = $false
+          foreach ($group in $groups.GetEnumerator()) {
+            $name = $group.Key
+            $specFiles = $group.Value
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            & ruby -S rspec @specFiles --format progress --format json --out "tmp/windows-webui/$name.json" 2>&1 | Tee-Object "tmp/windows-webui/$name.log"
+            $code = $LASTEXITCODE
+            $clock.Stop()
+            if ($code -ne 0) { $failed = $true }
+            [ordered]@{ group = $name; exit = $code; seconds = $clock.Elapsed.TotalSeconds } | ConvertTo-Json | Set-Content "tmp/windows-webui/$name-runtime.json"
+            if (Test-Path "tmp/windows-webui/$name.json") {
+              $result = Get-Content "tmp/windows-webui/$name.json" -Raw | ConvertFrom-Json
+              "${name}: $($result.summary.example_count) examples, $($result.summary.failure_count) failures, $($result.summary.pending_count) pending; $($clock.Elapsed.TotalSeconds)s" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Run logic and native renderer engines
+        if: ${{ !cancelled() }}
+        run: npm test --prefix spec/webui
+      - name: Upload Windows coverage and diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-webui-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            tmp/windows-webui/
+            spec/webui/test-results/
+          if-no-files-found: warn
+          retention-days: 14

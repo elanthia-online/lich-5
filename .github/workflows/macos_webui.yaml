@@ -1,0 +1,65 @@
+# Native macOS WebUI coverage. ci.yml calls this workflow when a change
+# reaches the native host, and requires it to pass. It can also be started by
+# hand on any branch; a manual run does not report to ci-gate.
+name: macOS Native WebUI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos_native:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199
+        with:
+          ruby-version: '4.0.9'
+          bundler: none
+          bundler-cache: false
+      - name: Install test tooling
+        # This focused Mac runner starts with Ruby and installs only the tooling
+        # needed by the selected native presentation specs, not the full gem set.
+        # Their shared spec_helper unconditionally requires both os and ffi:
+        # os supplies real platform detection; ffi satisfies that helper's load
+        # contract even though these examples exercise AppKit through Swift.
+        # RSpec alone therefore fails before any native example can execute.
+        # Install the real gems here rather than stub OS or alter shared tests.
+        # These are runner-local test prerequisites, not new helper runtime
+        # dependencies; other runners retain their own dependency provisioning.
+        run: |
+          gem install rspec --version 3.13.2 --no-document
+          gem install os ffi --no-document
+      - name: Execute native window scenarios
+        env:
+          NATIVE_HOST: '1'
+        run: |
+          mkdir -p tmp/macos-native
+          ruby -v
+          sw_vers
+          xcrun swiftc --version
+          rspec spec/lib/webui/native_host_presentation_spec.rb --tag native_host --format documentation --format json --out tmp/macos-native/presentation.json
+          python3 - <<'PYCODE'
+          import json
+          data = json.load(open('tmp/macos-native/presentation.json'))
+          assert data['summary']['example_count'] == 2, data['summary']
+          assert data['summary']['pending_count'] == 0, data['summary']
+          assert all(e['status'] == 'passed' for e in data['examples']), data['summary']
+          PYCODE
+      - name: Build and exercise production helper
+        run: |
+          zsh lib/webui/native/macos/build.sh
+          python3 .github/scripts/macos_webui_smoke.py
+      - name: Preserve native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: macos-native-${{ github.sha }}-${{ github.run_attempt }}
+          path: tmp/macos-native/
+          retention-days: 7

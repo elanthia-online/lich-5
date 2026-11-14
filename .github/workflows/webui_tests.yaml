@@ -1,0 +1,142 @@
+# ------------------------------------------------------------------------------
+# WebUI Tests
+#
+# Called by ci.yml, which decides from the changed files whether the renderer
+# suite, the browser suite, both or neither is needed, and calls this workflow
+# once per needed suite. This workflow has no triggers of its own.
+#
+# The browser job is split into two shards (matrix), each running its spec
+# files with two parallel workers. A new browser spec file must be added to
+# one shard's file list (shard 1 fails if one is missing); keep the shards'
+# total browser time roughly equal.
+# ------------------------------------------------------------------------------
+name: WebUI Tests
+
+on:
+  workflow_call:
+    inputs:
+      suite:
+        description: "Which suite to run: renderer or browser"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  renderer:
+    name: JavaScript renderer
+    if: inputs.suite == 'renderer'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: spec/webui/package-lock.json
+      - run: npm ci --prefix spec/webui
+      - name: Install renderer engines and headed display dependencies
+        working-directory: spec/webui
+        run: |
+          npx --no-install playwright install --with-deps webkit
+          npx --no-install playwright install-deps chrome
+          google-chrome --version || npx --no-install playwright install chrome
+      - run: xvfb-run --auto-servernum npm test --prefix spec/webui
+      - name: Upload renderer engine diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webui-renderer-failures
+          path: spec/webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser:
+    name: Chrome browser integration (${{ matrix.shard }}/2)
+    if: inputs.suite == 'browser'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Split by measured browser time, not file count.
+          - shard: 1
+            files: >-
+              spec/lib/common/script_scope_scheduling_acceptance_spec.rb
+              spec/lib/common/script_scope_builder_remaining_spec.rb
+              spec/lib/common/script_scope_header_bar_spec.rb
+              spec/lib/common/script_scope_tpick_setup_spec.rb
+              spec/lib/common/script_scope_content_spec.rb
+              spec/lib/common/script_scope_canvas_spec.rb
+              spec/lib/common/webui_launcher_presentation_browser_spec.rb
+          - shard: 2
+            files: >-
+              spec/lib/common/script_scope_builder_spec.rb
+              spec/lib/common/script_scope_widgets_spec.rb
+              spec/lib/webui/browser_integration_spec.rb
+              spec/lib/common/script_scope_source_refresh_spec.rb
+              spec/lib/common/script_scope_manatimer_spec.rb
+              spec/lib/common/script_scope_geometry_cursor_spec.rb
+              spec/lib/common/script_scope_drawing_spec.rb
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+      NATIVE_BROWSER: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler-cache: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: spec/webui/package-lock.json
+      - run: npm ci --prefix spec/webui
+      - name: Install browser system dependencies (reuse the image's Chrome)
+        working-directory: spec/webui
+        run: |
+          npx --no-install playwright install-deps chrome
+          # The runner image ships Google Chrome; install it only if missing.
+          google-chrome --version || npx --no-install playwright install chrome
+      - name: Check every browser spec file is in a shard
+        if: matrix.shard == 1
+        run: |
+          ruby -ryaml -e '
+            jobs = YAML.load_file(".github/workflows/webui_tests.yaml", aliases: true)["jobs"]
+            listed = jobs["browser"]["strategy"]["matrix"]["include"].flat_map { |s| s["files"].split }
+            specs = Dir["spec/**/*_spec.rb"]
+            browser = specs.select { |f| File.read(f).match?(/ENV\[.NATIVE_BROWSER.\]/) }
+            missing = (browser - listed).sort
+            stale = (listed - specs).sort
+            missing.each { |f| puts "::error file=#{f}::Has NATIVE_BROWSER examples but is in no browser shard; add it to one shard in webui_tests.yaml." }
+            stale.each { |f| puts "::error::#{f} is listed in a browser shard but does not exist." }
+            exit 1 unless missing.empty? && stale.empty?
+            puts "All #{browser.size} browser spec files are in a shard."'
+      - name: Restore shard runtime log
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmp/parallel_runtime_rspec.log
+          key: webui-runtime-${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: webui-runtime-${{ matrix.shard }}-
+      - name: Exercise shim controls and file bootstrap
+        env:
+          # End-to-end Chrome scenarios take seconds by design; 60s here only
+          # flags pathological examples (the 2s default is for unit examples).
+          RSPEC_SLOW_EXAMPLE_SECONDS: '60'
+          SHARD_FILES: ${{ matrix.files }}
+        run: bundle exec parallel_rspec -n 2 --serialize-stdout --verbose-rerun-command -o '--tag browser' $SHARD_FILES
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webui-browser-failures-${{ matrix.shard }}
+          path: spec/webui/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
