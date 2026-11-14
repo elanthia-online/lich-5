@@ -78,16 +78,20 @@ module Lich
         tail_size = [file_size, END_RECORD_SIZE + MAX_COMMENT_SIZE].min
         file.seek(file_size - tail_size)
         tail = file.read(tail_size)
-        exact, last = end_record_candidates(tail)
+        exact, last, probe = end_record_candidates(tail)
         raise Error, 'not a ZIP archive (no end of central directory record)' unless exact || last
 
         entries = central_directory_at(file, tail, exact || last, file_size - tail_size)
-        # A record inside the comment that also leads to a valid central
-        # directory is what unzip, bsdtar and Python's zipfile would read,
-        # since they take the last signature. Rather than extract something
-        # other than what those tools show, refuse the archive.
-        if exact && last && last > exact && valid_central_directory?(file, tail, last, file_size - tail_size)
-          raise Error, 'ambiguous ZIP archive: its comment holds another end of central directory record'
+        # unzip, bsdtar and Python's zipfile take the last signature with a
+        # whole record after it (+probe+), and find that record's central
+        # directory just in front of it, so an archive embedded in the comment
+        # is what they show. Rather than extract something other than what
+        # those tools show, an archive whose comment holds one is refused.
+        # Only the record and directory structure is checked, not Lich's
+        # entry rules: those tools list an embedded archive whose entries
+        # Lich itself would refuse, too.
+        if exact && probe && probe > exact && embedded_archive?(file, tail, probe, file_size - tail_size)
+          raise Error, 'ambiguous ZIP archive: its comment holds another archive'
         end
 
         entries
@@ -117,13 +121,31 @@ module Lich
         parse_central_directory(directory, total_count, record_offset)
       end
 
-      # @return [Boolean] whether the end record at +record_at+ leads to a
-      #   central directory that parses
-      def valid_central_directory?(file, tail, record_at, tail_offset)
-        central_directory_at(file, tail, record_at, tail_offset)
-        true
-      rescue Error
-        false
+      # @param file [File]
+      # @param tail [String] the last bytes of the archive
+      # @param record_at [Integer] offset of an end record in +tail+
+      # @param tail_offset [Integer] offset of +tail+ in the file
+      # @return [Boolean] whether a central directory of the declared size,
+      #   ending where the record starts, holds the declared number of
+      #   well-formed headers
+      def embedded_archive?(file, tail, record_at, tail_offset)
+        _signature, _disk, _directory_disk, _disk_count, total_count, directory_size, = tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
+        directory_start = tail_offset + record_at - directory_size
+        return false if directory_start.negative?
+
+        file.seek(directory_start)
+        directory = file.read(directory_size).to_s
+        position = 0
+        total_count.times do
+          return false if position + CENTRAL_HEADER_SIZE > directory.bytesize
+
+          signature, = directory.byteslice(position, 4).unpack('V')
+          name_length, extra_length, comment_length = directory.byteslice(position + 28, 6).unpack('vvv')
+          return false unless signature == CENTRAL_DIRECTORY_HEADER
+
+          position += CENTRAL_HEADER_SIZE + name_length + extra_length + comment_length
+        end
+        position == directory_size
       end
 
       # Finds the end of central directory record in the last bytes of the
@@ -133,21 +155,23 @@ module Lich
       # the end of the file (+exact+). An archive with bytes after its
       # comment, which unzip accepts with a warning, has no such candidate;
       # there the last signature is used as before, and refused as before if
-      # it has no whole record after it (+last+).
+      # it has no whole record after it (+last+). +probe+ is the last
+      # signature with a whole record after it, which other tools read.
       # @param tail [String] the last bytes of the archive
-      # @return [Array(Integer, Integer)] +exact+ and +last+, offsets in
-      #   +tail+, each nil when there is none
+      # @return [Array(Integer, Integer, Integer)] +exact+, +last+ and
+      #   +probe+, offsets in +tail+, each nil when there is none
       def end_record_candidates(tail)
+        probe = tail.rindex(END_OF_CENTRAL_DIRECTORY, tail.bytesize - END_RECORD_SIZE)
         last = tail.rindex(END_OF_CENTRAL_DIRECTORY)
         last = nil unless last && tail.bytesize - last >= END_RECORD_SIZE
         search_at = tail.bytesize - END_RECORD_SIZE
         while search_at >= 0 && (candidate = tail.rindex(END_OF_CENTRAL_DIRECTORY, search_at))
           comment_size = tail.byteslice(candidate + END_RECORD_SIZE - 2, 2).unpack1('v')
-          return [candidate, last] if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
+          return [candidate, last, probe] if candidate + END_RECORD_SIZE + comment_size == tail.bytesize
 
           search_at = candidate - 1
         end
-        [nil, last]
+        [nil, last, probe]
       end
 
       # @param directory [String] binary central directory

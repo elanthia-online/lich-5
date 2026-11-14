@@ -189,11 +189,16 @@ module Lich
     #   keys although APFS stores them as one file. In NFD the marks are
     #   already in canonical order, which also covers j with caron (U+01F0)
     #   followed by a dot below.
-    # - The final NFD is needed too. Ruby's NFD does not put a mark in
-    #   canonical order before U+0F73, U+0F75 or U+0F81: U+0300 U+0F73
-    #   becomes U+0300 U+0F71 U+0F72, while U+0F71 U+0F72 U+0300 stays as
-    #   it is, and APFS stores the two as one file. Normalising again
-    #   reorders the marks.
+    # - Ruby's NFD does not put a mark in canonical order before U+0F73,
+    #   U+0F75 or U+0F81: U+0300 U+0F73 becomes U+0300 U+0F71 U+0F72, while
+    #   U+0F71 U+0F72 U+0300 stays as it is, and APFS stores the two as one
+    #   file. A second NFD reorders the marks, so each NFD step here is
+    #   applied twice where it matters:
+    #   - before folding, because folding turns U+0345 into iota, a starter
+    #     that no later NFD can move past, so x U+0345 U+0F73 and
+    #     x U+0345 U+0F71 U+0F72 must be ordered before it;
+    #   - after folding, which reorders the U+0300 U+0F73 case and any
+    #     marks folding itself produces.
     #
     # This is deliberately stricter than any one file system: full folding
     # also joins sharp s and "ss", which NTFS keeps apart. Refusing such a
@@ -210,7 +215,7 @@ module Lich
     # @return [String]
     def layout_key(path, root)
       below = path.byteslice(root.bytesize..).force_encoding(Encoding::UTF_8)
-      below.unicode_normalize(:nfd).downcase(:fold).unicode_normalize(:nfd)
+      below.unicode_normalize(:nfd).unicode_normalize(:nfd).downcase(:fold).unicode_normalize(:nfd)
     end
   end
 end

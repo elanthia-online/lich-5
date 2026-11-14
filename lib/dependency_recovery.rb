@@ -1071,10 +1071,17 @@ module Lich
     #   directory above lib/ when it lies inside it (lib/archive.rb)
     def library_path(error, default = 'a recovery library')
       path = error.path if error.respond_to?(:path)
-      # A NameError raised while a file loads carries no path; the first
-      # backtrace frame in this lib/ directory is the file that raised it.
-      # (The very first frame can be inside a gem such as fileutils.)
-      path ||= error.backtrace_locations&.map(&:path)&.find { |frame| frame.start_with?("#{__dir__}/") }
+      # An error raised while a reader file loads may carry no path. An
+      # error from the loader itself, such as an unknown encoding comment,
+      # starts its message with the file's path; its backtrace only shows
+      # the file that required it. A NameError, or an error from a gem the
+      # file calls (fileutils, say), names the file in its backtrace, and
+      # the reader frame closest to the error is the one wanted. Only reader
+      # files count: otherwise this file's own require_relative would be
+      # named.
+      reader = %r{\A#{Regexp.escape(__dir__)}/(archive\.rb|archive/[^/]+\.rb)\z}
+      candidates = [error.message[/\A(.+?\.rb):\d+:/, 1].to_s, *(error.backtrace_locations || []).map(&:path)]
+      path ||= candidates.find { |candidate| candidate.match?(reader) }
       return default unless path
 
       path = "#{path}.rb" unless path.end_with?('.rb')

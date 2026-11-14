@@ -166,4 +166,32 @@ RSpec.describe 'reviewed startup policy files' do
     expect(status).to be_success, error
     expect(output.lines(chomp: true).last).to eq('Recovery cannot extract archives: lib/archive.rb loaded but does not define the archive reader')
   end
+
+  # An error from a gem the reader calls as it loads has the gem's file as
+  # its first frame; the reader file is the one named.
+  it 'names the reader file when it raises inside a gem as it loads' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+      path = File.join(dir, 'lib/archive/zip.rb')
+      File.binwrite(path, File.binread(path).sub("require 'zlib'\n", "require 'zlib'\nFileUtils.mkdir_p(nil)\n"))
+    end
+    expect(status).to be_success, error
+    raised, message = output.lines(chomp: true)
+    expect(raised).to eq('Lich::DependencyRecovery::Error')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive/zip.rb cannot be loaded (TypeError: ')
+  end
+
+  # The loader itself raises for an unknown encoding comment, so no frame is
+  # in a reader file; the message carries its path.
+  it 'names the reader file when the loader refuses it' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+      path = File.join(dir, 'lib/archive/zip.rb')
+      File.binwrite(path, File.binread(path).sub('# frozen_string_literal: true', '# encoding: bogus'))
+    end
+    expect(status).to be_success, error
+    raised, message = output.lines(chomp: true)
+    expect(raised).to eq('Lich::DependencyRecovery::Error')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive/zip.rb cannot be loaded (ArgumentError: ')
+  end
 end

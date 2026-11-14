@@ -137,7 +137,10 @@ RSpec.describe Lich::Archive::TarGz do
     'iota subscript'         => [u('r/<1FB3><308>.rb'), u('r/<391><308><399>.rb')],
     # Ruby's NFD leaves the grave ahead of the decomposed U+0F73; only the
     # final NFD reorders it.
-    'Tibetan vowel sign'     => [u('r/<300><F73>.rb'), u('r/<F71><F72><300>.rb')]
+    'Tibetan vowel sign'     => [u('r/<300><F73>.rb'), u('r/<F71><F72><300>.rb')],
+    # The same misordering before U+0345, which folding turns into a
+    # starter; only a second NFD before folding matches them.
+    'iota before Tibetan'    => [u('r/x<345><F73>.rb'), u('r/x<345><F71><F72>.rb')]
   }.each do |label, (first, second)|
     it "refuses #{label} as a duplicate and writes nothing" do
       write_tarball([{ name: first, data: 'first' }, { name: second, data: 'second' }])
@@ -317,7 +320,8 @@ RSpec.describe Lich::Archive::TarGz do
     end
 
     it 'refuses junk after zero padding after the gzip member' do
-      refuses(TarGzBuilder.gzip(tar) + ("\0" * 20_000) + 'junk', /gzip archive has data after its first member/)
+      # Far enough out that the junk is not in the first chunk read.
+      refuses(TarGzBuilder.gzip(tar) + ("\0" * 200_000) + 'junk', /gzip archive has data after its first member/)
     end
 
     # bsdtar (macOS's /usr/bin/tar) pads to its block size when it writes
@@ -367,6 +371,14 @@ RSpec.describe Lich::Archive::TarGz do
       expect { described_class.extract(tarball, destination) }.to raise_error(Lich::Archive::Error, /not a valid tar archive/)
       expect(Dir.exist?(destination)).to be(false)
     end
+  end
+
+  # Only an ArgumentError from RubyGems is the archive's fault.
+  it "re-raises an ArgumentError from Lich's own checks" do
+    File.binwrite(tarball, TarGzBuilder.build([{ name: 'r/a.rb', data: 'a' }]))
+    allow(described_class).to receive(:validate!).and_raise(ArgumentError, 'a bug in Lich')
+
+    expect { described_class.extract(tarball, destination) }.to raise_error(ArgumentError, 'a bug in Lich')
   end
 
   describe 'gzip integrity' do

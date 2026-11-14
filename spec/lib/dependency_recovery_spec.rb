@@ -1037,6 +1037,29 @@ RSpec.describe Lich::DependencyRecovery do
     end
   end
 
+  describe '#library_path' do
+    let(:lib) { File.expand_path('../../lib', __dir__) }
+
+    def error_raised_in(file)
+      locations = eval('caller_locations(0)', binding, file, 1)
+      StandardError.new('boom').tap { |error| error.set_backtrace(locations) }
+    end
+
+    # Only reader files are named: the first frame in lib/ can be the
+    # require_relative in dependency_recovery.rb itself.
+    it 'does not name dependency_recovery.rb for an error with no reader frame' do
+      error = error_raised_in(File.join(lib, 'dependency_recovery.rb'))
+
+      expect(described_class.allocate.send(:library_path, error, 'lib/archive.rb')).to eq('lib/archive.rb')
+    end
+
+    it 'names the reader file in the first reader frame' do
+      error = error_raised_in(File.join(lib, 'archive/tar_gz.rb'))
+
+      expect(described_class.allocate.send(:library_path, error, 'lib/archive.rb')).to eq('lib/archive/tar_gz.rb')
+    end
+  end
+
   describe '#parse_https_uri!' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 
