@@ -78,6 +78,8 @@ RSpec.describe Lich::GemCheck do
 
     it 'tells the user to rerun a one-shot command after macOS recovery, and exits 1 because it did not run' do
       stub_const('ARGV', ['--add-account', 'DOUG', 'secret'])
+      # A macOS host: the rerun message names the Bundler log there.
+      allow(Lich::BundlerRecovery).to receive(:supported?).and_return(true)
       allow(described_class).to receive(:missing_gems).and_return(['ox'])
       allow(described_class).to receive(:bundler_recovery_supported?).and_return(true)
       result = Lich::BundlerRecovery::Result.new(log_path: '/tmp/fixture', restart_required: true)
