@@ -26,8 +26,11 @@ RSpec.describe 'reviewed startup policy files' do
   # reviewed files.
   # @return [Array(String, String, Process::Status)]
   # @yieldparam dir [String] the copy, to change before the program runs
-  def run_reviewed(reviewed, root, program)
-    Dir.mktmpdir do |dir|
+  # @param parent [String, nil] a directory name to run the copy under, for
+  #   paths with characters a pattern would have to escape
+  def run_reviewed(reviewed, root, program, parent: nil)
+    Dir.mktmpdir do |tmp|
+      dir = parent ? File.join(tmp, parent) : tmp
       reviewed.each do |path|
         FileUtils.mkdir_p(File.join(dir, File.dirname(path)))
         FileUtils.cp(File.join(root, path), File.join(dir, path))
@@ -48,11 +51,11 @@ RSpec.describe 'reviewed startup policy files' do
     expect(output.strip).to eq('["constant", "constant", "constant"]')
   end
 
-  # The ZIP reader is loaded only when recovery extracts a bundle. Should it
+  # Lich::Archive is loaded only when recovery extracts a bundle. Should it
   # ever be missing, the failure must name the missing file and stay a
   # recovery Error: a LoadError is not a StandardError, so it would escape
   # #recover's boot guard and GemCheck, and crash a windowless rubyw Lich.
-  it 'reports a missing ZIP reader as a recovery Error naming the file' do
+  it 'reports a missing Lich::Archive as a recovery Error naming the file' do
     program = <<~'RUBY'
       require ARGV.fetch(0)
       begin
@@ -66,7 +69,7 @@ RSpec.describe 'reviewed startup policy files' do
     expect(status).to be_success, error
     raised, message = output.lines(chomp: true)
     expect(raised).to eq('Lich::DependencyRecovery::Error')
-    expect(message).to start_with('Recovery cannot extract archives: lib/zip_archive.rb is missing')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb is missing')
   end
 
   extract_program = <<~'RUBY'
@@ -111,39 +114,91 @@ RSpec.describe 'reviewed startup policy files' do
   it 'reports a truncated archive reader as a recovery Error naming the file' do
     reader = tracked_reader.call.grep(reader_pattern)
     output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
-      path = File.join(dir, 'lib/zip_archive.rb')
+      path = File.join(dir, 'lib/archive.rb')
       File.binwrite(path, File.binread(path, 3000))
     end
     expect(status).to be_success, error
     raised, message = output.lines(chomp: true)
     expect(raised).to eq('Lich::DependencyRecovery::Error')
-    expect(message).to start_with('Recovery cannot extract archives: lib/zip_archive.rb cannot be loaded (SyntaxError: ')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive.rb cannot be loaded (SyntaxError: ')
   end
+
+  # Lich is often installed under a directory such as "Program Files (x86)",
+  # whose characters a path pattern must escape.
+  windows_parent = 'Lich (x86)+ [1]'
 
   # Cut mid-word, the reader raises NameError as it loads instead.
-  it 'reports an archive reader cut mid-word as a recovery Error naming the file' do
-    reader = tracked_reader.call.grep(reader_pattern)
-    output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
-      path = File.join(dir, 'lib/zip_archive.rb')
-      source = File.binread(path)
-      File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
+  %w[lib/archive.rb lib/archive/zip.rb lib/archive/tar_gz.rb].each do |cut|
+    it "reports #{cut} cut mid-word as a recovery Error naming that file" do
+      reader = tracked_reader.call.grep(reader_pattern)
+      output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
+        path = File.join(dir, cut)
+        source = File.binread(path)
+        File.binwrite(path, source.byteslice(0, source.index("\nmodule ") + 6))
+      end
+      expect(status).to be_success, error
+      raised, message = output.lines(chomp: true)
+      expect(raised).to eq('Lich::DependencyRecovery::Error')
+      expect(message).to start_with("Recovery cannot extract archives: #{cut} cannot be loaded (NameError: ")
     end
-    expect(status).to be_success, error
-    raised, message = output.lines(chomp: true)
-    expect(raised).to eq('Lich::DependencyRecovery::Error')
-    expect(message).to start_with('Recovery cannot extract archives: lib/zip_archive.rb cannot be loaded (NameError: ')
   end
 
-  # An interrupted copy can also leave the reader empty, or cut at a line
-  # boundary before the module is defined; that loads without error.
-  it 'reports an empty archive reader as a recovery Error naming the file' do
+  # An interrupted copy can also leave a reader file empty, or cut at a line
+  # boundary before its module is defined; that loads without error.
+  {
+    'lib/archive.rb'     => 'an empty archive facade',
+    'lib/archive/zip.rb' => 'an empty ZIP reader'
+  }.each do |emptied, label|
+    it "reports #{label} as a recovery Error naming #{emptied}" do
+      reader = tracked_reader.call.grep(reader_pattern)
+      output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
+        File.binwrite(File.join(dir, emptied), '')
+      end
+      expect(status).to be_success, error
+      raised, message = output.lines(chomp: true)
+      expect(raised).to eq('Lich::DependencyRecovery::Error')
+      expect(message).to eq("Recovery cannot extract archives: #{emptied} loaded but does not define the archive reader")
+    end
+  end
+
+  # Cut just before it loads the formats, the facade defines Archive but
+  # not Archive::Zip.
+  it 'names the archive facade when it stops before loading the ZIP reader' do
     reader = tracked_reader.call.grep(reader_pattern)
     output, error, status = run_reviewed(reviewed + reader, root, extract_program) do |dir|
-      File.binwrite(File.join(dir, 'lib/zip_archive.rb'), '')
+      path = File.join(dir, 'lib/archive.rb')
+      source = File.binread(path)
+      File.binwrite(path, source.byteslice(0, source.index("require_relative 'archive/zip'")))
+    end
+    expect(status).to be_success, error
+    expect(output.lines(chomp: true).last).to eq('Recovery cannot extract archives: lib/archive.rb loaded but does not define the archive reader')
+  end
+
+  # An error from a gem the reader calls as it loads has the gem's file as
+  # its first frame; the reader file is the one named.
+  it 'names the reader file when it raises inside a gem as it loads' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
+      path = File.join(dir, 'lib/archive/zip.rb')
+      File.binwrite(path, File.binread(path).sub("require 'zlib'\n", "require 'zlib'\nFileUtils.mkdir_p(nil)\n"))
     end
     expect(status).to be_success, error
     raised, message = output.lines(chomp: true)
     expect(raised).to eq('Lich::DependencyRecovery::Error')
-    expect(message).to eq('Recovery cannot extract archives: lib/zip_archive.rb loaded but does not define Lich::ZipArchive')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive/zip.rb cannot be loaded (TypeError: ')
+  end
+
+  # The loader itself raises for an unknown encoding comment, so no frame is
+  # in a reader file; the message carries its path.
+  it 'names the reader file when the loader refuses it' do
+    reader = tracked_reader.call.grep(reader_pattern)
+    output, error, status = run_reviewed(reviewed + reader, root, extract_program, parent: windows_parent) do |dir|
+      path = File.join(dir, 'lib/archive/zip.rb')
+      File.binwrite(path, File.binread(path).sub('# frozen_string_literal: true', '# encoding: bogus'))
+    end
+    expect(status).to be_success, error
+    raised, message = output.lines(chomp: true)
+    expect(raised).to eq('Lich::DependencyRecovery::Error')
+    expect(message).to start_with('Recovery cannot extract archives: lib/archive/zip.rb cannot be loaded (ArgumentError: ')
   end
 end

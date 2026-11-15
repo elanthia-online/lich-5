@@ -17,14 +17,16 @@ on:
     paths:
       - "lib/dependency_recovery.rb"
       - "lib/recovery_unit_policy.rb"
-      - "lib/zip_archive.rb"
+      - "lib/archive.rb"
+      - "lib/archive/**"
       - ".github/scripts/windows_restricted_recovery.rb"
       - ".github/workflows/windows_restricted_recovery.yaml"
   pull_request:
     paths:
       - "lib/dependency_recovery.rb"
       - "lib/recovery_unit_policy.rb"
-      - "lib/zip_archive.rb"
+      - "lib/archive.rb"
+      - "lib/archive/**"
       - ".github/scripts/windows_restricted_recovery.rb"
       - ".github/workflows/windows_restricted_recovery.yaml"
   workflow_dispatch:

@@ -9,7 +9,7 @@ require 'stringio'
 require 'tmpdir'
 
 require_relative '../../lib/dependency_recovery'
-require_relative '../../lib/zip_archive'
+require_relative '../../lib/archive'
 require_relative '../support/no_process_expectations'
 require_relative '../support/zip_builder'
 
@@ -1037,6 +1037,29 @@ RSpec.describe Lich::DependencyRecovery do
     end
   end
 
+  describe '#library_path' do
+    let(:lib) { File.expand_path('../../lib', __dir__) }
+
+    def error_raised_in(file)
+      locations = eval('caller_locations(0)', binding, file, 1)
+      StandardError.new('boom').tap { |error| error.set_backtrace(locations) }
+    end
+
+    # Only reader files are named: the first frame in lib/ can be the
+    # require_relative in dependency_recovery.rb itself.
+    it 'does not name dependency_recovery.rb for an error with no reader frame' do
+      error = error_raised_in(File.join(lib, 'dependency_recovery.rb'))
+
+      expect(described_class.allocate.send(:library_path, error, 'lib/archive.rb')).to eq('lib/archive.rb')
+    end
+
+    it 'names the reader file in the first reader frame' do
+      error = error_raised_in(File.join(lib, 'archive/tar_gz.rb'))
+
+      expect(described_class.allocate.send(:library_path, error, 'lib/archive.rb')).to eq('lib/archive/tar_gz.rb')
+    end
+  end
+
   describe '#parse_https_uri!' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 
@@ -1096,7 +1119,7 @@ RSpec.describe Lich::DependencyRecovery do
     it 'extracts in-process on Windows, without PowerShell, WScript, or any other program' do
       allow(Gem).to receive(:win_platform?).and_return(true)
       File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk', descriptor: true }]))
-      expect_no_process(subject, Lich::ZipArchive)
+      expect_no_process(subject, Lich::Archive, Lich::Archive::Zip)
 
       subject.send(:extract_zip_file, zip_path, destination)
 
@@ -1181,14 +1204,14 @@ RSpec.describe Lich::DependencyRecovery do
         http_get: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), bundle_url => bundle_body }.method(:fetch),
         install_gem: ->(path, home) { installed << [File.basename(path), home] }
       )
-      missing = File.expand_path('../../lib/zip_archive', __dir__)
-      allow(engine).to receive(:require_relative).with('zip_archive')
+      missing = File.expand_path('../../lib/archive', __dir__)
+      allow(engine).to receive(:require_relative).with('archive')
                                                  .and_raise(LoadError.new("cannot load such file -- #{missing}").tap { |e| e.define_singleton_method(:path) { missing } })
 
       result = nil
       expect { result = engine.recover(['gtk3'], force: true) }.not_to raise_error
       expect(result).not_to be_success
-      expect(result.error).to include('Recovery cannot extract archives: lib/zip_archive.rb is missing')
+      expect(result.error).to include('Recovery cannot extract archives: lib/archive.rb is missing')
       expect(installed).to be_empty
     end
   end
