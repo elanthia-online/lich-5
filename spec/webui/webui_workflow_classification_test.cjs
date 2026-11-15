@@ -90,7 +90,7 @@ const MACOS_FILES = [
   'lib/webui/native/macos/Info.plist', 'lib/webui/native/macos/build.sh', 'lib/webui/native/macos/window.js',
   'spec/lib/webui/native_host_presentation_spec.rb', 'spec/webui/native_presentation.swift',
   'spec/spec_helper.rb', 'spec/support/data_dir.rb', 'spec/support/frontend_mock.rb',
-  'spec/support/real_keychain_fence.rb', '.rspec',
+  'spec/support/real_keychain_fence.rb', 'spec/support/terminal_fence.rb', '.rspec',
 ];
 
 // Startup and gem recovery, which only the Windows job runs end to end.
@@ -242,6 +242,33 @@ test('a rename out of the acceptance helper prefix still selects Windows', async
   assert.deepEqual(result.decisions, WINDOWS_ONLY);
 });
 
+const FRONTEND_DIR = 'lib/common/frontend';
+const frontendDefinitions = () => fs.readdirSync(path.join(__dirname, '../..', FRONTEND_DIR)).sort().map(name => `${FRONTEND_DIR}/${name}`);
+
+test('the shipped frontend definition directory is not empty', () => {
+  assert.ok(frontendDefinitions().length > 0, 'expected shipped frontend definitions');
+});
+
+test('each shipped frontend definition selects only Windows', async () => {
+  for (const filename of frontendDefinitions()) {
+    const result = await classify({ files: [{ filename }] });
+    assert.deepEqual(result.decisions, WINDOWS_ONLY, filename);
+    assert.ok(result.infos.some(message => message.startsWith('windows:') && message.includes(filename)), `the matched path is explained: ${filename}`);
+    assert.ok(result.infos.includes('macos: not needed'), filename);
+  }
+});
+
+test('frontend near-miss paths keep what they select today', async () => {
+  assert.deepEqual(await decisionsFor('lib/common/frontend.rb'), SHARED);
+  assert.deepEqual(await decisionsFor('lib/common/frontend_helpers.rb'), SHARED);
+  assert.deepEqual(await decisionsFor('lib/common/frontendx/a.rb'), NONE);
+});
+
+test('a rename out of the frontend definition directory still selects Windows', async () => {
+  const result = await classify({ files: [{ filename: 'lib/common/retired_frontend.rb', previous_filename: frontendDefinitions()[0], status: 'renamed' }] });
+  assert.deepEqual(result.decisions, WINDOWS_ONLY);
+});
+
 for (const filename of ALL_SUITE_FILES) {
   test(`a change to suite selection or execution selects every suite: ${filename}`, async () => {
     assert.deepEqual(await decisionsFor(filename), ALL);
@@ -309,6 +336,26 @@ test('every browser shard spec file selects the shared suites', async () => {
   assert.ok(shardFiles.length > 0, 'expected browser shard spec files');
   for (const filename of shardFiles) {
     assert.deepEqual(await decisionsFor(filename), SHARED, filename);
+  }
+});
+
+function specFiles(dir) {
+  const root = path.join(__dirname, '../..');
+  return fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap(entry => {
+    const rel = `${dir}/${entry.name}`;
+    // These hold installed packages and test output, not repository specs.
+    if (entry.isDirectory()) return ['node_modules', 'test-results'].includes(entry.name) ? [] : specFiles(rel);
+    return entry.name.endsWith('_spec.rb') ? [rel] : [];
+  });
+}
+
+test('every spec file with browser examples selects the browser suite', async () => {
+  const root = path.join(__dirname, '../..');
+  const browserSpecs = specFiles('spec').filter(filename => /ENV\[.NATIVE_BROWSER.\]/.test(fs.readFileSync(path.join(root, filename), 'utf8'))).sort();
+  assert.ok(browserSpecs.length > 0, 'expected spec files with browser examples');
+  for (const filename of browserSpecs) {
+    const { decisions } = await classify({ files: [{ filename }] });
+    assert.equal(decisions.browser, 'true', `${filename} has NATIVE_BROWSER examples but a change to it does not run the browser suite; add its path to the classifier's lists in ci.yml so a change to it runs the browser suite.`);
   }
 });
 

@@ -328,7 +328,7 @@ jobs:
               'lib/common/webui_launcher.rb', 'lib/common/webui_launcher/',
               'spec/webui/', 'spec/fixtures/webui/', 'spec/lib/webui/', 'spec/lib/common/script_scope_',
               'spec/support/webui_', 'spec/spec_helper.rb', 'spec/login_spec_helper.rb', 'spec/support/frontend_mock.rb',
-              'spec/support/data_dir.rb', 'spec/support/real_keychain_fence.rb',
+              'spec/support/data_dir.rb', 'spec/support/real_keychain_fence.rb', 'spec/support/terminal_fence.rb',
               'spec/lib/common/webui_launcher_presentation_browser_spec.rb',
               '.rspec', '.rspec_parallel',
               // Providers the launcher and login helpers load (authentication, GUI, frontend, sessions).
@@ -353,13 +353,19 @@ jobs:
             const WINDOWS_ACCEPTANCE_PATHS = [
               'spec/support/default_webui_acceptance_',
             ];
+            // The shipped frontend definitions. They decide which frontends the
+            // launcher offers on each platform, and only the Windows job runs the
+            // launcher specs on a Windows host.
+            const WINDOWS_FRONTEND_PATHS = [
+              'lib/common/frontend/',
+            ];
             // What the macOS job compiles and runs: the native host, its
             // presentation spec, and the helpers every rspec process loads.
             const MACOS_PATHS = [
               'lib/webui/native/',
               'spec/lib/webui/native_host_presentation_spec.rb', 'spec/webui/native_presentation.swift',
               'spec/spec_helper.rb', 'spec/support/data_dir.rb', 'spec/support/frontend_mock.rb',
-              'spec/support/real_keychain_fence.rb', '.rspec',
+              'spec/support/real_keychain_fence.rb', 'spec/support/terminal_fence.rb', '.rspec',
             ];
             // A change to how the suites are selected or run selects all of them.
             const ALL_SUITE_PATHS = [
@@ -401,13 +407,13 @@ jobs:
               }
               const selected = windowsSpecPaths(Buffer.from(data.content, 'base64').toString('utf8'));
               const windowsSpec = path => selected.some(p => path === p || (!p.endsWith('.rb') && path.startsWith(`${p}/`)));
-              const webui = within(WEBUI_PATHS), startup = within(WINDOWS_STARTUP_PATHS), acceptance = within(WINDOWS_ACCEPTANCE_PATHS);
+              const webui = within(WEBUI_PATHS), startup = within(WINDOWS_STARTUP_PATHS), acceptance = within(WINDOWS_ACCEPTANCE_PATHS), frontends = within(WINDOWS_FRONTEND_PATHS);
               const everySuite = within(ALL_SUITE_PATHS), macos = within(MACOS_PATHS);
               const shared = path => everySuite(path) || webui(path) || windowsSpec(path);
               const reaches = {
                 renderer: shared,
                 browser: shared,
-                windows: path => shared(path) || startup(path) || acceptance(path),
+                windows: path => shared(path) || startup(path) || acceptance(path) || frontends(path),
                 macos: path => everySuite(path) || macos(path),
               };
               // A rename or deletion out of a suite's paths still counts: check the old name too.
