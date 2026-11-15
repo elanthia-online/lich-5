@@ -1,0 +1,63 @@
+name: Windows Locked-Down Gem Recovery
+
+# Locks a Windows runner down like a stock client (execution policy
+# Restricted, then Windows Script Host disabled) and runs gem recovery
+# against the live Ruby4Lich5 manifest and bundles. The old wscript ->
+# powershell -File extractor must fail there; the current recovery must
+# stage, verify and install real units. See the driver script for details.
+#
+# Kept apart from windows_file_handoff.yaml: it changes machine-wide policy,
+# downloads about 70 MB of release assets, and only needs to run when the
+# recovery code changes.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lib/dependency_recovery.rb"
+      - "lib/recovery_unit_policy.rb"
+      - "lib/zip_archive.rb"
+      - ".github/scripts/windows_restricted_recovery.rb"
+      - ".github/workflows/windows_restricted_recovery.yaml"
+  pull_request:
+    paths:
+      - "lib/dependency_recovery.rb"
+      - "lib/recovery_unit_policy.rb"
+      - "lib/zip_archive.rb"
+      - ".github/scripts/windows_restricted_recovery.rb"
+      - ".github/workflows/windows_restricted_recovery.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restricted_recovery:
+    name: Recover gems on a locked-down Windows runner
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler-cache: false
+      # The script sets Windows PowerShell 5.1's LocalMachine policy to
+      # Restricted (the policy the old extractor ran under), disables Windows
+      # Script Host for its second phase, and puts both back before it exits.
+      # pwsh 7 keeps its own execution policy, so this pwsh step is unaffected.
+      - name: Lock down the runner and run recovery
+        shell: pwsh
+        run: ruby .github/scripts/windows_restricted_recovery.rb
+      # Belt and braces: if the script died before restoring, put the runner
+      # back anyway, and show the final policy either way.
+      - name: Restore execution policy and Windows Script Host
+        if: always()
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -NonInteractive -Command 'if ((Get-ExecutionPolicy -Scope LocalMachine) -eq ''Restricted'') { Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope LocalMachine -Force }; Get-ExecutionPolicy -List | Format-Table -AutoSize | Out-String'
+          foreach ($key in 'HKLM:\SOFTWARE\Microsoft\Windows Script Host\Settings', 'HKCU:\SOFTWARE\Microsoft\Windows Script Host\Settings') {
+            Remove-ItemProperty -Path $key -Name Enabled -ErrorAction SilentlyContinue
+          }

@@ -2,14 +2,20 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'open3'
 require 'pp'
 require 'rubygems/package'
 require 'stringio'
 require 'tmpdir'
 
 require_relative '../../lib/dependency_recovery'
+require_relative '../../lib/zip_archive'
+require_relative '../support/no_process_expectations'
+require_relative '../support/zip_builder'
 
 RSpec.describe Lich::DependencyRecovery do
+  include NoProcessExpectations
+
   let(:gem_home) { Dir.mktmpdir('lich-recovery-gems') }
   let(:manifest_url) { 'https://example.test/R4L5-gem-manifest.json' }
   let(:artifact_url) { 'https://example.test/sqlite3.gem' }
@@ -62,7 +68,7 @@ RSpec.describe Lich::DependencyRecovery do
     }
   end
 
-  def recovery(artifacts:, extract_zip: nil, install_gem: nil, powershell_runner: nil, helper_launcher: nil)
+  def recovery(artifacts:, extract_zip: nil, install_gem: nil, helper_launcher: nil)
     described_class.new(
       manifest_url: manifest_url,
       gem_home: gem_home,
@@ -70,7 +76,6 @@ RSpec.describe Lich::DependencyRecovery do
       http_get: ->(url) { artifacts.fetch(url) },
       install_gem: install_gem || ->(path, home) { installed << [File.basename(path), home, File.binread(path)] },
       extract_zip: extract_zip,
-      powershell_runner: powershell_runner,
       helper_launcher: helper_launcher
     )
   end
@@ -1083,62 +1088,108 @@ RSpec.describe Lich::DependencyRecovery do
     end
   end
 
-  describe '#unsafe_archive_entry?' do
-    let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
-
-    it 'rejects empty, absolute, and parent-traversal archive entries' do
-      ['', '/absolute.gem', '\\absolute.gem', 'C:\\absolute.gem', '../escape.gem', 'gems/../escape.gem'].each do |entry|
-        expect(subject.send(:unsafe_archive_entry?, entry)).to be(true)
-      end
-    end
-
-    it 'accepts safe relative archive filenames and subpaths' do
-      %w[sqlite3.gem gems/sqlite3.gem gems/native/sqlite3.gem].each do |entry|
-        expect(subject.send(:unsafe_archive_entry?, entry)).to be(false)
-      end
-    end
-  end
-
-  describe 'Windows ZIP extraction' do
+  describe 'ZIP extraction' do
     let(:zip_path) { File.join(recovery_temp_dir, 'bundle.zip') }
     let(:destination) { File.join(recovery_temp_dir, 'packages') }
+    let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir) }
 
-    before { allow(Gem).to receive(:win_platform?).and_return(true) }
-
-    it 'uses a hidden WScript launcher for parameterized PowerShell extraction' do
-      command = nil
-      success = double('status', success?: true)
-      runner = lambda do |*args|
-        command = args
-        ['', '', success]
-      end
-      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir,
-                                    powershell_runner: runner)
+    it 'extracts in-process on Windows, without PowerShell, WScript, or any other program' do
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk', descriptor: true }]))
+      expect_no_process(subject, Lich::ZipArchive)
 
       subject.send(:extract_zip_file, zip_path, destination)
 
-      launcher_path = command.last
-      script_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.ps1')
-      expect(command).to eq(['wscript.exe', '//nologo', launcher_path])
-      expect(File.read(launcher_path)).to include('shell.Run(command, 0, True)', '-Archive', '-Destination')
-      expect(File.read(script_path)).to include('[string]$Archive', '[string]$Destination')
+      expect(File.binread(File.join(destination, 'gtk3.gem'))).to eq('gtk')
+      expect(Dir.children(recovery_temp_dir).sort).to eq(%w[bundle.zip packages])
     end
 
-    it 'includes captured PowerShell diagnostics when extraction fails' do
-      failure = double('status', success?: false, exitstatus: 1)
-      runner = ->(*) { ['standard output', 'access denied', failure] }
-      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir,
-                                    powershell_runner: runner)
+    it 'names the archive and the reason when extraction fails' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: '../escape.gem', data: 'x' }]))
 
       expect { subject.send(:extract_zip_file, zip_path, destination) }
-        .to raise_error(described_class::Error, /PowerShell exit 1.*access denied/)
+        .to raise_error(described_class::Error, %r{Could not extract bundle\.zip into .*packages: unsafe archive entry: \.\./escape\.gem})
     end
 
-    it 'renders Windows paths as VBScript literals without Ruby backslash escapes' do
-      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir)
+    it 'names the archive when the destination cannot be created' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk' }]))
+      File.write(destination, 'a file where the directory should go')
 
-      expect(subject.send(:vbscript_literal, 'C:\\Ruby4Lich5\\temp')).to eq('"C:\\Ruby4Lich5\\temp"')
-      expect(subject.send(:vbscript_literal, 'a"b')).to eq('"a""b"')
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: File exists/)
+    end
+
+    it 'names the archive when two entries would collide on disk' do
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'clash', data: 'x' }, { name: 'clash/', data: '', method: :store }]))
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /Could not extract bundle\.zip into .*packages: archive entry is both a file and a directory: clash/)
+    end
+
+    it 'stages a real ZIP bundle for the native replacement helper' do
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      bundle_url = 'https://example.test/R4L5-gem-bundle.zip'
+      packages = [
+        { 'name' => 'glib2', 'version' => '4.3.9', 'filename' => "glib2-4.3.9-#{platform}.gem", 'sha256' => sha256('glib') },
+        { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => "gtk3-4.3.9-#{platform}.gem", 'sha256' => sha256('gtk') }
+      ]
+      bundle_body = ZipBuilder.build([
+                                       { name: packages[0]['filename'], data: 'glib', descriptor: true },
+                                       { name: packages[1]['filename'], data: 'gtk', descriptor: true },
+                                       { name: 'resolution-lock.json', data: '{}' }
+                                     ])
+      unit = {
+        'id'            => 'gtk3-runtime',
+        'members'       => %w[glib2 gtk3],
+        'artifact'      => { 'url' => bundle_url, 'filename' => 'R4L5-gem-bundle.zip', 'sha256' => sha256(bundle_body), 'archive' => 'zip' },
+        'packages'      => packages,
+        'install_order' => %w[glib2 gtk3]
+      }
+      staged = []
+      engine = described_class.new(
+        manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+        http_get: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), bundle_url => bundle_body }.method(:fetch),
+        helper_launcher: lambda do |payload_path|
+          JSON.parse(File.read(payload_path)).fetch('packages').each do |package|
+            staged << [package.fetch('name'), File.binread(package.fetch('path'))]
+          end
+        end
+      )
+
+      result = engine.recover(['gtk3'], force: true)
+
+      expect(result).to be_success
+      expect(result.restart_required).to be(true)
+      expect(staged).to eq([%w[glib2 glib], %w[gtk3 gtk]])
+    end
+
+    # LoadError is not a StandardError: unless extract_zip_file turns it into
+    # a recovery Error, it escapes #recover's boot guard and GemCheck.
+    it 'returns a failed result naming the reader when the ZIP reader cannot be loaded' do
+      bundle_url = 'https://example.test/R4L5-gem-bundle.zip'
+      package = { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => 'gtk3.gem', 'sha256' => sha256('gtk') }
+      bundle_body = ZipBuilder.build([{ name: 'gtk3.gem', data: 'gtk' }])
+      unit = {
+        'id'            => 'gtk3-runtime',
+        'members'       => %w[gtk3],
+        'artifact'      => { 'url' => bundle_url, 'filename' => 'R4L5-gem-bundle.zip', 'sha256' => sha256(bundle_body), 'archive' => 'zip' },
+        'packages'      => [package],
+        'install_order' => %w[gtk3]
+      }
+      engine = described_class.new(
+        manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+        http_get: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), bundle_url => bundle_body }.method(:fetch),
+        install_gem: ->(path, home) { installed << [File.basename(path), home] }
+      )
+      missing = File.expand_path('../../lib/zip_archive', __dir__)
+      allow(engine).to receive(:require_relative).with('zip_archive')
+                                                 .and_raise(LoadError.new("cannot load such file -- #{missing}").tap { |e| e.define_singleton_method(:path) { missing } })
+
+      result = nil
+      expect { result = engine.recover(['gtk3'], force: true) }.not_to raise_error
+      expect(result).not_to be_success
+      expect(result.error).to include('Recovery cannot extract archives: lib/zip_archive.rb is missing')
+      expect(installed).to be_empty
     end
   end
 

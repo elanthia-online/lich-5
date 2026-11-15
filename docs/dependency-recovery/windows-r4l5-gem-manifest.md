@@ -358,6 +358,21 @@ The GTK example is abbreviated only for readability. Production must list its
 complete tested closure in dependency order. ZIP package filenames must be at
 the archive root, and `install_order` must name every package exactly once.
 
+Lich extracts ZIP bundles in-process with Zlib (`Lich::ZipArchive`) and starts
+no external program, so PowerShell's execution policy, Windows Script Host and
+the presence of `unzip` do not matter. The bundle must be a single-disk,
+non-ZIP64, unencrypted archive whose entries are stored or deflated. Data
+descriptors are fine, since sizes are read from the central directory. Each
+deflated entry's compressed size must end exactly where its deflate stream
+ends. Entry names must be relative, without `..` segments, colons or control
+characters, ASCII unless the entry is flagged UTF-8, and unique: no two
+entries may name the same file, and no file may share a path with a
+directory. Names are compared in Unicode's canonical caseless form (NFD
+normalisation, full case folding, then NFD again), so `A.gem` and `a.gem`,
+or a precomposed and a decomposed `é`, count as the same file. This is
+stricter than NTFS: `ß` and `ss` also count as the same. Any other archive
+fails extraction with a named reason, and nothing is installed.
+
 The generator should derive package names, versions, filenames, and SHA-256
 values from the exact staged `.gem` files used by the clean-runtime smoke test.
 Publish it only after every referenced release asset is stable. A temporary
