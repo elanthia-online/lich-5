@@ -186,8 +186,8 @@ minimums the same way.
 
 Startup then sorts each package into one of three tiers:
 
-- **Needed** (below `minimum`, wrong platform, or an older version already
-  active): the existing consented repair runs for every unit containing a
+- **Needed** (below `minimum`, wrong platform (see below), or an older or
+  wrong-platform version already active): the existing consented repair runs for every unit containing a
   needed package, then Lich restarts (a session is relaunched; a one-shot
   command is not, see the recovery transaction below). The repair installs each package of
   those units at its `version`, so a package of the same unit that was only
@@ -210,6 +210,43 @@ Startup then sorts each package into one of three tiers:
   the same installed gems add nothing. If the log cannot be read, the entry
   is written anyway, and a failed write never stops startup.
 - **Current** (`version` or an eligible newer version is installed): as before.
+
+A package's installed copy normally counts only when its platform matches the
+manifest's (the R4L5 build, such as `x64-mingw-ucrt`). A build for another
+platform this runtime can load, usually a `ruby`-platform gem the user
+compiled with `gem install` or `gem update`, also counts when its version is
+**strictly newer than `version`** (not merely at `minimum`) and its native
+extension finished building. Startup keeps that newer gem instead of
+repairing it down to the accepted build. At `version` itself the R4L5 build is
+still required, because Ruby4Lich5 patches the GTK stack. Ruby-GNOME pins one
+exact version across its gems, so a strictly newer self-built gtk3 only
+resolves with equally new self-built glib2 and the rest of the stack, never
+with an R4L5 build. If the self-built gems cannot resolve together (a
+self-built gtk3 4.4.0 without glib2 4.4.0, say), startup decides again as if
+only R4L5 builds counted: it uses them, or repairs to them. It also does so
+when a package `minimum` turns that failure into a repair: if the R4L5 builds
+alone need no repair, or repair different units, startup uses that decision,
+so it never repairs a unit the R4L5 builds did not need. When the self-built
+gems and every package outside the repaired units resolve together, a repair
+another unit needs (a same-version self-built ox, say) repairs only that unit,
+and a complete self-built GTK stack is neither listed as missing nor repaired.
+A self-built glib2 beside an R4L5 gtk3, which pins glib2 exactly, does not
+resolve, so both units are repaired at once.
+
+A self-built copy is only considered when every other package of its unit
+that depends on it pins it exactly (`= version`), judged from the installed
+gemspecs. **cairo** is the exception in the GTK unit: cairo-gobject requires
+`cairo >= 1.16.2`, so a newer self-built cairo next to the R4L5 cairo-gobject
+is ignored and the R4L5 cairo is used (or repaired to). The reverse mix, a
+newer self-built Ruby-GNOME stack (glib2, cairo-gobject, gtk3 and the rest)
+over the R4L5 cairo, is kept. Standalone packages such as `ox` and `curses`,
+which no other package of their unit depends on, are kept when strictly newer.
+
+If a kept self-built gtk3 or sqlite3 then fails to load, the existing
+load-failure repair in `init.rb` installs the R4L5 build and moves the
+self-built copy aside. Other native packages (for example `ox` and `curses`)
+have no load-failure repair, so a self-built copy that builds but cannot load
+stops startup until the user reinstalls it or reruns the Ruby4Lich5 installer.
 
 Resolution and activation use the minimums as floors and keep the resolver's
 existing preference: the highest acceptable installed version, or the version
@@ -363,6 +400,24 @@ operation.
 The GTK example is abbreviated only for readability. Production must list its
 complete tested closure in dependency order. ZIP package filenames must be at
 the archive root, and `install_order` must name every package exactly once.
+
+Lich extracts ZIP bundles in-process with Zlib (`Lich::Archive.extract_zip`) and starts
+no external program, so PowerShell's execution policy, Windows Script Host and
+the presence of `unzip` do not matter. The bundle must be a single-disk,
+non-ZIP64, unencrypted archive whose entries are stored or deflated. Data
+descriptors are fine, since sizes are read from the central directory. Each
+deflated entry's compressed size must end exactly where its deflate stream
+ends. Entry names must be relative and separated by `/`, without `..`
+segments, colons, backslashes, control characters or any of `< > " | ? *`
+(which Windows refuses in file names), ASCII unless the entry
+is flagged UTF-8, free of segments Windows would alter (a trailing dot or
+space, or a device name such as `CON`, `NUL` or `COM1`, with or without an
+extension), and unique: no two entries may name the same file, and no file
+may share a path with a directory. Names are compared in Unicode's
+canonical caseless form (NFD normalisation, full case folding, then NFD
+again), so `A.gem` and `a.gem`, or a precomposed and a decomposed `é`,
+count as the same file. This is stricter than NTFS: `ß` and `ss` also count as the same. Any other archive fails
+extraction with a named reason, and nothing is installed.
 
 The generator should derive package names, versions, filenames, and SHA-256
 values from the exact staged `.gem` files used by the clean-runtime smoke test.
