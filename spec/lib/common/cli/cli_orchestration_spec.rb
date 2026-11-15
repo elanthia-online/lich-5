@@ -4,6 +4,7 @@ require 'stringio'
 
 require_relative '../../../spec_helper'
 require_relative '../../../login_spec_helper'
+require_relative '../../../support/hidden_terminal'
 require_relative '../../../../lib/common/cli/cli_orchestration'
 
 RSpec.describe Lich::Common::CLI::CLIOrchestration do
@@ -32,16 +33,18 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
           @prompts = []
         end
 
-        def tty? = true
+        # io/console's IO#noecho: runs the block with echo off; getpass
+        # fails outside it.
+        include HiddenTerminalGuard
 
-        # io/console's IO#noecho: runs the block with echo off.
-        def noecho = yield
+        def tty? = true
 
         def iflush; end
 
         # A prompt passed here would go to $stderr, which Lich points at
         # the debug log, so callers must print their own and pass none.
         def getpass(prompt = nil)
+          require_hidden!
           @prompts << prompt
           @line
         end
@@ -510,10 +513,11 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
           @shown_at_read = []
         end
 
-        def tty? = true
+        # Runs the block with echo off, as the reader does around its
+        # prompt; getpass fails outside it.
+        include HiddenTerminalGuard
 
-        # Runs the block with echo off, as the reader does around its prompt.
-        def noecho = yield
+        def tty? = true
 
         # Discards type-ahead; the reader calls it before showing its prompt.
         def iflush; end
@@ -522,6 +526,7 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         # would send a passed prompt to $stderr. Records what the terminal
         # showed by the time each hidden read began.
         def getpass
+          require_hidden!
           @reads += 1
           @shown_at_read << $stdout.string.dup
           @lines.shift

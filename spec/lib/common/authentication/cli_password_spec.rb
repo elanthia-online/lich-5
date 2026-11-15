@@ -9,6 +9,7 @@ require 'fileutils'
 
 # Define DATA_DIR before requiring source files
 require_relative '../../../support/data_dir'
+require_relative '../../../support/hidden_terminal'
 
 # Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
 # before any source files are required
@@ -846,11 +847,13 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
           @shown_at_read = []
         end
 
+        include HiddenTerminalGuard
+
         def tty? = true
-        def noecho = yield
         def iflush = nil
 
         def getpass
+          require_hidden!
           @shown_at_read << @shown&.string.to_s.dup
           @line
         end
@@ -940,11 +943,13 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
           @shown_at_read = []
         end
 
+        include HiddenTerminalGuard
+
         def tty? = true
-        def noecho = yield
         def iflush = nil
 
         def getpass
+          require_hidden!
           @shown_at_read << $stdout.string.dup
           @lines.shift
         end

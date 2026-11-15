@@ -5,6 +5,7 @@ require 'tmpdir'
 require 'yaml'
 require 'fileutils'
 require_relative '../../../support/data_dir'
+require_relative '../../../support/hidden_terminal'
 require_relative '../../../login_spec_helper'
 require_relative '../../../../lib/common/cli/cli_encryption_mode_change'
 
@@ -22,10 +23,15 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
   let(:terminal) do
     Class.new do
       def initialize(*lines) = @lines = lines
+      include HiddenTerminalGuard
+
       def tty? = true
-      def noecho = yield
       def iflush = nil
-      def getpass = @lines.shift
+
+      def getpass
+        require_hidden!
+        @lines.shift
+      end
     end
   end
 
