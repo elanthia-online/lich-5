@@ -4,7 +4,6 @@ require 'fileutils'
 require 'json'
 require 'net/http'
 require 'open-uri'
-require 'open3'
 require 'openssl'
 require 'rbconfig'
 require 'rubygems/installer'
@@ -135,12 +134,11 @@ module Lich
     # @param http_get [#call, nil] test seam returning binary response content
     # @param install_gem [#call, nil] test seam for local gem installation
     # @param extract_zip [#call, nil] test seam for zip extraction
-    # @param powershell_runner [#call, nil] test seam for the Windows extractor
     # @param windows_process_api [#open, #wait, #close] test seam for the
     #   kernel32 calls that wait for Lich to exit
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
-                   http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
+                   http_get: nil, install_gem: nil, extract_zip: nil,
                    helper_launcher: nil, lich_version: (defined?(LICH_VERSION) ? LICH_VERSION : nil),
                    windows_process_api: WindowsProcessApi)
       @windows_process_api = windows_process_api
@@ -151,7 +149,6 @@ module Lich
       @http_get = http_get
       @install_gem = install_gem || method(:install_gem_file)
       @extract_zip = extract_zip || method(:extract_zip_file)
-      @powershell_runner = powershell_runner || Open3.method(:capture3)
       @helper_launcher = helper_launcher || method(:launch_windows_helper)
     end
 
@@ -1011,99 +1008,85 @@ module Lich
     # Extracts a ZIP after the outer archive was hashed. The bundle producer
     # must place declared .gem files at its archive root; package filenames are
     # constrained to prevent manifest-controlled path traversal.
+    #
+    # Extraction runs in-process (Lich::Archive) on every platform. It used
+    # to start PowerShell through a hidden WScript launcher on Windows, which
+    # failed with no diagnostics wherever the execution policy blocked scripts
+    # (Restricted is the Windows client default), Windows Script Host was
+    # disabled, or security software stopped the launcher.
     # @param zip_path [String]
     # @param destination [String]
     # @return [void]
     def extract_zip_file(zip_path, destination)
-      FileUtils.mkdir_p(destination)
-      if Gem.win_platform?
-        script_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.ps1')
-        error_path = File.join(File.dirname(destination), 'extract-r4l5-bundle-error.txt')
-        launcher_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.vbs')
-        File.write(script_path, windows_extraction_script)
-        File.write(launcher_path, windows_hidden_launcher(script_path, zip_path, destination, error_path))
-        stdout, stderr, status = @powershell_runner.call('wscript.exe', '//nologo', launcher_path)
-        unless status.success?
-          details = [(File.read(error_path) if File.file?(error_path)), stderr, stdout]
-                    .compact.reject { |text| text.to_s.strip.empty? }.join("\n").strip
-          details = 'no diagnostic output' if details.empty?
-          raise Error, "Could not extract #{File.basename(zip_path)} into #{destination} " \
-                       "(PowerShell exit #{status.exitstatus}): #{details}"
-        end
-      else
-        entries = IO.popen(['unzip', '-Z1', zip_path], &:read).lines.map(&:strip)
-        raise Error, 'archive contains an unsafe entry' if entries.any? { |entry| unsafe_archive_entry?(entry) }
-
-        success = system('unzip', '-q', zip_path, '-d', destination)
-        raise Error, "could not extract #{File.basename(zip_path)} into #{destination}" unless success
+      # Loaded here, not at the top: Ruby4Lich5 runs each supported release's
+      # startup policy from a pinned copy of only its reviewed files
+      # (accepted_gem_policy, dependency_recovery, recovery_unit_policy,
+      # runtime_gem_contract, startup_policy_compatibility), so loading this
+      # file must not need anything outside that set.
+      # The require stays outside the rescued block below: a rescue clause
+      # naming Archive::Error would itself raise NameError if the file
+      # failed to load. A missing file (LoadError) or one cut short on disk,
+      # say by an interrupted update (SyntaxError), raises a ScriptError,
+      # which is not a StandardError: left alone it would escape #recover's
+      # boot guard and GemCheck (a silent crash under rubyw). A file cut
+      # mid-word can instead raise a NameError as it loads, and one cut at a
+      # line boundary, or emptied (FileUtils.copy_entry truncates before it
+      # writes), can load cleanly and define nothing, which the check after
+      # the require catches. Each is reported as a recovery Error naming the
+      # file.
+      begin
+        require_relative 'archive'
+      rescue LoadError => e
+        raise Error, "Recovery cannot extract archives: #{library_path(e)} is missing (#{e.message})"
+      rescue ScriptError, StandardError => e
+        raise Error, "Recovery cannot extract archives: #{library_path(e, 'lib/archive.rb')} cannot be loaded (#{e.class}: #{e.message.lines.first.to_s.strip})"
       end
-    rescue Errno::EACCES, Errno::EROFS => e
-      raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      if (undefined = undefined_archive_reader)
+        raise Error, "Recovery cannot extract archives: #{undefined} loaded but does not define the archive reader"
+      end
+      begin
+        Archive.extract_zip(zip_path, destination)
+      rescue Archive::Error => e
+        raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      rescue Errno::EACCES, Errno::EROFS => e
+        raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      rescue SystemCallError => e
+        raise Error, "Could not extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+      end
     end
 
-    # Uses named script parameters rather than appending values after
-    # PowerShell's -Command argument, where they would be parsed as command
-    # text instead of reliably reaching $args. A hidden WScript launcher starts
-    # PowerShell without the console flash produced by powershell.exe itself.
-    # @return [String] PowerShell extraction script
-    def windows_extraction_script
-      <<~POWERSHELL
-        param(
-          [Parameter(Mandatory = $true)][string]$Archive,
-          [Parameter(Mandatory = $true)][string]$Destination,
-          [Parameter(Mandatory = $true)][string]$ErrorPath
-        )
+    # @return [String, nil] the reader file that loaded without defining
+    #   what extraction needs, or nil when the reader is complete
+    def undefined_archive_reader
+      return 'lib/archive.rb' unless defined?(Archive::Error) && Archive.respond_to?(:extract_zip)
+      return nil if defined?(Archive::Zip) && Archive::Zip.respond_to?(:extract)
 
-        try {
-          $ErrorActionPreference = 'Stop'
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $archivePath = [IO.Path]::GetFullPath($Archive)
-          $destinationPath = [IO.Path]::GetFullPath($Destination)
-          $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
-          try {
-            foreach ($entry in $zip.Entries) {
-              if ([IO.Path]::IsPathRooted($entry.FullName) -or $entry.FullName -match '(^|[\\/])\\.\\.([\\/]|$)') {
-                throw "unsafe archive entry: $($entry.FullName)"
-              }
-            }
-          } finally {
-            $zip.Dispose()
-          }
-          [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $destinationPath)
-        } catch {
-          $_ | Out-String | Set-Content -LiteralPath $ErrorPath
-          exit 1
-        }
-      POWERSHELL
+      zip = File.expand_path('archive/zip.rb', __dir__)
+      $LOADED_FEATURES.include?(zip) ? 'lib/archive/zip.rb' : 'lib/archive.rb'
     end
 
-    # @param script_path [String]
-    # @param zip_path [String]
-    # @param destination [String]
-    # @param error_path [String]
-    # @return [String]
-    def windows_hidden_launcher(script_path, zip_path, destination, error_path)
-      <<~VBSCRIPT
-        Function Quote(value)
-          Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
-        End Function
-        Set shell = CreateObject("WScript.Shell")
-        command = Quote("powershell.exe") & " -NoProfile -NonInteractive -WindowStyle Hidden -File " & Quote(#{vbscript_literal(script_path)}) & " -Archive " & Quote(#{vbscript_literal(zip_path)}) & " -Destination " & Quote(#{vbscript_literal(destination)}) & " -ErrorPath " & Quote(#{vbscript_literal(error_path)})
-        WScript.Quit shell.Run(command, 0, True)
-      VBSCRIPT
-    end
+    # @param error [Exception] raised while loading a library
+    # @param default [String] what to name when +error+ carries no path
+    # @return [String] the file +error+ could not load, relative to the
+    #   directory above lib/ when it lies inside it (lib/archive.rb)
+    def library_path(error, default = 'a recovery library')
+      path = error.path if error.respond_to?(:path)
+      # An error raised while a reader file loads may carry no path. An
+      # error from the loader itself, such as an unknown encoding comment,
+      # starts its message with the file's path; its backtrace only shows
+      # the file that required it. A NameError, or an error from a gem the
+      # file calls (fileutils, say), names the file in its backtrace, and
+      # the reader frame closest to the error is the one wanted. Only reader
+      # files count: otherwise this file's own require_relative would be
+      # named.
+      reader = %r{\A#{Regexp.escape(__dir__)}/(archive\.rb|archive/[^/]+\.rb)\z}
+      candidates = [error.message[/\A(.+?\.rb):\d+:/, 1].to_s, *(error.backtrace_locations || []).map(&:path)]
+      path ||= candidates.find { |candidate| candidate.match?(reader) }
+      return default unless path
 
-    # @param value [String]
-    # @return [String] a VBScript string literal
-    def vbscript_literal(value)
-      %("#{value.to_s.gsub('"', '""')}")
-    end
-
-    # @param entry [String]
-    # @return [Boolean]
-    def unsafe_archive_entry?(entry)
-      entry.empty? || entry.start_with?('/', '\\') || entry.match?(/\A[A-Za-z]:[\\\/]/) ||
-        entry.split(/[\\\/]/).include?('..')
+      path = "#{path}.rb" unless path.end_with?('.rb')
+      top = "#{File.dirname(__dir__)}/"
+      path.start_with?(top) ? path.delete_prefix(top) : path
     end
 
     # @param path [String]

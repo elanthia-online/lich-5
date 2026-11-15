@@ -121,7 +121,8 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         double('download', open: StringIO.new(corrupt ? 'not a gzip archive' : archive))
       end
 
-      expect { installer.download_release_update }.to raise_error(Zlib::GzipFile::Error)
+      expect { installer.download_release_update }.to raise_error(Lich::Archive::Error, /not a valid gzip archive/)
+      expect(Dir.glob(File.join(TEMP_DIR, 'lich5-5.19.0*'))).to be_empty
       corrupt = false
       latest.replace([stable_release('5.19.1')])
 
@@ -230,7 +231,7 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         archive = ruby_floor_archive('9.0')
         offer_beta(->(url) { url == beta_url ? 'not a gzip archive' : archive })
         installer.prep_betatest
-        expect { installer.confirm_betatest }.to raise_error(Zlib::GzipFile::Error)
+        expect { installer.confirm_betatest }.to raise_error(Lich::Archive::Error, /not a valid gzip archive/)
 
         installer.download_release_update
 
