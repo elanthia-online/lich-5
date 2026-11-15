@@ -6,6 +6,7 @@ bundle lock \
   --add-platform aarch64-linux \
   --add-platform aarch64-linux-gnu \
   --add-platform aarch64-linux-musl \
+  --add-platform aarch64-mingw-ucrt \
   --add-platform arm-linux \
   --add-platform arm-linux-gnu \
   --add-platform arm-linux-musl \
