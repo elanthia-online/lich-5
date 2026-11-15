@@ -394,6 +394,20 @@ RSpec.describe Lich::Archive::Zip do
       end
     end
 
+    # unzip follows a stored offset that points past the record, too.
+    it 'refuses an archive whose comment holds a record pointing forward to its directory' do
+      start = ZipBuilder.build([{ name: 'a.gem', data: 'outer' }]).bytesize
+      relative = ZipBuilder.build([{ name: 'i.gem', data: 'inner!' }])
+      directory_offset = relative.byteslice(-6, 4).unpack1('V')
+      local = relative.byteslice(0, directory_offset)
+      directory = relative.byteslice(directory_offset...-22)
+      directory[42, 4] = [start].pack('V')
+      record = [0x06054b50, 0, 0, 1, 1, directory.bytesize + 1, start + local.bytesize + 22, 0].pack('VvvvvVVv')
+      File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{local}#{record}#{directory}x".b))
+
+      expect { described_class.extract(zip_path, destination) }.to raise_error(Lich::Archive::Error, /ambiguous ZIP archive/)
+    end
+
     # A record near the start of the file whose directory size reaches back
     # before it is not an archive, and is not read from before the file.
     it 'extracts an archive whose comment holds a record with a directory larger than the file before it' do
