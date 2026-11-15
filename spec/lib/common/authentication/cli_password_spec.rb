@@ -582,11 +582,32 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     let(:output) { StringIO.new }
 
     it 'turns echo off, discards type-ahead, shows the prompt, then reads' do
-      tty = terminal.new('typed', output)
+      # Records the flush with the terminal's events: with stdout piped, an
+      # unflushed prompt would only appear after the password was read.
+      screen = Class.new(StringIO) do
+        attr_writer :events
 
-      described_class.read_secret('Password: ', from_stdin: false, input: tty, output: output)
+        def flush
+          @events << [:flush, string.dup]
+          super
+        end
+      end.new
+      tty = terminal.new('typed', screen)
+      screen.events = tty.events
 
-      expect(tty.events).to eq([[:echo_off, ''], [:iflush, ''], [:getpass, 'Password: '], [:echo_on, 'Password: ']])
+      described_class.read_secret('Password: ', from_stdin: false, input: tty, output: screen)
+
+      expect(tty.events).to eq([[:echo_off, ''], [:iflush, ''], [:flush, 'Password: '], [:getpass, 'Password: '],
+                                [:echo_on, 'Password: ']])
+    end
+
+    it 'puts back the SIGCONT handler it found once the read is done', if: Signal.list.key?('CONT') do
+      sentinel = proc {}
+      previous = Signal.trap('CONT', sentinel)
+
+      described_class.read_secret('Password: ', from_stdin: false, input: terminal.new('typed'), output: output)
+
+      expect(Signal.trap('CONT', previous)).to be(sentinel)
     end
 
     # U+FEFF and a non-ASCII letter, built from code points: the
@@ -735,10 +756,11 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       require 'delegate'
       master, slave = PTY.open
       $stdin = slave
-      # Pauses once the prompt is on screen, as a busy process might, so the
-      # reply arrives before getpass starts reading. Echo has to be off by then.
+      # Pauses once the prompt is on screen (a pseudo-terminal is unbuffered),
+      # as a busy process might, so the reply arrives before getpass starts
+      # reading. Echo has to be off by then.
       late_reader = Class.new(SimpleDelegator) do
-        def flush
+        def print(*)
           super.tap { sleep 0.3 }
         end
       end.new(slave)
@@ -755,6 +777,44 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       expect(reader.join(5)&.value).to eq('sent-at-prompt')
       shown << master.read_nonblock(4096) while master.wait_readable(0.2)
       expect(shown).not_to include('sent-at-prompt')
+    ensure
+      reader&.kill
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
+    it 'keeps the password hidden after Ctrl-Z and fg at the prompt, and shows the prompt again',
+       if: Signal.list.key?('CONT') do
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      master, slave = PTY.open
+      $stdin = slave
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: slave) }
+      shown = +''
+      read_screen = lambda do |until_text|
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+        until shown.include?(until_text) || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+          shown << master.read_nonblock(4096) if master.wait_readable(0.05)
+        end
+      end
+      read_screen.call('Password: ')
+      expect(shown).to include('Password: ')
+
+      # What a job-control shell does around Ctrl-Z and fg: it puts its own
+      # terminal modes back (echo on), then resumes the process with SIGCONT.
+      slave.echo = true
+      Process.kill('CONT', Process.pid)
+      read_screen.call('Password: Password: ')
+      expect(shown).to include('Password: Password: ')
+      master.write("typed-after-fg\n")
+
+      expect(reader.join(5)&.value).to eq('typed-after-fg')
+      shown << master.read_nonblock(4096) while master.wait_readable(0.2)
+      expect(shown).not_to include('typed-after-fg')
     ensure
       reader&.kill
       $stdin = original_stdin
