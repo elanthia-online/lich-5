@@ -551,6 +551,15 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
         def tty? = true
 
+        # io/console's IO#noecho: runs the block with echo off. Records how
+        # much of the prompt was shown when echo went off and came back on.
+        def noecho
+          @events << [:echo_off, @output&.string.to_s.dup]
+          yield
+        ensure
+          @events << [:echo_on, @output&.string.to_s.dup]
+        end
+
         # Discards type-ahead; records how much of the prompt was shown by then.
         def iflush
           @events << [:iflush, @output&.string.to_s.dup]
@@ -572,12 +581,12 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
     let(:output) { StringIO.new }
 
-    it 'discards type-ahead before showing the prompt, then reads' do
+    it 'turns echo off, discards type-ahead, shows the prompt, then reads' do
       tty = terminal.new('typed', output)
 
       described_class.read_secret('Password: ', from_stdin: false, input: tty, output: output)
 
-      expect(tty.events).to eq([[:iflush, ''], [:getpass, 'Password: ']])
+      expect(tty.events).to eq([[:echo_off, ''], [:iflush, ''], [:getpass, 'Password: '], [:echo_on, 'Password: ']])
     end
 
     # U+FEFF and a non-ASCII letter, built from code points: the
@@ -712,6 +721,42 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     ensure
       reader&.kill
       $stderr = original_stderr
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
+    it 'never shows a reply sent the moment the prompt appears, even when the read starts late' do
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      require 'delegate'
+      master, slave = PTY.open
+      $stdin = slave
+      # Pauses once the prompt is on screen, as a busy process might, so the
+      # reply arrives before getpass starts reading. Echo has to be off by then.
+      late_reader = Class.new(SimpleDelegator) do
+        def flush
+          super.tap { sleep 0.3 }
+        end
+      end.new(slave)
+
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: late_reader) }
+      shown = +''
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until shown.include?('Password: ') || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        shown << master.read_nonblock(4096) if master.wait_readable(0.05)
+      end
+      expect(shown).to include('Password: ')
+      master.write("sent-at-prompt\n")
+
+      expect(reader.join(5)&.value).to eq('sent-at-prompt')
+      shown << master.read_nonblock(4096) while master.wait_readable(0.2)
+      expect(shown).not_to include('sent-at-prompt')
+    ensure
+      reader&.kill
       $stdin = original_stdin
       [master, slave].each { |io| io.close if io && !io.closed? }
     end
