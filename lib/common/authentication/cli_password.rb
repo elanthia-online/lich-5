@@ -87,13 +87,40 @@ module Lich
             input.iflush
             output.print prompt
             output.flush
-            input.getpass
+            # A job-control shell restores its own terminal modes when Ctrl-Z
+            # gives it the terminal, so after fg echo would be back on. Turn it
+            # off again and show the prompt again, as readpassphrase(3) does.
+            on_resume(lambda {
+              input.echo = false
+              output.print prompt
+              output.flush
+            }) { input.getpass }
           end
         ensure
           # Echo was off, so the Enter the user pressed never reached the screen.
           output.puts
         end
         private_class_method :read_hidden_line
+
+        # @api private
+        # Runs the block with a SIGCONT handler that calls on_continue, then
+        # puts the previous handler back. Windows has no SIGCONT and no job
+        # control, so there the block just runs.
+        #
+        # @param on_continue [#call] called each time the process is resumed
+        # @yield the work to protect
+        # @return [Object] the block's value
+        def self.on_resume(on_continue)
+          return yield unless Signal.list.key?('CONT')
+
+          previous = Signal.trap('CONT') { on_continue.call }
+          begin
+            yield
+          ensure
+            Signal.trap('CONT', previous)
+          end
+        end
+        private_class_method :on_resume
 
         # The UTF-8 encoding of U+FEFF, the byte-order mark. Built from bytes:
         # the AsciiOnlySource cop would autocorrect the escaped literal away.
