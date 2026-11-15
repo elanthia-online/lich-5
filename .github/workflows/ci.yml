@@ -342,11 +342,14 @@ jobs:
               '.ruby-version',
             ];
             // Startup and gem recovery, which only the Windows job runs end to
-            // end. lib/version.rb is left out: every release rewrites it.
+            // end. lib/version.rb is left out: every release rewrites it. The list
+            // is not exhaustive: other files with Windows-only branches are not
+            // listed, and a change to those is left to a manual run of the
+            // Windows workflow.
             const WINDOWS_STARTUP_PATHS = [
               'lich.rbw', 'lib/main/early_exit.rb', 'lib/gemcheck.rb', 'lib/bundler_recovery.rb',
               'lib/dependency_recovery.rb', 'lib/accepted_gem_policy.rb', 'lib/runtime_gem_contract.rb',
-              'lib/recovery_unit_policy.rb', 'lib/main/webui_startup.rb',
+              'lib/recovery_unit_policy.rb', 'lib/main/webui_startup.rb', 'lib/init.rb',
             ];
             // Helpers that carry the default-startup acceptance result between
             // processes; the Windows job is where that file handling is proven.
