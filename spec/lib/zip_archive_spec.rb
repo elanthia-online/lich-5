@@ -369,6 +369,22 @@ RSpec.describe Lich::ZipArchive do
       end
     end
 
+    # unzip falls back to the record's stored offset when the directory size
+    # does not lead to a header, and lists the inner archive there.
+    { 'no directory size' => ->(size) { 0 * size }, 'a directory size one too large' => ->(size) { size + 1 } }.each do |label, wrong|
+      it "refuses an archive whose comment holds an archive with #{label}" do
+        start = ZipBuilder.build([{ name: 'a.gem', data: 'outer' }]).bytesize
+        relative = ZipBuilder.build([{ name: 'i.gem', data: 'inner!' }])
+        directory_offset = relative.byteslice(-6, 4).unpack1('V')
+        directory_size = relative.byteslice(-10, 4).unpack1('V')
+        inner = ZipBuilder.build([{ name: 'i.gem', data: 'inner!', offset: start }],
+                                 directory_offset: start + directory_offset, directory_size: wrong.call(directory_size))
+        File.binwrite(zip_path, ZipBuilder.build([{ name: 'a.gem', data: 'outer' }], comment: "#{inner}x".b))
+
+        expect { described_class.extract(zip_path, destination) }.to raise_error(described_class::Error, /ambiguous ZIP archive/)
+      end
+    end
+
     # A record near the start of the file whose directory size reaches back
     # before it is not an archive, and is not read from before the file.
     it 'extracts an archive whose comment holds a record with a directory larger than the file before it' do

@@ -201,9 +201,10 @@ module Lich
       entries = central_directory_at(file, tail, exact || last, file_size - tail_size)
       # unzip and bsdtar take the last signature with a whole record after
       # it (+probe+); Python's zipfile takes the last signature and rejects
-      # the file when no whole record follows. All three find that record's
-      # central directory just in front of it, so an archive embedded in
-      # the comment is what they show. Rather than extract something other
+      # the file when no whole record follows. All three look for that
+      # record's central directory just in front of it, and unzip also at
+      # the record's stored offset, so an archive embedded in the comment is
+      # what they show. Rather than extract something other
       # than what those tools show, an archive whose comment holds one is
       # refused. Lich's entry rules are not applied to it: those tools list
       # an embedded archive whose entries Lich itself would refuse, too.
@@ -250,7 +251,8 @@ module Lich
     # Whether the end record at +record_at+ starts an archive the other
     # tools would read: a ZIP64 locator just in front of it, an empty
     # directory, or a central directory header where the record says its
-    # directory starts, counted back from the record. Python and bsdtar walk
+    # directory starts, counted back from the record or, as unzip also
+    # tries, at the record's stored offset. Python and bsdtar walk
     # a directory by its size, not its entry count, so the count is not
     # checked.
     # @param file [File]
@@ -259,16 +261,19 @@ module Lich
     # @param tail_offset [Integer] offset of +tail+ in the file
     # @return [Boolean]
     def embedded_archive?(file, tail, record_at, tail_offset)
-      _signature, _disk, _directory_disk, _disk_count, total_count, directory_size, = tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
+      _signature, _disk, _directory_disk, _disk_count, total_count, directory_size, directory_offset, = tail.byteslice(record_at, END_RECORD_SIZE).unpack('VvvvvVVv')
       record_offset = tail_offset + record_at
       return true if zip64_locator_before?(file, record_offset)
       return true if total_count.zero? && directory_size.zero?
 
-      directory_start = record_offset - directory_size
-      return false if directory_start.negative?
+      # unzip falls back to the record's stored offset when no directory
+      # header sits just in front of the record ("Compensating...").
+      [record_offset - directory_size, directory_offset].any? do |start|
+        next false if start.negative? || start >= record_offset
 
-      file.seek(directory_start)
-      file.read(4).to_s.unpack1('V') == CENTRAL_DIRECTORY_HEADER
+        file.seek(start)
+        file.read(4).to_s.unpack1('V') == CENTRAL_DIRECTORY_HEADER
+      end
     end
 
     # @param file [File]
