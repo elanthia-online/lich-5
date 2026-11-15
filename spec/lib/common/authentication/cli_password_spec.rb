@@ -847,6 +847,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         end
 
         def tty? = true
+        def noecho = yield
         def iflush = nil
 
         def getpass
@@ -940,6 +941,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         end
 
         def tty? = true
+        def noecho = yield
         def iflush = nil
 
         def getpass

@@ -23,6 +23,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
     Class.new do
       def initialize(*lines) = @lines = lines
       def tty? = true
+      def noecho = yield
       def iflush = nil
       def getpass = @lines.shift
     end

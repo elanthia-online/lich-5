@@ -512,6 +512,9 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
 
         def tty? = true
 
+        # Runs the block with echo off, as the reader does around its prompt.
+        def noecho = yield
+
         # Discards type-ahead; the reader calls it before showing its prompt.
         def iflush; end
 
