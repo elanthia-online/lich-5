@@ -73,16 +73,22 @@ module Lich
         # @return [String, nil] the line without its line ending, or nil at end-of-input
         def self.read_hidden_line(prompt, input, output)
           require 'io/console'
-          # Echo only goes off inside getpass, so on a POSIX terminal anything
-          # typed or pasted during startup was already shown on screen. Discard
-          # it, as getpass(3) does, rather than take a password the terminal
-          # has displayed. On Windows iflush does nothing (io-console only
-          # implements it with termios), and the console shows typed input only
-          # once a read takes it, so early typing there is read, unseen.
-          input.iflush
-          output.print prompt
-          output.flush
-          input.getpass
+          # Echo goes off before the prompt is shown. getpass only turns it off
+          # once it starts reading, so a reply sent the moment the prompt
+          # appears (an expect script, a password manager's auto-type) would
+          # otherwise be shown on screen and then used.
+          input.noecho do
+            # On a POSIX terminal anything typed or pasted during startup was
+            # already shown on screen. Discard it, as getpass(3) does, rather
+            # than take a password the terminal has displayed. On Windows
+            # iflush does nothing (io-console only implements it with
+            # termios), and the console shows typed input only once a read
+            # takes it, so early typing there is read, unseen.
+            input.iflush
+            output.print prompt
+            output.flush
+            input.getpass
+          end
         ensure
           # Echo was off, so the Enter the user pressed never reached the screen.
           output.puts

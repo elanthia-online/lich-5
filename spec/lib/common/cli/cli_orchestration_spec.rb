@@ -34,6 +34,9 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
 
         def tty? = true
 
+        # io/console's IO#noecho: runs the block with echo off.
+        def noecho = yield
+
         def iflush; end
 
         # A prompt passed here would go to $stderr, which Lich points at
