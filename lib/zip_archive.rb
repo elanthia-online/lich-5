@@ -199,15 +199,16 @@ module Lich
       raise Error, 'not a ZIP archive (no end of central directory record)' unless exact || last
 
       entries = central_directory_at(file, tail, exact || last, file_size - tail_size)
-      # unzip and bsdtar take the last signature with a whole record after
-      # it (+probe+); Python's zipfile takes the last signature and rejects
-      # the file when no whole record follows. All three look for that
-      # record's central directory just in front of it, and unzip also at
-      # the record's stored offset, so an archive embedded in the comment is
-      # what they show. Rather than extract something other
-      # than what those tools show, an archive whose comment holds one is
-      # refused. Lich's entry rules are not applied to it: those tools list
-      # an embedded archive whose entries Lich itself would refuse, too.
+      # Other tools read the last end record in the file (+probe+), so an
+      # archive embedded in the comment can be what they show. Lich refuses
+      # an archive whose comment holds an end record that starts one, by
+      # the checks in embedded_archive?: a central directory header just in
+      # front of the record or at its stored offset, a ZIP64 locator, or an
+      # empty record. Lich's entry rules are not applied to it: those tools
+      # list an embedded archive whose entries Lich itself would refuse.
+      # The tools' further recovery heuristics (bsdtar scanning forward for
+      # a directory, unzip accepting an end record cut short) are not
+      # matched; the bundle is digest-pinned and has no comment.
       if exact && probe && probe > exact && embedded_archive?(file, tail, probe, file_size - tail_size)
         raise Error, 'ambiguous ZIP archive: its comment holds another archive'
       end
@@ -248,11 +249,11 @@ module Lich
       parse_central_directory(directory, total_count, record_offset)
     end
 
-    # Whether the end record at +record_at+ starts an archive the other
-    # tools would read: a ZIP64 locator just in front of it, an empty
-    # directory, or a central directory header where the record says its
-    # directory starts, counted back from the record or, as unzip also
-    # tries, at the record's stored offset. Python and bsdtar walk
+    # Whether the end record at +record_at+ starts an archive: a ZIP64
+    # locator just in front of it, an empty directory, or a central
+    # directory header where the record says its directory starts, counted
+    # back from the record or, as unzip also tries, at the record's stored
+    # offset (which may lie past the record). Python and bsdtar walk
     # a directory by its size, not its entry count, so the count is not
     # checked.
     # @param file [File]
@@ -267,9 +268,11 @@ module Lich
       return true if total_count.zero? && directory_size.zero?
 
       # unzip falls back to the record's stored offset when no directory
-      # header sits just in front of the record ("Compensating...").
+      # header sits just in front of the record ("Compensating..."), and
+      # follows it forward too. A start past the end of the file reads
+      # nothing.
       [record_offset - directory_size, directory_offset].any? do |start|
-        next false if start.negative? || start >= record_offset
+        next false if start.negative?
 
         file.seek(start)
         file.read(4).to_s.unpack1('V') == CENTRAL_DIRECTORY_HEADER
