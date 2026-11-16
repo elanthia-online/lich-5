@@ -76,6 +76,23 @@ module Lich
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
     class CoverageError < PolicyError; end
+
+    # The running Ruby is older than the target's minimum_ruby_version.
+    class RubyTooOldError < LocalInstallationError
+      # @return [String] the target's minimum_ruby_version
+      attr_reader :minimum
+      # @return [String] the running Ruby
+      attr_reader :running
+
+      # @param minimum [String]
+      # @param running [String]
+      def initialize(minimum, running)
+        @minimum = minimum
+        @running = running
+        super("Ruby #{running} is older than this runtime policy's minimum Ruby #{minimum}; install Ruby4Lich5 with Ruby #{minimum} or newer")
+      end
+    end
+
     # The accepted manifest is valid but publishes no target for this Ruby
     # ABI/platform. Not a PolicyError: GemCheck treats it as "no accepted
     # policy applies here" and falls back to the plain missing-gem check.
@@ -84,7 +101,10 @@ module Lich
     # +needed+ is below a package minimum and requires a repair. +recommended+
     # starts on an installed version below the accepted one, at or above its
     # minimum; startup only logs it.
-    Check = Struct.new(:plan, :needed, :specs, :recommended, keyword_init: true)
+    # +relaxed_floors+ lists RubyInstaller gems started below their inventory
+    # floor because the running Ruby is older than the inventory's
+    # +ruby_version+, the Ruby the accepted Ruby4Lich5 build ships.
+    Check = Struct.new(:plan, :needed, :specs, :recommended, :relaxed_floors, keyword_init: true)
 
     class InstalledSet < Gem::Resolver::Set
       # @param find_specs [#call] installed specs by name
@@ -136,10 +156,15 @@ module Lich
       spec.version > accepted && Gem::Platform.match_spec?(spec) && !spec.missing_extensions?
     end
 
-    def initialize(recovery: DependencyRecovery.new, find_specs: Gem::Specification.method(:find_all_by_name), loaded_specs: Gem.loaded_specs)
+    # @param ruby_version [String] the Ruby to judge the target against: the
+    #   running one at startup, the inventory's +ruby_version+ (the Ruby the
+    #   build ships) in a pre-publication check
+    def initialize(recovery: DependencyRecovery.new, find_specs: Gem::Specification.method(:find_all_by_name), loaded_specs: Gem.loaded_specs,
+                   ruby_version: RUBY_VERSION)
       @recovery = recovery
       @find_specs = find_specs
       @loaded_specs = loaded_specs
+      @ruby_version = Gem::Version.new(ruby_version)
     end
 
     def check(dependencies)
@@ -154,10 +179,19 @@ module Lich
                end
         raise type, plan.error
       end
+      begin
+        minimum_ruby = RecoveryUnitPolicy.minimum_ruby_version(plan.target)
+      rescue RecoveryUnitPolicy::Error => e
+        raise InvalidPolicyError, e.message
+      end
+      raise RubyTooOldError.new(minimum_ruby.to_s, @ruby_version.to_s) if minimum_ruby && @ruby_version < minimum_ruby
       supplied = self.class.supplied_gems(plan.target)
+      shipped = plan.target.dig('contract', 'ruby_inventory', 'ruby_version')
+      older_ruby = shipped.is_a?(String) && Gem::Version.correct?(shipped) && @ruby_version < Gem::Version.new(shipped)
       covered = plan.units.flat_map { |unit| unit.fetch('members') }
       supplied_roots = {}
       below = []
+      @relaxed_floors = []
       dependencies.each do |dep|
         next if covered.include?(dep.name)
         unless supplied.key?(dep.name)
@@ -167,12 +201,26 @@ module Lich
         active = @loaded_specs[dep.name]
         installed = @find_specs.call(dep.name)
         unless installed.any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
-          below << { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
+          entry = { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
+          # On a Ruby older than the one the build ships, a gem below its
+          # floor that still satisfies the Gemfile starts, with a note. Floors
+          # taken from the oldest Ruby this Lich accepts make this a downgraded
+          # install on every accepted patch. Floors an accepted patch never
+          # shipped come from a contract whose floors are the build Ruby's own
+          # capture (built before that change), or from a manifest whose
+          # floors follow a later REQUIRED_RUBY than this Lich release's. On
+          # the shipped Ruby or newer a gem below its floor still stops startup.
+          if older_ruby && installed.any? { |spec| dep.requirement.satisfied_by?(spec.version) } && (!active || dep.requirement.satisfied_by?(active.version))
+            @relaxed_floors << entry
+            supplied_roots[dep.name] = nil
+          else
+            below << entry
+          end
           next
         end
         supplied_roots[dep.name] = floor
       end
-      raise RubyInventoryFloorError.new(below, plan.target.dig('contract', 'ruby_inventory', 'ruby_version')) unless below.empty?
+      raise RubyInventoryFloorError.new(below, shipped, running_ruby: @ruby_version.to_s) unless below.empty?
       packages = {}
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|
@@ -254,12 +302,13 @@ module Lich
         requirements << Gem::Dependency.new(name, "= #{active.version}") if active
       end
       supplied_roots.each do |name, floor|
-        requirements << Gem::Dependency.new(name, ">= #{floor}")
+        # A relaxed root (nil floor) keeps only its Gemfile requirement.
+        requirements << Gem::Dependency.new(name, ">= #{floor}") if floor
         requirements << Gem::Dependency.new(name, "= #{@loaded_specs[name].version}") if @loaded_specs[name]
       end
       specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, accepted)).resolve.map(&:spec)
       recommended = specs.select { |spec| packages.key?(spec.name) && spec.version < Gem::Version.new(packages.fetch(spec.name).fetch('version')) }.map(&:name)
-      Check.new(plan: plan, needed: [], specs: specs, recommended: recommended)
+      Check.new(plan: plan, needed: [], specs: specs, recommended: recommended, relaxed_floors: Array(@relaxed_floors))
     end
     private :evaluate
 
@@ -379,7 +428,7 @@ module Lich
     # A repair installs every package of each affected unit at its version.
     def repair_check(plan, needed)
       units = plan.units.select { |unit| unit.fetch('packages').any? { |package| needed.include?(package.fetch('name')) } }
-      Check.new(plan: DependencyRecovery::Plan.new(units: units, target: plan.target), needed: needed, specs: [], recommended: [])
+      Check.new(plan: DependencyRecovery::Plan.new(units: units, target: plan.target), needed: needed, specs: [], recommended: [], relaxed_floors: Array(@relaxed_floors))
     end
     private :repair_check
 

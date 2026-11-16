@@ -84,6 +84,31 @@ module Lich
       package.fetch('minimum', package['version'])
     end
 
+    # The target's optional minimum_ruby_version: a canonical release
+    # version, the only way a manifest requires a newer Ruby. Absent, nil.
+    # @param target [Hash]
+    # @return [Gem::Version, nil]
+    def self.minimum_ruby_version(target)
+      return nil unless target.key?('minimum_ruby_version')
+
+      value = target['minimum_ruby_version']
+      raise Error, 'invalid minimum_ruby_version' unless canonical_release?(value)
+
+      Gem::Version.new(value)
+    end
+
+    # Gem::Version.correct? accepts surrounding whitespace (a blank string
+    # would be version 0) and rewrites forms such as "2.10.1-1", so accept
+    # only the canonical spelling. A prerelease is rejected: startup
+    # requirements are releases, so the resolver never starts on an installed
+    # prerelease.
+    # @param value [Object]
+    # @return [Boolean]
+    def self.canonical_release?(value)
+      value.is_a?(String) && !value.empty? && Gem::Version.correct?(value) &&
+        Gem::Version.new(value).to_s == value && !Gem::Version.new(value).prerelease?
+    end
+
     # Bounds use literal Gem::Version ordering, including prereleases.
     def self.applicable?(unit, version)
       range = unit['lich_versions']

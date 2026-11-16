@@ -40,6 +40,9 @@ module Lich
         require_object!(entry, 'RubyInstaller gem')
         require_object!(entry.fetch('dependencies'), 'RubyInstaller gem dependencies')
       end
+      if (minimum_ruby = RecoveryUnitPolicy.minimum_ruby_version(target)) && minimum_ruby > Gem::Version.new(inventory.fetch('ruby_version'))
+        raise Error, "minimum_ruby_version is above the inventory's ruby_version"
+      end
       roles = contract.fetch('build_roles', {})
       require_object!(roles, 'build roles')
       resolved = reader.resolve(inventory)
@@ -89,7 +92,7 @@ module Lich
       ruby_version = contract.fetch('ruby_inventory').fetch('ruby_version')
       installer_version = provenance.fetch('ruby_installer_version')
       unless installer_version.is_a?(String) && installer_version.match?(/\A\d+\.\d+\.\d+-\d+\z/) && installer_version.split('-').first == ruby_version
-        raise Error, 'installer Ruby version does not match measured inventory'
+        raise Error, 'installer Ruby version does not match ruby_inventory.ruby_version'
       end
       unless RuntimeGemContract::SHA256.match?(provenance.fetch('installer_sha256'))
         raise Error, 'installer predecessor has no valid executable digest'

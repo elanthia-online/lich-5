@@ -88,6 +88,7 @@ module Lich
       end
       if check.needed.empty?
         note_recommended(check) unless Array(check.recommended).empty?
+        note_relaxed_floors(check) unless Array(check.relaxed_floors).empty?
         return policy.activate!(check)
       end
       exit 1 unless recovery_units_approved?(check.plan.units, groups)
@@ -426,10 +427,10 @@ module Lich
       if missing.any?
         parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
       end
-      # A floor error's dialog text already lists the gems and the remedy, so
-      # repeating its message here would say both twice. The missing-gems
-      # entry still records the full message.
-      if error && !error.is_a?(AcceptedGemPolicy::RubyInventoryFloorError)
+      # The floor and too-old-Ruby errors' dialog text already gives the
+      # remedy, so repeating their message here would say it twice. The
+      # missing-gems entry still records the full message.
+      if error && !error.is_a?(AcceptedGemPolicy::RubyInventoryFloorError) && !error.is_a?(AcceptedGemPolicy::RubyTooOldError)
         parts << "Underlying error:\n  #{error.message.lines.first.to_s.strip}"
       end
       parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
@@ -456,6 +457,9 @@ module Lich
         "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
       when AcceptedGemPolicy::InvalidPolicyError
         "The accepted runtime policy is invalid or incompatible with this runtime.\nAsk the release maintainer to check the published policy."
+      when AcceptedGemPolicy::RubyTooOldError
+        "This Lich needs Ruby #{error.minimum} or newer; this is Ruby #{error.running}.\n" \
+          "Install Ruby4Lich5 with Ruby #{error.minimum} or newer, then start Lich again."
       when AcceptedGemPolicy::RubyInventoryFloorError
         "Your Ruby is missing newer versions of gems that Ruby itself supplies:\n" +
           error.gems.map { |entry| "  - #{entry.fetch(:name)} #{entry.fetch(:installed).last || 'not installed'} (needs #{entry.fetch(:floor)} or newer)" }.join("\n") +
@@ -500,6 +504,25 @@ module Lich
         installed = selected[name] ? selected[name].version : 'unknown'
         accepted = package ? "#{package.fetch('version')} (minimum #{RecoveryUnitPolicy.package_minimum(package)})" : 'unknown'
         lines << "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
+      end
+      note(lines.join("\n"))
+    end
+
+    # The running Ruby is older than the inventory's +ruby_version+, the Ruby
+    # the accepted Ruby4Lich5 build ships, and some RubyInstaller gems are
+    # below their floor but still satisfy the Gemfile. Startup continues on
+    # them; installing Ruby4Lich5 is recommended, not required.
+    # @param check [AcceptedGemPolicy::Check]
+    # @return [void]
+    def note_relaxed_floors(check)
+      shipped = check.plan.target.dig('contract', 'ruby_inventory', 'ruby_version') || 'unknown'
+      lines = [
+        "info: #{RECOMMENDED_HEADING}",
+        "  Started on Ruby #{RUBY_VERSION}, older than Ruby #{shipped}, which Ruby4Lich5 currently ships.",
+        '  These RubyInstaller gems are below their floor but satisfy the Gemfile; installing Ruby4Lich5 is recommended.'
+      ]
+      Array(check.relaxed_floors).each do |entry|
+        lines << "    - #{entry.fetch(:name)}: installed #{entry.fetch(:installed).join(', ')}, floor #{entry.fetch(:floor)}"
       end
       note(lines.join("\n"))
     end

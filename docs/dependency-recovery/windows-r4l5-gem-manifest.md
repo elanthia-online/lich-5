@@ -134,6 +134,29 @@ its floor means a damaged or downgraded install, so the message says
 "Reinstall" instead. The failure entry's dependency table marks those gems
 `BELOW FLOOR` instead of `OK`.
 
+When the running Ruby is an older patch than the inventory's `ruby_version`,
+a supplied gem below its floor whose installed (and any active) version still
+satisfies the Gemfile does not stop startup: its resolver requirement falls
+back to the Gemfile's, and the start's Lich debug log records it under the
+recommended-update heading. On that Ruby or newer, a gem below its floor
+still stops startup, since it means a broken or downgraded install. While
+the floors come from the oldest Ruby Lich accepts, every accepted patch
+ships at least the floors, so a gem below its floor is a downgrade there
+too. The relaxation covers floors an accepted patch never shipped: a
+contract whose floors are the build Ruby's exact capture, or a manifest
+whose floors follow a later `REQUIRED_RUBY` than the running Lich release's.
+
+A target may set an optional `minimum_ruby_version`: a canonical release
+version (no prerelease, no surrounding whitespace). Lich stops a Ruby older
+than it and names the Ruby to install. It is the only way a manifest
+requires a newer Ruby; the inventory floors never do. A malformed value is
+an invalid policy. The release contract check rejects a value above the
+inventory's `ruby_version`, and the pre-publication startup check judges the
+served floors as a start on that Ruby, not on the host's. That check
+models every supplied gem at exactly its floor, so the host Ruby could not
+relax a floor there, but a valid `minimum_ruby_version` above an older host
+Ruby would fail it. Older Lich releases ignore the key.
+
 A working older gem triggers repair even when no gem is missing. If an older
 version is already active, merely installing a fixed copy does not permit
 startup to continue. Lich requests one native consent decision for all affected

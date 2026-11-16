@@ -301,6 +301,25 @@ RSpec.describe Lich::GemCheck do
           expect(flushed).to eq([])
         end
 
+        it 'notes RubyInstaller gems started below their floor on an older Ruby' do
+          plan.target['contract']['ruby_inventory'] = { 'ruby_version' => '4.0.9', 'gems' => {} }
+          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.2')]
+          relaxed = [{ name: 'openssl', floor: Gem::Version.new('4.0.2'), installed: [Gem::Version.new('4.0.0')], active: nil, requirement: Gem::Requirement.default }]
+          allow(policy).to(receive(:check).and_wrap_original { |original, *args| original.call(*args).tap { |result| result.relaxed_floors = relaxed } })
+          expect(described_class).not_to receive(:alert)
+          described_class.verify!
+          entry = flushed.join("\n")
+          expect(entry).to include("Started on Ruby #{RUBY_VERSION}, older than Ruby 4.0.9, which Ruby4Lich5 currently ships.", '- openssl: installed 4.0.0, floor 4.0.2')
+          expect(File.exist?(log)).to be(false)
+        end
+
+        it 'stops a Ruby older than the minimum with the Ruby to install' do
+          error = Lich::AcceptedGemPolicy::RubyTooOldError.new('4.0.9', '4.0.5')
+          body = described_class.build_alert_body([], error)
+          expect(body).to include('needs Ruby 4.0.9 or newer; this is Ruby 4.0.5', 'Install Ruby4Lich5 with Ruby 4.0.9')
+          expect(body).not_to include('Underlying error')
+        end
+
         it 'writes no recommended note when the accepted version is installed' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1'), installed_spec('sqlite3', '2.10.2')]
           described_class.verify!

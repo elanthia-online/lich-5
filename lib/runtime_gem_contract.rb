@@ -52,8 +52,10 @@ module Lich
       raise Error, "invalid runtime declarations or lock: #{e.message}"
     end
 
-    # Inventory must be captured from the pristine target RubyInstaller before
-    # installing application gems. Supplied versions are reported, never shipped.
+    # +inventory+ is the contract's ruby_inventory: RubyInstaller gem floors
+    # (from the oldest Ruby Lich accepts) under the build installer's
+    # ruby_version, abi and platform. Supplied versions are reported, never
+    # shipped.
     def resolve(inventory)
       raise Error, 'a lockfile is required for producer resolution' unless @specs
       unless inventory['platform'] == platform && inventory['ruby_abi'] == '4.0' && inventory['gems'].is_a?(Hash)
