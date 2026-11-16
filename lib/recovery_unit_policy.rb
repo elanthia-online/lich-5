@@ -84,6 +84,20 @@ module Lich
       package.fetch('minimum', package['version'])
     end
 
+    # The target's optional minimum_ruby_version: a canonical release
+    # version, the only way a manifest requires a newer Ruby. Absent, nil.
+    # @param target [Hash]
+    # @return [Gem::Version, nil]
+    def self.minimum_ruby_version(target)
+      return nil unless target.key?('minimum_ruby_version')
+
+      value = target['minimum_ruby_version']
+      unless value.is_a?(String) && !value.empty? && Gem::Version.correct?(value) && Gem::Version.new(value).to_s == value && !Gem::Version.new(value).prerelease?
+        raise Error, 'invalid minimum_ruby_version'
+      end
+      Gem::Version.new(value)
+    end
+
     # Bounds use literal Gem::Version ordering, including prereleases.
     def self.applicable?(unit, version)
       range = unit['lich_versions']

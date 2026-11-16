@@ -791,4 +791,75 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(check.recommended).to eq(['sqlite3'])
     end
   end
+
+  describe 'RubyInstaller floors on an older Ruby patch' do
+    let(:inventory) { target['contract']['ruby_inventory'] }
+
+    def policy_on(ruby_version)
+      described_class.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active, ruby_version: ruby_version)
+    end
+
+    before do
+      plan.units = []
+      inventory['ruby_version'] = '4.0.9'
+      inventory['gems']['openssl'] = { 'version' => '4.0.2' }
+      installed['openssl'] = [spec('openssl', '4.0.0')]
+    end
+
+    it 'starts on a gem below its floor that satisfies the Gemfile and reports it' do
+      check = policy_on('4.0.5').check([Gem::Dependency.new('openssl')])
+      expect(check.needed).to eq([])
+      expect(check.specs.map(&:full_name)).to eq(['openssl-4.0.0'])
+      expect(check.relaxed_floors.map { |entry| entry.values_at(:name, :floor) }).to eq([['openssl', Gem::Version.new('4.0.2')]])
+    end
+
+    it 'still stops on the measured patch or newer' do
+      %w[4.0.9 4.0.10].each do |ruby|
+        expect { policy_on(ruby).check([Gem::Dependency.new('openssl')]) }.to raise_error(described_class::RubyInventoryFloorError)
+      end
+    end
+
+    it 'still stops when no installed version satisfies the Gemfile' do
+      expect { policy_on('4.0.5').check([Gem::Dependency.new('openssl', '>= 4.0.1')]) }.to raise_error(described_class::RubyInventoryFloorError, /Gemfile requires >= 4.0.1/)
+    end
+
+    it 'still stops when the active version does not satisfy the Gemfile' do
+      installed['openssl'] << spec('openssl', '4.0.1')
+      active['openssl'] = installed['openssl'].first
+      expect { policy_on('4.0.5').check([Gem::Dependency.new('openssl', '>= 4.0.1')]) }.to raise_error(described_class::RubyInventoryFloorError)
+    end
+
+    it 'reports no relaxed floors when every gem meets its floor' do
+      installed['openssl'] = [spec('openssl', '4.0.2')]
+      expect(policy_on('4.0.5').check([Gem::Dependency.new('openssl')]).relaxed_floors).to eq([])
+    end
+  end
+
+  describe 'minimum_ruby_version' do
+    def policy_on(ruby_version)
+      described_class.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active, ruby_version: ruby_version)
+    end
+
+    before { installed['sqlite3'] = [spec('sqlite3', '2.10.2')] }
+
+    it 'stops a Ruby older than the minimum with the Ruby to install' do
+      target['minimum_ruby_version'] = '4.0.9'
+      expect { policy_on('4.0.5').check(dependencies) }.to raise_error(described_class::RubyTooOldError, /Ruby 4.0.5 is older.*minimum Ruby 4.0.9/) { |error|
+        expect([error.minimum, error.running]).to eq(%w[4.0.9 4.0.5])
+        expect(error).to be_a(described_class::LocalInstallationError)
+      }
+    end
+
+    it 'starts on the minimum Ruby or newer' do
+      target['minimum_ruby_version'] = '4.0.9'
+      expect(policy_on('4.0.9').check(dependencies).needed).to eq([])
+    end
+
+    it 'treats a malformed value as an invalid policy' do
+      ['4.0', '4.0.9.rc1', ' 4.0.9', nil].each do |value|
+        target['minimum_ruby_version'] = value
+        expect { policy_on('4.0.9').check(dependencies) }.to raise_error(described_class::InvalidPolicyError) unless value == '4.0'
+      end
+    end
+  end
 end

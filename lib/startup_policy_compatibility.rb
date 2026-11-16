@@ -33,7 +33,10 @@ module Lich
               available[package.fetch('name')] = specification(package.fetch('name'), version, platform)
             end
           end
-          policy = AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { available.key?(name) ? [available.fetch(name)] : [] }, loaded_specs: {})
+          # Judge as a start on the measured Ruby, never the host's: an older
+          # host Ruby would relax the inventory floors and hide a failure.
+          policy = AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { available.key?(name) ? [available.fetch(name)] : [] }, loaded_specs: {},
+                                         ruby_version: plan.target.dig('contract', 'ruby_inventory', 'ruby_version') || RUBY_VERSION)
           check = policy.check(dependencies)
           raise AcceptedGemPolicy::CoverageError, "#{label} cannot supply a complete startup" unless check.needed.empty?
         end

@@ -40,6 +40,9 @@ module Lich
         require_object!(entry, 'RubyInstaller gem')
         require_object!(entry.fetch('dependencies'), 'RubyInstaller gem dependencies')
       end
+      if (minimum_ruby = RecoveryUnitPolicy.minimum_ruby_version(target)) && minimum_ruby > Gem::Version.new(inventory.fetch('ruby_version'))
+        raise Error, 'minimum_ruby_version is above the measured inventory Ruby'
+      end
       roles = contract.fetch('build_roles', {})
       require_object!(roles, 'build roles')
       resolved = reader.resolve(inventory)
