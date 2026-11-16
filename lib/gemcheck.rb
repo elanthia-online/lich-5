@@ -414,9 +414,10 @@ module Lich
 
     # Composes the alert dialog body: platform message + a bulleted list of
     # detected missing gems, plus the underlying error when one was captured.
-    # The error is always shown when present: a failed `require 'gtk3'` may
-    # mean a native DLL failed to load even though every gem is installed, so
-    # hiding the message behind the missing-gems list misdiagnoses the fault.
+    # The error is shown even when gems are listed: a failed `require 'gtk3'`
+    # may mean a native DLL failed to load even though every gem is installed,
+    # so hiding the message behind the missing-gems list misdiagnoses the
+    # fault. Errors whose dialog text already states them are not repeated.
     # @param missing [Array<String>]
     # @param error [Exception, nil]
     # @return [String]
