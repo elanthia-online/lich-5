@@ -406,6 +406,28 @@ module Lich
             end
           end
 
+          # Closes the session from the core's pre-terminate hook thread. That thread
+          # is a host thread, so Script.current is nil on it; it stands in for the
+          # owner's cleanup thread (blocked on the hook) and carries the same
+          # cleanup identity for the close, so destroy handlers keep resolving the
+          # dying script as they did when the close ran on the cleanup thread.
+          # Retire this borrowed identity once the core hook runner supplies the
+          # owner's cleanup identity to hooks itself.
+          # @return [void]
+          # @api private
+          def close_for_owner_death
+            key = Script::CLEANUP_SCRIPT_THREAD_KEY if Script.const_defined?(:CLEANUP_SCRIPT_THREAD_KEY, false)
+            return close unless key
+
+            previous = Thread.current.thread_variable_get(key)
+            Thread.current.thread_variable_set(key, @owner)
+            begin
+              close
+            ensure
+              Thread.current.thread_variable_set(key, previous)
+            end
+          end
+
           private
 
           # Runs admitted queue/timer work with the captured viewer and window.
