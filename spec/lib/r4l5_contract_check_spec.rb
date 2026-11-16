@@ -454,4 +454,12 @@ RSpec.describe Lich::R4L5ContractCheck do
       end
     end
   end
+
+  it 'requires every occurrence of a package to agree on self_build_equivalent' do
+    legacy = Marshal.load(Marshal.dump(unit))
+    legacy['id'] = 'redis-legacy'
+    unit.fetch('packages').first['self_build_equivalent'] = true
+    target['units'] = [unit, legacy]
+    expect { verify }.to raise_error(described_class::Error, /recovery self_build_equivalent mismatch for redis-client/)
+  end
 end

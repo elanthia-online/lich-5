@@ -68,8 +68,10 @@ module Lich
     # Identity includes the effective startup minimum by version value, so an
     # absent minimum, one equal to the version and one spelled differently
     # but equal to it (2.10.2.0 for 2.10.2) are the same package.
+    # The self_build_equivalent flag is part of identity too: two units must
+    # not disagree on whether a self-built copy may stand in for a package.
     def self.package_identity(package, platform)
-      package.values_at('version', 'sha256') + [package_platform(package, platform), minimum_identity(package)]
+      package.values_at('version', 'sha256') + [package_platform(package, platform), minimum_identity(package), package['self_build_equivalent'] == true]
     end
 
     # Canonical segments, not Gem::Version: Gem::Version#eql? compares the

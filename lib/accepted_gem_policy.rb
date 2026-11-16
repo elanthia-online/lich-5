@@ -112,17 +112,21 @@ module Lich
       # @param accepted [Hash{String => Gem::Version, nil}, nil] versions a
       #   self-built gem must exceed (nil for a package that accepts only its
       #   accepted build), or nil to accept only the accepted builds
-      def initialize(find_specs, platforms, accepted)
+      # @param equivalent [Hash{String => Boolean}] packages whose
+      #   self-built copy at the accepted version is also accepted
+      def initialize(find_specs, platforms, accepted, equivalent = {})
         super()
         @find_specs = find_specs
         @platforms = platforms
         @accepted = accepted
+        @equivalent = equivalent
         self.remote = false
       end
 
       def find_all(request)
         @find_specs.call(request.name).select do |spec|
-          request.match?(spec) && (@platforms.key?(spec.name) ? AcceptedGemPolicy.acceptable_build?(spec, @platforms[spec.name], @accepted&.fetch(spec.name)) : Gem::Platform.match_spec?(spec))
+          request.match?(spec) &&
+            (@platforms.key?(spec.name) ? AcceptedGemPolicy.acceptable_build?(spec, @platforms[spec.name], @accepted&.fetch(spec.name), @equivalent.fetch(spec.name, false)) : Gem::Platform.match_spec?(spec))
         end
       end
     end
@@ -144,16 +148,22 @@ module Lich
     # cairo-gobject requires as `>= 1.16.2`) gets no version here; see
     # #newer_self_built_versions. At the accepted version itself the R4L5
     # build is preferred, because Ruby4Lich5 patches the GTK stack.
+    #
+    # A package the manifest marks `self_build_equivalent` (Ruby4Lich5 builds
+    # it from unchanged upstream source, such as ox) also accepts a self-built
+    # copy at the accepted version itself, under the same rules otherwise.
     # @param spec [Gem::Specification]
     # @param platform [String] the accepted package platform
     # @param accepted [Gem::Version, nil] the accepted package version, or nil
     #   to accept only the accepted build
+    # @param equivalent [Boolean] whether a self-built copy at the accepted
+    #   version is accepted too
     # @return [Boolean]
-    def self.acceptable_build?(spec, platform, accepted)
+    def self.acceptable_build?(spec, platform, accepted, equivalent = false)
       return true if spec.platform.to_s == platform
       return false unless accepted
 
-      spec.version > accepted && Gem::Platform.match_spec?(spec) && !spec.missing_extensions?
+      (spec.version > accepted || (equivalent && spec.version == accepted)) && Gem::Platform.match_spec?(spec) && !spec.missing_extensions?
     end
 
     # @param ruby_version [String] the Ruby to judge the target against: the
@@ -234,6 +244,7 @@ module Lich
       platforms = packages.transform_values do |package|
         RecoveryUnitPolicy.package_platform(package, plan.target.fetch('platform'))
       end
+      @equivalent = packages.transform_values { |package| package['self_build_equivalent'] == true }
       strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
       minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
       newer = newer_self_built_versions(plan, strict)
@@ -306,7 +317,7 @@ module Lich
         requirements << Gem::Dependency.new(name, ">= #{floor}") if floor
         requirements << Gem::Dependency.new(name, "= #{@loaded_specs[name].version}") if @loaded_specs[name]
       end
-      specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, accepted)).resolve.map(&:spec)
+      specs = Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, accepted, equivalent)).resolve.map(&:spec)
       recommended = specs.select { |spec| packages.key?(spec.name) && spec.version < Gem::Version.new(packages.fetch(spec.name).fetch('version')) }.map(&:name)
       Check.new(plan: plan, needed: [], specs: specs, recommended: recommended, relaxed_floors: Array(@relaxed_floors))
     end
@@ -352,7 +363,7 @@ module Lich
     #   newer self-built gem
     def self_built_candidates?(packages, platforms, newer)
       packages.each_key.any? do |name|
-        @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name)) }
+        @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name), equivalent.fetch(name, false)) }
       end
     end
     private :self_built_candidates?
@@ -370,11 +381,13 @@ module Lich
       kept = (packages.keys - repaired).map { |name| Gem::Dependency.new(name, ">= #{minimums.fetch(name)}") }
       requirements = kept + packages.each_key.filter_map do |name|
         next unless newer.fetch(name)
-        next unless @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name)) }
+        next unless @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name), equivalent.fetch(name, false)) }
 
-        Gem::Dependency.new(name, "> #{newer.fetch(name)}")
+        # A self-built copy at the accepted version is one only an
+        # equivalent package accepts, so it needs >= rather than >.
+        Gem::Dependency.new(name, "#{equivalent.fetch(name, false) ? '>=' : '>'} #{newer.fetch(name)}")
       end
-      Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, newer)).resolve
+      Gem::Resolver.new(requirements, InstalledSet.new(@find_specs, platforms, newer, equivalent)).resolve
       true
     rescue Gem::Exception
       false
@@ -415,10 +428,16 @@ module Lich
     end
     private :exact_pin?
 
+    # @return [Hash{String => Boolean}] packages marked self_build_equivalent
+    def equivalent
+      @equivalent || {}
+    end
+    private :equivalent
+
     def needed_at(packages, platforms, floors, accepted)
       packages.filter_map do |name, _package|
         floor = floors.fetch(name)
-        usable = ->(spec) { spec.version >= floor && self.class.acceptable_build?(spec, platforms.fetch(name), accepted&.fetch(name)) }
+        usable = ->(spec) { spec.version >= floor && self.class.acceptable_build?(spec, platforms.fetch(name), accepted&.fetch(name), equivalent.fetch(name, false)) }
         active = @loaded_specs[name]
         name if @find_specs.call(name).none?(&usable) || (active && !usable.call(active))
       end

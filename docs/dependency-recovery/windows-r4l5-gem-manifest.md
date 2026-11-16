@@ -249,7 +249,16 @@ compiled with `gem install` or `gem update`, also counts when its version is
 **strictly newer than `version`** (not merely at `minimum`) and its native
 extension finished building. Startup keeps that newer gem instead of
 repairing it down to the accepted build. At `version` itself the R4L5 build is
-still required, because Ruby4Lich5 patches the GTK stack. Ruby-GNOME pins one
+still required, because Ruby4Lich5 patches the GTK stack, unless the package
+carries `"self_build_equivalent": true`. Ruby4Lich5 sets that optional flag
+only on packages it builds from unchanged upstream source (such as `ox` and
+`curses`). A self-built copy at `version` then counts too, under the same
+conditions as a newer one: a loadable platform, a finished native extension,
+and every unit member that depends on it pinning it exactly. The flag must be
+`true` or `false`; anything else is an invalid policy. It is part of a
+package's identity, so two units that disagree on it conflict, and the
+release contract check rejects lock-checked packages whose units disagree.
+An absent flag keeps the strict behavior, and older Lich releases ignore it. Ruby-GNOME pins one
 exact version across its gems, so a strictly newer self-built gtk3 only
 resolves with equally new self-built glib2 and the rest of the stack, never
 with an R4L5 build. If the self-built gems cannot resolve together (a

@@ -588,6 +588,85 @@ RSpec.describe Lich::AcceptedGemPolicy do
       policy.activate!(check)
       expect(active.fetch('ox')).to equal(ox)
     end
+
+    context 'when the manifest marks it self_build_equivalent' do
+      let(:package) { ox_unit.fetch('packages').first }
+
+      def self_built_ox(version, extension_built: true)
+        spec('ox', version).tap do |item|
+          item.extensions = ['ext/extconf.rb']
+          item.define_singleton_method(:missing_extensions?) { !extension_built }
+        end
+      end
+
+      it 'keeps a self-built copy at the accepted version instead of repairing it' do
+        package['self_build_equivalent'] = true
+        ox = self_built_ox('2.14.29')
+        installed['ox'] = [ox]
+        expect(recovery).not_to receive(:recover)
+        check = policy.check([Gem::Dependency.new('ox')])
+        expect(check.needed).to be_empty
+        policy.activate!(check)
+        expect(active.fetch('ox')).to equal(ox)
+      end
+
+      it 'still repairs a same-version self-built copy without the flag, or with it false' do
+        installed['ox'] = [self_built_ox('2.14.29')]
+        [nil, false].each do |flag|
+          flag.nil? ? package.delete('self_build_equivalent') : package['self_build_equivalent'] = flag
+          expect(policy.check([Gem::Dependency.new('ox')]).needed).to eq(['ox'])
+        end
+      end
+
+      it 'still repairs an older self-built copy, or one whose native extension did not build' do
+        package['self_build_equivalent'] = true
+        installed['ox'] = [self_built_ox('2.14.28')]
+        expect(policy.check([Gem::Dependency.new('ox')]).needed).to eq(['ox'])
+        installed['ox'] = [self_built_ox('2.14.29', extension_built: false)]
+        expect(policy.check([Gem::Dependency.new('ox')]).needed).to eq(['ox'])
+      end
+
+      it 'does not restart for an already active same-version self-built copy' do
+        package['self_build_equivalent'] = true
+        ox = self_built_ox('2.14.29')
+        installed['ox'] = [ox]
+        active['ox'] = ox
+        expect(policy.check([Gem::Dependency.new('ox')]).needed).to be_empty
+      end
+
+      it 'keeps the same-version self-built copy in the consistency pass when another unit needs repair' do
+        package['self_build_equivalent'] = true
+        sqlite = unit
+        plan.units = [ox_unit, sqlite]
+        installed['ox'] = [self_built_ox('2.14.29')]
+        installed['sqlite3'] = [spec('sqlite3', '2.10.1')]
+        check = policy.check([Gem::Dependency.new('ox'), Gem::Dependency.new('sqlite3')])
+        expect(check.needed).to eq(['sqlite3'])
+        expect(check.plan.units.map { |item| item['id'] }).to eq(['sqlite3'])
+      end
+
+      it 'conflicts when two units disagree on the flag for one package' do
+        package['self_build_equivalent'] = true
+        other = Marshal.load(Marshal.dump(ox_unit)).merge('id' => 'ox-copy')
+        other.fetch('packages').first['self_build_equivalent'] = false
+        plan.units = [ox_unit, other]
+        installed['ox'] = [self_built_ox('2.14.29')]
+        expect { policy.check([Gem::Dependency.new('ox')]) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package identities for ox/)
+      end
+    end
+  end
+
+  context 'with a self_build_equivalent package in a stack that pins it loosely' do
+    let(:local) { Gem::Platform.local.to_s }
+
+    it 'never accepts a same-version self-built copy a unit member depends on loosely' do
+      cairo = { 'name' => 'cairo', 'version' => '1.18.0', 'filename' => "cairo-1.18.0-#{local}.gem", 'sha256' => "sha256:#{'4' * 64}", 'self_build_equivalent' => true }
+      gobject = { 'name' => 'cairo-gobject', 'version' => '4.3.9', 'filename' => "cairo-gobject-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'5' * 64}" }
+      plan.units = [{ 'id' => 'cairo', 'members' => %w[cairo cairo-gobject], 'install_order' => %w[cairo cairo-gobject], 'packages' => [cairo, gobject] }]
+      installed['cairo'] = [spec('cairo', '1.18.0')]
+      installed['cairo-gobject'] = [spec('cairo-gobject', '4.3.9', { 'cairo' => '>= 1.16.2' }).tap { |item| item.platform = Gem::Platform.local }]
+      expect(policy.check([Gem::Dependency.new('cairo-gobject')]).needed).to eq(['cairo'])
+    end
   end
 
   context 'with a package minimum' do
@@ -742,6 +821,30 @@ RSpec.describe Lich::AcceptedGemPolicy do
         [check.needed, check.specs.map(&:full_name), check.plan.units.map { |item| item.fetch('id') }, check.recommended]
       end
       expect(results.last).to eq(results.first)
+    end
+  end
+
+  context 'when validating a served self_build_equivalent flag' do
+    let(:artifact) { { 'url' => 'https://example.invalid/sqlite3-2.10.2.gem', 'archive' => 'gem', 'filename' => 'sqlite3-2.10.2.gem', 'sha256' => "sha256:#{'a' * 64}" } }
+
+    def served(flag)
+      package = unit.fetch('packages').first.merge('self_build_equivalent' => flag)
+      document = { 'schema' => 1, 'targets' => [{ 'ruby_abi' => RUBY_VERSION.split('.').first(2).join('.'), 'platform' => Gem::Platform.local.to_s,
+                                                  'units' => [unit.merge('artifact' => artifact, 'packages' => [package])] }] }
+      reader = Lich::DependencyRecovery.new(http_get: ->(_url) { JSON.generate(document) })
+      described_class.new(recovery: reader, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active)
+    end
+
+    it 'accepts true or false' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      [true, false].each { |flag| expect(served(flag).check(dependencies).needed).to be_empty }
+    end
+
+    it 'rejects anything else' do
+      installed['sqlite3'] = [spec('sqlite3', '2.10.2')]
+      ['true', 1, nil, {}].each do |flag|
+        expect { served(flag).check(dependencies) }.to raise_error(described_class::InvalidPolicyError, /self_build_equivalent must be true or false/)
+      end
     end
   end
 
