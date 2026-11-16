@@ -245,7 +245,7 @@ module Lich
       platforms = packages.transform_values do |package|
         RecoveryUnitPolicy.package_platform(package, plan.target.fetch('platform'))
       end
-      @equivalent = packages.transform_values { |package| RecoveryUnitPolicy.self_build_equivalent?(package) }
+      @equivalent = packages.to_h { |name, package| [name, RecoveryUnitPolicy.self_build_equivalent?(package) && !unit_dependency?(plan, name)] }
       strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
       minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
       newer = newer_self_built_versions(plan, strict)
@@ -427,6 +427,22 @@ module Lich
       unit.fetch('packages').map { |package| package.fetch('name') }
     end
     private :unit_package_names
+
+    # Whether another package of +name+'s units depends on it, judged by every
+    # installed or active copy (the manifest carries no gem dependencies). At
+    # the accepted version an exact pin from a unit-mate no longer keeps a
+    # self-built copy apart from the R4L5 builds, so the self_build_equivalent
+    # flag only counts for a package nothing else in its units depends on,
+    # such as standalone ox or curses. A flagged glib2 beside an R4L5 gtk3
+    # that pins it still repairs.
+    # @return [Boolean]
+    def unit_dependency?(plan, name)
+      others = plan.units.select { |unit| unit_package_names(unit).include?(name) }.flat_map { |unit| unit_package_names(unit) }.uniq - [name]
+      others.any? do |other|
+        (@find_specs.call(other) + [@loaded_specs[other]].compact).any? { |spec| spec.runtime_dependencies.any? { |dep| dep.name == name } }
+      end
+    end
+    private :unit_dependency?
 
     def exact_pin?(dependency)
       dependency.requirement.requirements.all? { |operator, _version| operator == '=' }

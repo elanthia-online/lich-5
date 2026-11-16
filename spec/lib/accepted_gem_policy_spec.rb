@@ -654,6 +654,12 @@ RSpec.describe Lich::AcceptedGemPolicy do
         expect { policy.check([Gem::Dependency.new('ox')]) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package identities for ox/)
       end
 
+      it 'repairs a flagged same-version self-built copy whose own dependency cannot resolve, instead of stopping' do
+        package['self_build_equivalent'] = true
+        installed['ox'] = [self_built_ox('2.14.29').tap { |item| item.add_runtime_dependency('ox-missing-helper', '>= 1') }]
+        expect(policy.check([Gem::Dependency.new('ox')]).needed).to eq(['ox'])
+      end
+
       it 'treats one unit omitting the flag and another setting it false as the same package' do
         package.delete('self_build_equivalent')
         other = Marshal.load(Marshal.dump(ox_unit)).merge('id' => 'ox-copy')
@@ -666,7 +672,7 @@ RSpec.describe Lich::AcceptedGemPolicy do
     end
   end
 
-  context 'with a self_build_equivalent package in a stack that pins it loosely' do
+  context 'with a self_build_equivalent package another unit member depends on' do
     let(:local) { Gem::Platform.local.to_s }
 
     it 'never accepts a same-version self-built copy a unit member depends on loosely' do
@@ -676,6 +682,15 @@ RSpec.describe Lich::AcceptedGemPolicy do
       installed['cairo'] = [spec('cairo', '1.18.0')]
       installed['cairo-gobject'] = [spec('cairo-gobject', '4.3.9', { 'cairo' => '>= 1.16.2' }).tap { |item| item.platform = Gem::Platform.local }]
       expect(policy.check([Gem::Dependency.new('cairo-gobject')]).needed).to eq(['cairo'])
+    end
+
+    it 'never accepts a same-version self-built copy a unit member pins exactly' do
+      glib2 = { 'name' => 'glib2', 'version' => '4.3.9', 'filename' => "glib2-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'6' * 64}", 'self_build_equivalent' => true }
+      gtk3 = { 'name' => 'gtk3', 'version' => '4.3.9', 'filename' => "gtk3-4.3.9-#{local}.gem", 'sha256' => "sha256:#{'7' * 64}" }
+      plan.units = [{ 'id' => 'gtk3', 'members' => %w[glib2 gtk3], 'install_order' => %w[glib2 gtk3], 'packages' => [glib2, gtk3] }]
+      installed['glib2'] = [spec('glib2', '4.3.9').tap { |item| item.extensions = ['ext/glib2/extconf.rb'] }.tap { |item| item.define_singleton_method(:missing_extensions?) { false } }]
+      installed['gtk3'] = [spec('gtk3', '4.3.9', { 'glib2' => '= 4.3.9' }).tap { |item| item.platform = Gem::Platform.local }]
+      expect(policy.check([Gem::Dependency.new('gtk3')]).needed).to eq(['glib2'])
     end
   end
 
