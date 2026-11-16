@@ -68,7 +68,7 @@ module Lich
             lich --login CHARACTER
             lich --login CHARACTER --headless PORT
             lich --login CHARACTER --headless auto
-            lich --add-account ACCOUNT PASSWORD
+            lich --add-account ACCOUNT
 
           Help topics:
             lich --help login
@@ -143,7 +143,7 @@ module Lich
             lich [account command] [options]
 
           Commands:
-            --add-account ACCOUNT PASSWORD [--frontend FRONTEND]
+            --add-account ACCOUNT [--password-stdin] [--frontend FRONTEND]
             --refresh-characters ACCOUNT [--frontend FRONTEND]
             --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD
@@ -151,6 +151,13 @@ module Lich
             --recover-master-password [NEWPASSWORD]
             --convert-entries MODE
             --change-encryption-mode MODE [--master-password PASSWORD]
+
+          Password for --add-account:
+            Prompted for on the terminal; what you type is not shown.
+            --password-stdin reads the first line of standard input instead.
+            Leading and trailing spaces are part of the password.
+            On Windows, pipe it from PowerShell 7 (pwsh) or cmd.
+            Windows PowerShell 5.1 changes non-ASCII characters in a pipe.
 
           Modes:
             plaintext
@@ -164,7 +171,11 @@ module Lich
                                           DRF  DragonRealms Fallen
 
           Examples:
-            lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront
+            lich --add-account MYACCOUNT --frontend stormfront
+            # sh, bash, zsh:
+            printf '%s\\n' "$PASSWORD" | lich --add-account MYACCOUNT --password-stdin
+            # PowerShell 7:
+            $env:PASSWORD | lich --add-account MYACCOUNT --password-stdin
             lich --refresh-characters MYACCOUNT
             lich --add-character MYACCOUNT NewCharName --game-code DR
             lich --change-account-password MYACCOUNT NEWPASSWORD

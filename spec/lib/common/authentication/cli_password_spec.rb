@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require 'stringio'
 require 'tempfile'
 require 'tmpdir'
 require 'yaml'
@@ -487,6 +488,347 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       expect {
         Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
       }.not_to output(/note:/).to_stdout
+    end
+
+    it 'skips the frontend prompt and stores stormfront when prompt_frontend is false' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_for_frontend)
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      expect {
+        expect(Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', nil, prompt_frontend: false)).to eq(0)
+      }.to output(/note: No frontend selected - characters stored with frontend stormfront/).to_stdout
+
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:prompt_for_frontend)
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account)
+        .with(anything, 'DOUG', 'password', [hash_including(frontend: 'stormfront')])
+    end
+
+    it 'asks for the frontend when prompt_frontend is true and none is known' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_for_frontend).and_return('wizard')
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      expect(Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', nil, prompt_frontend: true)).to eq(0)
+
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:prompt_for_frontend).once
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account)
+        .with(anything, 'DOUG', 'password', [hash_including(frontend: 'wizard')])
+    end
+
+    it 'still uses an explicit frontend when prompt_frontend is false' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      expect {
+        Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard', prompt_frontend: false)
+      }.not_to output(/note:/).to_stdout
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account)
+        .with(anything, 'DOUG', 'password', [hash_including(frontend: 'wizard')])
+    end
+  end
+
+  describe '.read_secret' do
+    # io/console's IO#getpass contract: reads one line with echo off and returns
+    # it without the line ending, or nil at end-of-input.
+    let(:terminal) do
+      Class.new do
+        attr_reader :prompts, :events
+
+        def initialize(line, output = nil)
+          @line = line
+          @output = output
+          @prompts = []
+          @events = []
+        end
+
+        def tty? = true
+
+        # io/console's IO#noecho: runs the block with echo off. Records how
+        # much of the prompt was shown when echo went off and came back on.
+        def noecho
+          @events << [:echo_off, @output&.string.to_s.dup]
+          yield
+        ensure
+          @events << [:echo_on, @output&.string.to_s.dup]
+        end
+
+        # Discards type-ahead; records how much of the prompt was shown by then.
+        def iflush
+          @events << [:iflush, @output&.string.to_s.dup]
+        end
+
+        # A prompt passed here would go to $stderr, which Lich points at
+        # the debug log, so callers must print their own and pass none.
+        def getpass(prompt = nil)
+          @events << [:getpass, @output&.string.to_s.dup]
+          @prompts << prompt
+          @line
+        end
+
+        def gets
+          raise 'a terminal secret must be read with getpass, not gets'
+        end
+      end
+    end
+
+    let(:output) { StringIO.new }
+
+    it 'turns echo off, discards type-ahead, shows the prompt, then reads' do
+      # Records the flush with the terminal's events: with stdout piped, an
+      # unflushed prompt would only appear after the password was read.
+      screen = Class.new(StringIO) do
+        attr_writer :events
+
+        def flush
+          @events << [:flush, string.dup]
+          super
+        end
+      end.new
+      tty = terminal.new('typed', screen)
+      screen.events = tty.events
+
+      described_class.read_secret('Password: ', from_stdin: false, input: tty, output: screen)
+
+      expect(tty.events).to eq([[:echo_off, ''], [:iflush, ''], [:flush, 'Password: '], [:getpass, 'Password: '],
+                                [:echo_on, 'Password: ']])
+    end
+
+    it 'puts back the SIGCONT handler it found once the read is done', if: Signal.list.key?('CONT') do
+      sentinel = proc {}
+      previous = Signal.trap('CONT', sentinel)
+
+      described_class.read_secret('Password: ', from_stdin: false, input: terminal.new('typed'), output: output)
+
+      expect(Signal.trap('CONT', previous)).to be(sentinel)
+    end
+
+    # U+FEFF and a non-ASCII letter, built from code points: the
+    # AsciiOnlySource cop rejects them as literals or escapes.
+    let(:bom) { [0xFEFF].pack('U') }
+    let(:a_umlaut) { [0xE4].pack('U') }
+
+    it 'removes a UTF-8 byte-order mark that Windows PowerShell 5.1 puts in front of a piped line' do
+      pipe = StringIO.new("#{bom} secret \r\n".b)
+
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: pipe).b).to eq(' secret '.b)
+    end
+
+    it 'removes the byte-order mark from a UTF-8 tagged line, and only one of them' do
+      pipe = StringIO.new("#{bom}#{bom}p#{a_umlaut}ss\n")
+
+      secret = described_class.read_secret('Password: ', from_stdin: true, input: pipe)
+      expect(secret).to eq("#{bom}p#{a_umlaut}ss")
+      expect(secret.encoding).to eq(Encoding::UTF_8)
+    end
+
+    it 'keeps a byte-order mark that is not at the start' do
+      pipe = StringIO.new("pw#{bom}\n")
+
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: pipe)).to eq("pw#{bom}")
+    end
+
+    it 'treats a line that is only a byte-order mark as empty' do
+      expect { described_class.read_secret('Password: ', from_stdin: true, input: StringIO.new("#{bom}\n")) }
+        .to raise_error(described_class::SecretInputError, /cannot be empty/)
+    end
+
+    it 'reads from a terminal with getpass, keeping surrounding spaces' do
+      tty = terminal.new('  a b  ')
+
+      expect(described_class.read_secret('Password: ', from_stdin: false, input: tty, output: output)).to eq('  a b  ')
+    end
+
+    it 'prints the prompt and the closing newline itself instead of handing the prompt to getpass' do
+      tty = terminal.new('typed')
+
+      described_class.read_secret('Password: ', from_stdin: false, input: tty, output: output)
+
+      expect(tty.prompts).to eq([nil])
+      expect(output.string).to eq("Password: \n")
+      expect(output.string).not_to include('typed')
+    end
+
+    it 'ends the prompt line even at end-of-input' do
+      expect { described_class.read_secret('Password: ', from_stdin: false, input: terminal.new(nil), output: output) }
+        .to raise_error(described_class::SecretInputError)
+      expect(output.string).to eq("Password: \n")
+    end
+
+    it 'prints nothing when reading a pipe' do
+      described_class.read_secret('Password: ', from_stdin: true, input: StringIO.new("pw\n"), output: output)
+
+      expect(output.string).to be_empty
+    end
+
+    it 'reads with getpass even when --password-stdin is given and stdin is a terminal' do
+      tty = terminal.new('typed')
+
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: tty, output: output)).to eq('typed')
+    end
+
+    it 'reads one line from a pipe with --password-stdin, removing only the line ending' do
+      pipe = StringIO.new(" \tsecret \r\nnext\n")
+
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: pipe)).to eq(" \tsecret ")
+      expect(pipe.gets).to eq("next\n")
+    end
+
+    it 'refuses to read a pipe without --password-stdin, leaving it unread' do
+      pipe = StringIO.new("unrelated\n")
+
+      expect { described_class.read_secret('Password: ', from_stdin: false, input: pipe) }
+        .to raise_error(described_class::SecretInputError, /--password-stdin/)
+      expect(pipe.pos).to eq(0)
+    end
+
+    it 'raises at end-of-input on a pipe' do
+      expect { described_class.read_secret('Password: ', from_stdin: true, input: StringIO.new('')) }
+        .to raise_error(described_class::SecretInputError, /Unable to read password/)
+    end
+
+    it 'raises at end-of-input on a terminal' do
+      expect { described_class.read_secret('Password: ', from_stdin: false, input: terminal.new(nil), output: output) }
+        .to raise_error(described_class::SecretInputError, /Unable to read password/)
+    end
+
+    it 'raises on an empty line rather than returning an empty password' do
+      expect { described_class.read_secret('Password: ', from_stdin: true, input: StringIO.new("\n")) }
+        .to raise_error(described_class::SecretInputError, /cannot be empty/)
+      expect { described_class.read_secret('Password: ', from_stdin: false, input: terminal.new(''), output: output) }
+        .to raise_error(described_class::SecretInputError, /cannot be empty/)
+    end
+
+    it 'keeps a password that is only spaces' do
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: StringIO.new("   \n"))).to eq('   ')
+    end
+
+    it 'shows the prompt on a real terminal even when $stderr is redirected, as Lich does' do
+      original_stderr = $stderr
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      master, slave = PTY.open
+      $stderr = StringIO.new
+      # Lich reads $stdin, and io-console only diverts getpass's prompt to
+      # $stderr when the receiver is $stdin, so the terminal has to be $stdin.
+      $stdin = slave
+      # Typed before the prompt appears: it must be discarded, not used.
+      master.write("early\n")
+      IO.select([slave], nil, nil, 2)
+
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: slave) }
+      shown = +''
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until shown.include?('Password: ') || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        shown << master.read_nonblock(4096) if master.wait_readable(0.1)
+      end
+      expect(shown).to include('Password: ')
+      master.write("pw\n")
+
+      expect(reader.join(5)&.value).to eq('pw')
+      # io-console writes its closing newline to $stderr; the prompt must not go there.
+      expect($stderr.string).not_to include('Password: ')
+    ensure
+      reader&.kill
+      $stderr = original_stderr
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
+    it 'never shows a reply sent the moment the prompt appears, even when the read starts late' do
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      require 'delegate'
+      master, slave = PTY.open
+      $stdin = slave
+      # Pauses once the prompt is on screen (a pseudo-terminal is unbuffered),
+      # as a busy process might, so the reply arrives before getpass starts
+      # reading. Echo has to be off by then.
+      late_reader = Class.new(SimpleDelegator) do
+        def print(*)
+          super.tap { sleep 0.3 }
+        end
+      end.new(slave)
+
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: late_reader) }
+      shown = +''
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until shown.include?('Password: ') || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        shown << master.read_nonblock(4096) if master.wait_readable(0.05)
+      end
+      expect(shown).to include('Password: ')
+      master.write("sent-at-prompt\n")
+
+      expect(reader.join(5)&.value).to eq('sent-at-prompt')
+      shown << master.read_nonblock(4096) while master.wait_readable(0.2)
+      expect(shown).not_to include('sent-at-prompt')
+    ensure
+      reader&.kill
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
+    it 'keeps the password hidden after Ctrl-Z and fg at the prompt, and shows the prompt again',
+       if: Signal.list.key?('CONT') do
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      master, slave = PTY.open
+      $stdin = slave
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: slave) }
+      shown = +''
+      read_screen = lambda do |until_text|
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+        until shown.include?(until_text) || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+          shown << master.read_nonblock(4096) if master.wait_readable(0.05)
+        end
+      end
+      read_screen.call('Password: ')
+      expect(shown).to include('Password: ')
+
+      # What a job-control shell does around Ctrl-Z and fg: it puts its own
+      # terminal modes back (echo on), then resumes the process with SIGCONT.
+      slave.echo = true
+      Process.kill('CONT', Process.pid)
+      read_screen.call('Password: Password: ')
+      expect(shown).to include('Password: Password: ')
+      master.write("typed-after-fg\n")
+
+      expect(reader.join(5)&.value).to eq('typed-after-fg')
+      shown << master.read_nonblock(4096) while master.wait_readable(0.2)
+      expect(shown).not_to include('typed-after-fg')
+    ensure
+      reader&.kill
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
+    it 'reads a real pipe' do
+      reader, writer = IO.pipe
+      writer.write("piped pw\n")
+      writer.close
+
+      expect(described_class.read_secret('Password: ', from_stdin: true, input: reader)).to eq('piped pw')
+    ensure
+      reader&.close
     end
   end
 

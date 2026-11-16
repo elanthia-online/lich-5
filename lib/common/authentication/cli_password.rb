@@ -18,6 +18,128 @@ module Lich
       # @example
       #   Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'NewPass123')
       module CLIPassword
+        # Raised by {read_secret} when no secret can be read. The message is
+        # user-facing and never contains the secret.
+        class SecretInputError < StandardError; end
+
+        # Reads a secret without it ever appearing on the command line.
+        #
+        # With +from_stdin+ (the caller saw --password-stdin) one line is read
+        # from +input+ and only its line ending is removed, so leading and
+        # trailing spaces are kept as the GUI keeps them. A leading UTF-8
+        # byte-order mark is removed too: Windows PowerShell 5.1 puts one in
+        # front of everything it pipes to a native program. Without it, the
+        # secret is only read from a terminal, with echo off: a pipe is never
+        # taken as a secret unless the caller asked for that, because a
+        # launcher or wrapper that leaves stdin attached to something else
+        # would otherwise send unrelated bytes to the auth server.
+        #
+        # The prompt is written to +output+, not passed to IO#getpass: getpass
+        # writes its prompt and closing newline to $stderr, which lib/init.rb
+        # has already pointed at the debug log by the time CLI commands run.
+        #
+        # @param prompt [String] prompt shown on the terminal
+        # @param from_stdin [Boolean] true when --password-stdin was given
+        # @param input [IO] where to read from (defaults to $stdin)
+        # @param output [IO] where the terminal prompt goes (defaults to $stdout)
+        # @return [String] the secret, without its trailing line ending
+        # @raise [SecretInputError] at end-of-input, on an empty secret, or when
+        #   there is no terminal to prompt on and +from_stdin+ is false
+        def self.read_secret(prompt, from_stdin:, input: $stdin, output: $stdout)
+          unless from_stdin || input.tty?
+            raise SecretInputError, 'No terminal to prompt for the password on. ' \
+                                    'To read it from a pipe, add --password-stdin.'
+          end
+
+          secret = if input.tty?
+                     read_hidden_line(prompt, input, output)
+                   else
+                     strip_byte_order_mark(input.gets&.chomp)
+                   end
+          raise SecretInputError, 'Unable to read password from STDIN / terminal' if secret.nil?
+          # Matches the GUI's Add Account tab, which refuses an empty password
+          # rather than sending one to the auth server.
+          raise SecretInputError, 'Password cannot be empty' if secret.empty?
+
+          secret
+        end
+
+        # @api private
+        # Reads one line from a terminal with echo off.
+        #
+        # @param prompt [String] prompt shown before reading
+        # @param input [IO] the terminal
+        # @param output [IO] where the prompt goes
+        # @return [String, nil] the line without its line ending, or nil at end-of-input
+        def self.read_hidden_line(prompt, input, output)
+          require 'io/console'
+          # Echo goes off before the prompt is shown. getpass only turns it off
+          # once it starts reading, so a reply sent the moment the prompt
+          # appears (an expect script, a password manager's auto-type) would
+          # otherwise be shown on screen and then used.
+          input.noecho do
+            # On a POSIX terminal anything typed or pasted during startup was
+            # already shown on screen. Discard it, as getpass(3) does, rather
+            # than take a password the terminal has displayed. On Windows
+            # iflush does nothing (io-console only implements it with
+            # termios), and the console shows typed input only once a read
+            # takes it, so early typing there is read, unseen.
+            input.iflush
+            output.print prompt
+            output.flush
+            # A job-control shell restores its own terminal modes when Ctrl-Z
+            # gives it the terminal, so after fg echo would be back on. Turn it
+            # off again and show the prompt again, as readpassphrase(3) does.
+            on_resume(lambda {
+              input.echo = false
+              output.print prompt
+              output.flush
+            }) { input.getpass }
+          end
+        ensure
+          # Echo was off, so the Enter the user pressed never reached the screen.
+          output.puts
+        end
+        private_class_method :read_hidden_line
+
+        # @api private
+        # Runs the block with a SIGCONT handler that calls on_continue, then
+        # puts the previous handler back. Windows has no SIGCONT and no job
+        # control, so there the block just runs.
+        #
+        # @param on_continue [#call] called each time the process is resumed
+        # @yield the work to protect
+        # @return [Object] the block's value
+        def self.on_resume(on_continue)
+          return yield unless Signal.list.key?('CONT')
+
+          previous = Signal.trap('CONT') { on_continue.call }
+          begin
+            yield
+          ensure
+            Signal.trap('CONT', previous)
+          end
+        end
+        private_class_method :on_resume
+
+        # The UTF-8 encoding of U+FEFF, the byte-order mark. Built from bytes:
+        # the AsciiOnlySource cop would autocorrect the escaped literal away.
+        UTF8_BYTE_ORDER_MARK = [0xEF, 0xBB, 0xBF].pack('C*').freeze
+        private_constant :UTF8_BYTE_ORDER_MARK
+
+        # @api private
+        # Removes one leading UTF-8 byte-order mark. Compared byte for byte, so
+        # it works whatever encoding Ruby tagged the piped line with.
+        #
+        # @param line [String, nil] a line read from a pipe
+        # @return [String, nil] +line+ without a leading byte-order mark
+        def self.strip_byte_order_mark(line)
+          return line unless line&.b&.start_with?(UTF8_BYTE_ORDER_MARK)
+
+          line.byteslice(UTF8_BYTE_ORDER_MARK.bytesize..)
+        end
+        private_class_method :strip_byte_order_mark
+
         # Changes account password in entry.yaml
         # Handles all encryption modes (plaintext, standard, enhanced)
         #
@@ -109,8 +231,12 @@ module Lich
         # @param account [String] Account username
         # @param password [String] Account password
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @param prompt_frontend [Boolean] false when stdin has already been
+        #   consumed (the password came in with --password-stdin), so asking for
+        #   a frontend would only hit end-of-input; the frontend is then left
+        #   unset, the same as pressing Enter at the prompt
         # @return [Integer] Exit code (0=success, 1=error, 2=auth failed)
-        def self.add_account(account, password, frontend = nil)
+        def self.add_account(account, password, frontend = nil, prompt_frontend: true)
           # Normalize account name to uppercase (accounts are stored uppercase)
           account = account.upcase
 
@@ -160,8 +286,7 @@ module Lich
                                     puts "Using predominant frontend: #{predominant}"
                                     Lich.log "info: Using predominant frontend: #{predominant}"
                                     predominant
-                                  else
-                                    # Prompt user
+                                  elsif prompt_frontend
                                     prompt_for_frontend
                                   end
                                 end
