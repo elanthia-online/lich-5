@@ -278,3 +278,58 @@ RSpec.describe 'Lich::Util::Update.request beta routing' do
     expect(help).to include('lich5-update --beta --library=<name>')
   end
 end
+
+RSpec.describe 'Lich::Util::Update.request gem package routing' do
+  let(:update) { Lich::Util::Update }
+  let(:manager) { instance_double(Lich::Util::Update::GemPackages) }
+  let(:messages) { [] }
+
+  before do
+    allow(update).to receive(:gem_packages_manager).and_return(manager)
+    allow(update).to receive(:respond) { |message = ''| messages << message }
+  end
+
+  it 'routes --add-gem, --update-gem, --remove-gem and --gems to the gem package manager' do
+    expect(manager).to receive(:add_gem).with('elanthia-online/eohunter')
+    expect(manager).to receive(:update_gem).with('someone/pkg')
+    expect(manager).to receive(:remove_gem).with('someone/pkg')
+    expect(manager).to receive(:list_gems)
+
+    update.request('--add-gem=elanthia-online/eohunter')
+    update.request('--update-gem=someone/pkg')
+    update.request('--remove-gem=someone/pkg')
+    update.request('--gems')
+  end
+
+  describe 'malformed --update-gem' do
+    let(:release_installer) { instance_double(Lich::Util::Update::ReleaseInstaller, download_release_update: nil) }
+
+    before { allow(update).to receive(:release_installer).and_return(release_installer) }
+
+    ['--update-gem x/y', '--update-gem', '--update-gem=', '--update-gems=x/y'].each do |form|
+      it "does not start a Lich update for '#{form}'" do
+        allow(manager).to receive(:update_gem)
+        update.request(form)
+
+        expect(release_installer).not_to have_received(:download_release_update)
+        expect(manager).not_to have_received(:update_gem)
+        expect(messages).to include("Command '#{form}' unknown, illegitimate and ignored.  Exiting . . .")
+      end
+    end
+
+    ['--update', '-u', '--update now'].each do |form|
+      it "still routes '#{form}' to the Lich update" do
+        update.request(form)
+        expect(release_installer).to have_received(:download_release_update)
+      end
+    end
+  end
+
+  it 'documents --update-gem and the trusted-owner rule in the help text' do
+    update.request('--help')
+    help = messages.join("\n")
+
+    expect(help).to include('lich5-update --update-gem=owner/repo')
+    expect(help).to include('Releases install automatically only from trusted owners (elanthia-online)')
+  end
+end
