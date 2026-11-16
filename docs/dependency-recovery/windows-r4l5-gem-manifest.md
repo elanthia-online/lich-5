@@ -25,10 +25,20 @@ The Windows target's `contract` object has `schema: 2`, `lich5_commit` (40
 lowercase hex characters), `gemfile_sha256`, `lock_sha256`, `promotable: true`,
 `overrides: {}`, `windows_contract_sha256`, and `ruby_inventory`. All three
 digests are bare lowercase SHA-256 hex strings. The raw file digests identify
-the producer input bytes for provenance; they are not consumer eligibility gates. `ruby_inventory` records the pristine target RubyInstaller's
-`ruby_version`, `ruby_abi`, `platform`, and `gems` mapping. Each supplied gem
+the producer input bytes for provenance; they are not consumer eligibility gates. `ruby_inventory` records
+`ruby_version`, `ruby_abi`, `platform`, and a `gems` mapping. Each supplied gem
 records `version` and `dependencies` (a name-to-requirement-array mapping).
-This inventory must be measured before application gems are installed.
+Its `gems` are floors, not the build Ruby's exact inventory: Ruby4Lich5 takes
+them from the RubyInstaller release of this repository's `REQUIRED_RUBY`
+(RubyInstaller 4.0.0-1 for `REQUIRED_RUBY = '4.0'`, on both x64 and ARM64),
+the oldest Ruby Lich accepts. `ruby_version`, `ruby_abi` and `platform` stay
+the build installer's, so the installer-version check below still holds. The
+build installer's exact capture, measured before application gems are
+installed, is published next to it as `measured_ruby_inventory` for
+provenance; Lich does not read it. The floors only rise when `REQUIRED_RUBY`
+does; see Ruby4Lich5's `docs/RUBY-FLOORS.md`. Contracts built before that
+change carry the build installer's exact capture as `ruby_inventory`, so
+their floors are that patch's versions.
 Supplied versions are checked against dependency requirements and differences
 from the lock are reported; those gems are not shipped to hide a difference.
 The reader selects the UCRT variant before a generic Ruby variant, so Windows
