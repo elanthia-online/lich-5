@@ -32,7 +32,9 @@ Its `gems` are floors, not the build Ruby's exact inventory: Ruby4Lich5 takes
 them from the RubyInstaller release of this repository's `REQUIRED_RUBY`
 (RubyInstaller 4.0.0-1 for `REQUIRED_RUBY = '4.0'`, on both x64 and ARM64),
 the oldest Ruby Lich accepts. `ruby_version`, `ruby_abi` and `platform` stay
-the build installer's, so the installer-version check below still holds. The
+the build installer's, because `check_r4l5_contract.rb` requires the
+provenance `ruby_installer_version` (for example `4.0.9-1`) to be that
+`ruby_version` plus a RubyInstaller build suffix. The
 build installer's exact capture, measured before application gems are
 installed, is published next to it as `measured_ruby_inventory` for
 provenance; Lich does not read it. The floors only rise when `REQUIRED_RUBY`
@@ -58,8 +60,10 @@ against the served recovery manifest and requires a matching installer
 predecessor. The published `installer-provenance.json` must carry
 `runtime_contract_sha256` (the canonical contract digest from
 `Lich::RuntimeGemContract.digest`), `recovery_manifest_sha256` (the exact served
-manifest bytes), `ruby_installer_version`, and `installer_sha256`. All four
-digests use bare lowercase hex. Existing installer provenance fields remain.
+manifest bytes), `ruby_installer_version`, and `installer_sha256`. The three
+digests use bare lowercase hex. `ruby_installer_version` must be a
+RubyInstaller release (`X.Y.Z-N`) whose Ruby equals the contract's
+`ruby_inventory.ruby_version`. Existing installer provenance fields remain.
 `--installer PATH` also verifies the executable before release attachment.
 `--manifest PATH --provenance PATH` supports offline validation. This is a
 build/release check; it does not install gems or change startup recovery.
@@ -87,13 +91,13 @@ PR must wait for that producer's accepted recovery and installer. PR activity
 does not dispatch privileged producer work.
 
 The producer validates the selected candidate SHA explicitly. Both producer and
-consumer compute `RuntimeGemContract#windows_contract_digest` with the measured
-`ruby_inventory`, producer `build_roles`, and the flattened candidate-applicable
+consumer compute `RuntimeGemContract#windows_contract_digest` with the
+`ruby_inventory` floors (never `measured_ruby_inventory`), producer `build_roles`, and the flattened candidate-applicable
 recovery-unit member names as `advertised_members` (after strict range selection
 when ranges are present). The method hashes a versioned Windows projection:
 normalized runtime root requirements, relevant selected Windows lock packages
 (including checksums and normalized dependency requirements), supplied-gem
-resolution and the pristine target inventory. Relevant packages include runtime
+resolution and the `ruby_inventory` floors. Relevant packages include runtime
 closure packages and advertised GTK-only non-GTK lock members. Producer-owned GTK
 role members remain exempt from lock pinning. Unused development entries,
 non-Windows variants and source comments do not enter eligibility. Changing an
