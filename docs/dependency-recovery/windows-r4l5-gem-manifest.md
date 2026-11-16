@@ -249,7 +249,24 @@ compiled with `gem install` or `gem update`, also counts when its version is
 **strictly newer than `version`** (not merely at `minimum`) and its native
 extension finished building. Startup keeps that newer gem instead of
 repairing it down to the accepted build. At `version` itself the R4L5 build is
-still required, because Ruby4Lich5 patches the GTK stack. Ruby-GNOME pins one
+still required, because Ruby4Lich5 patches the GTK stack, unless the package
+carries `"self_build_equivalent": true`. The flag is meant for packages
+Ruby4Lich5 builds from unchanged upstream source (such as `ox` and `curses`);
+until Ruby4Lich5 emits it, no served package carries it and the strict rule
+applies everywhere. With the flag, a self-built copy at `version` counts too,
+under the same conditions as a newer one (a loadable platform and a finished
+native extension), and only when no other package of its units depends on it,
+judged from the installed gemspecs. At `version` an exact pin no longer
+separates a self-built copy from the R4L5 builds, so a flagged glib2 beside an
+R4L5 gtk3 that pins it is still repaired. Lich checks only that direction.
+A flagged package that itself depends on a unit-mate whose R4L5 build bundles
+DLLs (a flagged gtk3 over an R4L5 glib2) would start mixed, so Ruby4Lich5
+must not flag such a package; a consumer check for it would also repair a
+flagged sqlite3 over an R4L5 `mini_portile2`, which is safe. The flag must be
+`true` or `false`; anything else is an invalid policy. It is part of a
+package's identity, so two units that disagree on it conflict, and the
+release contract check rejects lock-checked packages whose units disagree.
+An absent flag keeps the strict behavior, and older Lich releases ignore it. Ruby-GNOME pins one
 exact version across its gems, so a strictly newer self-built gtk3 only
 resolves with equally new self-built glib2 and the rest of the stack, never
 with an R4L5 build. If the self-built gems cannot resolve together (a
@@ -259,7 +276,8 @@ when a package `minimum` turns that failure into a repair: if the R4L5 builds
 alone need no repair, or repair different units, startup uses that decision,
 so it never repairs a unit the R4L5 builds did not need. When the self-built
 gems and every package outside the repaired units resolve together, a repair
-another unit needs (a same-version self-built ox, say) repairs only that unit,
+another unit needs (a same-version self-built ox without the flag, say)
+repairs only that unit,
 and a complete self-built GTK stack is neither listed as missing nor repaired.
 A self-built glib2 beside an R4L5 gtk3, which pins glib2 exactly, does not
 resolve, so both units are repaired at once.
@@ -271,7 +289,8 @@ gemspecs. **cairo** is the exception in the GTK unit: cairo-gobject requires
 is ignored and the R4L5 cairo is used (or repaired to). The reverse mix, a
 newer self-built Ruby-GNOME stack (glib2, cairo-gobject, gtk3 and the rest)
 over the R4L5 cairo, is kept. Standalone packages such as `ox` and `curses`,
-which no other package of their unit depends on, are kept when strictly newer.
+which no other package of their unit depends on, are kept when strictly newer,
+and also at `version` when their package carries the flag.
 
 If a kept self-built gtk3 or sqlite3 then fails to load, the existing
 load-failure repair in `init.rb` installs the R4L5 build and moves the

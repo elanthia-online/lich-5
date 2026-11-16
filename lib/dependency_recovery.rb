@@ -397,6 +397,9 @@ module Lich
         raise Error, "unit #{unit_id} package minimum is invalid" unless RecoveryUnitPolicy.canonical_release?(package['minimum'])
         raise Error, "unit #{unit_id} package minimum is above its version" if Gem::Version.new(package['minimum']) > Gem::Version.new(package['version'])
       end
+      if package.key?('self_build_equivalent') && ![true, false].include?(package['self_build_equivalent'])
+        raise Error, "unit #{unit_id} package self_build_equivalent must be true or false"
+      end
       require_filename!(package['filename'], "unit #{unit_id} package")
       raise Error, "unit #{unit_id} package filename must end in .gem" unless package['filename'].end_with?('.gem')
       require_sha256!(package['sha256'], "unit #{unit_id} package")

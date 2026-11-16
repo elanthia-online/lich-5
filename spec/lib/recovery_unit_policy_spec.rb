@@ -168,4 +168,21 @@ RSpec.describe Lich::RecoveryUnitPolicy do
       end
     end
   end
+
+  describe '.self_build_equivalent?' do
+    let(:package) { { 'name' => 'ox', 'version' => '2.14.29', 'filename' => 'ox-2.14.29-x64-mingw-ucrt.gem', 'sha256' => "sha256:#{'3' * 64}" } }
+
+    it 'is true only for an explicit true' do
+      expect(described_class.self_build_equivalent?(package.merge('self_build_equivalent' => true))).to be(true)
+      expect(described_class.self_build_equivalent?(package)).to be(false)
+      expect(described_class.self_build_equivalent?(package.merge('self_build_equivalent' => false))).to be(false)
+    end
+
+    it 'gives an absent flag and false the same package identity' do
+      absent = described_class.package_identity(package, 'x64-mingw-ucrt')
+      explicit = described_class.package_identity(package.merge('self_build_equivalent' => false), 'x64-mingw-ucrt')
+      expect(explicit).to eq(absent)
+      expect(described_class.package_identity(package.merge('self_build_equivalent' => true), 'x64-mingw-ucrt')).not_to eq(absent)
+    end
+  end
 end
