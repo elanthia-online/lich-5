@@ -295,6 +295,10 @@ before on every Lich release.
   last 256 KiB are kept.
 - **The Lich debug log** (`temp/debug-*.log`) holds everything noted on a
   start that continues, such as the recommended entry above.
+- A start can stop after GemCheck queued a note and before `init.rb` writes
+  it, for example when activation fails or a later `sqlite3` or `gtk3` load
+  alerts. The missing-gems entry for that stop then carries the queued notes
+  under "Noted earlier in this start", and they are not written again.
 
 ## Supported-client policy retention
 

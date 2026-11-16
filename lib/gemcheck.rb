@@ -498,6 +498,7 @@ module Lich
 
     # Notes for a startup that continues. GemCheck runs before Lich opens its
     # debug log, so they wait here until init.rb calls {flush_startup_notes}.
+    # If the start stops first, {write_log} writes them into its entry.
     # @return [Array<String>]
     def startup_notes
       @startup_notes ||= []
@@ -530,7 +531,8 @@ module Lich
     # Writes an entry to the missing-gems log. It is only for a start that
     # does not continue: a failure, a declined repair, or a consented repair
     # that exits or restarts Lich. Anything logged on a start that continues
-    # goes to the Lich debug log through {note} instead.
+    # goes to the Lich debug log through {note} instead; notes still queued
+    # when a start stops are written into this entry.
     # @param missing [Array<String>]
     # @param groups [Array<Symbol>]
     # @param error [Exception, nil]
@@ -559,6 +561,18 @@ module Lich
 
         if recovery_note
           f.puts "  Recovery: #{recovery_note}"
+          f.puts
+        end
+
+        # A start can stop after GemCheck queued notes and before init.rb
+        # flushes them to the Lich debug log: activate! raising, or a later
+        # sqlite3 or gtk3 alert in init.rb. This start stops, so the notes go
+        # in this entry. Flushing clears the queue, so no note reaches both logs.
+        notes = []
+        flush_startup_notes { |message| notes << message }
+        unless notes.empty?
+          f.puts '  Noted earlier in this start:'
+          notes.each { |message| message.each_line { |line| f.puts "    #{line.chomp}" } }
           f.puts
         end
 

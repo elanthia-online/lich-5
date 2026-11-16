@@ -309,6 +309,35 @@ RSpec.describe Lich::GemCheck do
           expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.2')
         end
 
+        context 'when the start stops after GemCheck queued a note' do
+          before do
+            allow(described_class).to receive(:alert).and_call_original
+            %i[alert_windows alert_macos alert_linux].each { |name| allow(described_class).to receive(name) }
+            installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
+          end
+
+          def expect_note_in_missing_gems_log
+            contents = File.read(log)
+            expect(contents).to include("  Noted earlier in this start:\n    info: Lich5 GemCheck recommended update")
+            expect(contents).to include('      - sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.1), sqlite3 gem')
+            expect(contents.scan('recommended update').length).to eq(1)
+            expect(flushed).to eq([])
+          end
+
+          it 'writes the note into the failure entry when a later init.rb alert stops the start' do
+            described_class.verify!
+            described_class.alert(missing: ['gtk3'], groups: [:gtk], error: LoadError.new('cannot load such file -- gtk3'))
+            expect_note_in_missing_gems_log
+          end
+
+          it 'writes the note into the failure entry when activation raises' do
+            allow(policy).to receive(:activate!).and_raise(Lich::DependencyRecovery::Error, 'activation failed')
+            expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+            expect(File.read(log)).to include('activation failed')
+            expect_note_in_missing_gems_log
+          end
+        end
+
         it 'runs one consented repair of the whole unit when a needed member shares it with a recommended one' do
           units.first['members'] << 'closure'
           units.first['install_order'].unshift('closure')
@@ -740,8 +769,22 @@ RSpec.describe Lich::GemCheck do
   describe '.write_log' do
     let(:log_path) { File.join(TEMP_DIR, described_class::LOG_FILENAME) }
 
-    before { FileUtils.rm_f(log_path) }
-    after  { FileUtils.rm_f(log_path) }
+    before do
+      FileUtils.rm_f(log_path)
+      described_class.startup_notes.clear
+    end
+    after { FileUtils.rm_f(log_path) }
+
+    it 'writes queued startup notes into one entry, in order, and clears them' do
+      described_class.note("info: first\n  detail")
+      described_class.note('info: second')
+      described_class.write_log
+      described_class.write_log
+      contents = File.read(log_path)
+      expect(contents).to include("  Noted earlier in this start:\n    info: first\n      detail\n    info: second\n")
+      expect(contents.scan('Noted earlier in this start').length).to eq(1)
+      expect(described_class.startup_notes).to eq([])
+    end
 
     it 'writes the platform message to TEMP_DIR' do
       described_class.write_log
