@@ -786,6 +786,17 @@ RSpec.describe Lich::GemCheck do
       expect(described_class.startup_notes).to eq([])
     end
 
+    it 'marks a gem below its RubyInstaller floor in the dependency table when the floor error stops startup' do
+      installed = Gem::Specification.find_all_by_name('json').map(&:version)
+      allow(described_class).to receive(:required_dependencies).with([:default]).and_return([Gem::Dependency.new('json')])
+      %i[alert_windows alert_macos alert_linux].each { |name| allow(described_class).to receive(name) }
+      gems = [{ name: 'json', floor: Gem::Version.new('999.0'), installed: installed, active: nil, requirement: Gem::Requirement.default }]
+      described_class.alert(error: Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9'))
+      row = File.read(log_path).lines.find { |line| line.match?(/^\s+json\s/) }
+      expect(row).to include("BELOW FLOOR 999.0 (#{installed.join(', ')})")
+      expect(row).not_to include('OK (')
+    end
+
     it 'writes the platform message to TEMP_DIR' do
       described_class.write_log
       expect(File.read(log_path)).to include("You're missing required Ruby gems")
@@ -1179,9 +1190,9 @@ RSpec.describe Lich::GemCheck do
 
     it 'names each gem below its RubyInstaller floor and the Ruby to install' do
       gems = [{ name: 'openssl', floor: Gem::Version.new('4.0.2'), installed: [Gem::Version.new('4.0.0')], active: nil, requirement: Gem::Requirement.default }]
-      error = Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9')
+      error = Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9', running_ruby: '4.0.5')
       body = described_class.build_alert_body([], error)
-      expect(body).to include('- openssl 4.0.0 (needs 4.0.2 or newer)', 'Install Ruby4Lich5 with Ruby 4.0.9', 'cannot update these gems itself')
+      expect(body).to include('- openssl 4.0.0 (needs 4.0.2 or newer)', 'Install Ruby4Lich5, which currently ships Ruby 4.0.9, then start Lich again', 'cannot update these gems itself')
       expect(body).not_to include("You're missing", 'repair the Ruby installation')
       expect(described_class).to receive(:alert_windows).with(body, download: true)
       described_class.alert(error: error)

@@ -453,10 +453,9 @@ module Lich
       when AcceptedGemPolicy::InvalidPolicyError
         "The accepted runtime policy is invalid or incompatible with this runtime.\nAsk the release maintainer to check the published policy."
       when AcceptedGemPolicy::RubyInventoryFloorError
-        install = error.ruby_version ? "Install Ruby4Lich5 with Ruby #{error.ruby_version}" : 'Reinstall Ruby4Lich5'
         "Your Ruby is missing newer versions of gems that Ruby itself supplies:\n" +
           error.gems.map { |entry| "  - #{entry.fetch(:name)} #{entry.fetch(:installed).last || 'not installed'} (needs #{entry.fetch(:floor)} or newer)" }.join("\n") +
-          "\n#{install}, then start Lich again. Lich cannot update these gems itself."
+          "\n#{error.remedy}, then start Lich again. Lich cannot update these gems itself."
       when AcceptedGemPolicy::LocalInstallationError
         "This Ruby installation has a missing gem dependency.\nRepair or reinstall Ruby4Lich5, then retry."
       when AcceptedGemPolicy::PolicyError

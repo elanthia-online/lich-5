@@ -18,30 +18,57 @@ module Lich
       # @return [Array<Hash>] one entry per gem: name, floor, installed
       #   versions, active version (or nil) and the Gemfile requirement
       attr_reader :gems
-      # @return [String, nil] the Ruby the inventory was measured on
+      # @return [String, nil] the Ruby the accepted Ruby4Lich5 build ships
+      #   (+ruby_inventory.ruby_version+). The floors can come from an older
+      #   RubyInstaller, so this is not the Ruby they were taken from.
       attr_reader :ruby_version
+      # @return [String] the Ruby this start runs on
+      attr_reader :running_ruby
 
       # @param gems [Array<Hash>]
       # @param ruby_version [String, nil]
-      def initialize(gems, ruby_version)
+      # @param running_ruby [String]
+      def initialize(gems, ruby_version, running_ruby: RUBY_VERSION)
         @gems = gems
         @ruby_version = ruby_version
-        super(self.class.describe(gems, ruby_version))
+        @running_ruby = running_ruby
+        super(self.class.describe(gems, ruby_version, running_ruby))
+      end
+
+      # What the player should do. A Ruby older than the one Ruby4Lich5 ships
+      # needs that install. On the shipped Ruby or newer, a gem below its
+      # floor means the install is damaged or downgraded, so reinstall it.
+      # @param ruby_version [String, nil]
+      # @param running_ruby [String]
+      # @return [String] a sentence start, without the closing period
+      def self.remedy(ruby_version, running_ruby)
+        return 'Reinstall Ruby4Lich5' unless ruby_version
+
+        verb = begin
+          Gem::Version.new(running_ruby) < Gem::Version.new(ruby_version) ? 'Install' : 'Reinstall'
+        rescue ArgumentError
+          'Install'
+        end
+        "#{verb} Ruby4Lich5, which currently ships Ruby #{ruby_version}"
+      end
+
+      # @return [String]
+      def remedy
+        self.class.remedy(ruby_version, running_ruby)
       end
 
       # @param gems [Array<Hash>]
       # @param ruby_version [String, nil]
+      # @param running_ruby [String]
       # @return [String]
-      def self.describe(gems, ruby_version)
+      def self.describe(gems, ruby_version, running_ruby = RUBY_VERSION)
         parts = gems.map do |entry|
           installed = entry.fetch(:installed).empty? ? 'not installed' : "installed #{entry.fetch(:installed).join(', ')}"
           active = entry.fetch(:active) ? ", active #{entry.fetch(:active)}" : ''
           requirement = entry.fetch(:requirement).to_s == '>= 0' ? '' : ", Gemfile requires #{entry.fetch(:requirement)}"
           "#{entry.fetch(:name)} #{installed}#{active}, floor #{entry.fetch(:floor)}#{requirement}"
         end
-        install = ruby_version ? "install Ruby4Lich5 with Ruby #{ruby_version}" : 'reinstall Ruby4Lich5'
-        "RubyInstaller gems below this Lich's floor: #{parts.join('; ')}. " \
-          "The floors were measured on Ruby #{ruby_version || 'unknown'}; #{install}"
+        "RubyInstaller gems below this Lich's floor: #{parts.join('; ')}. #{remedy(ruby_version, running_ruby)}."
       end
     end
 
