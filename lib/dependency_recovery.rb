@@ -275,6 +275,13 @@ module Lich
         file.puts "[#{Time.now}] Lich5 native gem replacement failure"
         file.puts "  #{error.class}: #{error.message}"
         file.puts
+        file.puts '  Diagnostics:'
+        file.puts "    Lich:            #{payload.fetch('lich_version', nil) || 'unknown'}"
+        file.puts "    Ruby:            #{RUBY_DESCRIPTION}"
+        file.puts "    Ruby path:       #{RbConfig.ruby}"
+        file.puts "    Gem home:        #{payload.fetch('gem_home', Gem.dir)}"
+        file.puts "    Working dir:     #{payload.dig('restart', 'chdir') || Dir.pwd}"
+        file.puts
       end
       return unless Gem.win_platform?
 
@@ -615,6 +622,7 @@ module Lich
         'work_dir'       => work_dir,
         'packages'       => packages.values,
         'preserve_newer' => preserve_newer,
+        'lich_version'   => @lich_version,
         'restart'        => restart_target
       }
       File.write(payload_path, JSON.generate(payload))

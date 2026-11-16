@@ -261,9 +261,14 @@ RSpec.describe Lich::GemCheck do
           allow(policy).to receive(:check).and_call_original
           allow(policy).to receive(:activate!).and_call_original
           FileUtils.rm_f(log)
+          described_class.startup_notes.clear
         end
 
-        it 'starts on a recommended-only gap with no dialog or repair and logs it' do
+        def flushed
+          [].tap { |messages| described_class.flush_startup_notes { |message| messages << message } }
+        end
+
+        it 'starts on a recommended-only gap with no dialog or repair and notes it for the Lich log' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
           expect(described_class).not_to receive(:alert)
           expect(described_class).not_to receive(:recovery_units_approved?)
@@ -271,59 +276,36 @@ RSpec.describe Lich::GemCheck do
           expect(recovery).not_to receive(:recover)
           expect { described_class.verify! }.not_to raise_error
           expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
-          entry = File.read(log)
-          expect(entry).to include('Lich5 GemCheck recommended update')
+          entry = flushed.join("\n")
+          expect(entry).to start_with('info: Lich5 GemCheck recommended update')
           expect(entry).to include('- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.1), sqlite3 gem')
-          expect(entry).not_to include('Lich5 GemCheck failure')
         end
 
-        it 'writes one recommended entry for repeated identical starts' do
+        it 'never writes the missing-gems log on a start that continues' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
           3.times do
             loaded.clear
             described_class.verify!
           end
-          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(1)
+          expect(File.exist?(log)).to be(false)
+          expect(flushed.length).to eq(3)
         end
 
-        it 'writes a new recommended entry when its content changes, even after another entry' do
+        it 'notes the recommended update again on every start, since each start has its own Lich log' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
           described_class.verify!
-          File.open(log, 'a') { |f| f.puts "[#{Time.now}] Lich5 GemCheck failure", '  something else', '' }
+          expect(flushed.length).to eq(1)
           loaded.clear
           described_class.verify!
-          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(1)
-          package['minimum'] = '2.10.0'
-          loaded.clear
-          described_class.verify!
-          entries = File.read(log).lines.grep(/- sqlite3:/).map(&:strip)
-          expect(entries).to eq(['- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.1), sqlite3 gem',
-                                 '- sqlite3: installed 2.10.1, accepted 2.10.2 (minimum 2.10.0), sqlite3 gem'])
+          expect(flushed.length).to eq(1)
+          expect(flushed).to eq([])
         end
 
-        it 'still writes the recommended entry and starts when the log cannot be read' do
-          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
-          described_class.verify!
-          allow(File).to receive(:foreach).and_call_original
-          allow(File).to receive(:foreach).with(log).and_raise(Errno::EACCES)
-          loaded.clear
-          expect { described_class.verify! }.not_to raise_error
-          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
-          expect(File.read(log).scan('Lich5 GemCheck recommended update').length).to eq(2)
-        end
-
-        it 'starts without raising when the recommended entry cannot be written' do
-          installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1')]
-          allow(File).to receive(:open).and_call_original
-          allow(File).to receive(:open).with(log, 'a').and_raise(Errno::EACCES)
-          expect { described_class.verify! }.not_to raise_error
-          expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.1')
-        end
-
-        it 'writes no recommended entry when the accepted version is installed' do
+        it 'writes no recommended note when the accepted version is installed' do
           installed['sqlite3'] = [installed_spec('sqlite3', '2.10.1'), installed_spec('sqlite3', '2.10.2')]
           described_class.verify!
-          expect(File.exist?(log) ? File.read(log) : '').not_to include('recommended update')
+          expect(flushed).to eq([])
+          expect(File.exist?(log)).to be(false)
           expect(loaded.fetch('sqlite3').version.to_s).to eq('2.10.2')
         end
 
@@ -340,7 +322,7 @@ RSpec.describe Lich::GemCheck do
             Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true)
           end
           expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
-          expect(File.exist?(log) ? File.read(log) : '').not_to include('recommended update')
+          expect(flushed).to eq([])
         end
       end
 
@@ -796,6 +778,28 @@ RSpec.describe Lich::GemCheck do
       expect(contents).to include('Bundler:')
       expect(contents).to include('Groups checked:  [:default, :gtk]')
       expect(contents).to include('Working dir:')
+    end
+
+    it 'records the Lich version, Ruby path and gem home' do
+      stub_const('LICH_VERSION', '5.99.0')
+      described_class.write_log
+      contents = File.read(log_path)
+      expect(contents).to include('Lich:            5.99.0')
+      expect(contents).to include("Ruby path:       #{RbConfig.ruby}")
+      expect(contents).to include("Gem home:        #{Gem.dir}")
+      expect(contents).to include("Working dir:     #{Dir.pwd}")
+    end
+
+    it 'keeps only the newest whole entries once the log passes its size cap' do
+      stub_const("#{described_class}::LOG_MAX_BYTES", 2_000)
+      stub_const("#{described_class}::LOG_KEEP_BYTES", 1_000)
+      File.open(log_path, 'w') { |f| 80.times { |i| f.puts "[old #{i}] Lich5 GemCheck failure", '  filler line', '' } }
+      described_class.write_log(missing: ['newest'])
+      contents = File.read(log_path)
+      expect(contents).to start_with('[')
+      expect(contents).not_to include('[old 0]')
+      expect(contents).to include('[old 79]', '- newest')
+      expect(contents.bytesize).to be < 1_000 + 4_000
     end
 
     it 'includes the release URL on Windows' do

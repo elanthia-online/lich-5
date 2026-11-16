@@ -418,6 +418,32 @@ RSpec.describe Lich::DependencyRecovery do
     expect(payloads.first.fetch('packages').map { |package| package.fetch('name') }).to eq(%w[glib2 gtk3])
   end
 
+  it 'records the Lich version in the replacement payload and in a helper failure entry' do
+    body = 'native gem payload'
+    unit = {
+      'id'            => 'ox',
+      'members'       => ['ox'],
+      'artifact'      => { 'url' => artifact_url, 'filename' => "ox-1.2.3-#{platform}.gem", 'sha256' => sha256(body), 'archive' => 'gem' },
+      'packages'      => [{ 'name' => 'ox', 'version' => '1.2.3', 'filename' => "ox-1.2.3-#{platform}.gem", 'sha256' => sha256(body) }],
+      'install_order' => ['ox']
+    }
+    allow(Gem).to receive(:win_platform?).and_return(true)
+    payload_paths = []
+    subject = described_class.new(
+      manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir, lich_version: '5.99.0',
+      http_get: ->(url) { { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), artifact_url => body }.fetch(url) },
+      helper_launcher: ->(path) { payload_paths << path }
+    )
+    expect(subject.recover(['ox'])).to be_success
+    expect(JSON.parse(File.read(payload_paths.first)).fetch('lich_version')).to eq('5.99.0')
+
+    allow(Gem).to receive(:win_platform?).and_return(false)
+    described_class.log_helper_failure(payload_paths.first, described_class::Error.new('helper broke'))
+    entry = File.read(File.join(recovery_temp_dir, 'lich5-missing-gems.log'))
+    expect(entry).to include('Lich5 native gem replacement failure', 'helper broke', 'Lich:            5.99.0',
+                             "Ruby path:       #{RbConfig.ruby}", "Gem home:        #{gem_home}", "Working dir:     #{Dir.pwd}")
+  end
+
   it 'defers a native single-gem artifact until the current process has exited' do
     body = 'native gem payload'
     unit = {

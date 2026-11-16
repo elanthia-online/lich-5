@@ -196,19 +196,29 @@ Startup then sorts each package into one of three tiers:
 - **Recommended** (the installed version startup selects is at or above
   `minimum` but below `version`): log-only. Lich starts immediately on the
   installed version with no dialog, no wait and no repair attempt, and writes
-  a short entry to `temp/lich5-missing-gems.log`:
+  a short entry to that start's Lich debug log (`temp/debug-*.log`):
 
   ```
-  [time] Lich5 GemCheck recommended update
+  [time]: info: Lich5 GemCheck recommended update
     Started on installed gems older than the accepted version but at or above its minimum.
     The accepted versions are installed by the next gem repair; nothing is required now.
       - redis-client: installed 0.25.0, accepted 0.26.0 (minimum 0.25.0), redis bundle
   ```
 
-  The entry is written only when its content, ignoring the timestamp,
-  differs from the last recommended entry in the log, so repeated starts on
-  the same installed gems add nothing. If the log cannot be read, the entry
-  is written anyway, and a failed write never stops startup.
+  GemCheck runs before the debug log opens, so it queues the entry and
+  `init.rb` writes it once the log exists. Each start has its own debug log
+  and Lich prunes old ones, so the entry is written on every such start.
+
+### Which log an entry goes to
+
+- **`temp/lich5-missing-gems.log`** holds only starts that do not continue:
+  a failure dialog, a declined or timed-out consent, a consented repair that
+  exits or restarts Lich, and a failed native replacement helper. Each entry
+  records the Lich version, Ruby description, Ruby executable path, gem home
+  and working directory. Past 1 MiB, only the newest whole entries within the
+  last 256 KiB are kept.
+- **The Lich debug log** (`temp/debug-*.log`) holds everything noted on a
+  start that continues, such as the recommended entry above.
 - **Current** (`version` or an eligible newer version is installed): as before.
 
 A package's installed copy normally counts only when its platform matches the

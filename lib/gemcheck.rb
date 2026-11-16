@@ -1,4 +1,5 @@
 # lib/gemcheck.rb
+require 'rbconfig'
 require 'timeout'
 require_relative 'bundler_recovery'
 require_relative 'common/cli/one_shot_commands'
@@ -18,6 +19,10 @@ module Lich
     TITLE           = 'Lich5: Ruby Gem Check'
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
+    # The missing-gems log holds only starts that stopped or restarted for a
+    # gem repair, so it grows slowly; past this size the oldest entries go.
+    LOG_MAX_BYTES   = 1024 * 1024
+    LOG_KEEP_BYTES  = 256 * 1024
     RECOMMENDED_HEADING = 'Lich5 GemCheck recommended update'
     CONSENT_TIMEOUT_SECONDS = 120
     BUNDLER_RECOVERY_TIMEOUT_SECONDS = 120
@@ -82,7 +87,7 @@ module Lich
         return verify_unsupported_windows_runtime!(groups, e)
       end
       if check.needed.empty?
-        write_recommended_log(check) unless Array(check.recommended).empty?
+        note_recommended(check) unless Array(check.recommended).empty?
         return policy.activate!(check)
       end
       exit 1 unless recovery_units_approved?(check.plan.units, groups)
@@ -469,15 +474,16 @@ module Lich
 
     # Installed gems at or above a package's minimum but below its accepted
     # version start Lich as they are: no dialog, wait or repair. The accepted
-    # versions install with the next required repair of their unit. A player
-    # can stay in this state for many starts, so the entry is written only
-    # when its content differs from the last recommended entry in the log.
+    # versions install with the next required repair of their unit. Startup
+    # continues, so the note goes to this launch's Lich debug log, which Lich
+    # prunes, rather than to the missing-gems log.
     # @param check [AcceptedGemPolicy::Check]
     # @return [void]
-    def write_recommended_log(check)
+    def note_recommended(check)
       found = check.plan.units.flat_map { |unit| unit.fetch('packages').map { |package| [package.fetch('name'), [unit, package]] } }.to_h
       selected = Array(check.specs).to_h { |spec| [spec.name, spec] }
-      body = [
+      lines = [
+        "info: #{RECOMMENDED_HEADING}",
         '  Started on installed gems older than the accepted version but at or above its minimum.',
         '  The accepted versions are installed by the next gem repair; nothing is required now.'
       ]
@@ -485,45 +491,31 @@ module Lich
         unit, package = found[name]
         installed = selected[name] ? selected[name].version : 'unknown'
         accepted = package ? "#{package.fetch('version')} (minimum #{RecoveryUnitPolicy.package_minimum(package)})" : 'unknown'
-        body << "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
+        lines << "    - #{name}: installed #{installed}, accepted #{accepted}, #{unit ? recovery_unit_label(unit) : 'unknown unit'}"
       end
-      log_path = File.join(TEMP_DIR, LOG_FILENAME)
-      return if last_recommended_body(log_path) == body
-
-      Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
-      File.open(log_path, 'a') do |f|
-        f.puts "[#{Time.now}] #{RECOMMENDED_HEADING}"
-        body.each { |line| f.puts line }
-        f.puts
-      end
-    rescue StandardError
-      # Filesystem write failed; startup continues on the installed versions.
+      note(lines.join("\n"))
     end
 
-    # Body lines of the last recommended entry, without its timestamped
-    # heading, or nil when there is none or the log cannot be read; an
-    # unreadable log must not stop the entry from being written.
-    # @param log_path [String]
-    # @return [Array<String>, nil]
-    def last_recommended_body(log_path)
-      return nil unless File.exist?(log_path)
+    # Notes for a startup that continues. GemCheck runs before Lich opens its
+    # debug log, so they wait here until init.rb calls {flush_startup_notes}.
+    # @return [Array<String>]
+    def startup_notes
+      @startup_notes ||= []
+    end
 
-      last = nil
-      current = nil
-      File.foreach(log_path) do |line|
-        line = line.chomp
-        if line.start_with?('[') && line.end_with?("] #{RECOMMENDED_HEADING}")
-          current = []
-          last = current
-        elsif line.empty? || line.start_with?('[')
-          current = nil
-        elsif current
-          current << line
-        end
-      end
-      last
-    rescue StandardError
-      nil
+    # @param message [String] one Lich debug log entry
+    # @return [void]
+    def note(message)
+      startup_notes << message
+    end
+
+    # Hands the queued startup notes to the Lich debug log, once, in order.
+    # @yieldparam message [String] one entry
+    # @return [void]
+    def flush_startup_notes
+      notes = startup_notes.dup
+      startup_notes.clear
+      notes.each { |message| yield message }
     end
 
     # @param missing [Array<String>]
@@ -535,6 +527,10 @@ module Lich
                 recovery_note: "Private non-GTK bundle staged and activated. Details: #{result.log_path}")
     end
 
+    # Writes an entry to the missing-gems log. It is only for a start that
+    # does not continue: a failure, a declined repair, or a consented repair
+    # that exits or restarts Lich. Anything logged on a start that continues
+    # goes to the Lich debug log through {note} instead.
     # @param missing [Array<String>]
     # @param groups [Array<Symbol>]
     # @param error [Exception, nil]
@@ -547,6 +543,7 @@ module Lich
       # verify! can run before init.rb creates TEMP_DIR (fresh install), so
       # ensure the directory exists or the alert would cite a log we never wrote.
       Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
+      trim_log(log_path)
       File.open(log_path, 'a') do |f|
         f.puts "[#{Time.now}] Lich5 GemCheck #{event}"
         f.puts failure_message(error).gsub(/^/, '  ') if event == 'failure'
@@ -566,7 +563,10 @@ module Lich
         end
 
         f.puts '  Diagnostics:'
+        f.puts "    Lich:            #{defined?(LICH_VERSION) ? LICH_VERSION : 'unknown'}"
         f.puts "    Ruby:            #{RUBY_DESCRIPTION}"
+        f.puts "    Ruby path:       #{safe_call { RbConfig.ruby }}"
+        f.puts "    Gem home:        #{safe_call { Gem.dir }}"
         f.puts "    Bundler:         #{self_healing_supported? ? 'not used by Windows startup policy' : safe_call { bundler::VERSION }}"
         f.puts "    Gemfile:         #{self_healing_supported? ? ENV.fetch('BUNDLE_GEMFILE', File.expand_path('../Gemfile', __dir__)) : safe_call { bundler.default_gemfile }}"
         f.puts "    Lockfile:        #{self_healing_supported? ? 'not used by Windows startup policy' : safe_call { bundler.default_lockfile }}"
@@ -601,6 +601,23 @@ module Lich
       end
     rescue StandardError
       # Filesystem write failed; continue to GUI attempt.
+    end
+
+    # Keeps the missing-gems log bounded: once it passes {LOG_MAX_BYTES}, only
+    # the newest whole entries within the last {LOG_KEEP_BYTES} are kept.
+    # @param log_path [String]
+    # @return [void]
+    def trim_log(log_path)
+      return unless File.file?(log_path) && File.size(log_path) > LOG_MAX_BYTES
+
+      tail = File.open(log_path, 'rb') do |f|
+        f.seek(-LOG_KEEP_BYTES, IO::SEEK_END)
+        f.read
+      end
+      start = tail.index("\n[")
+      File.binwrite(log_path, start ? tail[(start + 1)..] : '')
+    rescue StandardError
+      # Trimming is best effort; the entry is still appended.
     end
 
     # Builds a per-dependency status line for every gem in the requested
