@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'open3'
-require 'rbconfig'
+require_relative '../../support/webui_fresh_process'
 require 'webui/contract'
 
 RSpec.describe Lich::WebUI::Contract do
+  include WebUIFreshProcess
+
   it 'declares exactly the supported 30-type vocabulary' do
     expect(described_class::TYPES).to eq(%i[
                                            page group stack columns grid tabs expander split overlay scroll divider
@@ -60,7 +61,8 @@ RSpec.describe Lich::WebUI::Contract do
 
   it 'assembles frozen schemas when required alone in a fresh Ruby process' do
     code = 'abort "schema not frozen" unless Lich::WebUI::Contract.schema(:table)[:properties].frozen?; puts "ready"'
-    output, errors, status = Open3.capture3(RbConfig.ruby, '-I', LIB_DIR, '-r', 'webui/contract', '-e', code)
+    output, errors, status = run_ruby_with_deadline(code, '-r', 'webui/contract')
+    expect_child_within_deadline(status, output, errors, 'fresh-process contract example')
     expect(status.success?).to be(true), errors
     expect(output).to eq("ready\n")
   end
