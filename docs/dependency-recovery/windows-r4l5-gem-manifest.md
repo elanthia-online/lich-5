@@ -258,7 +258,11 @@ under the same conditions as a newer one (a loadable platform and a finished
 native extension), and only when no other package of its units depends on it,
 judged from the installed gemspecs. At `version` an exact pin no longer
 separates a self-built copy from the R4L5 builds, so a flagged glib2 beside an
-R4L5 gtk3 that pins it is still repaired. The flag must be
+R4L5 gtk3 that pins it is still repaired. Lich checks only that direction.
+A flagged package that itself depends on a unit-mate whose R4L5 build bundles
+DLLs (a flagged gtk3 over an R4L5 glib2) would start mixed, so Ruby4Lich5
+must not flag such a package; a consumer check for it would also repair a
+flagged sqlite3 over an R4L5 `mini_portile2`, which is safe. The flag must be
 `true` or `false`; anything else is an invalid policy. It is part of a
 package's identity, so two units that disagree on it conflict, and the
 release contract check rejects lock-checked packages whose units disagree.
