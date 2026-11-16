@@ -444,6 +444,18 @@ RSpec.describe Lich::DependencyRecovery do
                              "Ruby path:       #{RbConfig.ruby}", "Gem home:        #{gem_home}", "Working dir:     #{Dir.pwd}")
   end
 
+  it 'indents every line of a multi-line helper error, so none reads as a new log entry' do
+    Dir.mktmpdir('lich-helper-log') do |dir|
+      payload = File.join(dir, 'payload.json')
+      File.write(payload, JSON.generate('temp_dir' => dir))
+      allow(Gem).to receive(:win_platform?).and_return(false)
+      described_class.log_helper_failure(payload, described_class::Error.new("first line\n[not an entry] second line"))
+      lines = File.read(File.join(dir, 'lich5-missing-gems.log')).lines
+      expect(lines.grep(/^\[/).length).to eq(1)
+      expect(lines).to include("  [not an entry] second line\n")
+    end
+  end
+
   it 'defers a native single-gem artifact until the current process has exited' do
     body = 'native gem payload'
     unit = {

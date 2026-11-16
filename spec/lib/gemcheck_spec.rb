@@ -845,6 +845,34 @@ RSpec.describe Lich::GemCheck do
       expect(contents.bytesize).to be < 1_000 + 4_000
     end
 
+    it 'keeps an entry that starts exactly at the first byte of the kept window' do
+      stub_const("#{described_class}::LOG_MAX_BYTES", 2_000)
+      stub_const("#{described_class}::LOG_KEEP_BYTES", 1_000)
+      header = "[kept] Lich5 GemCheck failure\n"
+      kept = "#{header}#{'k' * (1_000 - header.bytesize - 1)}\n"
+      expect(kept.bytesize).to eq(1_000)
+      File.binwrite(log_path, "[old] Lich5 GemCheck failure\n#{'o' * 2_500}\n#{kept}")
+      described_class.trim_log(log_path)
+      expect(File.binread(log_path)).to eq(kept)
+    end
+
+    it 'writes queued notes and the ending exception for a start that stopped before init.rb flushed them' do
+      described_class.note('info: queued')
+      described_class.write_unflushed_notes(error: LoadError.new('cannot load such file -- ox'))
+      contents = File.read(log_path)
+      expect(contents).to include('Lich5 GemCheck start stopped before the Lich log opened', '    info: queued', 'Class:   LoadError')
+      expect(contents).not_to include("You're missing required Ruby gems")
+      expect(described_class.startup_notes).to eq([])
+    end
+
+    it 'writes nothing for an empty queue, and no error entry for a plain exit' do
+      described_class.write_unflushed_notes(error: RuntimeError.new('ignored'))
+      expect(File.exist?(log_path)).to be(false)
+      described_class.note('info: queued')
+      described_class.write_unflushed_notes(error: SystemExit.new(0))
+      expect(File.read(log_path)).not_to include('Underlying error')
+    end
+
     it 'includes the release URL on Windows' do
       stub_const('RUBY_PLATFORM', 'x64-mingw-ucrt')
       described_class.write_log

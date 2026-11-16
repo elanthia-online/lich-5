@@ -519,6 +519,35 @@ module Lich
       notes.each { |message| yield message }
     end
 
+    # Registers, once, an exit hook that writes notes still queued when the
+    # process ends; lich.rbw calls it right after {verify!}. A start that
+    # continues has its notes flushed by init.rb, and one that alerts has
+    # them written by {write_log}. Both leave the queue empty, so the hook
+    # only writes for a start that stops some other way before init.rb's
+    # flush: an uncaught exception (a failed `require 'ox'`) or an early
+    # `exit` such as the archaic lich.sav check.
+    # @param groups [Array<Symbol>] groups verified at startup
+    # @return [void]
+    def keep_unflushed_notes_at_exit(groups = startup_groups)
+      return if @unflushed_notes_hook
+
+      @unflushed_notes_hook = true
+      at_exit { write_unflushed_notes(groups: groups, error: $!) }
+    end
+
+    # Writes queued startup notes to the missing-gems log, with the exception
+    # that ended the process when there is one. Does nothing once the queue
+    # has been flushed or written.
+    # @param groups [Array<Symbol>]
+    # @param error [Exception, nil]
+    # @return [void]
+    def write_unflushed_notes(groups: [:default], error: nil)
+      return if startup_notes.empty?
+
+      error = nil if error.is_a?(SystemExit)
+      write_log(groups: groups, error: error, event: 'start stopped before the Lich log opened')
+    end
+
     # @param missing [Array<String>]
     # @param groups [Array<Symbol>]
     # @param result [BundlerRecovery::Result]
@@ -624,8 +653,10 @@ module Lich
     def trim_log(log_path)
       return unless File.file?(log_path) && File.size(log_path) > LOG_MAX_BYTES
 
+      # One byte more than the window, so an entry starting exactly at the
+      # window's first byte still has its preceding newline and is kept.
       tail = File.open(log_path, 'rb') do |f|
-        f.seek(-LOG_KEEP_BYTES, IO::SEEK_END)
+        f.seek(-(LOG_KEEP_BYTES + 1), IO::SEEK_END)
         f.read
       end
       start = tail.index("\n[")

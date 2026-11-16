@@ -273,7 +273,9 @@ module Lich
       log_path = File.join(payload.fetch('temp_dir', Dir.tmpdir), 'lich5-missing-gems.log')
       File.open(log_path, 'a') do |file|
         file.puts "[#{Time.now}] Lich5 native gem replacement failure"
-        file.puts "  #{error.class}: #{error.message}"
+        # Indent every line, so a message line starting with "[" is not read
+        # as the start of a new entry when the log is trimmed.
+        "#{error.class}: #{error.message}".each_line { |line| file.puts "  #{line.chomp}" }
         file.puts
         file.puts '  Diagnostics:'
         file.puts "    Lich:            #{payload.fetch('lich_version', nil) || 'unknown'}"

@@ -299,6 +299,14 @@ before on every Lich release.
   it, for example when activation fails or a later `sqlite3` or `gtk3` load
   alerts. The missing-gems entry for that stop then carries the queued notes
   under "Noted earlier in this start", and they are not written again.
+- A start that stops without an alert before `init.rb` writes the notes (an
+  uncaught exception such as a failed `require 'ox'`, or an early `exit` such
+  as the archaic `lich.sav` check) writes them from an exit hook that
+  `lich.rbw` registers right after the gem check. That entry is headed "start
+  stopped before the Lich log opened" and records the exception, if any.
+- If `TEMP_DIR` itself cannot be written, for example when the debug log
+  cannot be opened, the notes are lost along with the entry: both logs live
+  there.
 
 ## Supported-client policy retention
 
