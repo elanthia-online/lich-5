@@ -204,12 +204,12 @@ module Lich
           entry = { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
           # On a Ruby older than the one the build ships, a gem below its
           # floor that still satisfies the Gemfile starts, with a note. Floors
-          # taken from the oldest Ruby Lich accepts make this a downgraded
-          # install on every accepted patch, but a contract whose floors are
-          # the build Ruby's own capture (built before that change), or a
-          # REQUIRED_RUBY raise the manifest has not caught up with, sets
-          # floors an older patch never shipped. On the shipped Ruby or newer
-          # a gem below its floor still stops startup.
+          # taken from the oldest Ruby this Lich accepts make this a downgraded
+          # install on every accepted patch. Floors an accepted patch never
+          # shipped come from a contract whose floors are the build Ruby's own
+          # capture (built before that change), or from a manifest whose
+          # floors follow a later REQUIRED_RUBY than this Lich release's. On
+          # the shipped Ruby or newer a gem below its floor still stops startup.
           if older_ruby && installed.any? { |spec| dep.requirement.satisfied_by?(spec.version) } && (!active || dep.requirement.satisfied_by?(active.version))
             @relaxed_floors << entry
             supplied_roots[dep.name] = nil

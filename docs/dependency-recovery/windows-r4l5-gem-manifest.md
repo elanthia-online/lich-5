@@ -142,9 +142,9 @@ recommended-update heading. On that Ruby or newer, a gem below its floor
 still stops startup, since it means a broken or downgraded install. While
 the floors come from the oldest Ruby Lich accepts, every accepted patch
 ships at least the floors, so a gem below its floor is a downgrade there
-too; the relaxation covers contracts whose floors are the build Ruby's
-exact capture, and a `REQUIRED_RUBY` raise the manifest has not caught up
-with.
+too. The relaxation covers floors an accepted patch never shipped: a
+contract whose floors are the build Ruby's exact capture, or a manifest
+whose floors follow a later `REQUIRED_RUBY` than the running Lich release's.
 
 A target may set an optional `minimum_ruby_version`: a canonical release
 version (no prerelease, no surrounding whitespace). Lich stops a Ruby older
