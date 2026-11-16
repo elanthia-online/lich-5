@@ -786,6 +786,18 @@ RSpec.describe Lich::GemCheck do
       expect(described_class.startup_notes).to eq([])
     end
 
+    it 'marks a gem below its RubyInstaller floor in the dependency table when the floor error stops startup' do
+      installed = Gem::Specification.find_all_by_name('json').map(&:version)
+      allow(described_class).to receive(:required_dependencies).with([:default]).and_return([Gem::Dependency.new('json')])
+      %i[alert_windows alert_macos alert_linux].each { |name| allow(described_class).to receive(name) }
+      gems = [{ name: 'json', floor: Gem::Version.new('999.0'), installed: installed, active: nil, requirement: Gem::Requirement.default }]
+      described_class.alert(error: Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9'))
+      row = File.read(log_path).lines.find { |line| line.match?(/^\s+json\s/) }
+      expect(row).to include("BELOW FLOOR 999.0 (#{installed.join(', ')})")
+      expect(row).not_to include('OK (')
+      expect(File.read(log_path)).to include('Underlying error:', 'which currently ships Ruby 4.0.9')
+    end
+
     it 'writes the platform message to TEMP_DIR' do
       described_class.write_log
       expect(File.read(log_path)).to include("You're missing required Ruby gems")
@@ -909,6 +921,19 @@ RSpec.describe Lich::GemCheck do
     it 'swallows filesystem errors silently' do
       allow(File).to receive(:open).and_raise(Errno::EACCES)
       expect { described_class.write_log }.not_to raise_error
+    end
+  end
+
+  describe '.dependency_report with RubyInstaller floors' do
+    it 'marks a gem below its floor instead of printing OK' do
+      dep = double('dep', name: 'openssl', requirement: Gem::Requirement.default, groups: [:default])
+      allow(described_class).to receive(:required_dependencies).and_return([dep])
+      allow(Gem::Specification).to receive(:find_all_by_name).with('openssl', dep.requirement).and_return([double(version: Gem::Version.new('4.0.0'))])
+      floors = [{ name: 'openssl', floor: Gem::Version.new('4.0.2') }]
+      expect(described_class.dependency_report([:default])).to include('OK (4.0.0)')
+      report = described_class.dependency_report([:default], floors: floors)
+      expect(report).to include('BELOW FLOOR 4.0.2 (4.0.0)')
+      expect(report).not_to include('OK')
     end
   end
 
@@ -1160,6 +1185,17 @@ RSpec.describe Lich::GemCheck do
       body = described_class.build_alert_body([], error)
       expect(body).to include('missing gem dependency', 'Repair or reinstall Ruby4Lich5', 'local-child is missing')
       expect(body).not_to include('release maintainer', 'could not retrieve')
+      expect(described_class).to receive(:alert_windows).with(body, download: true)
+      described_class.alert(error: error)
+    end
+
+    it 'names each gem below its RubyInstaller floor and the Ruby to install' do
+      gems = [{ name: 'openssl', floor: Gem::Version.new('4.0.2'), installed: [Gem::Version.new('4.0.0')], active: nil, requirement: Gem::Requirement.default }]
+      error = Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9', running_ruby: '4.0.5')
+      body = described_class.build_alert_body([], error)
+      expect(body).to include('- openssl 4.0.0 (needs 4.0.2 or newer)', 'Install Ruby4Lich5, which currently ships Ruby 4.0.9, then start Lich again', 'cannot update these gems itself')
+      expect(body).not_to include("You're missing", 'repair the Ruby installation', 'Underlying error')
+      expect(body.scan('which currently ships Ruby 4.0.9').length).to eq(1)
       expect(described_class).to receive(:alert_windows).with(body, download: true)
       described_class.alert(error: error)
     end

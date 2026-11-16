@@ -123,8 +123,16 @@ startup floor is its `minimum` when present and otherwise its `version` (see
 requirements, closure floors and package platforms, then Lich explicitly
 activates and verifies the selected versions. Eligible newer installations remain
 eligible; an already active accepted newer version is retained. RubyInstaller-
-supplied roots must satisfy both their measured inventory floor and the Gemfile;
-an unavailable supplied version requires reinstalling Ruby4Lich5.
+supplied roots must satisfy both their inventory floor and the Gemfile;
+an unavailable supplied version requires reinstalling Ruby4Lich5. Startup
+then stops with one error naming every supplied gem below its floor (its
+installed and active versions, the floor and any Gemfile requirement) and
+what to do. The inventory's `ruby_version` is the Ruby the accepted
+Ruby4Lich5 build ships, so a Ruby older than it is told "Install Ruby4Lich5,
+which currently ships Ruby X.Y.Z". On that Ruby or a newer one, a gem below
+its floor means a damaged or downgraded install, so the message says
+"Reinstall" instead. The failure entry's dependency table marks those gems
+`BELOW FLOOR` instead of `OK`.
 
 A working older gem triggers repair even when no gem is missing. If an older
 version is already active, merely installing a fixed copy does not permit

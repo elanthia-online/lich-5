@@ -146,14 +146,51 @@ RSpec.describe Lich::AcceptedGemPolicy do
     plan.units = []
     target['contract']['ruby_inventory']['gems']['json'] = { 'version' => '3.1' }
     installed['json'] = [spec('json', '2.0')]
-    expect { policy.check([Gem::Dependency.new('json', '>= 3')]) }.to raise_error(described_class::Error, /repair the Ruby installation/)
+    expect { policy.check([Gem::Dependency.new('json', '>= 3')]) }.to raise_error(described_class::RubyInventoryFloorError, /json installed 2.0, floor 3.1, Gemfile requires >= 3/)
   end
 
   it 'enforces the supplied inventory floor even with an unrestricted Gemfile root' do
     plan.units = []
     target['contract']['ruby_inventory']['gems']['json'] = { 'version' => '3.1' }
     installed['json'] = [spec('json', '3.0')]
-    expect { policy.check([Gem::Dependency.new('json')]) }.to raise_error(described_class::Error, /repair the Ruby installation/)
+    expect { policy.check([Gem::Dependency.new('json')]) }.to raise_error(described_class::RubyInventoryFloorError, /json installed 3.0, floor 3.1\b/)
+  end
+
+  it 'names every gem below its floor and the Ruby Ruby4Lich5 ships' do
+    plan.units = []
+    target['contract']['ruby_inventory']['ruby_version'] = '4.0.9'
+    target['contract']['ruby_inventory']['gems']['json'] = { 'version' => '3.1' }
+    target['contract']['ruby_inventory']['gems']['psych'] = { 'version' => '5.2' }
+    installed['json'] = [spec('json', '3.0')]
+    installed['psych'] = []
+    active['json'] = spec('json', '3.0')
+    expect { policy.check([Gem::Dependency.new('json'), Gem::Dependency.new('psych')]) }.to raise_error(described_class::RubyInventoryFloorError) { |error|
+      expect(error).to be_a(described_class::LocalInstallationError)
+      expect(error.ruby_version).to eq('4.0.9')
+      expect(error.gems.map { |entry| entry.values_at(:name, :floor, :active) }).to eq([['json', Gem::Version.new('3.1'), Gem::Version.new('3.0')], ['psych', Gem::Version.new('5.2'), nil]])
+      expect(error.message).to include('json installed 3.0, active 3.0, floor 3.1', 'psych not installed, floor 5.2', 'Ruby4Lich5, which currently ships Ruby 4.0.9')
+      expect(error.message).not_to include('measured')
+    }
+  end
+
+  describe described_class::RubyInventoryFloorError do
+    let(:gems) { [{ name: 'openssl', floor: Gem::Version.new('4.0.0'), installed: [Gem::Version.new('3.9')], active: nil, requirement: Gem::Requirement.default }] }
+
+    it 'tells a Ruby older than the shipped one to install Ruby4Lich5' do
+      error = described_class.new(gems, '4.0.9', running_ruby: '4.0.5')
+      expect(error.remedy).to eq('Install Ruby4Lich5, which currently ships Ruby 4.0.9')
+      expect(error.message).to end_with('. Install Ruby4Lich5, which currently ships Ruby 4.0.9.')
+    end
+
+    it 'tells the shipped Ruby or a newer one to reinstall, since its install is damaged or downgraded' do
+      %w[4.0.9 4.0.10].each do |running|
+        expect(described_class.new(gems, '4.0.9', running_ruby: running).remedy).to eq('Reinstall Ruby4Lich5, which currently ships Ruby 4.0.9')
+      end
+    end
+
+    it 'says only to reinstall when the inventory names no Ruby' do
+      expect(described_class.new(gems, nil, running_ruby: '4.0.9').remedy).to eq('Reinstall Ruby4Lich5')
+    end
   end
 
   it 'accepts and activates a supplied version at or above its inventory floor' do

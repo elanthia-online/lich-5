@@ -10,6 +10,68 @@ module Lich
     Error = DependencyRecovery::Error
     # Policy acquisition/coverage failures are distinct from broken local gems.
     class LocalInstallationError < Error; end
+
+    # A RubyInstaller-supplied gem the Gemfile declares is below the floor
+    # the accepted manifest's inventory sets. Lich never ships these gems, so
+    # the fix is a Ruby install that supplies them, not a gem repair.
+    class RubyInventoryFloorError < LocalInstallationError
+      # @return [Array<Hash>] one entry per gem: name, floor, installed
+      #   versions, active version (or nil) and the Gemfile requirement
+      attr_reader :gems
+      # @return [String, nil] the Ruby the accepted Ruby4Lich5 build ships
+      #   (+ruby_inventory.ruby_version+). The floors can come from an older
+      #   RubyInstaller, so this is not the Ruby they were taken from.
+      attr_reader :ruby_version
+      # @return [String] the Ruby this start runs on
+      attr_reader :running_ruby
+
+      # @param gems [Array<Hash>]
+      # @param ruby_version [String, nil]
+      # @param running_ruby [String]
+      def initialize(gems, ruby_version, running_ruby: RUBY_VERSION)
+        @gems = gems
+        @ruby_version = ruby_version
+        @running_ruby = running_ruby
+        super(self.class.describe(gems, ruby_version, running_ruby))
+      end
+
+      # What the player should do. A Ruby older than the one Ruby4Lich5 ships
+      # needs that install. On the shipped Ruby or newer, a gem below its
+      # floor means the install is damaged or downgraded, so reinstall it.
+      # @param ruby_version [String, nil]
+      # @param running_ruby [String]
+      # @return [String] a sentence start, without the closing period
+      def self.remedy(ruby_version, running_ruby)
+        return 'Reinstall Ruby4Lich5' unless ruby_version
+
+        verb = begin
+          Gem::Version.new(running_ruby) < Gem::Version.new(ruby_version) ? 'Install' : 'Reinstall'
+        rescue ArgumentError
+          'Install'
+        end
+        "#{verb} Ruby4Lich5, which currently ships Ruby #{ruby_version}"
+      end
+
+      # @return [String]
+      def remedy
+        self.class.remedy(ruby_version, running_ruby)
+      end
+
+      # @param gems [Array<Hash>]
+      # @param ruby_version [String, nil]
+      # @param running_ruby [String]
+      # @return [String]
+      def self.describe(gems, ruby_version, running_ruby = RUBY_VERSION)
+        parts = gems.map do |entry|
+          installed = entry.fetch(:installed).empty? ? 'not installed' : "installed #{entry.fetch(:installed).join(', ')}"
+          active = entry.fetch(:active) ? ", active #{entry.fetch(:active)}" : ''
+          requirement = entry.fetch(:requirement).to_s == '>= 0' ? '' : ", Gemfile requires #{entry.fetch(:requirement)}"
+          "#{entry.fetch(:name)} #{installed}#{active}, floor #{entry.fetch(:floor)}#{requirement}"
+        end
+        "RubyInstaller gems below this Lich's floor: #{parts.join('; ')}. #{remedy(ruby_version, running_ruby)}."
+      end
+    end
+
     class PolicyError < Error; end
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
@@ -95,6 +157,7 @@ module Lich
       supplied = self.class.supplied_gems(plan.target)
       covered = plan.units.flat_map { |unit| unit.fetch('members') }
       supplied_roots = {}
+      below = []
       dependencies.each do |dep|
         next if covered.include?(dep.name)
         unless supplied.key?(dep.name)
@@ -102,11 +165,14 @@ module Lich
         end
         floor = Gem::Version.new(supplied.fetch(dep.name).fetch('version'))
         active = @loaded_specs[dep.name]
-        unless @find_specs.call(dep.name).any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
-          raise Error, "installed RubyInstaller gem #{dep.name} does not satisfy its inventory floor and declared requirement; repair the Ruby installation"
+        installed = @find_specs.call(dep.name)
+        unless installed.any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
+          below << { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
+          next
         end
         supplied_roots[dep.name] = floor
       end
+      raise RubyInventoryFloorError.new(below, plan.target.dig('contract', 'ruby_inventory', 'ruby_version')) unless below.empty?
       packages = {}
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|
