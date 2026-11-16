@@ -209,16 +209,6 @@ Startup then sorts each package into one of three tiers:
   `init.rb` writes it once the log exists. Each start has its own debug log
   and Lich prunes old ones, so the entry is written on every such start.
 
-### Which log an entry goes to
-
-- **`temp/lich5-missing-gems.log`** holds only starts that do not continue:
-  a failure dialog, a declined or timed-out consent, a consented repair that
-  exits or restarts Lich, and a failed native replacement helper. Each entry
-  records the Lich version, Ruby description, Ruby executable path, gem home
-  and working directory. Past 1 MiB, only the newest whole entries within the
-  last 256 KiB are kept.
-- **The Lich debug log** (`temp/debug-*.log`) holds everything noted on a
-  start that continues, such as the recommended entry above.
 - **Current** (`version` or an eligible newer version is installed): as before.
 
 A package's installed copy normally counts only when its platform matches the
@@ -294,6 +284,17 @@ key: their package validation checks only `name`, `version`, `filename` and
 `version` as the floor, the stricter direction, so publishing a `minimum` does
 not change how they start. A manifest without any `minimum` behaves exactly as
 before on every Lich release.
+
+### Which log an entry goes to
+
+- **`temp/lich5-missing-gems.log`** holds only starts that do not continue:
+  a failure dialog, a declined or timed-out consent, a consented repair that
+  exits or restarts Lich, and a failed native replacement helper. Each entry
+  records the Lich version, Ruby description, Ruby executable path, gem home
+  and working directory. Past 1 MiB, only the newest whole entries within the
+  last 256 KiB are kept.
+- **The Lich debug log** (`temp/debug-*.log`) holds everything noted on a
+  start that continues, such as the recommended entry above.
 
 ## Supported-client policy retention
 
