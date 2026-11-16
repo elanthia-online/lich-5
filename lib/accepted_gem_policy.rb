@@ -102,7 +102,8 @@ module Lich
     # starts on an installed version below the accepted one, at or above its
     # minimum; startup only logs it.
     # +relaxed_floors+ lists RubyInstaller gems started below their inventory
-    # floor because the running Ruby is older than the one it was measured on.
+    # floor because the running Ruby is older than the inventory's
+    # +ruby_version+, the Ruby the accepted Ruby4Lich5 build ships.
     Check = Struct.new(:plan, :needed, :specs, :recommended, :relaxed_floors, keyword_init: true)
 
     class InstalledSet < Gem::Resolver::Set
@@ -156,7 +157,8 @@ module Lich
     end
 
     # @param ruby_version [String] the Ruby to judge the target against: the
-    #   running one at startup, the measured one in a pre-publication check
+    #   running one at startup, the inventory's +ruby_version+ (the Ruby the
+    #   build ships) in a pre-publication check
     def initialize(recovery: DependencyRecovery.new, find_specs: Gem::Specification.method(:find_all_by_name), loaded_specs: Gem.loaded_specs,
                    ruby_version: RUBY_VERSION)
       @recovery = recovery
@@ -184,8 +186,8 @@ module Lich
       end
       raise RubyTooOldError.new(minimum_ruby.to_s, @ruby_version.to_s) if minimum_ruby && @ruby_version < minimum_ruby
       supplied = self.class.supplied_gems(plan.target)
-      measured = plan.target.dig('contract', 'ruby_inventory', 'ruby_version')
-      older_ruby = measured.is_a?(String) && Gem::Version.correct?(measured) && @ruby_version < Gem::Version.new(measured)
+      shipped = plan.target.dig('contract', 'ruby_inventory', 'ruby_version')
+      older_ruby = shipped.is_a?(String) && Gem::Version.correct?(shipped) && @ruby_version < Gem::Version.new(shipped)
       covered = plan.units.flat_map { |unit| unit.fetch('members') }
       supplied_roots = {}
       below = []
@@ -200,10 +202,14 @@ module Lich
         installed = @find_specs.call(dep.name)
         unless installed.any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
           entry = { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
-          # An older Ruby patch than the inventory's supplies older versions
-          # of these gems by design. If the Gemfile is still satisfied, start
-          # on them and note it; on the measured patch or newer a gem below
-          # the floor means a broken or downgraded install, and still stops.
+          # On a Ruby older than the one the build ships, a gem below its
+          # floor that still satisfies the Gemfile starts, with a note. Floors
+          # taken from the oldest Ruby Lich accepts make this a downgraded
+          # install on every accepted patch, but a contract whose floors are
+          # the build Ruby's own capture (built before that change), or a
+          # REQUIRED_RUBY raise the manifest has not caught up with, sets
+          # floors an older patch never shipped. On the shipped Ruby or newer
+          # a gem below its floor still stops startup.
           if older_ruby && installed.any? { |spec| dep.requirement.satisfied_by?(spec.version) } && (!active || dep.requirement.satisfied_by?(active.version))
             @relaxed_floors << entry
             supplied_roots[dep.name] = nil
@@ -214,7 +220,7 @@ module Lich
         end
         supplied_roots[dep.name] = floor
       end
-      raise RubyInventoryFloorError.new(below, plan.target.dig('contract', 'ruby_inventory', 'ruby_version')) unless below.empty?
+      raise RubyInventoryFloorError.new(below, shipped, running_ruby: @ruby_version.to_s) unless below.empty?
       packages = {}
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|

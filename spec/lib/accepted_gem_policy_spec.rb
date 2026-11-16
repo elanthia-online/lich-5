@@ -17,7 +17,7 @@ RSpec.describe Lich::AcceptedGemPolicy do
   let(:plan) { Lich::DependencyRecovery::Plan.new(units: [unit], target: target) }
   let(:recovery) { instance_double(Lich::DependencyRecovery, policy_plan: plan) }
   let(:dependencies) { [Gem::Dependency.new('sqlite3')] }
-  subject(:policy) { described_class.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active) }
+  subject(:policy) { described_class.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active, ruby_version: '4.0.9') }
 
   def spec(name, version, dependencies = {})
     result = Gem::Specification.new do |item|
@@ -813,7 +813,7 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(check.relaxed_floors.map { |entry| entry.values_at(:name, :floor) }).to eq([['openssl', Gem::Version.new('4.0.2')]])
     end
 
-    it 'still stops on the measured patch or newer' do
+    it "still stops on the inventory's Ruby or newer" do
       %w[4.0.9 4.0.10].each do |ruby|
         expect { policy_on(ruby).check([Gem::Dependency.new('openssl')]) }.to raise_error(described_class::RubyInventoryFloorError)
       end

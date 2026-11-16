@@ -33,8 +33,11 @@ module Lich
               available[package.fetch('name')] = specification(package.fetch('name'), version, platform)
             end
           end
-          # Judge as a start on the measured Ruby, never the host's: an older
-          # host Ruby would relax the inventory floors and hide a failure.
+          # Judge as a start on the inventory's Ruby (the one the build ships),
+          # never the host's. Every supplied gem is modelled at exactly its
+          # floor, so the host Ruby cannot relax a floor here; what it would
+          # change is minimum_ruby_version, which would fail a valid minimum
+          # whenever this check runs on an older host Ruby.
           policy = AcceptedGemPolicy.new(recovery: recovery, find_specs: ->(name) { available.key?(name) ? [available.fetch(name)] : [] }, loaded_specs: {},
                                          ruby_version: plan.target.dig('contract', 'ruby_inventory', 'ruby_version') || RUBY_VERSION)
           check = policy.check(dependencies)

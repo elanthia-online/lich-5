@@ -437,14 +437,14 @@ RSpec.describe Lich::R4L5ContractCheck do
   end
 
   context 'with a minimum_ruby_version' do
-    it 'accepts one at or below the measured inventory Ruby' do
+    it "accepts one at or below the inventory's ruby_version" do
       target['minimum_ruby_version'] = '4.0.9'
       expect { verify }.not_to raise_error
     end
 
-    it 'rejects one above the measured inventory Ruby' do
+    it "rejects one above the inventory's ruby_version" do
       target['minimum_ruby_version'] = '4.0.10'
-      expect { verify }.to raise_error(described_class::Error, /minimum_ruby_version is above the measured inventory Ruby/)
+      expect { verify }.to raise_error(described_class::Error, /minimum_ruby_version is above the inventory's ruby_version/)
     end
 
     it 'rejects a non-canonical or prerelease value' do

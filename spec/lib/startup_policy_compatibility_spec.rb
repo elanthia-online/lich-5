@@ -111,13 +111,13 @@ RSpec.describe Lich::StartupPolicyCompatibility do
     end
   end
 
-  context 'with a measured RubyInstaller inventory' do
+  context 'with a RubyInstaller inventory' do
     before do
       target['contract'] = { 'ruby_inventory' => { 'ruby_version' => '99.0.9', 'gems' => { 'json' => { 'version' => '99.1', 'dependencies' => {} } } } }
       clients.each { |client| client['gemfile'] += "\ngem 'json'" }
     end
 
-    it 'judges the served floors as a start on the measured Ruby, not on the host Ruby' do
+    it "judges the served floors as a start on the inventory's Ruby, not on the host Ruby" do
       expect(Lich::AcceptedGemPolicy).to receive(:new).at_least(:once).and_wrap_original do |original, **options|
         expect(options.fetch(:ruby_version)).to eq('99.0.9')
         original.call(**options)
@@ -125,7 +125,7 @@ RSpec.describe Lich::StartupPolicyCompatibility do
       expect { verify }.not_to raise_error
     end
 
-    it 'fails a minimum_ruby_version above the measured Ruby' do
+    it "fails a minimum_ruby_version above the inventory's Ruby" do
       target['minimum_ruby_version'] = '99.1.0'
       expect { verify }.to raise_error(Lich::AcceptedGemPolicy::PolicyError, /minimum Ruby 99.1.0/)
     end

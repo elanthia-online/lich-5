@@ -309,7 +309,7 @@ RSpec.describe Lich::GemCheck do
           expect(described_class).not_to receive(:alert)
           described_class.verify!
           entry = flushed.join("\n")
-          expect(entry).to include("Started on Ruby #{RUBY_VERSION}, older than the Ruby 4.0.9", '- openssl: installed 4.0.0, floor 4.0.2')
+          expect(entry).to include("Started on Ruby #{RUBY_VERSION}, older than Ruby 4.0.9, which Ruby4Lich5 currently ships.", '- openssl: installed 4.0.0, floor 4.0.2')
           expect(File.exist?(log)).to be(false)
         end
 

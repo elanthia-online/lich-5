@@ -508,18 +508,18 @@ module Lich
       note(lines.join("\n"))
     end
 
-    # The running Ruby is an older patch than the one the accepted inventory
-    # was measured on, so some RubyInstaller gems are below their floor but
-    # still satisfy the Gemfile. Startup continues on them; the newer Ruby is
-    # recommended, not required.
+    # The running Ruby is older than the inventory's +ruby_version+, the Ruby
+    # the accepted Ruby4Lich5 build ships, and some RubyInstaller gems are
+    # below their floor but still satisfy the Gemfile. Startup continues on
+    # them; installing Ruby4Lich5 is recommended, not required.
     # @param check [AcceptedGemPolicy::Check]
     # @return [void]
     def note_relaxed_floors(check)
-      measured = check.plan.target.dig('contract', 'ruby_inventory', 'ruby_version') || 'unknown'
+      shipped = check.plan.target.dig('contract', 'ruby_inventory', 'ruby_version') || 'unknown'
       lines = [
         "info: #{RECOMMENDED_HEADING}",
-        "  Started on Ruby #{RUBY_VERSION}, older than the Ruby #{measured} the gem floors were measured on.",
-        "  These RubyInstaller gems are below their floor but satisfy the Gemfile; installing Ruby4Lich5 with Ruby #{measured} is recommended."
+        "  Started on Ruby #{RUBY_VERSION}, older than Ruby #{shipped}, which Ruby4Lich5 currently ships.",
+        '  These RubyInstaller gems are below their floor but satisfy the Gemfile; installing Ruby4Lich5 is recommended.'
       ]
       Array(check.relaxed_floors).each do |entry|
         lines << "    - #{entry.fetch(:name)}: installed #{entry.fetch(:installed).join(', ')}, floor #{entry.fetch(:floor)}"
