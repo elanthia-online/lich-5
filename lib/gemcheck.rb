@@ -1,6 +1,7 @@
 # lib/gemcheck.rb
 require 'timeout'
 require_relative 'bundler_recovery'
+require_relative 'common/cli/one_shot_commands'
 require_relative 'dependency_recovery'
 require_relative 'accepted_gem_policy'
 require_relative 'runtime_gem_contract'
@@ -53,7 +54,8 @@ module Lich
 
         if result.success?
           write_bundler_recovery_log(missing: missing, groups: groups, result: result)
-          exit(result.restart_required ? 0 : 1)
+          exit_after_scheduled_repair! if result.restart_required
+          exit 1
         end
 
         alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
@@ -68,10 +70,11 @@ module Lich
     end
 
     # Accepted manifest versions apply before any application dependency loads.
-    # Repair always restarts; already-loaded native or pure code cannot be
+    # Repair always finishes after this process exits (relaunching a session,
+    # not a one-shot command); already-loaded native or pure code cannot be
     # safely replaced by changing the installed-spec registry in this process.
     def verify_windows!(groups)
-      recovery = DependencyRecovery.new
+      recovery = DependencyRecovery.new(relaunch: relaunch_after_repair?)
       policy = AcceptedGemPolicy.new(recovery: recovery)
       begin
         check = policy.check(required_dependencies(groups))
@@ -88,7 +91,46 @@ module Lich
       result = recovery.recover(check.needed, force: true, plan: check.plan, restart: true, preserve_newer: true)
       raise recovery_error(result) unless result.success?
       raise DependencyRecovery::Error, 'accepted-version repair did not schedule its required restart' unless result.restart_required
-      exit 0
+      exit_after_scheduled_repair!
+    end
+
+    # The one place that decides whether a gem repair that finishes after this
+    # process exits relaunches Lich. A session is relaunched with its original
+    # arguments. A one-shot command (Lich::Common::CLI::OneShotCommands) is
+    # not: the relaunch would discard its output, and its arguments can carry
+    # passwords that would otherwise be written into the helper's payload.
+    # The recovery objects, the consent prompt and the exit status all follow
+    # this answer.
+    #
+    # @return [Boolean] true when the repair helper should relaunch Lich
+    def relaunch_after_repair?
+      !Lich::Common::CLI::OneShotCommands.present?(ARGV)
+    end
+
+    # Exits once a gem repair has been scheduled to finish after this process
+    # is gone. A session exits 0 and is relaunched by the repair helper. A
+    # one-shot command is not relaunched, so the user is told to run it again,
+    # and the exit status says it did not run.
+    #
+    # @return [void] never returns
+    def exit_after_scheduled_repair!
+      return exit(0) if relaunch_after_repair?
+
+      $stdout.puts one_shot_rerun_message
+      exit 1
+    end
+
+    # Shown when a gem repair finishes after this process exits and the
+    # one-shot command that triggered it is not relaunched. Success is silent,
+    # so it names the log a failed background repair writes to.
+    #
+    # @return [String]
+    def one_shot_rerun_message
+      log_name = BundlerRecovery.supported? ? BundlerRecovery::LOG_FILENAME : LOG_FILENAME
+      log_path = defined?(TEMP_DIR) ? File.join(TEMP_DIR, log_name) : log_name
+      "Lich is finishing a repair of its Ruby gems in the background.\n" \
+        "Your command did not run. Give the repair a minute, then run your command again.\n" \
+        "If Lich asks to install the gems again, the background repair failed; see #{log_path}."
     end
 
     # The accepted manifest publishes no target for this Windows Ruby (for
@@ -173,7 +215,7 @@ module Lich
     # @param groups [Array<Symbol>] dependency groups being recovered
     # @return [DependencyRecovery::Result, nil]
     def recover_with_consent!(gem_names, force: false, groups: [:default])
-      recovery = DependencyRecovery.new
+      recovery = DependencyRecovery.new(relaunch: relaunch_after_repair?)
       plan = recovery.recovery_plan(gem_names)
       return DependencyRecovery::Result.new(installed_gems: [], error: plan.error) unless plan.success?
       return nil unless recovery_units_approved?(plan.units, groups)
@@ -190,7 +232,7 @@ module Lich
     # @param groups [Array<Symbol>]
     # @return [BundlerRecovery::Result, nil]
     def recover_with_bundler_consent!(gem_names, groups: [:default])
-      recovery = BundlerRecovery.new(lich_dir: LICH_DIR)
+      recovery = BundlerRecovery.new(lich_dir: LICH_DIR, relaunch: relaunch_after_repair?)
       if (reason = recovery.preflight(gem_names))
         return BundlerRecovery::Result.new(error: reason)
       end
@@ -274,8 +316,15 @@ module Lich
       end
       "Required Ruby gems are missing or need repair:\n#{listed_units.join("\n")}\n\n" \
         "Close all other Lich instances before continuing; they may hold native DLLs needed by this repair.\n" \
-        "Lich can download and install the approved, hash-verified packages now.\nA required version repair restarts Lich before continuing.\n\n" \
+        "Lich can download and install the approved, hash-verified packages now.\n#{restart_notice}\n\n" \
         'Install now?'
+    end
+
+    # @return [String] what happens to the current command after a required repair
+    def restart_notice
+      return 'A required version repair restarts Lich before continuing.' if relaunch_after_repair?
+
+      'A required version repair exits Lich; run your command again when it finishes.'
     end
 
     # @param unit [Hash] validated manifest recovery unit

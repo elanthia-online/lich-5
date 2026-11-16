@@ -76,6 +76,20 @@ RSpec.describe Lich::GemCheck do
       expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
     end
 
+    it 'tells the user to rerun a one-shot command after macOS recovery, and exits 1 because it did not run' do
+      stub_const('ARGV', ['--add-account', 'DOUG', 'secret'])
+      # A macOS host: the rerun message names the Bundler log there.
+      allow(Lich::BundlerRecovery).to receive(:supported?).and_return(true)
+      allow(described_class).to receive(:missing_gems).and_return(['ox'])
+      allow(described_class).to receive(:bundler_recovery_supported?).and_return(true)
+      result = Lich::BundlerRecovery::Result.new(log_path: '/tmp/fixture', restart_required: true)
+      allow(described_class).to receive(:recover_with_bundler_consent!).and_return(result)
+      allow(described_class).to receive(:write_bundler_recovery_log)
+
+      expect { expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) } }
+        .to output(/Your command did not run\. Give the repair a minute, then run your command again\.\n.*lich5-bundler-recovery\.log/).to_stdout
+    end
+
     {
       'a macOS Bundler preflight refusal'   => 'Xcode Command Line Tools are required to build native Ruby gems',
       'a failed macOS Bundler installation' => 'Bundler install failed (see fixture log)'
@@ -135,6 +149,15 @@ RSpec.describe Lich::GemCheck do
                                              .and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true))
         expect(policy).not_to receive(:activate!)
         expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
+      end
+
+      it 'asks for a rerun of a one-shot command after scheduling the repair, and exits 1' do
+        stub_const('ARGV', ['-cem', 'enhanced', '-mp', 'master-pw-fixture'])
+        check.needed = ['sqlite3']
+        allow(recovery).to receive(:recover).and_return(Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true))
+
+        expect { expect { described_class.verify! }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) } }
+          .to output(/Your command did not run/).to_stdout
       end
 
       it 'preserves the staging timeout type through Windows startup failure reporting' do
@@ -359,10 +382,57 @@ RSpec.describe Lich::GemCheck do
 
   describe '.build_recovery_prompt' do
     it 'uses real line breaks between the explanatory sentence and the question' do
+      stub_const('ARGV', ['--login', 'Doug'])
       unit = { 'id' => 'ox', 'members' => ['ox'] }
 
       expect(described_class.build_recovery_prompt([unit]))
         .to include("restarts Lich before continuing.\n\nInstall now?")
+    end
+
+    it 'tells a one-shot command that Lich exits and the command must be run again, not that Lich restarts' do
+      stub_const('ARGV', ['-cmp', 'old', 'new'])
+      unit = { 'id' => 'ox', 'members' => ['ox'] }
+
+      prompt = described_class.build_recovery_prompt([unit])
+
+      expect(prompt).to include("exits Lich; run your command again when it finishes.\n\nInstall now?")
+      expect(prompt).not_to include('restarts Lich')
+    end
+  end
+
+  describe '.relaunch_after_repair?' do
+    it 'relaunches a session or a bare launch' do
+      [[], ['--login', 'Doug'], ['--login', 'Doug', '--session-info']].each do |argv|
+        stub_const('ARGV', argv)
+        expect(described_class.relaunch_after_repair?).to be(true), argv.inspect
+      end
+    end
+
+    it 'does not relaunch a one-shot command' do
+      [['-aa', 'DOUG'], ['--active-sessions'], ['--session-info', 'Doug']].each do |argv|
+        stub_const('ARGV', argv)
+        expect(described_class.relaunch_after_repair?).to be(false), argv.inspect
+      end
+    end
+
+    {
+      'the Windows accepted-version repair' => :windows,
+      'a consented Windows repair'          => :consent,
+      'a consented macOS Bundler repair'    => :bundler
+    }.each do |path, kind|
+      it "is what #{path} hands to its recovery object" do
+        stub_const('ARGV', ['-cmp', 'old', 'new'])
+        stub_const('LICH_DIR', Dir.pwd) unless defined?(LICH_DIR)
+        stop = Class.new(StandardError)
+        if kind == :bundler
+          expect(Lich::BundlerRecovery).to receive(:new).with(hash_including(relaunch: false)).and_raise(stop)
+          expect { described_class.recover_with_bundler_consent!(['ox']) }.to raise_error(stop)
+        else
+          expect(Lich::DependencyRecovery).to receive(:new).with(relaunch: false).and_raise(stop)
+          call = kind == :windows ? -> { described_class.verify_windows!([:default]) } : -> { described_class.recover_with_consent!(['ox']) }
+          expect { call.call }.to raise_error(stop)
+        end
+      end
     end
   end
 
@@ -1150,5 +1220,51 @@ RSpec.describe Lich::GemCheck do
     latest = contents.split('Lich5 GemCheck failure').last
     expect(latest).to include('Check your network connection', 'Underlying error:')
     expect(latest).not_to include('Download:', "You're missing")
+  end
+
+  describe '.exit_after_scheduled_repair!' do
+    def exit_status_and_output(argv)
+      stub_const('ARGV', argv)
+      status = nil
+      output = StringIO.new
+      original_stdout = $stdout
+      $stdout = output
+      begin
+        described_class.exit_after_scheduled_repair!
+      rescue SystemExit => e
+        status = e.status
+      ensure
+        $stdout = original_stdout
+      end
+      [status, output.string]
+    end
+
+    it 'exits 0 silently for a session, which the repair helper relaunches' do
+      expect(exit_status_and_output(['--login', 'Doug'])).to eq([0, ''])
+    end
+
+    it 'exits 0 silently for a bare launch' do
+      expect(exit_status_and_output([])).to eq([0, ''])
+    end
+
+    it 'exits 1 and asks for a rerun for each one-shot command' do
+      %w[-aa -cap -cmp -rmp -cem --convert-entries --web-login-test --active-sessions --session-info=Doug].each do |flag|
+        status, output = exit_status_and_output([flag, 'x'])
+        expect(status).to eq(1), flag
+        expect(output).to include('Your command did not run'), flag
+      end
+    end
+
+    it 'names the Windows recovery log where macOS Bundler recovery is not supported' do
+      allow(Lich::BundlerRecovery).to receive(:supported?).and_return(false)
+
+      expect(exit_status_and_output(['-rmp']).last).to include(described_class::LOG_FILENAME)
+    end
+
+    it 'names the Bundler recovery log on macOS' do
+      allow(Lich::BundlerRecovery).to receive(:supported?).and_return(true)
+
+      expect(exit_status_and_output(['-rmp']).last).to include(Lich::BundlerRecovery::LOG_FILENAME)
+    end
   end
 end

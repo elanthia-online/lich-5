@@ -188,7 +188,8 @@ Startup then sorts each package into one of three tiers:
 
 - **Needed** (below `minimum`, wrong platform (see below), or an older or
   wrong-platform version already active): the existing consented repair runs for every unit containing a
-  needed package, then Lich restarts. The repair installs each package of
+  needed package, then Lich restarts (a session is relaunched; a one-shot
+  command is not, see the recovery transaction below). The repair installs each package of
   those units at its `version`, so a package of the same unit that was only
   recommended is upgraded with it. A unit with only recommended packages is
   not added to this repair; the conflict fallback below can still repair one.
@@ -307,13 +308,18 @@ those per-version acceptance runs have passed.
 
 After consent, all selected artifacts are staged and hash-verified under Lich's
 `temp` directory before a runtime write. Required version repairs are forced and
-always restart, including pure-gem repairs and direct native `.gem` downloads.
-One hidden `rubyw.exe` helper handles the complete transaction after the original
-process exits. It backs up replaced variants in the runtime gem directory,
-installs and verifies exact accepted packages, probes sqlite3/GTK entry points
-in a fresh bounded process when present, then relaunches the original Lich
-command and arguments. Startup then selects and verifies accepted versions in
-the new process. Existing newer packages are retained. Failed installation rolls
+always finish after Lich exits, including pure-gem repairs and direct native
+`.gem` downloads. One hidden `rubyw.exe` helper handles the complete transaction
+after the original process exits. It backs up replaced variants in the runtime
+gem directory, installs and verifies exact accepted packages, and probes
+sqlite3/GTK entry points in a fresh bounded process when present. For a session
+it then relaunches the original Lich command and arguments, and startup selects
+and verifies accepted versions in the new process. For an account, data or
+session-query command (`Lich::Common::CLI::OneShotCommands`) nothing is
+relaunched and its arguments are never written to the payload: Lich prints a
+message saying the command did not run and exits 1, and the user runs it again
+once the repair has finished. GemCheck makes that decision
+(`GemCheck.relaunch_after_repair?`), and the consent prompt says which applies. Existing newer packages are retained. Failed installation rolls
 back moved files and stops without relaunching. An unwritable gem home reports
 an error rather than continuing with an older version.
 

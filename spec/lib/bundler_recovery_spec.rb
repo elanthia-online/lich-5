@@ -17,12 +17,12 @@ RSpec.describe Lich::BundlerRecovery do
     end
   end
 
-  def recovery(installer: nil, &launcher)
+  def recovery(installer: nil, relaunch: true, &launcher)
     helper = lambda do |path|
       launcher.call(path)
       FileUtils.rm_rf(File.dirname(path)) # Mirrors detached helper cleanup in unit tests.
     end
-    described_class.new(lich_dir: @lich_dir, gem_home: @gem_home, helper_launcher: helper, installer: installer)
+    described_class.new(lich_dir: @lich_dir, gem_home: @gem_home, helper_launcher: helper, installer: installer, relaunch: relaunch)
   end
 
   before { allow(described_class).to receive(:supported?).and_return(true) }
@@ -77,6 +77,17 @@ RSpec.describe Lich::BundlerRecovery do
       expect(payload.fetch('packages')).to eq([{ 'name' => 'ox', 'version' => '2.14.28', 'full_name' => 'ox-2.14.28', 'path' => '/verified/ox.gem' }])
       expect(File.directory?(payload.fetch('work_dir'))).to be(false)
       expect(File).not_to exist(File.join(@lich_dir, '.lich-bundler-gems'))
+    end
+
+    it 'writes no restart and no arguments into the payload file when told not to relaunch' do
+      stub_const('ARGV', ['--change-master-password', 'old-master-pw', 'new-master-pw'])
+      written = nil
+      subject = recovery(relaunch: false) { |path| written = File.read(path) }
+
+      expect(subject.recover(['ox'])).to be_success
+
+      expect(JSON.parse(written)).to include('restart' => nil)
+      expect(written).not_to include('master-pw')
     end
 
     it 'uses a staged lockfile in frozen mode when one was shipped' do
@@ -135,6 +146,37 @@ RSpec.describe Lich::BundlerRecovery do
     end
   end
 
+  describe 'restart payload' do
+    let(:packages) { [{ 'name' => 'ox', 'version' => '1.0.0', 'full_name' => 'ox-1.0.0', 'path' => '/tmp/ox-1.0.0.gem' }] }
+
+    it 'relaunches a session with its original arguments' do
+      stub_const('ARGV', ['--login', 'Doug', '--frontend', 'wizard'])
+
+      payload = recovery(relaunch: true) { |_| }.send(:promotion_payload, @lich_dir, packages)
+
+      expect(payload.fetch('restart')).to eq(
+        'program' => File.join(@lich_dir, 'lich.rbw'), 'argv' => ['--login', 'Doug', '--frontend', 'wizard'], 'chdir' => @lich_dir
+      )
+    end
+
+    it 'leaves the command and its password out of the payload when told not to relaunch' do
+      stub_const('ARGV', ['--change-master-password', 'old-master-pw', 'new-master-pw'])
+
+      payload = recovery(relaunch: false) { |_| }.send(:promotion_payload, @lich_dir, packages)
+
+      expect(payload).to have_key('restart')
+      expect(payload.fetch('restart')).to be_nil
+      expect(JSON.generate(payload)).not_to include('master-pw')
+    end
+
+    it 'follows the relaunch it was given, not its own reading of ARGV' do
+      stub_const('ARGV', ['-aa', 'DOUG'])
+
+      expect(recovery(relaunch: true) { |_| }.send(:promotion_payload, @lich_dir, packages).fetch('restart'))
+        .to include('argv' => ['-aa', 'DOUG'])
+    end
+  end
+
   describe 'detached promotion transaction' do
     def write_installed_spec(name, version, marker:)
       spec = Gem::Specification.new do |entry|
@@ -182,6 +224,22 @@ RSpec.describe Lich::BundlerRecovery do
 
       expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
       expect(File.read(File.join(@gem_home, 'gems', original.full_name, 'marker'))).to eq('preserve')
+      expect(File).not_to exist(work_dir)
+    end
+
+    it 'promotes the package without relaunching when the payload has no restart' do
+      replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'old')
+      work_dir = Dir.mktmpdir('promotion-', @lich_dir)
+      payload, path = payload_for(work_dir, replacement)
+      payload['restart'] = nil
+      subject = recovery(installer: ->(_) { install_spec(replacement, marker: 'new') }) { |_| }
+      allow(subject).to receive(:wait_for_parent_exit)
+      expect(subject).not_to receive(:restart_lich)
+      expect(Process).not_to receive(:spawn)
+
+      subject.send(:run_macos_replacement!, payload, payload_path: path)
+
+      expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
       expect(File).not_to exist(work_dir)
     end
 

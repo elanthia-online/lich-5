@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'terminal-table'
+require_relative 'one_shot_commands'
 
 module Lich
   module Common
@@ -49,7 +50,7 @@ module Lich
         #
         # @return [Boolean]
         def self.query_requested?
-          ARGV.include?('--active-sessions') || !requested_session_name.nil?
+          OneShotCommands.session_query?(ARGV)
         end
 
         # Returns the session name requested by `--session-info`, if present.

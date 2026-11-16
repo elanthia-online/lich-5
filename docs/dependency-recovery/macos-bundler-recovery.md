@@ -28,8 +28,15 @@ runtime gems such as `ox`; it is not a macOS GTK installer.
    dependencies that the real `Gem.dir` cannot satisfy. It backs up every
    touched installed gem, validates the canonical installation, and restores
    the backup if any install or validation step fails.
-6. The helper removes staging and backup data, then relaunches Lich. `gem list`
-   therefore reports every recovered gem normally.
+6. The helper removes staging and backup data. `gem list` therefore reports
+   every recovered gem normally.
+7. A session is relaunched with its original arguments. An account, data or
+   session-query command (`--add-account`, `--change-master-password`,
+   `--active-sessions` and the rest of `Lich::Common::CLI::OneShotCommands`)
+   is not: its arguments are left out of the helper's payload, Lich prints a
+   message saying the command did not run and exits 1, and the user runs it
+   again once the repair has finished. A failed promotion is recorded in
+   `temp/lich5-bundler-recovery.log`.
 
 If Bundler cannot reach a source, a build fails, or the process is interrupted
 before promotion, the canonical RubyGems directory is unchanged. The incomplete
