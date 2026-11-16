@@ -795,6 +795,7 @@ RSpec.describe Lich::GemCheck do
       row = File.read(log_path).lines.find { |line| line.match?(/^\s+json\s/) }
       expect(row).to include("BELOW FLOOR 999.0 (#{installed.join(', ')})")
       expect(row).not_to include('OK (')
+      expect(File.read(log_path)).to include('Underlying error:', 'which currently ships Ruby 4.0.9')
     end
 
     it 'writes the platform message to TEMP_DIR' do
@@ -1193,7 +1194,8 @@ RSpec.describe Lich::GemCheck do
       error = Lich::AcceptedGemPolicy::RubyInventoryFloorError.new(gems, '4.0.9', running_ruby: '4.0.5')
       body = described_class.build_alert_body([], error)
       expect(body).to include('- openssl 4.0.0 (needs 4.0.2 or newer)', 'Install Ruby4Lich5, which currently ships Ruby 4.0.9, then start Lich again', 'cannot update these gems itself')
-      expect(body).not_to include("You're missing", 'repair the Ruby installation')
+      expect(body).not_to include("You're missing", 'repair the Ruby installation', 'Underlying error')
+      expect(body.scan('which currently ships Ruby 4.0.9').length).to eq(1)
       expect(described_class).to receive(:alert_windows).with(body, download: true)
       described_class.alert(error: error)
     end

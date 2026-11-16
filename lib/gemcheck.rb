@@ -425,7 +425,10 @@ module Lich
       if missing.any?
         parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
       end
-      if error
+      # A floor error's dialog text already lists the gems and the remedy, so
+      # repeating its message here would say both twice. The missing-gems
+      # entry still records the full message.
+      if error && !error.is_a?(AcceptedGemPolicy::RubyInventoryFloorError)
         parts << "Underlying error:\n  #{error.message.lines.first.to_s.strip}"
       end
       parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
