@@ -1,0 +1,357 @@
+module Ecleanse
+  class Setup < Gtk::Builder
+    attr_accessor :settings
+
+    @@categories = {
+      general: {
+        cleanse_magical: { default: false },
+        cleanse_grounded: { default: false },
+        cleanse_poison: { default: false },
+        cleanse_disease: { default: false },
+        recover_disarmed: { default: false },
+        dispel_clouds: { default: false },
+        dispel_magic: { default: false },
+        avoid_webs: { default: false },
+        use_berserk_webbed: { default: false },
+        hive_traps_apparatus: { default: false },
+        hive_traps_ground: { default: false },
+        break_runestone: { default: false },
+        stop_scripts: { default: '' },
+        script_list: { default: [] },
+        determination: { default: false },
+        itchy_curse: { default: false },
+        safe_room: { default: '' },
+        use_stunned_barkskin: { default: false },
+        use_berserk_stunned: { default: false },
+        use_stunned1040: { default: false },
+        use_stance1: { default: false },
+        use_stance2: { default: false },
+        use_flee: { default: false },
+        use_hide: { default: false },
+        use_709: { default: false },
+        use_619: { default: false },
+        use_213: { default: false },
+        use_1011: { default: false },
+        use_9811: { default: false },
+        use_140: { default: false },
+        use_919: { default: false },
+        use_1635: { default: false },
+        version: { default: '' },
+      }
+    }
+
+    def self.get_category(key)
+      @@categories.each { |category, data| return category unless data[key].nil? }
+      nil
+    end
+
+    def self.get_setting(key)
+      cat = Setup.get_category(key)
+      return nil if cat.nil?
+
+      @@categories[cat].each { |setting, data| return data if setting == key }
+      nil
+    end
+
+    def initialize(settings)
+      super()
+      @settings = settings
+      @silent_exit = false
+
+      # Capture starting settings
+      @original_settings = Marshal.load(Marshal.dump(settings))
+
+      # Get script version
+      @settings[:version] = version = Util.get_script_version
+
+      # set default values if they don't exist
+      @@categories.each do |_, data|
+        data.each { |key, value| @settings[key] = value[:default] if @settings[key].nil? }
+      end
+
+      # remove settings that don't exist
+      @settings.delete_if { |key, _| next Setup.get_category(key).nil? }
+
+      # use a GTK Builder to setup all the basics of the window then expand on that base
+      return unless defined?(Gtk) && Gtk::Version::MAJOR == 3
+
+      Gtk.queue do
+        # add_from_file("#{$data_dir}ecleanse.ui")
+        add_from_string(Setup.ui)
+        load_settings
+        self['main'].keep_above = true
+        self['main'].set_title "Ecleanse Setup v#{version}"
+        # connect signals after settings are loaded to a bunch of handlers don't trigger
+        connect_signals { |handler| method(handler) }
+      end
+    end
+
+    def self.ui
+      '<?xml version="1.0" encoding="UTF-8"?><!-- Generated with glade 3.38.2 --><interface><requires lib="gtk+" version="3.20"/><object class="GtkWindow" id="main"><property name="width-request">650</property><property name="height-request">675</property><property name="can-focus">False</property><property name="title" translatable="yes">Ecleanse Setup</property><signal name="destroy" handler="on_destroy" swapped="no"/><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><property name="spacing">5</property><child><object class="GtkNotebook"><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="vexpand">True</property><child><object class="GtkScrolledWindow"><property name="visible">True</property><property name="can-focus">True</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=1 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">13</property><property name="margin-end">5</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Scripts to Pause</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="stop_scripts"><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="width-chars">59</property><property name="placeholder-text" translatable="yes">list of scripts to pause eg - bigshot, eloot, go2</property></object><packing><property name="left-attach">1</property><property name="top-attach">0</property><property name="width">2</property>
+      </packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Scripts</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=4 n-rows=5 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkCheckButton" id="recover_disarmed"><property name="label" translatable="yes">Recover Disarmed Weapons</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Will use 218 if active</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="cleanse_magical"><property name="label" translatable="yes">Cleanse Magical</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Attempts to cleanse - Confusion, Vertigo, Sounds, or Thought Lash using spells 417, 119, or 1218 if known</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">3</property></packing></child><child><object class="GtkCheckButton" id="cleanse_poison"><property name="label" translatable="yes">Cure Poison</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Uses unpoison (114)</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="avoid_webs"><property name="label" translatable="yes">Dispel Webs</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="cleanse_disease"><property name="label" translatable="yes">Cure Disease</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Uses undisease (113)</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="cleanse_grounded"><property name="label" translatable="yes">Cleanse Grounded</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Attempts to clear Rooted or Pressed</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="determination"><property name="label" translatable="yes">Use Sigil of Determination</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="dispel_clouds"><property name="label" translatable="yes">Dispel Clouds</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="dispel_magic"><property name="label" translatable="yes">Dispel Magic</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_berserk_webbed"><property name="label" translatable="yes">Use Berserk when Webbed</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="hive_traps_apparatus"><property name="label" translatable="yes">Disarm Hive Apparatus</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">3</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="hive_traps_ground"><property name="label" translatable="yes">Disarm Hive Ground</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">3</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="break_runestone"><property name="label" translatable="yes">Break Runestone</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Attacks pale hovering runestones (Onslaught)</property><property name="halign">start</property><property name="margin-start">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">3</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="itchy_curse"><property name="label" translatable="yes">Manage Itchy Curse</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">3</property></packing></child><child><object class="GtkEntry" id="safe_room"><property name="visible">True</property><property name="can-focus">True</property><property name="tooltip-text" translatable="yes">If left empty will run to nearest town or sanctuary.</property><property name="halign">start</property><property name="margin-start">20</property><property name="margin-bottom">10</property><property name="placeholder-text" translatable="yes">Itchy Curse Safe Rooom</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">4</property><property name="width">2</property></packing></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Misc</property></object>
+      </child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=3 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkCheckButton" id="use_flee"><property name="label" translatable="yes">Stunman Flee</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">42</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_berserk_stunned"><property name="label" translatable="yes">Berserk</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_stunned1040"><property name="label" translatable="yes">Troubadour\'s Rally (1040)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="use_hide"><property name="label" translatable="yes">Stunman Hide</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">42</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_stance2"><property name="label" translatable="yes">Stunman Stance2</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">25</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_stance1"><property name="label" translatable="yes">Stunman Stance1</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">25</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_stunned_barkskin"><property name="label" translatable="yes">Barkskin (605)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property><property name="width">2</property></packing></child><child><object class="GtkCheckButton" id="use_1635"><property name="label" translatable="yes">Divine Intervention (1635)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">25</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">2</property></packing></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Stun Recovery</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">2</property>
+      </packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=3 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><child><object class="GtkCheckButton" id="use_9811"><property name="label" translatable="yes">Symbol of Sleep</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Will use 218 if active</property><property name="halign">start</property><property name="margin-start">32</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_213"><property name="label" translatable="yes">Minor Sanctuary (213)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="use_140"><property name="label" translatable="yes">Wall of Force (140)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">24</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_919"><property name="label" translatable="yes">Wizard\'s Shield (919)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Uses undisease (113)</property><property name="halign">start</property><property name="margin-start">24</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_709"><property name="label" translatable="yes">Grasp of the Grave (709)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_619"><property name="label" translatable="yes">Mass Calm (619)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">2</property></packing></child><child><object class="GtkCheckButton" id="use_1011"><property name="label" translatable="yes">Song of Peace (1011)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">32</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Cast in Room when Disarmed</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">3</property>
+      </packing></child></object></child></object></child></object></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">General</property></object><packing><property name="tab-fill">False</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">10</property><property name="label" translatable="yes">To save properly, exit with the close button and not the X window --&gt;</property><attributes><attribute name="style" value="italic"/>
+      </attributes></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkButton"><property name="label" translatable="yes">Close</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">10</property><property name="hexpand">True</property><signal name="clicked" handler="on_close_clicked" swapped="no"/>
+      </object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="pack-type">end</property><property name="position">1</property></packing></child></object></child></object></interface>'
+    end
+
+    # This is connected to automatically during load_settings and syncs data back to CharSettings.
+    def on_update(obj)
+      Gtk.queue do
+        key = obj.builder_name.to_sym
+        setting = Setup.get_setting(key)
+        return if setting.nil?
+
+        if obj.class == Gtk::CheckButton
+          @settings[key] = obj.active?
+
+          if key == :use_stance1 && obj.active?
+            self['use_stance2'].active = false
+            @settings[:use_stance2] = false
+
+            self['use_flee'].active = false
+            @settings[:use_flee] = false
+
+            self['use_hide'].active = false
+            @settings[:use_hide] = false
+          end
+
+          if key == :use_stance2 && obj.active?
+            self['use_stance1'].active = false
+            @settings[:use_stance1] = false
+
+            self['use_flee'].active = false
+            @settings[:use_flee] = false
+
+            self['use_hide'].active = false
+            @settings[:use_hide] = false
+          end
+
+          if key == :use_flee && obj.active?
+            self['use_stance1'].active = false
+            @settings[:use_stance1] = false
+
+            self['use_stance2'].active = false
+            @settings[:use_stance2] = false
+
+            self['use_hide'].active = false
+            @settings[:use_hide] = false
+          end
+
+          if key == :use_hide && obj.active?
+            self['use_stance1'].active = false
+            @settings[:use_stance1] = false
+
+            self['use_stance2'].active = false
+            @settings[:use_stance2] = false
+
+            self['use_flee'].active = false
+            @settings[:use_flee] = false
+          end
+        elsif obj.class == Gtk::Entry
+          @settings[key] = obj.text.strip
+        elsif obj.class == Gtk::SpinButton
+          # update from text entry
+          obj.update
+          # force int, we don't use floats anywhere
+          @settings[key] = obj.adjustment.value.to_i
+        elsif obj.class == Gtk::ComboBoxText
+          @settings[key] = obj.active_text
+        end
+      end
+    end
+
+    def on_close_clicked
+      if @original_settings == @settings
+        respond
+        Lich::Messaging.msg('plain', " Nothing to save. No changes were made.")
+        respond
+      else
+        filename = File.join(DATA_DIR, XMLData.game, Char.name, 'ecleanse.yaml')
+        File.write(filename, Ecleanse.data.settings.to_yaml)
+        respond
+        Lich::Messaging.msg('plain', " Settings saved to file: #{filename}.")
+        respond
+      end
+
+      @silent_exit = true
+      self['main'].destroy
+    end
+
+    def on_destroy
+      Gtk.queue {
+        unless @silent_exit
+          respond
+          Lich::Messaging.msg('plain', " #{@script_name} UI closed WITHOUT saving any changes")
+          Lich::Messaging.msg('plain', " Be sure to use the close button to save changes")
+          respond
+        end
+        @running = false
+      }
+    end
+
+    # iterate all objects and for any that match a setting name directly we set the default
+    def load_settings
+      Gtk.queue do
+        conditions = {
+          "cleanse_disease"      => !Spell[113].known?,
+          "cleanse_poison"       => !Spell[114].known?,
+          "use_berserk_webbed"   => !CMan.known?("Berserk"),
+          "determination"        => !Spell["Sigil of Determination"].known?,
+          "cleanse_grounded"     => !(CMan.known?("Retreat") || Feat.known?("escapeartist")),
+          "cleanse_magical"      => [417, 1218, 119].map { |s| Spell[s] }.find { |s| s.known? }.nil?,
+          "dispel_clouds"        => [417, 1218, 119].map { |s| Spell[s] }.find { |s| s.known? }.nil?,
+          "dispel_magic"         => [417, 1218, 119].map { |s| Spell[s] }.find { |s| s.known? }.nil? && !CMan.known?("Spell Cleave") && !CMan.known?("Spell Thieve"),
+          "avoid_webs"           => [209, 417, 1218, 119].map { |s| Spell[s] }.find { |s| s.known? }.nil? && !Feat.known?("escapeartist") && !CMan.known?("Spell Cleave") && !CMan.known?("Spell Thieve"),
+          "use_stunned_barkskin" => !Spell[605].known?,
+          "use_berserk_stunned"  => !CMan.known?("Berserk"),
+          "use_stunned1040"      => !Spell[1040].known?,
+          "use_stance1"          => CMan.stun_maneuvers < 2,
+          "use_stance2"          => CMan.stun_maneuvers < 4,
+          "use_flee"             => CMan.stun_maneuvers < 5,
+          "use_hide"             => CMan.stun_maneuvers < 5,
+          "use_709"              => !Spell[709].known?,
+          "use_619"              => !Spell[619].known?,
+          "use_213"              => !Spell[213].known?,
+          "use_1011"             => !Spell[1011].known?,
+          "use_9811"             => !Spell[9811].known?,
+          "use_140"              => !Spell[140].known?,
+          "use_919"              => !Spell[919].known?,
+          "use_1635"             => !Spell[1635].known?,
+        }
+
+        # load up the generic settings which are just matching by name of the widget
+        objects.each do |obj|
+          next unless obj.methods.include?(:builder_name)
+
+          key = obj.builder_name.to_sym
+          builder_name = obj.builder_name
+          next if (Setup.get_setting(key)).nil?
+
+          # disable options and set them to false if the character can't do them
+          if conditions[builder_name]
+            obj.set_sensitive(false)
+            self[builder_name].active = false
+            @settings[key] = false
+          end
+
+          if obj.class == Gtk::CheckButton
+            obj.active = @settings[key]
+            obj.signal_connect('toggled') { on_update(obj) }
+          elsif obj.class == Gtk::Entry
+            obj.text = @settings[key].strip
+            obj.signal_connect('changed') { on_update(obj) }
+          end
+        end
+      end
+    end
+
+    def start
+      @running = true
+      Gtk.queue { self['main'].show_all }
+      wait_while { @running }
+    end
+
+    def list(cat_to_list: 'all')
+      indent_size = 2
+      print_array =
+        proc do |key, value, indent|
+          _respond("#{' ' * indent_size * indent.to_i}#{key}:")
+          value.sort!.each { |entry| _respond("#{' ' * indent_size * (indent.to_i + 1)}#{value.index(entry) + 1}. #{entry}") }
+        end
+
+      print_value = proc { |key, value, indent| _respond("#{' ' * indent_size * indent.to_i}#{key}: #{value}") }
+
+      categories = cat_to_list == 'all' ? %w[general internal] : [cat_to_list]
+      if $frontend == 'stormfront'
+        output = "<output class=\"mono\"/>\n"
+      else
+        output = String.new
+      end
+      categories.each do |opt|
+        _respond("#{output}") if !output.empty?
+        _respond("#{monsterbold_start}= #{opt.capitalize} =#{monsterbold_end}\n")
+        @@categories[opt.to_sym].each do |id, _|
+          value = @settings[id]
+          value.class == Array ? print_array.call(id, value, 1) : print_value.call(id, value, 1)
+        end
+      end
+      if $frontend == 'stormfront'
+        output = "<output class=\"\"/>\n"
+        _respond("#{output}")
+      end
+    end
+
+    def self.update_setting(key, value)
+      setting = Setup.get_setting(key)
+      echo "** Setting #{key.inspect} does not exist" if setting.nil?
+      action = nil
+
+      if value =~ /^([+-])(.*)$/
+        action = Regexp.last_match(1)
+        value = Regexp.last_match(2).strip.downcase
+      end
+
+      if value == 'reset'
+        @settings.delete(key)
+        echo " Reset #{key}"
+      elsif @settings[key].class == Array
+        if value =~ /\d/ && @settings[key][value.to_i]
+          @settings[key].delete_at(value.to_i)
+        else
+          @settings[key].delete(value)
+        end
+
+        if action == '-'
+          echo " #{value.inspect} removed from #{key.inspect}"
+        else
+          @settings[key].push(value)
+          echo " #{value.inspect} added to #{key.inspect}"
+        end
+
+        echo " #{key.inspect} is now #{@settings[key].join(', ').inspect}"
+      else
+        if @settings[key].class == FalseClass || @settings[key].class == TrueClass
+          value = value =~ /^true|1|yes|on/ ? true : false
+        elsif @settings[key].class == Integer
+          value = value.to_i
+        end
+
+        echo "#{key.inspect} has been set to #{value.inspect}"
+        @settings[key] = value
+      end
+    end
+  end
+end

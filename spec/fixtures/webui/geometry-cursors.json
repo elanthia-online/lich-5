@@ -1,0 +1,35 @@
+{
+  "revision": "2fa28f1e540e97c468af88bbc8c432d3cebf8755",
+  "scripts": {
+    "gemstonev": {
+      "sha256": "a2b81ac7aa596305e7e90161aea380eeead4e91daf51647fbc3268dc8cb40483",
+      "blocks": {
+        "cursor_names": {
+          "line": 37,
+          "source": "\t@default_cursor = \"pointer\"\r\n\t@execute_cursor = \"cell\"\r\n\t@ability_cursor = \"copy\"\r\n",
+          "sha256": "0c966c630fb4754e821fc3864b88cc1dc6cc9ce5a5fba43ee375146e9147ba94"
+        },
+        "geometry": {
+          "line": 52,
+          "source": "\tdisplay = Gdk::Display.default\r\n\tmonitor = display.primary_monitor\r\n\tscreen_size = monitor.geometry\r\n\t@screen_width = screen_size.width\r\n\t@screen_height = screen_size.height\r\n",
+          "sha256": "dfce3ee1bd4604e5718d50bc2a64ec9699fb81cd1fc2efcb0c0aea29e3b66910"
+        },
+        "set_cursor": {
+          "line": 710,
+          "source": "\tdef self.set_cursor(widget, name)\r\n\t\tdisplay = Gdk::Display.default\r\n\t\tcursor = Gdk::Cursor.new(name, display: display) rescue nil\r\n\t\tcursor ||= Gdk::Cursor.new(\"default\", display: display)\r\n\t\twidget.window.set_cursor(cursor)\r\n\tend\r\n",
+          "sha256": "52318cadf099af4bb56a9fd1c3cf9513e71501d8da0762274b146c65003af1e4"
+        }
+      }
+    },
+    "highlight-manager": {
+      "sha256": "fd6210a4cc271fdbf043c9edc0f729bc6748027e1b641555abb6d2d21cc484a4",
+      "blocks": {
+        "cursor_helpers": {
+          "line": 4275,
+          "source": "def gdk_click_cursor\n  return nil unless defined?(Gdk::Cursor)\n\n  begin\n    return Gdk::Cursor.new(:hand2)\n  rescue\n    nil\n  end\n  begin\n    return Gdk::Cursor.new(Gdk::CursorType::HAND2) if defined?(Gdk::CursorType)\n  rescue\n    nil\n  end\n  begin\n    display = Gdk::Display.default if defined?(Gdk::Display) && Gdk::Display.respond_to?(:default)\n    return Gdk::Cursor.new_from_name(display, 'pointer') if display && Gdk::Cursor.respond_to?(:new_from_name)\n  rescue\n    nil\n  end\n  nil\nend\n\ndef set_clickable_text_view_cursor(text_view)\n  cursor = gdk_click_cursor\n  return unless cursor && text_view\n\n  if text_view.respond_to?(:window) && text_view.window && text_view.window.respond_to?(:cursor=)\n    text_view.window.cursor = cursor\n  end\n  if text_view.respond_to?(:get_window) && defined?(Gtk::TextWindowType)\n    [Gtk::TextWindowType::TEXT, Gtk::TextWindowType::WIDGET].each do |window_type|\n      begin\n        text_window = text_view.get_window(window_type)\n        text_window.cursor = cursor if text_window && text_window.respond_to?(:cursor=)\n      rescue\n        nil\n      end\n    end\n  end\nrescue => error\n  gtk_debug \"Label Names cursor setup failed: #{error.class}: #{error.message}\" if respond_to?(:gtk_debug)\nend\n",
+          "sha256": "b7a80f2becba13aaadbebd68eed35d565b7cfdea928e668188906d6f7a09a8b6"
+        }
+      }
+    }
+  }
+}
