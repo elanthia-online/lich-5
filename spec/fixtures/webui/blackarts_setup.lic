@@ -1,0 +1,766 @@
+module BlackArts
+  class Setup < Gtk::Builder
+    @@categories = {
+      general: {
+        skill_types: { default: [] },
+        shadow_drop_item: { default: '' },
+        forage_options: { default: [] },
+        no_forage_rooms: { default: '' },
+        only_required_creatures: { default: false },
+        use_vouchers: { default: false },
+        use_boost: { default: false },
+        once_and_done: { default: false },
+        no_alchemy: { default: false },
+        rr_travel: { default: false },
+        guild_travel: { default: false },
+        guild_pause: { default: '' },
+        home_guild: { default: '' },
+        home_guild_name: { default: '' },
+        buy_reagents: { default: false },
+        sell_consignment: { default: false },
+        no_bank: { default: false },
+        note_withdrawal: { default: '' },
+        note_refresh: { default: '' },
+        use_wracking: { default: false },
+        use_symbol_mana: { default: false },
+        use_symbol_renewal: { default: false },
+        use_sigil_power: { default: false },
+        use_sigil_concentration: { default: false },
+
+        # Foraging
+        forage_prep_commands: { default: '' },
+        forage_prep_scripts: { default: '' },
+        forage_post_commands: { default: '' },
+        forage_post_scripts: { default: '' },
+
+        btn_reset: { default: [] },
+        btn_consignment_reset: { default: [] },
+        consignment_include: {
+          default: [],
+          load: proc do |store, setting|
+            store.clear
+            setting.each do |text|
+              iter = store.append
+              iter[0] = text
+            end
+          end,
+          delete: proc do |_, selected, setting|
+            setting.delete(selected.get_value(0))
+            setting.uniq!.sort!
+          end,
+          set: proc do |_, text, setting|
+            next if setting.include?(text)
+
+            setting.push(text)
+            setting.uniq!.sort!
+          end
+        },
+        item_include: {
+          default: [],
+          load: proc do |store, setting|
+            store.clear
+            setting.each do |text|
+              iter = store.append
+              iter[0] = text
+            end
+          end,
+          delete: proc do |_, selected, setting|
+            setting.delete(selected.get_value(0))
+            setting.uniq!.sort!
+          end,
+          set: proc do |_, text, setting|
+            next if setting.include?(text)
+
+            setting.push(text)
+            setting.uniq!.sort!
+          end
+        },
+        recipe_exclude: {
+          default: [],
+          load: proc do |store, setting|
+            store.clear
+            setting.each do |text|
+              iter = store.append
+              iter[0] = text
+            end
+          end,
+          delete: proc do |_, selected, setting|
+            setting.delete(selected.get_value(0))
+            setting.uniq!.sort!
+          end,
+          set: proc do |_, text, setting|
+            next if setting.include?(text)
+
+            setting.push(text)
+            setting.uniq!.sort!
+          end
+        },
+        trash: {
+          default: [],
+          load: proc do |store, setting|
+            store.clear
+            setting.each do |text|
+              iter = store.append
+              iter[0] = text
+            end
+          end,
+          delete: proc do |_, selected, setting|
+            setting.delete(selected.get_value(0))
+            setting.uniq!.sort!
+          end,
+          set: proc do |_, text, setting|
+            next if setting.include?(text)
+
+            setting.push(text)
+            setting.uniq!.sort!
+          end
+        },
+        names_a: { default: '' },
+        profile_a: { default: '' },
+        profile_name_a: { default: '' },
+        kill_a: { default: false },
+        names_b: { default: '' },
+        profile_b: { default: '' },
+        profile_name_b: { default: '' },
+        kill_b: { default: false },
+        names_c: { default: '' },
+        profile_c: { default: '' },
+        profile_name_c: { default: '' },
+        kill_c: { default: false },
+        names_d: { default: '' },
+        profile_d: { default: '' },
+        profile_name_d: { default: '' },
+        kill_d: { default: false },
+        names_e: { default: '' },
+        profile_e: { default: '' },
+        profile_name_e: { default: '' },
+        kill_e: { default: false },
+        names_f: { default: '' },
+        profile_f: { default: '' },
+        profile_name_f: { default: '' },
+        kill_f: { default: false },
+        names_g: { default: '' },
+        profile_g: { default: '' },
+        profile_name_g: { default: '' },
+        kill_g: { default: false },
+        names_h: { default: '' },
+        profile_h: { default: '' },
+        profile_name_h: { default: '' },
+        kill_h: { default: false },
+        names_i: { default: '' },
+        profile_i: { default: '' },
+        profile_name_i: { default: '' },
+        kill_i: { default: false },
+        names_j: { default: '' },
+        profile_j: { default: '' },
+        profile_name_j: { default: '' },
+        kill_j: { default: false },
+      },
+      internal: {
+        silence: { default: true },
+        debug: { default: false },
+        no_magic: { default: [] },
+      }
+    }
+
+    def self.get_category(key)
+      @@categories.each { |category, data| return category unless data[key].nil? }
+      nil
+    end
+
+    def self.get_setting(key)
+      cat = Setup.get_category(key)
+      return nil if cat.nil?
+
+      @@categories[cat].each { |setting, data| return data if setting == key }
+      nil
+    end
+
+    def initialize(settings)
+      super()
+
+      version = BlackArts.get_script_version
+
+      @settings = settings
+
+      @default_buy = ["essence of air", "essence of earth", "essence of fire", "essence of water", "elemental core", "ayanad crystal", "s'ayanad crystal", "t'ayanad crystal", "n'ayanad crystal", "tiny golden seed", "inky necrotic core"]
+
+      @default_sell = [
+        "(rainbow\-hued|health|clear|lilac|silver|silvery|white|red|blue|green|grey|mana.*?|murky|bubbling|aquamarine|prismatic) potion",
+        "(rohnuru|sarmoc|duqnuru|dirtokh) potion",
+        "(silvery|glimmering|glittering|grey|opaline) dust",
+        "(opal|yew|grooved ebony|witchwood|iridescent opal|slender mithril|smooth crystalline|sapphire|beryl|willow|clear prismatic) wand",
+        "(prismatic|milky blue|fragrant|dark shimmering) oil",
+        "(dark translucent|foggy grey|glowing|jagged brown|rainbow\-flecked|eight\-sided|azure) crystal",
+        "(ivory disc|smooth stone) talisman",
+        "(ivory|fine white) powder",
+        "hazy glass vial",
+        "holy water",
+        "golden sand",
+        "moonstone amulet",
+        "sanguine flakes"
+      ]
+
+      # set default values if they don't exist
+      @@categories.each do |_, data|
+        data.each { |key, value| @settings[key] = value[:default] if @settings[key].nil? }
+      end
+
+      # remove settings that don't exist
+      @settings.delete_if { |key, _| next Setup.get_category(key).nil? }
+
+      # use a GTK Builder to setup all the basics of the window then expand on that base
+      return unless defined?(Gtk) && Gtk::Version::MAJOR == 3
+
+      Gtk.queue do
+        # add_from_file("#{$data_dir}BlackArts.ui")
+        add_from_string(ui)
+        load_settings
+
+        self['main'].keep_above = true
+        self['main'].set_title "BlackArts Setup v#{version}"
+
+        # connect signals after settings are loaded to a bunch of handlers don't trigger
+        connect_signals { |handler| method(handler) }
+      end
+    end
+
+    def ui
+      '<?xml version="1.0" encoding="UTF-8"?><!-- Generated with glade 3.38.2 --><interface><requires lib="gtk+" version="3.20"/><object class="GtkListStore" id="consignment_include_store"><columns><!-- column-name exclusion --><column type="gchararray"/></columns></object><object class="GtkListStore" id="item_include_store"><columns><!-- column-name exclusion --><column type="gchararray"/>
+      </columns></object><object class="GtkListStore" id="recipe_exclude_store"><columns><!-- column-name exclusion --><column type="gchararray"/></columns></object><object class="GtkListStore" id="trash_store"><columns><!-- column-name exclusion --><column type="gchararray"/></columns></object><object class="GtkWindow" id="main"><property name="width-request">750</property><property name="height-request">815</property><property name="can-focus">False</property><property name="title" translatable="yes">Black Arts Setup</property><property name="modal">True</property><signal name="destroy" handler="on_destroy" swapped="no"/><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><property name="spacing">5</property><child><object class="GtkNotebook"><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="vexpand">True</property><child><object class="GtkScrolledWindow"><property name="visible">True</property><property name="can-focus">True</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=6 n-rows=1 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="column-homogeneous">True</property><child><object class="GtkCheckButton" id="skill_types:alchemy"><property name="label" translatable="yes">Alchemy</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="skill_types:potions"><property name="label" translatable="yes">Potions</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="skill_types:trinkets"><property name="label" translatable="yes">Trinkets</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="skill_types:illusions"><property name="label" translatable="yes">Illusions</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">3</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property></object><packing><property name="left-attach">4</property><property name="top-attach">0</property></packing></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Guild Skills</property>
+      </object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=4 n-rows=3 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkCheckButton" id="skill_types:teach"><property name="label" translatable="yes">Teach</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="skill_types:learn"><property name="label" translatable="yes">Learn</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="shadow_drop_item"><property name="width-request">330</property><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-bottom">10</property><property name="placeholder-text" translatable="yes">Something small and cheap in case it gets lost</property></object><packing><property name="left-attach">0</property><property name="top-attach">2</property><property name="width">3</property>
+      </packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Shadow Drop Item</property></object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/>
+      </child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Illusion Skill Options</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=5 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkCheckButton" id="no_bank"><property name="label" translatable="yes">Do Not Use Bank (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Will only use coins/notes in your inventory and will not deposit after selling</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property><property name="height">2</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">Will withdrawl a note of specified amount</property><property name="halign">end</property><property name="margin-start">50</property><property name="label" translatable="yes">Withdrawal Amount</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">Will withdraw a new note if it falls below this amount</property><property name="halign">end</property><property name="label" translatable="yes">Refresh Note</property></object><packing><property name="left-attach">1</property><property name="top-attach">1</property>
+      </packing></child><child><object class="GtkEntry" id="note_withdrawal"><property name="width-request">200</property><property name="visible">True</property><property name="can-focus">True</property><property name="tooltip-text" translatable="yes">Will withdrawl a note of specified amount</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="placeholder-text" translatable="yes">Default amount is 50,000 silvers</property></object><packing><property name="left-attach">2</property><property name="top-attach">0</property><property name="width">2</property>
+      </packing></child><child><object class="GtkEntry" id="note_refresh"><property name="visible">True</property><property name="can-focus">True</property><property name="tooltip-text" translatable="yes">Will withdraw a new note if it falls below this amount</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="placeholder-text" translatable="yes">Default refresh is 5,000 silvers</property></object><packing><property name="left-attach">2</property><property name="top-attach">1</property><property name="width">2</property>
+      </packing></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Banking</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">2</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=4 n-rows=6 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">5</property><property name="column-spacing">5</property><property name="column-homogeneous">True</property><child><object class="GtkCheckButton" id="once_and_done"><property name="label" translatable="yes">Run one task and quit (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">When enabled this will quit after one bounty.</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkCheckButton" id="use_vouchers"><property name="label" translatable="yes">Use Vouchers</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">0</property>
+      </packing></child><child><object class="GtkCheckButton" id="no_alchemy"><property name="label" translatable="yes">No Alchemy (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Only accept tasks that require no alchemy to complete.</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">3</property></packing></child><child><object class="GtkCheckButton" id="guild_travel"><property name="label" translatable="yes">Travel to other Guilds (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">If enabled the script will travel to other guilds to finish tasks. Will stay on the east or west side of the Dragon Spine.</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="use_wracking"><property name="label" translatable="yes">Use Wracking</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">1</property><property name="top-attach">0</property>
+      </packing></child><child><object class="GtkCheckButton" id="use_sigil_concentration"><property name="label" translatable="yes">Use Sigil of Concentration</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">1</property><property name="top-attach">4</property>
+      </packing></child><child><object class="GtkCheckButton" id="use_sigil_power"><property name="label" translatable="yes">Use Sigil of Power</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">1</property><property name="top-attach">3</property>
+      </packing></child><child><object class="GtkCheckButton" id="use_symbol_mana"><property name="label" translatable="yes">Use Symbol of Mana(?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">The script will wait for the cooldown before reusing to avoid using deeds.</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="use_symbol_renewal"><property name="label" translatable="yes">Use Symbol of Renewal</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">2</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property></object><packing><property name="left-attach">3</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="sell_consignment"><property name="label" translatable="yes">Sell at Consignment (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">If enabled the script will try to sell alchemy products at the consignment shop.
+      Use the Consignment tab to sell sellable items.</property><property name="halign">start</property><property name="valign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">5</property></packing></child><child><object class="GtkCheckButton" id="buy_reagents"><property name="label" translatable="yes">Buy Reagents (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">If enabled the script will periodically go to the consignment and try to purchase items on your reagents tab.</property><property name="halign">start</property><property name="valign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">4</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="label" translatable="yes">Home Guild</property></object><packing><property name="left-attach">2</property><property name="top-attach">4</property></packing></child><child><object class="GtkComboBoxText" id="home_guild"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="valign">start</property><property name="margin-start">10</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="home_guild_name"><property name="can-focus">True</property>
+      </object></child></object><packing><property name="left-attach">2</property><property name="top-attach">5</property><property name="width">2</property></packing></child><child><object class="GtkCheckButton" id="use_boost"><property name="label" translatable="yes">Use Guild Boosts</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">start</property><property name="margin-start">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="rr_travel"><property name="label" translatable="yes">Travel to/from River\'s Rest (?)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="tooltip-text" translatable="yes">Requires silver at RR to purchase travel components</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child><child><object class="GtkEntry" id="guild_pause"><property name="width-request">75</property><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-start">10</property><property name="placeholder-text" translatable="yes">Default is 60 seconds</property></object><packing><property name="left-attach">2</property><property name="top-attach">3</property>
+      </packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-start">10</property><property name="label" translatable="yes">Wait (in seconds) before retrying guild task</property></object><packing><property name="left-attach">2</property><property name="top-attach">2</property><property name="width">2</property></packing></child><child><placeholder/></child><child><placeholder/>
+      </child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Misc</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">3</property></packing></child><child><!-- n-columns=1 n-rows=6 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-start">20</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Default, Herb, and Reagent bags need to be set with STOW</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Selling Script: Requires eloot</property></object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing>
+      </child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Healing Script: Requires eherbs</property></object><packing><property name="left-attach">0</property><property name="top-attach">2</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="label" translatable="yes">None of these are required if using "No Alchemy" mode</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">3</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="label" translatable="yes">The script will NOT purchase jars</property></object><packing><property name="left-attach">0</property><property name="top-attach">4</property></packing>
+      </child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="label" translatable="yes">*** Register and Mark Your Items ***</property><attributes><attribute name="foreground" value="#e0e01b1b2424"/></attributes></object><packing><property name="left-attach">0</property><property name="top-attach">5</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">4</property>
+      </packing></child></object></child></object></child></object></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">General</property></object><packing><property name="tab-fill">False</property></packing></child><child><object class="GtkScrolledWindow"><property name="visible">True</property><property name="can-focus">True</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=4 n-rows=4 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="column-homogeneous">True</property><child><object class="GtkCheckButton" id="forage_options:use_506"><property name="label" translatable="yes">Celerity (506)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="forage_options:use_213"><property name="label" translatable="yes">Minor Sanctuary (213)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="forage_options:use_709"><property name="label" translatable="yes">Grasp of the Grave (709)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="forage_options:run"><property name="label" translatable="yes">Run from creatures</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="forage_options:use_919"><property name="label" translatable="yes">Wizard\'s Shield (919)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkCheckButton" id="forage_options:use_140"><property name="label" translatable="yes">Wall of Force (140)</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-bottom">5</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkEntry" id="no_forage_rooms"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-left">10</property><property name="margin-start">10</property><property name="margin-top">3</property><property name="margin-bottom">5</property><property name="placeholder-text" translatable="yes">Example: 228, 188, 2300</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">3</property><property name="width">2</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">start</property><property name="margin-left">10</property><property name="margin-start">10</property><property name="label" translatable="yes">Rooms NOT to forage in</property></object><packing><property name="left-attach">0</property><property name="top-attach">2</property>
+      </packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property></object><packing><property name="left-attach">3</property><property name="top-attach">0</property></packing></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Foraging Options</property>
+      </object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=2 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Pre-Foraging Commands:</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="forage_prep_commands"><property name="width-request">550</property><property name="visible">True</property><property name="can-focus">True</property><property name="valign">start</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="max-width-chars">40</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Active Foraging Scripts:</property></object><packing><property name="left-attach">0</property><property name="top-attach">1</property>
+      </packing></child><child><object class="GtkEntry" id="forage_prep_scripts"><property name="visible">True</property><property name="can-focus">True</property><property name="valign">start</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="max-width-chars">40</property></object><packing><property name="left-attach">1</property><property name="top-attach">1</property>
+      </packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Pre-Foraging</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=2 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Post-Foraging Commands:</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="forage_post_commands"><property name="width-request">550</property><property name="visible">True</property><property name="can-focus">True</property><property name="valign">start</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="max-width-chars">40</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">end</property><property name="margin-start">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Post-Foraging Scripts:</property></object><packing><property name="left-attach">0</property><property name="top-attach">1</property>
+      </packing></child><child><object class="GtkEntry" id="forage_post_scripts"><property name="visible">True</property><property name="can-focus">True</property><property name="valign">start</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">10</property><property name="margin-bottom">10</property><property name="max-width-chars">40</property></object><packing><property name="left-attach">1</property><property name="top-attach">1</property>
+      </packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Post-Foraging</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">2</property></packing></child></object></child></object></child></object><packing><property name="position">1</property></packing></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Foraging</property>
+      </object><packing><property name="position">1</property><property name="tab-fill">False</property></packing></child><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="label-xalign">0</property><property name="shadow-type">none</property><child><!-- n-columns=2 n-rows=1 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkFrame"><property name="height-request">300</property><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">2</property><property name="column-spacing">5</property><child><object class="GtkButton" id="recipe_exclude_add"><property name="label" translatable="yes">Add</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkButton" id="recipe_exclude_delete"><property name="label" translatable="yes">Delete</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="recipe_exclude_entry"><property name="width-request">218</property><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="hexpand">True</property><property name="placeholder-text" translatable="yes">Alchemy Recipes to Exclude</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkScrolledWindow"><property name="height-request">525</property><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="border-width">5</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkTreeView" id="recipe_exclude"><property name="visible">True</property><property name="can-focus">True</property><property name="vexpand">False</property><property name="model">recipe_exclude_store</property><property name="headers-visible">False</property><property name="search-column">0</property><property name="fixed-height-mode">True</property><child internal-child="selection"><object class="GtkTreeSelection"/>
+      </child><child><object class="GtkTreeViewColumn"><property name="sizing">fixed</property><property name="title" translatable="yes">Exclusion</property><child><object class="GtkCellRendererText"/><attributes><attribute name="text">0</attribute></attributes></child></object></child></object></child></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">3</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">
+      </property></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkFrame"><property name="height-request">300</property><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">2</property><property name="column-spacing">5</property><child><object class="GtkButton" id="trash_add"><property name="label" translatable="yes">Add</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkButton" id="trash_delete"><property name="label" translatable="yes">Delete</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="trash_entry"><property name="width-request">218</property><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="hexpand">True</property><property name="placeholder-text" translatable="yes">Always trash these items</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkScrolledWindow"><property name="height-request">525</property><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="border-width">5</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkTreeView" id="trash"><property name="visible">True</property><property name="can-focus">True</property><property name="vexpand">False</property><property name="model">trash_store</property><property name="headers-visible">False</property><property name="search-column">0</property><property name="fixed-height-mode">True</property><child internal-child="selection"><object class="GtkTreeSelection"/>
+      </child><child><object class="GtkTreeViewColumn"><property name="sizing">fixed</property><property name="title" translatable="yes">Exclusion</property><child><object class="GtkCellRendererText"/><attributes><attribute name="text">0</attribute></attributes></child></object></child></object></child></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">3</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">
+      </property></object></child></object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child></object><packing><property name="position">2</property>
+      </packing></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Recipes/Trash</property></object><packing><property name="position">2</property><property name="tab-fill">False</property></packing></child><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="label-xalign">0</property><property name="shadow-type">none</property><child><!-- n-columns=2 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">2</property><property name="column-spacing">5</property><child><object class="GtkButton" id="item_include_add"><property name="label" translatable="yes">Add</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-start">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkButton" id="item_include_delete"><property name="label" translatable="yes">Delete</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="item_include_entry"><property name="width-request">218</property><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="hexpand">True</property><property name="placeholder-text" translatable="yes">Items to buy at reagent shop</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkScrolledWindow"><property name="height-request">525</property><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="border-width">5</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkTreeView" id="item_include"><property name="visible">True</property><property name="can-focus">True</property><property name="vexpand">False</property><property name="model">item_include_store</property><property name="headers-visible">False</property><property name="search-column">0</property><property name="fixed-height-mode">True</property><child internal-child="selection"><object class="GtkTreeSelection"/>
+      </child><child><object class="GtkTreeViewColumn"><property name="sizing">fixed</property><property name="title" translatable="yes">Exclusion</property><child><object class="GtkCellRendererText"/><attributes><attribute name="text">0</attribute></attributes></child></object></child></object></child></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">3</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">
+      </property></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">1</property></packing></child><child><object class="GtkButton" id="btn_reset"><property name="label" translatable="yes">Reset Reagent Buying     </property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="valign">end</property><property name="margin-start">10</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=2 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="row-spacing">2</property><property name="column-spacing">5</property><child><object class="GtkButton" id="consignment_include_add"><property name="label" translatable="yes">Add</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="margin-left">5</property><property name="margin-start">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkButton" id="consignment_include_delete"><property name="label" translatable="yes">Delete</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-right">5</property><property name="margin-end">5</property><property name="margin-bottom">5</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="consignment_include_entry"><property name="width-request">218</property><property name="visible">True</property><property name="can-focus">True</property><property name="halign">start</property><property name="margin-bottom">5</property><property name="hexpand">True</property><property name="placeholder-text" translatable="yes">Items to sell at the consignment shop</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkScrolledWindow"><property name="height-request">525</property><property name="visible">True</property><property name="can-focus">True</property><property name="hexpand">True</property><property name="border-width">5</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkTreeView" id="consignment_include"><property name="visible">True</property><property name="can-focus">True</property><property name="vexpand">False</property><property name="model">consignment_include_store</property><property name="headers-visible">False</property><property name="search-column">0</property><property name="fixed-height-mode">True</property><child internal-child="selection"><object class="GtkTreeSelection"/>
+      </child><child><object class="GtkTreeViewColumn"><property name="sizing">fixed</property><property name="title" translatable="yes">Exclusion</property><child><object class="GtkCellRendererText"/><attributes><attribute name="text">0</attribute></attributes></child></object></child></object></child></object></child></object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">3</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">
+      </property></object></child></object><packing><property name="left-attach">1</property><property name="top-attach">1</property></packing></child><child><object class="GtkButton" id="btn_consignment_reset"><property name="label" translatable="yes">Reset Consignment Selling</property><property name="width-request">80</property><property name="height-request">20</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">start</property><property name="valign">end</property><property name="margin-start">10</property>
+      </object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property></object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child></object><packing><property name="position">3</property></packing></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Buying/Selling</property>
+      </object><packing><property name="position">3</property><property name="tab-fill">False</property></packing></child><child><object class="GtkScrolledWindow"><property name="visible">True</property><property name="can-focus">True</property><property name="shadow-type">in</property><child><object class="GtkViewport"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><property name="orientation">vertical</property><child><object class="GtkFrame"><property name="visible">True</property><property name="can-focus">False</property><property name="border-width">10</property><property name="label-xalign">0</property><child><!-- n-columns=3 n-rows=25 --><object class="GtkGrid"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">1</property><property name="width">3</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="tooltip-text" translatable="yes">Names should be seperated by commas.</property><property name="margin-top">5</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Ingredient Names (?)</property><property name="use-markup">True</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">0</property></packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-top">5</property><property name="margin-bottom">10</property><property name="label" translatable="yes">Associated Profile</property></object><packing><property name="left-attach">1</property><property name="top-attach">0</property></packing></child><child><object class="GtkEntry" id="names_a"><property name="width-request">250</property><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property>
+      </object><packing><property name="left-attach">0</property><property name="top-attach">6</property></packing></child><child><object class="GtkComboBoxText" id="profile_a"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_a"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">6</property></packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">7</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_b"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_b"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">8</property></packing></child><child><object class="GtkEntry" id="names_b"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">8</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">9</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_c"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_c"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">10</property></packing></child><child><object class="GtkEntry" id="names_c"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">10</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">11</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_d"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_d"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">12</property></packing></child><child><object class="GtkEntry" id="names_d"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">12</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">13</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_e"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_e"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">14</property></packing></child><child><object class="GtkEntry" id="names_e"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">14</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">15</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_f"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_f"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">16</property></packing></child><child><object class="GtkEntry" id="names_f"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">16</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">17</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_g"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_g"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">18</property></packing></child><child><object class="GtkEntry" id="names_g"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">18</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">19</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_h"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_h"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">20</property></packing></child><child><object class="GtkEntry" id="names_h"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">20</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">21</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_i"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_i"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">22</property></packing></child><child><object class="GtkEntry" id="names_i"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">22</property>
+      </packing></child><child><object class="GtkSeparator"><property name="visible">True</property><property name="can-focus">False</property><property name="hexpand">True</property></object><packing><property name="left-attach">0</property><property name="top-attach">23</property><property name="width">3</property></packing></child><child><object class="GtkComboBoxText" id="profile_j"><property name="visible">True</property><property name="can-focus">False</property><property name="valign">center</property><property name="margin-start">10</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="has-entry">True</property><child internal-child="entry"><object class="GtkEntry" id="profile_name_j"><property name="can-focus">False</property>
+      </object></child></object><packing><property name="left-attach">1</property><property name="top-attach">24</property></packing></child><child><object class="GtkEntry" id="names_j"><property name="visible">True</property><property name="can-focus">True</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="xalign">0.5</property></object><packing><property name="left-attach">0</property><property name="top-attach">24</property>
+      </packing></child><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="halign">center</property><property name="valign">center</property><property name="margin-end">5</property><property name="label" translatable="yes">Only Kill Req.
+      </property></object><packing><property name="left-attach">2</property><property name="top-attach">0</property></packing></child><child><object class="GtkCheckButton" id="kill_a"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">6</property></packing></child><child><object class="GtkCheckButton" id="kill_b"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">8</property>
+      </packing></child><child><object class="GtkCheckButton" id="kill_c"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">10</property></packing></child><child><object class="GtkCheckButton" id="kill_d"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">12</property></packing></child><child><object class="GtkCheckButton" id="kill_e"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">14</property>
+      </packing></child><child><object class="GtkCheckButton" id="kill_f"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">16</property></packing></child><child><object class="GtkCheckButton" id="kill_g"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">18</property></packing></child><child><object class="GtkCheckButton" id="kill_h"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">20</property>
+      </packing></child><child><object class="GtkCheckButton" id="kill_i"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property></object><packing><property name="left-attach">2</property><property name="top-attach">22</property></packing></child><child><object class="GtkCheckButton" id="kill_j"><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">False</property><property name="halign">center</property><property name="valign">center</property><property name="draw-indicator">True</property>
+      </object><packing><property name="left-attach">2</property><property name="top-attach">24</property></packing></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child><child><placeholder/></child></object></child><child type="label"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Profiles</property>
+      </object></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child></object></child></object></child></object><packing><property name="position">4</property></packing></child><child type="tab"><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="label" translatable="yes">Profiles</property></object><packing><property name="position">4</property><property name="tab-fill">False</property>
+      </packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkBox"><property name="visible">True</property><property name="can-focus">False</property><child><object class="GtkLabel"><property name="visible">True</property><property name="can-focus">False</property><property name="margin-start">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="label" translatable="yes">Your changes are saved automatically.</property><attributes><attribute name="style" value="italic"/>
+      </attributes></object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">0</property></packing></child><child><object class="GtkButton"><property name="label" translatable="yes">Close</property><property name="width-request">80</property><property name="visible">True</property><property name="can-focus">True</property><property name="receives-default">True</property><property name="halign">end</property><property name="margin-end">10</property><property name="margin-top">5</property><property name="margin-bottom">5</property><property name="hexpand">True</property><signal name="clicked" handler="on_close_clicked" swapped="no"/>
+      </object><packing><property name="expand">False</property><property name="fill">True</property><property name="position">1</property></packing></child></object><packing><property name="expand">False</property><property name="fill">True</property><property name="pack-type">end</property><property name="position">2</property></packing></child></object></child></object></interface>'
+    end
+
+    # This is connected to automatically during load_settings and syncs data back to CharSettings.
+    def on_update(obj)
+      Gtk.queue do
+        key = obj.builder_name.to_sym
+        setting = Setup.get_setting(key)
+        return if setting.nil?
+
+        if obj.class == Gtk::CheckButton
+          @settings[key] = obj.active?
+        elsif obj.class == Gtk::Entry
+          @settings[key] = obj.text.strip
+        elsif obj.class == Gtk::SpinButton
+          # update from text entry
+          obj.update
+
+          # force int, we don't use floats anywhere
+          @settings[key] = obj.adjustment.value.to_i
+        elsif obj.class == Gtk::ComboBoxText
+          @settings[key] = obj.active_text
+        end
+      end
+    end
+
+    def on_close_clicked
+      BlackArts.save_profile()
+      self['main'].destroy
+    end
+
+    def on_destroy
+      Gtk.queue { @running = false }
+    end
+
+    def on_guild_load
+      all_guilds = Map.list.find_all { |room| room.tags.include?("#{Char.prof.downcase} alchemy administrator") }
+
+      self['home_guild'].remove_all
+      self['home_guild'].append_text('Closest') unless all_guilds.size.zero?
+
+      unless UserVars.mapdb_fwi_trinket
+        all_guilds.delete_if { |hash|
+          hash.location == 'Mist Harbor'
+        }
+      end
+
+      locations = []
+      all_guilds.each { |place|
+        named_location = Room[place.find_nearest_by_tag("town")].location
+        named_location = named_location.gsub(/the town of|the tunnels and caverns of|the city of|the free port of/i, '').strip
+        locations << named_location
+      }
+
+      locations.sort!.each { |place| self['home_guild'].append_text(place) }
+    end
+
+    def on_drop_load(profile_name)
+      dir = "#{$data_dir}#{XMLData.game}/#{Char.name}/bigshot_profiles"
+      self[profile_name].remove_all
+      self[profile_name].append_text('')
+      names = []
+      Dir.foreach(dir) { |f| names.push(f) }
+      names.each { |filename|
+        next if filename == '.' || filename == '..' || filename =~ /.ini/
+        self[profile_name].append_text("#{filename.sub(".yaml", "")}")
+      }
+    end
+
+    # iterate all objects and for any that match a setting name directly we set the default
+    def load_settings
+      Gtk.queue do
+        # load up the generic settings which are just matching by name of the widget
+        objects.each do |obj|
+          next unless obj.methods.include?(:builder_name)
+
+          key = obj.builder_name.to_sym
+
+          next if (setting = Setup.get_setting(key)).nil?
+
+          # set the default value
+          if obj.class == Gtk::CheckButton
+            obj.active = @settings[key]
+            obj.signal_connect('toggled') { on_update(obj) }
+
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("use_wracking")) unless Spell[9918].known?
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("use_symbol_mana")) unless Spell[9813].known?
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("use_symbol_renewal")) unless Spell[9819].known?
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("use_sigil_power")) unless Spell[9718].known?
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("use_sigil_concentration")) unless Spell[9714].known?
+          elsif obj.class == Gtk::Entry
+            obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("shadow_drop_item")) && Char.prof != "Sorcerer"
+            obj.text = @settings[key].to_s.strip
+
+            if obj.builder_name.to_s == "profile_name_a"
+              obj.text = @settings[:profile_a]
+            elsif obj.builder_name.to_s == "profile_name_b"
+              obj.text = @settings[:profile_b]
+            elsif obj.builder_name.to_s == "profile_name_c"
+              obj.text = @settings[:profile_c]
+            elsif obj.builder_name.to_s == "profile_name_d"
+              obj.text = @settings[:profile_d]
+            elsif obj.builder_name.to_s == "profile_name_e"
+              obj.text = @settings[:profile_e]
+            elsif obj.builder_name.to_s == "profile_name_f"
+              obj.text = @settings[:profile_f]
+            elsif obj.builder_name.to_s == "profile_name_g"
+              obj.text = @settings[:profile_g]
+            elsif obj.builder_name.to_s == "profile_name_h"
+              obj.text = @settings[:profile_h]
+            elsif obj.builder_name.to_s == "profile_name_i"
+              obj.text = @settings[:profile_i]
+            elsif obj.builder_name.to_s == "profile_name_j"
+              obj.text = @settings[:profile_j]
+            elsif obj.builder_name.to_s == "home_guild_name"
+              obj.text = @settings[:home_guild_name]
+            end
+
+            obj.signal_connect('changed') { on_update(obj) }
+          elsif obj.class == Gtk::SpinButton
+            obj.value = @settings[key]
+            obj.adjustment.value = @settings[key]
+            obj.signal_connect('changed') { on_update(obj) }
+          elsif obj.class == Gtk::ComboBoxText
+            if obj.builder_name.to_s == "home_guild"
+              on_guild_load
+            else
+              on_drop_load(obj.builder_name.to_s)
+            end
+            obj.signal_connect('changed') { on_update(obj) }
+          elsif obj.class == Gtk::Button
+            if obj.builder_name.to_s == 'btn_reset'
+              obj.signal_connect('clicked') do
+                # Delete all the entries
+                @settings[:item_include].each { |item| setting[:delete].call(@store, item, @settings[:item_include]) }
+
+                # Reset defaults
+                @settings[:item_include] = @default_buy.dup
+
+                # Add defaults
+                @settings[:item_include].each { |item| setting[:set].call(@store, item, @settings[:item_include]) }
+
+                # List them
+                @store.clear
+                @settings[:item_include].each do |text| @store.append[0] = text end
+              end
+            end
+
+            if obj.builder_name.to_s == 'btn_consignment_reset'
+              obj.signal_connect('clicked') do
+                # Delete all the entries
+                @settings[:consignment_include].each { |item| setting[:delete].call(@c_store, item, @settings[:consignment_include]) }
+
+                # Reset defaults
+                @settings[:consignment_include] = @default_sell.dup
+
+                # Add defaults
+                @settings[:consignment_include].each { |item| setting[:set].call(@c_store, item, @settings[:consignment_include]) }
+
+                # List them
+                @c_store.clear
+                @settings[:consignment_include].each do |text| @c_store.append[0] = text end
+              end
+            end
+
+          elsif obj.class == Gtk::TreeView && obj.builder_name.to_s == 'item_include'
+            if (@store = self["#{key}_store"]).nil?
+              respond "** failed to find store for treeview #{key}"
+              next
+            elsif setting[:load].nil?
+              respond "** no :load defined #{key}"
+              next
+            end
+
+            if @settings[key].empty?
+              @settings[key] = @default_buy.dup
+            end
+
+            setting[:load].call(@store, @settings[key])
+
+            # setup the signals
+            if (add = self["#{key}_add"]).nil?
+              respond "** failed to find add for treeview #{key}"
+              next
+            elsif (delete = self["#{key}_delete"]).nil?
+              respond "** failed to find delete for treeview #{key}"
+              next
+            elsif (entry = self["#{key}_entry"]).nil?
+              respond "** failed to find entry for treeview #{key}"
+              next
+            end
+
+            add.signal_connect('clicked') do
+              if setting[:set].nil?
+                respond "** no :set defined for #{key}"
+                next
+              elsif entry.text.empty?
+                next
+              end
+              setting[:set].call(@store, entry.text, @settings[key])
+              setting[:load].call(@store, @settings[key])
+              entry.text = ''
+            end
+
+            delete.signal_connect('clicked') do
+              if setting[:delete].nil?
+                respond "** no :delete defined for #{key}"
+                next
+              elsif (selected = obj.selection.selected).nil?
+                next
+              end
+              setting[:delete].call(@store, selected, @settings[key])
+              setting[:load].call(@store, @settings[key])
+            end
+          elsif obj.class == Gtk::TreeView && obj.builder_name.to_s == 'consignment_include'
+            if (@c_store = self["#{key}_store"]).nil?
+              respond "** failed to find store for treeview #{key}"
+              next
+            elsif setting[:load].nil?
+              respond "** no :load defined #{key}"
+              next
+            end
+
+            if @settings[key].empty?
+              @settings[key] = @default_sell.dup
+            end
+
+            setting[:load].call(@c_store, @settings[key])
+
+            # setup the signals
+            if (add = self["#{key}_add"]).nil?
+              respond "** failed to find add for treeview #{key}"
+              next
+            elsif (delete = self["#{key}_delete"]).nil?
+              respond "** failed to find delete for treeview #{key}"
+              next
+            elsif (entry = self["#{key}_entry"]).nil?
+              respond "** failed to find entry for treeview #{key}"
+              next
+            end
+
+            add.signal_connect('clicked') do
+              if setting[:set].nil?
+                respond "** no :set defined for #{key}"
+                next
+              elsif entry.text.empty?
+                next
+              end
+              setting[:set].call(@c_store, entry.text, @settings[key])
+              setting[:load].call(@c_store, @settings[key])
+              entry.text = ''
+            end
+
+            delete.signal_connect('clicked') do
+              if setting[:delete].nil?
+                respond "** no :delete defined for #{key}"
+                next
+              elsif (selected = obj.selection.selected).nil?
+                next
+              end
+              setting[:delete].call(@c_store, selected, @settings[key])
+              setting[:load].call(@c_store, @settings[key])
+            end
+          elsif obj.class == Gtk::TreeView && obj.builder_name.to_s =~ /recipe_exclude|trash/
+            if (store = self["#{key}_store"]).nil?
+              respond "** failed to find store for treeview #{key}"
+              next
+            elsif setting[:load].nil?
+              respond "** no :load defined #{key}"
+              next
+            end
+
+            setting[:load].call(store, @settings[key])
+
+            # setup the signals
+            if (add = self["#{key}_add"]).nil?
+              respond "** failed to find add for treeview #{key}"
+              next
+            elsif (delete = self["#{key}_delete"]).nil?
+              respond "** failed to find delete for treeview #{key}"
+              next
+            elsif (entry = self["#{key}_entry"]).nil?
+              respond "** failed to find entry for treeview #{key}"
+              next
+            end
+
+            add.signal_connect('clicked') do
+              if setting[:set].nil?
+                respond "** no :set defined for #{key}"
+                next
+              elsif entry.text.empty?
+                next
+              end
+              setting[:set].call(store, entry.text, @settings[key])
+              setting[:load].call(store, @settings[key])
+            end
+
+            delete.signal_connect('clicked') do
+              if setting[:delete].nil?
+                respond "** no :delete defined for #{key}"
+                next
+              elsif (selected = obj.selection.selected).nil?
+                next
+              end
+              setting[:delete].call(store, selected, @settings[key])
+              setting[:load].call(store, @settings[key])
+            end
+          end
+        end
+
+        # checkboxes for array storage with id's <setting>:<value>
+        # this is primarily used by the loot types
+        objects.each do |obj|
+          next unless obj.methods.include?(:builder_name)
+          next unless obj.builder_name =~ /^([^:]+):(.*)$/i
+          next unless obj.class == Gtk::CheckButton
+
+          key = Regexp.last_match(1).to_sym
+          value = Regexp.last_match(2).to_s
+          next if Setup.get_setting(key).nil?
+
+          # disable unless spell is known
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("forage_options:use_506")) unless Spell[506].known?
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("forage_options:use_213")) unless Spell[213].known?
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("forage_options:use_709")) unless Spell[709].known?
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("forage_options:use_919")) unless Spell[919].known?
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("forage_options:use_140")) unless Spell[140].known?
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("skill_types:illusions")) && Char.prof != 'Sorcerer'
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("skill_types:teach")) && Char.prof != 'Sorcerer'
+          obj.set_sensitive(false) if (obj.builder_name.to_s.eql?("skill_types:learn")) && Char.prof != 'Sorcerer'
+
+          obj.active = @settings[key].include?(value)
+
+          # add in hook
+          obj.signal_connect('toggled') do
+            @settings[key].delete(value)
+            if obj.active?
+              @settings[key].push(value)
+              @settings[key].uniq!.sort!
+            end
+          end
+        end
+      end
+    end
+
+    def start
+      @running = true
+
+      Gtk.queue { self['main'].show_all }
+
+      wait_while { @running }
+    end
+
+    def list(cat_to_list: 'all')
+      indent_size = 4
+      print_array =
+        proc do |key, value, indent|
+          _respond("#{' ' * indent_size * indent.to_i}#{key}:")
+          value.sort!.each { |entry| _respond("#{' ' * indent_size * (indent.to_i + 1)}#{value.index(entry) + 1}. #{entry}") }
+        end
+
+      print_value = proc { |key, value, indent| _respond("#{' ' * indent_size * indent.to_i}#{key}: #{value}") }
+
+      categories = cat_to_list == 'all' ? %w[general] : [cat_to_list]
+      if $frontend == 'stormfront'
+        output = "<output class=\"mono\"/>\n"
+      else
+        output = String.new
+      end
+      categories.each do |opt|
+        _respond("#{output}") if !output.empty?
+        _respond("#{monsterbold_start}  #{opt.capitalize} =#{monsterbold_end}\n")
+        @@categories[opt.to_sym].each do |id, _|
+          value = @settings[id]
+          value.class == Array ? print_array.call(id, value, 1) : print_value.call(id, value, 1)
+        end
+      end
+      if $frontend == 'stormfront'
+        output = "<output class=\"\"/>\n"
+        _respond("#{output}")
+      end
+    end
+
+    def self.update_setting(key, value)
+      setting = Setup.get_setting(key)
+      Util.msg('error', "** Setting \"#{key}\" does not exist") if setting.nil?
+
+      action = nil
+
+      if value.to_s =~ /^([+-])(.*)$/
+        action = Regexp.last_match(1)
+        value = Regexp.last_match(2).strip.downcase
+      end
+
+      if value == 'reset'
+        @settings.delete(key)
+        Util.msg("info", " Reset #{key}")
+      elsif @settings[key].class == Array
+        if value =~ /\d/ && @settings[key][value.to_i]
+          @settings[key].delete_at(value.to_i)
+        else
+          @settings[key].delete(value)
+        end
+
+        if action == '-'
+          Util.msg("info", " \"#{value}\" removed from \"#{key}\"")
+        else
+          @settings[key].push(value)
+          Util.msg("info", " \"#{value}\" added to \"#{key}\"")
+        end
+
+        Util.msg("info", " \"#{key}\" is now \"#{@settings[key].join(', ')}\"")
+      else
+        if @settings[key].class == FalseClass || @settings[key].class == TrueClass
+          value = value =~ /^true|1|yes|on/ ? true : false
+        elsif @settings[key].class == Integer
+          value = value.to_i
+        end
+
+        Util.msg("info", " \"#{key}\" has been set to \"#{value}\"")
+        @settings[key] = value
+      end
+    end
+  end
+end
