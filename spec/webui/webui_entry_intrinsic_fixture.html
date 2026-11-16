@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebUI intrinsic entry control</title>
+<link rel="stylesheet" href="../../lib/webui/assets/app.css">
+<section class="webui-page bare" data-density="compact" data-theme="light">
+  <label class="field" id="native" style="width:max-content"><input type="text" data-natural-entry="true" placeholder="Eloot exclusion"></label>
+  <label class="field" id="shim" style="width:max-content"><input type="text" data-natural-entry="true" placeholder="Gtk::Entry shim"></label>
+  <label class="field" id="explicit"><input type="text" style="width: 100px" placeholder="Explicit width"></label>
+  <label class="field" id="editable" style="width:max-content"><span class="webui-editable-select"><input type="text" data-natural-entry="true" style="width:100%;flex:1"><span class="webui-choice-picker"><select><option></option></select></span></span></label>
+</section>
+<pre id="measured"></pre>
+<script>
+  const lines = ['native', 'shim', 'explicit'].map(id => {
+    const input = document.querySelector(`#${id} input`);
+    const style = getComputedStyle(input);
+    return `${id}: width=${input.getBoundingClientRect().width}, font=${style.font}, padding=${style.padding}, border=${style.borderWidth}`;
+  });
+  const probe = document.createElement('span');
+  probe.style.width = '1ch';
+  probe.style.display = 'inline-block';
+  document.querySelector('.webui-page').append(probe);
+  lines.push(`1ch=${probe.getBoundingClientRect().width}`);
+  const widths = ['native', 'shim'].map(id => document.querySelector(`#${id} input`).getBoundingClientRect().width);
+  const explicitWidth = document.querySelector('#explicit input').getBoundingClientRect().width;
+  const editableWidth = document.querySelector('#editable .webui-editable-select').getBoundingClientRect().width;
+  lines.push(`editable Gtk::ComboBoxText body=${editableWidth}; GTK preferred body=203`);
+  lines.unshift(widths.every(width => width >= 168 && width <= 170) && explicitWidth === 100 && editableWidth >= 202 && editableWidth <= 205 ? 'PASS' : 'FAIL');
+  document.getElementById('measured').textContent = lines.join('\n');
+</script>
