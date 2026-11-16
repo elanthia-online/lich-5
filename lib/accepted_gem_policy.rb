@@ -10,6 +10,41 @@ module Lich
     Error = DependencyRecovery::Error
     # Policy acquisition/coverage failures are distinct from broken local gems.
     class LocalInstallationError < Error; end
+
+    # A RubyInstaller-supplied gem the Gemfile declares is below the floor
+    # the accepted manifest's inventory sets. Lich never ships these gems, so
+    # the fix is a Ruby install that supplies them, not a gem repair.
+    class RubyInventoryFloorError < LocalInstallationError
+      # @return [Array<Hash>] one entry per gem: name, floor, installed
+      #   versions, active version (or nil) and the Gemfile requirement
+      attr_reader :gems
+      # @return [String, nil] the Ruby the inventory was measured on
+      attr_reader :ruby_version
+
+      # @param gems [Array<Hash>]
+      # @param ruby_version [String, nil]
+      def initialize(gems, ruby_version)
+        @gems = gems
+        @ruby_version = ruby_version
+        super(self.class.describe(gems, ruby_version))
+      end
+
+      # @param gems [Array<Hash>]
+      # @param ruby_version [String, nil]
+      # @return [String]
+      def self.describe(gems, ruby_version)
+        parts = gems.map do |entry|
+          installed = entry.fetch(:installed).empty? ? 'not installed' : "installed #{entry.fetch(:installed).join(', ')}"
+          active = entry.fetch(:active) ? ", active #{entry.fetch(:active)}" : ''
+          requirement = entry.fetch(:requirement).to_s == '>= 0' ? '' : ", Gemfile requires #{entry.fetch(:requirement)}"
+          "#{entry.fetch(:name)} #{installed}#{active}, floor #{entry.fetch(:floor)}#{requirement}"
+        end
+        install = ruby_version ? "install Ruby4Lich5 with Ruby #{ruby_version}" : 'reinstall Ruby4Lich5'
+        "RubyInstaller gems below this Lich's floor: #{parts.join('; ')}. " \
+          "The floors were measured on Ruby #{ruby_version || 'unknown'}; #{install}"
+      end
+    end
+
     class PolicyError < Error; end
     class AcquisitionError < PolicyError; end
     class InvalidPolicyError < PolicyError; end
@@ -95,6 +130,7 @@ module Lich
       supplied = self.class.supplied_gems(plan.target)
       covered = plan.units.flat_map { |unit| unit.fetch('members') }
       supplied_roots = {}
+      below = []
       dependencies.each do |dep|
         next if covered.include?(dep.name)
         unless supplied.key?(dep.name)
@@ -102,11 +138,14 @@ module Lich
         end
         floor = Gem::Version.new(supplied.fetch(dep.name).fetch('version'))
         active = @loaded_specs[dep.name]
-        unless @find_specs.call(dep.name).any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
-          raise Error, "installed RubyInstaller gem #{dep.name} does not satisfy its inventory floor and declared requirement; repair the Ruby installation"
+        installed = @find_specs.call(dep.name)
+        unless installed.any? { |spec| spec.version >= floor && dep.requirement.satisfied_by?(spec.version) } && (!active || active.version >= floor)
+          below << { name: dep.name, floor: floor, installed: installed.map(&:version).uniq.sort, active: active&.version, requirement: dep.requirement }
+          next
         end
         supplied_roots[dep.name] = floor
       end
+      raise RubyInventoryFloorError.new(below, plan.target.dig('contract', 'ruby_inventory', 'ruby_version')) unless below.empty?
       packages = {}
       plan.units.each do |unit|
         unit.fetch('packages').each do |package|

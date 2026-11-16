@@ -452,6 +452,11 @@ module Lich
         "The accepted runtime policy does not cover this Lich installation.\nAsk the release maintainer to restore supported-client coverage; reinstalling Ruby will not fix missing policy coverage."
       when AcceptedGemPolicy::InvalidPolicyError
         "The accepted runtime policy is invalid or incompatible with this runtime.\nAsk the release maintainer to check the published policy."
+      when AcceptedGemPolicy::RubyInventoryFloorError
+        install = error.ruby_version ? "Install Ruby4Lich5 with Ruby #{error.ruby_version}" : 'Reinstall Ruby4Lich5'
+        "Your Ruby is missing newer versions of gems that Ruby itself supplies:\n" +
+          error.gems.map { |entry| "  - #{entry.fetch(:name)} #{entry.fetch(:installed).last || 'not installed'} (needs #{entry.fetch(:floor)} or newer)" }.join("\n") +
+          "\n#{install}, then start Lich again. Lich cannot update these gems itself."
       when AcceptedGemPolicy::LocalInstallationError
         "This Ruby installation has a missing gem dependency.\nRepair or reinstall Ruby4Lich5, then retry."
       when AcceptedGemPolicy::PolicyError
@@ -634,7 +639,7 @@ module Lich
         end
 
         f.puts '  Declared dependencies in requested groups:'
-        safe_call { dependency_report(groups) }.to_s.each_line do |line|
+        safe_call { dependency_report(groups, floors: error.is_a?(AcceptedGemPolicy::RubyInventoryFloorError) ? error.gems : []) }.to_s.each_line do |line|
           f.puts "    #{line.chomp}"
         end
         f.puts
@@ -668,16 +673,21 @@ module Lich
     # Builds a per-dependency status line for every gem in the requested
     # groups: name, requirement, and whether it's installed. This is the
     # single most useful piece of debug output when the detector disagrees
-    # with Bundler.
+    # with Bundler. A RubyInstaller gem below its inventory floor is marked
+    # as such: judged against the Gemfile alone it would print OK, although
+    # the floor is what stopped startup.
     # @param groups [Array<Symbol>]
+    # @param floors [Array<Hash>] RubyInventoryFloorError#gems entries
     # @return [String]
-    def dependency_report(groups)
+    def dependency_report(groups, floors: [])
       deps = required_dependencies(groups)
       return '(none)' if deps.empty?
 
+      below = Array(floors).to_h { |entry| [entry.fetch(:name), entry] }
       deps.sort_by(&:name).map do |dep|
         installed = Gem::Specification.find_all_by_name(dep.name, dep.requirement)
         status = installed.any? ? "OK (#{installed.map(&:version).join(', ')})" : 'MISSING'
+        status = "BELOW FLOOR #{below[dep.name].fetch(:floor)} (#{installed.any? ? installed.map(&:version).join(', ') : 'none installed'})" if below.key?(dep.name)
         "#{dep.name.ljust(24)} #{dep.requirement.to_s.ljust(20)} #{status}"
       end.join("\n")
     end
