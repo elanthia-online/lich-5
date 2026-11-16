@@ -151,8 +151,10 @@ module Lich
     # build is preferred, because Ruby4Lich5 patches the GTK stack.
     #
     # A package the manifest marks `self_build_equivalent` (Ruby4Lich5 builds
-    # it from unchanged upstream source, such as ox) also accepts a self-built
-    # copy at the accepted version itself, under the same rules otherwise.
+    # it from unchanged upstream source, such as ox), and that nothing else in
+    # its units depends on, also accepts a self-built copy at the accepted
+    # version itself, under the same rules otherwise; see #unit_dependency?.
+    # Callers pass that combined condition as +equivalent+.
     # @param spec [Gem::Specification]
     # @param platform [String] the accepted package platform
     # @param accepted [Gem::Version, nil] the accepted package version, or nil
@@ -450,6 +452,7 @@ module Lich
     private :exact_pin?
 
     # @return [Hash{String => Boolean}] packages marked self_build_equivalent
+    #   and depended on by nothing else in their units; see #unit_dependency?
     def equivalent
       @equivalent || {}
     end
