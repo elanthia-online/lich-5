@@ -159,4 +159,13 @@ RSpec.describe Lich::RecoveryUnitPolicy do
       end
     end
   end
+
+  describe '.canonical_release?' do
+    it 'accepts only a canonical release spelling' do
+      expect(%w[4.0 4.0.9 2.10.2].map { |value| described_class.canonical_release?(value) }).to all(be(true))
+      ['4.0.9.rc1', ' 4.0.9', '4.0.9 ', '2.10.1-1', '', nil, 409].each do |value|
+        expect(described_class.canonical_release?(value)).to be(false), value.inspect
+      end
+    end
+  end
 end

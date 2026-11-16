@@ -317,6 +317,7 @@ RSpec.describe Lich::GemCheck do
           error = Lich::AcceptedGemPolicy::RubyTooOldError.new('4.0.9', '4.0.5')
           body = described_class.build_alert_body([], error)
           expect(body).to include('needs Ruby 4.0.9 or newer; this is Ruby 4.0.5', 'Install Ruby4Lich5 with Ruby 4.0.9')
+          expect(body).not_to include('Underlying error')
         end
 
         it 'writes no recommended note when the accepted version is installed' do

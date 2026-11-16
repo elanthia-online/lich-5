@@ -813,9 +813,30 @@ RSpec.describe Lich::AcceptedGemPolicy do
       expect(check.relaxed_floors.map { |entry| entry.values_at(:name, :floor) }).to eq([['openssl', Gem::Version.new('4.0.2')]])
     end
 
-    it "still stops on the inventory's Ruby or newer" do
+    it "still stops on the inventory's Ruby or newer, and the error names the Ruby the policy judged" do
       %w[4.0.9 4.0.10].each do |ruby|
-        expect { policy_on(ruby).check([Gem::Dependency.new('openssl')]) }.to raise_error(described_class::RubyInventoryFloorError)
+        expect { policy_on(ruby).check([Gem::Dependency.new('openssl')]) }.to raise_error(described_class::RubyInventoryFloorError) { |error|
+          expect(error.running_ruby).to eq(ruby)
+          expect(error.remedy).to start_with('Reinstall')
+        }
+      end
+    end
+
+    context 'when GemCheck builds the policy without ruby_version:' do
+      # GemCheck.verify_windows! relies on this default, so it must be the
+      # running Ruby.
+      let(:startup_policy) { described_class.new(recovery: recovery, find_specs: ->(name) { installed.fetch(name, []) }, loaded_specs: active) }
+
+      it 'relaxes the floor when the running Ruby is an older patch' do
+        stub_const('RUBY_VERSION', '4.0.5')
+        expect(startup_policy.check([Gem::Dependency.new('openssl')]).relaxed_floors.map { |entry| entry[:name] }).to eq(['openssl'])
+      end
+
+      it "stops with the floor error when the running Ruby is the inventory's" do
+        stub_const('RUBY_VERSION', '4.0.9')
+        expect { startup_policy.check([Gem::Dependency.new('openssl')]) }.to raise_error(described_class::RubyInventoryFloorError) { |error|
+          expect(error.running_ruby).to eq('4.0.9')
+        }
       end
     end
 
@@ -853,12 +874,14 @@ RSpec.describe Lich::AcceptedGemPolicy do
     it 'starts on the minimum Ruby or newer' do
       target['minimum_ruby_version'] = '4.0.9'
       expect(policy_on('4.0.9').check(dependencies).needed).to eq([])
+      target['minimum_ruby_version'] = '4.0'
+      expect(policy_on('4.0.0').check(dependencies).needed).to eq([])
     end
 
     it 'treats a malformed value as an invalid policy' do
-      ['4.0', '4.0.9.rc1', ' 4.0.9', nil].each do |value|
+      ['4.0.9.rc1', ' 4.0.9', '4.0.9-1', '', nil].each do |value|
         target['minimum_ruby_version'] = value
-        expect { policy_on('4.0.9').check(dependencies) }.to raise_error(described_class::InvalidPolicyError) unless value == '4.0'
+        expect { policy_on('4.0.9').check(dependencies) }.to raise_error(described_class::InvalidPolicyError)
       end
     end
   end

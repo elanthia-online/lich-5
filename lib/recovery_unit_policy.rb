@@ -92,10 +92,21 @@ module Lich
       return nil unless target.key?('minimum_ruby_version')
 
       value = target['minimum_ruby_version']
-      unless value.is_a?(String) && !value.empty? && Gem::Version.correct?(value) && Gem::Version.new(value).to_s == value && !Gem::Version.new(value).prerelease?
-        raise Error, 'invalid minimum_ruby_version'
-      end
+      raise Error, 'invalid minimum_ruby_version' unless canonical_release?(value)
+
       Gem::Version.new(value)
+    end
+
+    # Gem::Version.correct? accepts surrounding whitespace (a blank string
+    # would be version 0) and rewrites forms such as "2.10.1-1", so accept
+    # only the canonical spelling. A prerelease is rejected: startup
+    # requirements are releases, so the resolver never starts on an installed
+    # prerelease.
+    # @param value [Object]
+    # @return [Boolean]
+    def self.canonical_release?(value)
+      value.is_a?(String) && !value.empty? && Gem::Version.correct?(value) &&
+        Gem::Version.new(value).to_s == value && !Gem::Version.new(value).prerelease?
     end
 
     # Bounds use literal Gem::Version ordering, including prereleases.
