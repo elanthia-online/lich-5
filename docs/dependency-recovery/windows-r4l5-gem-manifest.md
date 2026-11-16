@@ -196,19 +196,19 @@ Startup then sorts each package into one of three tiers:
 - **Recommended** (the installed version startup selects is at or above
   `minimum` but below `version`): log-only. Lich starts immediately on the
   installed version with no dialog, no wait and no repair attempt, and writes
-  a short entry to `temp/lich5-missing-gems.log`:
+  a short entry to that start's Lich debug log (`temp/debug-*.log`):
 
   ```
-  [time] Lich5 GemCheck recommended update
+  [time]: info: Lich5 GemCheck recommended update
     Started on installed gems older than the accepted version but at or above its minimum.
     The accepted versions are installed by the next gem repair; nothing is required now.
       - redis-client: installed 0.25.0, accepted 0.26.0 (minimum 0.25.0), redis bundle
   ```
 
-  The entry is written only when its content, ignoring the timestamp,
-  differs from the last recommended entry in the log, so repeated starts on
-  the same installed gems add nothing. If the log cannot be read, the entry
-  is written anyway, and a failed write never stops startup.
+  GemCheck runs before the debug log opens, so it queues the entry and
+  `init.rb` writes it once the log exists. Each start has its own debug log
+  and Lich prunes old ones, so the entry is written on every such start.
+
 - **Current** (`version` or an eligible newer version is installed): as before.
 
 A package's installed copy normally counts only when its platform matches the
@@ -284,6 +284,29 @@ key: their package validation checks only `name`, `version`, `filename` and
 `version` as the floor, the stricter direction, so publishing a `minimum` does
 not change how they start. A manifest without any `minimum` behaves exactly as
 before on every Lich release.
+
+### Which log an entry goes to
+
+- **`temp/lich5-missing-gems.log`** holds only starts that do not continue:
+  a failure dialog, a declined or timed-out consent, a consented repair that
+  exits or restarts Lich, and a failed native replacement helper. Each entry
+  records the Lich version, Ruby description, Ruby executable path, gem home
+  and working directory. Past 1 MiB, only the newest whole entries within the
+  last 256 KiB are kept.
+- **The Lich debug log** (`temp/debug-*.log`) holds everything noted on a
+  start that continues, such as the recommended entry above.
+- A start can stop after GemCheck queued a note and before `init.rb` writes
+  it, for example when activation fails or a later `sqlite3` or `gtk3` load
+  alerts. The missing-gems entry for that stop then carries the queued notes
+  under "Noted earlier in this start", and they are not written again.
+- A start that stops without an alert before `init.rb` writes the notes (an
+  uncaught exception such as a failed `require 'ox'`, or an early `exit` such
+  as the archaic `lich.sav` check) writes them from an exit hook that
+  `lich.rbw` registers right after the gem check. That entry is headed "start
+  stopped before the Lich log opened" and records the exception, if any.
+- If `TEMP_DIR` itself cannot be written, for example when the debug log
+  cannot be opened, the notes are lost along with the entry: both logs live
+  there.
 
 ## Supported-client policy retention
 

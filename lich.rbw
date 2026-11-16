@@ -45,6 +45,10 @@ Lich::Main::EarlyExit.dispatch!
 
 require File.join(LIB_DIR, 'gemcheck.rb')
 Lich::GemCheck.verify!(*Lich::GemCheck.startup_groups)
+# A start that stops before lib/init.rb writes GemCheck's notes to the Lich
+# log (a failed require below, an early exit in init.rb) keeps them in the
+# missing-gems log instead.
+Lich::GemCheck.keep_unflushed_notes_at_exit
 
 # Must run before lib/init.rb's `require 'gtk3'` -- install! sets up a
 # wrapper around gobject-introspection's converter registration that has to

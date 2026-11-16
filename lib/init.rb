@@ -493,6 +493,9 @@ Lich.log "info: Ruby #{RUBY_VERSION}"
 Lich.log "info: #{RUBY_PLATFORM}"
 Lich.log @early_gtk_error if @early_gtk_error
 @early_gtk_error = nil
+# GemCheck ran before this log existed; record what it noted on a start
+# that continued.
+Lich::GemCheck.flush_startup_notes { |message| Lich.log(message) }
 
 unless File.exist?(DATA_DIR)
   begin
