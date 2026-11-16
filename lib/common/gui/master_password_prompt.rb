@@ -22,6 +22,14 @@ module Lich
           # ====================================================================
           # VALIDATION: Check password requirements
           # ====================================================================
+          too_long = MasterPasswordManager.keychain_length_refusal(master_password)
+          if too_long
+            Lich.log "info: Master password refused: too long for the keychain"
+            return nil unless show_warning_dialog('Password Too Long', "#{too_long}\n\nChoose a different password?")
+
+            return show_create_master_password_dialog
+          end
+
           if master_password.length < 8
             if show_warning_dialog(
               "Short Password",

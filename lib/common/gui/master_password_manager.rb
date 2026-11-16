@@ -17,6 +17,15 @@ module Lich
       #           Runtime decryption uses 10k iterations (via PasswordCipher)
       module MasterPasswordManager
         KEYCHAIN_SERVICE = 'lich5.master_password'
+        # Longest command the macOS security tool runs whole when it reads
+        # commands from standard input. It cuts a longer line and runs the rest
+        # as a second command.
+        MACOS_SECURITY_COMMAND_LIMIT = 4094
+        # Largest master password, in bytes, that one such command can carry: the
+        # password travels as two hexadecimal digits per byte after the command
+        # words.
+        MACOS_KEYCHAIN_PASSWORD_BYTES =
+          (MACOS_SECURITY_COMMAND_LIMIT - "add-generic-password -U -s #{KEYCHAIN_SERVICE} -a lich5 -X ".bytesize) / 2
         VALIDATION_ITERATIONS = 100_000
         VALIDATION_KEY_LENGTH = 32
         VALIDATION_SALT_PREFIX = 'lich5-master-password-validation-v1'
@@ -29,6 +38,9 @@ module Lich
         NEW_PASSWORD_EMPTY = 'Master password cannot be empty.'
         NEW_PASSWORD_TOO_SHORT = "New master password must be at least #{MIN_PASSWORD_LENGTH} characters."
         NEW_PASSWORD_EDGE_WHITESPACE = 'New master password cannot begin or end with whitespace.'
+        NEW_PASSWORD_TOO_LONG_FOR_MACOS =
+          "New master password is too long for the macOS keychain. Use at most #{MACOS_KEYCHAIN_PASSWORD_BYTES} " \
+          'plain characters; accented and non-Latin characters each count as two or more.'
 
         # The one entry rule for every CLI master-password prompt: removes only the
         # line terminator, never surrounding whitespace, so an existing password is
@@ -40,7 +52,8 @@ module Lich
         end
 
         # The one acceptance rule for a new master password on every CLI create and
-        # change path. The GTK dialogs keep their own checks. Existing passwords
+        # change path. The GTK dialogs keep their own checks and share only the
+        # keychain length refusal below. Existing passwords
         # (unlock and recovery) are never checked here; the validation test
         # decides them.
         # @param password [String, nil] proposed new master password
@@ -50,7 +63,18 @@ module Lich
           return NEW_PASSWORD_TOO_SHORT if password.length < MIN_PASSWORD_LENGTH
           return NEW_PASSWORD_EDGE_WHITESPACE if password.match?(/\A[[:space:]]|[[:space:]]\z/)
 
-          nil
+          keychain_length_refusal(password)
+        end
+
+        # Refuses a new master password the platform's keychain cannot hold, so
+        # the person choosing it is told before anything is stored. Shared by the
+        # CLI rule and the GTK dialogs. Only macOS has such a limit here.
+        # @param password [String, nil] proposed new master password
+        # @return [String, nil] fixed refusal message, or nil when it fits
+        def self.keychain_length_refusal(password)
+          return nil unless OS.mac? && password
+
+          password.bytesize > MACOS_KEYCHAIN_PASSWORD_BYTES ? NEW_PASSWORD_TOO_LONG_FOR_MACOS : nil
         end
 
         def self.keychain_available?
@@ -114,9 +138,12 @@ module Lich
           if OS.windows?
             return WindowsCredentialManager.retrieve_credential(KEYCHAIN_SERVICE, strict: true)
           elsif OS.mac?
-            output, _error, status = Open3.capture3('/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-w')
+            password, status = read_macos_keychain
             # errSecItemNotFound (-25300), represented as an 8-bit process status.
             return nil if status.exitstatus == 44
+            raise IOError, "Keychain read failed; previous master password state is unknown" unless status.success? && password && !password.empty?
+
+            return password
           elsif OS.linux?
             attributes = ['service', KEYCHAIN_SERVICE, 'user', 'lich5']
             output, error, status = Open3.capture3('secret-tool', 'lookup', *attributes)
@@ -209,18 +236,71 @@ module Lich
           false
         end
 
+        # Stores the password without putting it on a command line, where the
+        # process list would show it. The security tool reads the command from
+        # its standard input, and the password travels as hexadecimal so no
+        # character in it needs quoting. -U replaces an existing item in place.
+        # A password too long for one command is refused rather than stored cut
+        # short.
+        # @param password [String] master password to store
+        # @return [Boolean] true when the tool reports the item stored
         private_class_method def self.store_macos_keychain(password)
-          escaped = password.shellescape
-          # Delete existing entry (ignore result)
-          system("security delete-generic-password -s #{KEYCHAIN_SERVICE.shellescape} 2>/dev/null")
-          # Add new entry and return actual result
-          system("security add-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -a lich5 -w #{escaped}")
+          return false if password.nil? || password.empty?
+
+          command = ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', 'lich5',
+                     '-X', password.unpack1('H*'), *macos_keychain_target].join(' ')
+          if command.bytesize > MACOS_SECURITY_COMMAND_LIMIT
+            Lich.log 'error: Master password is too long to store in the macOS keychain'
+            return false
+          end
+
+          _output, _diagnostics, status = Open3.capture3('/usr/bin/security', '-i', stdin_data: "#{command}\n")
+          status.success?
         end
 
         private_class_method def self.retrieve_macos_keychain
-          stored_password(`security find-generic-password -s #{KEYCHAIN_SERVICE.shellescape} -w 2>/dev/null`)
+          password, _status = read_macos_keychain
+          password.nil? || password.empty? ? nil : password
         rescue
           nil
+        end
+
+        # Reads the stored password with the tool's -g form. Its -w form prints
+        # a password as text or, when any byte is not plain printable ASCII, as
+        # bare hexadecimal, and the two cannot be told apart. -g marks which
+        # one it printed.
+        # @return [Array(String, Process::Status), Array(nil, Process::Status)]
+        #   the password as stored (nil when the tool printed none) and the
+        #   tool's exit status
+        private_class_method def self.read_macos_keychain
+          _attributes, password_report, status = Open3.capture3(
+            '/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-g', *macos_keychain_target
+          )
+          [status.success? ? macos_reported_password(password_report) : nil, status]
+        end
+
+        # Extracts the password from the line -g prints: `password: "text"` for
+        # plain printable ASCII, otherwise `password: 0xHEX  "escaped text"`.
+        # The hexadecimal form is exact, so it is decoded and the escaped text
+        # is ignored.
+        # @param report [String] what the tool printed about the password
+        # @return [String, nil] the stored password, or nil when none is reported
+        private_class_method def self.macos_reported_password(report)
+          line = report.each_line(chomp: true).find { |candidate| candidate.start_with?('password: ') }
+          return nil unless line
+
+          if (hex = line[/\Apassword: 0x([0-9A-Fa-f]+)/, 1])
+            [hex].pack('H*').force_encoding(Encoding::UTF_8)
+          else
+            line[/\Apassword: "(.*)"\z/, 1]
+          end
+        end
+
+        # Keychain the macOS store and read act on. Empty selects the user's
+        # default keychain.
+        # @return [Array<String>] trailing keychain argument for the security tool
+        private_class_method def self.macos_keychain_target
+          []
         end
 
         # Reads a keychain tool's output as the stored password: only the line
