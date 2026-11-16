@@ -653,6 +653,16 @@ RSpec.describe Lich::AcceptedGemPolicy do
         installed['ox'] = [self_built_ox('2.14.29')]
         expect { policy.check([Gem::Dependency.new('ox')]) }.to raise_error(described_class::InvalidPolicyError, /conflicting accepted package identities for ox/)
       end
+
+      it 'treats one unit omitting the flag and another setting it false as the same package' do
+        package.delete('self_build_equivalent')
+        other = Marshal.load(Marshal.dump(ox_unit)).merge('id' => 'ox-copy')
+        other.fetch('packages').first['self_build_equivalent'] = false
+        plan.units = [ox_unit, other]
+        installed['ox'] = [spec('ox', '2.14.29').tap { |item| item.platform = Gem::Platform.local }]
+        expect(recovery).not_to receive(:recover)
+        expect(policy.check([Gem::Dependency.new('ox')]).needed).to be_empty
+      end
     end
   end
 

@@ -109,9 +109,10 @@ module Lich
     class InstalledSet < Gem::Resolver::Set
       # @param find_specs [#call] installed specs by name
       # @param platforms [Hash{String => String}] accepted package platforms
-      # @param accepted [Hash{String => Gem::Version, nil}, nil] versions a
-      #   self-built gem must exceed (nil for a package that accepts only its
-      #   accepted build), or nil to accept only the accepted builds
+      # @param accepted [Hash{String => Gem::Version, nil}, nil] the accepted
+      #   version a self-built gem must exceed, or reach for an +equivalent+
+      #   package (nil for a package that accepts only its accepted build), or
+      #   nil to accept only the accepted builds
       # @param equivalent [Hash{String => Boolean}] packages whose
       #   self-built copy at the accepted version is also accepted
       def initialize(find_specs, platforms, accepted, equivalent = {})
@@ -244,7 +245,7 @@ module Lich
       platforms = packages.transform_values do |package|
         RecoveryUnitPolicy.package_platform(package, plan.target.fetch('platform'))
       end
-      @equivalent = packages.transform_values { |package| package['self_build_equivalent'] == true }
+      @equivalent = packages.transform_values { |package| RecoveryUnitPolicy.self_build_equivalent?(package) }
       strict = packages.transform_values { |package| Gem::Version.new(package.fetch('version')) }
       minimums = packages.transform_values { |package| Gem::Version.new(RecoveryUnitPolicy.package_minimum(package)) }
       newer = newer_self_built_versions(plan, strict)
@@ -301,7 +302,8 @@ module Lich
 
     # @param floors [Hash{String => Gem::Version}] per-package startup floors
     # @param accepted [Hash{String => Gem::Version, nil}, nil] accepted package
-    #   versions a self-built gem must exceed, or nil for accepted builds only
+    #   versions a self-built gem must exceed (or reach, for a package marked
+    #   self_build_equivalent), or nil for accepted builds only
     def evaluate(plan, dependencies, packages, platforms, supplied_roots, floors, accepted)
       needed = needed_at(packages, platforms, floors, accepted)
       return repair_check(plan, needed) if needed.any?
@@ -333,8 +335,8 @@ module Lich
     # Applies the package minimums, then the accepted versions where the
     # minimums cannot resolve.
     # @param self_built [Hash{String => Gem::Version, nil}, nil] accepted
-    #   versions a self-built gem must exceed, or nil to accept only the
-    #   accepted builds
+    #   versions a self-built gem must exceed (or reach, for a package marked
+    #   self_build_equivalent), or nil to accept only the accepted builds
     def decide(plan, dependencies, packages, platforms, supplied_roots, minimums, strict, self_built)
       return evaluate(plan, dependencies, packages, platforms, supplied_roots, strict, self_built) if minimums == strict
 
@@ -360,7 +362,8 @@ module Lich
     # @param newer [Hash{String => Gem::Version, nil}] see
     #   #newer_self_built_versions
     # @return [Boolean] whether any installed gem is acceptable only as a
-    #   newer self-built gem
+    #   self-built gem: newer than its accepted version, or at it for a
+    #   package marked self_build_equivalent
     def self_built_candidates?(packages, platforms, newer)
       packages.each_key.any? do |name|
         @find_specs.call(name).any? { |spec| spec.platform.to_s != platforms.fetch(name) && self.class.acceptable_build?(spec, platforms.fetch(name), newer.fetch(name), equivalent.fetch(name, false)) }
@@ -370,7 +373,8 @@ module Lich
 
     # Whether what stays installed after +check+'s repair holds together:
     # every package outside the units it repairs, at its floor, and each
-    # newer self-built gem that may be used, above its accepted version.
+    # self-built gem that may be used: above its accepted version, or at or
+    # above it for a package marked self_build_equivalent.
     # A self-built gtk3 4.4.0 without a self-built glib2 4.4.0 does not, and
     # neither does a self-built glib2 4.4.0 beside an R4L5 gtk3 4.3.9, which
     # pins glib2 exactly.
@@ -394,8 +398,9 @@ module Lich
     end
     private :self_built_consistent?
 
-    # The version a newer self-built copy of each package must exceed, or nil
-    # where only the accepted build may be used. A self-built copy is only
+    # The version a self-built copy of each package must exceed (or reach,
+    # for a package marked self_build_equivalent), or nil where only the
+    # accepted build may be used. A self-built copy is only
     # considered when every other package of its units that depends on it
     # pins it exactly, judged by every installed copy of those packages (the
     # manifest carries no gem dependencies). Ruby-GNOME's exact pins then keep

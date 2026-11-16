@@ -71,7 +71,14 @@ module Lich
     # The self_build_equivalent flag is part of identity too: two units must
     # not disagree on whether a self-built copy may stand in for a package.
     def self.package_identity(package, platform)
-      package.values_at('version', 'sha256') + [package_platform(package, platform), minimum_identity(package), package['self_build_equivalent'] == true]
+      package.values_at('version', 'sha256') + [package_platform(package, platform), minimum_identity(package), self_build_equivalent?(package)]
+    end
+
+    # Only an explicit true marks a package; an absent flag and false mean the
+    # same thing, so a producer that omits the key and one that writes false
+    # describe the same package.
+    def self.self_build_equivalent?(package)
+      package['self_build_equivalent'] == true
     end
 
     # Canonical segments, not Gem::Version: Gem::Version#eql? compares the
