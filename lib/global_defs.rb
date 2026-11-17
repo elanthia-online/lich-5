@@ -2234,7 +2234,7 @@ def handle_detachable_client(client)
   end
   Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
   # The script list goes out now when the session's set includes it, or once
-  # the client declares script_list (docs/frontends/script-list-feed.md).
+  # the client declares script_list (https://github.com/elanthia-online/lich-5/wiki/Front-End-Script-List-Feed).
   Lich::Common::ScriptListFeed.client_ready(client)
 
   while (client_string = client.gets)
@@ -2247,7 +2247,7 @@ def handle_detachable_client(client)
       next
     end
     # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles itself
-    # (docs/frontends/capability-declaration.md). Never sent to the game.
+    # (https://github.com/elanthia-online/lich-5/wiki/Front-End-Capability-Declaration). Never sent to the game.
     next if Lich::Common::ClientCapabilities.declare(client, client_string)
 
     # Detachable exits run script shutdown inline, so the watchdog must be armed

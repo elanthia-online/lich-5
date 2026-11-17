@@ -3,7 +3,7 @@
 module Lich
   module Common
     # Pushes the list of running scripts to every front end that can take it
-    # (docs/frontends/script-list-feed.md), in exactly one of two forms:
+    # (https://github.com/elanthia-online/lich-5/wiki/Front-End-Script-List-Feed), in exactly one of two forms:
     #
     # * the +lichScripts+ data element, to a client whose feeds include
     #   +script_list+ (declared with +SET_FRONTEND_CAPS+, or from

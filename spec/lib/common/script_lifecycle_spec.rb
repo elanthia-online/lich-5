@@ -1501,7 +1501,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
   end
 
-  # The script list feed (docs/frontends/script-list-feed.md) hears about
+  # The script list feed (https://github.com/elanthia-online/lich-5/wiki/Front-End-Script-List-Feed) hears about
   # every change to what ;list shows: a script joining or leaving the running
   # list, a pause or unpause, and hide_me.
   describe 'script list feed signals' do

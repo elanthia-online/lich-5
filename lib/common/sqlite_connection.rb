@@ -10,6 +10,24 @@ require 'monitor'
 module Lich
   DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
 
+  # Busy timeout, in milliseconds, for SQLite connections opened through the
+  # core database helpers.
+  #
+  # The timeout is connection-local: it is applied when Lich opens a
+  # connection, is not persisted in lich.db3, and does not affect SQLite
+  # handles a script opens itself. Covered open paths: Lich.db,
+  # Lich.open_sqlite_db, Lich.open_sequel_sqlite, the Settings lich.db3
+  # Sequel adapter, and the session summary adapter's fallback connections.
+  #
+  # Deliberate exception: the Settings adapter's data_version connection
+  # (DatabaseAdapter#open_version_connection) uses a busy timeout of 0. It
+  # only reads PRAGMA data_version to tell whether another connection has
+  # committed, and SQLite's busy wait keeps Ruby's GVL, so waiting there would
+  # stall every thread while another process holds the lock. With 0 the read
+  # fails at once and Settings keeps its cached row until the version can be
+  # read again.
+  #
+  # @return [Integer] busy timeout in milliseconds
   def Lich.sqlite_busy_timeout_ms
     DEFAULT_SQLITE_BUSY_TIMEOUT_MS
   end
