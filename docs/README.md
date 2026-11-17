@@ -23,6 +23,7 @@ skip the RSpec run in CI.
 | Doc | Covers |
 |---|---|
 | **Contributing** | |
+| [Commit and PR titles](contributing/commit-and-pr-titles.md) | Required `type(scope):` PR titles, allowed scopes, and how types map to versions and changelog sections |
 | [YARD style guide](contributing/yard-style-guide.md) | Which methods get docs, required tags, type notation |
 | **Dependency recovery** | |
 | [Windows: R4L5 gem manifest](dependency-recovery/windows-r4l5-gem-manifest.md) | Manifest-driven missing-gem repair and the shared lich-5/Ruby4Lich5 version contract |
