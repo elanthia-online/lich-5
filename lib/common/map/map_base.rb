@@ -1027,6 +1027,7 @@ module Lich
         # and an unreached room still yields nil. #size and #length now count the
         # rooms actually reached rather than the highest id plus one, and
         # iteration yields pairs rather than slots.
+        #
         # With static_only: true, edges are skipped unless wayto is a plain
         # String and timeto is a finite, nonnegative real Numeric; StringProc
         # weights are skipped before evaluation. No preference weights or map
