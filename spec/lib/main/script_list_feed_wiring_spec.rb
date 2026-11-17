@@ -4,7 +4,7 @@ require 'rspec'
 
 # main.rb runs at load time, so (as in client_string_log_spec.rb) its wiring
 # is checked against the shipping source. The primary client gets the script
-# list (docs/frontends/script-list-feed.md) from its session set as soon as
+# list (https://github.com/elanthia-online/lich-5/wiki/Front-End-Script-List-Feed) from its session set as soon as
 # its read loop starts; a client that declares script_list gets it from
 # ClientCapabilities.declare instead.
 RSpec.describe 'script list feed wiring for the primary client (main.rb)' do

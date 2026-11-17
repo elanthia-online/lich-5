@@ -1027,6 +1027,24 @@ module Lich
         # and an unreached room still yields nil. #size and #length now count the
         # rooms actually reached rather than the highest id plus one, and
         # iteration yields pairs rather than slots.
+        # With static_only: true, edges are skipped unless wayto is a plain
+        # String and timeto is a finite, nonnegative real Numeric; StringProc
+        # weights are skipped before evaluation. No preference weights or map
+        # entries change, and the return shape is the same. Static routing can
+        # find a longer route, or none, when dynamic edges are needed. It does
+        # not execute movement, validate what a String command means, prove a
+        # destination safe, or guarantee map data is unchanged after planning:
+        # callers validate commands and room transitions and enforce their own
+        # execution budget. It is not a sandbox for arbitrary Ruby objects or
+        # map extensions.
+        #
+        # Map.dijkstra passes only the positional destination unless
+        # static_only: true is given, so positional-only overrides of this
+        # method keep working. An override must accept and honor static_only:
+        # to support static routing; one that does not raises ArgumentError
+        # when a caller opts in. The dijkstra_hashes aliases accept the same
+        # keyword.
+        #
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
         # @param static_only [Boolean] use only plain String wayto edges with
         #   finite, nonnegative real Numeric weights; never evaluate StringProc

@@ -135,7 +135,8 @@ module Lich
           ].freeze
 
           # Combat maneuvers (cmans, PSMs, techniques) - both persons where
-          # the wiki documents them. Sources: docs/COMBAT_DEFS_WIKI_CATALOG.md
+          # the wiki documents them. Sources: the GemStone IV wiki (gswiki.play.net)
+          # messaging sections for each maneuver
           MANEUVER_ATTACKS = [
             AttackDef.new(:haymaker, [
               /You clench your (?:right|left) fist and bring your arm back for a roundhouse punch aimed at (?<target>[^!]+)!/,

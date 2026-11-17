@@ -148,7 +148,7 @@ module Lich
           ].freeze
 
           # Spell initiations catalogued from the wiki Messaging sections
-          # (docs/COMBAT_DEFS_WIKI_CATALOG.md). Ordered AFTER SPELL_ATTACKS
+          # on gswiki.play.net. Ordered AFTER SPELL_ATTACKS
           # so per-spell defs above (balefire, tonis_bolt) keep their names;
           # the generic 2p bolt def is LAST in this group for the same reason.
           WIKI_SPELL_ATTACKS = [

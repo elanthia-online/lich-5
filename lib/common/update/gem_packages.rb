@@ -16,7 +16,7 @@
   Lich never knows what a package copies or where.
 
   The list is kept for the whole install, in lich_settings, because a gem is
-  installed once for the whole Ruby. docs/scripting/gem-packages.md describes
+  installed once for the whole Ruby. https://github.com/elanthia-online/lich-5/wiki/Gem-Packages describes
   the contract, what is refused, and the trust model.
 =end
 

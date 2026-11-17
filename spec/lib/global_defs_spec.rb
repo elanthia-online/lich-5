@@ -751,7 +751,7 @@ RSpec.describe '#handle_detachable_client' do
 end
 
 # A client may send SET_FRONTEND_CAPS at any time to name the rich-stream
-# rewrites it handles itself (docs/frontends/capability-declaration.md). The
+# rewrites it handles itself (https://github.com/elanthia-online/lich-5/wiki/Front-End-Capability-Declaration). The
 # real handler runs in a subprocess, as above; the client's lines are scripted
 # and every line that reaches dispatch is recorded.
 RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
@@ -816,7 +816,7 @@ RSpec.describe '#handle_detachable_client with SET_FRONTEND_CAPS' do
     expect(declared).to eq('[]')
   end
 
-  # The script list feed (docs/frontends/script-list-feed.md) is handed the
+  # The script list feed (https://github.com/elanthia-online/lich-5/wiki/Front-End-Script-List-Feed) is handed the
   # client on attach, for a session whose own set includes script_list, and
   # again after each declaration, which may ask for it.
   it 'hands the client to the script list feed on attach and after each declaration' do

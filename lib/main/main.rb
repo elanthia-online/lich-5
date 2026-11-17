@@ -877,7 +877,7 @@ reconnect_if_wanted = proc {
       begin
         while (client_string = $_CLIENT_.gets)
           # SET_FRONTEND_CAPS: the rich-stream rewrites this client handles
-          # itself (docs/frontends/capability-declaration.md). Never sent to the game.
+          # itself (https://github.com/elanthia-online/lich-5/wiki/Front-End-Capability-Declaration). Never sent to the game.
           next if Lich::Common::ClientCapabilities.declare($_CLIENT_, client_string)
 
           if Frontend.supports_gsl?
