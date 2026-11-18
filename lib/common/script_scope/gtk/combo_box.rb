@@ -324,10 +324,17 @@ module Lich
           # @param index [Integer] row index to remove
           # @return [ComboBox] self
           def remove(index)
-            session.refuse(self, :remove) unless index.is_a?(Integer) && index.between?(0, model.size - 1)
+            session.refuse(self, :remove) unless index.is_a?(Integer)
+            # GTK ignores an out-of-range position, notably -1 with nothing active.
+            unless index.between?(0, model.size - 1)
+              session.degrade(:combo_remove_range, "ComboBox#remove(#{index}) is out of range; ignored", receiver: self)
+              return self
+            end
             model.remove(model.rows[index])
             self
           end
+          # The GTK2-era text-combo name for removing a row by position.
+          alias remove_text remove
 
           def remove_all
             model.clear

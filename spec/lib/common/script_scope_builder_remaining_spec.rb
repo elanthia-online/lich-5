@@ -338,17 +338,18 @@ RSpec.describe 'remaining Builder setup families' do
     end
   end
 
-  it "reports the unchanged bigshot obsolete tooltip target instead of inventing a widget #{attribution.fetch('bigshot')}" do
+  it "returns nil for the unchanged bigshot obsolete tooltip target instead of inventing a widget #{attribution.fetch('bigshot')}" do
     allow(owner).to receive(:kill)
     form = original('bigshot', source_failure: true)
+    expect(form['boon_flee_from']).to be_nil
+    expect(@diagnostics.grep(/Builder object "boon_flee_from" is not declared; returning nil/).length).to eq(1), @diagnostics.join("\n")
+    # This spec runs without Lich's NilClass extension, so the script's later
+    # call on the nil fails in its own code, not in the Builder.
     failures = @diagnostics.grep(/callback failed/)
     expect(failures.length).to eq(1), @diagnostics.join("\n")
-    expect(failures.first).to include('BuilderError', 'object=boon_flee_from', 'property=get_object', 'undeclared object identifier')
-    expect { form['boon_flee_from'] }.to raise_error(gtk::BuilderError, /object=boon_flee_from/)
-    expect(form['main']).to be_destroyed
-    expect(service.registry.pages_for(owner)).to be_empty
-    expect(owner).to have_received(:kill).with(async: true)
-    expect(gtk.queue { raise 'late work must not run' }).to be_nil
+    expect(failures.first).to include('NoMethodError', 'set_tooltips')
+    expect(failures.first).not_to include('BuilderError')
+    expect(owner).not_to have_received(:kill)
   end
 
   it "loads the explicitly corrected bigshot candidate and saves through its original Close handler #{attribution.fetch('bigshot')}" do
