@@ -13,6 +13,10 @@ module Lich
         class Session
           attr_reader :port
 
+          # @return [Boolean] whether this session's owner has been closed
+          # @api private
+          def closed? = @closed
+
           # Binds the script's shadow state and callback submissions to one host.
           # @param owner [Script] script whose lifetime governs all shim work
           def initialize(owner)

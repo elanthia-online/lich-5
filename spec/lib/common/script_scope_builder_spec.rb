@@ -256,8 +256,9 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     2.times { drain_gtk }
     failures = @setup_diagnostics.grep(/callback failed/)
     if source_failure
-      expect(failures.length).to eq(1), @setup_diagnostics.join("\n")
-      expect(failures.first).to include('BuilderError', 'object=exclusions_label', 'property=get_object', 'undeclared object identifier')
+      # Under Lich's NilClass extension the nil lookup is harmless, as in GTK; it is logged once.
+      expect(failures).to eq([]), @setup_diagnostics.join("\n")
+      expect(@setup_diagnostics.grep(/Builder object "exclusions_label" is not declared/).length).to eq(1), @setup_diagnostics.join("\n")
     else
       expect(failures).to eq([]), @setup_diagnostics.join("\n")
     end
@@ -303,13 +304,13 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     end
   end
 
-  it "retains the refreshed eloot original missing-label failure #{attribution.fetch('eloot-refreshed')}" do |example|
+  it "opens the refreshed eloot original despite its missing label, as GTK does #{attribution.fetch('eloot-refreshed')}" do |example|
     next if production_nil_example(example)
 
     allow(owner).to receive(:kill)
     form = original_e_setup('eloot', {}, source_failure: true, refreshed: true)
-    expect(form['main']).to be_destroyed
-    expect(owner).to have_received(:kill).with(async: true)
+    expect(form['main']).not_to be_destroyed
+    expect(owner).not_to have_received(:kill)
   end
 
   it "loads and saves all seven refreshed eloot stance choices in the repaired candidate #{attribution.fetch('eloot-refreshed')}" do |example|
@@ -460,16 +461,14 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(form['main']).to be_destroyed
   end
 
-  it "refuses the original eloot missing tooltip target with a conversion diagnostic #{attribution.fetch('eloot')}" do |example|
+  it "returns nil for the original eloot missing tooltip target, as GTK does #{attribution.fetch('eloot')}" do |example|
     next if production_nil_example(example)
 
     allow(owner).to receive(:kill)
     form = original_e_setup('eloot', {}, source_failure: true)
-    expect { form['exclusions_label'] }.to raise_error(gtk::BuilderError, /object=exclusions_label.*native WebUI/)
-    expect(form['main']).to be_destroyed
-    expect(service.registry.pages_for(owner)).to be_empty
-    expect(owner).to have_received(:kill).with(async: true)
-    expect(gtk.queue { raise 'late work must not run' }).to be_nil
+    expect(form['exclusions_label']).to be_nil
+    expect(form['main']).not_to be_destroyed
+    expect(owner).not_to have_received(:kill)
   end
 
   %w[ebounty eherbs blackarts].each do |name|
@@ -1088,16 +1087,15 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(service.registry.pages_for(owner)).to be_empty
   end
 
-  it 'refuses undeclared IDs through both lookup APIs without damaging loaded objects' do
+  it 'returns nil for undeclared IDs through both lookup APIs, logs once, and keeps loaded objects' do
     load_xml('<object class="GtkEntry" id="retained"><property name="text">Keep</property></object>')
     original = builder['retained']
+    logged = []
+    allow(Lich).to receive(:log) { |message| logged << message }
     %i[get_object []].each do |lookup|
-      expect { builder.public_send(lookup, :missing) }.to raise_error(gtk::BuilderError) do |error|
-        expect(error.message).to match(/script=builder.lic.*object=missing.*property=get_object.*native WebUI/)
-        expect(error.issues.first).to include(object: 'missing', property: 'get_object')
-        expect(error.diagnostic).to include('object=missing', 'property=get_object', 'blockers=1')
-      end
+      expect(builder.public_send(lookup, :missing)).to be_nil
     end
+    expect(logged.grep(/Builder object "missing" is not declared; returning nil/).length).to eq(1)
     expect(builder.get_object(:retained)).to equal(original)
     expect(original.text).to eq('Keep')
   end
@@ -1159,7 +1157,7 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     end.to raise_error(gtk::BuilderError, /script=builder.lic.*object=bad.*property=angle/)
     expect(builder.objects).to eq(original)
     expect(builder['retained'].text).to eq('Keep')
-    expect { builder['candidate'] }.to raise_error(gtk::BuilderError, /object=candidate/)
+    expect(builder['candidate']).to be_nil
     expect(gtk.session.instance_variable_get(:@windows)).to be_empty
     expect(service.registry.pages_for(owner)).to be_empty
     expect { load_xml('<object class="GtkEntry" id="retained"/>') }.to raise_error(gtk::BuilderError, /duplicate identifier/)

@@ -64,8 +64,8 @@ module Lich
             return false unless absolute
 
             roots = $LOAD_PATH.dup
-            if defined?(Gem) && Gem.respond_to?(:loaded_specs)
-              roots.concat(Gem.loaded_specs.values.flat_map(&:full_require_paths))
+            if defined?(::Gem) && ::Gem.respond_to?(:loaded_specs)
+              roots.concat(::Gem.loaded_specs.values.flat_map(&:full_require_paths))
             end
             roots.any? do |root|
               prefix = File.expand_path(root).tr('\\', '/').sub(%r{/+\z}, '') + '/'
@@ -130,3 +130,40 @@ end
 
 Kernel.prepend(Lich::Common::ScriptScope::Gtk::RequireBoundary::PrivateLoaders)
 Kernel.singleton_class.prepend(Lich::Common::ScriptScope::Gtk::RequireBoundary::Loaders)
+
+module Lich
+  module Common
+    module ScriptScope
+      # The script view of RubyGems. Legacy GTK scripts test
+      # Gem.loaded_specs['gtk3'] before using Gtk; while the compatibility
+      # layer is presenting, report gtk3 as loaded. Everything else is the
+      # real ::Gem, which code outside the script scope keeps seeing.
+      module Gem
+        # @return [Hash{String => ::Gem::Specification}] real specs, plus gtk3 when presenting
+        def self.loaded_specs
+          specs = ::Gem.loaded_specs
+          return specs if specs.key?('gtk3') || !Lich::WebUI.presentation_enabled?
+
+          specs.merge('gtk3' => compatibility_spec)
+        end
+
+        # @return [::Gem::Specification] stand-in describing the compatibility layer
+        def self.compatibility_spec
+          @compatibility_spec ||= ::Gem::Specification.new do |spec|
+            spec.name = 'gtk3'
+            spec.version = Gtk::Version::STRING
+            spec.summary = 'Lich WebUI GTK compatibility layer'
+          end
+        end
+
+        def self.method_missing(name, *, **, &) = ::Gem.public_send(name, *, **, &)
+
+        def self.respond_to_missing?(name, include_private = false)
+          ::Gem.respond_to?(name, include_private) || super
+        end
+
+        def self.const_missing(name) = ::Gem.const_get(name)
+      end
+    end
+  end
+end

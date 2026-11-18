@@ -58,16 +58,17 @@ module Lich
           # @return [Array<Object>] document-order snapshot, including anonymous objects
           def objects = @objects.dup
 
-          # Resolves a declared XML identity or refuses the missing lookup.
+          # Resolves a declared XML identity; an undeclared one returns nil, as in
+          # GTK, so optional lookups (`builder['x'] || fallback`) keep working.
+          # Each miss is logged once per id, because Lich's NilClass extension
+          # would otherwise hide a later call on the nil.
           # @param id [String, Symbol] XML identifier
-          # @return [Object] the original object for a declared identifier
-          # @raise [BuilderError] undeclared identifier; unlike GTK, lookup never returns nil
+          # @return [Object, nil] the original object, or nil for an undeclared identifier
           def get_object(id)
-            # Refuse at lookup so Lich's NilClass extension cannot silently swallow
-            # a subsequent widget operation. Optional lookups must inspect objects.
             session.synchronize do
               @by_id.fetch(id.to_s) do
-                fail_at(nil, 'get_object', 'undeclared object identifier; update the script to native WebUI', object_id: id.to_s)
+                session.degrade(:"builder_lookup_#{id}", "Builder object #{id.to_s[0, 64].inspect} is not declared; returning nil", receiver: self)
+                nil
               end
             end
           end
