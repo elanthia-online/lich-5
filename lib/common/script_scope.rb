@@ -183,6 +183,40 @@ module Lich
         @__script_scope_adopt_nested_constants
       end
 
+      # A script's top-level `include M` lands here, because the script binding's
+      # self is this module. A module the script defined was adopted and already
+      # includes ScriptScope, so including it back would be cyclic. For those,
+      # give the scope M's constants and methods instead, with include's
+      # precedence: names this scope already defines are kept.
+      # @param modules [Array<Module>] modules named by the script
+      # @return [Module] self
+      def self.include(*modules)
+        cyclic, plain = modules.partition { |mod| mod.is_a?(Module) && !mod.equal?(self) && mod.include?(self) }
+        super(*plain) unless plain.empty?
+        cyclic.reverse_each { |mod| absorb_script_module(mod) }
+        self
+      end
+
+      # Copies an adopted script module's constants and instance methods into
+      # this scope, without overriding names the scope already has.
+      # @param mod [Module] script-defined module that already includes ScriptScope
+      # @return [void]
+      def self.absorb_script_module(mod)
+        mod.constants(false).each do |name|
+          const_set(name, mod.const_get(name, false)) unless const_defined?(name, false)
+        end
+        { public: mod.public_instance_methods(false), protected: mod.protected_instance_methods(false),
+          private: mod.private_instance_methods(false) }.each do |visibility, names|
+          names.each do |name|
+            next if method_defined?(name, false) || private_method_defined?(name, false)
+
+            define_method(name, mod.instance_method(name))
+            __send__(visibility, name)
+          end
+        end
+      end
+      private_class_method :absorb_script_module
+
       # Gives every module and class a script defines inside ScriptScope the
       # same view of the script's top-level methods that it would have under
       # Object, and installs itself on each one so nesting keeps working at
