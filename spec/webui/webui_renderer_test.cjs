@@ -1165,6 +1165,28 @@ test('numeric input renders its bounded range and reports a number', t => {
   assert.equal(sent.length, 1, 'a temporarily empty edit is not a numeric value');
 });
 
+test('an out-of-range number clamps to its bound on blur and at submit', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'bounds' }] });
+  receive({ type: 'render', page: 'bounds', generation: 1,
+    bindings: { typeahead: ['change'], delay: ['change'], save: ['activate'] }, submissions: { save: ['typeahead', 'delay'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'typeahead', props: { value: 0, min: 0, max: 100, step: 1 }, children: [] },
+      { type: 'number_input', cid: 'delay', props: { value: 0, min: 0, max: 600, step: 1 }, children: [] },
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  const [typeahead, delay] = dom.window.document.querySelectorAll('input[type=number]');
+  typeahead.value = '150';
+  typeahead.dispatchEvent(new dom.window.Event('input'));
+  typeahead.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(typeahead.value, '100', 'blur snaps the typed value to max');
+  assert.deepEqual(sent.at(-1).payload, { value: 100 });
+  delay.value = '-3';
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [100, 0], 'a submit without blur still sends in-range values');
+});
+
 test('modal page announcements do not reattach an already attached form', t => {
   const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'form' }] });

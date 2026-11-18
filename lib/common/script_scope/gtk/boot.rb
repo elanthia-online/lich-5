@@ -152,6 +152,40 @@ module Lich
           current
         end
 
+        # Reports whether the owner has queued or scheduled UI work that has not
+        # started. Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.pending_ui?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.pending_ui? : false
+        end
+
+        # Counts UI work ever admitted for the owner. Never creates a session.
+        # @param owner [Script]
+        # @return [Integer]
+        def self.ui_admissions(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.ui_admissions : 0
+        end
+
+        # Reports pending work or admitted work still running. Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.busy_ui?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.busy_ui? : false
+        end
+
+        # Reports whether any of the owner's top-level windows is shown.
+        # Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.visible_windows?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.visible_windows? : false
+        end
+
         # Defers one block onto the existing core owner dispatcher. Shadow-state
         # operations inside the block remain synchronous. During before_dying,
         # the existing session executes cleanup on Script's cleanup thread.
