@@ -178,6 +178,17 @@ RSpec.describe Lich::Util do
       expect(result).to be_complete
     end
 
+    it 'completes inv combat with nothing worn on the original patterns, leaving nothing behind' do
+      # The reply as logged in DragonRealms: the help line always follows.
+      reply_with(["You aren't wearing anything like that.\r\n", "[Use INVENTORY HELP for more options.]\r\n", prompt])
+      result = capture('inv combat', /All of your worn combat|You aren't wearing anything like that/,
+                       /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
+
+      expect(result).to be_complete
+      expect(result.lines).to eq(["You aren't wearing anything like that."])
+      expect(script.drain).to eq([])
+    end
+
     it 'omits a separate end line when include_end is false' do
       reply_with(["All of your worn combat equipment:\r\n", "  a shield\r\n", "Use INVENTORY HELP for more options.\r\n"])
       result = capture('inv combat', /All of your worn/, /Use INVENTORY HELP/, usexml: false, include_end: false)
