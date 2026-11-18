@@ -85,16 +85,20 @@ module Lich
             # termios), and the console shows typed input only once a read
             # takes it, so early typing there is read, unseen.
             input.iflush
-            output.print prompt
-            output.flush
             # A job-control shell restores its own terminal modes when Ctrl-Z
             # gives it the terminal, so after fg echo would be back on. Turn it
             # off again and show the prompt again, as readpassphrase(3) does.
+            # The handler goes in before the prompt is shown, so a stop at the
+            # prompt is always caught.
             on_resume(lambda {
               input.echo = false
               output.print prompt
               output.flush
-            }) { input.getpass }
+            }) do
+              output.print prompt
+              output.flush
+              input.getpass
+            end
           end
         ensure
           # Echo was off, so the Enter the user pressed never reached the screen.

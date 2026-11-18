@@ -822,6 +822,51 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       [master, slave].each { |io| io.close if io && !io.closed? }
     end
 
+    it 'catches a Ctrl-Z and fg the moment the prompt is shown',
+       if: Signal.list.key?('CONT') do
+      original_stdin = $stdin
+      begin
+        require 'pty'
+      rescue LoadError
+        skip 'needs a pseudo-terminal'
+      end
+      require 'delegate'
+      master, slave = PTY.open
+      $stdin = slave
+      # Stops and resumes from the reader thread right after the first prompt
+      # is written, as a shell's Ctrl-Z and fg would. A SIGCONT sent before
+      # the handler is installed is lost, so this depends on the order of the
+      # prompt and the handler, not on timing.
+      stop_at_prompt = Class.new(SimpleDelegator) do
+        def print(*)
+          super.tap do
+            next if @stopped
+
+            @stopped = true
+            __getobj__.echo = true
+            Process.kill('CONT', Process.pid)
+          end
+        end
+      end.new(slave)
+
+      reader = Thread.new { described_class.read_secret('Password: ', from_stdin: false, output: stop_at_prompt) }
+      shown = +''
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      until shown.include?('Password: Password: ') || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        shown << master.read_nonblock(4096) if master.wait_readable(0.05)
+      end
+      expect(shown).to include('Password: Password: ')
+      master.write("typed-after-fg\n")
+
+      expect(reader.join(5)&.value).to eq('typed-after-fg')
+      shown << master.read_nonblock(4096) while master.wait_readable(0.2)
+      expect(shown).not_to include('typed-after-fg')
+    ensure
+      reader&.kill
+      $stdin = original_stdin
+      [master, slave].each { |io| io.close if io && !io.closed? }
+    end
+
     it 'reads a real pipe' do
       reader, writer = IO.pipe
       writer.write("piped pw\n")
