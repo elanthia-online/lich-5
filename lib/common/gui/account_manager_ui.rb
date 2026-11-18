@@ -6,6 +6,8 @@ require_relative 'frontend_selector'
 require_relative 'theme_utils'
 require_relative 'master_password_change'
 require_relative 'encryption_mode_change'
+require_relative 'character_generator'
+require_relative '../authentication/account_characters'
 
 module Lich
   module Common
@@ -36,6 +38,7 @@ module Lich
           @data_dir = data_dir
           @msgbox = ->(message) { show_message_dialog(message) }
           @data_change_callback = nil
+          @play_callback = nil
           @tab_communicator = nil
           @notifications_registered = false
           @tab_indices = {}
@@ -49,6 +52,14 @@ module Lich
         # @return [void]
         def set_data_change_callback(callback)
           @data_change_callback = callback
+        end
+
+        # Sets the launcher play callback used by Create Character
+        #
+        # @param callback [Proc] Callback receiving (launch_data, login_context)
+        # @return [void]
+        def set_play_callback(callback)
+          @play_callback = callback
         end
 
         # Stores tab communicator for later registration when tab is selected
@@ -237,6 +248,25 @@ module Lich
 
           button_box.pack_start(change_password_button, expand: false, fill: false, padding: 0)
 
+          # Create character generator and server refresh buttons (act on the selected row's account)
+          create_character_button = Gtk::Button.new(label: "Create Character...")
+          create_character_button.sensitive = false
+          Accessibility.make_button_accessible(
+            create_character_button,
+            "Create Character Button",
+            "Enter the character generator for the selected account"
+          )
+          button_box.pack_start(create_character_button, expand: false, fill: false, padding: 0)
+
+          refresh_characters_button = Gtk::Button.new(label: "Refresh Characters")
+          refresh_characters_button.sensitive = false
+          Accessibility.make_button_accessible(
+            refresh_characters_button,
+            "Refresh Characters Button",
+            "Fetch the selected account's characters from the game servers"
+          )
+          button_box.pack_start(refresh_characters_button, expand: false, fill: false, padding: 0)
+
           accounts_box.pack_start(button_box, expand: false, fill: false, padding: 0)
 
           # Add tab to notebook and store index
@@ -265,10 +295,37 @@ module Lich
 
               # Only enable change password for account nodes (not character nodes)
               change_password_button.sensitive = !account.nil? && (character.nil? || character.empty?)
+
+              # Account-level actions work from an account or any of its characters
+              create_character_button.sensitive = !account.nil?
+              refresh_characters_button.sensitive = !account.nil?
             else
               remove_button.sensitive = false
               change_password_button.sensitive = false
+              create_character_button.sensitive = false
+              refresh_characters_button.sensitive = false
             end
+          end
+
+          # Set up create character button handler
+          create_character_button.signal_connect('clicked') do
+            iter = selection.selected
+            if iter
+              CharacterGenerator.show_dialog(
+                parent: @window,
+                data_dir: @data_dir,
+                account: iter[0],
+                button: create_character_button,
+                on_play: @play_callback,
+                msgbox: @msgbox
+              )
+            end
+          end
+
+          # Set up refresh characters button handler
+          refresh_characters_button.signal_connect('clicked') do
+            iter = selection.selected
+            refresh_account_characters(iter[0]) if iter
           end
 
           # Set up remove button handler
@@ -934,6 +991,34 @@ module Lich
               @msgbox.call(result[:message])
             end
           end
+        end
+
+        # Fetches an account's characters from the game servers and stores any new
+        # ones, the GUI counterpart of `--refresh-characters ACCOUNT`. New characters
+        # get the account's usual frontend (stormfront when it has none).
+        #
+        # @param account [String] account key as stored in entry.yaml
+        # @return [void]
+        def refresh_account_characters(account)
+          characters = Authentication::AccountCharacters
+          password = characters.stored_password(@data_dir, account)
+          auth_data = characters.fetch_characters(account, password)
+          frontend = characters.default_frontend(@data_dir, account)
+          result = characters.store_new_characters(@data_dir, account, password, auth_data, frontend)
+
+          if result[:added].zero?
+            @msgbox.call("No new characters for #{account} (#{result[:found]} found).")
+            return
+          end
+
+          refresh_accounts_display
+          notify_data_changed(:character_added, { account: account, added: result[:added] })
+          @msgbox.call("Added #{result[:added]} new character(s) to #{account} " \
+                       "(#{result[:found]} found), using #{Frontend.display_name(frontend)}.")
+        rescue StandardError => e
+          # CRITICAL: Only show e.message, NEVER password values
+          Lich.log "error: GUI refresh characters failed for '#{account}': #{e.message}"
+          @msgbox.call("Could not refresh characters for #{account}: #{e.message}")
         end
 
         # Sets up the favorites column click handler with data change notification

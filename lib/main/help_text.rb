@@ -92,6 +92,11 @@ module Lich
 
           Login options:
             --login CHARACTER       Login using a saved entry
+            --login NEW --account=ACCOUNT
+                                    Enter the character generator on a saved account
+                                    (needs a game flag; frontend defaults to the
+                                    account's usual one, or profanity with
+                                    --without-frontend)
             --headless PORT         Run without a frontend and expose a detachable client on PORT
             --headless auto         Run without a frontend and let the OS assign a detachable port
             --headless HOST:PORT    Bind the detachable client to HOST (tailscale, lan, any, IP, or hostname)
@@ -132,6 +137,7 @@ module Lich
             lich --login Mychar --headless auto
             lich --login Mychar --headless tailscale:8001
             lich --login Mychar --start-scripts=repository,go2
+            lich --login NEW --account=MYACCOUNT --dr
         TEXT
       end
 
