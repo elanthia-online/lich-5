@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'timeout'
+require_relative '../../../../lib/common/downstreamhook'
 require_relative '../../../spec_helper'
 
 # Load production code
@@ -1186,18 +1187,16 @@ RSpec.describe Lich::DragonRealms::DRCH do
       allow(Lich::Messaging).to receive(:msg)
       allow(described_class).to receive(:waitrt?)
       allow(DRStats).to receive(:empath?).and_return(true)
-      stub_const('DownstreamHook', Class.new do
-        def self.add(*_args, **_kwargs); end
-
-        def self.remove(*_args); end
-      end)
+      # Drive the real hook path: issue_command captures from DownstreamHook,
+      # which the game thread runs on each server string.
+      stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       allow(Script).to receive(:current).and_return(
         OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
       )
-      allow(Lich::Util).to receive(:fput)
-      queue = replies.dup
-      # Hand out the scripted lines, then block like a quiet game would.
-      allow(Lich::Util).to receive(:get) { queue.empty? ? sleep(5) : queue.shift }
+      # The game answers the command with the scripted lines, then goes quiet.
+      allow(Lich::Util).to receive(:fput) do |*_args, **_opts|
+        Thread.new { replies.each { |line| DownstreamHook.run(line) } }
+      end
       # Keep the real method but shorten its timeout so the examples run fast.
       allow(Lich::Util).to receive(:issue_command).and_wrap_original do |original, *args, **kwargs|
         original.call(*args, **kwargs, timeout: 0.2)
@@ -1237,12 +1236,11 @@ RSpec.describe Lich::DragonRealms::DRCH do
             prompt
           ]
         }
-        reply_queue = []
-        allow(Lich::Util).to receive(:fput) do |command|
+        allow(Lich::Util).to receive(:fput) do |command, *_args, **_opts|
           sent << command
-          reply_queue.concat(per_command.fetch(command, []))
+          lines = per_command.fetch(command, [])
+          Thread.new { lines.each { |line| DownstreamHook.run(line) } }
         end
-        allow(Lich::Util).to receive(:get) { reply_queue.empty? ? sleep(5) : reply_queue.shift }
       end
 
       it 'perceive_health sends HEALTH and keeps its bleeders, poison and disease with captured false' do

@@ -80,7 +80,7 @@ module Lich
     # Issues the 'exp mods' command and parses skill modifiers.
     # @return [Array<String>, nil] The captured output lines or nil on timeout
     def check_exp_mods
-      Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false, usexml: false)
+      Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false)
     end
 
     # Converts copper to a readable currency string with denominations.

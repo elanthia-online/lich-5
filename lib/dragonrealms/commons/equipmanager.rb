@@ -316,7 +316,7 @@ module Lich
       # @return [Array<String>] combat item description strings
       # @api private
       def get_combat_items
-        snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
+        snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options|You aren't wearing anything like that/, usexml: false, include_end: false)
         return [] unless snapshot
 
         snapshot.map(&:strip) - ["All of your worn combat equipment:", "You aren't wearing anything like that."]

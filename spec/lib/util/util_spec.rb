@@ -5,6 +5,7 @@ require 'timeout'
 require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/util/util.rb'
 require_relative '../../spec_helper'
+require_relative '../../../lib/common/markup'
 
 # Covers Lich::Util.issue_command's quiet: true filtering, specifically the
 # fix for dropping bundled display-state tags along with suppressed text.
@@ -18,10 +19,6 @@ require_relative '../../spec_helper'
 # text, leaving the frontend stuck in mono mode until an unrelated later
 # mono tag happened to close it.
 #
-# These specs drive the DownstreamHook proc issue_command registers
-# directly (captured via a wrapped DownstreamHook.add), rather than
-# simulating the full socket pipeline, since the proc's suppression logic
-# is what changed and is independently testable.
 RSpec.describe Lich::Util do
   describe '.preserve_quiet_state_tags' do
     it 'returns nil for a chunk with no recognized state tags' do
@@ -81,105 +78,264 @@ RSpec.describe Lich::Util do
     end
   end
 
-  describe '.issue_command with quiet: true' do
-    let(:captured_proc) { {} }
+  # Drives the real capture_command against a fake game thread that keeps
+  # production's ordering (Game#process_server_string): each server string is
+  # first pushed to the calling script's downstream buffer (process_xml_data),
+  # then run through DownstreamHook (process_downstream_hooks), whose output
+  # is what the frontend sees.
+  describe '.capture_command / .issue_command' do
+    # Minimal stand-in for the calling Script: the flags issue_command saves
+    # and restores, and a thread-safe downstream buffer.
+    let(:script_class) do
+      Class.new do
+        attr_accessor :silent, :want_downstream, :want_downstream_xml
+        attr_reader :name
+
+        def initialize
+          @queue = Queue.new
+          @name = 'spec'
+          @want_downstream = false
+          @want_downstream_xml = true
+        end
+
+        def downstream_buffer = self
+        def push(line) = @queue << line
+        def gets? = (@queue.pop(true) rescue nil)
+
+        def drain
+          lines = []
+          while (line = gets?)
+            lines << line
+          end
+          lines
+        end
+      end
+    end
+
+    let(:script) { script_class.new }
+    let(:frontend) { [] }
+    let(:prompt) { %(<prompt time="1787075465">H&gt;</prompt>\r\n) }
 
     before do
-      # issue_command's source calls the bare top-level constant
-      # `DownstreamHook` unqualified (production relies on `include
-      # Lich::Common` at boot for that to resolve to
-      # Lich::Common::DownstreamHook). spec_helper.rb separately defines its
-      # own lightweight top-level `DownstreamHook` mock (add/remove-less,
-      # `unless defined?` guarded) for specs that don't need real hook
-      # behavior. Which one wins the bare `DownstreamHook` name in a full
-      # suite run depends on file load order across the whole spec/
-      # directory, which this file does not control -- so rather than fight
-      # that at load time, stub_const rebinds the constant just for the
-      # examples in this block and restores whatever was there afterward,
-      # independent of load order.
+      # See the note in the old block: bind the real registry regardless of
+      # spec_helper's lightweight DownstreamHook mock and load order.
       stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+      Script.current = script
+      allow(Lich).to receive(:log)
+    end
 
-      # Capture the proc issue_command registers so it can be driven
-      # directly with synthetic bundled chunks.
-      allow(DownstreamHook).to receive(:add).and_wrap_original do |original, name, action, **kwargs|
-        captured_proc[:action] = action
-        original.call(name, action, **kwargs)
+    after do
+      DownstreamHook.remove('spec-other-hook')
+      Script.current = nil
+    end
+
+    # Sends +reply+ as the game's response to the command. +gap+ widens the
+    # window between the buffer push and the hook run for every string.
+    def reply_with(reply, gap: 0)
+      sender = lambda do |*_args, **_opts|
+        @game_thread = Thread.new do
+          reply.each do |raw|
+            if script.want_downstream_xml
+              script.push(raw)
+            else
+              Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").each { |l| script.push(l) unless l.empty? }
+            end
+            sleep gap if gap.positive?
+            out = DownstreamHook.run(raw)
+            frontend << out if out
+          end
+        end
+        true
+      end
+      allow(described_class).to receive(:fput, &sender)
+      allow(described_class).to receive(:put, &sender)
+    end
+
+    def capture(*args, **opts)
+      result = described_class.capture_command(*args, timeout: 0.3, **opts)
+      @game_thread&.join(1) # let the fake game thread finish forwarding
+      result
+    end
+
+    def fe_lines = frontend.map(&:rstrip)
+
+    it 'captures a multi-line reply through the end line' do
+      reply_with(["Your flags:\r\n", "MonsterBold ON\r\n", prompt])
+      result = capture('flag', /^Your flags/)
+
+      expect(result.lines).to eq(['Your flags:', 'MonsterBold ON', prompt.rstrip])
+      expect(result).to be_complete
+    end
+
+    it 'ends on the start line when that line also matches end_pattern' do
+      reply_with(["You aren't wearing anything like that.\r\n", prompt, "A goblin arrives.\r\n"])
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = capture('inv combat', /All of your worn|You aren't wearing/, /Use INVENTORY HELP|You aren't wearing/,
+                       usexml: false, include_end: false)
+
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
+      expect(result.lines).to eq(["You aren't wearing anything like that."])
+      expect(result).to be_complete
+    end
+
+    it 'omits a separate end line when include_end is false' do
+      reply_with(["All of your worn combat equipment:\r\n", "  a shield\r\n", "Use INVENTORY HELP for more options.\r\n"])
+      result = capture('inv combat', /All of your worn/, /Use INVENTORY HELP/, usexml: false, include_end: false)
+
+      expect(result.lines).to eq(['All of your worn combat equipment:', '  a shield'])
+    end
+
+    it 'with :ignore, captures only the start line' do
+      reply_with(["You have 50 silver.\r\n", "A goblin arrives.\r\n", prompt])
+      result = capture('wealth', /You have \d+ silver/, :ignore)
+
+      expect(result.lines).to eq(['You have 50 silver.'])
+      expect(result).to be_complete
+    end
+
+    it 'reports :no_start when the start line never arrives' do
+      reply_with(["Something else.\r\n"])
+      result = capture('flag', /^Your flags/)
+
+      expect(result.lines).to eq([])
+      expect(result.status).to eq(:no_start)
+    end
+
+    it 'reports :no_end, with the partial lines, when the end line never arrives' do
+      reply_with(["Your flags:\r\n", "MonsterBold ON\r\n"])
+      result = capture('flag', /^Your flags/)
+
+      expect(result.lines).to eq(['Your flags:', 'MonsterBold ON'])
+      expect(result.status).to eq(:no_end)
+    end
+
+    it 'issue_command returns the plain lines Array (partial on timeout), as before' do
+      reply_with(["Your flags:\r\n"])
+      result = described_class.issue_command('flag', /^Your flags/, timeout: 0.3)
+
+      expect(result).to eq(['Your flags:'])
+      expect(result.class).to eq(Array)
+    end
+
+    it 'matches text-mode patterns against stripped text, so quiet engages on a tag-led start line' do
+      reply_with([%(<output class="mono"/>Usage: FLAG [ON|OFF]\r\n), "  MonsterBold ON\r\n",
+                  "For other setting options, see AVOID, SET, and TOGGLE.\r\n", prompt])
+      result = capture('flag', /^Usage/, /^For other setting options/, quiet: true, usexml: false)
+
+      expect(result).to be_complete
+      expect(fe_lines).to eq([%(<output class="mono"/>), prompt.rstrip])
+    end
+
+    it 'warns when a text-mode end_pattern is markup, which stripped text can never match' do
+      reply_with([])
+      capture('exp mods', /The following skills/, /^<output class=""/, usexml: false)
+
+      expect(Lich).to have_received(:log).with(/looks like markup/)
+    end
+
+    it 'consumes the reply from the script buffer but leaves what follows it' do
+      reply_with(["Your flags:\r\n", prompt, "A goblin arrives.\r\n"])
+      capture('flag', /^Your flags/)
+
+      expect(script.drain).to eq(["A goblin arrives.\r\n"])
+    end
+
+    it 'restores the script flags it changed' do
+      script.silent = false
+      reply_with(["x\r\n", prompt])
+      capture('look', /x/, silent: true, usexml: false)
+
+      expect([script.silent, script.want_downstream, script.want_downstream_xml]).to eq([false, false, true])
+    end
+
+    it 'stops at once with :error, and restores the script, when matching raises' do
+      # Raise only for the observer's private strip buffer, not the fake game's.
+      allow(Lich::Common::Markup).to receive(:strip_xml).and_wrap_original do |original, line, type: nil|
+        raise 'boom' if type.to_s.start_with?('Util::capture_command')
+
+        original.call(line, type: type)
+      end
+      reply_with(["Usage:\r\n", "x\r\n"])
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = capture('flag', /^Usage/, /^x/, usexml: false, quiet: true)
+
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.2
+      expect(result.status).to eq(:error)
+      expect(Lich).to have_received(:log).with(/RuntimeError: boom/)
+      expect(script.want_downstream_xml).to be true
+    end
+
+    it 'restores the script flags even if draining the buffer raises' do
+      reply_with(["Your flags:\r\n", prompt])
+      allow(script).to receive(:gets?).and_raise(RuntimeError, 'guard')
+
+      expect { capture('flag', /^Your flags/, usexml: false) }.to raise_error(RuntimeError, 'guard')
+      expect([script.want_downstream, script.want_downstream_xml]).to eq([false, true])
+    end
+
+    it 'removes its hooks whether or not the reply completed' do
+      reply_with(["Your flags:\r\n"])
+      capture('flag', /^Your flags/, quiet: true)
+
+      expect(DownstreamHook.list.grep(/capture_command/)).to be_empty
+    end
+
+    context 'with quiet: true' do
+      it 'hides start through end line, even when hooks lag the script buffer' do
+        reply_with(["You currently have the following active effects:\r\n", "Spell...10:00\r\n", prompt], gap: 0.02)
+        result = capture('spell active', /You currently have the following/, quiet: true)
+
+        expect(result).to be_complete
+        expect(frontend).to eq([])
       end
 
-      Script.current = OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+      it 'forwards a bundled mono-closing tag instead of dropping the whole end-of-range chunk' do
+        reply_with(["You currently have the following active effects:\r\n",
+                    %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>\r\n)])
+        capture('spell active', /You currently have the following/, quiet: true)
+
+        expect(frontend).to eq([%(<output class=""/>\n)])
+      end
+
+      it 'forwards a bundled tag on an intermediate suppressed chunk' do
+        reply_with(["You currently have the following active effects:\r\n",
+                    %(<output class="mono"/>Some Spell.....................  10:00\r\n), prompt])
+        capture('spell active', /You currently have the following/, quiet: true)
+
+        expect(frontend).to eq([%(<output class="mono"/>\n)])
+      end
+
+      it 'leaves lines outside the reply alone' do
+        reply_with(["A goblin arrives.\r\n", "Your flags:\r\n", prompt, "It attacks!\r\n"])
+        capture('flag', /^Your flags/, quiet: true)
+
+        expect(fe_lines).to eq(['A goblin arrives.', 'It attacks!'])
+      end
+
+      it 'still lets other hooks see the hidden lines' do
+        seen = []
+        DownstreamHook.add('spec-other-hook', proc { |line| seen << line.rstrip; line }, persist: true)
+        reply_with(["Your flags:\r\n", prompt])
+        capture('flag', /^Your flags/, quiet: true)
+
+        expect(seen).to eq(['Your flags:', prompt.rstrip])
+      end
     end
 
-    # Drives issue_command's internal get-loop just far enough for it to
-    # match start_pattern then end_pattern and return, independent of the
-    # DownstreamHook proc under test (get and DownstreamHook consume the
-    # same underlying stream through separate paths in production).
-    def run_issue_command(quiet:, timeout: 1)
-      allow(described_class).to receive(:get).and_return(
-        'You currently have the following active effects:',
-        '<prompt time="1787075465">H&gt;</prompt>'
-      )
+    it 'captures what the server sent even if another hook rewrites or squelches it' do
+      DownstreamHook.add('spec-other-hook', proc { |line| line.include?('MonsterBold') ? nil : line.sub('Your', '>>Your') }, persist: true)
+      reply_with(["Your flags:\r\n", "MonsterBold ON\r\n", prompt])
+      result = capture('flag', /^Your flags/)
 
-      described_class.issue_command(
-        'spell active',
-        /You currently have the following/,
-        /<prompt/,
-        quiet: quiet,
-        usexml: true,
-        timeout: timeout
-      )
+      expect(result.lines).to eq(['Your flags:', 'MonsterBold ON', prompt.rstrip])
+      expect(fe_lines).to eq(['>>Your flags:', prompt.rstrip])
     end
 
-    it 'still returns the captured lines to the caller' do
-      result = run_issue_command(quiet: true)
+    it 'does not alter frontend output when quiet is false' do
+      reply_with(["Your flags:\r\n", prompt])
+      capture('flag', /^Your flags/)
 
-      expect(result).to eq(
-        [
-          'You currently have the following active effects:',
-          '<prompt time="1787075465">H&gt;</prompt>'
-        ]
-      )
-    end
-
-    it 'drops a suppressed chunk outright when it carries no state tags' do
-      run_issue_command(quiet: true)
-
-      forwarded = captured_proc[:action].call('You currently have the following active effects:')
-
-      expect(forwarded).to be_nil
-    end
-
-    it 'forwards a bundled mono-closing tag instead of dropping the whole end-of-range chunk' do
-      run_issue_command(quiet: true)
-
-      # Enter the filtering state via the start_pattern chunk.
-      captured_proc[:action].call('You currently have the following active effects:')
-
-      # The end-of-range chunk bundles the mono-closing tag with the prompt --
-      # this is the exact server behavior from the reported bug.
-      bundled_end_chunk = %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
-      forwarded = captured_proc[:action].call(bundled_end_chunk)
-
-      expect(forwarded).to eq(%(<output class=""/>\n))
-    end
-
-    it 'forwards a bundled tag on an intermediate suppressed chunk, not just the end chunk' do
-      run_issue_command(quiet: true)
-
-      captured_proc[:action].call('You currently have the following active effects:') # enters filter
-      mid_range_chunk = %(<output class="mono"/>Some Spell.....................  10:00)
-      forwarded = captured_proc[:action].call(mid_range_chunk)
-
-      expect(forwarded).to eq(%(<output class="mono"/>\n))
-    end
-
-    it 'does not alter non-quiet behavior (lines are forwarded unchanged)' do
-      run_issue_command(quiet: false)
-
-      start_chunk = 'You currently have the following active effects:'
-      end_chunk = %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
-
-      expect(captured_proc[:action].call(start_chunk)).to eq(start_chunk)
-      expect(captured_proc[:action].call(end_chunk)).to eq(end_chunk)
+      expect(fe_lines).to eq(['Your flags:', prompt.rstrip])
     end
   end
 
