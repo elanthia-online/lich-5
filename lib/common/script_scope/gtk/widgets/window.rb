@@ -377,8 +377,10 @@ module Lich
               @realized = true
               @shown = true
               emit_handlers(:realize) if first
+              emit_descendant_lifecycle(:realize) if first && !destroyed?
               emit_handlers(:show) if changed && !destroyed?
               emit_handlers(:map) if changed && !destroyed? && visible?
+              emit_descendant_lifecycle(:map) if changed && !destroyed? && visible?
             end
             self
           end
@@ -421,6 +423,25 @@ module Lich
             self
           end
           private :request_minimized
+
+          # GTK realizes and maps a window's children with it. Each child runs
+          # its realize handlers once; map handlers run on every show.
+          # @param event [Symbol] :realize or :map
+          # @return [void]
+          def emit_descendant_lifecycle(event)
+            pending = children
+            until pending.empty?
+              widget = pending.shift
+              next if widget.destroyed?
+
+              pending.concat(widget.children)
+              next if event == :realize && widget.instance_variable_get(:@realized)
+
+              widget.instance_variable_set(:@realized, true) if event == :realize
+              widget.send(:emit_handlers, event)
+            end
+          end
+          private :emit_descendant_lifecycle
 
           # Reports shadow visibility without allocating a browser surface.
           # @return [Boolean] whether this window has been published and remains live

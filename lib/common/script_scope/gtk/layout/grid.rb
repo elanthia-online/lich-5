@@ -20,7 +20,7 @@ module Lich
             @n_rows = [Integer(rows), 1].max
             @columns = [Integer(columns), 1].max
             @props.merge!(cols: @columns, gap: 0, homogeneous: homogeneous)
-            session.refuse(self, :new) unless @n_rows.positive? && @columns.between?(1, 24)
+            session.refuse(self, :new) unless @n_rows.positive? && @columns.between?(1, Lich::WebUI::Contract::BOUNDS[:grid_columns])
             session.degrade(:homogeneous_rows, 'equal columns are retained; row heights follow browser layout') if homogeneous
           end
 
@@ -71,7 +71,7 @@ module Lich
           # @return [Table] self
           def attach(child, left, right, top, bottom, xoptions = 5, yoptions = 5, xpadding = 0, ypadding = 0)
             valid = [left, right, top, bottom].all? { |value| value.is_a?(Integer) }
-            valid &&= left >= 0 && right > left && right <= 24 && top >= 0 && bottom > top &&
+            valid &&= left >= 0 && right > left && right <= Lich::WebUI::Contract::BOUNDS[:grid_columns] && top >= 0 && bottom > top &&
                       bottom <= Lich::WebUI::Contract::BOUNDS[:children]
             session.refuse(self, :attach) unless valid
             session.refuse(self, :attach) unless [xoptions, yoptions].all? { |value| %i[fill expand shrink].include?(value) || (value.is_a?(Integer) && value.between?(0, 7)) }
@@ -208,14 +208,28 @@ module Lich
           def max_children_per_line = read(:cols)
 
           # Updates both the published column maximum and shadow table dimensions.
-          # @param value [Integer] maximum columns, from 1 through 24
+          # GTK truncates a numeric maximum to an unsigned count and ignores a
+          # value below one. A count above the grid bound is clamped to it and
+          # logged once, since a page cannot lay out more columns.
+          # @param value [Numeric] maximum columns
           # @return [void] result is not part of the supported script contract
-          # @raise [UnsupportedOperation] for an invalid maximum or a destroyed flow
+          # @raise [UnsupportedOperation] for a non-numeric maximum or a destroyed flow
           def max_children_per_line=(value)
             session.style_operation(self, :max_children_per_line=) do
-              session.refuse(self, :max_children_per_line=) if destroyed? || !value.is_a?(Integer) || !value.between?(1, 24)
-              write(:cols, value)
-              @columns = value
+              valid = value.is_a?(Numeric) && value.real? && value.finite?
+              session.refuse(self, :max_children_per_line=) if destroyed? || !valid
+              count = value.to_i
+              limit = Lich::WebUI::Contract::BOUNDS[:grid_columns]
+              if count < 1
+                session.degrade(:flow_columns_low, 'a maximum below one column is ignored', receiver: self)
+                next
+              end
+              if count > limit
+                session.degrade(:flow_columns_high, "a maximum above #{limit} columns is clamped to #{limit}", receiver: self)
+                count = limit
+              end
+              write(:cols, count)
+              @columns = count
             end
           end
           alias set_max_children_per_line max_children_per_line=
@@ -333,6 +347,11 @@ module Lich
           # @return [Grid] self
           def attach(child, left, top, width, height)
             session.synchronize do
+              # GTK warns and skips attaching a widget that already has a parent.
+              if child.is_a?(Widget) && child.session.equal?(session) && !child.destroyed? && child.parent && !destroyed?
+                session.degrade(:attach_parented, 'a widget that already has a parent is not attached again, as in GTK', receiver: self)
+                return self
+              end
               valid = [left, top, width, height].all? { |value| value.is_a?(Integer) }
               valid &&= width.positive? && height.positive? && left.abs <= 65_536 && top.abs <= 65_536
               session.refuse(self, :attach) unless valid && !destroyed? && child.is_a?(Widget) &&
@@ -432,7 +451,7 @@ module Lich
             end
             columns = [1, *placements.values.map { |p| p[:column] + p[:span] - 1 }].max
             rows = [1, *placements.values.map { |p| p[:row] + p[:row_span] - 1 }].max
-            valid = columns <= 24 && rows <= Lich::WebUI::Contract::BOUNDS[:children]
+            valid = columns <= Lich::WebUI::Contract::BOUNDS[:grid_columns] && rows <= Lich::WebUI::Contract::BOUNDS[:children]
             session.refuse(self, :attach) unless valid
             expanding = placements.flat_map do |child, p|
               child.expands?(:horizontal) ? (p[:column]...(p[:column] + p[:span])).to_a : []

@@ -47,9 +47,9 @@ module Lich
             grid: {
               properties: {
                 flow: property(BOOL),
-                cols: property(integer(min: 1, max: 24), required: true),
+                cols: property(integer(min: 1, max: BOUNDS[:grid_columns]), required: true),
                 homogeneous: property(BOOL, default: true), equal_rows: property(BOOL, default: false),
-                expand_columns: property(array(integer(min: 1, max: 24), max: 24)),
+                expand_columns: property(array(integer(min: 1, max: BOUNDS[:grid_columns]), max: BOUNDS[:grid_columns])),
                 row_sizing: property(enum(:auto, :spread), default: :auto),
                 cells: property(integer(min: 0, max: BOUNDS[:children])),
                 gap: property(integer(min: 0, max: 64), default: 8),

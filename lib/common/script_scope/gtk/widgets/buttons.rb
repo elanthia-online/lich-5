@@ -241,6 +241,41 @@ module Lich
             session.refuse(self, :receives_default=) unless value == true
           end
           alias set_receives_default receives_default=
+
+          # The browser has no window-wide default button; the request is
+          # retained only and logged once.
+          # @param value [Boolean] whether this button may become the default
+          # @return [void]
+          def can_default=(value)
+            session.refuse(self, :can_default=) unless [true, false].include?(value)
+            session.degrade(:can_default, 'the browser has no default button; Enter acts on the focused control', receiver: self) if value
+          end
+          alias set_can_default can_default=
+
+          # Emits clicked as GTK's gtk_button_clicked does, running handlers now.
+          # @return [nil]
+          def clicked
+            session.style_operation(self, :clicked) { session.refuse(self, :clicked) if destroyed? }
+            emit_handlers(:activate, signal: 'clicked')
+            nil
+          end
+
+          # GTK places a caption Label inside a labelled button. The first read
+          # moves the caption into a real child Label so later text and markup
+          # changes on it update the button.
+          # @return [Label, Widget, nil] the child, or nil for an empty button
+          def child
+            session.synchronize do
+              return @children.first unless @children.empty?
+              return nil if label.to_s.empty?
+
+              caption = Label.new(label)
+              write(:label, '')
+              add(caption)
+              caption
+            end
+          end
+
           # Creates a literal action label, removing mnemonic underscores when requested.
           # Stock-button IDs are unsupported; no native GTK stock catalog is loaded.
           # @param text [String, nil] optional positional caption
@@ -307,6 +342,34 @@ module Lich
           # Returns a snapshot suitable for the legacy group constructor.
           # @return [Array<RadioButton>]
           def group = @group.dup
+
+          # Moves this member into another member's group, or into a group of
+          # its own for nil, before the page is built. GTK keeps one member of
+          # the new group active, so a joining member starts inactive.
+          # @param source [RadioButton, nil] member of the destination group
+          # @return [RadioButton] self
+          # @raise [UnsupportedOperation] for a foreign source or a built control
+          def join_group(source)
+            session.style_operation(self, :join_group) do
+              valid = source.nil? || (source.is_a?(RadioButton) && source.session.equal?(session) && !source.destroyed?)
+              session.refuse(self, :join_group) unless valid && !destroyed? && @handle.nil?
+              return self if source && source.group.include?(self)
+
+              @group.delete(self)
+              @group.first&.send(:write, :checked, true) if @group.none?(&:active?) && read(:checked)
+              if source
+                @group = source.instance_variable_get(:@group)
+                write(:group, source.send(:read, :group))
+                write(:checked, false)
+              else
+                @group = []
+                write(:group, "radio-#{object_id}")
+                write(:checked, true)
+              end
+              @group << self
+            end
+            self
+          end
 
           # Retires group membership before destroyed controls can be selected again.
           # @return [void]

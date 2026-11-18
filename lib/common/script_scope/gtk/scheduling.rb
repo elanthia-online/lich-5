@@ -21,24 +21,54 @@ module Lich
         end
         extend Boundary
 
-        # Owner-bound constructor for scripts that allocate a loop before building UI.
-        # The core dispatcher owns execution; nested GLib loops remain unsupported.
+        # Owner-bound loop for scripts that wait on their own UI. The core
+        # dispatcher already runs callbacks, so run only blocks the calling
+        # thread until quit, or until the script's session ends.
         class MainLoop
+          WAIT_SLICE = 0.25
+
           # Captures the existing script session without creating a native loop.
           def initialize
             @session = Gtk.session
             @session.style_operation(self, :new) { nil }
+            @mutex = Mutex.new
+            @wake = ConditionVariable.new
+            @running = false
           end
 
-          # @raise [Gtk::UnsupportedOperation] nested dispatch is unsupported
+          # Blocks until quit or the session closes. A callback cannot wait,
+          # since it runs on the dispatcher this loop depends on.
+          # @return [nil]
+          # @raise [Gtk::UnsupportedOperation] when already running or called from a callback
           def run
-            @session.style_operation(self, :run) { @session.refuse(self, :run) }
+            nested = @session.held_by_current_thread?
+            @session.style_operation(self, :run) do
+              @session.refuse(self, :run) if @running || nested
+              @running = true
+            end
+            begin
+              @mutex.synchronize do
+                @wake.wait(@mutex, WAIT_SLICE) while @running && !@session.closed?
+              end
+            ensure
+              @running = false
+            end
+            nil
           end
 
-          # @raise [Gtk::UnsupportedOperation] no native loop exists to stop
+          # Ends a running loop; with none running it does nothing, as in GTK.
+          # @return [nil]
           def quit
-            @session.style_operation(self, :quit) { @session.refuse(self, :quit) }
+            @mutex.synchronize do
+              @running = false
+              @wake.broadcast
+            end
+            nil
           end
+
+          # @return [Boolean] whether run is waiting
+          def running? = @running
+          alias is_running running?
         end
 
         module Timeout

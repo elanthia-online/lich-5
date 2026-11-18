@@ -73,6 +73,7 @@ module Lich
           end
           alias set_text text=
           alias label= text=
+          alias set_label text=
           alias label text
 
           # Maps unit-interval fractions to start/center/end content alignment.

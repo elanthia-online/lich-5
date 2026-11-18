@@ -149,14 +149,25 @@ module Lich
             end
             self
           end
+          # GTK2 spelling, still used by older scripts.
+          alias set_page set_current_page
 
           # Accepts a Label, or one EventBox containing a Label. Headers remain
           # owned widgets but never appear as extra Notebook#children pages.
           # @param child [Widget] same-session child governed by this container
           # @param label [Label, EventBox] same-session paired tab header
           # @return [Integer] new zero-based page index
-          def append_page(child, label)
+          def append_page(child, label) = insert_page(child, label, -1)
+
+          # Inserts a page before the given position; a negative or past-the-end
+          # position appends, as in GTK.
+          # @param child [Widget] same-session child governed by this container
+          # @param label [Label, EventBox] same-session paired tab header
+          # @param position [Integer] zero-based insertion index
+          # @return [Integer] the new page's zero-based index
+          def insert_page(child, label, position)
             session.style_operation(self, :append_page) do
+              session.refuse(self, :insert_page) unless position.is_a?(Integer)
               valid = !destroyed? && child.is_a?(Widget) && child.session.equal?(session) && !child.destroyed? && child.parent.nil?
               ancestor = self
               while ancestor
@@ -173,15 +184,16 @@ module Lich
                         !label.tab_owner && !text.tab_owner
               session.refuse(self, :append_page) unless valid
               previous = selected_tab_key
+              index = position.negative? || position > n_pages ? n_pages : position
               entry = { key: "tab-#{SecureRandom.hex(12)}", widget: label, label: text, page: child }
-              publish_tabs(@tabs + [entry])
+              publish_tabs(@tabs.dup.insert(index, entry))
               label.send(:parent=, self)
               [label, text].uniq.each { |widget| widget.tab_owner = self }
               child.send(:parent=, self)
-              @children << child
-              @tabs << entry
+              @children.insert(index, child)
+              @tabs.insert(index, entry)
               notify_switch(previous)
-              n_pages - 1
+              index
             end
           end
 

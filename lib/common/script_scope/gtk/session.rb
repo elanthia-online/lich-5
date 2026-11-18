@@ -49,6 +49,11 @@ module Lich
             @mutex.synchronize(&block)
           end
 
+          # Reports whether this thread already holds the session monitor, as
+          # every callback does; work that waits on other callbacks must not.
+          # @return [Boolean]
+          def held_by_current_thread? = @mutex.mon_owned?
+
           # Serializes mutable style state on the existing owner monitor.
           # @raise [UnsupportedOperation] after teardown or for another script
           # @api private

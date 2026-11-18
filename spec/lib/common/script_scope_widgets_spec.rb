@@ -1627,7 +1627,7 @@ RSpec.describe 'bounded script compatibility pilot' do
     window.hide
     window.show
     expect(events).to eq(%w[realize show map show map])
-    expect { compatibility::Entry.new.signal_connect('map') {} }.to raise_error(compatibility::UnsupportedOperation)
+    expect(compatibility::Entry.new.signal_connect('map') {}).to be_a(Integer)
   end
 
   it 'emits allocation notifications only for size changes and retains configure movement' do

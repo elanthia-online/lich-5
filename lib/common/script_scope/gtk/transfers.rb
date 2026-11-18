@@ -341,6 +341,44 @@ module Lich
             @props[:transfer_group] = 'gtk-string-move'
           end
         end
+
+        # Scripts run in the Lich process, not the viewer's browser, so they
+        # cannot reach the system clipboard. Copies are dropped and logged
+        # once; reads return nil, as GTK does for an empty clipboard.
+        class Clipboard
+          # @param _selection [Symbol] Gdk::Selection value, ignored
+          # @return [Clipboard] an owner-bound clipboard stand-in
+          def self.get(_selection = nil) = new
+
+          def initialize
+            @session = Gtk.session
+            @session.style_operation(self, :new) { nil }
+          end
+
+          # @param _text [String] text the script asked to copy
+          # @return [Clipboard] self
+          def set_text(_text, *)
+            @session.degrade(:clipboard, 'the system clipboard is not available to scripts; copied text is dropped', receiver: self)
+            self
+          end
+          alias text= set_text
+
+          # @return [nil] nothing to read
+          def wait_for_text = nil
+
+          # Calls back with nil, as GTK does for an empty clipboard.
+          # @return [nil]
+          def request_text
+            yield(self, nil) if block_given?
+            nil
+          end
+
+          # @return [Clipboard] self
+          def store = self
+
+          # @return [Clipboard] self
+          def clear = self
+        end
       end
 
       module Gdk
@@ -361,6 +399,8 @@ module Lich
 
         module Selection
           TYPE_STRING = :string
+          CLIPBOARD = :clipboard
+          PRIMARY = :primary
         end
       end
     end
