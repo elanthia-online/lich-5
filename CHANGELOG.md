@@ -1,5 +1,38 @@
 # Changelog
 
+## [5.25.0](https://github.com/elanthia-online/lich-5/compare/v5.24.2...v5.25.0) (2026-11-18)
+
+
+### Features
+
+* **all:** install and update scripts shipped as a gem on GitHub releases ([#2323](https://github.com/elanthia-online/lich-5/issues/2323)) ([1966933](https://github.com/elanthia-online/lich-5/commit/19669330124704fc6c8fef7a2ec1e8eb0e133c42))
+* **all:** prompt for master and account passwords instead of taking … ([#2400](https://github.com/elanthia-online/lich-5/issues/2400)) ([8ca9ce0](https://github.com/elanthia-online/lich-5/commit/8ca9ce0291bd12b2910c47709b4d8774db2b0509))
+* **all:** prompt for the --add-account password instead of taking it on argv ([#2393](https://github.com/elanthia-online/lich-5/issues/2393)) ([39b55d1](https://github.com/elanthia-online/lich-5/commit/39b55d140984198d668e8fd742a32bfdb0921d23))
+
+
+### Bug Fixes
+
+* **all:** accept a same-version self-built copy of packages marked self_build_equivalent ([#2412](https://github.com/elanthia-online/lich-5/issues/2412)) ([ccf50d8](https://github.com/elanthia-online/lich-5/commit/ccf50d8a529c41cec9c5947a9e12b4540f88b1bf))
+* **all:** accept an optional per-package gem manifest minimum ([#2316](https://github.com/elanthia-online/lich-5/issues/2316)) ([b890c63](https://github.com/elanthia-online/lich-5/commit/b890c635cb35624ebac7c59ec2b23d5be1487a4d))
+* **all:** describe a runtime contract for a chosen Windows platform ([#2310](https://github.com/elanthia-online/lich-5/issues/2310)) ([68634cd](https://github.com/elanthia-online/lich-5/commit/68634cdd4b252c62072582b78b9758a92f18a340))
+* **all:** don't relaunch one-shot CLI commands after a gem repair ([#2394](https://github.com/elanthia-online/lich-5/issues/2394)) ([5506199](https://github.com/elanthia-online/lich-5/commit/5506199f030a09816b7958e637011879c129f177))
+* **all:** extract lich5-update tarballs with a shared Lich::Archive ([#2367](https://github.com/elanthia-online/lich-5/issues/2367)) ([63418bc](https://github.com/elanthia-online/lich-5/commit/63418bc0635e213e8796332a2610379d21510320))
+* **all:** extract the gem recovery ZIP in-process instead of through PowerShell ([#2365](https://github.com/elanthia-online/lich-5/issues/2365)) ([37df00c](https://github.com/elanthia-online/lich-5/commit/37df00c0aa2354f618e2dd55953cb2b70e71f9bd))
+* **all:** install the SIGCONT handler before showing the password prompt ([#2418](https://github.com/elanthia-online/lich-5/issues/2418)) ([f86f39d](https://github.com/elanthia-online/lich-5/commit/f86f39d638f99389901addc2b3fb760b38ef985d))
+* **all:** keep a newer self-built gem instead of repairing it down to the R4L5 build ([#2366](https://github.com/elanthia-online/lich-5/issues/2366)) ([93e13cb](https://github.com/elanthia-online/lich-5/commit/93e13cbe9edbda89ecad1543d637902e1df496d3))
+* **all:** keep the missing-gems log for starts that stop, and note the rest in the Lich log ([#2409](https://github.com/elanthia-online/lich-5/issues/2409)) ([4460496](https://github.com/elanthia-online/lich-5/commit/4460496a8102fc31e5903681f43a50ed9195a3c6))
+* **all:** lock aarch64-mingw-ucrt so Windows ARM64 resolves the ffi build ([#2363](https://github.com/elanthia-online/lich-5/issues/2363)) ([db08c4e](https://github.com/elanthia-online/lich-5/commit/db08c4ee7691c6315f9755d35d6c3cd10c4a9874))
+* **all:** master password off the command line on macOS and readback ([#2403](https://github.com/elanthia-online/lich-5/issues/2403)) ([55900b1](https://github.com/elanthia-online/lich-5/commit/55900b16ad4e8da998e4a781966431d32d3804f4))
+* **all:** match a named character in move's "unable to follow" refusal ([#2402](https://github.com/elanthia-online/lich-5/issues/2402)) ([00cb62d](https://github.com/elanthia-online/lich-5/commit/00cb62de037fc0873700b8a6c14cda655c6477d2))
+* **all:** name the RubyInstaller gems below their floor and the Ruby to install ([#2410](https://github.com/elanthia-online/lich-5/issues/2410)) ([e83dc2f](https://github.com/elanthia-online/lich-5/commit/e83dc2f1fb6fa4fd6d5c45cf2482fbd3579bf30b))
+* **all:** start older Ruby patches on RubyInstaller gems that satisfy the Gemfile ([#2411](https://github.com/elanthia-online/lich-5/issues/2411)) ([fa8199a](https://github.com/elanthia-online/lich-5/commit/fa8199ad26ec339d5a3ca8f700fb48e5f2e695ed))
+
+
+### Documentation
+
+* **all:** describe ruby_inventory as floors from the oldest Ruby Lich accepts ([#2413](https://github.com/elanthia-online/lich-5/issues/2413)) ([ef9059e](https://github.com/elanthia-online/lich-5/commit/ef9059ea42e062a8838eb16107947da5815dddee))
+* **all:** move script-author and protocol docs to the wiki, keep project-operations docs ([#2417](https://github.com/elanthia-online/lich-5/issues/2417)) ([d59113c](https://github.com/elanthia-online/lich-5/commit/d59113ca9333df8bd994712151e1bc9afdef99c1))
+
 ## [5.24.2](https://github.com/elanthia-online/lich-5/compare/v5.24.1...v5.24.2) (2026-11-11)
 
 
