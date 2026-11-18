@@ -119,6 +119,22 @@ jobs:
             stale.each { |f| puts "::error::#{f} is listed in a browser shard but does not exist." }
             exit 1 unless missing.empty? && stale.empty?
             puts "All #{browser.size} browser spec files are in a shard."'
+      - name: Warm up Chrome
+        # The first Chrome start on a fresh runner can take over 30s, which
+        # used up the whole 30s test timeout of each RSpec worker's first
+        # scenario. Pay that cost once here, where no test timeout applies.
+        working-directory: spec/webui
+        run: |
+          node -e '
+            const { chromium } = require("@playwright/test");
+            (async () => {
+              const started = Date.now();
+              const browser = await chromium.launch({ channel: "chrome", headless: true });
+              const page = await browser.newPage();
+              await page.setContent("<p>warm</p>");
+              await browser.close();
+              console.log("Chrome warm-up took " + (Date.now() - started) + "ms");
+            })().catch(error => { console.error(error); process.exit(1); });'
       - name: Restore shard runtime log
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
