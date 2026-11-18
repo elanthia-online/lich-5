@@ -26,7 +26,7 @@ module Lich
               end
             end
             optional = %i[key_press key_release blur] + (is_a?(RadioButton) ? [:activate] : [])
-            (builtin_events + signal_map.values + @signals.keys).uniq.reject { |event| %i[show map realize].include?(event) || (optional.include?(event) && !@signals.key?(event)) }.each { |event| bind_event(event) }
+            (builtin_events + signal_map.values + @signals.keys).uniq.reject { |event| Widget::UNBOUND_EVENTS.include?(event) || (optional.include?(event) && !@signals.key?(event)) }.each { |event| bind_event(event) }
             @handle
           end
 

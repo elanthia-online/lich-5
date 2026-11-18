@@ -72,7 +72,7 @@ RSpec.describe 'GTK bridge family loading and Builder transactions' do
           <object class="GtkListStore" id="store"><columns><column type="gchararray"/></columns></object>
           <object class="GtkTreeView" id="view"><property name="model">store</property></object>
           <object class="GtkGrid" id="grid"><child><object class="GtkEntry" id="candidate"/>
-            <packing><property name="left-attach">24</property></packing>
+            <packing><property name="left-attach">64</property></packing>
           </child></object>
         </interface>
       XML

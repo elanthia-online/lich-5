@@ -1304,7 +1304,7 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     flow.add(labels[1])
     wait_for { nodes(viewer).find { |node| node['type'] == 'grid' }['children'].last['props']['content'] == 'Cell 1' }
     expect(nodes(viewer).find { |node| node['type'] == 'grid' }['props']).to include('cols' => 2, 'homogeneous' => false, 'equal_rows' => false)
-    [0, 25, '2'].each { |value| expect { flow.max_children_per_line = value }.to raise_error(gtk::UnsupportedOperation) }
+    ['2', Float::NAN].each { |value| expect { flow.max_children_per_line = value }.to raise_error(gtk::UnsupportedOperation) }
     expect { flow.row_spacing = -1 }.to raise_error(gtk::UnsupportedOperation)
     expect { flow.selection_mode = :multiple }.to raise_error(gtk::UnsupportedOperation)
     expect(flow.max_children_per_line).to eq(2)

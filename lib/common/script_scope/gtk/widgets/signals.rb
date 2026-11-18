@@ -17,7 +17,6 @@ module Lich
               session.refuse(self, :signal_connect) if destroyed?
               name = name.to_s.tr('-', '_')
               event = if %w[destroy show map realize].include?(name)
-                        session.refuse(self, "signal:#{name}") if %w[map realize].include?(name) && !is_a?(Window)
                         name.to_sym
                       elsif %w[scroll_event enter_notify_event leave_notify_event].include?(name)
                         mapped = { 'scroll_event' => :scroll, 'enter_notify_event' => :pointer_enter, 'leave_notify_event' => :pointer_leave }.fetch(name)
@@ -25,9 +24,14 @@ module Lich
                         mapped
                       elsif %w[button_press_event button_release_event].include?(name)
                         pointer_event = name == 'button_press_event' ? :pointer_press : :pointer_release
-                        session.refuse(self, "signal:#{name}") unless session.port.schema(component_type)[:events].key?(pointer_event)
-                        write(:pointer_events, true)
-                        pointer_event
+                        if session.port.schema(component_type)[:events].key?(pointer_event)
+                          write(:pointer_events, true)
+                          pointer_event
+                        else
+                          inert_signal(name)
+                        end
+                      elsif name == 'size_allocate' && !is_a?(Window)
+                        inert_signal(name)
                       else
                         signal_map.transform_keys { |key| key.tr('-', '_') }[name] || session.refuse(self, "signal:#{name}")
                       end
@@ -39,12 +43,27 @@ module Lich
                 (@destroy_handlers ||= []) << handler
               else
                 (@signals[event] ||= []) << [name, handler]
-                bind_event(event) if @handle && !%i[show map realize].include?(event)
+                bind_event(event) if @handle && !Widget::UNBOUND_EVENTS.include?(event)
               end
               @signal_connections[id] = [event, handler]
               id
             end
           end
+
+          # Handlers kept but never delivered: GTK would call them for native
+          # pointer and allocation changes this widget does not report.
+          INERT_EVENT = :inert
+          UNBOUND_EVENTS = %i[show map realize inert].freeze
+
+          # Retains a connection for a signal the browser does not report, logged once.
+          # @param name [String] normalized GTK signal name
+          # @return [Symbol] the inert event key
+          # @api private
+          def inert_signal(name)
+            session.degrade(:"inert_signal_#{name}", "signal #{name} is accepted but not delivered", receiver: self)
+            INERT_EVENT
+          end
+          private :inert_signal
 
           # The supported after-signals observe selected tabs or an unhandled close.
           # Normal listeners run first regardless of connection order.

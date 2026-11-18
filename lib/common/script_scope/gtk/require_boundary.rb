@@ -12,7 +12,7 @@ module Lich
         # top of that file runs; its first bare native require is still refused,
         # so native GTK never loads.
         module RequireBoundary
-          COMPATIBILITY_FEATURES = %w[gtk2 gtk2.rb gtk3 gtk3.rb].freeze
+          COMPATIBILITY_FEATURES = %w[gtk2 gtk2.rb gtk3 gtk3.rb pango pango.rb].freeze
           # Ruby-GNOME uses underscore names for some native extensions even
           # when their Ruby entrypoints use hyphens; guard both before loading.
           NATIVE_FEATURE = %r{

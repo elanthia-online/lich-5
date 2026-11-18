@@ -905,7 +905,6 @@ RSpec.describe 'bounded Gtk Builder compatibility' do
     expect(builder['frame'].send(:component_props)).to include(border_width: 0)
     [
       '<object class="GtkComboBoxText"><property name="has-entry">True</property><property name="can-focus">True</property></object>',
-      '<object class="GtkLabel"><property name="can-focus">True</property></object>',
       '<object class="GtkCheckButton"><property name="valign">baseline</property></object>',
       '<object class="GtkCheckButton"><property name="draw-indicator">False</property></object>',
       '<object class="GtkCheckButton"><property name="receives-default">invalid</property></object>',

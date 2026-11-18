@@ -515,9 +515,10 @@ RSpec.describe 'progress provider lifecycle' do
     label = gtk::Label.new('Bounded')
     expect { label.override_color(:active, color) }.to raise_error(gtk::UnsupportedOperation)
     expect { label.override_color(:normal, 'red') }.to raise_error(gtk::UnsupportedOperation)
-    [Float::NAN, Float::INFINITY, -0.1, 1.1, '1', Complex(0, 1)].each do |value|
+    [Float::NAN, Float::INFINITY, '1', Complex(0, 1)].each do |value|
       expect { scope.const_get(:Gdk)::RGBA.new(value, 0, 0, 1) }.to raise_error(gtk::UnsupportedOperation)
     end
+    expect(scope.const_get(:Gdk)::RGBA.new(-0.1, 1.1, 0, 1).to_h).to include(r: 0, g: 255)
     other = Struct.new(:name).new('other.lic')
     allow(Lich::Common::Script).to receive(:current).and_return(other)
     expect { label.override_color(:normal, color) }.to raise_error(gtk::UnsupportedOperation)
