@@ -8,8 +8,7 @@ module Lich
         # YARD's private API tags describe usage, not Ruby method visibility.
 
         # The Frontends tab: the catalog on top, an editor for the selected row
-        # below. Retains the editing role of the former GUI::FrontendManagerTab
-        # from #1558 -- detection is shown as status only, and nothing here ever
+        # below. Detection is shown as status only, and nothing here ever
         # launches a frontend or touches account associations.
         # @param ui [WebUI::TreeBuilder] builder receiving this presentation family
         # @return [void] authors the cached frontend catalog and editor

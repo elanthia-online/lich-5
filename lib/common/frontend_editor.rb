@@ -9,12 +9,10 @@ module Lich
   module Common
     # The rules for editing frontend configuration, with no widgets attached.
     #
-    # GUI::FrontendManagerTab grew these as private methods around Gtk::Entry
-    # instances, so the WebUI launcher could not reach them without either
-    # duplicating the validation or instantiating GTK. The shapes a
-    # frontends.yml document may hold, what a built-in may override, and what
-    # makes an identifier acceptable are properties of the settings file rather
-    # than of either toolkit -- so they live here. The current WebUI launcher's
+    # The shapes a frontends.yml document may hold, what a built-in may
+    # override, and what makes an identifier acceptable are properties of the
+    # settings file, so their validation and transformations live here without
+    # a dependency on presentation widgets. The WebUI launcher's
     # FrontendTab uses these transformations and provides the settings snapshot.
     #
     # Nothing here reads or writes a file. Callers hand in the current document

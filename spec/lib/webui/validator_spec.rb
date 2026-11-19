@@ -506,7 +506,7 @@ RSpec.describe Lich::WebUI::Validator do
       expect(validator.validate_input_value!(type, 'kept', props: props, **context)).to eq('kept')
     end
   end
-  it 'G3 RC12 accepts integer rotations while retaining string rotations' do
+  it 'accepts integer rotations while retaining string rotations' do
     [0, 90, 180, 270, '0', '90', '180', '270'].each do |rotation|
       expect(validator.validate_component!(:text, { content: '', rotation: rotation }, **context)[:rotation]).to eq(rotation)
     end
@@ -516,7 +516,7 @@ RSpec.describe Lich::WebUI::Validator do
     end
   end
 
-  it 'G3 RC42 lists each enum choice once in the refusal message' do
+  it 'lists each enum choice once in the refusal message' do
     expect { validator.validate_component!(:text, { content: '', rotation: 45 }, **context) }
       .to raise_error(Lich::WebUI::SchemaViolationError) { |error|
         expect(error.message).to include('must be one of 0, 90, 180, 270')
@@ -524,7 +524,7 @@ RSpec.describe Lich::WebUI::Validator do
       }
   end
 
-  it 'G3 RC17 copies enum strings before freezing the normalized result' do
+  it 'copies enum strings before freezing the normalized result' do
     theme = +'dark'
     props = validator.validate_component!(:page, { title: 'Title', theme: theme }, **context)
     expect(props[:theme]).to eq('dark')
@@ -534,7 +534,7 @@ RSpec.describe Lich::WebUI::Validator do
     expect(props[:theme]).to eq('dark')
   end
 
-  it 'G3 RC20 reports invalid identifier syntax equally for string and symbol field names' do
+  it 'reports invalid identifier syntax equally for string and symbol field names' do
     ['bad name', :'bad name', '', :''].each do |name|
       expect { validator.validate_component!(:stack, { name => true }, **context) }
         .to raise_error(Lich::WebUI::SchemaViolationError, /field name has invalid identifier syntax/)
@@ -544,7 +544,7 @@ RSpec.describe Lich::WebUI::Validator do
     expect(validator.validate_component!(:stack, { 'disabled' => true }, **context)[:disabled]).to be true
   end
 
-  it 'G3 RC22 accepts and strips unknown record fields with allow_extra enabled' do
+  it 'accepts and strips unknown record fields with allow_extra enabled' do
     contract = Lich::WebUI::Contract
     shape = contract.record({ title: contract.property(contract::SHORT, required: true) }, allow_extra: true)
     value = { 'title' => 'Title', 'extra' => 'discarded' }
@@ -558,7 +558,7 @@ RSpec.describe Lich::WebUI::Validator do
   end
 
   %i[slider number_input].each do |type|
-    it "G3 RC15 enforces authored, event and submitted step alignment for #{type}" do
+    it "enforces authored, event and submitted step alignment for #{type}" do
       authored = { min: 0.1, max: 2.1, step: 0.2, value: 0.1 }
       props = validator.validate_component!(type, authored, **context)
       [0.1, 0.3, 0.1 + 3 * 0.2, 2.1].each do |value|
@@ -578,7 +578,7 @@ RSpec.describe Lich::WebUI::Validator do
   end
 
   %i[slider number_input].each do |type|
-    it "G3 RC41 accepts step-aligned values at large step counts for #{type}" do
+    it "accepts step-aligned values at large step counts for #{type}" do
       authored = { min: 0, max: 1e9, step: 0.01, value: 1_000_000 }
       props = validator.validate_component!(type, authored, **context)
       [1_000_000, 1_000_000.0, 999_999.99, 123_456_789.12].each do |value|
@@ -593,7 +593,7 @@ RSpec.describe Lich::WebUI::Validator do
     end
   end
 
-  it 'G3 RC15 permits free numeric stepping in authored, event and submitted values' do
+  it 'permits free numeric stepping in authored, event and submitted values' do
     authored = { min: 1, max: 10, step: 2, value: 2, snap_to_step: false, stepper_buttons: true }
     props = validator.validate_component!(:number_input, authored, **context)
     expect(props[:value]).to eq(2)

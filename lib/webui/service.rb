@@ -17,7 +17,7 @@ module Lich
       EXIT_CLEANUP_MUTEX = Mutex.new
       private_constant :EXIT_CLEANUP_MUTEX
       # Seconds an exiting Script owner gets to finish its own teardown before
-      # its UI is retired regardless (B3: the owner must not stay active).
+      # its UI is retired regardless, so the owner cannot stay active.
       # Ordinary cleanup takes milliseconds; at_exit handlers, die_with stops
       # (Script::CHILD_JOIN_TIMEOUT each) and worker joins fit well inside it.
       OWNER_STOP_TIMEOUT = 5
@@ -308,7 +308,7 @@ module Lich
 
       private
 
-      # Stops an owner whose callback or render requested exit (B3), on a host
+      # Stops an owner whose callback or render requested exit, on a host
       # thread: never inside the exiting callback, and never on the owner's
       # dispatcher worker, which a script's cleanup may kill. A Script owner
       # (one that responds to kill) is asked to stop asynchronously and gets

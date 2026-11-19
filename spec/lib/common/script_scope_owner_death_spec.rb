@@ -4,8 +4,8 @@ require_relative '../../spec_helper'
 require_relative '../../support/webui_fresh_process'
 require 'webui'
 
-# The shim closes a dying script's windows through the core pre-terminate hook
-# (1836:RC20): destroy handlers run while the owner is still admitted, before
+# The shim closes a dying script's windows through the core pre-terminate hook:
+# destroy handlers run while the owner is still admitted, before
 # the core retires its pages, and keep resolving the dying Script. Fresh
 # process with the production shim entry and a real Script owner.
 RSpec.describe 'script compatibility close on script death' do
@@ -93,7 +93,7 @@ RSpec.describe 'script compatibility close on script death' do
     expect(output).to eq("ready\n")
   end
 
-  # 1845:RC12: a widget built once the death close has begun (a destroy handler
+  # A widget built once the death close has begun (a destroy handler
   # run by the close, or a later ScriptDeath handler) must not create a session
   # and terminate hook for the dead owner, which nothing would ever close.
   it 'refuses a new session for an owner whose death close has begun' do
@@ -130,7 +130,7 @@ RSpec.describe 'script compatibility close on script death' do
     expect(output).to eq("ready\n")
   end
 
-  # 1836:RC22: an owner that never used Gtk has no shim hook, so the refusal
+  # An owner that never used Gtk has no shim hook, so the refusal
   # above cannot key on it. Its killed worker's ensure builds a first widget
   # after the core has run the owner's pre-terminate hooks; a session created
   # then would be held with a terminate hook that never fires.
@@ -180,7 +180,7 @@ RSpec.describe 'script compatibility close on script death' do
     expect(output).to eq("ready\n")
   end
 
-  # 1836:RC22 (Gtk.session share): the refusal rests on the core refusing a
+  # Gtk.session refusal rests on the core refusing a
   # registration once the owner's hooks have started (snapshotted, not yet
   # done), not on a check made before registering. A core hook held open keeps
   # the owner in that state while its unwinding worker asks for a first session.

@@ -111,7 +111,7 @@ RSpec.describe Lich::WebUI::TreeBuilder do
       expect(group.children.first.props[:value]).to eq(canary)
     end
   end
-  it 'G3 RC13 normalizes a single Draft in keyword and post-render submission scopes' do
+  it 'normalizes a single Draft in keyword and post-render submission scopes' do
     input = builder.text_input(key: 'name', value: '')
     action = builder.button(label: 'Go', submit: input)
     later = builder.button(label: 'Later')
@@ -120,7 +120,7 @@ RSpec.describe Lich::WebUI::TreeBuilder do
     expect(builder.build).to be_a(Lich::WebUI::Component)
   end
 
-  it 'G3 RC14 refuses column span overflow and admits a span ending at the last column' do
+  it 'refuses column span overflow and admits a span ending at the last column' do
     builder.grid(cols: 3) { text(content: 'Fits', placement: { column: 2, span: 2 }) }
     expect(builder.build).to be_a(Lich::WebUI::Component)
     overflow = described_class.new(owner: :fixture, page_id: 'overflow', title: 'Overflow')
@@ -128,7 +128,7 @@ RSpec.describe Lich::WebUI::TreeBuilder do
     expect { overflow.build }.to raise_error(Lich::WebUI::SchemaViolationError, /exceeds grid columns/)
   end
 
-  it 'G3 RC30 separates numeric keys and reserved prefixes from fixed positional IDs' do
+  it 'separates numeric keys and reserved prefixes from fixed positional IDs' do
     numeric = builder.text_input(key: '0', value: '')
     fixed = builder.text_input(value: '')
     reserved = builder.text_input(key: 'key:0', value: '')

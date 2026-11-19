@@ -4,8 +4,8 @@ require_relative '../../spec_helper'
 require 'webui'
 require 'timeout'
 
-# Owner stop for an exiting callback at the host service: the P05 share of
-# 1843:RC3. A Script owner is asked to stop and its own teardown finishes
+# Owner stop for an exiting callback at the host service.
+# A Script owner is asked to stop and its own teardown finishes
 # before its pages go; an owner without kill is retired at once; an ignored
 # kill is bounded.
 RSpec.describe 'WebUI service owner-stop boundary' do
@@ -45,7 +45,7 @@ RSpec.describe 'WebUI service owner-stop boundary' do
     Timeout.timeout(seconds) { sleep 0.02 until yield }
   end
 
-  it 'asks an exiting Script owner to stop, lets its teardown finish, then retires its pages (1843:RC3)' do
+  it 'asks an exiting Script owner to stop, lets its teardown finish, then retires its pages' do
     owner = script_class.new('exiting.lic')
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'main', title: 'Main') {})
     service.runtime.dispatch(owner: owner) { exit 3 }
@@ -60,7 +60,7 @@ RSpec.describe 'WebUI service owner-stop boundary' do
     expect(registry.pages_for(owner)).to be_empty
   end
 
-  it 'retires an owner without kill immediately (1843:RC3)' do
+  it 'retires an owner without kill immediately' do
     owner = Object.new
     registry.register(Lich::WebUI::Page.new(owner: owner, id: 'main', title: 'Main') {})
     service.runtime.dispatch(owner: owner) { exit 3 }
@@ -68,7 +68,7 @@ RSpec.describe 'WebUI service owner-stop boundary' do
     expect(registry.pages_for(owner)).to be_empty
   end
 
-  it 'retires the owner once the bound expires when its kill is ignored (1843:RC3)' do
+  it 'retires the owner once the bound expires when its kill is ignored' do
     stub_const('Lich::WebUI::Service::OWNER_STOP_TIMEOUT', 0.2)
     owner = script_class.new('hung.lic')
     registry.register(Lich::WebUI::Page.new(owner: owner, id: 'main', title: 'Main') {})

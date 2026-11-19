@@ -4,8 +4,7 @@ require_relative '../../spec_helper'
 require 'common/frontend_editor'
 
 # The rules for editing frontend configuration, with no toolkit attached.
-# GUI::FrontendManagerTab grew these around Gtk::Entry instances, so the WebUI
-# launcher could not reach them without duplicating the validation.
+# The WebUI launcher uses these shared validation and transformation rules.
 RSpec.describe Lich::Common::FrontendEditor do
   let(:catalog) do
     Class.new do
