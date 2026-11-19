@@ -54,7 +54,8 @@ module Lich
 
           # Accepts the measured normal-state token while retaining browser-theme backgrounds.
           # @param state [Symbol] supported GTK state token
-          # @param colour [Gdk::RGBA] typed bounded legacy color
+          # @param colour [Gdk::RGBA, nil] typed bounded legacy color; nil clears an
+          #   override, which leaves the browser theme's background in place
           # @return [Widget] self
           # @raise [UnsupportedOperation] for other state/color objects
           def override_background_color(state, colour)

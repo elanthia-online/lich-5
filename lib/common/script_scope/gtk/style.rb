@@ -418,6 +418,7 @@ module Lich
           # clamps a channel outside 0..1 when it draws, so the record holds
           # the clamped value and the clamp is logged once.
           # The immutable record contains no native color state or source CSS.
+          # @param channels [Array<Numeric>] exactly four finite real numbers: red, green, blue, alpha
           # @raise [UnsupportedOperation] for invalid channels
           def initialize(*channels)
             Gtk.session.refuse(self, :new) unless channels.length == 4 && channels.all? { |channel| channel.is_a?(Numeric) && channel.real? && channel.finite? }

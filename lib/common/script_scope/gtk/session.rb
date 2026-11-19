@@ -54,6 +54,12 @@ module Lich
           # @return [Boolean]
           def held_by_current_thread? = @mutex.mon_owned?
 
+          # Reports whether the calling thread belongs to the script that owns
+          # this session, whether or not the session is still open.
+          # @return [Boolean] whether the current script is the owner
+          # @api private
+          def owner_call? = Script.current.equal?(@owner)
+
           # Serializes mutable style state on the existing owner monitor.
           # @raise [UnsupportedOperation] after teardown or for another script
           # @api private
