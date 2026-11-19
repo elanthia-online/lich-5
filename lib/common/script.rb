@@ -9,6 +9,7 @@
 
 require 'weakref'
 require_relative 'script_death'
+require_relative 'script_body_completion'
 require_relative 'script_list_feed'
 require_relative 'script_execution_guard'
 require_relative 'script_scope'
@@ -251,7 +252,7 @@ module Lich
                 script_obj.__send__(:__record_exit_error, error)
                 Script.__send__(:__report_script_error, script_obj, error, :untrusted => !trusted)
               ensure
-                Script.__send__(:__await_ui_linger, script_obj)
+                ScriptBodyCompletion.run(script_obj)
                 script_obj.kill if script_obj.running? && !script_obj.stopping?
               end
             }
@@ -708,78 +709,6 @@ module Lich
         on_error.call(error)
       end
       private_class_method :__execute
-
-      # Pending-only linger bound: queued UI work that never runs (a dropped
-      # dispatch) must not keep a finished script alive indefinitely.
-      UI_LINGER_PENDING_LIMIT = 30
-      # Seconds a finished body waits for a live worker thread to queue UI.
-      UI_LINGER_WORKER_GRACE = 1.0
-
-      # Queue-then-exit: a legacy GTK script that queues its window and ends
-      # still shows that window, because GTK runs the queued work after the
-      # script is gone. When a script body ends with compatibility UI work not
-      # yet started, keep the owner running until that work has run and the
-      # windows it shows are closed; ;kill still ends it at once. A body that
-      # ends with nothing pending stops as before, so scripts that close
-      # their own windows in exit handlers are unaffected.
-      # @param script [Script] owner whose body has just finished
-      # @return [void]
-      def Script.__await_ui_linger(script)
-        gtk = Lich::Common::ScriptScope.const_get(:Gtk, false) if Lich::Common::ScriptScope.const_defined?(:Gtk, false)
-        return unless %i[pending_ui? busy_ui? visible_windows? ui_admissions].all? { |name| gtk.respond_to?(name) }
-        return unless script.running? && !script.stopping?
-
-        # A worker thread started just before the body ended may not have
-        # queued its UI yet (Thread.new { Gtk.queue { ... } }; exit). Only
-        # scripts that use the GTK compatibility layer and queued no UI of
-        # their own before the body ended wait for it. Work admitted after
-        # the body ended arms the linger even if it has already run by the
-        # time this check looks.
-        admitted_at_end = gtk.ui_admissions(script)
-        queued_after_end = -> { gtk.ui_admissions(script) > admitted_at_end }
-        workers = -> { script.thread_group.list.any? { |thread| !thread.equal?(Thread.current) && thread.alive? } }
-        if admitted_at_end.zero? && workers.call && Script.__send__(:__legacy_gtk_script?, script)
-          grace = Process.clock_gettime(Process::CLOCK_MONOTONIC) + UI_LINGER_WORKER_GRACE
-          until gtk.pending_ui?(script) || queued_after_end.call || Process.clock_gettime(Process::CLOCK_MONOTONIC) > grace
-            break unless workers.call
-
-            sleep 0.05
-          end
-        end
-        return unless gtk.pending_ui?(script) || queued_after_end.call
-
-        pending_since = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        loop do
-          break if !script.running? || script.stopping?
-
-          if gtk.visible_windows?(script)
-            pending_since = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          elsif gtk.busy_ui?(script)
-            # Pending or still running (a window mid-show is not visible yet).
-            break if Process.clock_gettime(Process::CLOCK_MONOTONIC) - pending_since > UI_LINGER_PENDING_LIMIT
-          else
-            break
-          end
-          sleep 0.1
-        end
-      rescue StandardError => error
-        Lich.log "UI linger check failed for #{script.name}: #{error.class}"
-      end
-      private_class_method :__await_ui_linger
-
-      # Whether a script's source names the legacy GTK or GLib API. Read only
-      # when its body has ended with live worker threads.
-      # @param script [Script]
-      # @return [Boolean]
-      def Script.__legacy_gtk_script?(script)
-        path = script.respond_to?(:file_name) ? script.file_name : nil
-        return false unless path && File.file?(path)
-
-        File.read(path, encoding: 'UTF-8', invalid: :replace, undef: :replace).match?(/\b(?:Gtk|GLib)(?:::|\.)/)
-      rescue SystemCallError, IOError
-        false
-      end
-      private_class_method :__legacy_gtk_script?
 
       def Script.__report_script_error(script, error, untrusted:)
         respond "--- Lich: error: #{error}\n\t#{error.backtrace[0..1].join("\n\t")}"
