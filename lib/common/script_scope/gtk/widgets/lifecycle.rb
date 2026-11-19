@@ -58,7 +58,9 @@ module Lich
           end
 
           # Clears the shared hidden property. A widget presented by this call
-          # runs its map handlers, after its show handlers.
+          # runs its map handlers, after its show handlers. A widget that was
+          # never shown is not mapped, so its first show under a presented
+          # parent is what maps it.
           # @return [Widget] self
           def show
             changed = !visible?
@@ -68,7 +70,7 @@ module Lich
             self
           end
 
-          # Reports whether this widget is presented: not hidden, under ancestors
+          # Reports whether this widget is presented: shown, under ancestors
           # that are presented, inside a shown window.
           # @return [Boolean] whether the widget is currently mapped
           def mapped? = @mapped == true && !@destroyed
@@ -79,9 +81,12 @@ module Lich
           # per presentation; all realize handlers run before the first map
           # handler. A widget that stops being presented, with everything under
           # it, becomes unmapped without a signal. Every visibility, attachment
-          # and window presentation change ends here.
-          # @yield between the realize handlers and the map handlers, only when
-          #   this widget itself becomes mapped
+          # and window presentation change ends here. A handler of the
+          # transition may add or show further widgets under a widget that is
+          # not mapped yet; they are gathered again once the map handlers have
+          # run, until none is left, so they are mapped by the same transition.
+          # @yield between the first realize handlers and the map handlers,
+          #   only when this widget itself becomes mapped
           # @return [void]
           # @api private
           def refresh_mapped
@@ -89,30 +94,36 @@ module Lich
               next leave_map unless map_ready?
               next if mapped?
 
-              arriving = collect_arriving([])
-              arriving.each { |widget| widget.send(:realize_once) }
-              yield if block_given?
-              arriving.each { |widget| widget.send(:enter_map) }
+              first = true
+              loop do
+                arriving = collect_arriving([])
+                arriving.each { |widget| widget.send(:realize_once) }
+                yield if first && block_given?
+                first = false
+                break if arriving.count { |widget| widget.send(:enter_map) }.zero?
+              end
             end
             nil
           end
 
           # Reports whether nothing keeps this widget from being presented. An
-          # ordinary widget needs a mapped parent; a window overrides this.
+          # ordinary widget must be shown and needs a mapped parent; a window
+          # overrides this.
           # @return [Boolean] whether the widget should be mapped now
           # @api private
-          def map_ready? = !destroyed? && !hidden? && !parent.nil? && parent.mapped?
+          def map_ready? = visible? && !parent.nil? && parent.mapped?
 
-          # Gathers, parents first, the widgets of this subtree that become
-          # presented once this widget is. A hidden widget keeps its whole
-          # subtree out.
+          # Gathers, parents first, the widgets of this subtree that are shown
+          # but not mapped. A widget that is not shown keeps its whole subtree
+          # out; one that is already mapped is passed through, so a widget
+          # added under it during the transition is still found.
           # @param into [Array<Widget>] accumulator
           # @return [Array<Widget>] the accumulator
           # @api private
           def collect_arriving(into)
-            return into if destroyed? || hidden? || mapped?
+            return into unless visible?
 
-            into << self
+            into << self unless mapped?
             owned_children.each { |child| child.send(:collect_arriving, into) }
             into
           end
@@ -130,14 +141,14 @@ module Lich
 
           # Marks this widget mapped and runs its map handlers, unless a handler
           # that ran earlier in the same transition hid or removed it.
-          # @return [void]
+          # @return [Boolean] whether this call mapped the widget
           # @api private
           def enter_map
-            return if mapped? || !map_ready?
+            return false if mapped? || !map_ready?
 
             @mapped = true
             emit_handlers(:map)
-            nil
+            true
           end
 
           # Marks this widget and its descendants unmapped. No signal is

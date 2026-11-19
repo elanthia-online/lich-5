@@ -193,6 +193,7 @@ module Lich
               @children.insert(index, child)
               @tabs.insert(index, entry)
               notify_switch(previous)
+              [label, child].each { |widget| map_attached(widget) }
               index
             end
           end
