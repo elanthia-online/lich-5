@@ -182,25 +182,29 @@ module Lich
 
     # Longest time, in seconds, the calling script waits after the reply for
     # the suppressor to hide the end line when a hook between the observer
-    # and the suppressor is slow. Kept short: if another hook squelches the
-    # end line the suppressor never sees it, and the call waits this long.
+    # and the suppressor is slow; a hook slower than this still lets the end
+    # line through. Kept short: if another hook squelches the end line the
+    # suppressor never sees it, and every such call waits this long.
     CAPTURE_QUIET_SETTLE = 0.1
-
-    # How often a guarded script's cancellation is checked while it waits
-    # for the reply; the same interval Script#gets uses.
-    CAPTURE_GUARD_POLL = 0.05
 
     # Issues a command and captures its reply, from the first line matching
     # start_pattern through the first line matching end_pattern.
     #
     # One state machine, run synchronously on the game thread by a downstream
     # hook, decides both what is captured and (with quiet: true) what is hidden
-    # from the frontend. With quiet: true the call waits briefly
-    # ({CAPTURE_QUIET_SETTLE}) for the end line to be hidden before it
-    # returns, so a slow hook between the two cannot let the end line through.
-    # The start line is also tested against end_pattern (with any prompt on
-    # its server string removed), so a reply that is sometimes one line and
-    # sometimes several needs no special casing.
+    # from the frontend. With quiet: true the call waits for up to
+    # {CAPTURE_QUIET_SETTLE} seconds for the end line to be hidden before it
+    # returns, so a slow hook between the two does not let the end line
+    # through unless it takes longer than that. The start line is also tested
+    # against end_pattern (with any prompt on its server string removed), so a
+    # reply that is sometimes one line and sometimes several needs no special
+    # casing.
+    #
+    # With use_fput, the capture restarts each time fput sends: on a refusal
+    # fput resends ("...wait", "you may only type ahead") or stands first
+    # ("struggle to stand"), so only the reply to the last send is captured,
+    # as before capture_command. Lines already hidden under quiet: true stay
+    # hidden.
     #
     # Lines are matched in the form the caller asked for: each server string
     # with its line terminator removed, as the script's buffer holds it, with
@@ -219,10 +223,12 @@ module Lich
     # @param end_pattern [Regexp, Symbol] marks the last line of the reply;
     #   :ignore captures the start line only
     # @param include_end [Boolean] whether a separate end line is kept in the
-    #   result (a start line that is also the end line is always kept)
+    #   result (a start line that is also the end line is always kept; a
+    #   text-mode capture that ends on a markup-only string has no end line)
     # @param timeout [Numeric] seconds to wait for the whole reply; 0 or nil
     #   returns at once (status :no_start), unlike the unlimited wait
-    #   Timeout.timeout gave those values before capture_command
+    #   Timeout.timeout gave those values before capture_command. The command
+    #   is still sent, and its reply is neither captured nor hidden.
     # @param silent [Boolean, nil] the script's silent flag for the duration
     #   (nil: unchanged)
     # @param usexml [Boolean] match and return raw XML (true) or stripped text
@@ -233,8 +239,9 @@ module Lich
     def self.capture_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
       single_line = end_pattern.eql?(:ignore)
       # Stripped text never contains markup, so in text mode a markup
-      # end_pattern is matched against the raw server string instead.
-      markup_end = !usexml && end_pattern.is_a?(Regexp) && end_pattern.source.include?('<')
+      # end_pattern is also matched against the raw server string. A "<"
+      # that only opens a named group or lookbehind ("(?<") is not markup.
+      markup_end = !usexml && end_pattern.is_a?(Regexp) && end_pattern.source.gsub('(?<', '').include?('<')
 
       script = Script.current
       name = "Util::capture_command-#{SecureRandom.uuid}"
@@ -301,7 +308,8 @@ module Lich
               phase = :error
             end
             if %i[done error].include?(phase)
-              script&.downstream_buffer&.push(CAPTURE_END_MARKER) if phase == :done
+              # Also on :error, so a waiting fput reads a line and returns.
+              script&.downstream_buffer&.push(CAPTURE_END_MARKER)
               done << phase
             end
           end
@@ -335,7 +343,27 @@ module Lich
 
         remaining = -> { deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC) }
         if use_fput && script
-          fput(command, timeout: [remaining.call, 0.001].max, interrupt: -> { !done.empty? || remaining.call <= 0 })
+          # fput calls on_send before every send, resends and 'stand'
+          # included, after clearing the script's buffer (and any end marker
+          # in it). Restart the capture there: whatever it matched so far
+          # answered an earlier send. fput is not interrupted when the capture
+          # completes, so a refusal that matched cannot cancel the resend.
+          restart = lambda do |_sent|
+            lock.synchronize do
+              next if phase == :error
+
+              phase = :waiting
+              lines.clear
+              suppress_current = false
+              done.clear
+              $strip_xml_multiline&.delete(strip_key)
+            end
+          end
+          sent = fput(command, timeout: [remaining.call, 0.001].max, interrupt: -> { remaining.call <= 0 },
+                               on_send: restart, failures: :symbol)
+          # Out of time before fput saw a reply to its last send (a roundtime
+          # longer than the timeout): anything captured answered a refusal.
+          restart.call(nil) if sent == :interrupted
         else
           put(command)
         end
@@ -346,49 +374,53 @@ module Lich
         loop do
           script.check_execution_guard! if guarded
           left = [remaining.call, 0].max
-          outcome = done.pop(timeout: guarded ? [left, CAPTURE_GUARD_POLL].min : left)
+          outcome = done.pop(timeout: guarded ? [left, script.class::EXECUTION_GUARD_POLL_INTERVAL].min : left)
           break if outcome || remaining.call <= 0
         end
         completed = outcome == :done
       ensure
-        if quiet
-          # The observer releases this thread from the top of the hook chain;
-          # give the suppressor at the bottom a moment to hide the line the
-          # observer flagged, so a slow hook in between cannot leak it.
-          settle_until = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CAPTURE_QUIET_SETTLE
-          lock.synchronize do
-            while suppress_current && (left = settle_until - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
-              settled.wait(lock, left)
+        begin
+          if quiet
+            # The observer releases this thread from the top of the hook
+            # chain; give the suppressor at the bottom up to
+            # CAPTURE_QUIET_SETTLE to hide the line the observer flagged.
+            settle_until = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CAPTURE_QUIET_SETTLE
+            lock.synchronize do
+              while suppress_current && (left = settle_until - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
+                settled.wait(lock, left)
+              end
             end
           end
-        end
-        DownstreamHook.remove(name)
-        DownstreamHook.remove("#{name}-quiet")
-        status = lock.synchronize do
-          # The reply may have completed in the instant the wait timed out.
-          completed ||= phase == :done
-          failed = phase == :error
-          phase = :abandoned unless completed
-          suppress_current = false
-          if completed then :complete
-          elsif failed then :error
-          elsif lines.empty? then :no_start
-          else :no_end
-          end
-        end
-        $strip_xml_multiline&.delete(strip_key)
-        if script
-          begin
-            # Consume the reply from the script's own buffer, as the old
-            # get-loop did: through the end marker when complete, else all of
-            # it. Before the restore: with both want flags off, gets? sleeps.
-            while (line = script.gets?)
-              break if completed && line.equal?(CAPTURE_END_MARKER)
+        ensure
+          # Runs however the settle wait ends, an interrupt included.
+          DownstreamHook.remove(name)
+          DownstreamHook.remove("#{name}-quiet")
+          status = lock.synchronize do
+            # The reply may have completed in the instant the wait timed out.
+            completed ||= phase == :done
+            failed = phase == :error
+            phase = :abandoned unless completed
+            suppress_current = false
+            if completed then :complete
+            elsif failed then :error
+            elsif lines.empty? then :no_start
+            else :no_end
             end
-          ensure
-            script.silent = save_script_silent unless silent.nil?
-            script.want_downstream = save_want_downstream
-            script.want_downstream_xml = save_want_downstream_xml
+          end
+          $strip_xml_multiline&.delete(strip_key)
+          if script
+            begin
+              # Consume the reply from the script's own buffer, as the old
+              # get-loop did: through the end marker when complete, else all of
+              # it. Before the restore: with both want flags off, gets? sleeps.
+              while (line = script.gets?)
+                break if completed && line.equal?(CAPTURE_END_MARKER)
+              end
+            ensure
+              script.silent = save_script_silent unless silent.nil?
+              script.want_downstream = save_want_downstream
+              script.want_downstream_xml = save_want_downstream_xml
+            end
           end
         end
       end
@@ -404,9 +436,10 @@ module Lich
     # @param end_pattern [Regexp, Symbol] marks the last line of the reply;
     #   :ignore captures the start line only
     # @param include_end [Boolean] whether a separate end line is kept in the
-    #   result (a start line that is also the end line is always kept)
+    #   result (a start line that is also the end line is always kept; a
+    #   text-mode capture that ends on a markup-only string has no end line)
     # @param timeout [Numeric] seconds to wait for the whole reply; 0 or nil
-    #   returns at once with an empty result
+    #   returns at once with an empty result (the command is still sent)
     # @param silent [Boolean, nil] the script's silent flag for the duration
     #   (nil: unchanged)
     # @param usexml [Boolean] match and return raw XML (true) or stripped text

@@ -325,6 +325,24 @@ RSpec.describe '#fput' do
       expect(fput('get sword', resend_transient: true, max_resends: 5)).to eq('You pick up a sword.')
     end
 
+    it 'calls on_send with every command it sends, before sending it' do
+      stub_game_responses('...wait 2 seconds.', 'You struggle but fail to stand.', 'You stand back up.',
+                          'Sorry, you may only type ahead 1 command.', 'You pick up a sword.')
+      events = []
+      allow(self).to receive(:put) { |cmd| events << [:put, cmd] }
+
+      result = fput('get sword', on_send: ->(cmd) { events << [:on_send, cmd] })
+
+      expect(result).to eq('You pick up a sword.')
+      expect(events).to eq([[:on_send, 'get sword'], [:put, 'get sword'], [:on_send, 'get sword'], [:put, 'get sword'],
+                            [:on_send, 'stand'], [:put, 'stand'], [:on_send, 'get sword'], [:put, 'get sword'],
+                            [:on_send, 'get sword'], [:put, 'get sword']])
+    end
+
+    it 'rejects an on_send that cannot be called' do
+      expect { fput('get sword', on_send: 'nope') }.to raise_error(ArgumentError, /on_send/)
+    end
+
     it 'stops on the interrupt during a roundtime wait, in slices' do
       stub_game_responses('...wait 3 seconds.', 'OK.')
       calls = 0

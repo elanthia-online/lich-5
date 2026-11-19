@@ -1492,6 +1492,10 @@ def fput(message, *waitingfor)
   #                     up (nil, the original: unbounded)
   #   interrupt:        a callable checked on every wait and before every
   #                     resend; true ends the send at once (nil: never)
+  #   on_send:          a callable invoked with each command just before
+  #                     fput sends it: the message, every resend of it, and
+  #                     a 'stand' (nil: none); Util.capture_command uses it
+  #                     to restart its capture on each send
   #   resend_transient: on a transient refusal that is not a stun or a
   #                     web (a "can't seem", "don't seem"), resend after a
   #                     quarter second instead of giving up (false, the
@@ -1507,6 +1511,14 @@ def fput(message, *waitingfor)
   interrupt = option.call(:interrupt)
   unless interrupt.nil? || interrupt.respond_to?(:call)
     raise ArgumentError, "fput: interrupt: must respond to call"
+  end
+  on_send = option.call(:on_send)
+  unless on_send.nil? || on_send.respond_to?(:call)
+    raise ArgumentError, "fput: on_send: must respond to call"
+  end
+  send_command = lambda do |command|
+    on_send&.call(command)
+    put(command)
   end
   resend_transient = option.call(:resend_transient) ? true : false
   symbols = option.call(:failures) == :symbol
@@ -1538,7 +1550,7 @@ def fput(message, *waitingfor)
   end
 
   clear
-  put(message)
+  send_command.call(message)
 
   timer = Time.now
   loop do
@@ -1565,7 +1577,7 @@ def fput(message, *waitingfor)
 
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     elsif string =~ /^You.+struggle.+stand/
       # stand in this frame, under the same cap and interrupt, instead of
@@ -1577,7 +1589,7 @@ def fput(message, *waitingfor)
 
       standing = true
       clear
-      put('stand')
+      send_command.call('stand')
       next
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
@@ -1613,14 +1625,14 @@ def fput(message, *waitingfor)
 
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     elsif standing
       # the reply to 'stand' ("You stand back up.", "You are already
       # standing"): message went unanswered, send it again
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     else
       if waitingfor.empty?
@@ -1635,7 +1647,7 @@ def fput(message, *waitingfor)
         return fail_with.call(:interrupted) if wait.call(1)
 
         clear
-        put(message)
+        send_command.call(message)
         next
       end
     end

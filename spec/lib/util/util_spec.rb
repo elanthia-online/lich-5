@@ -6,6 +6,8 @@ require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/util/util.rb'
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/markup'
+require_relative '../../../lib/common/wait_response'
+require_relative '../../support/global_defs_spec_source'
 
 # Covers Lich::Util.issue_command's quiet: true filtering, specifically the
 # fix for dropping bundled display-state tags along with suppressed text.
@@ -88,6 +90,9 @@ RSpec.describe Lich::Util do
     # and restores, and a thread-safe downstream buffer.
     let(:script_class) do
       Class.new do
+        # Script#gets' interval, read by capture_command for a guarded script.
+        const_set(:EXECUTION_GUARD_POLL_INTERVAL, 0.05)
+
         attr_accessor :silent, :want_downstream, :want_downstream_xml
         attr_reader :name
 
@@ -101,6 +106,14 @@ RSpec.describe Lich::Util do
         def downstream_buffer = self
         def push(line) = @queue << line
         def gets? = (@queue.pop(true) rescue nil)
+        def clear = drain
+
+        # fput puts back the line it returns on, ahead of everything else.
+        def unshift(line)
+          rest = drain
+          @queue << line
+          rest.each { |l| @queue << l }
+        end
 
         def drain
           lines = []
@@ -121,8 +134,8 @@ RSpec.describe Lich::Util do
       # (production relies on `include Lich::Common` at boot for that to
       # resolve to Lich::Common::DownstreamHook). spec_helper.rb separately
       # defines its own lightweight top-level `DownstreamHook` mock
-      # (add/remove-less, `unless defined?` guarded) for specs that don't
-      # need real hook behavior. Which one wins the bare name in a full suite
+      # (`unless defined?` guarded) whose add takes no priority: and whose
+      # run calls no hooks. Which one wins the bare name in a full suite
       # run depends on file load order across spec/, which this file does
       # not control -- so stub_const rebinds the constant for these examples
       # and restores whatever was there afterward.
@@ -142,22 +155,23 @@ RSpec.describe Lich::Util do
     # (Script.new_downstream_xml) and hooks get it unchomped.
     def reply_with(reply, gap: 0)
       sender = lambda do |*_args, **_opts|
-        @game_thread = Thread.new do
-          reply.each do |raw|
-            if script.want_downstream_xml
-              script.push(raw.chomp)
-            else
-              Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").each { |l| script.push(l) unless l.empty? }
-            end
-            sleep gap if gap.positive?
-            out = DownstreamHook.run(raw)
-            frontend << out if out
-          end
-        end
+        @game_thread = Thread.new { reply.each { |raw| deliver(raw, gap: gap) } }
         true
       end
       allow(described_class).to receive(:fput, &sender)
       allow(described_class).to receive(:put, &sender)
+    end
+
+    # One server string, in Game#process_server_string's order.
+    def deliver(raw, gap: 0)
+      if script.want_downstream_xml
+        script.push(raw.chomp)
+      else
+        Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").each { |l| script.push(l) unless l.empty? }
+      end
+      sleep gap if gap.positive?
+      out = DownstreamHook.run(raw)
+      frontend << out if out
     end
 
     def capture(*args, timeout: 0.3, **opts)
@@ -302,6 +316,103 @@ RSpec.describe Lich::Util do
       end
     end
 
+    it 'in text mode, does not end on a prompt that shares the start line\'s server string' do
+      reply_with([%(Your name is Spec.<prompt time="1">&gt;</prompt>\r\n), "Your title is Spec the Bold.\r\n", prompt])
+      result = capture('title show', /name/, usexml: false, quiet: true, timeout: 2)
+
+      expect(result).to be_complete
+      expect(result.lines).to eq(['Your name is Spec.', 'Your title is Spec the Bold.'])
+    end
+
+    it 'in text mode, does not take a named group in end_pattern for markup' do
+      reply_with(["Your account:\r\n", %(You see a <a exist="1" noun="Bank">vault</a>.\r\n), "Bank total: 5\r\n"])
+      result = capture('bank', /^Your account/, /(?<w>Bank)/, usexml: false)
+
+      expect(result).to be_complete
+      expect(result.lines).to eq(['Your account:', 'You see a vault.', 'Bank total: 5'])
+    end
+
+    # Runs the fput in lib/global_defs.rb against a game that answers each
+    # send synchronously, so every refusal is seen before fput resends.
+    context 'with the real fput, when the game refuses the first send' do
+      let(:fput_host) do
+        klass = Class.new do
+          attr_accessor :game, :script
+
+          def clear = script.clear
+          def put(cmd) = game.call(cmd)
+          def get? = script.gets?
+          def pause(*) = sleep(0.001)
+          def echo(*) = nil
+          def respond(*) = nil
+          def dead? = false
+          def checkstunned = false
+          def checkwebbed = false
+        end
+        GlobalDefsSpecSource.define(klass, 'fput')
+        klass.new
+      end
+
+      # Answers the Nth send with replies[N]; returns the commands sent.
+      def game_answering(*replies)
+        sent = []
+        fput_host.script = script
+        fput_host.game = lambda do |cmd|
+          sent << cmd
+          (replies.shift || []).each { |raw| deliver(raw) }
+        end
+        allow(Script).to receive(:execution_sleep) { sleep(0.001) }
+        allow(described_class).to receive(:fput) { |*args, **opts| fput_host.fput(*args, **opts) }
+        sent
+      end
+
+      let(:reply) { ["You flip the coin.\r\n", prompt] }
+
+      it 'resends after a roundtime refusal and captures only the reply to the resend' do
+        sent = game_answering(["...wait 1 seconds.\r\n", prompt], reply)
+        result = capture('flip coin', /\S/, timeout: 2)
+
+        expect(sent).to eq(['flip coin', 'flip coin'])
+        expect(result).to be_complete
+        expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+      end
+
+      it 'resends after a type-ahead refusal and captures only the reply to the resend' do
+        sent = game_answering(["Sorry, you may only type ahead 1 command.\r\n", prompt], reply)
+        result = capture('flip coin', /\S/, timeout: 3)
+
+        expect(sent).to eq(['flip coin', 'flip coin'])
+        expect(result).to be_complete
+        expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+      end
+
+      it 'stands, resends, and captures only the reply to the resend after a struggle to stand' do
+        sent = game_answering(["You struggle but fail to stand.\r\n", prompt], ["You stand back up.\r\n", prompt], reply)
+        result = capture('flip coin', /\S/, timeout: 2)
+
+        expect(sent).to eq(['flip coin', 'stand', 'flip coin'])
+        expect(result).to be_complete
+        expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+      end
+
+      it 'reports :no_start, not the refusal, when the roundtime outlasts the timeout' do
+        sent = game_answering(["...wait 100 seconds.\r\n", prompt], reply)
+        result = capture('flip coin', /\S/, timeout: 0.3)
+
+        expect(sent).to eq(['flip coin'])
+        expect(result.status).to eq(:no_start)
+        expect(result.lines).to eq([])
+        expect(script.drain).to eq([])
+      end
+
+      it 'leaves nothing of the refused send in the script buffer' do
+        game_answering(["...wait 1 seconds.\r\n", prompt], reply + ["A goblin arrives.\r\n"])
+        capture('flip coin', /\S/, /<prompt/, timeout: 2)
+
+        expect(script.drain).to eq(['A goblin arrives.'])
+      end
+    end
+
     it 'returns at once with :no_start when timeout is 0' do
       reply_with([])
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -337,10 +448,44 @@ RSpec.describe Lich::Util do
       reply_with([])
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-      expect { capture('flag', /^Your flags/, quiet: true, timeout: 2) }.to raise_error(cancelled)
+      expect { capture('flag', /^Your flags/, quiet: true, usexml: false, timeout: 2) }.to raise_error(cancelled)
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
       expect(DownstreamHook.list.grep(/capture_command/)).to be_empty
-      expect(script.want_downstream_xml).to be true
+      expect([script.want_downstream, script.want_downstream_xml]).to eq([false, true])
+    end
+
+    it 'removes its hooks and restores the script even if interrupted during the quiet settle wait' do
+      # Another hook squelches the end line, so the suppressor never takes
+      # the flag and the call sits in the settle wait; the raise lands there.
+      # A long settle bound so the raise lands inside the wait even under load.
+      stub_const("#{described_class}::CAPTURE_QUIET_SETTLE", 2.0)
+      interrupted = Class.new(StandardError)
+      caller_thread = Thread.current
+      raiser = nil
+      DownstreamHook.add('spec-other-hook', proc { |line|
+        next line unless line.start_with?('<prompt')
+
+        raiser = Thread.new { sleep 0.1; caller_thread.raise(interrupted) }
+        nil
+      }, persist: true)
+      reply_with(["Your flags:\r\n", prompt])
+
+      begin
+        expect { capture('flag', /^Your flags/, quiet: true, usexml: false, timeout: 2) }.to raise_error(interrupted)
+      ensure
+        raiser&.join(1)
+      end
+      expect(DownstreamHook.list.grep(/capture_command/)).to be_empty
+      expect([script.want_downstream, script.want_downstream_xml]).to eq([false, true])
+    end
+
+    it 'issue_command passes its documented defaults to capture_command' do
+      allow(described_class).to receive(:capture_command)
+        .and_return(described_class::CommandCapture.new(lines: [], status: :no_start))
+      described_class.issue_command('cmd', /a/)
+
+      expect(described_class).to have_received(:capture_command)
+        .with('cmd', /a/, /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
     end
 
     it 'restores the script flags it changed' do
