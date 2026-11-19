@@ -90,6 +90,7 @@ module Lich
           # of the widget the new run adds; a live foreign group is still refused.
           # @param widget [Object] candidate member
           # @return [void]
+          # @api private
           def adopt_into_current_run(widget)
             return unless session.closed? && widget.is_a?(Widget) && !widget.session.equal?(session)
             return unless widget.session.equal?(Gtk.session)
@@ -104,7 +105,9 @@ module Lich
 
           # GTK aligns a group across windows; each WebUI page sizes only its own
           # members, so a group spanning windows aligns within each window. Logged once.
+          # @param widget [Widget] member being added to the group
           # @return [void]
+          # @api private
           def validate_roots(widget)
             roots = (@widgets + [widget]).reject(&:destroyed?).map(&:toplevel).grep(Window).uniq
             return if roots.size <= 1

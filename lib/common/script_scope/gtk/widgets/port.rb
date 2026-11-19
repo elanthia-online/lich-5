@@ -7,7 +7,17 @@ module Lich
         class Widget
           protected
 
-          attr_writer :parent
+          # Records the container that holds this widget, or nil once detached.
+          # Attaching under a presented parent maps this subtree; detaching
+          # unmaps it.
+          # @param value [Widget, nil] new parent
+          # @return [Widget, nil] the new parent
+          # @api private
+          def parent=(value)
+            @parent = value
+            refresh_mapped
+            value
+          end
 
           # Auxiliary owned widgets participate in lifetime/render traversal without becoming public children.
           # @return [Array<Widget>] descendants included in traversal

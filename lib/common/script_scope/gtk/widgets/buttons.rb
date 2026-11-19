@@ -209,11 +209,16 @@ module Lich
             end
           end
 
-          # Serializes child removal with single-child admission.
+          # Serializes child removal with single-child admission. Removing the
+          # caption Label leaves an empty button whose next label write is shown.
           # @param child [Widget] same-session child governed by this container
           # @return [Button] self
           def remove(child)
-            session.synchronize { super }
+            session.synchronize do
+              super
+              @caption_child = nil if child.equal?(@caption_child)
+              self
+            end
           end
 
           # GTK requests are minima. Keep action text free to grow with the
@@ -262,7 +267,9 @@ module Lich
 
           # GTK places a caption Label inside a labelled button. The first read
           # moves the caption into a real child Label so later text and markup
-          # changes on it update the button.
+          # changes on it update the button. From then on that Label holds the
+          # caption: {#label} reads it and {#label=} writes it, until the Label
+          # is removed or destroyed.
           # @return [Label, Widget, nil] the child, or nil for an empty button
           def child
             session.synchronize do
@@ -272,7 +279,7 @@ module Lich
               caption = Label.new(label)
               write(:label, '')
               add(caption)
-              caption
+              @caption_child = caption
             end
           end
 
@@ -290,20 +297,41 @@ module Lich
             @props[:label] = use_underline ? label.delete('_') : label
           end
 
-          # Reads the retained action label.
+          # Reads the action label from wherever the caption lives: the caption
+          # Label once {#child} has produced one, otherwise the retained text.
           # @return [String]
-          def label = read(:label)
+          def label
+            session.synchronize { caption_child ? caption_child.text : read(:label) }
+          end
 
-          # Writes literal action text through the shared button contract.
+          # Writes literal action text to wherever the caption lives, so the
+          # displayed caption and the value {#label} reads never differ.
           # @param value [Object] literal text converted with String before publication
           # @return [Button] self
           # @raise [UnsupportedOperation] for text that is not UTF-8 or binary-tagged UTF-8
           def label=(value)
-            write(:label, wire_literal(value, :label=))
+            text = wire_literal(value, :label=)
+            session.synchronize do
+              if caption_child
+                caption_child.text = text
+              else
+                write(:label, text)
+              end
+            end
+            self
           end
           alias set_label label=
 
           protected
+
+          # Stops treating a removed or destroyed caption Label as the caption.
+          # @param child [Widget] same-session child governed by this container
+          # @return [void] result is not part of the supported script contract
+          # @api private
+          def forget_child(child)
+            @caption_child = nil if child.equal?(@caption_child)
+            super
+          end
 
           # Selects the shared component type for this compatibility object.
           # @return [Symbol] shared component type
@@ -313,6 +341,15 @@ module Lich
           # @return [Hash{String => Symbol}] accepted GTK signals and shared events
           # @api private
           def signal_map = { 'clicked' => :activate }
+
+          private
+
+          # The Label that {#child} produced, while it is still this button's child.
+          # @return [Label, nil] live caption Label, or nil when the retained text is the caption
+          # @api private
+          def caption_child
+            @caption_child if @caption_child && @children.first.equal?(@caption_child) && !@caption_child.destroyed?
+          end
         end
 
         # Individually placed radio members share a same-owner group and real radio inputs.

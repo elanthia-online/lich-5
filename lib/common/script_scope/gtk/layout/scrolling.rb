@@ -122,6 +122,7 @@ module Lich
               session.refuse(self, :set_reveal_child) if destroyed? || ![true, false].include?(value)
               @reveal_child = value
               write(:hidden, !@shown)
+              refresh_mapped
             end
             self
           end

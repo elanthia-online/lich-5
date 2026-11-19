@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'timeout'
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/script_scope'
 
@@ -29,16 +30,52 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(Thread.new { gtk.main_level }.value).to eq(1)
   end
 
-  it 'shows gtk3 as a loaded gem to scripts only while the compatibility layer presents' do
-    allow(Lich::WebUI).to receive(:presentation_enabled?).and_return(true)
-    spec = scope::Gem.loaded_specs['gtk3']
-    expect(spec).to be_a(Gem::Specification)
-    expect(spec.name).to eq('gtk3')
-    expect(Gem.loaded_specs).not_to have_key('gtk3') unless Gem.loaded_specs.key?('gtk3')
-    expect(scope::Gem::Version.new('1.2')).to eq(Gem::Version.new('1.2'))
-    expect(scope::Gem.ruby_version).to eq(Gem.ruby_version)
-    allow(Lich::WebUI).to receive(:presentation_enabled?).and_return(false)
-    expect(scope::Gem.loaded_specs['gtk3']).to eq(Gem.loaded_specs['gtk3'])
+  describe 'the script view of RubyGems' do
+    # A registry known not to hold gtk3 stands in for the real one, so the
+    # check never depends on the gems installed on the host.
+    let(:registry) { { 'rspec' => Gem.loaded_specs['rspec'] } }
+
+    before { allow(Gem).to receive(:loaded_specs).and_return(registry) }
+
+    it 'shows gtk3 to scripts while presenting and leaves the real registry unchanged' do
+      allow(Lich::WebUI).to receive(:presentation_enabled?).and_return(true)
+      before_query = registry.dup
+      view = eval('Gem.loaded_specs', scope.script_binding)
+      expect(view.fetch('gtk3')).to be_a(Gem::Specification)
+      expect(view.fetch('gtk3').name).to eq('gtk3')
+      expect(view.fetch('rspec')).to equal(registry.fetch('rspec'))
+      expect(view).not_to equal(registry)
+      expect(registry).to eq(before_query)
+      expect(Gem.loaded_specs).not_to have_key('gtk3')
+    end
+
+    it 'returns the real registry itself, without gtk3, when presentation is disabled' do
+      allow(Lich::WebUI).to receive(:presentation_enabled?).and_return(false)
+      view = eval('Gem.loaded_specs', scope.script_binding)
+      expect(view).to equal(registry)
+      expect(registry.keys).to eq(['rspec'])
+    end
+
+    it 'returns the real registry untouched when gtk3 really is loaded' do
+      allow(Lich::WebUI).to receive(:presentation_enabled?).and_return(true)
+      real = Gem::Specification.new { |spec| spec.name = 'gtk3' }
+      registry['gtk3'] = real
+      expect(eval('Gem.loaded_specs', scope.script_binding).fetch('gtk3')).to equal(real)
+      expect(registry.keys).to eq(%w[rspec gtk3])
+    end
+
+    it 'forwards RubyGems calls and keeps constant feature guards truthful' do
+      script = scope.script_binding
+      expect(eval('Gem::Version.new("1.2")', script)).to eq(Gem::Version.new('1.2'))
+      expect(eval('Gem.ruby_version', script)).to eq(Gem.ruby_version)
+      expect(eval('Gem::Version', script)).to equal(Gem::Version)
+      expect(eval('defined?(Gem::Version)', script)).to eq(defined?(Gem::Version))
+      expect(eval('Gem.const_defined?(:Version)', script)).to eq(Gem.const_defined?(:Version))
+      expect(eval('Gem.constants.include?(:Specification)', script)).to be(true)
+      expect(eval('defined?(Gem::NoSuchCompatConstant)', script)).to be_nil
+      expect(eval('Gem.const_defined?(:NoSuchCompatConstant)', script)).to be(false)
+      expect { eval('Gem::NoSuchCompatConstant', script) }.to raise_error(NameError, /NoSuchCompatConstant/)
+    end
   end
 
   it 'removes a combo row by position through the GTK2-era remove_text name' do
@@ -89,6 +126,51 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     caption.set_markup("<span size='20480'>two</span>")
     expect(caption.text).to eq('two')
     expect(gtk::Button.new.child).to be_nil
+  end
+
+  it 'keeps a button label and its caption child the same text in both directions' do
+    button = gtk::Button.new(label: 'Before')
+    caption = button.child
+    observed = [button.label]
+    caption.text = 'From child'
+    observed << button.label
+    button.set_label('From button')
+    observed << button.label << caption.text
+    expect(observed).to eq(['Before', 'From child', 'From button', 'From button'])
+    expect(button.send(:read, :label)).to eq('')
+    button.label = 'Again'
+    expect(caption.text).to eq('Again')
+    expect(button.child).to equal(caption)
+  end
+
+  it 'shows a button label written after its caption child is removed or destroyed' do
+    button = gtk::Button.new(label: 'Before')
+    caption = button.child
+    button.remove(caption)
+    expect(button.label).to eq('')
+    button.label = 'After removal'
+    expect(caption.text).to eq('Before')
+    expect(button.send(:read, :label)).to eq('After removal')
+    expect(button.children).to be_empty
+    replacement = button.child
+    expect(replacement).not_to equal(caption)
+    expect(replacement.text).to eq('After removal')
+    replacement.destroy
+    button.label = 'After destroy'
+    expect(button.send(:read, :label)).to eq('After destroy')
+    expect(button.label).to eq('After destroy')
+  end
+
+  it 'publishes a button label change through the caption child the page renders' do
+    window = gtk::Window.new
+    button = gtk::Button.new(label: 'Before')
+    window.add(button)
+    caption = button.child
+    window.show_all
+    button.label = 'After'
+    rendered = caption.send(:session).port.get(caption.materialize, :content)
+    expect(rendered).to eq('After')
+    expect(button.send(:session).port.get(button.materialize, :label)).to eq('')
   end
 
   it 'joins a radio member to another group before the page is built' do
@@ -162,6 +244,85 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(events).to eq(%i[realize map])
   end
 
+  it 'maps a child excluded from show_all only when it is shown, and sees it visible' do
+    window = gtk::Window.new
+    box = gtk::Box.new(:vertical)
+    window.add(box)
+    label = gtk::Label.new('hidden until requested')
+    label.no_show_all = true
+    box.add(label)
+    events = []
+    label.signal_connect('realize') { events << [:realize, label.visible?] }
+    label.signal_connect('map') { events << [:map, label.visible?] }
+    window.show_all
+    expect(events).to be_empty
+    expect(label.mapped?).to be(false)
+    label.show
+    expect(events).to eq([[:realize, true], [:map, true]])
+    label.show
+    expect(events.length).to eq(2)
+    expect(label.mapped?).to be(true)
+  end
+
+  it 'maps a subtree when its hidden ancestor is shown, and again after a hide' do
+    window = gtk::Window.new
+    outer = gtk::Box.new(:vertical)
+    inner = gtk::Label.new('inside')
+    outer.add(inner)
+    window.add(outer)
+    outer.no_show_all = true
+    events = []
+    inner.signal_connect('realize') { events << :realize }
+    inner.signal_connect('map') { events << :map }
+    window.show_all
+    inner.show
+    expect(events).to be_empty
+    outer.show
+    expect(events).to eq(%i[realize map])
+    outer.hide
+    expect(inner.mapped?).to be(false)
+    outer.show
+    expect(events).to eq(%i[realize map map])
+  end
+
+  it 'maps a child attached to a window that is already shown, and unmaps it on removal' do
+    window = gtk::Window.new
+    box = gtk::Box.new(:vertical)
+    window.add(box)
+    window.show_all
+    late = gtk::Label.new('late')
+    events = []
+    late.signal_connect('map') { events << :map }
+    late.show
+    expect(events).to be_empty
+    box.add(late)
+    expect(events).to eq([:map])
+    box.remove(late)
+    expect(late.mapped?).to be(false)
+    box.add(late)
+    expect(events).to eq(%i[map map])
+  end
+
+  it 'maps window children again on each window show, in realize, show, map order' do
+    window = gtk::Window.new
+    view = gtk::TextView.new
+    window.add(view)
+    events = []
+    window.signal_connect('realize') { events << :window_realize }
+    window.signal_connect('show') { events << :window_show }
+    window.signal_connect('map') { events << :window_map }
+    view.signal_connect('realize') { events << :realize }
+    view.signal_connect('map') { events << :map }
+    window.show_all
+    expect(events).to eq(%i[window_realize realize window_show window_map map])
+    window.show
+    expect(events.length).to eq(5)
+    window.hide
+    expect(view.mapped?).to be(false)
+    window.show
+    expect(events.drop(5)).to eq(%i[window_show window_map map])
+  end
+
   it 'blocks a main loop until quit, and refuses a nested run' do
     loop = scope.const_get(:GLib, false)::MainLoop.new
     quitter = Thread.new do
@@ -171,6 +332,31 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(loop.run).to be_nil
     quitter.join
     expect(loop.running?).to be(false)
+  end
+
+  it 'refuses a main loop quit from another script and keeps the waiter running' do
+    loop = scope.const_get(:GLib, false)::MainLoop.new
+    waiter = Thread.new { loop.run }
+    Timeout.timeout(2) { sleep 0.01 until loop.running? }
+    other = Struct.new(:name).new('other-script.lic')
+    allow(Lich::Common::Script).to receive(:current).and_return(other)
+    expect { loop.quit }.to raise_error(gtk::UnsupportedOperation)
+    expect(waiter.join(0.4)).to be_nil
+    expect(loop.running?).to be(true)
+    allow(Lich::Common::Script).to receive(:current).and_return(owner)
+    expect(loop.quit).to be_nil
+    expect(waiter.join(2)).to equal(waiter)
+  ensure
+    waiter&.kill
+    waiter&.join
+  end
+
+  it 'lets the owner quit an idle main loop, and a loop whose session has closed' do
+    loop = scope.const_get(:GLib, false)::MainLoop.new
+    expect(loop.quit).to be_nil
+    expect(loop.running?).to be(false)
+    Lich::Common::ScriptDeath.run(owner)
+    expect(loop.quit).to be_nil
   end
 
   it 'drops clipboard copies and reports an empty clipboard' do

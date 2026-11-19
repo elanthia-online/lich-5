@@ -57,8 +57,13 @@ module Lich
           end
 
           # Ends a running loop; with none running it does nothing, as in GTK.
+          # Only the script that owns the loop may end it. After the owner's
+          # session has closed the loop is already released, so the owner's
+          # late quit, for example from a destroy handler, stays harmless.
           # @return [nil]
+          # @raise [Gtk::UnsupportedOperation] when another script calls it
           def quit
+            @session.refuse(self, :quit) unless @session.owner_call?
             @mutex.synchronize do
               @running = false
               @wake.broadcast

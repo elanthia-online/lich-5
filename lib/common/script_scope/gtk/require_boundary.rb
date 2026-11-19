@@ -138,7 +138,14 @@ module Lich
       # Gem.loaded_specs['gtk3'] before using Gtk; while the compatibility
       # layer is presenting, report gtk3 as loaded. Everything else is the
       # real ::Gem, which code outside the script scope keeps seeing.
+      # Including ::Gem puts its constants on this module's ancestor chain, so
+      # a script's defined?(Gem::Version), Gem.const_defined? and Gem.constants
+      # answer as they do for ::Gem, including constants ::Gem gains later.
       module Gem
+        include ::Gem
+
+        # Reports the loaded gems a script sees. The real registry is never
+        # modified; the gtk3 entry exists only in the returned copy.
         # @return [Hash{String => ::Gem::Specification}] real specs, plus gtk3 when presenting
         def self.loaded_specs
           specs = ::Gem.loaded_specs
@@ -147,7 +154,9 @@ module Lich
           specs.merge('gtk3' => compatibility_spec)
         end
 
+        # Builds, once, the gtk3 entry shown to scripts.
         # @return [::Gem::Specification] stand-in describing the compatibility layer
+        # @api private
         def self.compatibility_spec
           @compatibility_spec ||= ::Gem::Specification.new do |spec|
             spec.name = 'gtk3'
@@ -156,12 +165,25 @@ module Lich
           end
         end
 
+        # Forwards every other RubyGems call to the real ::Gem.
+        # @param name [Symbol] RubyGems module method
+        # @return [Object] the real method's result
+        # @raise [NoMethodError] when ::Gem has no such public method
         def self.method_missing(name, *, **, &) = ::Gem.public_send(name, *, **, &)
 
+        # Advertises exactly the methods ::Gem answers.
+        # @param name [Symbol] method being asked about
+        # @param include_private [Boolean] whether private methods count
+        # @return [Boolean] whether ::Gem or this module responds
         def self.respond_to_missing?(name, include_private = false)
           ::Gem.respond_to?(name, include_private) || super
         end
 
+        # Resolves a constant the ancestor chain does not hold through ::Gem,
+        # so a missing name fails as it does there.
+        # @param name [Symbol] constant name
+        # @return [Object] the constant's value
+        # @raise [NameError] when ::Gem does not define the constant
         def self.const_missing(name) = ::Gem.const_get(name)
       end
     end
