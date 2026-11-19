@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'monitor'
+
 module Lich
   module Common
     # Lexical scope for script code that must see something different from
@@ -35,6 +37,8 @@ module Lich
       @__script_scope_plugin_names = []
       @__script_scope_plugin_modules = []
       @__script_scope_concealed_names = []
+      @__script_scope_include_providers = {}.compare_by_identity
+      @__script_scope_include_monitor = Monitor.new
 
       # Compatibility exports contain only script declarations, never plugins.
       # Retirement: migrate supported legacy consumers, verify zero bridge uses
@@ -87,11 +91,12 @@ module Lich
         super
       end
 
-      # Checks that a registered legacy helper remains public and directly defined.
+      # Checks that a registered legacy helper remains public and declared by
+      # the script, directly or through a module it included at top level.
       # @param name [Symbol] requested helper name
       # @return [Boolean] whether the helper can be forwarded
       def self.legacy_helper?(name)
-        @__script_scope_legacy_helpers.key?(name) && public_instance_methods(false).include?(name)
+        @__script_scope_legacy_helpers.key?(name) && script_helper?(name)
       end
 
       # Emits one migration notice per kind/name, without script values.
@@ -183,39 +188,177 @@ module Lich
         @__script_scope_adopt_nested_constants
       end
 
-      # A script's top-level `include M` lands here, because the script binding's
-      # self is this module. A module the script defined was adopted and already
-      # includes ScriptScope, so including it back would be cyclic. For those,
-      # give the scope M's constants and methods instead, with include's
-      # precedence: names this scope already defines are kept.
-      # @param modules [Array<Module>] modules named by the script
-      # @return [Module] self
-      def self.include(*modules)
-        cyclic, plain = modules.partition { |mod| mod.is_a?(Module) && !mod.equal?(self) && mod.include?(self) }
-        super(*plain) unless plain.empty?
-        cyclic.reverse_each { |mod| absorb_script_module(mod) }
-        self
+      # Keeps an include provider current when its script module changes after
+      # the script included it, as a native include would show the change.
+      # Prepended to the singleton class of every script module that has a
+      # provider.
+      module IncludeTracking
+        # Refreshes the provider after a method is defined or redefined.
+        # @param name [Symbol] method just defined
+        # @return [void]
+        def method_added(name)
+          super
+          ScriptScope.__send__(:sync_include_provider, self)
+        end
+
+        # Refreshes the provider after a method is removed.
+        # @param name [Symbol] method just removed
+        # @return [void]
+        def method_removed(name)
+          super
+          ScriptScope.__send__(:sync_include_provider, self)
+        end
+
+        # Refreshes the provider after a method is undefined.
+        # @param name [Symbol] method just undefined
+        # @return [void]
+        def method_undefined(name)
+          super
+          ScriptScope.__send__(:sync_include_provider, self)
+        end
+
+        # Refreshes the provider after a constant is defined.
+        # @param name [Symbol] constant just defined
+        # @return [void]
+        def const_added(name)
+          super
+          ScriptScope.__send__(:sync_include_provider, self)
+        end
+
+        # Refreshes the provider after the module includes further modules.
+        # @param modules [Array<Module>] modules being included
+        # @return [Module] self
+        def include(*modules)
+          result = super
+          ScriptScope.__send__(:sync_include_provider, self)
+          result
+        end
       end
 
-      # Copies an adopted script module's constants and instance methods into
-      # this scope, without overriding names the scope already has.
-      # @param mod [Module] script-defined module that already includes ScriptScope
-      # @return [void]
-      def self.absorb_script_module(mod)
-        mod.constants(false).each do |name|
-          const_set(name, mod.const_get(name, false)) unless const_defined?(name, false)
-        end
-        { public: mod.public_instance_methods(false), protected: mod.protected_instance_methods(false),
-          private: mod.private_instance_methods(false) }.each do |visibility, names|
-          names.each do |name|
-            next if method_defined?(name, false) || private_method_defined?(name, false)
+      # A script's top-level `include M` lands here, because the script binding's
+      # self is this module. A module the script defined was adopted and already
+      # includes ScriptScope, so including it back would be cyclic. Each such
+      # module is represented by a provider module that carries its constants
+      # and methods and is included in its place, so Ruby's own ancestor order
+      # decides precedence: the scope's direct declarations first, then the
+      # most recently included module, with the first argument of one call
+      # ahead of the rest. Arguments Ruby would reject are rejected unchanged,
+      # before any provider is created.
+      # @param modules [Array<Module>] modules named by the script
+      # @return [Module] self
+      # @raise [TypeError] when an argument is not a module, or is a class
+      # @raise [ArgumentError] when no module is given or a plain include is cyclic
+      def self.include(*modules)
+        return super unless modules.all? { |mod| mod.is_a?(Module) && !mod.is_a?(Class) }
 
-            define_method(name, mod.instance_method(name))
-            __send__(visibility, name)
+        super(*modules.map { |mod| script_module?(mod) ? include_provider(mod) : mod })
+      end
+
+      # Reports whether a module was adopted into this scope, so that including
+      # it directly would be cyclic.
+      # @param mod [Module] candidate module
+      # @return [Boolean] whether the module already includes this scope
+      # @api private
+      def self.script_module?(mod)
+        !mod.equal?(self) && !mod.is_a?(Class) && mod.include?(self)
+      end
+      private_class_method :script_module?
+
+      # Finds or creates the provider that stands in for an adopted script
+      # module, brings it up to date and starts tracking later changes.
+      # @param mod [Module] script-defined module that already includes this scope
+      # @return [Module] provider to include in place of the module
+      # @api private
+      def self.include_provider(mod)
+        @__script_scope_include_monitor.synchronize do
+          @__script_scope_include_providers[mod] ||= Module.new
+          mod.singleton_class.prepend(IncludeTracking) unless mod.singleton_class.include?(IncludeTracking)
+          sync_include_provider(mod)
+          @__script_scope_include_providers[mod]
+        end
+      end
+      private_class_method :include_provider
+
+      # Mirrors a script module into its provider: the modules it includes, up
+      # to this scope, then its own constants and instance methods with their
+      # visibility. Names the module no longer has are dropped. A module with
+      # no provider is left alone.
+      # @param mod [Module] script-defined module whose provider is refreshed
+      # @return [void]
+      # @api private
+      def self.sync_include_provider(mod)
+        @__script_scope_include_monitor.synchronize do
+          provider = @__script_scope_include_providers[mod]
+          next unless provider
+
+          inherited = (mod.ancestors - [mod]).take_while { |ancestor| !ancestor.equal?(self) }
+          inherited.reject! { |ancestor| ancestor.is_a?(Class) }
+          inherited.map! { |ancestor| script_module?(ancestor) ? include_provider(ancestor) : ancestor }
+          missing = inherited.reject { |ancestor| provider.include?(ancestor) }
+          provider.include(*missing) unless missing.empty?
+          sync_provider_constants(mod, provider)
+          sync_provider_methods(mod, provider)
+        end
+      end
+      private_class_method :sync_include_provider
+
+      # Copies a script module's own constants to its provider and drops the
+      # ones the module no longer defines. Constants not yet autoloaded are
+      # skipped so the copy never triggers a load. A new constant is exported
+      # for legacy lookup unless this scope declares that name itself.
+      # @param mod [Module] script-defined module being mirrored
+      # @param provider [Module] provider receiving the constants
+      # @return [void]
+      # @api private
+      def self.sync_provider_constants(mod, provider)
+        names = mod.constants(false).reject { |name| mod.autoload?(name) }
+        (provider.constants(false) - names).each { |name| provider.__send__(:remove_const, name) }
+        names.each do |name|
+          value = mod.const_get(name, false)
+          next if provider.const_defined?(name, false) && provider.const_get(name, false).equal?(value)
+
+          provider.__send__(:remove_const, name) if provider.const_defined?(name, false)
+          provider.const_set(name, value)
+          export_legacy_constant(name, value) unless const_defined?(name, false)
+        end
+      end
+      private_class_method :sync_provider_constants
+
+      # Copies a script module's own instance methods to its provider with
+      # their visibility and drops the ones the module no longer defines.
+      # Public names are registered for legacy helper lookup.
+      # @param mod [Module] script-defined module being mirrored
+      # @param provider [Module] provider receiving the methods
+      # @return [void]
+      # @api private
+      def self.sync_provider_methods(mod, provider)
+        current = {}
+        %i[public protected private].each do |visibility|
+          mod.__send__(:"#{visibility}_instance_methods", false).each { |name| current[name] = visibility }
+        end
+        stale = provider.instance_methods(false) + provider.private_instance_methods(false) - current.keys
+        stale.each { |name| provider.__send__(:remove_method, name) }
+        current.each do |name, visibility|
+          provider.__send__(:define_method, name, mod.instance_method(name))
+          provider.__send__(visibility, name)
+          @__script_scope_legacy_helpers[name] = true if visibility == :public
+        end
+      end
+      private_class_method :sync_provider_methods
+
+      # Reports whether a public helper is declared by the script: directly on
+      # this scope, or by a script module the scope includes.
+      # @param name [Symbol] requested helper name
+      # @return [Boolean] whether a script declaration provides the helper
+      def self.script_helper?(name)
+        return true if public_instance_methods(false).include?(name)
+
+        @__script_scope_include_monitor.synchronize do
+          @__script_scope_include_providers.each_value.any? do |provider|
+            include?(provider) && provider.public_instance_methods(false).include?(name)
           end
         end
       end
-      private_class_method :absorb_script_module
 
       # Gives every module and class a script defines inside ScriptScope the
       # same view of the script's top-level methods that it would have under
@@ -281,7 +424,7 @@ module Lich
         # @return [Object] whatever the helper returns, or +super+'s result when no helper matches
         # @raise [NoMethodError] from +super+ when neither the ancestors nor ScriptScope answer
         def method_missing(name, *args, **kwargs, &block)
-          return ScriptScope.public_send(name, *args, **kwargs, &block) if ScriptScope.public_instance_methods(false).include?(name)
+          return ScriptScope.public_send(name, *args, **kwargs, &block) if ScriptScope.script_helper?(name)
 
           super
         end
@@ -291,7 +434,7 @@ module Lich
         # @param include_private [Boolean] whether private methods count
         # @return [Boolean] true when a script helper of that name exists, else +super+'s answer
         def respond_to_missing?(name, include_private = false)
-          ScriptScope.public_instance_methods(false).include?(name) || super
+          ScriptScope.script_helper?(name) || super
         end
       end
 

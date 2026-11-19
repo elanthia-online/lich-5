@@ -1187,6 +1187,35 @@ test('an out-of-range number clamps to its bound on blur and at submit', t => {
   assert.deepEqual(sent.at(-1).submission, [100, 0], 'a submit without blur still sends in-range values');
 });
 
+test('a number clamps to the highest legal step when max is off-step', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  const number = (cid, props) => ({ type: 'number_input', cid, props: { value: 0, min: 0, ...props }, children: [] });
+  receive({ type: 'hello', pages: [{ address: 'steps' }] });
+  receive({ type: 'render', page: 'steps', generation: 1,
+    bindings: { blurred: ['change'], direct: ['change'], decimal: ['change'], free: ['change'], save: ['activate'] },
+    submissions: { save: ['blurred', 'direct', 'decimal', 'free'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      number('blurred', { max: 9, step: 2 }),
+      number('direct', { max: 9, step: 2 }),
+      number('decimal', { max: 0.3, step: 0.1 }),
+      number('free', { max: 9, step: 2, snap_to_step: false, stepper_buttons: true }),
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  const [blurred, direct, decimal, free] = dom.window.document.querySelectorAll('input[type=number]');
+  blurred.value = '20';
+  blurred.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(blurred.value, '8', 'blur shows the highest step at or below max');
+  assert.equal(blurred.checkValidity(), true, 'the displayed clamp is a legal step value');
+  assert.deepEqual(sent.at(-1).payload, { value: 8 });
+  direct.value = '50';
+  decimal.value = '4';
+  free.value = '50';
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [8, 8, 0.3, 9],
+    'submit uses the same bound: stepped fields stay on a step, an aligned max is kept exactly, free stepping keeps max');
+});
+
 test('modal page announcements do not reattach an already attached form', t => {
   const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'form' }] });

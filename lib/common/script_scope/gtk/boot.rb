@@ -24,6 +24,7 @@ require_relative 'transfers'
 require_relative 'drawing'
 require_relative 'builder'
 require_relative 'require_boundary'
+require_relative 'linger'
 
 module Lich
   module Common
@@ -184,6 +185,15 @@ module Lich
         def self.visible_windows?(owner)
           current = @mutex.synchronize { @sessions[owner] }
           current ? current.visible_windows? : false
+        end
+
+        # Reports when the last of the owner's scheduled sources that has not
+        # yet run is due. Never creates a session.
+        # @param owner [Script]
+        # @return [Float, nil] monotonic clock seconds, or nil with none waiting
+        def self.pending_ui_due(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current&.pending_ui_due
         end
 
         # Defers one block onto the existing core owner dispatcher. Shadow-state
