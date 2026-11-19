@@ -362,6 +362,8 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller branch specs' do
     'pre/beta'                        => ['elanthia-online/lich-5', 'pre%2Fbeta'],
     'someone:feature'                 => ['someone/lich-5', 'feature'],
     'someone:feat/x'                  => ['someone/lich-5', 'feat%2Fx'],
+    'someone/lich-5:feature'          => ['someone/lich-5', 'feature'],
+    'someone/Lich-5:feat/x'           => ['someone/lich-5', 'feat%2Fx'],
     'elanthia-online/lich-6:main'     => ['elanthia-online/lich-6', 'main'],
     'Elanthia-Online/lich-6:main'     => ['Elanthia-Online/lich-6', 'main'],
     'elanthia-online/lich-6:feat/web' => ['elanthia-online/lich-6', 'feat%2Fweb'],

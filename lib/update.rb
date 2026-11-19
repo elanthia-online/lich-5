@@ -256,7 +256,7 @@ module Lich
     #{$clean_lich_char}lich5-update --branch=some_branch_name   Update to a different branch
     #{$clean_lich_char}lich5-update --branch=owner:branch_name  Update to a fork's branch
     #{$clean_lich_char}lich5-update --branch=elanthia-online/repo:branch_name
-                                                  Update to a branch of another elanthia-online repo
+                                              Update to a branch of another elanthia-online repo
 
     *NOTE* Script repos sync automatically on login for both DR and GS.
     "

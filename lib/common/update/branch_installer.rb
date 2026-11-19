@@ -140,6 +140,9 @@ module Lich
             return nil
           end
 
+          # owner/lich-5 is how GitHub names a fork, so treat it as owner:branch.
+          return ["#{match[:owner]}/lich-5", branch_name] if match[:repo].casecmp?('lich-5')
+
           unless REPO_OWNER_ALLOWLIST.any? { |allowed| allowed.casecmp?(match[:owner]) }
             respond_usage("Error: Repositories other than lich-5 can only be installed from: #{REPO_OWNER_ALLOWLIST.join(', ')}.")
             return nil
