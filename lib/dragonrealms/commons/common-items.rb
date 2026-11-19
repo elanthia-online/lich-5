@@ -290,6 +290,7 @@ module Lich
         /^You take/,
         /you tug/i,
         /^You untie/,
+        /^You yank/, # You yank your sling off your belt and place the finger loop of the retention cord over one of your fingers.
         /as you remove/,
         /slide themselves off of your/,
         /you manage to loosen/,
