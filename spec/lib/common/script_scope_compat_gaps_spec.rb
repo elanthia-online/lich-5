@@ -303,6 +303,82 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(events).to eq(%i[map map])
   end
 
+  it 'records a child in its container before the map handlers run, even when one raises' do
+    window = gtk::Window.new
+    box = gtk::Box.new(:vertical)
+    book = gtk::Notebook.new
+    box.add(book)
+    window.add(box)
+    window.show_all
+    seen = {}
+    child = gtk::Label.new('child')
+    child.show
+    child.signal_connect('map') do
+      seen[:listed] = box.children.include?(child)
+      raise 'handler bug'
+    end
+    expect { box.add(child) }.to raise_error(RuntimeError, 'handler bug')
+    expect(seen).to eq(listed: true)
+    expect([child.parent, box.children.include?(child), child.mapped?]).to eq([box, true, true])
+    page = gtk::Label.new('page')
+    page.show
+    page.signal_connect('map') { seen[:pages] = [book.n_pages, book.children.include?(page)] }
+    book.append_page(page, gtk::Label.new('tab'))
+    expect(seen[:pages]).to eq([1, true])
+    window.destroy
+    expect(child.destroyed?).to be(true)
+  end
+
+  %w[realize show map].each do |signal|
+    it "maps a widget added and shown by a window #{signal} handler" do
+      window = gtk::Window.new
+      box = gtk::Box.new(:vertical)
+      window.add(box)
+      late = gtk::Label.new('late')
+      events = []
+      late.signal_connect('realize') { events << :realize }
+      late.signal_connect('map') { events << :map }
+      window.signal_connect(signal) do
+        box.add(late)
+        late.show
+      end
+      window.show_all
+      expect(events).to eq(%i[realize map])
+      expect([late.mapped?, box.mapped?]).to eq([true, true])
+    end
+  end
+
+  it 'maps a hidden child that a window show handler shows' do
+    window = gtk::Window.new
+    child = gtk::Label.new('hidden')
+    window.add(child)
+    child.no_show_all = true
+    child.hide
+    events = []
+    child.signal_connect('map') { events << child.visible? }
+    window.signal_connect('show') { child.show }
+    window.show_all
+    expect(events).to eq([true])
+    expect(child.mapped?).to be(true)
+  end
+
+  it 'maps a child that was never shown only when it and its ancestors are shown' do
+    window = gtk::Window.new
+    box = gtk::Box.new(:vertical)
+    child = gtk::Label.new('later')
+    box.add(child)
+    window.add(box)
+    seen = []
+    child.signal_connect('map') { seen << child.visible? }
+    window.show
+    expect([seen, child.mapped?, box.mapped?]).to eq([[], false, false])
+    child.show
+    expect([seen, child.mapped?]).to eq([[], false])
+    box.show
+    expect(seen).to eq([true])
+    expect([child.mapped?, box.mapped?]).to eq([true, true])
+  end
+
   it 'maps window children again on each window show, in realize, show, map order' do
     window = gtk::Window.new
     view = gtk::TextView.new
