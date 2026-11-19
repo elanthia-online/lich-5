@@ -256,6 +256,345 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    describe 'queue-then-exit' do
+      # Legacy GTK shows a window queued by a script that has already ended.
+      def start_lingering(root, name, body)
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        stub_const('SCRIPT_DIR', root)
+        stub_const('LINGER_EVENTS', Queue.new)
+        Lich::Common::ScriptScope.activate!
+        host = Lich::WebUI.service
+        allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+          Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+        end
+        File.write(File.join(root, 'custom', "#{name}.lic"), "# quiet\n#{body}")
+        [host, script_class.start(name)]
+      end
+
+      let(:queued_window) do
+        <<~RUBY
+          Gtk.queue do
+            window = Gtk::Window.new(:toplevel)
+            window.signal_connect('destroy') { LINGER_EVENTS << :destroyed }
+            window.show_all
+            LINGER_EVENTS << :shown
+          end
+        RUBY
+      end
+
+      it 'keeps the script running until the queued window is closed' do
+        Dir.mktmpdir('script-linger-close') do |root|
+          host, child = start_lingering(root, 'linger-close', queued_window)
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:shown)
+          expect(child.join(0.3)).to be_nil
+          expect(child).to be_running
+          page = nil
+          Timeout.timeout(2) { sleep 0.001 until (page = host.registry.pages_for(child).first)&.last_render }
+          host.runtime.browser_closed(page)
+          expect(child.join(3)).to equal(child)
+          expect(child).to be_completed_successfully
+          expect(LINGER_EVENTS.pop(timeout: 1)).to eq(:destroyed)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'still ends a lingering script on kill' do
+        Dir.mktmpdir('script-linger-kill') do |root|
+          _host, child = start_lingering(root, 'linger-kill', queued_window)
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:shown)
+          child.kill
+          expect(child.join(3)).to equal(child)
+          expect(LINGER_EVENTS.pop(timeout: 1)).to eq(:destroyed)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'waits for a worker thread that queues the window just after the body ends' do
+        Dir.mktmpdir('script-linger-thread') do |root|
+          body = "Gtk.queue { nil }\nThread.new { sleep 0.2\n#{queued_window} }\n"
+          _host, child = start_lingering(root, 'linger-thread', body)
+          expect(LINGER_EVENTS.pop(timeout: 3)).to eq(:shown)
+          expect(child).to be_running
+          child.kill
+          expect(child.join(3)).to equal(child)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'does not linger for a script with no Gtk work pending when its body ends' do
+        Dir.mktmpdir('script-linger-none') do |root|
+          _host, child = start_lingering(root, 'linger-none', "LINGER_EVENTS << :ran\n")
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:ran)
+          expect(child.join(2)).to equal(child)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'keeps a queued window whose block has already finished when the body ends' do
+        Dir.mktmpdir('script-linger-finished') do |root|
+          body = <<~RUBY
+            shown = Queue.new
+            Gtk.queue do
+              window = Gtk::Window.new(:toplevel)
+              window.signal_connect('destroy') { LINGER_EVENTS << :destroyed }
+              window.show_all
+              shown << true
+            end
+            shown.pop
+            sleep 0.2
+            LINGER_EVENTS << :body_done
+          RUBY
+          _host, child = start_lingering(root, 'linger-finished', body)
+          expect(LINGER_EVENTS.pop(timeout: 3)).to eq(:body_done)
+          expect(child.join(0.5)).to be_nil
+          expect(child).to be_running
+          expect(LINGER_EVENTS).to be_empty
+          child.kill
+          expect(child.join(3)).to equal(child)
+          expect(LINGER_EVENTS.pop(timeout: 1)).to eq(:destroyed)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'stops at once, workers included, when the script only mentions Gtk' do
+        Dir.mktmpdir('script-linger-mention') do |root|
+          body = "# opens a window with Gtk.queue when asked\nThread.new { loop { sleep 0.05 } }\nLINGER_EVENTS << :body_done\n"
+          _host, child = start_lingering(root, 'linger-mention', body)
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:body_done)
+          expect(child.join(0.5)).to equal(child)
+          expect(child).to be_completed_successfully
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'keeps a windowless script running while its repeating source is live, until kill' do
+        Dir.mktmpdir('script-linger-repeat') do |root|
+          body = "GLib::Timeout.add(50) { LINGER_EVENTS << :tick; true }\n"
+          _host, child = start_lingering(root, 'linger-repeat', body)
+          expect(Array.new(4) { LINGER_EVENTS.pop(timeout: 2) }).to eq(%i[tick tick tick tick])
+          expect(child).to be_running
+          child.kill
+          expect(child.join(3)).to equal(child)
+          LINGER_EVENTS.clear
+          sleep 0.2
+          expect(LINGER_EVENTS).to be_empty
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'retires a repeating source when its callback returns false' do
+        Dir.mktmpdir('script-linger-repeat-end') do |root|
+          body = "runs = 0\nGLib::Timeout.add(50) { LINGER_EVENTS << :tick; (runs += 1) < 3 }\n"
+          _host, child = start_lingering(root, 'linger-repeat-end', body)
+          expect(child.join(5)).to equal(child)
+          expect(child).to be_completed_successfully
+          expect(LINGER_EVENTS.size).to eq(3)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'retires a repeating source when it is removed' do
+        Dir.mktmpdir('script-linger-repeat-removed') do |root|
+          body = "id = GLib::Timeout.add(50) { LINGER_EVENTS << :tick; true }\nThread.new { sleep 0.3; GLib::Source.remove(id) }\n"
+          _host, child = start_lingering(root, 'linger-repeat-removed', body)
+          expect(child.join(5)).to equal(child)
+          expect(child).to be_completed_successfully
+          expect(LINGER_EVENTS.size).to be >= 2
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'runs the queued window of an exec script and keeps it until kill' do
+        stub_const('LINGER_EVENTS', Queue.new)
+        Lich::Common::ScriptScope.activate!
+        host = Lich::WebUI.service
+        allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+          Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+        end
+        child = exec_script_class.start(queued_window, quiet: true)
+        expect(LINGER_EVENTS.pop(timeout: 3)).to eq(:shown)
+        expect(child.join(0.3)).to be_nil
+        expect(child).to be_running
+        child.kill
+        expect(child.join(3)).to equal(child)
+        expect(LINGER_EVENTS.pop(timeout: 1)).to eq(:destroyed)
+      ensure
+        child&.kill(context: :shutdown) if child&.running?
+        Lich::WebUI.reset!
+      end
+
+      it 'releases a script whose body raised while a scheduled source still waits' do
+        Dir.mktmpdir('script-linger-failed') do |root|
+          body = "GLib::Timeout.add(15_000) { false }\nraise 'configuration failed'\n"
+          _host, child = start_lingering(root, 'linger-failed', body)
+          expect(child.join(2)).to equal(child)
+          expect(child.exit_error.message).to eq('configuration failed')
+          expect(script_class.running?('linger-failed')).to be(false)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'waits for the worker window of a gzip-compressed script' do
+        Dir.mktmpdir('script-linger-gzip') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          stub_const('LINGER_EVENTS', Queue.new)
+          Lich::Common::ScriptScope.activate!
+          host = Lich::WebUI.service
+          allow(Lich::WebUI).to receive(:adapter) do |owner:, viewer: nil|
+            Lich::WebUI::Adapter.new(owner: owner, viewer: viewer, service: host)
+          end
+          Zlib::GzipWriter.open(File.join(root, 'custom', 'linger-gzip.lic.gz')) do |io|
+            io.write("# quiet\nGtk.queue { nil }\nThread.new { sleep 0.2\n#{queued_window} }\n")
+          end
+          child = script_class.start('linger-gzip')
+          expect(LINGER_EVENTS.pop(timeout: 3)).to eq(:shown)
+          expect(child).to be_running
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'runs a scheduled source that is due after the pending limit, then retires' do
+        Dir.mktmpdir('script-linger-late') do |root|
+          body = "GLib::Timeout.add(700) { LINGER_EVENTS << :fired; false }\nLINGER_EVENTS << :registered\n"
+          _host, child = start_lingering(root, 'linger-late', body)
+          stub_const('Lich::Common::ScriptScope::Gtk::UI_LINGER_PENDING_LIMIT', 0.2)
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:registered)
+          expect(child.join(5)).to equal(child)
+          expect(LINGER_EVENTS.pop(timeout: 0.1)).to eq(:fired)
+          expect(child).to be_completed_successfully
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'ends a script on kill while its scheduled source is still waiting' do
+        Dir.mktmpdir('script-linger-late-kill') do |root|
+          body = "GLib::Timeout.add(15_000) { LINGER_EVENTS << :fired; false }\nLINGER_EVENTS << :registered\n"
+          _host, child = start_lingering(root, 'linger-late-kill', body)
+          expect(LINGER_EVENTS.pop(timeout: 2)).to eq(:registered)
+          expect(child.join(0.3)).to be_nil
+          child.kill
+          expect(child.join(3)).to equal(child)
+          expect(LINGER_EVENTS).to be_empty
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
+      it 'stops waiting when the scheduled source is removed before it runs' do
+        Dir.mktmpdir('script-linger-removed') do |root|
+          body = "id = GLib::Timeout.add(15_000) { false }\nThread.new { sleep 0.3; GLib::Source.remove(id) }\n"
+          _host, child = start_lingering(root, 'linger-removed', body)
+          expect(child.join(3)).to equal(child)
+          expect(child).to be_completed_successfully
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+    end
+
+    describe 'body completion handlers' do
+      it 'runs each registered handler with the finished script before it stops' do
+        Dir.mktmpdir('script-body-complete') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          seen = Queue.new
+          handlers = Lich::Common::ScriptBodyCompletion.instance_variable_get(:@handlers)
+          handler = proc { |finished| seen << [finished, finished.running?, finished.stopping?] }
+          Lich::Common::ScriptBodyCompletion.on_complete(&handler)
+          File.write(File.join(root, 'custom', 'body-complete.lic'), "# quiet\n1 + 1\n")
+          child = script_class.start('body-complete')
+          expect(child.join(3)).to equal(child)
+          expect(seen.pop(timeout: 1)).to eq([child, true, false])
+        ensure
+          handlers&.delete(handler)
+        end
+      end
+
+      it 'stops the script when a handler raises and still runs later handlers' do
+        Dir.mktmpdir('script-body-complete-raise') do |root|
+          FileUtils.mkdir_p(File.join(root, 'custom'))
+          stub_const('SCRIPT_DIR', root)
+          seen = Queue.new
+          handlers = Lich::Common::ScriptBodyCompletion.instance_variable_get(:@handlers)
+          added = [proc { raise 'handler failed' }, proc { |finished| seen << finished }]
+          added.each { |handler| Lich::Common::ScriptBodyCompletion.on_complete(&handler) }
+          File.write(File.join(root, 'custom', 'body-raise.lic'), "# quiet\n1 + 1\n")
+          child = script_class.start('body-raise')
+          expect(child.join(3)).to equal(child)
+          expect(seen.pop(timeout: 1)).to equal(child)
+          expect(child).to be_completed_successfully
+        ensure
+          added&.each { |handler| handlers.delete(handler) }
+        end
+      end
+
+      it 'keeps core script files free of compatibility-plugin names' do
+        core = Dir[File.expand_path('../../../lib/common/script{,_death,_body_completion}.rb', __dir__)]
+        expect(core.length).to eq(3)
+        core.each do |path|
+          code = File.readlines(path).grep_v(/^\s*#/).join
+          expect(code).not_to match(/Gtk|GLib|Gdk/), "#{File.basename(path)} names the compatibility plugin"
+        end
+      end
+    end
+
+    it 'lets a script include a module it defined at top level' do
+      Dir.mktmpdir('script-own-include') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        stub_const('SCRIPT_DIR', root)
+        stub_const('INCLUDE_RESULTS', Queue.new)
+        Lich::Common::ScriptScope.activate!
+        File.write(File.join(root, 'custom', 'own-include.lic'), <<~RUBY)
+          # quiet
+          module OwnHelpers
+            LIMIT = 3
+            class Widget
+              def kind = :widget
+            end
+
+            def helper = :helped
+
+            private
+
+            def hidden = :hidden
+          end
+          include OwnHelpers
+          INCLUDE_RESULTS << [helper, LIMIT, Widget.new.kind, hidden]
+        RUBY
+        child = script_class.start('own-include')
+        expect(child.join(3)).to equal(child)
+        expect(child).to be_completed_successfully
+        expect(INCLUDE_RESULTS.pop(timeout: 1)).to eq([:helped, 3, :widget, :hidden])
+      end
+    end
+
     it 'executes deferred Gtk.queue work with the real calling Script as owner' do
       Dir.mktmpdir('script-queue-owner') do |root|
         FileUtils.mkdir_p(File.join(root, 'custom'))

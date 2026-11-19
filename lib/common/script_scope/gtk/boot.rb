@@ -24,6 +24,7 @@ require_relative 'transfers'
 require_relative 'drawing'
 require_relative 'builder'
 require_relative 'require_boundary'
+require_relative 'linger'
 
 module Lich
   module Common
@@ -150,6 +151,50 @@ module Lich
           end
           Thread.current.thread_variable_set(:lich_script_compatibility_session, current)
           current
+        end
+
+        # Reports whether the owner has used this layer: a session exists only
+        # once the script has built a widget, queued or scheduled work, or
+        # made another call that needs one. Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.session?(owner)
+          @mutex.synchronize { @sessions.key?(owner) }
+        end
+
+        # Reports whether a scheduled source of the owner has run and will run
+        # again. Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.repeating_sources?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.repeating_sources? : false
+        end
+
+        # Reports pending work or admitted work still running. Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.busy_ui?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.busy_ui? : false
+        end
+
+        # Reports whether any of the owner's top-level windows is shown.
+        # Never creates a session.
+        # @param owner [Script]
+        # @return [Boolean]
+        def self.visible_windows?(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current ? current.visible_windows? : false
+        end
+
+        # Reports when the last of the owner's scheduled sources that has not
+        # yet run is due. Never creates a session.
+        # @param owner [Script]
+        # @return [Float, nil] monotonic clock seconds, or nil with none waiting
+        def self.pending_ui_due(owner)
+          current = @mutex.synchronize { @sessions[owner] }
+          current&.pending_ui_due
         end
 
         # Defers one block onto the existing core owner dispatcher. Shadow-state

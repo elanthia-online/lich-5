@@ -9,6 +9,7 @@
 
 require 'weakref'
 require_relative 'script_death'
+require_relative 'script_body_completion'
 require_relative 'script_list_feed'
 require_relative 'script_execution_guard'
 require_relative 'script_scope'
@@ -251,6 +252,7 @@ module Lich
                 script_obj.__send__(:__record_exit_error, error)
                 Script.__send__(:__report_script_error, script_obj, error, :untrusted => !trusted)
               ensure
+                ScriptBodyCompletion.run(script_obj)
                 script_obj.kill if script_obj.running? && !script_obj.stopping?
               end
             }
@@ -3426,6 +3428,7 @@ module Lich
                   respond 'start_exec_script screwed up...'
                 end
               ensure
+                ScriptBodyCompletion.run(new_script)
                 new_script.kill if new_script.running? && !new_script.stopping?
               end
             }
