@@ -77,10 +77,12 @@ module Lich
       end
     end
 
-    # Issues the 'exp mods' command and parses skill modifiers.
-    # @return [Array<String>, nil] The captured output lines or nil on timeout
+    # Issues the 'exp mods' command with its reply hidden from the frontend.
+    # DRParser reads the modifiers from the game stream; the return value
+    # is informational.
+    # @return [Array<String>] The captured text lines (partial or empty on timeout)
     def check_exp_mods
-      Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false)
+      Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false, usexml: false)
     end
 
     # Converts copper to a readable currency string with denominations.

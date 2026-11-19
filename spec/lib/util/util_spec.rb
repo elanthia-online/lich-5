@@ -117,8 +117,15 @@ RSpec.describe Lich::Util do
     let(:prompt) { %(<prompt time="1787075465">H&gt;</prompt>\r\n) }
 
     before do
-      # See the note in the old block: bind the real registry regardless of
-      # spec_helper's lightweight DownstreamHook mock and load order.
+      # capture_command calls the bare top-level constant `DownstreamHook`
+      # (production relies on `include Lich::Common` at boot for that to
+      # resolve to Lich::Common::DownstreamHook). spec_helper.rb separately
+      # defines its own lightweight top-level `DownstreamHook` mock
+      # (add/remove-less, `unless defined?` guarded) for specs that don't
+      # need real hook behavior. Which one wins the bare name in a full suite
+      # run depends on file load order across spec/, which this file does
+      # not control -- so stub_const rebinds the constant for these examples
+      # and restores whatever was there afterward.
       stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       Script.current = script
       allow(Lich).to receive(:log)
@@ -130,13 +137,15 @@ RSpec.describe Lich::Util do
     end
 
     # Sends +reply+ as the game's response to the command. +gap+ widens the
-    # window between the buffer push and the hook run for every string.
+    # window between the buffer push and the hook run for every string. As
+    # in production, the buffer gets each XML string chomped
+    # (Script.new_downstream_xml) and hooks get it unchomped.
     def reply_with(reply, gap: 0)
       sender = lambda do |*_args, **_opts|
         @game_thread = Thread.new do
           reply.each do |raw|
             if script.want_downstream_xml
-              script.push(raw)
+              script.push(raw.chomp)
             else
               Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").each { |l| script.push(l) unless l.empty? }
             end
@@ -151,8 +160,8 @@ RSpec.describe Lich::Util do
       allow(described_class).to receive(:put, &sender)
     end
 
-    def capture(*args, **opts)
-      result = described_class.capture_command(*args, timeout: 0.3, **opts)
+    def capture(*args, timeout: 0.3, **opts)
+      result = described_class.capture_command(*args, timeout: timeout, **opts)
       @game_thread&.join(1) # let the fake game thread finish forwarding
       result
     end
@@ -171,7 +180,7 @@ RSpec.describe Lich::Util do
       reply_with(["You aren't wearing anything like that.\r\n", prompt, "A goblin arrives.\r\n"])
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       result = capture('inv combat', /All of your worn|You aren't wearing/, /Use INVENTORY HELP|You aren't wearing/,
-                       usexml: false, include_end: false)
+                       usexml: false, include_end: false, timeout: 2)
 
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
       expect(result.lines).to eq(["You aren't wearing anything like that."])
@@ -237,18 +246,101 @@ RSpec.describe Lich::Util do
       expect(fe_lines).to eq([%(<output class="mono"/>), prompt.rstrip])
     end
 
-    it 'warns when a text-mode end_pattern is markup, which stripped text can never match' do
-      reply_with([])
-      capture('exp mods', /The following skills/, /^<output class=""/, usexml: false)
+    it 'matches a $-anchored XML start pattern, as the script buffer holds the line chomped' do
+      reply_with(["You flip through the scroll stack, checking each section before closing it.\r\n",
+                  "  a scroll of Aether Cloak\r\n", prompt])
+      result = capture('flip stack', /^You flip through the .+, checking each section before closing it\.$/)
 
-      expect(Lich).to have_received(:log).with(/looks like markup/)
+      expect(result).to be_complete
+      expect(result.lines.first).to end_with('closing it.')
+    end
+
+    it 'does not end on the start line merely because a prompt shares its server string' do
+      reply_with([%(<dialogData id='encum'></dialogData><prompt time="1">&gt;</prompt>\r\n),
+                  "In the pouch you see a gem.\r\n", prompt])
+      result = capture('look in pouch', /<dialogData|In the/)
+
+      expect(result).to be_complete
+      expect(result.lines.last).to eq(prompt.rstrip)
+      expect(result.lines.size).to eq(3)
+    end
+
+    it 'still ends on a start line whose own text matches end_pattern, with a prompt on the same string' do
+      reply_with([%(I'm sorry, but you don't have access to an account here.<prompt time="1">&gt;</prompt>\r\n),
+                  "A goblin arrives.\r\n", prompt])
+      result = capture('bank account', /You currently have|you don't have access/i, /a maximum of|you don't have access|<prompt/i,
+                       timeout: 2)
+
+      expect(result).to be_complete
+      expect(result.lines.size).to eq(1)
+    end
+
+    context 'in text mode with a markup end_pattern' do
+      it 'ends exp mods on the raw <output class=""/> line and hides the reply' do
+        reply_with(["The following skills are currently under the influence of a modifier:\r\n",
+                    %(<output class="mono"/>\r\n), %(<preset id="speech">+75 Athletics</preset>\r\n),
+                    %(<output class=""/>\r\n), prompt])
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        result = capture('exp mods', /The following skills are currently under the influence of a modifier/, /^<output class=""/,
+                         quiet: true, include_end: false, usexml: false, timeout: 2)
+
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
+        expect(result).to be_complete
+        expect(result.lines).to eq(['The following skills are currently under the influence of a modifier:', '+75 Athletics'])
+        expect(fe_lines).to eq([%(<output class="mono"/>), %(<output class=""/>), prompt.rstrip])
+      end
+
+      it 'ends at the next prompt with the default end_pattern, so later output reaches the frontend' do
+        reply_with(["Your name is Spec.\r\n", prompt, "A goblin arrives.\r\n"])
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        result = capture('title show', /name/, usexml: false, silent: true, quiet: true, timeout: 2)
+
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
+        expect(result).to be_complete
+        expect(result.lines).to eq(['Your name is Spec.'])
+        expect(fe_lines).to eq(['A goblin arrives.'])
+      end
+    end
+
+    it 'returns at once with :no_start when timeout is 0' do
+      reply_with([])
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = capture('flag', /^Your flags/, timeout: 0)
+
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.1
+      expect(result.status).to eq(:no_start)
+    end
+
+    it 'issue_command forwards every option to capture_command' do
+      allow(described_class).to receive(:capture_command)
+        .and_return(described_class::CommandCapture.new(lines: ['x'], status: :complete))
+      result = described_class.issue_command('cmd', /a/, /b/, include_end: false, timeout: 3, silent: true,
+                                                              usexml: false, quiet: true, use_fput: false)
+
+      expect(result).to eq(['x'])
+      expect(described_class).to have_received(:capture_command)
+        .with('cmd', /a/, /b/, include_end: false, timeout: 3, silent: true, usexml: false, quiet: true, use_fput: false)
     end
 
     it 'consumes the reply from the script buffer but leaves what follows it' do
       reply_with(["Your flags:\r\n", prompt, "A goblin arrives.\r\n"])
       capture('flag', /^Your flags/)
 
-      expect(script.drain).to eq(["A goblin arrives.\r\n"])
+      expect(script.drain).to eq(['A goblin arrives.'])
+    end
+
+    it 'checks a guarded script for cancellation while it waits, and cleans up' do
+      cancelled = Class.new(StandardError)
+      checks = 0
+      script.define_singleton_method(:execution_guard_active?) { true }
+      script.define_singleton_method(:check_execution_guard!) { (checks += 1) > 2 ? raise(cancelled) : true }
+      reply_with([])
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      expect { capture('flag', /^Your flags/, quiet: true, timeout: 2) }.to raise_error(cancelled)
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.5
+      expect(DownstreamHook.list.grep(/capture_command/)).to be_empty
+      expect(script.want_downstream_xml).to be true
     end
 
     it 'restores the script flags it changed' do
@@ -321,6 +413,15 @@ RSpec.describe Lich::Util do
         capture('flag', /^Your flags/, quiet: true)
 
         expect(fe_lines).to eq(['A goblin arrives.', 'It attacks!'])
+      end
+
+      it 'hides the end line even when a hook between the observer and the suppressor is slow' do
+        DownstreamHook.add('spec-other-hook', proc { |line| sleep 0.01; line }, persist: true)
+        reply_with(["Your flags:\r\n", "MonsterBold ON\r\n", prompt])
+        result = capture('flag', /^Your flags/, quiet: true)
+
+        expect(result).to be_complete
+        expect(frontend).to eq([])
       end
 
       it 'still lets other hooks see the hidden lines' do

@@ -1689,7 +1689,7 @@ RSpec.describe Lich::GameBase::Game do
       # need real behavior -- neither mock implements .add/.remove
       # (DownstreamHook) or supports_sentinel? (Frontend). Rebind both to
       # the real classes for this block, independent of file load order
-      # across the suite (see util_spec.rb for the load-order failure this
+      # across the suite (see util_spec.rb's capture_command block for the load-order failure this
       # protects against).
       stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       stub_const('Frontend', Lich::Common::Frontend)
