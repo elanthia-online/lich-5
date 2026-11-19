@@ -116,6 +116,15 @@ module Lich
         @stopping = false
       end
 
+      # Names this listener by class, bind address and liveness only. The session
+      # credential, launch credentials, connections and sockets never appear.
+      # Liveness is read without the server mutex so inspection cannot block or
+      # re-enter it. Ruby's pp prints through it too.
+      # @return [String] bounded inspection text
+      def inspect
+        "#<#{self.class.name} host=#{host.inspect} port=#{port.inspect} running=#{running_locked?}>"
+      end
+
       # Starts or repairs the accept worker while retaining a usable loopback listener.
       # Startup failures stop owned resources before propagating the error.
       # @return [Server] self

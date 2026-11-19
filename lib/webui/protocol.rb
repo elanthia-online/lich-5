@@ -12,16 +12,20 @@ module Lich
       # bigshot Builder setup page (2.23 MiB) renders. Temporary: when the GTK3 script
       # compatibility layer is removed, delete this and bound renders by MAX_MESSAGE_BYTES.
       MAX_RENDER_BYTES = 4 * 1024 * 1024
-      TYPES = %w[attach detach event].freeze
+      # Byte bounds on a browser failure report's text fields.
+      CLIENT_ERROR_LIMITS = { message_bytes: 512, stack_bytes: 2048 }.freeze
+      TYPES = %w[attach detach event client_error].freeze
       FIELDS = {
-        'attach' => %i[type page version resume],
-        'detach' => %i[type page generation geometry],
-        'event'  => %i[type page cid event generation payload submission request],
+        'attach'       => %i[type page version resume],
+        'detach'       => %i[type page generation geometry],
+        'event'        => %i[type page cid event generation payload submission request],
+        'client_error' => %i[type page generation message stack],
       }.freeze
       REQUIRED = {
-        'attach' => %i[type page version],
-        'detach' => %i[type page generation],
-        'event'  => %i[type page cid event generation],
+        'attach'       => %i[type page version],
+        'detach'       => %i[type page generation],
+        'event'        => %i[type page cid event generation],
+        'client_error' => %i[type page generation message],
       }.freeze
 
       class Refusal < Error
@@ -181,11 +185,32 @@ module Lich
           if message.key?(:submission) && !message[:submission].is_a?(Array)
             raise Refusal.new(:malformed, 'submission must be an ordered array')
           end
+        when 'client_error'
+          validate_client_error!(message)
         end
       rescue VersionError => error
         raise Refusal.new(:version, error.message)
       end
       private_class_method :validate_type!
+
+      # Bounds a browser failure report: a non-empty message and an optional
+      # stack, each a string within its CLIENT_ERROR_LIMITS byte budget.
+      # @param message [Hash] parsed client_error envelope
+      # @return [void]
+      # @raise [Refusal] for a mistyped, empty or oversized field
+      def validate_client_error!(message)
+        { message: :message_bytes, stack: :stack_bytes }.each do |field, limit|
+          next unless message.key?(field)
+
+          text = message[field]
+          raise Refusal.new(:malformed, "#{field} must be a string") unless text.is_a?(String)
+          raise Refusal.new(:malformed, "#{field} must not be empty") if text.empty?
+          next if text.bytesize <= CLIENT_ERROR_LIMITS.fetch(limit)
+
+          raise Refusal.new(:frame_size, "#{field} exceeds the report byte limit")
+        end
+      end
+      private_class_method :validate_client_error!
 
       # Freezes routing containers while preserving mutable secret-bearing leaf strings.
       # @return [Object] supplied value
