@@ -83,6 +83,10 @@ module Lich
         @expiry_condition = ConditionVariable.new
         @expiry_thread = nil
         @expiry_stopped = false
+        @client_error_mutex = Mutex.new
+        # Page => [monotonic time of its last logged report, reports suppressed since].
+        # Entries last until the page closes or its owner terminates.
+        @client_error_windows = {}.compare_by_identity
       end
 
       # Submits non-page work to the same ordered worker as this owner's UI events.
@@ -116,7 +120,7 @@ module Lich
         @degradation_mutex.synchronize { Array(@degradations[page]).map(&:dup).freeze }
       end
 
-      # Routes an already-parsed attach, detach, or event message.
+      # Routes an already-parsed attach, detach, event, or client_error message.
       # Refusals expose a generic wire message; stale-generation refusals precede a new tree.
       # @param connection [Object] authenticated transport
       # @param message [Hash] message accepted by Protocol.parse_client_message
@@ -126,6 +130,7 @@ module Lich
         when 'attach' then attach(connection, message)
         when 'detach' then detach(connection, message)
         when 'event' then event(connection, message)
+        when 'client_error' then client_error(connection, message)
         end
       rescue Protocol::Refusal => error
         log(:warning, "WebUI event refusal=#{error.reason}")
@@ -166,6 +171,7 @@ module Lich
         end
         @degradation_mutex.synchronize { pages.each { |page| @degradations.delete(page) } }
         @resumable_mutex.synchronize { pages.each { |page| @resumable.delete(page) } }
+        forget_client_errors(pages)
         pages
       end
 
@@ -240,3 +246,4 @@ require_relative 'runtime/submissions'
 require_relative 'runtime/rendering'
 require_relative 'runtime/properties'
 require_relative 'runtime/lifecycle'
+require_relative 'runtime/client_errors'
