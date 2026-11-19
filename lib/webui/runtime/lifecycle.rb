@@ -51,6 +51,7 @@ module Lich
         @viewers.destroy_page(page)
         @degradation_mutex.synchronize { @degradations.delete(page) }
         @resumable_mutex.synchronize { @resumable.delete(page) }
+        forget_client_errors([page])
         @viewers_changed&.call(page.owner)
         page
       rescue Error

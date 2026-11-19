@@ -85,7 +85,8 @@ module Lich
         @expiry_stopped = false
         @client_error_mutex = Mutex.new
         # Page => [monotonic time of its last logged report, reports suppressed since].
-        @client_error_windows = ObjectSpace::WeakMap.new
+        # Entries last until the page closes or its owner terminates.
+        @client_error_windows = {}.compare_by_identity
       end
 
       # Submits non-page work to the same ordered worker as this owner's UI events.
@@ -170,6 +171,7 @@ module Lich
         end
         @degradation_mutex.synchronize { pages.each { |page| @degradations.delete(page) } }
         @resumable_mutex.synchronize { pages.each { |page| @resumable.delete(page) } }
+        forget_client_errors(pages)
         pages
       end
 

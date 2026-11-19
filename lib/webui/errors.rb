@@ -19,6 +19,34 @@ module Lich
         "#{owner.class}:#{owner.object_id}"
       end
 
+      # Characters of a label kept by display_label.
+      DISPLAY_LABEL_CHARACTERS = 80
+
+      # Renders a label for inspection text and log lines: one line of printable
+      # ASCII, at most DISPLAY_LABEL_CHARACTERS long. Whitespace and control runs
+      # collapse to a space and any other character becomes "?". For display
+      # only; lookups keep using the owner identity itself.
+      # @param label [Object] owner label or other diagnostic identity
+      # @return [String] bounded single-line text
+      def self.display_label(label)
+        label.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace, replace: '?')
+             .gsub(/[\x00-\x20\x7F]+/, ' ').gsub(/[^\x20-\x7E]/, '?').strip[0, DISPLAY_LABEL_CHARACTERS]
+      end
+
+      # Advances one once-per-interval log window. The caller keeps the returned
+      # state under its own lock and logs only when a report count is returned.
+      # @param logged_at [Float, nil] monotonic time of the window's last logged line
+      # @param suppressed [Integer] occurrences counted since that line
+      # @param now [Float] current monotonic time
+      # @param interval [Numeric] seconds one logged line covers
+      # @return [Array] new logged_at, new suppressed count, and the suppressed
+      #   count to report now, or nil when this occurrence is suppressed
+      def self.log_window(logged_at, suppressed, now:, interval:)
+        return [logged_at, suppressed + 1, nil] if logged_at && now - logged_at < interval
+
+        [now, 0, suppressed]
+      end
+
       # Keeps ordinary diagnostic-sink failures out of runtime control flow.
       # @param logger [#call] sink accepting level and message
       # @param level [Symbol] diagnostic severity
