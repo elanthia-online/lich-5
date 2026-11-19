@@ -3,8 +3,9 @@
 =begin
   Handles installation of Lich5 from arbitrary GitHub branches.
 
-  Supports both main repository branches and fork branches via
-  owner:branch_name syntax. Downloads tarball archives, validates
+  Supports main repository branches, fork branches via owner:branch_name
+  syntax, and other repositories under an allowlisted owner via
+  owner/repo:branch_name syntax. Downloads tarball archives, validates
   structure, and delegates to ReleaseInstaller for actual installation.
 =end
 
@@ -12,6 +13,19 @@ module Lich
   module Util
     module Update
       class BranchInstaller
+        # Owners whose repositories may be named with owner/repo:branch_name.
+        # Any repository under these owners is accepted, so a successor
+        # project (e.g. elanthia-online/lich-6) can be installed by opt-in.
+        # Compared case-insensitively, as GitHub owner names are. Kept apart
+        # from GemPackages::TRUSTED_OWNERS: that list grants unattended
+        # installs of script gems, this one an opt-in replacement of lib/.
+        # Repositories that are not Lich installations (e.g. scripts) pass
+        # this check and are refused by validate_lich_structure before
+        # anything is installed.
+        REPO_OWNER_ALLOWLIST = %w[elanthia-online].freeze
+        # GitHub owner and repository name characters.
+        REPO_SPEC_PATTERN = %r{\A(?<owner>[A-Za-z0-9-]+)/(?<repo>[A-Za-z0-9._-]+)\z}.freeze
+
         # @param snapshot_manager [SnapshotManager] snapshot management instance
         # @param release_installer [ReleaseInstaller] installer for performing updates
         def initialize(snapshot_manager, release_installer)
@@ -21,31 +35,19 @@ module Lich
 
         # Downloads and installs from a GitHub branch.
         #
-        # @param branch_spec [String] branch name or 'owner:branch_name'
+        # @param branch_spec [String] 'branch_name', 'owner:branch_name' (a
+        #   lich-5 fork) or 'owner/repo:branch_name' (owner must be in
+        #   REPO_OWNER_ALLOWLIST)
         # @return [void]
         def download_branch_update(branch_spec)
-          branch_spec = branch_spec.strip
-          if branch_spec.empty?
-            respond
-            respond "Error: Branch specification cannot be empty."
-            respond "Usage: #{$clean_lich_char}lich5-update --branch=<branch_name>"
-            respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>:<branch_name>"
-            respond
-            return
-          end
+          source = resolve_branch_source(branch_spec.strip)
+          return unless source
 
-          if branch_spec.include?(':')
-            owner, branch_name = branch_spec.split(':', 2)
-            repo = "#{owner}/lich-5"
-          else
-            owner = nil
-            branch_name = branch_spec
-            repo = GITHUB_REPO
-          end
+          repo, branch_name = source
 
           respond
           respond "Attempting to update to branch: #{branch_name}"
-          respond "Repository: #{repo}" if owner
+          respond "Repository: #{repo}" unless repo == GITHUB_REPO
           respond "This will download from GitHub and extract over your current installation."
           respond
 
@@ -91,7 +93,7 @@ module Lich
               respond
               respond "Successfully updated to branch: #{branch_name} (version #{extracted_version})"
               respond "Branch tracking: This installation is now tracking branch '#{branch_name}'"
-              respond "                 from repository '#{repo}'" if owner
+              respond "                 from repository '#{repo}'" unless repo == GITHUB_REPO
               respond "You should exit the game, then log back in to use the updated version."
               respond
               respond "To check your current branch status, run: #{$clean_lich_char}lich5-update --status"
@@ -100,7 +102,7 @@ module Lich
               respond
               respond "Error: Could not download branch '#{branch_name}'"
               respond "HTTP Error: #{e.message}"
-              respond "Please verify the branch name exists on GitHub."
+              respond "Please verify that repository '#{repo}' and its branch '#{branch_name}' exist on GitHub."
               respond
             rescue StandardError => e
               respond
@@ -110,6 +112,58 @@ module Lich
               respond
             end
           end
+        end
+
+        private
+
+        # Splits a branch spec into the repository and branch to download.
+        # Git ref names cannot contain ':', so the first ':' separates the
+        # source from the branch, and a branch may itself contain '/'.
+        #
+        # @param branch_spec [String] stripped branch spec
+        # @return [Array(String, String), nil] [owner/repo, branch_name], or
+        #   nil after telling the user why the spec was refused
+        def resolve_branch_source(branch_spec)
+          source, separator, branch_name = branch_spec.partition(':')
+          return incomplete_spec(branch_spec) if source.empty?
+          return [GITHUB_REPO, source] if separator.empty?
+
+          source = source.strip
+          branch_name = branch_name.strip
+          return incomplete_spec(branch_spec) if source.empty? || branch_name.empty?
+
+          return ["#{source}/lich-5", branch_name] unless source.include?('/')
+
+          match = REPO_SPEC_PATTERN.match(source)
+          if match.nil? || %w[. ..].include?(match[:repo])
+            respond_usage("Error: '#{source}' is not a valid owner/repo.")
+            return nil
+          end
+
+          unless REPO_OWNER_ALLOWLIST.any? { |allowed| allowed.casecmp?(match[:owner]) }
+            respond_usage("Error: Repositories other than lich-5 can only be installed from: #{REPO_OWNER_ALLOWLIST.join(', ')}.")
+            return nil
+          end
+
+          [source, branch_name]
+        end
+
+        # @param branch_spec [String] spec missing its source or branch
+        # @return [nil]
+        def incomplete_spec(branch_spec)
+          respond_usage("Error: Branch specification is incomplete: '#{branch_spec}'.")
+          nil
+        end
+
+        # @param error [String] reason the spec was refused
+        # @return [void]
+        def respond_usage(error)
+          respond
+          respond error
+          respond "Usage: #{$clean_lich_char}lich5-update --branch=<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>:<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>/<repo>:<branch_name>  (owner: #{REPO_OWNER_ALLOWLIST.join(', ')})"
+          respond
         end
       end
     end
