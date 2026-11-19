@@ -38,4 +38,50 @@ RSpec.describe Lich::Gemstone::Overwatch do
       described_class::Observer.consume(line, described_class::Observer.wants?(line))
     end
   end
+
+  describe 'Term::REVEALED_EXPLODES (Ascension onslaught plunderer)' do
+    # Raw XML captured live; player name anonymized.
+    let(:first_person) do
+      '<pushBold/>A <a exist="2168386" noun="plunderer">masked goliath plunderer</a><popBold/> explodes from the shadows!  ' \
+        '<pushBold/><a exist="2168386" noun="plunderer">His</a><popBold/> shining eyes agleam with cunning, ' \
+        '<pushBold/>a <a exist="2168386" noun="plunderer">masked goliath plunderer</a><popBold/> lashes out at you with ' \
+        '<pushBold/><a exist="2168386" noun="plunderer">his</a><popBold/> <a exist="2168388" noun="sword-breaker">rainbow glaes sword-breaker</a>!'
+    end
+
+    let(:third_person) do
+      '<pushBold/>A <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> explodes from the shadows!  ' \
+        '<pushBold/><a exist="57655053" noun="plunderer">His</a><popBold/> shining eyes agleam with cunning, ' \
+        '<pushBold/>a <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> lashes out at ' \
+        '<a exist="-1234567" noun="Examplechar">Examplechar</a> with ' \
+        '<pushBold/><a exist="57655053" noun="plunderer">his</a><popBold/> <a exist="57655057" noun="poignard">rainbow glaes poignard</a>!'
+    end
+
+    {
+      'the 1st-person view (attacking you)'            => [:first_person, '2168386'],
+      'the 3rd-person view (attacking another player)' => [:third_person, '57655053'],
+    }.each do |desc, (line_name, id)|
+      context desc do
+        let(:line) { send(line_name) }
+
+        it 'captures the revealed creature id, noun and name' do
+          match = line.match(term::REVEALED_EXPLODES)
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('plunderer')
+          expect(match[:name]).to eq('masked goliath plunderer')
+        end
+
+        it 'is part of ANY_REVEALED and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_REVEALED)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature into the target list via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with(id, 'plunderer', 'masked goliath plunderer')
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
 end
