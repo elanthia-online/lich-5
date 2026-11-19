@@ -84,4 +84,50 @@ RSpec.describe Lich::Gemstone::Overwatch do
       end
     end
   end
+
+  describe 'Term::SILENT_CANNIBAL_SWING / SILENT_CANNIBAL_GRAPPLE (bloody halfling cannibal)' do
+    # 3rd-person lines reconstructed from plain-text Overwatch logs using the player-link
+    # markup captured live for REVEALED_EXPLODES; player name anonymized.
+    player = '<a exist="-1234567" noun="Examplechar">Examplechar</a>'
+    swing = ->(target) do
+      'With an ululating shriek, <pushBold/>a <a exist="356982" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+        "leaps from the shadows and hurtles at #{target}, swinging wildly with a " \
+        '<a exist="356990" noun="dagger">twisted obsidian dagger</a>!'
+    end
+    grapple = ->(target) do
+      'With an ululating shriek, <pushBold/>a <a exist="356982" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+        'leaps from the shadows and throws <pushBold/><a exist="356982" noun="cannibal">her</a><popBold/> ' \
+        "wiry arms around #{target}, fueled by panicked hunger!"
+    end
+
+    {
+      'swing, 1st-person view (attacking you)'              => [:SILENT_CANNIBAL_SWING, swing.call('you')],
+      'swing, 3rd-person view (attacking another player)'   => [:SILENT_CANNIBAL_SWING, swing.call(player)],
+      'grapple, 1st-person view (attacking you)'            => [:SILENT_CANNIBAL_GRAPPLE, grapple.call('you')],
+      'grapple, 3rd-person view (attacking another player)' => [:SILENT_CANNIBAL_GRAPPLE, grapple.call(player)],
+    }.each do |desc, (const, raw)|
+      context desc do
+        let(:line) { raw }
+
+        it 'captures the creature id, noun and name' do
+          match = line.match(term.const_get(const))
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq('356982')
+          expect(match[:noun]).to eq('cannibal')
+          expect(match[:name]).to eq('bloody halfling cannibal')
+        end
+
+        it 'is part of ANY_SILENT_STRIKE and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_SILENT_STRIKE)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature as a silent strike via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with('356982', 'cannibal', 'bloody halfling cannibal', silent_strike: true)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
 end
