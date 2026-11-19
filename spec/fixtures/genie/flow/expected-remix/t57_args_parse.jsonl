@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t57_args_parse p_x \"q r\" \"\" s_t"}
+{"t":0,"ev":"script-start","script":"t57_args_parse","args":"p x q r  s t"}
+{"t":0,"ev":"print","text":"[Script loaded: t57_args_parse.cmd]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"argc=4 0=[p x q r  s t]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"1=[p x] 2=[q r] 3=[] 4=[s t] 5=[] 9=[]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"top d0=[] d1=[] dargc=-1","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"noargs d0=[] d1=[] dargc=-1","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"withargs d0=[u_v \"w x\"] d1=[u_v] d2=[w x] dargc=2","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"withargs-shift d0=[u_v \"w x\"] d1=[u_v] argc=3 1=[q r]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"s1 argc=2 0=[s t] 1=[] 2=[s t] 3=[] 4=[]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"s2 argc=1 0=[s t] 1=[s t] 2=[] 3=[]","script":"t57_args_parse"}
+{"t":0,"ev":"echo","text":"s5 argc=0 0=[] 1=[] d1=[] dargc=-1","script":"t57_args_parse"}
+{"t":0,"ev":"print","text":"[Script finished (In 0 seconds): t57_args_parse.cmd(17)]","script":"t57_args_parse"}
+{"t":0,"ev":"script-finish","script":"t57_args_parse"}
+{"t":10,"ev":"end","live":0}

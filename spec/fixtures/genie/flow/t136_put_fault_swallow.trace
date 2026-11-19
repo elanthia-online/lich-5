@@ -1,0 +1,4 @@
+WAIT 100
+IN Fault now
+WAIT 100
+IN done

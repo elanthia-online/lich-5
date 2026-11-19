@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t76_child_move_matchre"}
+{"t":0,"ev":"script-start","script":"t76_child_move_matchre","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t76_child_move_matchre.cmd]","script":"t76_child_move_matchre"}
+{"t":0,"ev":"script-start","script":"_t76_mover","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t76_mover.cmd]","script":"_t76_mover"}
+{"t":0,"ev":"queue","text":"go crate","delay":0,"script":"_t76_mover"}
+{"t":10,"ev":"send","text":"go crate","origin":"","user":false}
+{"t":10,"ev":"expect-ok","want":"go crate","got":"go crate"}
+{"t":10,"ev":"in","text":"You climb quietly into an old crate."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1020,"ev":"queue","text":"#parse MOVE SUCCESSFUL","delay":0,"script":"_t76_mover"}
+{"t":1020,"ev":"print","text":"[Script finished (In 1.02 seconds): _t76_mover.cmd]","script":"_t76_mover"}
+{"t":1020,"ev":"script-finish","script":"_t76_mover"}
+{"t":1030,"ev":"echo","text":"move done","script":"t76_child_move_matchre"}
+{"t":1030,"ev":"print","text":"[Script finished (In 1.03 seconds): t76_child_move_matchre.cmd(9)]","script":"t76_child_move_matchre"}
+{"t":1030,"ev":"script-finish","script":"t76_child_move_matchre"}
+{"t":1030,"ev":"end","live":0}

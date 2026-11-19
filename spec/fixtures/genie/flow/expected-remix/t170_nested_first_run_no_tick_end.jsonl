@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t170_nested_first_run_no_tick_end"}
+{"t":0,"ev":"script-start","script":"t170_nested_first_run_no_tick_end","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t170_nested_first_run_no_tick_end.cmd]","script":"t170_nested_first_run_no_tick_end"}
+{"t":0,"ev":"script-start","script":"_t170_c","args":"a"}
+{"t":0,"ev":"print","text":"[Script loaded: _t170_c.cmd]","script":"_t170_c"}
+{"t":0,"ev":"echo","text":"c a none","script":"_t170_c"}
+{"t":100,"ev":"echo","text":"L0 t170_nested_first_run_no_tick_end|_t170_c","script":"t170_nested_first_run_no_tick_end"}
+{"t":100,"ev":"print","text":"[Script aborted! (Run time: 0.10 seconds): _t170_c.cmd]","script":"_t170_c"}
+{"t":100,"ev":"script-finish","script":"_t170_c"}
+{"t":100,"ev":"script-start","script":"_t170_c","args":"b"}
+{"t":100,"ev":"print","text":"[Script loaded: _t170_c.cmd]","script":"_t170_c"}
+{"t":100,"ev":"echo","text":"c b t170_nested_first_run_no_tick_end|_t170_c","script":"_t170_c"}
+{"t":100,"ev":"echo","text":"L1 t170_nested_first_run_no_tick_end|_t170_c","script":"t170_nested_first_run_no_tick_end"}
+{"t":200,"ev":"echo","text":"L2 t170_nested_first_run_no_tick_end|_t170_c","script":"t170_nested_first_run_no_tick_end"}
+{"t":600,"ev":"echo","text":"c-end b t170_nested_first_run_no_tick_end|_t170_c","script":"_t170_c"}
+{"t":600,"ev":"print","text":"[Script finished (In 0.50 seconds): _t170_c.cmd]","script":"_t170_c"}
+{"t":600,"ev":"script-finish","script":"_t170_c"}
+{"t":1200,"ev":"echo","text":"L3 t170_nested_first_run_no_tick_end","script":"t170_nested_first_run_no_tick_end"}
+{"t":1200,"ev":"print","text":"[Script finished (In 1.20 seconds): t170_nested_first_run_no_tick_end.cmd]","script":"t170_nested_first_run_no_tick_end"}
+{"t":1200,"ev":"script-finish","script":"t170_nested_first_run_no_tick_end"}
+{"t":1310,"ev":"end","live":0}

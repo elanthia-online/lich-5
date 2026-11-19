@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t91_date_specials"}
+{"t":0,"ev":"script-start","script":"t91_date_specials","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t91_date_specials.cmd]","script":"t91_date_specials"}
+{"t":0,"ev":"echo","text":"t=[12:00:00 PM] t24=[12:00:00 PM] d=[1/1/2026] dt=[1/1/2026 12:00:00 PM] dt24=[1/1/2026 12:00:00 PM]","script":"t91_date_specials"}
+{"t":0,"ev":"echo","text":"mt=[1200] y=[2026] mo=[00] dom=[01] doy=[1] u=[1767222000]","script":"t91_date_specials"}
+{"t":0,"ev":"echo","text":"r=[12:00:00 PM] [12:00:00 PM] [1/1/2026] [1] [00] [1/1/2026 12:00:00 PM]","script":"t91_date_specials"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t91_date_specials.cmd]","script":"t91_date_specials"}
+{"t":0,"ev":"script-finish","script":"t91_date_specials"}
+{"t":10,"ev":"end","live":0}

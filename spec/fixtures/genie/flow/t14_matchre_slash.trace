@@ -1,0 +1,6 @@
+EXPECT look
+IN The orc dies.
+PROMPT
+EXPECT look2
+IN A rock falls.
+PROMPT

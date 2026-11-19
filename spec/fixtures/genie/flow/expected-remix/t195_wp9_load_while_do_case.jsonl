@@ -1,0 +1,6 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t195_wp9_load_while_do_case"}
+{"t":0,"ev":"script-start","script":"t195_wp9_load_while_do_case","args":""}
+{"t":0,"ev":"error","text":"[Script error(2): Invalid WHILE statement: while 1 DO echo x]","script":"t195_wp9_load_while_do_case"}
+{"t":0,"ev":"script-finish","script":"t195_wp9_load_while_do_case","loadfailed":true}
+{"t":10,"ev":"end","live":0}

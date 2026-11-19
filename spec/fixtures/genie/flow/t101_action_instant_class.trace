@@ -1,0 +1,6 @@
+EXPECT look
+IN ping one
+PROMPT
+WAIT 1200
+IN ping two
+PROMPT

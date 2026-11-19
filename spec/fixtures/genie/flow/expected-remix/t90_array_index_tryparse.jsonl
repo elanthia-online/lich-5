@@ -1,0 +1,10 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t90_array_index_tryparse"}
+{"t":0,"ev":"script-start","script":"t90_array_index_tryparse","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t90_array_index_tryparse.cmd]","script":"t90_array_index_tryparse"}
+{"t":0,"ev":"var","name":"$gb","value":"x|y|z","src":"cmd"}
+{"t":0,"ev":"echo","text":"l=[b] [a] [b] [] [] [a|b|c(2147483648)] [a|b|c(99999999999)] [a|b|c(1x)]","script":"t90_array_index_tryparse"}
+{"t":0,"ev":"echo","text":"g=[y] [x] [x|y|z(3)] [x|y|z(2147483648)] [x|y|z(1x)]","script":"t90_array_index_tryparse"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t90_array_index_tryparse.cmd]","script":"t90_array_index_tryparse"}
+{"t":0,"ev":"script-finish","script":"t90_array_index_tryparse"}
+{"t":10,"ev":"end","live":0}

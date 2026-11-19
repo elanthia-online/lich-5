@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t208_wp9_do_repeat"}
+{"t":0,"ev":"script-start","script":"t208_wp9_do_repeat","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t208_wp9_do_repeat.cmd]","script":"t208_wp9_do_repeat"}
+{"t":0,"ev":"queue","text":"look","delay":0,"script":"t208_wp9_do_repeat"}
+{"t":10,"ev":"send","text":"look","origin":"","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"...wait 1 seconds."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"queue","text":"look","delay":0,"script":"t208_wp9_do_repeat"}
+{"t":30,"ev":"send","text":"look","origin":"","user":false}
+{"t":1520,"ev":"expect-ok","want":"look","got":"look"}
+{"t":1520,"ev":"in","text":"You see a room."}
+{"t":1520,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1520,"ev":"prompt-event"}
+{"t":1530,"ev":"echo","text":"got got","script":"t208_wp9_do_repeat"}
+{"t":1530,"ev":"print","text":"[Script finished (In 1.53 seconds): t208_wp9_do_repeat.cmd]","script":"t208_wp9_do_repeat"}
+{"t":1530,"ev":"script-finish","script":"t208_wp9_do_repeat"}
+{"t":1530,"ev":"end","live":0}

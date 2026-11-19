@@ -1,0 +1,14 @@
+WAIT 200
+IN GO
+FLUSH
+WAIT 300
+IN Obvious paths: north.
+PROMPT
+WAIT 200
+IN Obvious paths: north.
+PROMPT
+WAIT 200
+IN Obvious paths: north.
+PROMPT
+WAIT 200
+WAIT 500

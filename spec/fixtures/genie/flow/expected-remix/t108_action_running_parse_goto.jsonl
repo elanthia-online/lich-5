@@ -1,0 +1,9 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t108_action_running_parse_goto"}
+{"t":0,"ev":"script-start","script":"t108_action_running_parse_goto","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t108_action_running_parse_goto.cmd]","script":"t108_action_running_parse_goto"}
+{"t":100,"ev":"echo","text":"after-inner","script":"t108_action_running_parse_goto"}
+{"t":110,"ev":"echo","text":"at-lbl","script":"t108_action_running_parse_goto"}
+{"t":110,"ev":"print","text":"[Script finished (In 0.11 seconds): t108_action_running_parse_goto.cmd]","script":"t108_action_running_parse_goto"}
+{"t":110,"ev":"script-finish","script":"t108_action_running_parse_goto"}
+{"t":110,"ev":"end","live":0}

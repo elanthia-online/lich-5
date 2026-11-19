@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t77_net_regex"}
+{"t":0,"ev":"script-start","script":"t77_net_regex","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t77_net_regex.cmd]","script":"t77_net_regex"}
+{"t":0,"ev":"send","text":"look","origin":"t77_net_regex","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"@a tattered o'brien-scroll"}
+{"t":10,"ev":"echo","text":"scroll o'brien-scroll","script":"t77_net_regex"}
+{"t":10,"ev":"in","text":"You see a suit of full plate here."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"armor [plate]","script":"t77_net_regex"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t77_net_regex.cmd]","script":"t77_net_regex"}
+{"t":20,"ev":"script-finish","script":"t77_net_regex"}
+{"t":20,"ev":"end","live":0}

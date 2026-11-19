@@ -1,0 +1,8 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t64_shift_unvar_argcount a b c"}
+{"t":0,"ev":"script-start","script":"t64_shift_unvar_argcount","args":"a b c"}
+{"t":0,"ev":"print","text":"[Script loaded: t64_shift_unvar_argcount.cmd]","script":"t64_shift_unvar_argcount"}
+{"t":0,"ev":"echo","text":"after argc=[%argcount] 1=[a] 2=[b] 0=[a b c]","script":"t64_shift_unvar_argcount"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t64_shift_unvar_argcount.cmd]","script":"t64_shift_unvar_argcount"}
+{"t":0,"ev":"script-finish","script":"t64_shift_unvar_argcount"}
+{"t":10,"ev":"end","live":0}

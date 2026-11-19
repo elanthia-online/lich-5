@@ -1,0 +1,4 @@
+WAIT 100
+IN boom
+PROMPT 5
+WAIT 6000

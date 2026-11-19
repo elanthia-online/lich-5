@@ -1,0 +1,23 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t34_loopguard_paced"}
+{"t":0,"ev":"script-start","script":"t34_loopguard_paced","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t34_loopguard_paced.cmd]","script":"t34_loopguard_paced"}
+{"t":0,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":1000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":1500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":2000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":2500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":3000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":3500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":4000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":4500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":5000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":5500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":6000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":6500,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":7000,"ev":"send","text":"look","origin":"t34_loopguard_paced","user":false}
+{"t":7500,"ev":"echo","text":"done 15","script":"t34_loopguard_paced"}
+{"t":7500,"ev":"print","text":"[Script finished (In 7.50 seconds): t34_loopguard_paced.cmd]","script":"t34_loopguard_paced"}
+{"t":7500,"ev":"script-finish","script":"t34_loopguard_paced"}
+{"t":9010,"ev":"end","live":0}

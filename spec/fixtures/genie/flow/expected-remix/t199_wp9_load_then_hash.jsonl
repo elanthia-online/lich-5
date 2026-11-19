@@ -1,0 +1,6 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t199_wp9_load_then_hash"}
+{"t":0,"ev":"script-start","script":"t199_wp9_load_then_hash","args":""}
+{"t":0,"ev":"error","text":"[Script error(2): Unknown script command: #echo foo]","script":"t199_wp9_load_then_hash"}
+{"t":0,"ev":"script-finish","script":"t199_wp9_load_then_hash","loadfailed":true}
+{"t":10,"ev":"end","live":0}

@@ -1,0 +1,6 @@
+WAIT 100
+IN CAP p\\¤q/¤rs
+IN GLOB p\\¤q/¤rs
+WAIT 100
+IN DONE
+WAIT 300

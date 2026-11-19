@@ -1,0 +1,16 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t31_waitfor_case"}
+{"t":0,"ev":"script-start","script":"t31_waitfor_case","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t31_waitfor_case.cmd]","script":"t31_waitfor_case"}
+{"t":0,"ev":"send","text":"look","origin":"t31_waitfor_case","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"you see a thing"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":520,"ev":"in","text":"YOU SEE a thing"}
+{"t":520,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":520,"ev":"prompt-event"}
+{"t":530,"ev":"echo","text":"got-upper","script":"t31_waitfor_case"}
+{"t":530,"ev":"print","text":"[Script finished (In 0.53 seconds): t31_waitfor_case.cmd]","script":"t31_waitfor_case"}
+{"t":530,"ev":"script-finish","script":"t31_waitfor_case"}
+{"t":530,"ev":"end","live":0}

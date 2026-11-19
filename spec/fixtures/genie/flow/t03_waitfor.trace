@@ -1,0 +1,11 @@
+EXPECT look
+IN Nothing here.
+IN Something about the orc.
+IN The orc arrives.
+PROMPT
+IN You hit the troll hard.
+PROMPT
+IN exact case lowercase
+PROMPT
+IN exact Case upper
+PROMPT

@@ -1,0 +1,654 @@
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (14 roisaen)
+Tailwind  (30 roisaen)
+Redeemer's Pride  (30 roisaen)
+Shield of Light  (28 roisaen)
+Clear Sight  (25 roisaen)
+<popStream/><prompt time="1790000000">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000001">&gt;</prompt>
+Testerson came through a wooden door.
+<component id='room players'>Also here: Testerson.</component>
+<prompt time="1790000002">&gt;</prompt>
+Testerson goes east.
+<component id='room players'></component>
+<prompt time="1790000002">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1790000005">&gt;</prompt>
+Leaning on her spear, the town guard yawns widely.
+<prompt time="1790000007">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000007">&gt;</prompt>
+<pushStream id="logons"/> * Examplar joins the adventure.
+<popStream/><prompt time="1790000008">&gt;</prompt>
+<nav rm='3100001'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Market Lane] (3100001)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Market Lane] (3100001)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Painted stalls line both sides of the lane, their awnings faded by long summers.  A stone well stands at the crossing, its rope worn smooth.</component>
+<component id='room objs'>You also see a stone well.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>east</d>, <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Market Lane] (3100001)
+<style id=""/><preset id='roomDesc'>Painted stalls line both sides of the lane, their awnings faded by long summers.  A stone well stands at the crossing, its rope worn smooth.</preset>  You also see a stone well.
+Obvious paths: <d>north</d>, <d>east</d>, <d>south</d>.
+<compass><dir value="n"/><dir value="e"/><dir value="s"/></compass><component id='room objs'>You also see a stone well.</component>
+<component id='room players'></component>
+<prompt time="1790000008">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (13 roisaen)
+Tailwind  (29 roisaen)
+Redeemer's Pride  (29 roisaen)
+Shield of Light  (27 roisaen)
+Clear Sight  (24 roisaen)
+<popStream/><prompt time="1790000010">&gt;</prompt>
+You go north.
+<nav rm='3100002'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Market Lane] (3100002)
+<style id=""/><preset id='roomDesc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</preset>  
+Obvious paths: <d>south</d>, <d>northeast</d>.
+<compass><dir value="s"/><dir value="ne"/></compass><component id='room players'></component>
+<prompt time="1790000010">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='99' text='mana 99%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go northeast.
+<nav rm='3100003'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</component>
+<component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100003)
+<style id=""/><preset id='roomDesc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</preset>  You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.
+Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="e"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<crtrStatus exist="400107" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000012">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (12 roisaen)
+Tailwind  (28 roisaen)
+Redeemer's Pride  (28 roisaen)
+Shield of Light  (26 roisaen)
+Clear Sight  (23 roisaen)
+<popStream/><prompt time="1790000014">&gt;</prompt>
+<component id='exp Athletics'><preset id='whisper'>       Athletics: 512 40% learning     </preset></component>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='98' text='fatigue 98%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000014">&gt;</prompt>
+You go east.
+<nav rm='3100004'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100004)
+<style id=""/><preset id='roomDesc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</preset>  
+Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.
+<compass><dir value="w"/><dir value="n"/><dir value="up"/></compass><component id='room players'></component>
+<prompt time="1790000014">&gt;</prompt>
+You go north.
+<nav rm='3100005'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</component>
+<component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, North Gate] (3100005)
+<style id=""/><preset id='roomDesc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</preset>  You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.
+Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.
+<compass><dir value="down"/><dir value="n"/><dir value="out"/></compass><component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<crtrStatus exist="400114" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000016">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (11 roisaen)
+Tailwind  (27 roisaen)
+Redeemer's Pride  (27 roisaen)
+Shield of Light  (25 roisaen)
+Clear Sight  (22 roisaen)
+<popStream/><prompt time="1790000018">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+Testerson just arrived.
+<component id='room players'>Also here: Testerson.</component>
+<prompt time="1790000019">&gt;</prompt>
+<pushStream id="combat" />Testerson bobs, lowering himself into a smaller target.
+<popStream id="combat" /><prompt time="1790000020">&gt;</prompt>
+Testerson goes north.
+<component id='room players'></component>
+<prompt time="1790000020">&gt;</prompt>
+You go up.
+<nav rm='3100006'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100006)
+<style id=""/><preset id='roomDesc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</preset>  
+Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="n"/><dir value="nw"/></compass><component id='room players'></component>
+<prompt time="1790000020">&gt;</prompt>
+<component id='exp rexp'>Rested EXP Stored: 2:10 hours  Usable This Cycle: 2:10 hours  Cycle Refreshes: 20:00 hours</component>
+<component id='exp tdp'>            TDPs:  120</component>
+<component id='exp favor'>          Favors:  5</component>
+<component id='exp sleep'></component>
+<prompt time="1790000022">&gt;</prompt>
+You go north.
+<nav rm='3100007'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</component>
+<component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>north</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100007)
+<style id=""/><preset id='roomDesc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</preset>  You also see <pushBold/>a field rat<popBold/> and a fallen milestone.
+Obvious paths: <d>southeast</d>, <d>north</d>.
+<compass><dir value="se"/><dir value="n"/></compass><component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<crtrStatus exist="400121" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000022">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (10 roisaen)
+Tailwind  (26 roisaen)
+Redeemer's Pride  (26 roisaen)
+Shield of Light  (24 roisaen)
+Clear Sight  (21 roisaen)
+<popStream/><prompt time="1790000024">&gt;</prompt>
+You go north.
+<nav rm='3100008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Edge] (3100008)
+<style id=""/><preset id='roomDesc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</preset>  You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.
+Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="ne"/><dir value="nw"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<crtrStatus exist="400128" hostile="1" disengaged="1"/><crtrStatus exist="400135" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000024">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='93' text='mana 93%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go northwest.
+<nav rm='3100009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Hollow] (3100009)
+<style id=""/><preset id='roomDesc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</preset>  You also see <pushBold/>a forest goblin<popBold/> and a rotting log.
+Obvious paths: <d>southwest</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<crtrStatus exist="400142" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000026">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (9 roisaen)
+Tailwind  (25 roisaen)
+Redeemer's Pride  (25 roisaen)
+Shield of Light  (23 roisaen)
+Clear Sight  (20 roisaen)
+<popStream/><prompt time="1790000028">&gt;</prompt>
+You go west.
+<nav rm='3100010'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Clearing] (3100010)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Clearing] (3100010)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A small clearing opens around a ring of grey stones.  The grass inside the ring is greener than the grass outside it.</component>
+<component id='room objs'>You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Clearing] (3100010)
+<style id=""/><preset id='roomDesc'>A small clearing opens around a ring of grey stones.  The grass inside the ring is greener than the grass outside it.</preset>  You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.
+Obvious paths: <d>east</d>, <d>southwest</d>, <d>northwest</d>.
+<compass><dir value="e"/><dir value="sw"/><dir value="nw"/></compass><component id='room objs'>You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.</component>
+<crtrStatus exist="400149" hostile="1" disengaged="1"/><crtrStatus exist="400156" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000028">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (8 roisaen)
+Tailwind  (24 roisaen)
+Redeemer's Pride  (24 roisaen)
+Shield of Light  (22 roisaen)
+Clear Sight  (19 roisaen)
+<popStream/><prompt time="1790000030">&gt;</prompt>
+You go east.
+<nav rm='3100009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Hollow] (3100009)
+<style id=""/><preset id='roomDesc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</preset>  You also see <pushBold/>a forest goblin<popBold/> and a rotting log.
+Obvious paths: <d>southwest</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<crtrStatus exist="400163" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000030">&gt;</prompt>
+You go southeast.
+<nav rm='3100008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Edge] (3100008)
+<style id=""/><preset id='roomDesc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</preset>  You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.
+Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="ne"/><dir value="nw"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<crtrStatus exist="400170" hostile="1" disengaged="1"/><crtrStatus exist="400177" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000032">&gt;</prompt>
+You go south.
+<nav rm='3100007'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</component>
+<component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>north</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100007)
+<style id=""/><preset id='roomDesc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</preset>  You also see <pushBold/>a field rat<popBold/> and a fallen milestone.
+Obvious paths: <d>southeast</d>, <d>north</d>.
+<compass><dir value="se"/><dir value="n"/></compass><component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<crtrStatus exist="400184" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000034">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (7 roisaen)
+Tailwind  (23 roisaen)
+Redeemer's Pride  (23 roisaen)
+Shield of Light  (21 roisaen)
+Clear Sight  (18 roisaen)
+<popStream/><prompt time="1790000036">&gt;</prompt>
+You go south.
+<nav rm='3100006'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100006)
+<style id=""/><preset id='roomDesc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</preset>  
+Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="n"/><dir value="nw"/></compass><component id='room players'></component>
+<prompt time="1790000036">&gt;</prompt>
+You go down.
+<nav rm='3100005'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</component>
+<component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, North Gate] (3100005)
+<style id=""/><preset id='roomDesc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</preset>  You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.
+Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.
+<compass><dir value="down"/><dir value="n"/><dir value="out"/></compass><component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<crtrStatus exist="400191" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000038">&gt;</prompt>
+You go south.
+<nav rm='3100004'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100004)
+<style id=""/><preset id='roomDesc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</preset>  
+Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.
+<compass><dir value="w"/><dir value="n"/><dir value="up"/></compass><component id='room players'></component>
+<prompt time="1790000040">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (6 roisaen)
+Tailwind  (22 roisaen)
+Redeemer's Pride  (22 roisaen)
+Shield of Light  (20 roisaen)
+Clear Sight  (17 roisaen)
+<popStream/><prompt time="1790000042">&gt;</prompt>
+You go west.
+<nav rm='3100003'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</component>
+<component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100003)
+<style id=""/><preset id='roomDesc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</preset>  You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.
+Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="e"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<crtrStatus exist="400198" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000042">&gt;</prompt>
+You go southwest.
+<nav rm='3100002'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Market Lane] (3100002)
+<style id=""/><preset id='roomDesc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</preset>  
+Obvious paths: <d>south</d>, <d>northeast</d>.
+<compass><dir value="s"/><dir value="ne"/></compass><component id='room players'></component>
+<prompt time="1790000044">&gt;</prompt>
+You go south.
+<nav rm='3100001'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Market Lane] (3100001)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Market Lane] (3100001)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Painted stalls line both sides of the lane, their awnings faded by long summers.  A stone well stands at the crossing, its rope worn smooth.</component>
+<component id='room objs'>You also see a stone well.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>east</d>, <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Market Lane] (3100001)
+<style id=""/><preset id='roomDesc'>Painted stalls line both sides of the lane, their awnings faded by long summers.  A stone well stands at the crossing, its rope worn smooth.</preset>  You also see a stone well.
+Obvious paths: <d>north</d>, <d>east</d>, <d>south</d>.
+<compass><dir value="n"/><dir value="e"/><dir value="s"/></compass><component id='room objs'>You also see a stone well.</component>
+<component id='room players'></component>
+<prompt time="1790000046">&gt;</prompt>
+You go north.
+<nav rm='3100002'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Market Lane] (3100002)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Market Lane] (3100002)
+<style id=""/><preset id='roomDesc'>The lane narrows between two tall houses whose upper floors lean together over the cobbles.  A cart rut runs down the middle of the way.</preset>  
+Obvious paths: <d>south</d>, <d>northeast</d>.
+<compass><dir value="s"/><dir value="ne"/></compass><component id='room players'></component>
+<prompt time="1790000048">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go northeast.
+<nav rm='3100003'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100003)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</component>
+<component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100003)
+<style id=""/><preset id='roomDesc'>A wooden mill wheel turns slowly in the stream beside the road.  Flour dust drifts through the air and settles on the grass verge.</preset>  You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.
+Obvious paths: <d>southwest</d>, <d>east</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="e"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a town guard<popBold/> and a mill wheel and a sack of flour.</component>
+<crtrStatus exist="400205" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000050">&gt;</prompt>
+You go east.
+<nav rm='3100004'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, Mill Road] (3100004)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, Mill Road] (3100004)
+<style id=""/><preset id='roomDesc'>The road bends around a stand of birch trees.  Somewhere nearby a dog barks at nothing in particular.</preset>  
+Obvious paths: <d>west</d>, <d>north</d>, <d>up</d>.
+<compass><dir value="w"/><dir value="n"/><dir value="up"/></compass><component id='room players'></component>
+<prompt time="1790000052">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go north.
+<nav rm='3100005'/>
+<streamWindow id='main' title='Story' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Testvale, North Gate] (3100005)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</component>
+<component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Testvale, North Gate] (3100005)
+<style id=""/><preset id='roomDesc'>A squat gatehouse of grey stone guards the northern road.  Its iron-bound doors stand open during the day.</preset>  You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.
+Obvious paths: <d>down</d>, <d>north</d>, <d>out</d>.
+<compass><dir value="down"/><dir value="n"/><dir value="out"/></compass><component id='room objs'>You also see <pushBold/>the Gatewarden Testor<popBold/> and a warning sign and a pair of iron-bound doors.</component>
+<crtrStatus exist="400212" hostile="0" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000054">&gt;</prompt>
+You go up.
+<nav rm='3100006'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100006)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100006)
+<style id=""/><preset id='roomDesc'>Fields of barley sway on either side of the old road.  A low wall of piled stones marks the edge of each plot.</preset>  
+Obvious paths: <d>south</d>, <d>north</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="n"/><dir value="nw"/></compass><component id='room players'></component>
+<prompt time="1790000056">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='95' text='mana 95%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go north.
+<nav rm='3100007'/>
+<streamWindow id='main' title='Story' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Old Road, Fields] (3100007)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</component>
+<component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>north</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Old Road, Fields] (3100007)
+<style id=""/><preset id='roomDesc'>The road climbs a gentle rise.  From here the roofs of the town can be seen to the south.</preset>  You also see <pushBold/>a field rat<popBold/> and a fallen milestone.
+Obvious paths: <d>southeast</d>, <d>north</d>.
+<compass><dir value="se"/><dir value="n"/></compass><component id='room objs'>You also see <pushBold/>a field rat<popBold/> and a fallen milestone.</component>
+<crtrStatus exist="400219" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000058">&gt;</prompt>
+You go north.
+<nav rm='3100008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Edge] (3100008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Edge] (3100008)
+<style id=""/><preset id='roomDesc'>The first trees of the wood close in around the path.  Moss covers the roots that cross the trail.</preset>  You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.
+Obvious paths: <d>south</d>, <d>northeast</d>, <d>northwest</d>.
+<compass><dir value="s"/><dir value="ne"/><dir value="nw"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and <pushBold/>a forest goblin<popBold/>.</component>
+<crtrStatus exist="400226" hostile="1" disengaged="1"/><crtrStatus exist="400233" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000060">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You go northwest.
+<nav rm='3100009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Hollow] (3100009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</component>
+<component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Hollow] (3100009)
+<style id=""/><preset id='roomDesc'>The path drops into a shallow hollow filled with ferns.  A thin mist hangs among the stems.</preset>  You also see <pushBold/>a forest goblin<popBold/> and a rotting log.
+Obvious paths: <d>southwest</d>, <d>west</d>.
+<compass><dir value="sw"/><dir value="w"/></compass><component id='room objs'>You also see <pushBold/>a forest goblin<popBold/> and a rotting log.</component>
+<crtrStatus exist="400240" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000062">&gt;</prompt>
+You go west.
+<nav rm='3100010'/>
+<streamWindow id='main' title='Story' subtitle=" - [Dim Woods, Clearing] (3100010)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Dim Woods, Clearing] (3100010)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A small clearing opens around a ring of grey stones.  The grass inside the ring is greener than the grass outside it.</component>
+<component id='room objs'>You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><style id="roomName" />[Dim Woods, Clearing] (3100010)
+<style id=""/><preset id='roomDesc'>A small clearing opens around a ring of grey stones.  The grass inside the ring is greener than the grass outside it.</preset>  You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.
+Obvious paths: <d>east</d>, <d>southwest</d>, <d>northwest</d>.
+<compass><dir value="e"/><dir value="sw"/><dir value="nw"/></compass><component id='room objs'>You also see <pushBold/>a goblin shaman<popBold/> and <pushBold/>a goblin shaman that is surrounded by a faint glow<popBold/>.</component>
+<crtrStatus exist="400247" hostile="1" disengaged="1"/><crtrStatus exist="400254" hostile="1" disengaged="1"/><component id='room players'></component>
+<prompt time="1790000064">&gt;</prompt>
+All of your worn combat equipment:
+  a plain leather cap
+  a padded cloth shirt
+  some sturdy canvas trousers
+  a pair of soft leather boots
+[Use <d cmd='inventory help'>INVENTORY HELP</d> for more options.]
+<prompt time="1790000065">&gt;</prompt>
+<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a plain leather cap
+  a padded cloth shirt
+  some sturdy canvas trousers
+  a pair of soft leather boots
+  a small canvas pack
+<popStream/><prompt time="1790000066">&gt;</prompt>
+Your inventory is now arranged in head-to-toe order.
+<prompt time="1790000066">&gt;</prompt>
+<component id='exp Athletics'></component>
+<prompt time="1790000067">&gt;</prompt>
+You trace an arcane sigil in the air, shaping the pattern of the Fire Shard spell.
+<spell exist='spell'>Fire Shard</spell><castTime value='1790000076'/>
+<prompt time="1790000068">&gt;</prompt>
+<roundTime value='1790000075'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000071">&gt;</prompt>
+<roundTime value='1790000078'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000074">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000075">&gt;</prompt>
+<roundTime value='1790000081'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='95' text='mana 95%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000077">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (5 roisaen)
+Tailwind  (21 roisaen)
+Redeemer's Pride  (21 roisaen)
+Shield of Light  (19 roisaen)
+Clear Sight  (16 roisaen)
+<popStream/><prompt time="1790000077">&gt;</prompt>
+<roundTime value='1790000084'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='94' text='mana 94%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000080">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000081">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="Injury1" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<roundTime value='1790000087'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='93' text='mana 93%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000083">&gt;</prompt>
+<roundTime value='1790000090'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='92' text='mana 92%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000086">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000087">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (4 roisaen)
+Tailwind  (20 roisaen)
+Redeemer's Pride  (20 roisaen)
+Shield of Light  (18 roisaen)
+Clear Sight  (15 roisaen)
+<popStream/><prompt time="1790000086">&gt;</prompt>
+<roundTime value='1790000093'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000089">&gt;</prompt>
+<roundTime value='1790000096'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='96' text='mana 96%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000092">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000093">&gt;</prompt>
+<roundTime value='1790000099'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='95' text='mana 95%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000095">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (3 roisaen)
+Tailwind  (19 roisaen)
+Redeemer's Pride  (19 roisaen)
+Shield of Light  (17 roisaen)
+Clear Sight  (14 roisaen)
+<popStream/><prompt time="1790000095">&gt;</prompt>
+<roundTime value='1790000102'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='94' text='mana 94%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000098">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000099">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<roundTime value='1790000105'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='93' text='mana 93%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  A glancing blow to the left arm.
+[You're solidly balanced and in better position.]
+<prompt time="1790000101">&gt;</prompt>
+<roundTime value='1790000108'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='92' text='mana 92%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You swing a steel sword at a goblin shaman.  The goblin shaman evades.
+[You're solidly balanced and in better position.]
+<prompt time="1790000104">&gt;</prompt>
+<pushStream id="combat" />* Swinging wildly, a goblin shaman thrusts a knobbed staff at you.  You block with a round wooden shield.  
+The goblin shaman mutters under its breath.
+<popStream id="combat" /><prompt time="1790000105">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (2 roisaen)
+Tailwind  (18 roisaen)
+Redeemer's Pride  (18 roisaen)
+Shield of Light  (16 roisaen)
+Clear Sight  (13 roisaen)
+<popStream/><prompt time="1790000104">&gt;</prompt>
+You gesture at a goblin shaman.
+<spell>None</spell>
+<prompt time="1790000106">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='97' text='mana 97%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000110">&gt;</prompt>
+A breeze stirs the grass inside the ring of stones.
+<prompt time="1790000110">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000114">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='99' text='mana 99%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000118">&gt;</prompt>
+A breeze stirs the grass inside the ring of stones.
+<prompt time="1790000118">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1790000122">&gt;</prompt>
+You trace an arcane sigil in the air, shaping the pattern of the Dragon's Breath spell.
+<spell exist='spell'>Dragon's Breath</spell><castTime value='1790000130'/>
+<prompt time="1790000123">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Ignite  (9 roisaen)
+Tailwind  (17 roisaen)
+Redeemer's Pride  (17 roisaen)
+Shield of Light  (15 roisaen)
+Clear Sight  (12 roisaen)
+<popStream/><prompt time="1790000123">&gt;</prompt>

@@ -1,0 +1,28 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t59_launch_child one_two \"three four\" five"}
+{"t":0,"ev":"script-start","script":"t59_launch_child","args":"one two three four five"}
+{"t":0,"ev":"print","text":"[Script loaded: t59_launch_child.cmd]","script":"t59_launch_child"}
+{"t":0,"ev":"script-start","script":"_t59_child","args":"one two three four five"}
+{"t":0,"ev":"print","text":"[Script loaded: _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"echo","text":"child argc=5 0=[one two three four five] 1=[one] 2=[two] 3=[three] 4=[four]","script":"_t59_child"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"script-finish","script":"_t59_child"}
+{"t":0,"ev":"script-start","script":"_t59_child","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"echo","text":"child argc=0 0=[] 1=[] 2=[] 3=[] 4=[]","script":"_t59_child"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"script-finish","script":"_t59_child"}
+{"t":0,"ev":"script-start","script":"_t59_child","args":"a b c d e f"}
+{"t":0,"ev":"print","text":"[Script loaded: _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"echo","text":"child argc=3 0=[a b c d e f] 1=[a b] 2=[c d] 3=[e f] 4=[]","script":"_t59_child"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"script-finish","script":"_t59_child"}
+{"t":0,"ev":"script-start","script":"_t59_child","args":"one two three four"}
+{"t":0,"ev":"print","text":"[Script loaded: _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"echo","text":"child argc=4 0=[one two three four] 1=[one] 2=[two] 3=[three] 4=[four]","script":"_t59_child"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t59_child.cmd]","script":"_t59_child"}
+{"t":0,"ev":"script-finish","script":"_t59_child"}
+{"t":0,"ev":"echo","text":"parent done","script":"t59_launch_child"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t59_launch_child.cmd]","script":"t59_launch_child"}
+{"t":0,"ev":"script-finish","script":"t59_launch_child"}
+{"t":10,"ev":"end","live":0}

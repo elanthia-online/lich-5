@@ -1,0 +1,9 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t102_action_invalid"}
+{"t":0,"ev":"script-start","script":"t102_action_invalid","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t102_action_invalid.cmd]","script":"t102_action_invalid"}
+{"t":0,"ev":"echo","text":"start","script":"t102_action_invalid"}
+{"t":0,"ev":"error","text":"[Script error in t102_action_invalid.cmd(2): Invalid ACTION command: echo x]","script":"t102_action_invalid"}
+{"t":0,"ev":"print","text":"[Script aborted! (Run time: 0.00 seconds): t102_action_invalid.cmd]","script":"t102_action_invalid"}
+{"t":0,"ev":"script-finish","script":"t102_action_invalid"}
+{"t":10,"ev":"end","live":0}

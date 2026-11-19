@@ -1,0 +1,30 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t150_prompt_text_actions"}
+{"t":0,"ev":"script-start","script":"t150_prompt_text_actions","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t150_prompt_text_actions.cmd]","script":"t150_prompt_text_actions"}
+{"t":0,"ev":"send","text":"look","origin":"t150_prompt_text_actions","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"probe"}
+{"t":10,"ev":"echo","text":"plain","script":"t150_prompt_text_actions"}
+{"t":10,"ev":"echo","text":"k152","script":"t150_prompt_text_actions"}
+{"t":10,"ev":"echo","text":"other","script":"t150_prompt_text_actions"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":10,"ev":"echo","text":"plain","script":"t150_prompt_text_actions"}
+{"t":10,"ev":"echo","text":"k152","script":"t150_prompt_text_actions"}
+{"t":1020,"ev":"in","text":"You swing."}
+{"t":1020,"ev":"echo","text":"plain","script":"t150_prompt_text_actions"}
+{"t":1020,"ev":"echo","text":"k152","script":"t150_prompt_text_actions"}
+{"t":1020,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":1020,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1020,"ev":"roundtime-event","seconds":2}
+{"t":1020,"ev":"prompt-event"}
+{"t":1020,"ev":"trigger-fire","pattern":"^R> $","text":"R> "}
+{"t":1020,"ev":"cmdecho","text":"trig-rprompt","window":""}
+{"t":1020,"ev":"echo","text":"plain","script":"t150_prompt_text_actions"}
+{"t":1020,"ev":"echo","text":"k152","script":"t150_prompt_text_actions"}
+{"t":1020,"ev":"echo","text":"rt-prompt","script":"t150_prompt_text_actions"}
+{"t":3020,"ev":"echo","text":"saw-rprompt","script":"t150_prompt_text_actions"}
+{"t":3020,"ev":"print","text":"[Script finished (In 3.02 seconds): t150_prompt_text_actions.cmd]","script":"t150_prompt_text_actions"}
+{"t":3020,"ev":"script-finish","script":"t150_prompt_text_actions"}
+{"t":4030,"ev":"end","live":0}

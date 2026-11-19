@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t179_bufferwait_kept"}
+{"t":0,"ev":"script-start","script":"t179_bufferwait_kept","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t179_bufferwait_kept.cmd]","script":"t179_bufferwait_kept"}
+{"t":0,"ev":"script-start","script":"_t179_h","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t179_h.cmd]","script":"_t179_h"}
+{"t":500,"ev":"send","text":"ping","origin":"_t179_h","user":false}
+{"t":510,"ev":"echo","text":"act","script":"t179_bufferwait_kept"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): _t179_h.cmd]","script":"_t179_h"}
+{"t":1000,"ev":"script-finish","script":"_t179_h"}
+{"t":3010,"ev":"in","text":"hello row"}
+{"t":3020,"ev":"echo","text":"got-zzz","script":"t179_bufferwait_kept"}
+{"t":3020,"ev":"print","text":"[Script finished (In 3.02 seconds): t179_bufferwait_kept.cmd(12)]","script":"t179_bufferwait_kept"}
+{"t":3020,"ev":"script-finish","script":"t179_bufferwait_kept"}
+{"t":5020,"ev":"end","live":0}

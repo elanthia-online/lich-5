@@ -1,0 +1,27 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t173_bold_split"}
+{"t":0,"ev":"script-start","script":"t173_bold_split","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t173_bold_split.cmd]","script":"t173_bold_split"}
+{"t":110,"ev":"in","text":"< You swing at a <pushBold/>goblin<popBold/>."}
+{"t":110,"ev":"echo","text":"L:[< You swing at a ]","script":"t173_bold_split"}
+{"t":110,"ev":"echo","text":"L:[goblin.]","script":"t173_bold_split"}
+{"t":170,"ev":"in","text":"* A goblin <pushBold/>attacks<popBold/> you!"}
+{"t":170,"ev":"echo","text":"L:[* A goblin ]","script":"t173_bold_split"}
+{"t":170,"ev":"echo","text":"L:[attacks you!]","script":"t173_bold_split"}
+{"t":230,"ev":"in","text":"> The troll <pushBold/>roars<popBold/> > loudly."}
+{"t":230,"ev":"echo","text":"L:[> The troll ]","script":"t173_bold_split"}
+{"t":230,"ev":"echo","text":"L:[roars]","script":"t173_bold_split"}
+{"t":290,"ev":"in","text":"<pushBold/>* bold start<popBold/> then more"}
+{"t":290,"ev":"echo","text":"L:[* bold start then more]","script":"t173_bold_split"}
+{"t":350,"ev":"in","text":"plain <pushBold/>bold<popBold/> plain"}
+{"t":350,"ev":"echo","text":"L:[plain bold plain]","script":"t173_bold_split"}
+{"t":410,"ev":"in","text":"<pushBold/>"}
+{"t":470,"ev":"in","text":"* carried bold <popBold/>end"}
+{"t":470,"ev":"echo","text":"L:[* carried bold end]","script":"t173_bold_split"}
+{"t":530,"ev":"in","text":"< x <pushBold/>y<popBold/> < z <pushBold/>w<popBold/>"}
+{"t":530,"ev":"echo","text":"L:[< x ]","script":"t173_bold_split"}
+{"t":530,"ev":"echo","text":"L:[y < z w]","script":"t173_bold_split"}
+{"t":2000,"ev":"echo","text":"done","script":"t173_bold_split"}
+{"t":2000,"ev":"print","text":"[Script finished (In 2.00 seconds): t173_bold_split.cmd]","script":"t173_bold_split"}
+{"t":2000,"ev":"script-finish","script":"t173_bold_split"}
+{"t":2000,"ev":"end","live":0}

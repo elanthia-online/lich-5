@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t169_pauseorresume_dup_copies"}
+{"t":0,"ev":"script-start","script":"t169_pauseorresume_dup_copies","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t169_pauseorresume_dup_copies.cmd]","script":"t169_pauseorresume_dup_copies"}
+{"t":0,"ev":"script-start","script":"_t169_w","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t169_w.cmd]","script":"_t169_w"}
+{"t":0,"ev":"script-start","script":"_t169_w","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t169_w.cmd]","script":"_t169_w"}
+{"t":100,"ev":"echo","text":"list t169_pauseorresume_dup_copies|_t169_w|_t169_w","script":"t169_pauseorresume_dup_copies"}
+{"t":100,"ev":"print","text":"[Script paused: _t169_w.cmd]","script":"_t169_w"}
+{"t":100,"ev":"script-pause","script":"_t169_w"}
+{"t":100,"ev":"print","text":"[Script paused: _t169_w.cmd]","script":"_t169_w"}
+{"t":100,"ev":"script-pause","script":"_t169_w"}
+{"t":200,"ev":"echo","text":"after t169_pauseorresume_dup_copies|_t169_w|_t169_w","script":"t169_pauseorresume_dup_copies"}
+{"t":700,"ev":"print","text":"[Script aborted! (Run time: 0.70 seconds): _t169_w.cmd]","script":"_t169_w"}
+{"t":700,"ev":"script-finish","script":"_t169_w"}
+{"t":700,"ev":"print","text":"[Script aborted! (Run time: 0.70 seconds): _t169_w.cmd]","script":"_t169_w"}
+{"t":700,"ev":"script-finish","script":"_t169_w"}
+{"t":800,"ev":"echo","text":"end t169_pauseorresume_dup_copies","script":"t169_pauseorresume_dup_copies"}
+{"t":800,"ev":"print","text":"[Script finished (In 0.80 seconds): t169_pauseorresume_dup_copies.cmd]","script":"t169_pauseorresume_dup_copies"}
+{"t":800,"ev":"script-finish","script":"t169_pauseorresume_dup_copies"}
+{"t":1210,"ev":"end","live":0}

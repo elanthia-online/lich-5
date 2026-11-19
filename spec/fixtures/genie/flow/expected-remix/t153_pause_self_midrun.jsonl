@@ -1,0 +1,19 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t153_pause_self_midrun"}
+{"t":0,"ev":"script-start","script":"t153_pause_self_midrun","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t153_pause_self_midrun.cmd]","script":"t153_pause_self_midrun"}
+{"t":0,"ev":"script-start","script":"_t153_resumer","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t153_resumer.cmd]","script":"_t153_resumer"}
+{"t":100,"ev":"echo","text":"before","script":"t153_pause_self_midrun"}
+{"t":100,"ev":"print","text":"[Script paused: t153_pause_self_midrun.cmd]","script":"t153_pause_self_midrun"}
+{"t":100,"ev":"script-pause","script":"t153_pause_self_midrun"}
+{"t":500,"ev":"print","text":"[Script resumed: t153_pause_self_midrun.cmd]","script":"t153_pause_self_midrun"}
+{"t":500,"ev":"echo","text":"after-pause-row","script":"t153_pause_self_midrun"}
+{"t":500,"ev":"script-resume","script":"t153_pause_self_midrun"}
+{"t":600,"ev":"echo","text":"resumer-done","script":"_t153_resumer"}
+{"t":600,"ev":"print","text":"[Script finished (In 0.60 seconds): _t153_resumer.cmd]","script":"_t153_resumer"}
+{"t":600,"ev":"script-finish","script":"_t153_resumer"}
+{"t":700,"ev":"echo","text":"end","script":"t153_pause_self_midrun"}
+{"t":700,"ev":"print","text":"[Script finished (In 0.70 seconds): t153_pause_self_midrun.cmd]","script":"t153_pause_self_midrun"}
+{"t":700,"ev":"script-finish","script":"t153_pause_self_midrun"}
+{"t":700,"ev":"end","live":0}

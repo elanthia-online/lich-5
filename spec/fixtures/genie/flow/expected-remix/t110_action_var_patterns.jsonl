@@ -1,0 +1,26 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t110_action_var_patterns n s e"}
+{"t":0,"ev":"script-start","script":"t110_action_var_patterns","args":"n s e"}
+{"t":0,"ev":"print","text":"[Script loaded: t110_action_var_patterns.cmd]","script":"t110_action_var_patterns"}
+{"t":0,"ev":"echo","text":"start 1=n 2=s","script":"t110_action_var_patterns"}
+{"t":0,"ev":"send","text":"n","origin":"t110_action_var_patterns","user":false}
+{"t":10,"ev":"expect-ok","want":"n","got":"n"}
+{"t":110,"ev":"in","text":"Obvious paths: north, south."}
+{"t":300,"ev":"echo","text":"tick depth=1 1=s stepwait=0","script":"t110_action_var_patterns"}
+{"t":320,"ev":"in","text":"...wait 1 seconds."}
+{"t":330,"ev":"echo","text":"retry","script":"t110_action_var_patterns"}
+{"t":530,"ev":"in","text":"You can't go there."}
+{"t":540,"ev":"echo","text":"failed","script":"t110_action_var_patterns"}
+{"t":740,"ev":"in","text":"You begin climbing the rope."}
+{"t":750,"ev":"echo","text":"wait-label stepwait=1","script":"t110_action_var_patterns"}
+{"t":950,"ev":"in","text":"Obvious exits: none."}
+{"t":1050,"ev":"echo","text":"tick depth=1 1=s stepwait=1","script":"t110_action_var_patterns"}
+{"t":1160,"ev":"in","text":"You reach the top."}
+{"t":1350,"ev":"echo","text":"tick depth=1 1=s stepwait=0","script":"t110_action_var_patterns"}
+{"t":1370,"ev":"in","text":"Obvious paths: east."}
+{"t":1370,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1370,"ev":"prompt-event"}
+{"t":1650,"ev":"echo","text":"tick depth=0 1=e stepwait=0","script":"t110_action_var_patterns"}
+{"t":1650,"ev":"print","text":"[Script finished (In 1.65 seconds): t110_action_var_patterns.cmd(21)]","script":"t110_action_var_patterns"}
+{"t":1650,"ev":"script-finish","script":"t110_action_var_patterns"}
+{"t":1650,"ev":"end","live":0}

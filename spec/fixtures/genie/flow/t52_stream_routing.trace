@@ -1,0 +1,13 @@
+# talk + spellfront (Lich SUPPRESSED_STREAMS drops them; Remix routes them to Other and parses)
+# and room (Remix excludes WindowTarget.Room from TriggerParse; Lich strip_xml delivers it).
+INPUT #trigger {TRIGTALK} {#echo trig-talk}
+INPUT #trigger {TRIGROOM} {#echo trig-room}
+WAIT 100
+IN <pushStream id='talk'/>Bob says, "TALKTOK TRIGTALK."<popStream/>
+WAIT 200
+IN <pushStream id='spellfront'/>SPELLTOK Shadows<popStream/>
+WAIT 200
+IN <pushStream id='room'/>ROOMTOK TRIGROOM roomstream<popStream/>
+WAIT 200
+IN DONETOK
+WAIT 300

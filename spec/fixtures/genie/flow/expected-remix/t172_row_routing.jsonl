@@ -1,0 +1,50 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t172_row_routing"}
+{"t":0,"ev":"script-start","script":"t172_row_routing","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t172_row_routing.cmd]","script":"t172_row_routing"}
+{"t":110,"ev":"in","text":"<stream id='thoughts'>[General] Bob thinks, \"A.\"</stream>"}
+{"t":110,"ev":"echo","text":"L:[[General] Bob thinks, A.]","script":"t172_row_routing"}
+{"t":170,"ev":"in","text":"<preset id='speech'>You say</preset>, \"Hello <a exist='1' noun='x'>there</a>.\""}
+{"t":170,"ev":"echo","text":"L:[You say, Hello there.]","script":"t172_row_routing"}
+{"t":230,"ev":"in","text":"<preset id='roomDesc'>A path <a exist='2' noun='y'>runs</a> north.</preset>  Obvious."}
+{"t":230,"ev":"echo","text":"L:[A path runs north.runs]","script":"t172_row_routing"}
+{"t":230,"ev":"echo","text":"L:[  Obvious.]","script":"t172_row_routing"}
+{"t":290,"ev":"in","text":"<component id='room exits'>Obvious paths: <d>north</d>.</component>"}
+{"t":350,"ev":"in","text":"You see <b>a bold thing</b> here."}
+{"t":350,"ev":"echo","text":"L:[You see a bold thing here.]","script":"t172_row_routing"}
+{"t":410,"ev":"in","text":"Link <d cmd='look rock'>rock</d> here."}
+{"t":410,"ev":"echo","text":"L:[Link rock here.]","script":"t172_row_routing"}
+{"t":470,"ev":"in","text":"<pushBold/>< You swing at a goblin.<pushBold/>goblin<popBold/> ducks."}
+{"t":530,"ev":"in","text":"<pushStream id='familiar'/>Your familiar purrs.<popStream/>"}
+{"t":530,"ev":"echo","text":"L:[Your familiar purrs.]","script":"t172_row_routing"}
+{"t":590,"ev":"in","text":"<pushStream id='combat'/>* A goblin attacks!<popStream/>"}
+{"t":590,"ev":"echo","text":"L:[* A goblin attacks!]","script":"t172_row_routing"}
+{"t":650,"ev":"in","text":"<pushStream id='logons'/>* Bob joins the adventure.<popStream/>"}
+{"t":650,"ev":"echo","text":"L:[* Bob joins the adventure.]","script":"t172_row_routing"}
+{"t":710,"ev":"in","text":"<pushStream id='death'/>* Bob was slain.<popStream/>"}
+{"t":710,"ev":"echo","text":"L:[* Bob was slain.]","script":"t172_row_routing"}
+{"t":770,"ev":"in","text":"<pushStream id='moonWindow'/>Katamba sets."}
+{"t":770,"ev":"echo","text":"L:[Katamba sets.]","script":"t172_row_routing"}
+{"t":830,"ev":"in","text":"still in moon"}
+{"t":830,"ev":"echo","text":"L:[still in moon]","script":"t172_row_routing"}
+{"t":890,"ev":"in","text":"<popStream/>back in main"}
+{"t":890,"ev":"echo","text":"L:[back in main]","script":"t172_row_routing"}
+{"t":950,"ev":"in","text":"<pushStream id='inv'/>a sack<popStream/>"}
+{"t":1010,"ev":"in","text":"<pushStream id='room'/>room text<popStream/>"}
+{"t":1070,"ev":"in","text":"   Last login: leading spaces kept"}
+{"t":1070,"ev":"echo","text":"L:[   Last login: leading spaces kept]","script":"t172_row_routing"}
+{"t":1130,"ev":"in","text":"tab\tinside and trailing   "}
+{"t":1130,"ev":"echo","text":"L:[tab\tinside and trailing   ]","script":"t172_row_routing"}
+{"t":1190,"ev":"in","text":"<output class=\"mono\"/>"}
+{"t":1250,"ev":"in","text":"<spell>Fire</spell>You prepare."}
+{"t":1250,"ev":"echo","text":"L:[You prepare.]","script":"t172_row_routing"}
+{"t":1310,"ev":"in","text":"<streamWindow id='room' title='Room' subtitle=\" - [Here]\"/>"}
+{"t":1370,"ev":"in","text":"<component id='room desc'>The room desc.</component>"}
+{"t":1370,"ev":"move-event"}
+{"t":1430,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1430,"ev":"prompt-event"}
+{"t":1430,"ev":"echo","text":"L:[> ]","script":"t172_row_routing"}
+{"t":3000,"ev":"echo","text":"done","script":"t172_row_routing"}
+{"t":3000,"ev":"print","text":"[Script finished (In 3.00 seconds): t172_row_routing.cmd]","script":"t172_row_routing"}
+{"t":3000,"ev":"script-finish","script":"t172_row_routing"}
+{"t":3000,"ev":"end","live":0}

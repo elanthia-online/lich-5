@@ -1,0 +1,32 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t54_entity_glue"}
+{"t":0,"ev":"script-start","script":"t54_entity_glue","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t54_entity_glue.cmd]","script":"t54_entity_glue"}
+{"t":10,"ev":"input","text":"#trigger {^a\\W b$} {#echo trig-semi-kept}"}
+{"t":20,"ev":"input","text":"#trigger {^a b$} {#echo trig-semi-dropped}"}
+{"t":30,"ev":"input","text":"#trigger {^Tom & Al$} {#echo trig-amp-kept}"}
+{"t":40,"ev":"input","text":"#trigger {^Tom $} {#echo trig-amp-lost}"}
+{"t":50,"ev":"input","text":"#trigger {^it's here$} {#echo trig-apos-decoded}"}
+{"t":60,"ev":"input","text":"#trigger {^its here$} {#echo trig-apos-blanked}"}
+{"t":70,"ev":"input","text":"#trigger {^TOK x$} {#echo trig-nbsp-space}"}
+{"t":80,"ev":"input","text":"#trigger {^TOK&nbsp.x$} {#echo trig-nbsp-literal}"}
+{"t":190,"ev":"in","text":"You think; therefore you are."}
+{"t":200,"ev":"echo","text":"semi-dropped You think therefore","script":"t54_entity_glue"}
+{"t":300,"ev":"in","text":"Tom & Al"}
+{"t":300,"ev":"trigger-fire","pattern":"^Tom $","text":"Tom "}
+{"t":300,"ev":"cmdecho","text":"trig-amp-lost","window":""}
+{"t":310,"ev":"echo","text":"amp-lost Tom","script":"t54_entity_glue"}
+{"t":410,"ev":"in","text":"X &amp;gt; Y"}
+{"t":420,"ev":"echo","text":"gt-nosemi","script":"t54_entity_glue"}
+{"t":420,"ev":"print","text":"[Script finished (In 0.42 seconds): t54_entity_glue.cmd]","script":"t54_entity_glue"}
+{"t":420,"ev":"script-finish","script":"t54_entity_glue"}
+{"t":520,"ev":"in","text":"a; b"}
+{"t":520,"ev":"trigger-fire","pattern":"^a b$","text":"a b"}
+{"t":520,"ev":"cmdecho","text":"trig-semi-dropped","window":""}
+{"t":630,"ev":"in","text":"it&apos;s here"}
+{"t":630,"ev":"trigger-fire","pattern":"^its here$","text":"its here"}
+{"t":630,"ev":"cmdecho","text":"trig-apos-blanked","window":""}
+{"t":740,"ev":"in","text":"TOK&nbsp;x"}
+{"t":740,"ev":"trigger-fire","pattern":"^TOK x$","text":"TOK x"}
+{"t":740,"ev":"cmdecho","text":"trig-nbsp-space","window":""}
+{"t":1050,"ev":"end","live":0}

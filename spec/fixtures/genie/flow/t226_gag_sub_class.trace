@@ -1,0 +1,17 @@
+WAIT 100
+PROMPT
+IN hide me
+PROMPT
+IN blank this
+PROMPT
+IN shown one
+PROMPT
+WAIT 100
+PROMPT
+IN hide me
+PROMPT
+IN blank this
+PROMPT
+IN shown two
+PROMPT
+WAIT 100

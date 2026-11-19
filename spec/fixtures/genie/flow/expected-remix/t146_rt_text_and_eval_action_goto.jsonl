@@ -1,0 +1,24 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t146_rt_text_and_eval_action_goto"}
+{"t":0,"ev":"script-start","script":"t146_rt_text_and_eval_action_goto","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t146_rt_text_and_eval_action_goto.cmd]","script":"t146_rt_text_and_eval_action_goto"}
+{"t":110,"ev":"in","text":"You do something."}
+{"t":110,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":110,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":110,"ev":"roundtime-event","seconds":3}
+{"t":110,"ev":"prompt-event"}
+{"t":220,"ev":"in","text":"GOTEXT"}
+{"t":220,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":220,"ev":"prompt-event"}
+{"t":3110,"ev":"echo","text":"txt","script":"t146_rt_text_and_eval_action_goto"}
+{"t":3730,"ev":"in","text":"You do something."}
+{"t":3730,"ev":"in","text":"<roundTime value='1700000006'/>"}
+{"t":3730,"ev":"in","text":"<prompt time=\"1700000003\">&gt;</prompt>"}
+{"t":3730,"ev":"roundtime-event","seconds":3}
+{"t":3730,"ev":"prompt-event"}
+{"t":3840,"ev":"input","text":"#var g 1"}
+{"t":3840,"ev":"var","name":"$g","value":"1","src":"cmd"}
+{"t":6730,"ev":"echo","text":"evl","script":"t146_rt_text_and_eval_action_goto"}
+{"t":6730,"ev":"print","text":"[Script finished (In 6.73 seconds): t146_rt_text_and_eval_action_goto.cmd]","script":"t146_rt_text_and_eval_action_goto"}
+{"t":6730,"ev":"script-finish","script":"t146_rt_text_and_eval_action_goto"}
+{"t":7350,"ev":"end","live":0}

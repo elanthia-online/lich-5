@@ -1,0 +1,7 @@
+EXPECT look
+IN probe
+PROMPT
+WAIT 1000
+IN You swing.
+PROMPT 2
+WAIT 3000

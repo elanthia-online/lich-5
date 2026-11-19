@@ -1,0 +1,7 @@
+EXPECT look
+IN Try again
+PROMPT
+EXPECT look
+IN fine
+PROMPT
+WAIT 3000

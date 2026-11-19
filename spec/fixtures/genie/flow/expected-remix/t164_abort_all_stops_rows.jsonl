@@ -1,0 +1,12 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t164_abort_all_stops_rows"}
+{"t":0,"ev":"script-start","script":"t164_abort_all_stops_rows","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t164_abort_all_stops_rows.cmd]","script":"t164_abort_all_stops_rows"}
+{"t":0,"ev":"script-start","script":"_t164_other","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t164_other.cmd]","script":"_t164_other"}
+{"t":0,"ev":"echo","text":"other-up","script":"_t164_other"}
+{"t":100,"ev":"print","text":"[Script aborted! (Run time: 0.10 seconds): t164_abort_all_stops_rows.cmd]","script":"t164_abort_all_stops_rows"}
+{"t":100,"ev":"script-finish","script":"t164_abort_all_stops_rows"}
+{"t":100,"ev":"print","text":"[Script aborted! (Run time: 0.10 seconds): _t164_other.cmd]","script":"_t164_other"}
+{"t":100,"ev":"script-finish","script":"_t164_other"}
+{"t":310,"ev":"end","live":0}

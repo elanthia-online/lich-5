@@ -1,0 +1,21 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t88_reserved_last_writer"}
+{"t":0,"ev":"script-start","script":"t88_reserved_last_writer","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t88_reserved_last_writer.cmd]","script":"t88_reserved_last_writer"}
+{"t":10,"ev":"in","text":"<indicator id='IconINVISIBLE' visible='y'/>"}
+{"t":10,"ev":"in","text":"<component id='room objs'>You also see a rock.</component>"}
+{"t":10,"ev":"in","text":"STEP1"}
+{"t":20,"ev":"echo","text":"a=[1] o=[You also see a rock.]","script":"t88_reserved_last_writer"}
+{"t":20,"ev":"var","name":"$invisible","value":"0","src":"cmd"}
+{"t":20,"ev":"var","name":"$roomobjs","value":"mine","src":"cmd"}
+{"t":20,"ev":"var","name":"$version","value":"9.9","src":"cmd"}
+{"t":20,"ev":"echo","text":"b=[0] o=[mine] v=[9.9]","script":"t88_reserved_last_writer"}
+{"t":320,"ev":"in","text":"<indicator id='IconINVISIBLE' visible='y'/>"}
+{"t":320,"ev":"in","text":"<component id='room objs'>You also see a pebble.</component>"}
+{"t":320,"ev":"in","text":"STEP2"}
+{"t":330,"ev":"echo","text":"c=[1] o=[You also see a pebble.] v=[9.9]","script":"t88_reserved_last_writer"}
+{"t":330,"ev":"var","name":"$invisible","value":"0","src":"cmd"}
+{"t":330,"ev":"echo","text":"d=[0]","script":"t88_reserved_last_writer"}
+{"t":330,"ev":"print","text":"[Script finished (In 0.33 seconds): t88_reserved_last_writer.cmd]","script":"t88_reserved_last_writer"}
+{"t":330,"ev":"script-finish","script":"t88_reserved_last_writer"}
+{"t":330,"ev":"end","live":0}

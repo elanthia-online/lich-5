@@ -1,0 +1,4 @@
+WAIT 100
+IN X %loc
+IN done
+PROMPT

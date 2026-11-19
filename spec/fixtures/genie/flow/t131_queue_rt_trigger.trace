@@ -1,0 +1,18 @@
+EXPECT swing
+IN You swing.
+PROMPT 3
+WAIT 500
+IN Fire send
+WAIT 500
+IN Fire queue
+WAIT 3000
+IN You swing again.
+PROMPT 2
+WAIT 300
+IN Fire both
+WAIT 3000
+IN You swing a third time.
+PROMPT 3
+WAIT 300
+IN Fire queue
+WAIT 500

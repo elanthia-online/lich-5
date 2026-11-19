@@ -1,0 +1,48 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t156_prompt_back_to_back"}
+{"t":0,"ev":"script-start","script":"t156_prompt_back_to_back","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t156_prompt_back_to_back.cmd]","script":"t156_prompt_back_to_back"}
+{"t":10,"ev":"in","text":"START"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"in","text":"<dialogData id='minivitals'><progressBar id='health' value='99' text='health 99%' left='0%' top='0%' width='25%' height='100%'/></dialogData>"}
+{"t":20,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":20,"ev":"prompt-event"}
+{"t":30,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":30,"ev":"prompt-event"}
+{"t":40,"ev":"in","text":"<pushStream id=\"thoughts\"/>Someone thinks loudly.<popStream/>"}
+{"t":40,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":40,"ev":"prompt-event"}
+{"t":50,"ev":"in","text":"You feel fine."}
+{"t":50,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":50,"ev":"prompt-event"}
+{"t":60,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":60,"ev":"prompt-event"}
+{"t":1020,"ev":"send","text":"step2","origin":"t156_prompt_back_to_back","user":false}
+{"t":1020,"ev":"expect-ok","want":"step2","got":"step2"}
+{"t":1020,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1020,"ev":"prompt-event"}
+{"t":1030,"ev":"in","text":"<prompt time=\"1700000001\">&gt;</prompt>"}
+{"t":1030,"ev":"prompt-event"}
+{"t":2020,"ev":"echo","text":"mark","script":"t156_prompt_back_to_back"}
+{"t":2040,"ev":"in","text":"<prompt time=\"1700000002\">&gt;</prompt>"}
+{"t":2040,"ev":"prompt-event"}
+{"t":2050,"ev":"in","text":"<prompt time=\"1700000002\">&gt;</prompt>"}
+{"t":2050,"ev":"prompt-event"}
+{"t":3020,"ev":"cmdecho","text":"named","window":"Familiar"}
+{"t":3060,"ev":"in","text":"<prompt time=\"1700000003\">&gt;</prompt>"}
+{"t":3060,"ev":"prompt-event"}
+{"t":4020,"ev":"cmdecho","text":"plain","window":""}
+{"t":4070,"ev":"in","text":"<prompt time=\"1700000004\">&gt;</prompt>"}
+{"t":4070,"ev":"prompt-event"}
+{"t":4080,"ev":"in","text":"<prompt time=\"1700000004\">&gt;</prompt>"}
+{"t":4080,"ev":"prompt-event"}
+{"t":5090,"ev":"in","text":"<prompt time=\"1700000005\">&gt;</prompt>"}
+{"t":5090,"ev":"prompt-event"}
+{"t":5100,"ev":"in","text":"FINAL"}
+{"t":5110,"ev":"echo","text":"matched=[FINAL]","script":"t156_prompt_back_to_back"}
+{"t":5110,"ev":"echo","text":"seen=start|>|>|>|>|>","script":"t156_prompt_back_to_back"}
+{"t":5110,"ev":"echo","text":"prompt=[>]","script":"t156_prompt_back_to_back"}
+{"t":5110,"ev":"print","text":"[Script finished (In 5.11 seconds): t156_prompt_back_to_back.cmd]","script":"t156_prompt_back_to_back"}
+{"t":5110,"ev":"script-finish","script":"t156_prompt_back_to_back"}
+{"t":5610,"ev":"end","live":0}

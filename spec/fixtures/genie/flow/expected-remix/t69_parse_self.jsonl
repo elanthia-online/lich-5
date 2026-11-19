@@ -1,0 +1,14 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t69_parse_self"}
+{"t":0,"ev":"script-start","script":"t69_parse_self","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t69_parse_self.cmd]","script":"t69_parse_self"}
+{"t":10,"ev":"var","name":"$dbl","value":"$pv","src":"trace"}
+{"t":500,"ev":"var","name":"$pv","value":"three","src":"cmd"}
+{"t":500,"ev":"echo","text":"act one","script":"t69_parse_self"}
+{"t":1500,"ev":"echo","text":"no-self-buffer","script":"t69_parse_self"}
+{"t":1500,"ev":"trigger-fire","pattern":"^GLOB (\\w+)","text":"GLOB three"}
+{"t":1500,"ev":"cmdecho","text":"trig","window":""}
+{"t":1500,"ev":"echo","text":"end","script":"t69_parse_self"}
+{"t":1500,"ev":"print","text":"[Script finished (In 1.5 seconds): t69_parse_self.cmd(12)]","script":"t69_parse_self"}
+{"t":1500,"ev":"script-finish","script":"t69_parse_self"}
+{"t":1500,"ev":"end","live":0}

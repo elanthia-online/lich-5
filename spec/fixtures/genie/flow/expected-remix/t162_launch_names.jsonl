@@ -1,0 +1,44 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t162_launch_names"}
+{"t":0,"ev":"script-start","script":"t162_launch_names","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t162_launch_names.cmd]","script":"t162_launch_names"}
+{"t":0,"ev":"script-start","script":"","args":""}
+{"t":0,"ev":"error","text":"[Script error: File not found: .cmd]","script":""}
+{"t":0,"ev":"script-finish","script":""}
+{"t":0,"ev":"script-start","script":"","args":"x"}
+{"t":0,"ev":"error","text":"[Script error: File not found: .cmd]","script":""}
+{"t":0,"ev":"script-finish","script":""}
+{"t":0,"ev":"script-start","script":".h","args":""}
+{"t":0,"ev":"error","text":"[Script error: File not found: .h.cmd]","script":".h"}
+{"t":0,"ev":"script-finish","script":".h"}
+{"t":0,"ev":"script-start","script":"nosuch","args":"a b"}
+{"t":0,"ev":"error","text":"[Script error: File not found: nosuch.cmd]","script":"nosuch"}
+{"t":0,"ev":"script-finish","script":"nosuch"}
+{"t":0,"ev":"script-start","script":"_t162","args":""}
+{"t":0,"ev":"error","text":"[Script error: File not found: _t162.cmd]","script":"_t162"}
+{"t":0,"ev":"script-finish","script":"_t162"}
+{"t":0,"ev":"script-start","script":"_t162_inc","args":""}
+{"t":0,"ev":"error","text":"[Script error: File not found: _t162_inc.cmd]","script":"_t162_inc"}
+{"t":0,"ev":"script-finish","script":"_t162_inc"}
+{"t":0,"ev":"script-start","script":"_t162_empty","args":""}
+{"t":0,"ev":"error","text":"[Script error: Unable to load file: _t162_empty.cmd]","script":"_t162_empty"}
+{"t":0,"ev":"script-finish","script":"_t162_empty"}
+{"t":0,"ev":"script-start","script":"_t162_helper","args":"x1"}
+{"t":0,"ev":"print","text":"[Script loaded: _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"echo","text":"helper _t162_helper x1","script":"_t162_helper"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"script-finish","script":"_t162_helper"}
+{"t":0,"ev":"script-start","script":"_t162_helper","args":"y1"}
+{"t":0,"ev":"print","text":"[Script loaded: _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"echo","text":"helper _t162_helper y1","script":"_t162_helper"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"script-finish","script":"_t162_helper"}
+{"t":0,"ev":"script-start","script":"_t162_helper","args":"z1"}
+{"t":0,"ev":"print","text":"[Script loaded: _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"echo","text":"helper _t162_helper z1","script":"_t162_helper"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): _t162_helper.cmd]","script":"_t162_helper"}
+{"t":0,"ev":"script-finish","script":"_t162_helper"}
+{"t":0,"ev":"echo","text":"done","script":"t162_launch_names"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t162_launch_names.cmd]","script":"t162_launch_names"}
+{"t":0,"ev":"script-finish","script":"t162_launch_names"}
+{"t":210,"ev":"end","live":0}

@@ -1,0 +1,26 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t215_echo_colour_names"}
+{"t":0,"ev":"script-start","script":"t215_echo_colour_names","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t215_echo_colour_names.cmd]","script":"t215_echo_colour_names"}
+{"t":0,"ev":"cmdecho","text":"text1","window":"","color":"Red"}
+{"t":0,"ev":"cmdecho","text":"text2","window":"","color":"Crimson"}
+{"t":0,"ev":"cmdecho","text":"text3","window":"","color":"YellowGreen"}
+{"t":0,"ev":"cmdecho","text":"RebeccaPurple text4","window":""}
+{"t":0,"ev":"cmdecho","text":"Transparent text5","window":""}
+{"t":0,"ev":"cmdecho","text":"ControlText text6","window":""}
+{"t":0,"ev":"cmdecho","text":"grey text7","window":""}
+{"t":0,"ev":"cmdecho","text":"text8","window":"","color":"Red"}
+{"t":0,"ev":"cmdecho","text":"red, text9","window":""}
+{"t":0,"ev":"cmdecho","text":"text10","window":"","color":"Red"}
+{"t":0,"ev":"cmdecho","text":"zzz,red text11","window":""}
+{"t":0,"ev":"cmdecho","text":"text12","window":"Log","color":"Yellow"}
+{"t":0,"ev":"cmdecho","text":"text13","window":"Log","color":"Yellow"}
+{"t":0,"ev":"cmdecho","text":"@red text14","window":""}
+{"t":0,"ev":"cmdecho","text":"","window":"","color":"Red"}
+{"t":0,"ev":"cmdecho","text":"","window":"w","color":"Red"}
+{"t":0,"ev":"cmdecho","text":"*** Climbed Xing walls 0 times ***","window":"","color":"Lime"}
+{"t":0,"ev":"cmdecho","text":"*** MISSING MATCH IN PUT! ***","window":"","color":"Crimson"}
+{"t":0,"ev":"echo","text":"done","script":"t215_echo_colour_names"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t215_echo_colour_names.cmd]","script":"t215_echo_colour_names"}
+{"t":0,"ev":"script-finish","script":"t215_echo_colour_names"}
+{"t":10,"ev":"end","live":0}

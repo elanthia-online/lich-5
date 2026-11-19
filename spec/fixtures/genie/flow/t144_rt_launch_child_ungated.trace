@@ -1,0 +1,5 @@
+IN You swing.
+PROMPT 3
+WAIT 300
+INPUT ._t144_child
+WAIT 4000

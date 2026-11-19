@@ -1,0 +1,4 @@
+WAIT 1200
+IN hello row
+FLUSH
+WAIT 3000

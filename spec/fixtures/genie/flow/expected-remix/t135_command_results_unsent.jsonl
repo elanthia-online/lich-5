@@ -1,0 +1,11 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t135_command_results_unsent"}
+{"t":0,"ev":"script-start","script":"t135_command_results_unsent","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t135_command_results_unsent.cmd]","script":"t135_command_results_unsent"}
+{"t":0,"ev":"cmdecho","text":"shown","window":""}
+{"t":10,"ev":"send","text":"ifsend","origin":"","user":false}
+{"t":110,"ev":"in","text":"Calc now"}
+{"t":110,"ev":"trigger-fire","pattern":"^Calc now","text":"Calc now"}
+{"t":220,"ev":"input","text":"#evalmath 3+3"}
+{"t":230,"ev":"input","text":"#if {1} {typed-if}"}
+{"t":2340,"ev":"end","live":1}

@@ -1,0 +1,11 @@
+EXPECT look
+IN You hit it
+IN you hit it
+PROMPT
+IN    Pad word   
+PROMPT
+IN xspaced
+IN x spaced
+PROMPT
+IN foobar
+PROMPT

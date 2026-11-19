@@ -1,0 +1,23 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t253_delay_save_random"}
+{"t":0,"ev":"script-start","script":"t253_delay_save_random","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t253_delay_save_random.cmd]","script":"t253_delay_save_random"}
+{"t":50,"ev":"echo","text":"d1","script":"t253_delay_save_random"}
+{"t":1050,"ev":"echo","text":"d2","script":"t253_delay_save_random"}
+{"t":2050,"ev":"echo","text":"d3","script":"t253_delay_save_random"}
+{"t":3050,"ev":"echo","text":"d4","script":"t253_delay_save_random"}
+{"t":3050,"ev":"send","text":"swing","origin":"t253_delay_save_random","user":false}
+{"t":3050,"ev":"expect-ok","want":"swing","got":"swing"}
+{"t":3050,"ev":"in","text":"You swing."}
+{"t":3050,"ev":"in","text":"<roundTime value='1700000006'/>"}
+{"t":3050,"ev":"in","text":"<prompt time=\"1700000003\">&gt;</prompt>"}
+{"t":3050,"ev":"roundtime-event","seconds":3}
+{"t":3050,"ev":"prompt-event"}
+{"t":7050,"ev":"echo","text":"d5-in-rt","script":"t253_delay_save_random"}
+{"t":7050,"ev":"echo","text":"s=hello world","script":"t253_delay_save_random"}
+{"t":7050,"ev":"echo","text":"s=[]","script":"t253_delay_save_random"}
+{"t":7050,"ev":"echo","text":"r=5","script":"t253_delay_save_random"}
+{"t":7050,"ev":"echo","text":"r0=-1","script":"t253_delay_save_random"}
+{"t":7050,"ev":"print","text":"[Script finished (In 7.05 seconds): t253_delay_save_random.cmd]","script":"t253_delay_save_random"}
+{"t":7050,"ev":"script-finish","script":"t253_delay_save_random"}
+{"t":8060,"ev":"end","live":0}

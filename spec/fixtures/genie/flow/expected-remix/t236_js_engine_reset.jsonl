@@ -1,0 +1,13 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t236_js_engine_reset"}
+{"t":0,"ev":"script-start","script":"t236_js_engine_reset","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t236_js_engine_reset.cmd]","script":"t236_js_engine_reset"}
+{"t":0,"ev":"echo","text":"a=x","script":"t236_js_engine_reset"}
+{"t":0,"ev":"echo","text":"after-if2 s2=1","script":"t236_js_engine_reset"}
+{"t":0,"ev":"error","text":"[Javascript error in t236_js_engine_reset.cmd(17): nosuch is not defined]","script":"t236_js_engine_reset"}
+{"t":0,"ev":"print","text":"[Script moving to scripterror label (t236_js_engine_reset.cmd)]","script":"t236_js_engine_reset"}
+{"t":20,"ev":"error","text":"[Script error in t236_js_engine_reset.cmd(21): doPush is not defined]","script":"t236_js_engine_reset"}
+{"t":20,"ev":"echo","text":"a2=x","script":"t236_js_engine_reset"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t236_js_engine_reset.cmd]","script":"t236_js_engine_reset"}
+{"t":20,"ev":"script-finish","script":"t236_js_engine_reset"}
+{"t":20,"ev":"end","live":0}

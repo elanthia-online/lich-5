@@ -1,0 +1,17 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t252_elseif_setvar"}
+{"t":0,"ev":"script-start","script":"t252_elseif_setvar","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t252_elseif_setvar.cmd]","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"two","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"b2","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"other","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"five","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"y=5","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"y2=6","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"y=%y","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"y2=%y2","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"z=7","script":"t252_elseif_setvar"}
+{"t":0,"ev":"echo","text":"z=%z","script":"t252_elseif_setvar"}
+{"t":0,"ev":"print","text":"[Script finished (In 0.00 seconds): t252_elseif_setvar.cmd]","script":"t252_elseif_setvar"}
+{"t":0,"ev":"script-finish","script":"t252_elseif_setvar"}
+{"t":10,"ev":"end","live":0}

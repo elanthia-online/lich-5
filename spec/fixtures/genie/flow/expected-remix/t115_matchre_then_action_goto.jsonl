@@ -1,0 +1,14 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t115_matchre_then_action_goto"}
+{"t":0,"ev":"script-start","script":"t115_matchre_then_action_goto","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t115_matchre_then_action_goto.cmd]","script":"t115_matchre_then_action_goto"}
+{"t":0,"ev":"send","text":"look","origin":"t115_matchre_then_action_goto","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"one"}
+{"t":10,"ev":"in","text":"two"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"at-albl","script":"t115_matchre_then_action_goto"}
+{"t":20,"ev":"print","text":"[Script finished (In 0.02 seconds): t115_matchre_then_action_goto.cmd]","script":"t115_matchre_then_action_goto"}
+{"t":20,"ev":"script-finish","script":"t115_matchre_then_action_goto"}
+{"t":720,"ev":"end","live":0}

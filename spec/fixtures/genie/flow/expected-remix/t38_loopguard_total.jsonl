@@ -1,0 +1,43 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t38_loopguard_total"}
+{"t":0,"ev":"script-start","script":"t38_loopguard_total","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t38_loopguard_total.cmd]","script":"t38_loopguard_total"}
+{"t":0,"ev":"send","text":"glance 1","origin":"t38_loopguard_total","user":false}
+{"t":100,"ev":"send","text":"glance 2","origin":"t38_loopguard_total","user":false}
+{"t":200,"ev":"send","text":"glance 3","origin":"t38_loopguard_total","user":false}
+{"t":300,"ev":"send","text":"glance 4","origin":"t38_loopguard_total","user":false}
+{"t":400,"ev":"send","text":"glance 5","origin":"t38_loopguard_total","user":false}
+{"t":500,"ev":"send","text":"glance 6","origin":"t38_loopguard_total","user":false}
+{"t":600,"ev":"send","text":"glance 7","origin":"t38_loopguard_total","user":false}
+{"t":700,"ev":"send","text":"glance 8","origin":"t38_loopguard_total","user":false}
+{"t":800,"ev":"send","text":"glance 9","origin":"t38_loopguard_total","user":false}
+{"t":900,"ev":"send","text":"glance 10","origin":"t38_loopguard_total","user":false}
+{"t":1000,"ev":"send","text":"glance 11","origin":"t38_loopguard_total","user":false}
+{"t":1100,"ev":"send","text":"glance 12","origin":"t38_loopguard_total","user":false}
+{"t":1200,"ev":"send","text":"glance 13","origin":"t38_loopguard_total","user":false}
+{"t":1300,"ev":"send","text":"glance 14","origin":"t38_loopguard_total","user":false}
+{"t":1400,"ev":"send","text":"glance 15","origin":"t38_loopguard_total","user":false}
+{"t":1500,"ev":"send","text":"glance 16","origin":"t38_loopguard_total","user":false}
+{"t":1600,"ev":"send","text":"glance 17","origin":"t38_loopguard_total","user":false}
+{"t":1700,"ev":"send","text":"glance 18","origin":"t38_loopguard_total","user":false}
+{"t":1800,"ev":"send","text":"glance 19","origin":"t38_loopguard_total","user":false}
+{"t":1900,"ev":"send","text":"glance 20","origin":"t38_loopguard_total","user":false}
+{"t":2000,"ev":"send","text":"glance 21","origin":"t38_loopguard_total","user":false}
+{"t":2100,"ev":"send","text":"glance 22","origin":"t38_loopguard_total","user":false}
+{"t":2200,"ev":"send","text":"glance 23","origin":"t38_loopguard_total","user":false}
+{"t":2300,"ev":"send","text":"glance 24","origin":"t38_loopguard_total","user":false}
+{"t":2400,"ev":"send","text":"glance 25","origin":"t38_loopguard_total","user":false}
+{"t":2500,"ev":"send","text":"glance 26","origin":"t38_loopguard_total","user":false}
+{"t":2600,"ev":"send","text":"glance 27","origin":"t38_loopguard_total","user":false}
+{"t":2700,"ev":"send","text":"glance 28","origin":"t38_loopguard_total","user":false}
+{"t":2800,"ev":"send","text":"glance 29","origin":"t38_loopguard_total","user":false}
+{"t":2900,"ev":"send","text":"glance 30","origin":"t38_loopguard_total","user":false}
+{"t":3000,"ev":"send","text":"glance 31","origin":"t38_loopguard_total","user":false}
+{"t":3100,"ev":"send","text":"glance 32","origin":"t38_loopguard_total","user":false}
+{"t":3200,"ev":"send","text":"glance 33","origin":"t38_loopguard_total","user":false}
+{"t":3300,"ev":"send","text":"glance 34","origin":"t38_loopguard_total","user":false}
+{"t":3400,"ev":"send","text":"glance 35","origin":"t38_loopguard_total","user":false}
+{"t":3500,"ev":"echo","text":"done 35","script":"t38_loopguard_total"}
+{"t":3500,"ev":"print","text":"[Script finished (In 3.50 seconds): t38_loopguard_total.cmd]","script":"t38_loopguard_total"}
+{"t":3500,"ev":"script-finish","script":"t38_loopguard_total"}
+{"t":5010,"ev":"end","live":0}

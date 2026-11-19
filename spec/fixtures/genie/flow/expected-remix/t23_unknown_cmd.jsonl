@@ -1,0 +1,6 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t23_unknown_cmd"}
+{"t":0,"ev":"script-start","script":"t23_unknown_cmd","args":""}
+{"t":0,"ev":"error","text":"[Script error(2): Unknown script command: blarg something]","script":"t23_unknown_cmd"}
+{"t":0,"ev":"script-finish","script":"t23_unknown_cmd","loadfailed":true}
+{"t":10,"ev":"end","live":0}

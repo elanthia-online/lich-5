@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t248_mycommandchar"}
+{"t":0,"ev":"script-start","script":"t248_mycommandchar","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t248_mycommandchar.cmd]","script":"t248_mycommandchar"}
+{"t":0,"ev":"echo","text":"lc=","script":"t248_mycommandchar"}
+{"t":0,"ev":"send","text":"look","origin":"t248_mycommandchar","user":false}
+{"t":0,"ev":"echo","text":"lc=look","script":"t248_mycommandchar"}
+{"t":0,"ev":"trigger-fire","pattern":"^/spell","text":"/spelltimer"}
+{"t":0,"ev":"cmdecho","text":"trig saw","window":""}
+{"t":0,"ev":"echo","text":"lc=look","script":"t248_mycommandchar"}
+{"t":0,"ev":"queue","text":"/queued","delay":0,"script":"t248_mycommandchar"}
+{"t":0,"ev":"send","text":" /spaced","origin":"t248_mycommandchar","user":false}
+{"t":0,"ev":"echo","text":"lc= /spaced","script":"t248_mycommandchar"}
+{"t":110,"ev":"input","text":"north"}
+{"t":110,"ev":"send","text":"north","origin":"","user":true}
+{"t":220,"ev":"input","text":"/spell typed"}
+{"t":220,"ev":"trigger-fire","pattern":"^/spell","text":"/spell typed"}
+{"t":220,"ev":"cmdecho","text":"trig saw","window":""}
+{"t":500,"ev":"echo","text":"lc=north li=north","script":"t248_mycommandchar"}
+{"t":500,"ev":"print","text":"[Script finished (In 0.5 seconds): t248_mycommandchar.cmd(17)]","script":"t248_mycommandchar"}
+{"t":500,"ev":"script-finish","script":"t248_mycommandchar"}
+{"t":830,"ev":"end","live":0}

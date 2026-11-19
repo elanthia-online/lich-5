@@ -1,0 +1,22 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t75_corpus_mc_pound"}
+{"t":0,"ev":"script-start","script":"t75_corpus_mc_pound","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t75_corpus_mc_pound.cmd]","script":"t75_corpus_mc_pound"}
+{"t":0,"ev":"queue","text":"analyze my tongs","delay":0,"script":"t75_corpus_mc_pound"}
+{"t":10,"ev":"send","text":"analyze my tongs","origin":"","user":false}
+{"t":10,"ev":"expect-ok","want":"analyze my tongs","got":"analyze my tongs"}
+{"t":10,"ev":"in","text":"This tool is used to shovel fuel and can be adjusted."}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":20,"ev":"echo","text":"adj=1","script":"t75_corpus_mc_pound"}
+{"t":20,"ev":"queue","text":"pound","delay":0,"script":"t75_corpus_mc_pound"}
+{"t":30,"ev":"send","text":"pound","origin":"","user":false}
+{"t":30,"ev":"expect-ok","want":"pound","got":"pound"}
+{"t":30,"ev":"in","text":"You pound it. TURN it with the tongs to finish."}
+{"t":30,"ev":"in","text":"Roundtime: 3 sec."}
+{"t":30,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":30,"ev":"prompt-event"}
+{"t":40,"ev":"echo","text":"tool=tongs last=tongs","script":"t75_corpus_mc_pound"}
+{"t":40,"ev":"print","text":"[Script finished (In 0.04 seconds): t75_corpus_mc_pound.cmd]","script":"t75_corpus_mc_pound"}
+{"t":40,"ev":"script-finish","script":"t75_corpus_mc_pound"}
+{"t":40,"ev":"end","live":0}

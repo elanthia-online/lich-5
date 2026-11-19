@@ -1,0 +1,20 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t143_rt_line_during_gated_resume"}
+{"t":0,"ev":"script-start","script":"t143_rt_line_during_gated_resume","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t143_rt_line_during_gated_resume.cmd]","script":"t143_rt_line_during_gated_resume"}
+{"t":0,"ev":"send","text":"swing","origin":"t143_rt_line_during_gated_resume","user":false}
+{"t":10,"ev":"expect-ok","want":"swing","got":"swing"}
+{"t":10,"ev":"in","text":"You swing."}
+{"t":10,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":3}
+{"t":10,"ev":"prompt-event"}
+{"t":1020,"ev":"in","text":"Early line"}
+{"t":3010,"ev":"queue","text":"look","delay":0,"script":"t143_rt_line_during_gated_resume"}
+{"t":3010,"ev":"echo","text":"after-send","script":"t143_rt_line_during_gated_resume"}
+{"t":3020,"ev":"send","text":"look","origin":"","user":false}
+{"t":4030,"ev":"in","text":"Late line"}
+{"t":4040,"ev":"echo","text":"got-late","script":"t143_rt_line_during_gated_resume"}
+{"t":4040,"ev":"print","text":"[Script finished (In 4.04 seconds): t143_rt_line_during_gated_resume.cmd]","script":"t143_rt_line_during_gated_resume"}
+{"t":4040,"ev":"script-finish","script":"t143_rt_line_during_gated_resume"}
+{"t":5040,"ev":"end","live":0}

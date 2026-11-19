@@ -1,0 +1,35 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t131_queue_rt_trigger"}
+{"t":0,"ev":"script-start","script":"t131_queue_rt_trigger","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t131_queue_rt_trigger.cmd]","script":"t131_queue_rt_trigger"}
+{"t":0,"ev":"send","text":"swing","origin":"t131_queue_rt_trigger","user":false}
+{"t":10,"ev":"expect-ok","want":"swing","got":"swing"}
+{"t":10,"ev":"in","text":"You swing."}
+{"t":10,"ev":"in","text":"<roundTime value='1700000003'/>"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"roundtime-event","seconds":3}
+{"t":10,"ev":"prompt-event"}
+{"t":520,"ev":"in","text":"Fire send"}
+{"t":520,"ev":"trigger-fire","pattern":"^Fire send","text":"Fire send"}
+{"t":1030,"ev":"in","text":"Fire queue"}
+{"t":1030,"ev":"trigger-fire","pattern":"^Fire queue","text":"Fire queue"}
+{"t":3010,"ev":"send","text":"rtsend","origin":"","user":false}
+{"t":3010,"ev":"send","text":"qfree","origin":"","user":false}
+{"t":4040,"ev":"in","text":"You swing again."}
+{"t":4040,"ev":"in","text":"<roundTime value='1700000006'/>"}
+{"t":4040,"ev":"in","text":"<prompt time=\"1700000004\">&gt;</prompt>"}
+{"t":4040,"ev":"roundtime-event","seconds":2}
+{"t":4040,"ev":"prompt-event"}
+{"t":4350,"ev":"in","text":"Fire both"}
+{"t":4350,"ev":"trigger-fire","pattern":"^Fire both","text":"Fire both"}
+{"t":6040,"ev":"send","text":"hol1","origin":"","user":false}
+{"t":6040,"ev":"send","text":"hol2","origin":"","user":false}
+{"t":7360,"ev":"in","text":"You swing a third time."}
+{"t":7360,"ev":"in","text":"<roundTime value='1700000010'/>"}
+{"t":7360,"ev":"in","text":"<prompt time=\"1700000007\">&gt;</prompt>"}
+{"t":7360,"ev":"roundtime-event","seconds":3}
+{"t":7360,"ev":"prompt-event"}
+{"t":7670,"ev":"in","text":"Fire queue"}
+{"t":7670,"ev":"trigger-fire","pattern":"^Fire queue","text":"Fire queue"}
+{"t":7680,"ev":"send","text":"qfree","origin":"","user":false}
+{"t":10180,"ev":"end","live":1}

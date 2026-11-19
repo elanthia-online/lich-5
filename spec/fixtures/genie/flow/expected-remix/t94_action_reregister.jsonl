@@ -1,0 +1,15 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t94_action_reregister"}
+{"t":0,"ev":"script-start","script":"t94_action_reregister","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t94_action_reregister.cmd]","script":"t94_action_reregister"}
+{"t":0,"ev":"send","text":"look","origin":"t94_action_reregister","user":false}
+{"t":10,"ev":"expect-ok","want":"look","got":"look"}
+{"t":10,"ev":"in","text":"hit"}
+{"t":10,"ev":"in","text":"dup"}
+{"t":10,"ev":"echo","text":"TWO","script":"t94_action_reregister"}
+{"t":10,"ev":"in","text":"<prompt time=\"1700000000\">&gt;</prompt>"}
+{"t":10,"ev":"prompt-event"}
+{"t":1000,"ev":"echo","text":"hits=1","script":"t94_action_reregister"}
+{"t":1000,"ev":"print","text":"[Script finished (In 1.00 seconds): t94_action_reregister.cmd]","script":"t94_action_reregister"}
+{"t":1000,"ev":"script-finish","script":"t94_action_reregister"}
+{"t":1000,"ev":"end","live":0}

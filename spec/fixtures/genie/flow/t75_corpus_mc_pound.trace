@@ -1,0 +1,7 @@
+EXPECT analyze my tongs
+IN This tool is used to shovel fuel and can be adjusted.
+PROMPT
+EXPECT pound
+IN You pound it. TURN it with the tongs to finish.
+IN Roundtime: 3 sec.
+PROMPT

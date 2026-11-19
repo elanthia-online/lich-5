@@ -1,0 +1,11 @@
+WAIT 50
+IN <style id=""/><preset id='roomDesc'>D one.</preset>  You also see <pushBold/>X<popBold/>.
+WAIT 50
+IN <preset id='roomDesc'>D two.</preset>  You also see Y.
+WAIT 50
+IN   You also see Z on its own row.
+WAIT 50
+IN    You also see three spaces.
+WAIT 50
+IN   lead <pushBold/>W<popBold/>.
+WAIT 200

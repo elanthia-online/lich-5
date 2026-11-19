@@ -1,0 +1,17 @@
+{"t":0,"ev":"setup","scriptdir":"<lab>/flow-oracle/tests","genie":"Genie4 Remix v4.2.4 (<Genie4_Remix>)","delivery":"row"}
+{"t":0,"ev":"input","text":".t168_trigger_launch_owner"}
+{"t":0,"ev":"script-start","script":"t168_trigger_launch_owner","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: t168_trigger_launch_owner.cmd]","script":"t168_trigger_launch_owner"}
+{"t":0,"ev":"trigger-fire","pattern":"^GOKID$","text":"GOKID"}
+{"t":0,"ev":"script-start","script":"_t168_kid","args":""}
+{"t":0,"ev":"print","text":"[Script loaded: _t168_kid.cmd]","script":"_t168_kid"}
+{"t":0,"ev":"echo","text":"kid-start none","script":"_t168_kid"}
+{"t":0,"ev":"echo","text":"a-after none","script":"t168_trigger_launch_owner"}
+{"t":100,"ev":"echo","text":"a-list1 t168_trigger_launch_owner|_t168_kid","script":"t168_trigger_launch_owner"}
+{"t":200,"ev":"echo","text":"kid-alive t168_trigger_launch_owner|_t168_kid","script":"_t168_kid"}
+{"t":200,"ev":"print","text":"[Script finished (In 0.20 seconds): _t168_kid.cmd]","script":"_t168_kid"}
+{"t":200,"ev":"script-finish","script":"_t168_kid"}
+{"t":400,"ev":"echo","text":"a-list2 t168_trigger_launch_owner","script":"t168_trigger_launch_owner"}
+{"t":400,"ev":"print","text":"[Script finished (In 0.40 seconds): t168_trigger_launch_owner.cmd]","script":"t168_trigger_launch_owner"}
+{"t":400,"ev":"script-finish","script":"t168_trigger_launch_owner"}
+{"t":610,"ev":"end","live":0}
