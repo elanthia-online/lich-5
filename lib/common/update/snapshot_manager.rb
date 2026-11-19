@@ -3,19 +3,21 @@
 =begin
   Snapshot and rollback functionality for Lich core files.
 
-  Creates timestamped backups of lib/, lich.rbw, core scripts, Gemfile,
-  Gemfile.lock and LICENSE before updates. Supports rollback to most
-  recent snapshot. #snapshot, #revert
-  and #restore_from describe how each leaves the installation as it was when
-  it fails.
+  Creates timestamped backups of lib/, lich.rbw, and core scripts before
+  updates, with copies of Gemfile, Gemfile.lock and LICENSE. Supports
+  rollback to most recent snapshot; #revert restores lib/, lich.rbw and
+  the core scripts, not the top-level files (see #copy_top_level_files).
+  #snapshot, #revert and #restore_from describe how each leaves the
+  installation as it was when it fails.
 
   A revert whose thread is killed (Lich shutting down) undoes the swap like
   a failed one. A revert whose process is killed during the swap cannot
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
   Lich will not start and cannot run the revert again. The snapshot itself
-  is untouched: copying its lib/, the core scripts in its scripts/ and its
-  lich.rbw back by hand, or running the revert from another session of this
-  installation that is still running, restores it. On Windows each rename
+  is untouched: copying its lib/, the core scripts in its scripts/, its
+  lich.rbw and any Gemfile, Gemfile.lock and LICENSE it has back by hand,
+  or running the revert from another session of this installation that is
+  still running, restores it. On Windows each rename
   of the swap that Windows refuses keeps this window open for up to about 3
   seconds while it is retried; Lich says so while it waits.
 =end
@@ -26,6 +28,24 @@ module Lich
   module Util
     module Update
       class SnapshotManager
+        # A LICH_VERSION assigned a string literal: the only form #revert
+        # reads, as it never runs a snapshot's code.
+        LICH_VERSION_PATTERN = /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/.freeze
+
+        # Reads the version a version.rb declares, without running it. Shared
+        # with ReleaseInstaller#extract_version_from_file, so a tree an
+        # update accepts has a version #revert can read from its snapshot.
+        #
+        # @param version_file [String] path to a version.rb
+        # @return [String, nil] the declared LICH_VERSION, or nil when the
+        #   file is missing, unreadable or does not assign it a literal
+        def self.declared_version(version_file)
+          match = LICH_VERSION_PATTERN.match(File.binread(version_file))
+          match && match[1].dup.force_encoding(Encoding::UTF_8)
+        rescue SystemCallError
+          nil
+        end
+
         CORE_SCRIPTS = %w[
           alias.lic autostart.lic dependency.lic ewaggle.lic foreach.lic
           go2.lic infomon.lic jinx.lic lnet.lic log.lic logxml.lic
@@ -106,7 +126,7 @@ module Lich
         end
 
         # Creates timestamped snapshot of lib/, lich.rbw, core scripts and the
-        # top-level files an update overwrites (see #top_level_files).
+        # top-level files an update overwrites (see #copy_top_level_files).
         #
         # The copies go into a staging directory under BACKUP_DIR whose name
         # #revert ignores. Only once every copy has succeeded is
@@ -329,10 +349,7 @@ module Lich
         # @return [void]
         def copy_core_files(dest)
           FileUtils.cp(File.join(LICH_DIR, lich_file_name), File.join(dest, lich_file_name))
-          top_level_files.each do |file|
-            source = File.join(LICH_DIR, file)
-            FileUtils.cp(source, File.join(dest, file)) if File.file?(source)
-          end
+          copy_top_level_files(dest)
 
           dest_lib = File.join(dest, 'lib')
           FileUtils.mkdir_p(dest_lib)
@@ -344,6 +361,31 @@ module Lich
           CORE_SCRIPTS.each do |file|
             source = File.join(SCRIPT_DIR, file)
             FileUtils.cp(source, File.join(dest, 'scripts', file)) if File.exist?(source)
+          end
+        end
+
+        # Copies the top-level files an update overwrites
+        # (ReleaseInstaller::TOP_LEVEL_FILES: Gemfile, Gemfile.lock, LICENSE)
+        # into +dest+, so the ones from before an update survive it. Lich
+        # checks its gems against the Gemfile at startup. #revert does not
+        # restore them: after a restart, --revert runs the code of whatever
+        # was installed, which may not know about them, so they are kept for
+        # restoring by hand (see the note at the top of this file).
+        #
+        # Only a regular file that can be read is copied (through a link, its
+        # target's bytes). A directory, a dangling link or an unreadable file
+        # is skipped, so the snapshot never fails where it did before these
+        # files were copied.
+        #
+        # @param dest [String] snapshot directory being filled
+        # @return [void]
+        # @api private
+        def copy_top_level_files(dest)
+          ReleaseInstaller::TOP_LEVEL_FILES.each do |file|
+            source = File.join(LICH_DIR, file)
+            next unless File.file?(source) && File.readable?(source)
+
+            FileUtils.cp(source, File.join(dest, file))
           end
         end
 
@@ -613,10 +655,7 @@ module Lich
         # @param dir [String] snapshot directory
         # @return [String, nil] LICH_VERSION declared by dir/lib/version.rb
         def snapshot_version(dir)
-          content = File.binread(File.join(dir, 'lib', 'version.rb'))
-          content =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/ ? $1 : nil
-        rescue SystemCallError
-          nil
+          self.class.declared_version(File.join(dir, 'lib', 'version.rb'))
         end
 
         # Explains why #revert will not restore the newest snapshot and what
@@ -681,9 +720,8 @@ module Lich
           end
         end
 
-        # Replaces the live lib/ contents, the snapshot's scripts, its
-        # top-level files (see #swap_top_level_files) and lich.rbw with the
-        # copies in +snapshot_dir+.
+        # Replaces the live lib/ contents, the snapshot's scripts and
+        # lich.rbw with the copies in +snapshot_dir+.
         #
         # Phase 1 copies everything from the snapshot into hidden working
         # directories next to the targets (for a symlinked lich.rbw, next to
@@ -726,16 +764,10 @@ module Lich
             new_lich = File.join(new_lich_dir, File.basename(live_lich))
             FileUtils.cp(File.join(snapshot_dir, lich_file_name), new_lich)
             File.chmod(File.stat(live_lich).mode, new_lich) if File.exist?(live_lich)
-            new_top = revert_temp_dir(LICH_DIR, 'new', temp_dirs)
-            top_level_files.each do |file|
-              source = File.join(snapshot_dir, file)
-              FileUtils.cp(source, File.join(new_top, file)) if File.file?(source)
-            end
 
             old_lib = revert_temp_dir(LIB_DIR, 'old', temp_dirs)
             old_scripts = revert_temp_dir(SCRIPT_DIR, 'old', temp_dirs)
             old_lich_dir = revert_temp_dir(File.dirname(live_lich), 'old', temp_dirs)
-            old_top = revert_temp_dir(LICH_DIR, 'old', temp_dirs)
 
             stage = :swapping
             # This run's working directories, and any a previous failed
@@ -753,8 +785,6 @@ module Lich
               move_entry(File.join(new_scripts, name), live, journal)
             end
 
-            swap_top_level_files(new_top, old_top, journal)
-
             move_entry(live_lich, File.join(old_lich_dir, File.basename(live_lich)), journal) if File.exist?(live_lich)
             move_entry(new_lich, live_lich, journal)
             stage = :done
@@ -763,37 +793,6 @@ module Lich
             raise
           ensure
             Thread.handle_interrupt(Object => :never) { finish_restore(stage, temp_dirs, journal, failure) }
-          end
-        end
-
-        # Top-level files an update overwrites (ReleaseInstaller::TOP_LEVEL_FILES:
-        # Gemfile, Gemfile.lock, LICENSE). Lich checks its gems against the
-        # Gemfile at startup, so a revert has to put the old one back.
-        #
-        # @return [Array<String>] file names in LICH_DIR
-        def top_level_files
-          ReleaseInstaller::TOP_LEVEL_FILES
-        end
-
-        # Swaps the snapshot's top-level files (copied into +new_top+) in
-        # for the live ones, moving those into +old_top+. A snapshot taken
-        # before snapshots held these files has none of them, and the live
-        # ones are kept. One that has some of them recorded every one the
-        # install had, so a live file it lacks was added by the update being
-        # reverted (e.g. a Gemfile.lock) and is moved out too.
-        #
-        # @param new_top [String] working directory holding the snapshot's copies
-        # @param old_top [String] working directory to move the live files into
-        # @param journal [Array<Array(String, String)>] renames done so far
-        # @return [void]
-        def swap_top_level_files(new_top, old_top, journal)
-          restored = Dir.children(new_top)
-          return if restored.empty?
-
-          top_level_files.each do |file|
-            live = File.join(LICH_DIR, file)
-            move_entry(live, File.join(old_top, file), journal) if File.exist?(live) || File.symlink?(live)
-            move_entry(File.join(new_top, file), live, journal) if restored.include?(file)
           end
         end
 

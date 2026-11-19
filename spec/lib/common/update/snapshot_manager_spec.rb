@@ -265,6 +265,42 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(File.exist?(File.join(dir, 'Gemfile.lock'))).to be(false)
     end
 
+    it 'skips a top-level directory, dangling link or unreadable file instead of failing' do
+      skip_unless_permissions_enforced
+      skip 'symlinks are not available on this platform' unless symlinks_supported?
+      write(File.join(LICH_DIR, 'LICENSE', 'notice.txt'), "# notice\n")
+      File.symlink(File.join(root, 'missing'), File.join(LICH_DIR, 'Gemfile.lock'))
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile\n")
+      File.chmod(0o000, File.join(LICH_DIR, 'Gemfile'))
+
+      dir = manager.snapshot
+
+      expect(%w[Gemfile Gemfile.lock LICENSE].select { |file| File.exist?(File.join(dir, file)) }).to be_empty
+    end
+
+    it 'copies the bytes of a linked top-level file' do
+      skip 'symlinks are not available on this platform' unless symlinks_supported?
+      write(File.join(root, 'checkout', 'Gemfile'), "# linked Gemfile\n")
+      File.symlink(File.join(root, 'checkout', 'Gemfile'), File.join(LICH_DIR, 'Gemfile'))
+
+      dir = manager.snapshot
+
+      expect(File.symlink?(File.join(dir, 'Gemfile'))).to be(false)
+      expect(File.read(File.join(dir, 'Gemfile'))).to eq("# linked Gemfile\n")
+    end
+
+    it 'is not restored by #revert, which leaves the live top-level files as they are' do
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      manager.snapshot
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile other\n")
+      write(File.join(LICH_DIR, 'Gemfile.lock'), "# lock other\n")
+
+      manager.revert
+
+      expect(File.read(File.join(LICH_DIR, 'Gemfile'))).to eq("# Gemfile other\n")
+      expect(File.read(File.join(LICH_DIR, 'Gemfile.lock'))).to eq("# lock other\n")
+    end
+
     it 'marks the snapshot as staged, so #revert never treats it as an older Lich\'s' do
       FileUtils.rm_f(File.join(SCRIPT_DIR, 'map.lic'))
       dir = manager.snapshot
@@ -764,6 +800,17 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(revert_temp_dirs + checkout_temp_dirs).to be_empty
       end
 
+      it 'restores a snapshot when the install root is read-only and the launcher is linked out of it' do
+        skip_unless_permissions_enforced
+        File.chmod(0o555, LICH_DIR)
+
+        manager.revert
+
+        File.chmod(0o755, LICH_DIR)
+        expect(File.read(target)).to eq("# lich 5.21.0\n")
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
       it 'replaces a dangling link with the snapshot\'s launcher so Lich can start' do
         File.delete(target)
 
@@ -773,6 +820,17 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(File.read(live_lich)).to eq("# lich 5.21.0\n")
         expect(revert_temp_dirs).to be_empty
       end
+    end
+
+    it 'leaves a LICENSE directory and its contents alone across a snapshot and revert' do
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      write(File.join(LICH_DIR, 'LICENSE', 'notice.txt'), "# notice\n")
+      manager.snapshot
+
+      manager.revert
+
+      expect(File.read(File.join(LICH_DIR, 'LICENSE', 'notice.txt'))).to eq("# notice\n")
+      expect(File.read(File.join(LICH_DIR, 'Gemfile'))).to eq("# Gemfile 5.22.0\n")
     end
 
     it 'makes lib/ exactly the snapshot\'s lib/, hidden top-level files included' do
@@ -1161,61 +1219,6 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
     # A snapshot this version published was copied in full, so a core
     # script it lacks was not installed when it was taken.
-    # An update overwrites Gemfile, Gemfile.lock and LICENSE, and Lich
-    # checks its gems against the Gemfile at startup, so a revert from
-    # another project's tree must put the old ones back.
-    context 'with top-level files (Gemfile, Gemfile.lock, LICENSE)' do
-      def top_level(dir)
-        %w[Gemfile Gemfile.lock LICENSE].to_h { |file| [file, File.exist?(File.join(dir, file)) ? File.read(File.join(dir, file)) : nil] }
-      end
-
-      before do
-        %w[Gemfile Gemfile.lock LICENSE].each { |file| write(File.join(LICH_DIR, file), "# #{file} other\n") }
-      end
-
-      it 'restores the snapshot\'s and moves out one it did not have' do
-        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
-        write(File.join(dir, 'Gemfile'), "# Gemfile 5.21.0\n")
-        write(File.join(dir, 'LICENSE'), "# LICENSE 5.21.0\n")
-
-        manager.revert
-
-        expect(top_level(LICH_DIR)).to eq('Gemfile' => "# Gemfile 5.21.0\n", 'Gemfile.lock' => nil, 'LICENSE' => "# LICENSE 5.21.0\n")
-        expect(revert_temp_dirs).to be_empty
-      end
-
-      it 'keeps the live ones when the snapshot has none (taken by an older Lich)' do
-        make_snapshot('2026-10-01-00-00-00', '5.21.0')
-        before = top_level(LICH_DIR)
-
-        manager.revert
-
-        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
-        expect(top_level(LICH_DIR)).to eq(before)
-      end
-
-      it 'undoes their swap when a later rename fails' do
-        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
-        write(File.join(dir, 'Gemfile'), "# Gemfile 5.21.0\n")
-        write(File.join(dir, 'LICENSE'), "# LICENSE 5.21.0\n")
-        File.delete(File.join(LICH_DIR, 'LICENSE'))
-        before = top_level(LICH_DIR)
-        live_lich = File.join(LICH_DIR, lich_name)
-        allow(File).to receive(:rename).and_wrap_original do |original, from, to|
-          raise Errno::EACCES, to if to == live_lich && from.include?('.lich5-revert-new-')
-
-          original.call(from, to)
-        end
-        messages = capture_responses
-
-        expect { manager.revert }.to raise_error(Errno::EACCES)
-
-        expect(top_level(LICH_DIR)).to eq(before)
-        expect(revert_temp_dirs).to be_empty
-        expect(messages).to include('Every change was undone; your installation is as it was.')
-      end
-    end
-
     context 'when the snapshot lacks core scripts that are installed' do
       it 'restores it, keeps them and names them as kept at the current version' do
         dir = make_snapshot('2026-10-01-00-00-00', '5.21.0', omit: %i[scripts], staged: true)

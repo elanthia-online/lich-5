@@ -92,16 +92,16 @@ module Lich
                 end
 
                 version = @release_installer.extract_version_from_file(version_file_path)
-
+                # #revert reads a snapshot's version the same way, without
+                # running it, and refuses one it cannot read. Falling back to
+                # the current version here would install a tree whose next
+                # snapshot cannot be reverted.
                 if version.nil?
-                  respond
-                  respond "Warning: Could not extract version from branch's version.rb file."
-                  respond "Using existing Lich version identifier: #{LICH_VERSION}"
-                  version = LICH_VERSION
-                else
-                  respond
-                  respond "Detected version from branch: #{version}"
+                  raise StandardError, "Downloaded branch's lib/version.rb does not assign LICH_VERSION a string literal, which this updater needs to revert it"
                 end
+
+                respond
+                respond "Detected version from branch: #{version}"
 
                 installing = true
                 @release_installer.perform_update(source_dir, version, snapshot_dir)
@@ -114,6 +114,15 @@ module Lich
               respond "Successfully updated to branch: #{branch_name} (version #{extracted_version})"
               respond "Branch tracking: This installation is now tracking branch '#{branch_name}'"
               respond "                 from repository '#{repo}'" unless repo.casecmp?(GITHUB_REPO)
+              respond
+              respond "Your previous installation is saved in: #{snapshot_dir}"
+              respond "After you log back in, --revert runs the version you just installed, and it may"
+              respond "not put back Gemfile, Gemfile.lock and LICENSE. If it does not, or the new"
+              respond "version will not start, copy from that folder its lib/, #{File.basename($PROGRAM_NAME)}, the"
+              respond "scripts in its scripts/ and any Gemfile, Gemfile.lock and LICENSE it has into:"
+              respond "    #{LICH_DIR}"
+              respond "Delete a Gemfile.lock there if the saved folder has none."
+              respond
               respond "You should exit the game, then log back in to use the updated version."
               respond
               respond "To check your current branch status, run: #{$clean_lich_char}lich5-update --status"
@@ -153,6 +162,7 @@ module Lich
         # @param branch_spec [String] stripped branch spec
         # @return [Array(String, String), nil] [owner/repo, branch_name], or
         #   nil after telling the user why the spec was refused
+        # @api private
         def resolve_branch_source(branch_spec)
           source, separator, branch_name = branch_spec.partition(':')
           return incomplete_spec(branch_spec) if source.empty?
@@ -189,23 +199,32 @@ module Lich
           ["#{owner}/#{repo_name}", branch_name]
         end
 
+        # Names the lich-5 repository of +owner+.
+        #
         # @param owner [String] GitHub owner of a lich-5 fork
         # @return [String] owner/lich-5, spelled as GITHUB_REPO when it is
         #   the main repository, so branch tracking records one spelling
+        # @api private
         def fork_repo(owner)
           repo = "#{owner}/lich-5"
           repo.casecmp?(GITHUB_REPO) ? GITHUB_REPO : repo
         end
 
+        # Refuses a spec missing its source or its branch.
+        #
         # @param branch_spec [String] spec missing its source or branch
         # @return [nil]
+        # @api private
         def incomplete_spec(branch_spec)
           respond_usage("Error: Branch specification is incomplete: '#{branch_spec}'.")
           nil
         end
 
+        # Tells the user why a spec was refused and which forms are accepted.
+        #
         # @param error [String] reason the spec was refused
         # @return [void]
+        # @api private
         def respond_usage(error)
           respond
           respond error

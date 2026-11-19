@@ -106,7 +106,9 @@ module Lich
         case type
         when /^(?:--announce|-a)\b/
           release_installer.announce
-        when /^--branch=(.+)$/
+        # (.*), not (.+): an empty --branch= reaches the installer's usage text
+        # instead of being reported as an unknown option.
+        when /^--branch=(.*)$/
           branch_installer.download_branch_update($1)
         when /^--(?:beta|test)\s+(?:--)?confirm\s*$/
           release_installer.confirm_betatest

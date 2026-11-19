@@ -429,7 +429,8 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller branch specs' do
                                         extract_version_from_file: '6.0.0',
                                         perform_update: true)
     installer = Lich::Util::Update::BranchInstaller.new(snapshot_manager, release_installer)
-    allow(installer).to receive(:respond)
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+    allow(snapshot_manager).to receive(:snapshot).and_yield('/backup/L5-snapshot-2026-11-19-00-00-00')
     allow(Lich::Util::Update).to receive(:store_branch_tracking)
 
     Dir.mktmpdir do |tree|
@@ -441,6 +442,22 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller branch specs' do
     end
 
     expect(Lich::Util::Update).to have_received(:store_branch_tracking).with('main', 'elanthia-online/lich-6', '6.0.0')
+    # After a restart --revert runs the installed tree's code, so the way
+    # back by hand is given before the user restarts.
+    saved = messages.index('Your previous installation is saved in: /backup/L5-snapshot-2026-11-19-00-00-00')
+    expect(saved).not_to be_nil
+    expect(saved).to be < messages.index('You should exit the game, then log back in to use the updated version.')
+    expect(messages).to include(a_string_including('any Gemfile, Gemfile.lock and LICENSE it has into:'), "    #{LICH_DIR}")
+  end
+
+  it 'shows the usage text for an empty --branch= given to the command' do
+    allow(Lich::Util::Update).to receive(:branch_installer).and_return(installer)
+
+    Lich::Util::Update.request('--branch=')
+
+    expect(messages).to include(a_string_matching(/incomplete/))
+    expect(messages).to include(a_string_including('<owner>/<repo>:<branch_name>'))
+    expect(snapshot_manager).not_to have_received(:snapshot)
   end
 end
 
@@ -474,7 +491,11 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
     entries.each do |entry|
       path = File.join(@tree, entry)
       FileUtils.mkdir_p(File.dirname(path))
-      entry == 'lib' ? FileUtils.mkdir_p(path) : File.write(path, "# #{entry}\n")
+      if entry == 'lib'
+        FileUtils.mkdir_p(path)
+      else
+        File.write(path, entry == 'lib/version.rb' ? "LICH_VERSION = '6.0.0'\n" : "# #{entry}\n")
+      end
     end
   end
 
@@ -498,6 +519,17 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
 
     expect(release_installer).not_to have_received(:perform_update)
     expect(messages).to include(a_string_including('has no lib/version.rb'))
+    expect(messages).to include('Your installation has been preserved.')
+  end
+
+  it 'refuses a lib/version.rb whose version cannot be read without running it' do
+    lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
+    File.write(File.join(@tree, 'lib', 'version.rb'), "LICH_VERSION = [6, 0, 0].join('.')\n")
+
+    installer.download_branch_update('elanthia-online/lich-6:main')
+
+    expect(release_installer).not_to have_received(:perform_update)
+    expect(messages).to include(a_string_including('does not assign LICH_VERSION a string literal'))
     expect(messages).to include('Your installation has been preserved.')
   end
 
