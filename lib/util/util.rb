@@ -168,10 +168,12 @@ module Lich
     # See {CAPTURE_OBSERVER_PRIORITY}.
     CAPTURE_SUPPRESSOR_PRIORITY = -1_000_000_000
 
-    # Marker pushed onto the calling script's downstream buffer right after
-    # the end line, so the script thread can consume exactly the reply and
-    # nothing after it. A String (not a bare Object) so a stray read can
-    # never raise on =~.
+    # Text of the marker pushed onto the calling script's downstream buffer
+    # right after the end line, so the script thread can consume exactly the
+    # reply and nothing after it. A String (not a bare Object) so a stray
+    # read can never raise on =~. Each capture, and each restart of one,
+    # pushes its own copy and the drain matches it by identity, so a marker
+    # left by an earlier send is consumed rather than taken as the end.
     CAPTURE_END_MARKER = "\u0000Lich::Util.capture_command:end\u0000".freeze
 
     # A prompt tag and its text. Removed from the start line before that
@@ -251,6 +253,7 @@ module Lich
       settled = ConditionVariable.new # signalled when the suppressor takes the flag
       done = Queue.new
       lines = []
+      marker = CAPTURE_END_MARKER.dup # replaced on every restart
       phase = :waiting # -> :capturing -> :done, or -> :abandoned on timeout
       suppress_current = false
 
@@ -309,7 +312,7 @@ module Lich
             end
             if %i[done error].include?(phase)
               # Also on :error, so a waiting fput reads a line and returns.
-              script&.downstream_buffer&.push(CAPTURE_END_MARKER)
+              script&.downstream_buffer&.push(marker)
               done << phase
             end
           end
@@ -344,16 +347,20 @@ module Lich
         remaining = -> { deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC) }
         if use_fput && script
           # fput calls on_send before every send, resends and 'stand'
-          # included, after clearing the script's buffer (and any end marker
-          # in it). Restart the capture there: whatever it matched so far
-          # answered an earlier send. fput is not interrupted when the capture
-          # completes, so a refusal that matched cannot cancel the resend.
+          # included, after clearing the script's buffer. Restart the capture
+          # there: whatever it matched so far answered an earlier send. The
+          # game thread can complete that earlier capture between fput's
+          # clear and this restart, leaving its marker in the buffer, so the
+          # restart takes a fresh marker and the drain skips the stale one.
+          # fput is not interrupted when the capture completes, so a refusal
+          # that matched cannot cancel the resend.
           restart = lambda do |_sent|
             lock.synchronize do
               next if phase == :error
 
               phase = :waiting
               lines.clear
+              marker = CAPTURE_END_MARKER.dup
               suppress_current = false
               done.clear
               $strip_xml_multiline&.delete(strip_key)
@@ -411,10 +418,11 @@ module Lich
           if script
             begin
               # Consume the reply from the script's own buffer, as the old
-              # get-loop did: through the end marker when complete, else all of
-              # it. Before the restore: with both want flags off, gets? sleeps.
+              # get-loop did: through this capture's end marker when complete
+              # (a stale one from an earlier send is consumed on the way),
+              # else all of it. Before the restore: with both want flags off, gets? sleeps.
               while (line = script.gets?)
-                break if completed && line.equal?(CAPTURE_END_MARKER)
+                break if completed && line.equal?(marker)
               end
             ensure
               script.silent = save_script_silent unless silent.nil?

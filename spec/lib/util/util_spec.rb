@@ -337,9 +337,15 @@ RSpec.describe Lich::Util do
     context 'with the real fput, when the game refuses the first send' do
       let(:fput_host) do
         klass = Class.new do
-          attr_accessor :game, :script
+          attr_accessor :game, :script, :after_clear
 
-          def clear = script.clear
+          # after_clear stands in for the game thread running between fput's
+          # clear and its next send.
+          def clear
+            script.clear
+            after_clear&.call
+          end
+
           def put(cmd) = game.call(cmd)
           def get? = script.gets?
           def pause(*) = sleep(0.001)
@@ -393,6 +399,20 @@ RSpec.describe Lich::Util do
         expect(sent).to eq(['flip coin', 'stand', 'flip coin'])
         expect(result).to be_complete
         expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+      end
+
+      it 'skips a marker left by a capture that completed between fput\'s clear and its resend' do
+        # The stand reply's prompt arrives in a later packet, just after
+        # fput's clear before the resend: the capture that started on the
+        # stand reply completes in that gap and pushes its marker.
+        sent = game_answering(["You struggle but fail to stand.\r\n"], ["You stand back up.\r\n"], reply + ["A goblin arrives.\r\n"])
+        clears = 0
+        fput_host.after_clear = -> { deliver(prompt) if (clears += 1) == 3 }
+        result = capture('flip coin', /\S/, timeout: 2)
+
+        expect(sent).to eq(['flip coin', 'stand', 'flip coin'])
+        expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+        expect(script.drain).to eq(['A goblin arrives.'])
       end
 
       it 'reports :no_start, not the refusal, when the roundtime outlasts the timeout' do
