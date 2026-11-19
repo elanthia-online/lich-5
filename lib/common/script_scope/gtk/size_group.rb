@@ -34,6 +34,7 @@ module Lich
           # Adds one live same-owner member; repeats preserve existing identity and membership.
           # @return [SizeGroup] self
           def add_widget(widget)
+            adopt_into_current_run(widget)
             session.style_operation(self, :add_widget) do
               valid = widget.is_a?(Widget) && !widget.is_a?(Window) && widget.session.equal?(session) && !widget.destroyed?
               session.refuse(self, :add_widget) unless valid
@@ -83,11 +84,35 @@ module Lich
 
           private
 
-          # Refuses membership spanning multiple windows before publishing group identity.
-          # @raise [UnsupportedOperation] when live members belong to distinct windows
+          # Scripts often cache groups at top level (`@groups[c] ||= SizeGroup.new`),
+          # which outlives a run, and GTK lets the next run reuse them. A group
+          # whose run has ended moves, empty and with a new key, to the session
+          # of the widget the new run adds; a live foreign group is still refused.
+          # @param widget [Object] candidate member
+          # @return [void]
+          # @api private
+          def adopt_into_current_run(widget)
+            return unless session.closed? && widget.is_a?(Widget) && !widget.session.equal?(session)
+            return unless widget.session.equal?(Gtk.session)
+
+            fresh = widget.session
+            fresh.style_operation(self, :new) do
+              @key = "sizegroup-#{fresh.next_size_group_sequence(self, LIFETIME_LIMIT)}".freeze
+              @widgets = []
+            end
+            @session = fresh
+          end
+
+          # GTK aligns a group across windows; each WebUI page sizes only its own
+          # members, so a group spanning windows aligns within each window. Logged once.
+          # @param widget [Widget] member being added to the group
+          # @return [void]
+          # @api private
           def validate_roots(widget)
             roots = (@widgets + [widget]).reject(&:destroyed?).map(&:toplevel).grep(Window).uniq
-            session.refuse(self, :add_widget) if roots.size > 1
+            return if roots.size <= 1
+
+            session.degrade(:size_group_windows, 'size group spans windows; widths align within each window only', receiver: self)
           end
         end
 

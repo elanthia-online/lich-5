@@ -337,6 +337,7 @@ module Lich
             end
             self
           end
+          alias label_widget= set_label_widget
 
           # Releases the current caption and its style context exactly once.
           # @return [Frame] self

@@ -122,10 +122,18 @@ candidate widgets and leaves earlier successfully loaded objects intact. IDs
 must be unique, and references must resolve within the current document.
 Cross-document references into an earlier graph are unsupported.
 
-Undeclared object lookups raise `Gtk::BuilderError`; optional lookup callers must
-inspect `objects` explicitly. Unhandled Builder errors escaping `Gtk.queue` close
-that owner's UI and request script termination, preventing a partly initialized
-setup from continuing. A rescued direct error does not discard prior objects.
+Looking up an object the XML never declared returns `nil`, as GTK does, so an
+optional lookup such as `builder['extra'] || fallback` works. Each undeclared
+identifier is logged once and no widget is invented. A caller that requires the
+object must check the result itself: with Lich's `NilClass` extension loaded, as
+in a running Lich, a later call on that `nil` silently does nothing; without the
+extension the same call raises `NoMethodError` in the script's own code.
+
+`Gtk::BuilderError` is raised only when a load fails: unsupported or malformed
+XML, a file that cannot be read, a duplicate identifier or a reference that does
+not resolve. Unhandled Builder errors escaping `Gtk.queue` close that owner's UI
+and request script termination, preventing a partly initialized setup from
+continuing. A rescued direct error does not discard prior objects.
 Source defects are not repaired by the shim. Regression fixtures distinguish
 unchanged source failures from explicitly corrected candidates, with pinned
 provenance and explicit acceptance limits.

@@ -54,7 +54,8 @@ module Lich
 
           # Accepts the measured normal-state token while retaining browser-theme backgrounds.
           # @param state [Symbol] supported GTK state token
-          # @param colour [Gdk::RGBA] typed bounded legacy color
+          # @param colour [Gdk::RGBA, nil] typed bounded legacy color; nil clears an
+          #   override, which leaves the browser theme's background in place
           # @return [Widget] self
           # @raise [UnsupportedOperation] for other state/color objects
           def override_background_color(state, colour)
@@ -62,7 +63,10 @@ module Lich
             # Resolve it at call time; an absent class has no instances.
             # Retirement: replace this guard with a plain constant reference once this
             # file is always shipped and tested with the defining file.
-            session.refuse(self, :override_background_color) unless state == :normal && defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA)
+            # A nil colour clears an override, which the browser theme already owns.
+            session.refuse(self, :override_background_color) unless state == :normal && (colour.nil? || (defined?(Gdk::RGBA) && colour.is_a?(Gdk::RGBA)))
+            return self if colour.nil?
+
             session.degrade(:background_colour, 'widget background colours follow browser theme; displayed values are retained')
             self
           end
@@ -227,21 +231,40 @@ module Lich
           alias set_halign halign=
 
           # Accepts only the focus behavior already provided by this concrete control.
-          # Composite entries and non-default requests need their own implementation;
-          # disabling focus must never be confused with disabling the whole widget.
+          # Browser controls keep their own focus order; disabling focus must never
+          # be confused with disabling the whole widget. A request that differs
+          # from the control's browser behavior is retained and logged once.
           # @param value [Boolean] requested ability to own input focus
           # @return [void]
-          # @raise [UnsupportedOperation] when no equivalent control behavior exists
+          # @raise [UnsupportedOperation] for a non-boolean value
           def can_focus=(value)
+            session.refuse(self, :can_focus=) unless [true, false].include?(value)
             kind = self.class.name&.split('::')&.last
             focusable = %w[Button ToggleButton CheckButton RadioButton Entry ComboEntry SearchEntry SpinButton TextView Notebook ScrolledWindow Expander TreeView ComboBoxText ComboBox]
             passive = %w[Window Box HBox VBox Grid Table Frame Viewport Label Separator HSeparator]
             expected = if focusable.include?(kind) then true
                        elsif passive.include?(kind) then false
                        end
-            session.refuse(self, :can_focus=) if expected.nil? || value != expected
+            return if value == expected
+
+            session.degrade(:can_focus, 'focus follows the browser control; the request is retained only', receiver: self)
           end
           alias set_can_focus can_focus=
+
+          # Moves focus within this widget's window, or before it opens. A
+          # widget the page cannot focus, or one outside a window, keeps the
+          # request only and logs once.
+          # @return [void]
+          def grab_focus
+            window = toplevel
+            focusable = Lich::WebUI::TreeBuilder::FOCUSABLE_TYPES.include?(component_type)
+            if window.is_a?(Window) && !window.equal?(self) && focusable && !destroyed?
+              window.set_focus(self)
+            else
+              session.degrade(:grab_focus, 'focus request kept only; this widget has no browser focus target', receiver: self)
+            end
+            nil
+          end
 
           alias set_margin_start set_margin_left
           alias set_margin_end set_margin_right

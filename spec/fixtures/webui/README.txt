@@ -2,8 +2,8 @@ WebUI setup fixture provenance and acceptance boundaries
 
 This record describes frozen fixtures, not the latest upstream script versions.
 The original Builder cohort contains ten script fixtures: eight positive setup candidates and
-two negative candidates (eloot and Bigshot), also exercised with
-explicit test-only source repairs. These ten fixtures are not a total-corpus
+two source-defect candidates (eloot and Bigshot, which look up an object their
+XML never declares), also exercised with explicit test-only source repairs. These ten fixtures are not a total-corpus
 compatibility count or the full current fixture inventory. Separate fixtures below
 cover tpick, manatimer, repository v2.76, sail2, gemstonev/highlight-manager and the
 source refresh (abyssx, compass_and_wings, newer eloot and Bigshot provenance).
@@ -222,10 +222,19 @@ each have independent browser examples and original Close/destroy checks.
 ebounty/BlackArts retain source uniq!.sort! chains; subprocess tests load Lich's
 actual NilClass extension without changing the parent RSpec process. Removing
 that production extension will require source migration; it is not shim support.
-eloot is a negative fixture: its XML never declares exclusions_label, so tooltip
-initialization must report BuilderError even with nil suppression present.
-Unhandled queued Builder failures close the owner's UI and request the existing
-asynchronous script stop. No widget is fabricated.
+eloot is a source-defect fixture: its XML never declares exclusions_label, so
+tooltip initialization looks up an undeclared object. The lookup returns nil, as
+in GTK, and is logged once; no widget is fabricated and no BuilderError is raised.
+What the original source then does depends on the environment:
+- With Lich's NilClass extension loaded, as in a running Lich, the tooltip
+  assignment on that nil does nothing. Setup completes without that tooltip, the
+  window stays open and the owner is not stopped.
+- Without the extension the same assignment raises NoMethodError in the script's
+  own code, which is reported as a failed callback.
+BuilderError remains the result of a load that fails: unsupported or malformed
+XML, an unreadable file, a duplicate identifier or an unresolved reference.
+An unhandled BuilderError escaping a queued callback closes the owner's UI and
+requests the existing asynchronous script stop.
 
 The preserved native WebUI versions of all three positive fixtures were reviewed
 for reusable behavior. Their settings and script-specific form code remain out
@@ -320,9 +329,14 @@ harness code.
 
 Huntplan's original setup, input limits, invalid-slot refusal, Save & Exit and
 cleanup run in Ruby and Chrome with inert game data and in-memory persistence.
-Bigshot's retained original source fails on the undeclared boon_flee_from
-tooltip target before connecting its XML signals. This is an expected source
-failure, not successful Bigshot acceptance. Its converted version was inspected
+Bigshot's retained original source looks up the undeclared boon_flee_from
+tooltip target. The lookup returns nil and is logged once. Its example runs
+without Lich's NilClass extension, so the next call on that nil raises
+NoMethodError in the script's own set_tooltips, before its XML signals are
+connected; the callback is reported as failed, no BuilderError is involved and
+the owner is not stopped. With the extension loaded that call does nothing, as
+described for eloot above. Either way this is a source defect on record, not
+successful Bigshot acceptance. Its converted version was inspected
 as a behavior reference; converted business logic is not copied into the shim.
 
 Explicitly corrected eloot/Bigshot acceptance candidates
@@ -331,8 +345,11 @@ The source-repair helper applies exact-match substitutions only while
 loading separately labeled positive tests. Fixture files remain untouched.
 eloot names its existing Exclusions label exclusions_label; Bigshot removes
 the obsolete tooltip assignment and replaces its legacy boon-flag migration.
-Source digests are checked before these substitutions. The unchanged negative
+Source digests are checked before these substitutions. The unchanged original
 tests remain mandatory, so candidate success does not hide production defects.
+An original passes when its undeclared lookup returns nil and is logged once
+with no BuilderError; a corrected candidate passes when the repaired source
+needs no such lookup.
 
 Corrected eloot exercises all twelve list add/delete handlers, scalar entry/spin
 settings, tipping-preview dispatch with isolated calculation/formatting, dependent
@@ -375,10 +392,11 @@ claim that these are the latest upstream versions.
 - Bigshot v5.17.0 Setup, lines 955-2359, uses the normalized class hash
   (`raw_lines.lstrip.chomp`) recorded above. The manifest links the new whole-source
   hash to the existing fixture with its documented boundary edits; no duplicate
-  Setup is needed. The original missing boon_flee_from failure and separately
-  corrected candidate remain unchanged.
+  Setup is needed. The original's undeclared boon_flee_from lookup (nil, logged
+  once) and the separately corrected candidate remain unchanged.
 - eloot v2.13.0 Setup, lines 742-1948, replaces loot_defensive with loot_stance.
-  The refreshed original still fails on exclusions_label. Its separately labeled
+  The refreshed original still looks up the undeclared exclusions_label and
+  gets nil, logged once. Its separately labeled
   positive candidate applies only the existing exact-match label-ID repair and
   checks seven stance IDs, restored/default values, changes and saved settings.
   The historical eloot fixture remains separate. Setup acceptance does not run

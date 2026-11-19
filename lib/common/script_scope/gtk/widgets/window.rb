@@ -372,13 +372,10 @@ module Lich
                   set_focus(target) if ancestor.equal?(self)
                 end
               end
-              first = !@realized
-              changed = !@shown
-              @realized = true
               @shown = true
-              emit_handlers(:realize) if first
-              emit_handlers(:show) if changed && !destroyed?
-              emit_handlers(:map) if changed && !destroyed? && visible?
+              # The window and the widgets presented with it realize, then the
+              # window's show handlers run, then each of them maps.
+              refresh_mapped { emit_handlers(:show) unless destroyed? }
             end
             self
           end
@@ -391,6 +388,7 @@ module Lich
               session.refuse(self, :hide) if destroyed?
               write(:presentation, (@props[:presentation] || {}).merge(hidden: true))
               @shown = false
+              refresh_mapped
             end
             self
           end
@@ -421,6 +419,12 @@ module Lich
             self
           end
           private :request_minimized
+
+          # A window is the root of presentation: it is mapped while shown.
+          # @return [Boolean] whether the window should be mapped now
+          # @api private
+          def map_ready? = visible?
+          private :map_ready?
 
           # Reports shadow visibility without allocating a browser surface.
           # @return [Boolean] whether this window has been published and remains live

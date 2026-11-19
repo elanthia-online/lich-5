@@ -55,18 +55,21 @@ RSpec.describe 'horizontal size groups and fixed spin ranges' do
     expect(other.widgets).to be_empty
   end
 
-  it 'refuses foreign, dead, cross-window and unsupported group use' do
+  it 'refuses foreign, dead and unsupported group use, and accepts a cross-window member' do
     group = gtk::SizeGroup.new(:horizontal)
     first, second = [gtk::Button.new('First'), gtk::Button.new('Second')]
     one, two = [gtk::Window.new, gtk::Window.new]
     one.add(first)
     two.add(second)
     group.add_widget(first)
-    expect { group.add_widget(second) }.to raise_error(gtk::UnsupportedOperation)
+    # GTK aligns across windows; WebUI aligns within each window and logs it once.
+    expect(group.add_widget(second)).to equal(group)
+    expect(group.widgets).to eq([first, second])
     expect { group.add_widget(one) }.to raise_error(gtk::UnsupportedOperation)
     expect { gtk::SizeGroup.new(:vertical) }.to raise_error(gtk::UnsupportedOperation)
-    second.destroy
-    expect { group.add_widget(second) }.to raise_error(gtk::UnsupportedOperation)
+    dead = gtk::Button.new('Dead')
+    dead.destroy
+    expect { group.add_widget(dead) }.to raise_error(gtk::UnsupportedOperation)
     allow(Lich::Common::Script).to receive(:current).and_return(Struct.new(:name).new('other.lic'))
     expect { group.add_widget(gtk::Button.new('Foreign')) }.to raise_error(gtk::UnsupportedOperation)
     expect { group.widgets }.to raise_error(gtk::UnsupportedOperation)
@@ -75,15 +78,16 @@ RSpec.describe 'horizontal size groups and fixed spin ranges' do
     expect { group.widgets }.to raise_error(gtk::UnsupportedOperation)
   end
 
-  it 'refuses groups split into separate windows after their members were registered' do
+  it 'shows a group split into separate windows, aligning within each window' do
     group = gtk::SizeGroup.new(:horizontal)
     first, second = [gtk::Label.new('First'), gtk::Label.new('Second')]
     group.add_widget(first).add_widget(second)
     one, two = [gtk::Window.new, gtk::Window.new]
     one.add(first)
     two.add(second)
-    expect { one.show_all }.to raise_error(gtk::UnsupportedOperation)
-    expect(service.registry.pages_for(owner)).to be_empty
+    one.show_all
+    two.show_all
+    [first, second].each { |widget| expect(widget.session.port.get(widget.materialize, :width_groups)).to eq([group.key]) }
   end
 
   it 'bounds overlapping memberships without corrupting an existing widget' do

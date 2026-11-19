@@ -7,7 +7,29 @@ module Lich
         class Widget
           protected
 
-          attr_writer :parent
+          # Records the container that holds this widget, or nil once detached.
+          # Detaching unmaps this subtree, without a signal. Attaching runs no
+          # handler here: the container maps the subtree itself once it has
+          # recorded the child (see {#map_attached}), so a handler always
+          # finds the child in its container and a handler that raises leaves
+          # the attachment complete.
+          # @param value [Widget, nil] new parent
+          # @return [Widget, nil] the new parent
+          # @api private
+          def parent=(value)
+            @parent = value
+            leave_map if value.nil?
+            value
+          end
+
+          # Maps a child this container has finished recording, when the
+          # container is presented and the child is shown.
+          # @param child [Widget] child now listed by this container
+          # @return [void]
+          # @api private
+          def map_attached(child)
+            child.send(:refresh_mapped)
+          end
 
           # Auxiliary owned widgets participate in lifetime/render traversal without becoming public children.
           # @return [Array<Widget>] descendants included in traversal

@@ -236,6 +236,15 @@ module Lich
           nil
         end
 
+        # The core dispatcher's loop is always running for the script, so report
+        # one level: the common `Gtk.main if Gtk.main_level.zero?` guard then
+        # skips a main loop it does not need, on any script thread.
+        # @return [Integer] 1
+        def self.main_level
+          session.degrade(:main_loop, 'native main-loop control is replaced by the core dispatcher')
+          1
+        end
+
         # There is no native GTK queue to pump; the core worker owns dispatch.
         def self.events_pending?
           session.degrade(:main_loop, 'native main-loop control is replaced by the core dispatcher')
