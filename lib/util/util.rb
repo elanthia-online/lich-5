@@ -227,10 +227,11 @@ module Lich
     # @param include_end [Boolean] whether a separate end line is kept in the
     #   result (a start line that is also the end line is always kept; a
     #   text-mode capture that ends on a markup-only string has no end line)
-    # @param timeout [Numeric] seconds to wait for the whole reply; 0 or nil
-    #   returns at once (status :no_start), unlike the unlimited wait
-    #   Timeout.timeout gave those values before capture_command. The command
-    #   is still sent, and its reply is neither captured nor hidden.
+    # @param timeout [Numeric, nil] seconds to wait for the whole reply; a
+    #   reply, or the rest of one, arriving later is neither captured nor
+    #   hidden. 0 or nil returns at once (status :no_start), unlike the
+    #   unlimited wait Timeout.timeout gave those values before
+    #   capture_command; the command is still sent.
     # @param silent [Boolean, nil] the script's silent flag for the duration
     #   (nil: unchanged)
     # @param usexml [Boolean] match and return raw XML (true) or stripped text
@@ -256,6 +257,9 @@ module Lich
       marker = CAPTURE_END_MARKER.dup # replaced on every restart
       phase = :waiting # -> :capturing -> :done, or -> :abandoned on timeout
       suppress_current = false
+      # Text lines that shared the end line's server string and follow it:
+      # left in the script's buffer for its next read, as before.
+      keep_after_end = 0
 
       line_matches = lambda do |text, pattern|
         !pattern.eql?(:ignore) && text.match?(pattern)
@@ -290,18 +294,32 @@ module Lich
       observer = proc do |chunk|
         lock.synchronize do
           suppress_current = false
+          # Past the deadline nothing more is matched or hidden; a reply that
+          # completed in time stays complete.
+          phase = :abandoned if %i[waiting capturing].include?(phase) && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
           if %i[waiting capturing].include?(phase)
             begin
-              # The script's buffer holds each XML server string chomped
-              # (Script.new_downstream_xml); match the same view, so a pattern
-              # anchored with $ behaves as it does against the buffer.
+              # Match what the script's buffer holds. XML: each server string
+              # chomped (Script.new_downstream_xml), so a pattern anchored
+              # with $ behaves as it does against the buffer. Text: the lines
+              # the game thread decoded for the buffer (with the "main"
+              # strip_xml state, which a fresh decoder would not have mid-
+              # stream); a private decoder only when hooks run outside Game.
               texts = if usexml
                         [chunk.chomp]
+                      elsif (decoded = Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY]).is_a?(Array)
+                        decoded
                       else
                         Lich::Common::Markup.strip_xml(chunk, type: strip_key).to_s.split("\r\n").reject(&:empty?)
                       end
               was_capturing = phase == :capturing
-              in_reply = texts.map { |text| advance.call(text) }.any?
+              in_reply = false
+              texts.each_with_index do |text, index|
+                next unless advance.call(text)
+
+                in_reply = true
+                keep_after_end = texts.size - index - 1 if phase == :done
+              end
               # Only after the start line's server string, as the start
               # line itself is never ended by a prompt riding on it.
               phase = :done if markup_end && was_capturing && phase == :capturing && chunk.chomp.match?(end_pattern)
@@ -350,18 +368,22 @@ module Lich
           # included, after clearing the script's buffer. Restart the capture
           # there: whatever it matched so far answered an earlier send. The
           # game thread can complete that earlier capture between fput's
-          # clear and this restart, leaving its marker in the buffer, so the
-          # restart takes a fresh marker and the drain skips the stale one.
-          # fput is not interrupted when the capture completes, so a refusal
-          # that matched cannot cancel the resend.
+          # clear and this restart, leaving its marker in the buffer; remove
+          # it, or fput would read it as the reply to the next send, and take
+          # a fresh marker. fput is not interrupted when the capture
+          # completes, so a refusal that matched cannot cancel the resend.
+          # suppress_current is left for the suppressor of the chunk in
+          # flight, which may be the refusal itself.
           restart = lambda do |_sent|
             lock.synchronize do
-              next if phase == :error
+              next if %i[error abandoned].include?(phase)
 
+              stale = marker
+              script.downstream_buffer.delete_if { |line| line.equal?(stale) }
               phase = :waiting
               lines.clear
+              keep_after_end = 0
               marker = CAPTURE_END_MARKER.dup
-              suppress_current = false
               done.clear
               $strip_xml_multiline&.delete(strip_key)
             end
@@ -370,7 +392,15 @@ module Lich
                                on_send: restart, failures: :symbol)
           # Out of time before fput saw a reply to its last send (a roundtime
           # longer than the timeout): anything captured answered a refusal.
-          restart.call(nil) if sent == :interrupted
+          if sent == :interrupted
+            lock.synchronize do
+              unless phase == :error
+                lines.clear
+                done.clear
+                phase = :abandoned
+              end
+            end
+          end
         else
           put(command)
         end
@@ -418,11 +448,16 @@ module Lich
           if script
             begin
               # Consume the reply from the script's own buffer, as the old
-              # get-loop did: through this capture's end marker when complete
-              # (a stale one from an earlier send is consumed on the way),
-              # else all of it. Before the restore: with both want flags off, gets? sleeps.
-              while (line = script.gets?)
-                break if completed && line.equal?(marker)
+              # get-loop did. Complete: atomically through this capture's end
+              # marker, keeping the text lines that followed the end line in
+              # its server string; if the marker was evicted at capacity, the
+              # reply went with it and what remains came after it, so nothing
+              # is removed. Otherwise all of it. Before the restore: with both
+              # want flags off, gets? sleeps.
+              if completed
+                script.downstream_buffer.shift_through(marker, keep: keep_after_end)
+              else
+                nil while script.gets?
               end
             ensure
               script.silent = save_script_silent unless silent.nil?
@@ -446,8 +481,8 @@ module Lich
     # @param include_end [Boolean] whether a separate end line is kept in the
     #   result (a start line that is also the end line is always kept; a
     #   text-mode capture that ends on a markup-only string has no end line)
-    # @param timeout [Numeric] seconds to wait for the whole reply; 0 or nil
-    #   returns at once with an empty result (the command is still sent)
+    # @param timeout [Numeric, nil] seconds to wait for the whole reply; 0 or
+    #   nil returns at once with an empty result (the command is still sent)
     # @param silent [Boolean, nil] the script's silent flag for the duration
     #   (nil: unchanged)
     # @param usexml [Boolean] match and return raw XML (true) or stripped text

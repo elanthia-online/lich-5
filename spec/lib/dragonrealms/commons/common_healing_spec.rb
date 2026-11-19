@@ -2,6 +2,7 @@
 
 require 'timeout'
 require_relative '../../../../lib/common/downstreamhook'
+require_relative '../../../../lib/common/limitedarray'
 require_relative '../../../spec_helper'
 
 # Load production code
@@ -1191,7 +1192,8 @@ RSpec.describe Lich::DragonRealms::DRCH do
       # which the game thread runs on each server string.
       stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       allow(Script).to receive(:current).and_return(
-        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true,
+                       downstream_buffer: Lich::Common::LimitedArray.new)
       )
       # The game answers the command with the scripted lines, then goes quiet.
       allow(Lich::Util).to receive(:fput) do |*_args, **_opts|

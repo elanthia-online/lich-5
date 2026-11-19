@@ -6,6 +6,39 @@ require 'common/limitedarray'
 RSpec.describe Lich::Common::LimitedArray do
   subject(:buffer) { described_class.new }
 
+  describe '#shift_through' do
+    let(:boundary) { +'boundary' }
+
+    it 'removes through the boundary, found by identity, and returns what it removed' do
+      buffer.push('a', 'boundary', boundary, 'b')
+
+      expect(buffer.shift_through(boundary)).to eq(%w[a boundary boundary])
+      expect(buffer).to eq(['b'])
+    end
+
+    it 'puts the last keep items before the boundary back at the front' do
+      buffer.push('a', 'b', 'c', boundary, 'd')
+
+      buffer.shift_through(boundary, keep: 2)
+
+      expect(buffer).to eq(%w[b c d])
+    end
+
+    it 'keeps only what there is when keep exceeds the items before the boundary' do
+      buffer.push('a', boundary, 'b')
+
+      expect(buffer.shift_through(boundary, keep: 3)).to eq(['a', boundary])
+      expect(buffer).to eq(%w[a b])
+    end
+
+    it 'removes nothing and returns nil when the boundary is gone' do
+      buffer.push('a', 'b')
+
+      expect(buffer.shift_through(boundary)).to be_nil
+      expect(buffer).to eq(%w[a b])
+    end
+  end
+
   it 'evicts the oldest item when push exceeds max_size' do
     buffer.max_size = 3
     4.times { |value| buffer.push(value) }

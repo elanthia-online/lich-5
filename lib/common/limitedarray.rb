@@ -19,6 +19,7 @@ module Lich
       RAW_LENGTH  = Array.instance_method(:length)
       RAW_CLEAR   = Array.instance_method(:clear)
       RAW_DUP     = Array.instance_method(:dup)
+      RAW_INDEX   = Array.instance_method(:index)
 
       INIT_MUTEX = Mutex.new
 
@@ -131,6 +132,27 @@ module Lich
           return nil if RAW_EMPTY.bind_call(self)
 
           RAW_SHIFT.bind_call(self)
+        end
+      end
+
+      # Atomically removes everything up to and including +item+, found by
+      # identity (equal?), then puts the last +keep+ removed items before it
+      # back at the front.
+      #
+      # @param item [Object] the boundary to remove through
+      # @param keep [Integer] how many items just before the boundary to keep
+      # @return [Array, nil] the removed items, boundary included, or nil
+      #   (nothing removed) when the boundary is not in the buffer, e.g.
+      #   because it was evicted at capacity
+      def shift_through(item, keep: 0)
+        synchronize do
+          index = RAW_INDEX.bind_call(self) { |entry| entry.equal?(item) }
+          return nil unless index
+
+          removed = RAW_SHIFT.bind_call(self, index + 1)
+          kept = keep.positive? ? removed[0...-1].last(keep) : []
+          RAW_UNSHIFT.bind_call(self, *kept) unless kept.empty?
+          removed
         end
       end
 

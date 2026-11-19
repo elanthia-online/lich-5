@@ -7,6 +7,7 @@ require_relative '../../../lib/util/util.rb'
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/markup'
 require_relative '../../../lib/common/wait_response'
+require_relative '../../../lib/common/limitedarray'
 require_relative '../../support/global_defs_spec_source'
 
 # Covers Lich::Util.issue_command's quiet: true filtering, specifically the
@@ -96,24 +97,19 @@ RSpec.describe Lich::Util do
         attr_accessor :silent, :want_downstream, :want_downstream_xml
         attr_reader :name
 
+        # The production buffer type, with its capacity of 200.
+        attr_reader :downstream_buffer
+
         def initialize
-          @queue = Queue.new
+          @downstream_buffer = Lich::Common::LimitedArray.new
           @name = 'spec'
           @want_downstream = false
           @want_downstream_xml = true
         end
 
-        def downstream_buffer = self
-        def push(line) = @queue << line
-        def gets? = (@queue.pop(true) rescue nil)
-        def clear = drain
-
-        # fput puts back the line it returns on, ahead of everything else.
-        def unshift(line)
-          rest = drain
-          @queue << line
-          rest.each { |l| @queue << l }
-        end
+        def push(line) = @downstream_buffer.push(line)
+        def gets? = @downstream_buffer.try_shift
+        def clear = @downstream_buffer.clear_snapshot
 
         def drain
           lines = []
@@ -147,6 +143,8 @@ RSpec.describe Lich::Util do
     after do
       DownstreamHook.remove('spec-other-hook')
       Script.current = nil
+      # The synchronous fake game delivers on this thread.
+      Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = nil
     end
 
     # Sends +reply+ as the game's response to the command. +gap+ widens the
@@ -164,11 +162,13 @@ RSpec.describe Lich::Util do
 
     # One server string, in Game#process_server_string's order.
     def deliver(raw, gap: 0)
+      text_lines = Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").reject(&:empty?).freeze
       if script.want_downstream_xml
         script.push(raw.chomp)
-      else
-        Lich::Common::Markup.strip_xml(raw, type: 'main').to_s.split("\r\n").each { |l| script.push(l) unless l.empty? }
+      elsif script.want_downstream
+        text_lines.each { |l| script.push(l) }
       end
+      Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = text_lines
       sleep gap if gap.positive?
       out = DownstreamHook.run(raw)
       frontend << out if out
@@ -338,6 +338,7 @@ RSpec.describe Lich::Util do
       let(:fput_host) do
         klass = Class.new do
           attr_accessor :game, :script, :after_clear
+          attr_writer :pause_for
 
           # after_clear stands in for the game thread running between fput's
           # clear and its next send.
@@ -348,7 +349,7 @@ RSpec.describe Lich::Util do
 
           def put(cmd) = game.call(cmd)
           def get? = script.gets?
-          def pause(*) = sleep(0.001)
+          def pause(*) = sleep(@pause_for || 0.001)
           def echo(*) = nil
           def respond(*) = nil
           def dead? = false
@@ -360,12 +361,24 @@ RSpec.describe Lich::Util do
       end
 
       # Answers the Nth send with replies[N]; returns the commands sent.
-      def game_answering(*replies)
+      # Synchronously by default; with threaded:, from one game thread, as
+      # production does, +delay+ seconds after each send.
+      def game_answering(*replies, threaded: false, delay: 0)
         sent = []
         fput_host.script = script
+        if threaded
+          @game_queue = Queue.new
+          @game_worker = Thread.new do
+            while (batch = @game_queue.pop) != :stop
+              sleep delay if delay.positive?
+              batch.each { |raw| deliver(raw) }
+            end
+          end
+        end
         fput_host.game = lambda do |cmd|
           sent << cmd
-          (replies.shift || []).each { |raw| deliver(raw) }
+          batch = replies.shift || []
+          threaded ? @game_queue << batch : batch.each { |raw| deliver(raw) }
         end
         allow(Script).to receive(:execution_sleep) { sleep(0.001) }
         allow(described_class).to receive(:fput) { |*args, **opts| fput_host.fput(*args, **opts) }
@@ -373,6 +386,44 @@ RSpec.describe Lich::Util do
       end
 
       let(:reply) { ["You flip the coin.\r\n", prompt] }
+
+      after do
+        @game_queue&.push(:stop)
+        @game_worker&.join(1)
+      end
+
+      it 'keeps the quiet decision for a refusal through the resend it causes' do
+        # A slow hook holds the refusal between the observer and the
+        # suppressor while fput reads it, resends and restarts the capture.
+        DownstreamHook.add('spec-other-hook', proc { |line| sleep 0.1 if line.include?('wait'); line }, persist: true)
+        game_answering(["...wait 1 seconds.\r\n", prompt], reply, threaded: true)
+        result = capture('flip coin', /\S/, quiet: true, timeout: 2)
+        @game_queue << :stop
+        @game_worker.join(1)
+
+        expect(result).to be_complete
+        expect(frontend.join).not_to include('wait')
+      end
+
+      it 'neither captures nor hides a reply that first arrives after the deadline' do
+        fput_host.pause_for = 0.1 # fput's own poll interval
+        game_answering(reply, threaded: true, delay: 0.06)
+        result = capture('flip coin', /\S/, quiet: true, timeout: 0.025)
+        @game_queue << :stop
+        @game_worker.join(1)
+
+        expect(result).not_to be_complete
+        expect(result.lines).to eq([])
+        expect(fe_lines).to include('You flip the coin.')
+      end
+
+      it 'with timeout 0, neither captures nor hides a reply delivered during the send' do
+        game_answering(reply)
+        result = capture('flip coin', /\S/, quiet: true, timeout: 0)
+
+        expect(result.status).to eq(:no_start)
+        expect(fe_lines).to include('You flip the coin.')
+      end
 
       it 'resends after a roundtime refusal and captures only the reply to the resend' do
         sent = game_answering(["...wait 1 seconds.\r\n", prompt], reply)
@@ -401,17 +452,21 @@ RSpec.describe Lich::Util do
         expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
       end
 
-      it 'skips a marker left by a capture that completed between fput\'s clear and its resend' do
+      it 'drops a marker left by a capture that completed between fput\'s clear and its resend' do
         # The stand reply's prompt arrives in a later packet, just after
         # fput's clear before the resend: the capture that started on the
-        # stand reply completes in that gap and pushes its marker.
-        sent = game_answering(["You struggle but fail to stand.\r\n"], ["You stand back up.\r\n"], reply + ["A goblin arrives.\r\n"])
+        # stand reply completes in that gap and pushes its marker. The
+        # resend is then refused too, and fput must not take that stale
+        # marker as its reply. Text mode, where the prompt itself adds no
+        # line to the buffer, so the marker is all fput could read.
+        sent = game_answering(["You struggle but fail to stand.\r\n"], ["You stand back up.\r\n"],
+                              ["...wait 1 seconds.\r\n", prompt], reply + ["A goblin arrives.\r\n"])
         clears = 0
         fput_host.after_clear = -> { deliver(prompt) if (clears += 1) == 3 }
-        result = capture('flip coin', /\S/, timeout: 2)
+        result = capture('flip coin', /\S/, usexml: false, timeout: 2)
 
-        expect(sent).to eq(['flip coin', 'stand', 'flip coin'])
-        expect(result.lines).to eq(['You flip the coin.', prompt.rstrip])
+        expect(sent).to eq(['flip coin', 'stand', 'flip coin', 'flip coin'])
+        expect(result.lines).to eq(['You flip the coin.'])
         expect(script.drain).to eq(['A goblin arrives.'])
       end
 
@@ -431,6 +486,45 @@ RSpec.describe Lich::Util do
 
         expect(script.drain).to eq(['A goblin arrives.'])
       end
+    end
+
+    context 'in text mode, against the game\'s own text feed' do
+      after { $strip_xml_multiline&.delete('main') }
+
+      it 'matches the lines the game decoded, when the call starts inside an open stream' do
+        # The game's "main" decoder already holds an open inventory stream;
+        # the helm that closes it is not text in the script's buffer.
+        deliver(%(<pushStream id="inv"/>Your worn items:\r\n))
+        reply_with([%(  a helm\r\n<popStream/>\r\n), "You flip the coin.\r\n", prompt])
+        result = capture('flip coin', /\S/, usexml: false, timeout: 2)
+
+        expect(result).to be_complete
+        expect(result.lines).to eq(['You flip the coin.'])
+      end
+
+      it 'leaves the lines after the end line in its server string for the next read' do
+        reply_with(["You peer south.\r\n", "[Dusty Road]\r\nA dusty road runs north.\r\nObvious paths: north.\r\n", prompt])
+        result = capture('peer south', /^You peer/, /^\[Dusty Road\]/, usexml: false, timeout: 2)
+
+        expect(result.lines).to eq(['You peer south.', '[Dusty Road]'])
+        expect(script.drain).to eq(['A dusty road runs north.', 'Obvious paths: north.'])
+      end
+    end
+
+    it 'keeps what followed the reply when the buffer evicted the reply at capacity' do
+      # 250 lines land after the end line before the script cleans up (here
+      # while it waits on quiet's settle): the 200-line buffer drops the reply
+      # and its marker, and every line it still holds came after them.
+      DownstreamHook.add('spec-other-hook', proc { |line|
+        250.times { |i| script.push("line #{i}") } if line.start_with?('<prompt')
+        line
+      }, persist: true)
+      reply_with(["Your flags:\r\n", prompt])
+      capture('flag', /^Your flags/, quiet: true, timeout: 2)
+
+      left = script.drain
+      expect(left.size).to eq(200)
+      expect([left.first, left.last]).to eq(['line 50', 'line 249'])
     end
 
     it 'returns at once with :no_start when timeout is 0' do
@@ -517,25 +611,20 @@ RSpec.describe Lich::Util do
     end
 
     it 'stops at once with :error, and restores the script, when matching raises' do
-      # Raise only for the observer's private strip buffer, not the fake game's.
-      allow(Lich::Common::Markup).to receive(:strip_xml).and_wrap_original do |original, line, type: nil|
-        raise 'boom' if type.to_s.start_with?('Util::capture_command')
-
-        original.call(line, type: type)
-      end
+      # A start pattern String#match? rejects, so matching the first line raises.
       reply_with(["Usage:\r\n", "x\r\n"])
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = capture('flag', /^Usage/, /^x/, usexml: false, quiet: true)
+      result = capture('flag', Object.new, /^x/, usexml: false, quiet: true)
 
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.2
       expect(result.status).to eq(:error)
-      expect(Lich).to have_received(:log).with(/RuntimeError: boom/)
+      expect(Lich).to have_received(:log).with(/TypeError/)
       expect(script.want_downstream_xml).to be true
     end
 
     it 'restores the script flags even if draining the buffer raises' do
       reply_with(["Your flags:\r\n", prompt])
-      allow(script).to receive(:gets?).and_raise(RuntimeError, 'guard')
+      allow(script.downstream_buffer).to receive(:shift_through).and_raise(RuntimeError, 'guard')
 
       expect { capture('flag', /^Your flags/, usexml: false) }.to raise_error(RuntimeError, 'guard')
       expect([script.want_downstream, script.want_downstream_xml]).to eq([false, true])
