@@ -83,11 +83,12 @@ module Lich
         @mutex = Monitor.new
       end
 
-      # Names this port by class and owner label only. The default inspect would
-      # walk the host service and every retained node. Ruby's pp prints through it too.
+      # Names this port by class and a bounded, single-line owner label only. The
+      # default inspect would walk the host service and every retained node.
+      # Ruby's pp prints through it too.
       # @return [String] bounded inspection text
       def inspect
-        "#<#{self.class.name} owner=#{owner_label.to_s.inspect}>"
+        "#<#{self.class.name} owner=#{Diagnostics.display_label(owner_label).inspect}>"
       end
 
       # Validates a component and allocates an opaque handle without opening a window.

@@ -620,10 +620,7 @@ module Lich
       # @return [Array] new logged_at, new suppressed count, and the suppressed
       #   count to report now, or nil when this refusal is suppressed
       def refusal_window(logged_at, suppressed)
-        now = monotonic_time
-        return [logged_at, suppressed + 1, nil] if logged_at && now - logged_at < REFUSAL_LOG_INTERVAL
-
-        [now, 0, suppressed]
+        Diagnostics.log_window(logged_at, suppressed, now: monotonic_time, interval: REFUSAL_LOG_INTERVAL)
       end
 
       # Logs an admitted refusal with the count suppressed before it.
