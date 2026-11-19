@@ -153,21 +153,22 @@ module Lich
           current
         end
 
-        # Reports whether the owner has queued or scheduled UI work that has not
-        # started. Never creates a session.
+        # Reports whether the owner has used this layer: a session exists only
+        # once the script has built a widget, queued or scheduled work, or
+        # made another call that needs one. Never creates a session.
         # @param owner [Script]
         # @return [Boolean]
-        def self.pending_ui?(owner)
-          current = @mutex.synchronize { @sessions[owner] }
-          current ? current.pending_ui? : false
+        def self.session?(owner)
+          @mutex.synchronize { @sessions.key?(owner) }
         end
 
-        # Counts UI work ever admitted for the owner. Never creates a session.
+        # Reports whether a scheduled source of the owner has run and will run
+        # again. Never creates a session.
         # @param owner [Script]
-        # @return [Integer]
-        def self.ui_admissions(owner)
+        # @return [Boolean]
+        def self.repeating_sources?(owner)
           current = @mutex.synchronize { @sessions[owner] }
-          current ? current.ui_admissions : 0
+          current ? current.repeating_sources? : false
         end
 
         # Reports pending work or admitted work still running. Never creates a session.

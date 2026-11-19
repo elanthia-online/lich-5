@@ -1216,6 +1216,61 @@ test('a number clamps to the highest legal step when max is off-step', t => {
     'submit uses the same bound: stepped fields stay on a step, an aligned max is kept exactly, free stepping keeps max');
 });
 
+test('a number being typed outside its range survives an unrelated render and clamps on blur', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  const tree = text => ({ type: 'page', cid: 'root', props: {}, children: [
+    { type: 'number_input', cid: 'amount', props: { value: 10, min: 10, max: 500, step: 1 }, children: [] },
+    { type: 'text', cid: 'status', props: { text } },
+    { type: 'button', cid: 'save', props: { label: 'Save' } }
+  ] });
+  const message = (generation, text) => ({ type: 'render', page: 'typing', generation,
+    bindings: { amount: ['change'], save: ['activate'] }, submissions: { save: ['amount'] }, tree: tree(text) });
+  const field = () => dom.window.document.querySelector('input[type=number]');
+  receive({ type: 'hello', pages: [{ address: 'typing' }] });
+  receive(message(1, 'first'));
+  field().focus();
+  field().value = '2';
+  field().dispatchEvent(new dom.window.Event('input'));
+  receive(message(2, 'second'));
+  assert.equal(field().value, '2', 'a render leaves the partly typed number as typed');
+  field().value = '25';
+  field().dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 25 }, 'typing continues from the kept draft');
+  field().value = '2';
+  field().dispatchEvent(new dom.window.Event('input'));
+  receive(message(3, 'third'));
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [10], 'submit still sends the bounded value');
+  field().dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(field().value, '10', 'blur clamps the field');
+});
+
+test('a fractional step with an off-step max clamps without float noise', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  const number = (cid, props) => ({ type: 'number_input', cid, props: { value: props.min, ...props }, children: [] });
+  receive({ type: 'hello', pages: [{ address: 'fractions' }] });
+  receive({ type: 'render', page: 'fractions', generation: 1,
+    bindings: { tenths: ['change'], offset: ['change'], small: ['change'], save: ['activate'] },
+    submissions: { save: ['tenths', 'offset', 'small'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      number('tenths', { min: 0, max: 0.75, step: 0.1 }),
+      number('offset', { min: 0.05, max: 0.4, step: 0.1 }),
+      number('small', { min: 0, max: 0.00035, step: 0.0001 }),
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  const [tenths, offset, small] = dom.window.document.querySelectorAll('input[type=number]');
+  tenths.value = '5';
+  tenths.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(tenths.value, '0.7', 'blur shows the step value as written');
+  assert.deepEqual(sent.at(-1).payload, { value: 0.7 }, 'the clamp is a legal value and is sent');
+  offset.value = '9';
+  small.value = '1';
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [0.7, 0.35, 0.0003]);
+});
+
 test('modal page announcements do not reattach an already attached form', t => {
   const { dom, sent, receive } = fixture(); t.after(() => dom.window.close());
   receive({ type: 'hello', pages: [{ address: 'form' }] });

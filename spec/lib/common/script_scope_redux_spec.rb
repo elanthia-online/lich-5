@@ -279,6 +279,93 @@ RSpec.describe Lich::Common::ScriptScope do
       expect(result).to eq([:forwarded, true, false])
     end
 
+    it 'keeps Ruby constants ahead of an included module constant of the same name, for every script' do
+      described_class.activate!
+      # At a native top level the include lands on Object, whose own Queue is
+      # found before the module's; inside the module its own Queue still wins.
+      first = eval(<<~RUBY, described_class.script_binding)
+        module IncludeCaseShadow
+          INCLUDE_CASE_SHADOW_OWN = :kept
+          class Queue; def include_case_marker = :script_queue; end
+          def self.inner = Queue.new.respond_to?(:include_case_marker)
+        end
+        include IncludeCaseShadow
+        [Queue.equal?(::Queue), IncludeCaseShadow.inner, INCLUDE_CASE_SHADOW_OWN]
+      RUBY
+      expect(first).to eq([true, true, :kept])
+      expect(eval('Queue.equal?(::Queue)', described_class.script_binding)).to be(true)
+      later_class = eval('class IncludeCaseShadowUser; def queue = Queue; end; IncludeCaseShadowUser.new.queue', described_class.script_binding)
+      expect(later_class).to equal(::Queue)
+    end
+
+    it 'runs the included callback of a script module with the scope as base' do
+      scoped, native = scoped_and_native(<<~RUBY, '[include_case_hooked, IncludeCaseHook.bases.length]')
+        module IncludeCaseHook
+          module ClassMethods; def include_case_hooked = :hooked; end
+          def self.bases = (@bases ||= [])
+          def self.included(base)
+            bases << base
+            base.extend(ClassMethods)
+          end
+        end
+        include IncludeCaseHook
+        include IncludeCaseHook
+      RUBY
+      expect(native).to eq([:hooked, 2])
+      expect(scoped).to eq(native)
+      expect(described_class::IncludeCaseHook.bases).to all(equal(described_class))
+    end
+
+    it 'shows a module prepended to an included module after the include' do
+      scoped, native = scoped_and_native(<<~RUBY, 'include_case_prepended')
+        module IncludeCasePrepend; def include_case_prepended = :own; end
+        include IncludeCasePrepend
+        module IncludeCasePatch; def include_case_prepended = [:patched, super]; end
+        module IncludeCasePrepend; prepend IncludeCasePatch; end
+      RUBY
+      expect(native).to eq(%i[patched own])
+      expect(scoped).to eq(native)
+    end
+
+    it 'shows a visibility change and a removed constant made in a reopened module body' do
+      probe = '[respond_to?(:include_case_hidden), respond_to?(:include_case_shown), defined?(INCLUDE_CASE_GONE), defined?(INCLUDE_CASE_DROPPED)]'
+      scoped, native = scoped_and_native(<<~RUBY, probe)
+        module IncludeCaseVisibility
+          INCLUDE_CASE_GONE = 1
+          INCLUDE_CASE_DROPPED = 2
+          def include_case_hidden = :hidden
+
+          private
+
+          def include_case_shown = :shown
+        end
+        include IncludeCaseVisibility
+        module IncludeCaseVisibility
+          private :include_case_hidden
+          public :include_case_shown
+          remove_const :INCLUDE_CASE_GONE
+        end
+        IncludeCaseVisibility.send(:remove_const, :INCLUDE_CASE_DROPPED)
+      RUBY
+      expect(native).to eq([false, true, nil, nil])
+      expect(scoped).to eq(native)
+    end
+
+    it 'reports the scope as an instance of a script module it included' do
+      probe = '[is_a?(IncludeCaseKind), kind_of?(IncludeCaseKind), IncludeCaseKind === self, singleton_class.include?(IncludeCaseKind), ' \
+              'is_a?(IncludeCaseOther), IncludeCaseOther === self, is_a?(Comparable)]'
+      scoped, native = scoped_and_native(<<~RUBY, probe)
+        module IncludeCaseKind; end
+        module IncludeCaseOther; end
+        include IncludeCaseKind
+      RUBY
+      expect(native).to eq([true, true, true, true, false, false, false])
+      expect(scoped).to eq(native)
+      expect(described_class.include?(described_class::IncludeCaseKind)).to be(true)
+      expect(described_class.include?(described_class::IncludeCaseOther)).to be(false)
+      expect { described_class.is_a?(:not_a_module) }.to raise_error(TypeError)
+    end
+
     it 'raises TypeError for a class, as Ruby does, and includes nothing from the call' do
       described_class.activate!
       script = described_class.script_binding

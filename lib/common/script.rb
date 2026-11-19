@@ -3428,6 +3428,7 @@ module Lich
                   respond 'start_exec_script screwed up...'
                 end
               ensure
+                ScriptBodyCompletion.run(new_script)
                 new_script.kill if new_script.running? && !new_script.stopping?
               end
             }

@@ -13,82 +13,67 @@ module Lich
         UI_LINGER_PENDING_LIMIT = 30
         # Seconds a finished body waits for a live worker thread to queue UI.
         UI_LINGER_WORKER_GRACE = 1.0
-        # Source text that marks a script as a user of this compatibility layer.
-        UI_LINGER_SOURCE = /\b(?:Gtk|GLib)(?:::|\.)/
 
         # Queue-then-exit: a legacy GTK script that queues its window and ends
         # still shows that window, because GTK runs the queued work after the
-        # script is gone. When a script body ends successfully with
-        # compatibility UI work not yet started, keep the owner running until
-        # that work has run and the windows it shows are closed; ;kill still
-        # ends it at once. A body that ends with nothing pending stops as
-        # before, so scripts that close their own windows in exit handlers are
-        # unaffected. A body that failed never waits: its name and callbacks
-        # are released at once.
+        # script is gone and nothing closes the window for it. When a script
+        # body ends successfully and the script has used this layer, keep the
+        # owner running while it still has UI: a shown window, a repeating
+        # scheduled source, or admitted work that is pending or running. It
+        # makes no difference whether a queued block has not started, is
+        # running or has finished when the body ends. A live worker thread
+        # gets a short grace after the body ends to queue its UI. ;kill still
+        # ends the owner at once. A script that never used this layer, or has
+        # no UI left, stops as before. A body that failed never waits: its
+        # name and callbacks are released at once.
+        #
+        # A script that registered exit handlers before its body ended closes
+        # its own UI in them, as GTK would run them at this point, so a window
+        # or repeating source it already has is left to those handlers and
+        # does not keep it running. Only work still pending or running when
+        # its body ends (or queued by a worker in the grace) does, because the
+        # handlers cannot have accounted for UI that did not exist yet.
         # @param owner [Script] owner whose body has just finished
         # @return [void]
         # @api private
         def self.await_ui_linger(owner)
           return unless owner.running? && !owner.stopping? && owner.exit_error.nil?
-          return unless ui_left_behind?(owner)
+          return unless session?(owner)
 
-          waiting_since = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          keeps_ui = owner.at_exit_procs.empty?
+          body_ended = waiting_since = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           loop do
             break if !owner.running? || owner.stopping?
 
             now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-            if visible_windows?(owner)
+            busy = busy_ui?(owner)
+            keeps_ui ||= busy
+            if keeps_ui && (visible_windows?(owner) || repeating_sources?(owner))
               waiting_since = now
-            elsif busy_ui?(owner)
+            elsif busy
               # Pending or still running (a window mid-show is not visible yet).
               # A source accepted for a later time is not stalled before then.
               break if now - [waiting_since, pending_ui_due(owner)].compact.max > UI_LINGER_PENDING_LIMIT
-            else
+            elsif now - body_ended > UI_LINGER_WORKER_GRACE || !live_workers?(owner)
               break
             end
-            sleep 0.1
+            sleep 0.05
           end
         rescue StandardError => error
           Lich.log "UI linger check failed for #{owner.name}: #{error.class}"
         end
         private_class_method :await_ui_linger
 
-        # Decides whether a finished body left UI work behind. A worker thread
-        # started just before the body ended may not have queued its UI yet
-        # (Thread.new { Gtk.queue { ... } }; exit). Only scripts that use this
-        # compatibility layer and queued no UI of their own before the body
-        # ended wait for it. Work admitted after the body ended counts even if
-        # it has already run by the time this check looks.
+        # Whether the owner has a live thread other than the one asking. A
+        # worker started just before the body ended may not have queued its UI
+        # yet (Thread.new { Gtk.queue { ... } }; exit).
         # @param owner [Script] owner whose body has just finished
-        # @return [Boolean] whether admitted UI work is pending or arrived late
+        # @return [Boolean] whether another thread of the owner is alive
         # @api private
-        def self.ui_left_behind?(owner)
-          admitted_at_end = ui_admissions(owner)
-          queued_after_end = -> { ui_admissions(owner) > admitted_at_end }
-          workers = -> { owner.thread_group.list.any? { |thread| !thread.equal?(Thread.current) && thread.alive? } }
-          if admitted_at_end.zero? && workers.call && legacy_ui_source?(owner)
-            grace = Process.clock_gettime(Process::CLOCK_MONOTONIC) + UI_LINGER_WORKER_GRACE
-            until pending_ui?(owner) || queued_after_end.call || Process.clock_gettime(Process::CLOCK_MONOTONIC) > grace
-              break unless workers.call
-
-              sleep 0.05
-            end
-          end
-          pending_ui?(owner) || queued_after_end.call
+        def self.live_workers?(owner)
+          owner.thread_group.list.any? { |thread| !thread.equal?(Thread.current) && thread.alive? }
         end
-        private_class_method :ui_left_behind?
-
-        # Whether the script's loaded source names the legacy GTK or GLib API.
-        # Reads the text the script was started from, so every supported file
-        # encoding gives the same answer.
-        # @param owner [Script] owner whose body has just finished
-        # @return [Boolean] whether any label of the script names Gtk or GLib
-        # @api private
-        def self.legacy_ui_source?(owner)
-          labels = owner.respond_to?(:labels) ? owner.labels : nil
-          labels.is_a?(Hash) && labels.each_value.any? { |text| text.to_s.match?(UI_LINGER_SOURCE) }
-        end
-        private_class_method :legacy_ui_source?
+        private_class_method :live_workers?
 
         # With presentation disabled this layer is concealed from scripts, so
         # no finished script waits on it.

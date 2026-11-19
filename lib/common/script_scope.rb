@@ -191,7 +191,11 @@ module Lich
       # Keeps an include provider current when its script module changes after
       # the script included it, as a native include would show the change.
       # Prepended to the singleton class of every script module that has a
-      # provider.
+      # provider. Ruby reports no event for a visibility change, so every
+      # tracked module is also refreshed when a body that reopens it closes
+      # (see {.track_module_bodies}). A visibility change made outside such a
+      # body, for example +Helpers.send(:private, :name)+, cannot be observed
+      # when it happens and shows at the next tracked change to the module.
       module IncludeTracking
         # Refreshes the provider after a method is defined or redefined.
         # @param name [Symbol] method just defined
@@ -233,6 +237,35 @@ module Lich
           ScriptScope.__send__(:sync_include_provider, self)
           result
         end
+
+        # Refreshes the provider after modules are prepended to the module.
+        # @param modules [Array<Module>] modules being prepended
+        # @return [Module] self
+        def prepend(*modules)
+          result = super
+          ScriptScope.__send__(:sync_include_provider, self)
+          result
+        end
+
+        # Reports the scope itself as an instance of the module once the
+        # scope includes it, as +M === self+ is true at a native top level.
+        # @param object [Object] candidate instance
+        # @return [Boolean] whether the object is an instance of the module
+        def ===(object)
+          super || (ScriptScope.equal?(object) && ScriptScope.include?(self))
+        end
+
+        private
+
+        # Refreshes the provider after a constant is removed.
+        # @param name [Symbol, String] constant being removed
+        # @return [Object] removed constant value
+        # @api private
+        def remove_const(name)
+          value = super
+          ScriptScope.__send__(:sync_include_provider, self)
+          value
+        end
       end
 
       # A script's top-level `include M` lands here, because the script binding's
@@ -243,7 +276,17 @@ module Lich
       # decides precedence: the scope's direct declarations first, then the
       # most recently included module, with the first argument of one call
       # ahead of the rest. Arguments Ruby would reject are rejected unchanged,
-      # before any provider is created.
+      # before any provider is created. Each script module then receives its
+      # +included+ callback with this scope as the base, last argument first
+      # as Ruby does, on every call.
+      #
+      # Limits of the stand-in: {.include?}, +is_a?+, +kind_of?+ and
+      # +M === self+ answer for the scope itself, as does
+      # +singleton_class.include?+, but Ruby's own ancestry checks elsewhere
+      # (+ancestors+, +is_a?+ on an instance of a script class, +M <= scope+)
+      # see the provider, not the module, and
+      # nothing can be raised or logged where they are asked. A module's own
+      # +append_features+ override is not called.
       # @param modules [Array<Module>] modules named by the script
       # @return [Module] self
       # @raise [TypeError] when an argument is not a module, or is a class
@@ -251,7 +294,47 @@ module Lich
       def self.include(*modules)
         return super unless modules.all? { |mod| mod.is_a?(Module) && !mod.is_a?(Class) }
 
-        super(*modules.map { |mod| script_module?(mod) ? include_provider(mod) : mod })
+        adopted = modules.select { |mod| script_module?(mod) }
+        super(*modules.map { |mod| adopted.include?(mod) ? include_provider(mod) : mod })
+        adopted.reverse_each { |mod| mod.__send__(:included, self) }
+        self
+      end
+
+      # Answers for a script module the scope included through its provider,
+      # as Ruby answers for a module included natively.
+      # @param mod [Module] candidate module
+      # @return [Boolean] whether the scope includes the module or its provider
+      # @raise [TypeError] when the argument is not a module, as Ruby does
+      def self.include?(mod)
+        return true if super
+
+        provider = @__script_scope_include_monitor.synchronize { @__script_scope_include_providers[mod] }
+        !provider.nil? && super(provider)
+      end
+
+      # Reports the scope, which is the script's top-level self, as an
+      # instance of a script module it included, as a native top-level self is.
+      # @param mod [Module] candidate class or module
+      # @return [Boolean] whether the scope is an instance of it
+      # @raise [TypeError] when the argument is not a class or module, as Ruby does
+      def self.is_a?(mod)
+        super || (mod.is_a?(Module) && !mod.is_a?(Class) && include?(mod))
+      end
+
+      # @param mod [Module] candidate class or module
+      # @return [Boolean] whether the scope is an instance of it
+      # @raise [TypeError] when the argument is not a class or module, as Ruby does
+      def self.kind_of?(mod)
+        is_a?(mod)
+      end
+
+      # The scope extends itself, so its singleton class answers for the same
+      # modules the scope does.
+      # @param mod [Module] candidate module
+      # @return [Boolean] whether the scope's singleton class includes it
+      # @raise [TypeError] when the argument is not a module, as Ruby does
+      singleton_class.define_singleton_method(:include?) do |mod|
+        super(mod) || ScriptScope.include?(mod)
       end
 
       # Reports whether a module was adopted into this scope, so that including
@@ -273,16 +356,32 @@ module Lich
         @__script_scope_include_monitor.synchronize do
           @__script_scope_include_providers[mod] ||= Module.new
           mod.singleton_class.prepend(IncludeTracking) unless mod.singleton_class.include?(IncludeTracking)
+          track_module_bodies
           sync_include_provider(mod)
           @__script_scope_include_providers[mod]
         end
       end
       private_class_method :include_provider
 
-      # Mirrors a script module into its provider: the modules it includes, up
-      # to this scope, then its own constants and instance methods with their
-      # visibility. Names the module no longer has are dropped. A module with
-      # no provider is left alone.
+      # Refreshes a tracked script module whenever a module body closes on
+      # it, which is the only moment a change Ruby reports no event for (a
+      # visibility change such as +private :name+) can be observed. Installed
+      # once, when the first provider is created; the callback is an identity
+      # lookup for every other class or module body.
+      # @return [void]
+      # @api private
+      def self.track_module_bodies
+        @__script_scope_include_body_trace ||= TracePoint.new(:end) do |trace|
+          sync_include_provider(trace.self) if @__script_scope_include_providers.key?(trace.self)
+        end.tap(&:enable)
+        nil
+      end
+      private_class_method :track_module_bodies
+
+      # Mirrors a script module into its provider: the modules prepended to
+      # it and the modules it includes, up to this scope, then its own
+      # constants and instance methods with their visibility. Names the module
+      # no longer has are dropped. A module with no provider is left alone.
       # @param mod [Module] script-defined module whose provider is refreshed
       # @return [void]
       # @api private
@@ -291,10 +390,17 @@ module Lich
           provider = @__script_scope_include_providers[mod]
           next unless provider
 
-          inherited = (mod.ancestors - [mod]).take_while { |ancestor| !ancestor.equal?(self) }
-          inherited.reject! { |ancestor| ancestor.is_a?(Class) }
-          inherited.map! { |ancestor| script_module?(ancestor) ? include_provider(ancestor) : ancestor }
-          missing = inherited.reject { |ancestor| provider.include?(ancestor) }
+          stand_in = lambda do |ancestors|
+            ancestors.reject { |ancestor| ancestor.is_a?(Class) }
+                     .map { |ancestor| script_module?(ancestor) ? include_provider(ancestor) : ancestor }
+          end
+          ancestors = mod.ancestors
+          position = ancestors.index(mod)
+          ahead = provider.ancestors.take_while { |ancestor| !ancestor.equal?(provider) }
+          prepended = stand_in.call(ancestors.take(position) - self.ancestors) - ahead
+          provider.prepend(*prepended) unless prepended.empty?
+          included = ancestors.drop(position + 1).take_while { |ancestor| !ancestor.equal?(self) }
+          missing = stand_in.call(included).reject { |ancestor| provider.include?(ancestor) }
           provider.include(*missing) unless missing.empty?
           sync_provider_constants(mod, provider)
           sync_provider_methods(mod, provider)
@@ -304,15 +410,21 @@ module Lich
 
       # Copies a script module's own constants to its provider and drops the
       # ones the module no longer defines. Constants not yet autoloaded are
-      # skipped so the copy never triggers a load. A new constant is exported
-      # for legacy lookup unless this scope declares that name itself.
+      # skipped so the copy never triggers a load. A name Object itself
+      # defines is never copied: under a native top-level include Object's
+      # own constant is found first, so the module's must not replace it for
+      # this or any other script. A new constant is exported for legacy
+      # lookup unless this scope declares that name itself, and a dropped one
+      # is withdrawn from it.
       # @param mod [Module] script-defined module being mirrored
       # @param provider [Module] provider receiving the constants
       # @return [void]
       # @api private
       def self.sync_provider_constants(mod, provider)
-        names = mod.constants(false).reject { |name| mod.autoload?(name) }
-        (provider.constants(false) - names).each { |name| provider.__send__(:remove_const, name) }
+        names = mod.constants(false).reject { |name| mod.autoload?(name) || Object.const_defined?(name, false) }
+        (provider.constants(false) - names).each do |name|
+          withdraw_legacy_constant(name, provider.__send__(:remove_const, name))
+        end
         names.each do |name|
           value = mod.const_get(name, false)
           next if provider.const_defined?(name, false) && provider.const_get(name, false).equal?(value)
@@ -323,6 +435,23 @@ module Lich
         end
       end
       private_class_method :sync_provider_constants
+
+      # Withdraws the legacy export of a constant an included script module no
+      # longer defines, unless this scope or another included module still
+      # supplies that same export.
+      # @param name [Symbol] constant dropped from a provider
+      # @param value [Object] value the provider held
+      # @return [void]
+      # @api private
+      def self.withdraw_legacy_constant(name, value)
+        return unless @__script_scope_legacy_constants.key?(name) && LegacyConstants.const_get(name, false).equal?(value)
+        return if const_defined?(name, false)
+        return if @__script_scope_include_providers.each_value.any? { |other| other.const_defined?(name, false) }
+
+        @__script_scope_legacy_constants.delete(name)
+        LegacyConstants.send(:remove_const, name)
+      end
+      private_class_method :withdraw_legacy_constant
 
       # Copies a script module's own instance methods to its provider with
       # their visibility and drops the ones the module no longer defines.
@@ -339,7 +468,13 @@ module Lich
         stale = provider.instance_methods(false) + provider.private_instance_methods(false) - current.keys
         stale.each { |name| provider.__send__(:remove_method, name) }
         current.each do |name, visibility|
-          provider.__send__(:define_method, name, mod.instance_method(name))
+          # With a module prepended, lookup by name finds the prepended
+          # method first; the provider needs the module's own definition.
+          own = mod.instance_method(name)
+          own = own.super_method until own.nil? || own.owner.equal?(mod)
+          next unless own
+
+          provider.__send__(:define_method, name, own)
           provider.__send__(visibility, name)
           @__script_scope_legacy_helpers[name] = true if visibility == :public
         end
