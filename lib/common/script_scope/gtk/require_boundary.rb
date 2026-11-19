@@ -7,6 +7,10 @@ module Lich
         # Prevents ordinary Ruby loaders from bringing native GTK into a script
         # process. Installed gems do not widen the bounded compatibility surface.
         # This is a dependency boundary, not a sandbox against arbitrary Ruby.
+        # Known limit: an absolute require of a file inside an installed but
+        # unactivated gem (outside every load root) is an ordinary helper, so the
+        # top of that file runs; its first bare native require is still refused,
+        # so native GTK never loads.
         module RequireBoundary
           COMPATIBILITY_FEATURES = %w[gtk2 gtk2.rb gtk3 gtk3.rb].freeze
           # Ruby-GNOME uses underscore names for some native extensions even
@@ -18,11 +22,14 @@ module Lich
           }ix
 
           # Recognizes preloaded compatibility entrypoints or refuses native code.
-          # Other dependencies retain normal Ruby loader behavior.
+          # Other dependencies retain normal Ruby loader behavior. With the core
+          # presentation policy disabled, the entrypoints are unavailable, as if
+          # GTK were not installed; this boundary itself stays in force.
           # @param feature [String, #to_path] requested Ruby feature or path
           # @param operation [Symbol] Ruby loader being used
           # @param location [Thread::Backtrace::Location] caller of the loader
           # @return [Boolean] true only for an already available shim entrypoint
+          # @raise [LoadError] for a compatibility entrypoint while presentation is disabled
           # @raise [UnsupportedOperation] when a native dependency is requested
           def self.handled?(feature, operation, location)
             path = File.path(feature).tr('\\', '/')
@@ -31,7 +38,12 @@ module Lich
             owner = if defined?(Script)
                       Script.respond_to?(:current_without_pause) ? Script.current_without_pause : Script.current
                     end
-            return true if owner && operation == :require && COMPATIBILITY_FEATURES.include?(path)
+            if owner && operation == :require && COMPATIBILITY_FEATURES.include?(path)
+              return true if Lich::WebUI.presentation_enabled?
+
+              raise LoadError,
+                    "script=#{owner.name} operation=#{operation} feature=#{path} source=#{location}: GTK compatibility is unavailable because presentation is disabled (--no-gui)"
+            end
 
             raise UnsupportedOperation,
                   "script=#{owner&.name || 'none'} operation=#{operation} feature=#{path} source=#{location}: native GTK loading is disabled; use the bounded script shim or native WebUI"

@@ -309,6 +309,8 @@ RSpec.describe 'bounded script compatibility pilot' do
       expect(eval('Gtk::Version::MAJOR', binding)).to eq(3)
       expect(eval("Gtk::Version::STRING.chr == '3'", binding)).to be(true)
       # The bindings resolve the lexical ScriptScope constant, whatever its value.
+      # From P22 that value follows the core presentation policy read at first
+      # activation (script_scope_presentation_spec.rb pins each policy).
       expect(eval('HAVE_GTK', binding)).to be(scope::HAVE_GTK)
     end
     expect([true, false]).to include(scope::HAVE_GTK)

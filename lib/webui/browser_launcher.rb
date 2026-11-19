@@ -7,6 +7,7 @@ require 'tmpdir'
 require 'fileutils'
 require 'cgi/escape'
 require 'uri'
+require 'rexml/document'
 require_relative 'errors'
 require_relative 'native_host'
 
@@ -14,8 +15,9 @@ module Lich
   module WebUI
     # Opens an authenticated loopback URL in a native helper or a
     # dedicated browser app process. Automatic discovery finds Chrome (plus Edge
-    # on Windows and distro Chromium on Linux). Any other Chromium-based browser
-    # is chosen at the user's risk by an explicit path: the launcher Settings
+    # on Windows and Chromium on macOS or Linux). Chrome, Edge, Brave or Arc are
+    # supported; other browsers are not actively supported. A browser other than
+    # snap-packaged Chromium can be chosen by an explicit path: the launcher Settings
     # "Browser path", or LICH_WEBUI_BROWSER, which is read before any window
     # exists so a host without Chrome can still reach one. Precedence: explicit
     # argument, then LICH_WEBUI_BROWSER, then automatic discovery. Snap-packaged
@@ -34,6 +36,10 @@ module Lich
       MACOS_PATHS = [
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         File.join(Dir.home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+      ].freeze
+      MACOS_CHROMIUM_PATHS = [
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        File.join(Dir.home, 'Applications/Chromium.app/Contents/MacOS/Chromium'),
       ].freeze
       LINUX_PATHS = [
         '/usr/bin/google-chrome',
@@ -56,13 +62,15 @@ module Lich
 
       # Spawns one app host using a private launch file instead of secret argv.
       # Every browser receives an isolated profile, removed after process exit.
+      # Invalid application bundles name their setting or environment source.
       # The start callback runs before the exit monitor is installed, so callers
       # must defer termination until this method returns.
       # @param url [String] authenticated loopback launch URL
       # @param spawn [#call] process creator accepting an argv array and options
       # @param platform [String, nil] discovery override; nil uses the current OS
       # @param browser_path [String, nil] explicit browser, bypassing the native host;
-      #   when absent a non-empty LICH_WEBUI_BROWSER takes its place
+      #   a macOS .app bundle resolves to its executable; when absent a non-empty
+      #   LICH_WEBUI_BROWSER takes its place
       # @param chrome_path [String, nil] legacy alias for browser_path
       # @param environment [#[]] environment source for LICH_WEBUI_BROWSER
       # @param geometry [Hash, nil] initial outer dimensions and desktop position
@@ -78,6 +86,7 @@ module Lich
                on_start: nil, on_failure: nil, waitpid: Process.method(:waitpid),
                thread_factory: HostThread.method(:start))
         chosen, origin = browser_override(browser_path || chrome_path, environment)
+        chosen = resolve_browser_path(chosen, platform: platform, origin: origin)
         verify_browser_path(chosen, origin: origin)
         native = native_host(platform, chosen)
         profile_dir = Dir.mktmpdir('lich-webui-browser-')
@@ -113,7 +122,9 @@ module Lich
         "unable to open WebUI window: #{detail}"
       end
 
-      # Selects native or browser argv without invoking a shell or starting a process.
+      # Selects native or browser argv without invoking a shell or opening a window.
+      # Explicit macOS application bundles resolve to their executable first.
+      # Invalid bundles name the setting or environment override that selected them.
       # Failed automatic Linux discovery names any skipped snap browser so the
       # recovery message can direct the user to a non-snap installation.
       # @param url [String] private launch-file path (native) or file URL (browser)
@@ -127,7 +138,8 @@ module Lich
       # @raise [Error] if the required native helper or browser is unavailable
       def command_for(url, platform: nil, browser_path: nil, chrome_path: nil, environment: ENV,
                       geometry: nil, profile_dir: nil)
-        override, = browser_override(browser_path || chrome_path, environment)
+        override, origin = browser_override(browser_path || chrome_path, environment)
+        override = resolve_browser_path(override, platform: platform, origin: origin)
         return NativeHost.command_for(url, geometry: geometry) if native_host(platform, override)
 
         platform ||= OS.host_os
@@ -145,8 +157,6 @@ module Lich
           end
           requirement = if windows?(platform)
                           'Google Chrome or Microsoft Edge'
-                        elsif platform.match?(/darwin/i)
-                          'Google Chrome'
                         else
                           'Google Chrome or Chromium'
                         end
@@ -172,6 +182,55 @@ module Lich
 
         value = environment[ENVIRONMENT_VARIABLE].to_s.strip
         value.empty? ? [nil, nil] : [value, :environment]
+      end
+
+      # Resolves macOS bundles after normalizing trailing slashes and extension case.
+      # Refusals name the source of the explicit path before executable verification.
+      # @param path [String, nil] explicit browser path or automatic discovery
+      # @param platform [String, nil] discovery override; nil uses the current OS
+      # @param origin [Symbol, nil] :argument (setting) or :environment (LICH_WEBUI_BROWSER)
+      # @return [String, nil] executable path, unchanged off macOS or for plain files
+      # @raise [Error] if an application bundle has no executable
+      # @api private
+      def resolve_browser_path(path, platform: nil, origin: :argument)
+        return path unless path && (platform ? platform.match?(/darwin/i) : OS.mac?)
+
+        bundle = path.sub(%r{/+\z}, '')
+        return path unless File.extname(bundle).casecmp?('.app')
+
+        name = bundle_executable(bundle)
+        if name && !name.empty? && File.basename(name) == name && !%w[. ..].include?(name)
+          executable = File.join(bundle, 'Contents', 'MacOS', name)
+          return executable if executable_file?(executable)
+        end
+
+        shown = path.gsub(/[[:cntrl:]]/, '?')
+        if origin == :environment
+          raise Error, "#{ENVIRONMENT_VARIABLE} names '#{shown}', which has no executable; fix or unset #{ENVIRONMENT_VARIABLE}"
+        end
+
+        raise Error, "the configured browser application '#{shown}' has no executable; #{SETTING_HINT} or clear it"
+      end
+
+      # Reads an application's executable name from XML or a binary property list.
+      # @param bundle [String] macOS application bundle path
+      # @return [String, nil] CFBundleExecutable value, absent for an invalid bundle
+      # @api private
+      def bundle_executable(bundle)
+        plist = File.join(bundle, 'Contents', 'Info.plist')
+        document = REXML::Document.new(File.read(plist))
+        key = document.elements.to_a('plist/dict/key').find { |element| element.text == 'CFBundleExecutable' }
+        value = key&.next_element
+        value.text if value&.name == 'string'
+      rescue REXML::ParseException
+        begin
+          output, _error, status = Open3.capture3('/usr/bin/plutil', '-extract', 'CFBundleExecutable', 'raw', '--', plist)
+          status.success? ? output.strip : nil
+        rescue SystemCallError
+          nil
+        end
+      rescue SystemCallError
+        nil
       end
 
       # Refuses an explicit browser that is not an executable file, so a stale or
@@ -250,9 +309,17 @@ module Lich
       # the os gem rather than guessing from a Ruby build-platform string.
       # @param platform [String, nil] discovery override
       # @param browser_path [String, nil] explicit browser that disables native selection
-      # @return [Symbol, nil] native host kind, absent for explicit browsers
+      # @return [Symbol, nil] native host kind, absent for explicit browsers or a
+      #   session whose native preparation failed
       def native_host(platform, browser_path)
         NativeHost.platform(platform) unless browser_path
+      end
+
+      # Updates the shared native selection and capabilities after preparation fails.
+      # @param unavailable [Boolean] whether this session must use a browser
+      # @return [Boolean] assigned session state
+      def native_unavailable=(unavailable)
+        NativeHost.unavailable = unavailable
       end
 
       # Stores the one-use credential inside the launch directory (0700 on POSIX).
@@ -331,7 +398,7 @@ module Lich
       end
 
       # Selects the first executable Chrome candidate, then Edge on Windows or
-      # distro Chromium on Linux, skipping snap-packaged Chromium. Injected
+      # Chromium on macOS or Linux, skipping snap-packaged Chromium. Injected
       # platform/environment/probes allow discovery tests without launching a browser.
       # @param platform [String] Ruby platform string selecting the candidate lists
       # @param executable [#call] admits a candidate; defaults to an executable regular file
@@ -368,14 +435,15 @@ module Lich
         end
       end
 
-      # Lists Linux distro Chromium paths, then absolute PATH entries; none on
-      # macOS or Windows. Relative PATH entries are skipped so the working
-      # directory can never supply the browser.
-      # @param platform [String] Ruby platform string; only Linux yields candidates
+      # Lists macOS Chromium installations, or Linux distro paths followed by
+      # absolute PATH entries; none on Windows. Relative PATH entries are skipped
+      # so the working directory can never supply the browser.
+      # @param platform [String] Ruby platform string selecting Chromium candidates
       # @param environment [#[]] environment source for PATH
       # @return [Array<String>] ordered discovery candidates
       def chromium_candidates(platform: RUBY_PLATFORM, environment: ENV)
-        return [] if platform.match?(/darwin/i) || windows?(platform)
+        return MACOS_CHROMIUM_PATHS if platform.match?(/darwin/i)
+        return [] if windows?(platform)
 
         directories = environment['PATH'].to_s.split(File::PATH_SEPARATOR).select do |directory|
           directory.start_with?('/')

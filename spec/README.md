@@ -1,6 +1,6 @@
 # lich-5 Test Suite
 
-This directory contains RSpec tests for the lich-5 codebase.
+This directory contains RSpec tests and JavaScript renderer tests for the lich-5 codebase.
 
 ## Quick Start
 
@@ -38,6 +38,61 @@ parallel_rspec -n 4 spec
 - **Slow examples:** CI warns on any example over 2s in the spec files a PR
   changes (the full parallel run only flags examples over 60s). Speed it up, or
   tag it `:slow` if the time is unavoidable.
+
+## WebUI validation
+
+The ordinary combined Ruby suite runs after GTK retirement; no transition
+isolation runner is needed. Every changed spec must also pass alone.
+
+Install the locked browser/test dependencies when setting up a development
+checkout, then run the JavaScript suite independently of RSpec:
+
+```sh
+npm ci --prefix spec/webui
+cd spec/webui && npx --no-install playwright install webkit && cd ../..
+npm test --prefix spec/webui
+```
+
+These are test-only dependencies. RSpec does not automatically run the npm suite.
+The engine portion opens browser windows and requires installed Google Chrome.
+Run it on a logged-in desktop. On Linux, install the browser system dependencies
+and use `xvfb-run --auto-servernum npm test --prefix spec/webui` for a virtual
+display. Use `npm run test:logic --prefix spec/webui` for logic tests alone.
+The WebUI workflow runs npm and two Chrome shards. Each browser spec belongs to
+exactly one shard; its coverage check rejects missing and stale entries.
+
+```sh
+NATIVE_BROWSER=1 parallel_rspec -n 2 --test-options '--tag browser' spec/lib/common spec/lib/webui
+```
+
+Browser cases use the production loopback bootstrap and Ruby callbacks with
+inert game/download boundaries and isolated settings. Installed Google Chrome
+and the locked Playwright dependency are required. Native window behavior is a
+separate acceptance surface, not certified by headless Chrome.
+
+The retained fixture provenance records source
+revisions, hashes, excerpts and explicit test-only repairs. Specs retain original
+failures separately from corrected candidates. Do not treat construction,
+rendering or bounded setup checks as complete gameplay acceptance. The CSS
+corpus uses extracted provenance with pinned source identities.
+
+The default entrypoint acceptance spec launches a subprocess with temporary
+data, authenticates HTTP/WebSocket traffic, exercises a launcher callback and
+checks shutdown without GTK. Its protocol-only browser substitute does not
+certify browser cookies or native windows. Native helper preparation retains the
+production startup path but uses an isolated temporary fixture builder, requiring
+no native compiler and writing no helper output into the checkout.
+
+On a logged-in macOS desktop with the installed Swift compiler:
+
+```sh
+NATIVE_HOST=1 rspec spec/lib/webui/native_host_presentation_spec.rb
+```
+
+The opt-in `ruby bench/native_webui_smoke.rb` opens native and shim windows for
+manual focus, topmost, opacity, resize and close checks on a supported host. It
+is interactive and is not a CI test. Native platform and actual script-operation
+acceptance belong to beta testing. See the [WebUI author guide](../docs/webui-integration.md).
 
 ## Directory Structure
 

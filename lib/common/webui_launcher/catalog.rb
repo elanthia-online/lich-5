@@ -370,7 +370,9 @@ module Lich
         def change_encryption_mode(mode, master_password: nil)
           @mutex.synchronize do
             writable_yaml_data
-            @entry_store.change_encryption_mode(data_dir, mode.to_sym, master_password)
+            @entry_store.change_encryption_mode(
+              data_dir, mode.to_sym, master_password, manager: @master_password_manager
+            )
           end
         end
 
@@ -404,12 +406,9 @@ module Lich
             return false if data['master_password_validation_test'].nil?
 
             begin
-              # The entry store at this layer publishes through GUI::MasterPasswordManager and
-              # takes no manager: keyword; passing one raised ArgumentError, reported as a
-              # wrong password. Retire this call shape when EntryStore.write_yaml_with_master_password
-              # accepts manager: (WebUI activation commit), which passes @master_password_manager again.
               @entry_store.write_yaml_with_master_password(
-                @entry_store.yaml_file_path(data_dir), data, new_password
+                @entry_store.yaml_file_path(data_dir), data, new_password,
+                manager: @master_password_manager
               )
               true
             rescue StandardError => error
