@@ -680,6 +680,117 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
     end
 
+    context 'when snapshots of prerelease versions are newer than the last stable one' do
+      # Each beta install snapshots the version it replaces, so after
+      # 5.21.0 -> beta.0 -> beta.1 the newest snapshot holds beta.0.
+      before do
+        install('5.22.0-beta.1')
+        allow(Lich::Util::Update).to receive(:clear_branch_tracking)
+      end
+
+      it 'restores the last installed stable release, not the previous beta' do
+        stable = make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', '5.22.0-beta.0', staged: true)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(tree(LIB_DIR)).to eq(tree(File.join(stable, 'lib')))
+        expect(File.read(File.join(LICH_DIR, lich_name))).to eq("# lich 5.21.0\n")
+        expect(File.read(File.join(SCRIPT_DIR, 'go2.lic'))).to eq("# go2 5.21.0\n")
+        expect(messages).to include('Passing over a newer snapshot of prerelease versions (5.22.0-beta.0).')
+        expect(messages).to include('Restoring Lich5 version 5.21.0 from:', "    #{stable}")
+        expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
+      end
+
+      it 'passes over every prerelease snapshot, however many betas were installed since' do
+        make_snapshot('2026-09-01-00-00-00', '5.20.0', staged: true)
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', '5.22.0-beta.0', staged: true)
+        make_snapshot('2026-10-03-00-00-00', '5.22.0-beta.1', staged: true)
+        make_snapshot('2026-10-04-00-00-00', '5.22.0-rc.1', staged: true)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(messages).to include('Passing over 3 newer snapshots of prerelease versions (5.22.0-rc.1, 5.22.0-beta.1, 5.22.0-beta.0).')
+      end
+
+      it 'restores a stable snapshot that is newer than a prerelease one without mentioning it' do
+        make_snapshot('2026-09-01-00-00-00', '5.21.0-beta.3', staged: true)
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+        expect(messages.grep(/Passing over/)).to be_empty
+      end
+
+      it 'says so and changes nothing when every snapshot is of a prerelease' do
+        make_snapshot('2026-10-02-00-00-00', '5.22.0-beta.0', staged: true)
+        make_snapshot('2026-10-03-00-00-00', '5.22.0-beta.1', staged: true)
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(revert_temp_dirs).to be_empty
+        expect(messages).to include('No snapshot of a stable Lich5 release was found, so nothing was changed.')
+        expect(messages).to include("The snapshots in #{BACKUP_DIR} are all of prerelease versions (5.22.0-beta.1, 5.22.0-beta.0).")
+        expect(messages.join("\n")).not_to include('has been reverted')
+        expect(Lich::Util::Update).not_to have_received(:clear_branch_tracking)
+      end
+
+      it 'reads the version as text and never runs the snapshot\'s version.rb' do
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        beta = make_snapshot('2026-10-02-00-00-00', '5.22.0-beta.0', staged: true)
+        marker = File.join(root, 'version-rb-was-run')
+        File.write(File.join(beta, 'lib', 'version.rb'), "File.write(#{marker.dump}, 'run')\nLICH_VERSION = '5.22.0-beta.0'\n")
+
+        manager.revert
+
+        expect(File.exist?(marker)).to be(false)
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
+      it 'does not take a version that is not a version number for a stable release' do
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', 'not a version', staged: true)
+
+        manager.revert
+
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
+      it 'still refuses on an incomplete snapshot between the prereleases and the stable one' do
+        stable = make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        bad = make_snapshot('2026-10-02-00-00-00', '5.21.1', omit: %i[version])
+        make_snapshot('2026-10-03-00-00-00', '5.22.0-beta.0', staged: true)
+        before = live_state
+        messages = capture_responses
+
+        manager.revert
+
+        expect(live_state).to eq(before)
+        expect(messages).to include('The newest snapshot is incomplete, so nothing was changed:', "    #{bad}")
+        expect(messages).to include('The next complete snapshot is Lich5 version 5.21.0:', "    #{stable}")
+      end
+
+      it 'never offers a prerelease snapshot as the next complete one' do
+        make_snapshot('2026-10-01-00-00-00', '5.22.0-beta.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', '5.21.1', omit: %i[version])
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('No complete snapshot was found. Seek assistance.')
+        expect(messages.join("\n")).not_to include('5.22.0-beta.0')
+      end
+    end
+
     it 'keeps a core script the snapshot does not contain instead of deleting it' do
       make_snapshot('2026-10-01-00-00-00', '5.21.0')
       write(File.join(SCRIPT_DIR, 'jinx.lic'), "# jinx 5.22.0\n")

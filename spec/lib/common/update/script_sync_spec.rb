@@ -304,11 +304,15 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       }
     end
 
+    after { UserVars.held_scripts = nil }
+
     it 'keeps the local copy and reports the script as needing a newer Lich' do
       stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'req' => config(true) })
+      File.binwrite(File.join(tmpdir, 'needy.lic'), "echo 'runs on 5.22'\n")
 
       expect(Lich::Util::Update::FileWriter).not_to receive(:safe_write)
       sync.sync_repo('req')
+      expect(File.binread(File.join(tmpdir, 'needy.lic'))).to eq("echo 'runs on 5.22'\n")
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
         'Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']], missing_tracked: []
       )
@@ -327,6 +331,286 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       expect(Lich::Util::Update::FileWriter).to receive(:safe_write).with(File.join(tmpdir, 'needy.lic'), anything)
       sync.sync_repo('req')
+    end
+  end
+
+  describe '#sync_repo when the newest version of a script needs a newer Lich' do
+    include_context 'with the real script floor reader'
+
+    let(:raw) { 'https://raw.githubusercontent.com/acme/scripts' }
+    let(:commits_url) { 'https://api.github.com/repos/acme/scripts/commits?sha=master&path=scripts%2Fneedy.lic&per_page=30' }
+    let(:shas) { %w[a b c d].map { |letter| letter * 40 } }
+    let(:newest) { script_requiring('5.26.0', 'v4') }
+    let(:compatible) { script_requiring('5.25.0', 'v2') }
+    let(:history) { [newest, script_requiring('5.26.0', 'v3'), compatible, script_requiring('5.24.0', 'v1')] }
+    let(:live_path) { File.join(tmpdir, 'needy.lic') }
+    let(:tree) { { 'tree' => [{ 'path' => 'scripts/needy.lic', 'type' => 'blob', 'sha' => git_blob_sha(newest) }] } }
+    let(:config) do
+      {
+        display_name: 'Core', api_url: 'https://api.github.com/repos/acme/scripts/git/trees/master?recursive=1',
+        raw_base_url: "#{raw}/master", tracking_mode: :all, script_pattern: /^scripts\/[^\/]+\.lic$/,
+        game_filter: nil, subdirs: {}, check_lich_requirement: true
+      }
+    end
+    let(:summaries) { [] }
+
+    before do
+      stub_const('LICH_VERSION', '5.25.1')
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'core' => config })
+      UserVars.held_scripts = nil
+      allow(Vars).to receive(:save)
+      allow(Lich::Util::Update::StatusReporter).to receive(:render_sync_summary) { |*args, **| summaries << args[7] }
+      allow(client).to receive(:last_error).and_return(nil)
+      allow(client).to receive(:fetch_github_json).with(config[:api_url]) { tree }
+      allow(client).to receive(:fetch_github_json).with(commits_url) { history.each_index.map { |index| { 'sha' => shas[index] } } }
+      allow(client).to receive(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false) { newest }
+      shas.each_with_index do |sha, index|
+        allow(client).to receive(:http_get).with("#{raw}/#{sha}/scripts/needy.lic", auth: false) { history[index] }
+      end
+    end
+
+    after { UserVars.held_scripts = nil }
+
+    def remembered
+      UserVars.held_scripts&.dig('core', 'needy.lic')
+    end
+
+    context 'when the script is not installed' do
+      it 'installs the newest version in the history that the running Lich can run' do
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]]])
+      end
+
+      it 'stops at that version without reading anything older' do
+        sync.sync_repo('core')
+
+        expect(client).to have_received(:http_get).with("#{raw}/#{shas[2]}/scripts/needy.lic", auth: false).once
+        expect(client).not_to have_received(:http_get).with("#{raw}/#{shas[3]}/scripts/needy.lic", auth: false)
+      end
+
+      it 'installs nothing and says so when no version in the history can run here' do
+        history.replace([newest, script_requiring('5.26.0', 'v3')])
+
+        sync.sync_repo('core')
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :none_compatible]]])
+      end
+
+      it 'looks no further back than the bound on the history walk' do
+        stub_const('Lich::Util::Update::ScriptFloor::MAX_HISTORY', 2)
+        allow(client).to receive(:fetch_github_json)
+          .with(commits_url.sub('per_page=30', 'per_page=2')) { shas.map { |sha| { 'sha' => sha } } }
+
+        sync.sync_repo('core')
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(client).not_to have_received(:http_get).with("#{raw}/#{shas[2]}/scripts/needy.lic", auth: false)
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :none_compatible]]])
+      end
+
+      it 'reports the script, writes nothing and tries again next time when the history cannot be read' do
+        printed = []
+        allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |text| printed << text }
+        allow(client).to receive(:fetch_github_json).with(commits_url).and_return(nil)
+        allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :rate_limited, status: 403))
+
+        2.times { sync.sync_repo('core') }
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :history_unavailable]]] * 2)
+        expect(printed.grep(/GitHub check failed \(rate limit reached\)\. Older versions of scripts in Core that need a newer Lich could not be checked\./).size).to eq(2)
+        expect(client).to have_received(:fetch_github_json).with(commits_url).twice
+        expect(remembered).to be_nil
+      end
+    end
+
+    context 'when the installed copy is the newest version and its floor is not met' do
+      before { File.binwrite(live_path, newest) }
+
+      it 'replaces it with the newest version the running Lich can run' do
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]]])
+      end
+
+      it 'works from the installed bytes instead of downloading the same version again' do
+        sync.sync_repo('core')
+
+        expect(client).to have_received(:fetch_github_json).with(commits_url).once
+        expect(client).not_to have_received(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false)
+      end
+
+      it 'leaves it alone when the running Lich meets its floor' do
+        stub_const('LICH_VERSION', '5.26.0')
+
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(newest)
+        expect(client).not_to have_received(:http_get)
+        expect(summaries).to eq([[]])
+      end
+    end
+
+    context 'when the installed copy is another version' do
+      it 'replaces a copy whose own floor is not met' do
+        File.binwrite(live_path, script_requiring('5.26.0', 'v3'))
+
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(compatible)
+      end
+
+      it 'keeps a copy the running Lich can run, without reading the history' do
+        File.binwrite(live_path, script_requiring('5.24.0', 'v1'))
+
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(script_requiring('5.24.0', 'v1'))
+        expect(client).not_to have_received(:fetch_github_json).with(commits_url)
+        expect(summaries).to eq([[['needy.lic', '5.26.0']]])
+      end
+    end
+
+    it 'installs the newest version once the running Lich meets its floor' do
+      stub_const('LICH_VERSION', '5.26.0')
+
+      sync.sync_repo('core')
+
+      expect(File.binread(live_path)).to eq(newest)
+      expect(client).not_to have_received(:fetch_github_json).with(commits_url)
+      expect(summaries).to eq([[]])
+    end
+
+    it 'does not search the history of a repo that does not check floors' do
+      config.delete(:check_lich_requirement)
+
+      sync.sync_repo('core')
+
+      expect(File.binread(live_path)).to eq(newest)
+      expect(client).not_to have_received(:fetch_github_json).with(commits_url)
+    end
+
+    describe 'remembering the decision' do
+      it 'records the remote SHA, the running Lich version and the commit installed' do
+        sync.sync_repo('core')
+
+        expect(remembered).to eq(
+          'remote_sha' => git_blob_sha(newest), 'lich_version' => '5.25.1', 'local_sha' => git_blob_sha(compatible),
+          'required' => '5.26.0', 'outcome' => 'installed', 'commit' => shas[2]
+        )
+        expect(Vars).to have_received(:save).once
+      end
+
+      it 'repeats neither the download nor the history walk while nothing has changed' do
+        sync.sync_repo('core')
+        sync.sync_repo('core')
+
+        expect(client).to have_received(:fetch_github_json).with(commits_url).once
+        expect(client).to have_received(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).once
+        expect(Vars).to have_received(:save).once
+      end
+
+      it 'keeps reporting the script as needing a newer Lich, as a held script was before' do
+        sync.sync_repo('core')
+        sync.sync_repo('core')
+
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]], [['needy.lic', '5.26.0']]])
+      end
+
+      it 'is read back by a later session, which has a new sync object' do
+        sync.sync_repo('core')
+
+        described_class.new(client).sync_repo('core')
+
+        expect(client).to have_received(:fetch_github_json).with(commits_url).once
+      end
+
+      it 'remembers that a local copy was kept, and skips the download next time' do
+        File.binwrite(live_path, script_requiring('5.24.0', 'v1'))
+
+        2.times { sync.sync_repo('core') }
+
+        expect(remembered).to include('outcome' => 'held', 'local_sha' => git_blob_sha(script_requiring('5.24.0', 'v1')))
+        expect(client).to have_received(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).once
+        expect(summaries).to eq([[['needy.lic', '5.26.0']]] * 2)
+      end
+
+      it 'remembers that no version can run here, and skips the walk next time' do
+        history.replace([newest])
+
+        2.times { sync.sync_repo('core') }
+
+        expect(remembered).to include('outcome' => 'none', 'local_sha' => nil)
+        expect(client).to have_received(:fetch_github_json).with(commits_url).once
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :none_compatible]]] * 2)
+      end
+
+      it 'checks again when the remote SHA changes' do
+        sync.sync_repo('core')
+        newer = script_requiring('5.26.0', 'v5')
+        tree['tree'].first['sha'] = git_blob_sha(newer)
+        allow(client).to receive(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).and_return(newer)
+
+        sync.sync_repo('core')
+
+        expect(client).to have_received(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).twice
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(remembered).to include('remote_sha' => git_blob_sha(newer), 'outcome' => 'held')
+      end
+
+      it 'checks again when the running Lich version changes, and installs the newest version it now meets' do
+        sync.sync_repo('core')
+        expect(remembered).to include('lich_version' => '5.25.1')
+        stub_const('LICH_VERSION', '5.26.0')
+
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(newest)
+        expect(remembered).to be_nil
+        expect(summaries.last).to eq([])
+      end
+
+      it 'checks again when the installed copy is deleted' do
+        sync.sync_repo('core')
+        File.delete(live_path)
+
+        sync.sync_repo('core')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(client).to have_received(:fetch_github_json).with(commits_url).twice
+      end
+
+      it 'checks again, whatever was remembered, when forced' do
+        sync.sync_repo('core')
+
+        sync.sync_repo('core', force: true)
+
+        expect(client).to have_received(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).twice
+        expect(File.binread(live_path)).to eq(compatible)
+      end
+
+      it 'forgets a script the sync no longer covers' do
+        sync.sync_repo('core')
+        expect(remembered).to include('outcome' => 'installed')
+        tree['tree'].clear
+
+        sync.sync_repo('core')
+
+        expect(remembered).to be_nil
+      end
+
+      it 'remembers nothing when the write fails, so the next sync tries again' do
+        allow(Lich::Util::Update::FileWriter).to receive(:safe_write).and_raise(Errno::EACCES, 'Permission denied')
+
+        sync.sync_repo('core')
+
+        expect(Lich::Util::Update::FileWriter).to have_received(:safe_write).with(live_path, compatible)
+        expect(remembered).to be_nil
+      end
     end
   end
 
@@ -400,6 +684,24 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       expect(output).to include('needy.lic', 'needs Lich 5.23.0+ (not updated)', '1 need newer Lich')
       expect(output).not_to include('all up to date')
+    end
+
+    it 'says what was done for a held-back script when the local copy was not simply kept' do
+      allow(described_class).to receive(:render_sync_summary).and_call_original
+      output = nil
+      allow(described_class).to receive(:respond_mono) { |text| output = text }
+      held = [
+        ['kept.lic', '5.26.0'], ['fell-back.lic', '5.26.0', :installed_compatible],
+        ['nothing.lic', '5.27.0', :none_compatible], ['unknown.lic', '5.26.0', :history_unavailable]
+      ]
+
+      described_class.render_sync_summary('Core', 4, [], {}, [], [], {}, held)
+
+      expect(output).to include(
+        'needs Lich 5.26.0+ (not updated)', 'needs Lich 5.26.0+ (installed newest compatible version)',
+        'needs Lich 5.27.0+ (no compatible version found)', 'needs Lich 5.26.0+ (older versions not checked; will retry next login)',
+        'Total: 1 updated, 4 need newer Lich'
+      )
     end
 
     it 'lists tracked names missing from the repo instead of reporting everything up to date' do

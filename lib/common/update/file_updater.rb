@@ -21,9 +21,18 @@ module Lich
           @client = client
           @resolver = resolver
           @snapshot_manager = snapshot_manager
+          @floor = ScriptFloor.new(client)
         end
 
         # Updates a file from a specific repository.
+        #
+        # A script whose newest version needs a newer Lich than the one
+        # running is never installed at that version, whatever the repo. From
+        # a built-in repo, the newest version this Lich can run is installed
+        # in its place, also over an installed copy of the newest version.
+        # From a custom repo nothing is installed: its history is not
+        # searched (see ScriptFloor). Either way the command says what it
+        # did (see #script_for_this_lich).
         #
         # @param type [String] 'script' or 'data'
         # @param repo_key [String] repository key from SCRIPT_REPOS
@@ -81,13 +90,20 @@ module Lich
                        filename
                      end
           remote_entry = raw_path ? tree_data['tree'].find { |e| e['path'] == raw_path } : nil
+          content = nil
           if remote_entry
             local_path = File.join(location, filename)
             if File.exist?(local_path)
               local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
               if local_sha == remote_entry['sha']
-                StatusReporter.respond_mono("[lich5-update: #{filename} is already up to date.]")
-                return
+                # The newest version is installed. For a script this Lich
+                # cannot run, that is not up to date: the floor check below
+                # replaces it, working from the bytes already on disk.
+                content = File.binread(local_path) if type == "script"
+                if content.nil? || ScriptFloor.unmet(content).nil?
+                  StatusReporter.respond_mono("[lich5-update: #{filename} is already up to date.]")
+                  return
+                end
               end
             end
           else
@@ -98,8 +114,13 @@ module Lich
 
           name = config[:display_name] || repo_key
           url = "#{config[:raw_base_url]}/#{raw_path}"
-          content = @client.http_get(url, auth: false)
+          content ||= @client.http_get(url, auth: false)
           if content
+            if type == "script"
+              source = config[:custom] ? nil : ScriptFloor.source_for(config)
+              content = script_for_this_lich(filename, content, source, raw_path, File.join(location, filename))
+              return unless content
+            end
             FileWriter.safe_write(File.join(location, filename), content)
             StatusReporter.respond_mono("[lich5-update: #{filename} has been updated from #{name}.]")
           else
@@ -111,6 +132,9 @@ module Lich
         end
 
         # Updates a file using legacy auto-detection logic.
+        #
+        # A script is held to its Lich version floor the same way as in
+        # #update_file_from_repo.
         #
         # @param type [String] 'script', 'library', or 'data'
         # @param rf [String] requested filename
@@ -130,8 +154,12 @@ module Lich
             location = SCRIPT_DIR
             if requested_file.downcase == 'dependency.lic'
               remote_repo = "https://raw.githubusercontent.com/elanthia-online/dr-scripts/main"
+              script_source = { repo: 'elanthia-online/dr-scripts', branch: 'main' }
+              script_path = requested_file
             else
               remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+              script_source = { repo: 'elanthia-online/scripts', branch: 'master' }
+              script_path = "scripts/#{requested_file}"
             end
             requested_file_ext = requested_file =~ /\.lic$/ ? ".lic" : "bad extension"
           when "library"
@@ -194,6 +222,11 @@ module Lich
               return
             end
 
+            if type == "script"
+              content = script_for_this_lich(requested_file, content, script_source, script_path, file_path, retried_by: retried_by)
+              return unless content
+            end
+
             begin
               FileWriter.safe_write(file_path, content)
 
@@ -247,6 +280,62 @@ module Lich
         end
 
         private
+
+        # Picks what a --script= command may write, given the script's Lich
+        # version floor.
+        #
+        # Returns +content+ itself when the running Lich meets its floor.
+        # Otherwise the file's history is searched for the newest version
+        # this Lich can run, and the user is told what was found: that
+        # version is returned to be installed, or nil when there is nothing
+        # to write (the installed copy already is that version, no version
+        # this Lich can run was found, the repository's history is not
+        # searched, or GitHub could not be read). A version with an unmet
+        # floor is never returned.
+        #
+        # @param filename [String] script name, for messages
+        # @param content [String] the repository's newest version
+        # @param source [Hash{Symbol=>String}, nil] :repo and :branch holding
+        #   the script (see ScriptFloor.source_for); nil for a repository
+        #   whose history is not searched
+        # @param path [String] the script's path in that repository
+        # @param local_path [String] where the script is installed
+        # @param retried_by [Symbol] :user or :login, for a GitHub failure
+        #   (see StatusReporter.github_failure_message)
+        # @return [String, nil] content to install, or nil to write nothing
+        # @api private
+        def script_for_this_lich(filename, content, source, path, local_path, retried_by: :user)
+          required = ScriptFloor.unmet(content)
+          return content unless required
+
+          needs = "The newest #{filename} needs Lich #{required}+ and this is Lich #{LICH_VERSION}"
+          action = File.exist?(local_path) ? 'updated' : 'installed'
+          unless source
+            StatusReporter.respond_mono("[lich5-update: #{needs}, so #{filename} was not #{action}. Update Lich to use it.]")
+            return nil
+          end
+
+          found = @floor.newest_compatible(source, path)
+          case found.status
+          when :found
+            if File.file?(local_path) && File.binread(local_path) == found.content.b
+              StatusReporter.respond_mono("[lich5-update: #{needs}. #{filename} is already at the newest version this Lich can run.]")
+              return nil
+            end
+            StatusReporter.respond_mono("[lich5-update: #{needs}. Installing the newest version this Lich can run instead (commit #{found.commit[0, 7]}).]")
+            found.content
+          when :none
+            StatusReporter.respond_mono("[lich5-update: #{needs}. No older version that runs on this Lich was found (#{found.examined} checked), " \
+                                        "so #{filename} was not #{action}. Update Lich to use it.]")
+            nil
+          else
+            error = found.error
+            StatusReporter.respond_github_failure(error&.global? ? error : nil,
+                                                  "#{needs}, and its older versions could not be checked, so #{filename} was not updated.",
+                                                  retried_by: retried_by)
+            nil
+          end
+        end
 
         # Tells the user the default repository has no file by this name.
         #

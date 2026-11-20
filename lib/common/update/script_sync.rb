@@ -6,6 +6,8 @@
   Downloads scripts and data files from configured SCRIPT_REPOS and
   user-registered custom repos, skipping files that match local SHA1.
   Supports both :all (auto-sync all .lic) and :explicit (tracked list) modes.
+  A repo that checks Lich version floors installs, for a script whose newest
+  version needs a newer Lich, the newest version the running Lich can run.
 =end
 
 module Lich
@@ -15,6 +17,8 @@ module Lich
         # @param client [GitHubClient] GitHub API client instance
         def initialize(client)
           @client = client
+          @floor = ScriptFloor.new(client)
+          @held = HeldScripts.new
         end
 
         # Syncs all registered repositories (built-in + custom) for current game.
@@ -35,6 +39,16 @@ module Lich
         end
 
         # Syncs a single repository by key (built-in or custom).
+        #
+        # In a repo that checks Lich version floors, a script whose newest
+        # version needs a newer Lich is never installed at that version. A
+        # local copy that runs on this Lich is kept; otherwise the newest
+        # version this Lich can run is installed from the file's history
+        # (see #resolve_unmet_floor), including over an installed copy of
+        # the newest version. The decision is remembered (HeldScripts), so
+        # later syncs repeat neither the download nor the history search
+        # until the repository's version, the running Lich or the local copy
+        # changes. +force+ ignores what was remembered.
         #
         # @param repo_key [String] repository key from SCRIPT_REPOS or custom repo
         # @param force [Boolean] skip SHA check and download all (default: false)
@@ -86,31 +100,76 @@ module Lich
           downloaded_scripts = []
           failed_scripts = []
           held_scripts = []
+          history_error = nil
           syncable.each do |entry|
             filename = File.basename(entry['path'])
-            next if !force && local_shas[filename] == entry['sha']
+            local_sha = local_shas[filename]
+            content = nil
+            if !force && local_sha == entry['sha']
+              # The repository's newest version is installed. It stays unless
+              # the repo checks floors and the running Lich does not meet this
+              # one, as after Lich itself went back to an older release.
+              next unless config[:check_lich_requirement]
 
-            content = @client.http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
+              content = read_local(dest, filename)
+              if content.nil? || ScriptFloor.unmet(content).nil?
+                @held.forget(repo_key, filename)
+                next
+              end
+            end
+
+            if config[:check_lich_requirement] && !force
+              known = @held.lookup(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha)
+              if known
+                held_scripts << remembered_row(filename, known)
+                next
+              end
+            end
+
+            content ||= @client.http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
             unless content
               failed_scripts << filename
               next
             end
 
+            fallback = nil
             if config[:check_lich_requirement]
-              required = Lich::Common::Script.required_lich_version_in(content)
-              unless Lich::Common::Script.lich_version_satisfied?(required)
-                held_scripts << [filename, required]
-                next
+              required = ScriptFloor.unmet(content)
+              if required
+                row, result = resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required)
+                unless result&.status == :found
+                  history_error ||= result if result&.status == :failed
+                  held_scripts << row
+                  next
+                end
+                fallback = { row: row, required: required, commit: result.commit }
+                content = result.content
+              else
+                @held.forget(repo_key, filename)
               end
             end
 
             begin
               FileWriter.safe_write(File.join(dest, filename), content)
-              downloaded_scripts << filename
+              if fallback
+                held_scripts << fallback[:row]
+                @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: FileWriter.blob_sha(content),
+                                                   required: fallback[:required], outcome: 'installed', commit: fallback[:commit])
+              else
+                downloaded_scripts << filename
+              end
             rescue StandardError => e
               respond "[lich5-update: write failed for #{filename}: #{e.message}]"
               failed_scripts << filename
             end
+          end
+
+          if config[:check_lich_requirement]
+            @held.prune(repo_key, syncable.map { |entry| File.basename(entry['path']) })
+            @held.save
+          end
+          if history_error
+            StatusReporter.respond_github_failure(history_error.error, "Older versions of scripts in #{name} that need a newer Lich could not be checked.")
           end
 
           downloaded_other = {}
@@ -211,6 +270,73 @@ module Lich
             how = "the repo has '#{guess}'; #{how}" if guess
             [f, "not in repo, not synced (#{how})"]
           end
+        end
+
+        # Decides what the sync does with a script whose newest version
+        # needs a newer Lich than the one running.
+        #
+        # A local copy that runs on this Lich is kept. Without one (the
+        # script is not installed, or the installed copy has an unmet floor
+        # of its own), the file's history is searched for the newest version
+        # this Lich can run. Decisions that leave the files as they are get
+        # remembered here; the caller remembers an install once it is written.
+        #
+        # @param entry [Hash] the script's GitHub tree entry
+        # @param config [Hash] repository config
+        # @param repo_key [String] repository key
+        # @param dest [String] directory the repository installs into
+        # @param local_sha [String, nil] blob SHA of the local copy, nil if absent
+        # @param required [String] the floor of the repository's newest version
+        # @return [Array(Array, ScriptFloor::Result)] the summary row for the
+        #   script, and the history search's result (nil when a local copy
+        #   was kept without searching). A :found result is the version to
+        #   install; the row then reports it as installed.
+        # @api private
+        def resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required)
+          filename = File.basename(entry['path'])
+          if local_sha && local_sha != entry['sha']
+            local = read_local(dest, filename)
+            if local && ScriptFloor.unmet(local).nil?
+              @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'held')
+              return [[filename, required], nil]
+            end
+          end
+
+          result = @floor.newest_compatible(ScriptFloor.source_for(config), entry['path'])
+          case result.status
+          when :found
+            [[filename, required, :installed_compatible], result]
+          when :none
+            @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'none')
+            [[filename, required, :none_compatible], result]
+          else
+            [[filename, required, :history_unavailable], result]
+          end
+        end
+
+        # The summary row for a script whose remembered decision still
+        # stands. A script with no version this Lich can run says so; the
+        # others read as any script kept back for a newer Lich.
+        #
+        # @param filename [String] script filename
+        # @param known [Hash] the entry HeldScripts#lookup returned
+        # @return [Array] [file, required Lich version] with an outcome when
+        #   there is one, as StatusReporter.render_sync_summary takes them
+        # @api private
+        def remembered_row(filename, known)
+          row = [filename, known['required']]
+          row << :none_compatible if known['outcome'] == 'none'
+          row
+        end
+
+        # @param dest [String] directory the repository installs into
+        # @param filename [String] script filename
+        # @return [String, nil] the local copy's bytes, or nil when it cannot be read
+        # @api private
+        def read_local(dest, filename)
+          File.binread(File.join(dest, filename))
+        rescue SystemCallError
+          nil
         end
 
         # Filters tree entries to syncable scripts based on tracking mode.

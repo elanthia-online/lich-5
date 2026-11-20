@@ -187,11 +187,17 @@ module Lich
         # client socket: this step only prints the notice and opens a
         # confirmation window; #confirm_betatest performs the install.
         #
+        # On a computer that cannot open the beta's windows, the full install
+        # is refused here, before the notice, and no confirmation window is
+        # opened (see #beta_windows_unavailable?).
+        #
         # @param type [String, nil] file type ('script', 'library', 'data') or nil for full beta
         # @param requested_file [String, nil] file name if type is set
         # @return [void]
         def prep_betatest(type = nil, requested_file = nil)
           if type.nil?
+            return if beta_windows_unavailable?
+
             BETA_LOCK.synchronize { @beta_prompted_at = monotonic_now }
             respond 'You are electing to participate in the beta testing of the next Lich release.'
             respond 'This beta test will include only Lich code, and does not include Ruby updates.'
@@ -207,7 +213,9 @@ module Lich
 
         # Installs the latest beta if the notice from #prep_betatest was shown
         # within the last BETA_CONFIRM_WINDOW seconds. A notice can be confirmed
-        # only once; a second confirmation needs a fresh notice.
+        # only once; a second confirmation needs a fresh notice. The check that
+        # this computer can open the beta's windows runs again first, so the
+        # install never starts on one that cannot.
         #
         # @return [void]
         def confirm_betatest
@@ -226,6 +234,8 @@ module Lich
             respond "Your beta test request expired after #{BETA_CONFIRM_WINDOW} seconds.  Run #{$clean_lich_char}lich5-update --beta again to start over."
             return
           end
+
+          return if beta_windows_unavailable?
 
           respond 'Beta test installation accepted.  Thank you for considering!'
           # Held from setting the beta target until the install clears it. The
@@ -400,6 +410,26 @@ module Lich
         end
 
         private
+
+        # Tells the user when this computer cannot open the beta's windows:
+        # the beta needs a native window helper or a Chromium-based browser
+        # (see WebUIPreflight), and a full beta install is refused without one.
+        #
+        # @return [Boolean] true when the beta must not be installed; the
+        #   reason and the ways forward have been shown
+        # @api private
+        def beta_windows_unavailable?
+          reason = WebUIPreflight.refusal
+          return false unless reason
+
+          respond 'The Lich beta would not be able to open its windows on this computer:'
+          respond "  #{reason}."
+          respond 'The beta was not installed and nothing was changed.  You can stay on the stable release.'
+          respond "To install the beta, set the #{WebUIPreflight::BROWSER_VARIABLE} environment variable to the full path of"
+          respond "Chrome, Edge, Brave or Arc, restart Lich, then run #{$clean_lich_char}lich5-update --beta again."
+          respond 'If you run Lich without windows, start it with --no-gui instead.'
+          true
+        end
 
         # Resolves the latest beta reference and installs it.
         #
