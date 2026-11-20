@@ -31,6 +31,19 @@ RSpec.describe Lich::Common::LimitedArray do
       expect(buffer).to eq(%w[a b])
     end
 
+    it 'holds the buffer lock while it works, so the game thread cannot push or evict in between' do
+      buffer.push('a', boundary)
+      worker = nil
+      buffer.send(:synchronize) do
+        worker = Thread.new { buffer.shift_through(boundary) }
+        sleep 0.05
+        expect(worker.status).to eq('sleep') # waiting for the lock
+        expect(buffer.to_a).to eq(['a', boundary])
+      end
+
+      expect(worker.value).to eq(['a', boundary])
+    end
+
     it 'removes nothing and returns nil when the boundary is gone' do
       buffer.push('a', 'b')
 

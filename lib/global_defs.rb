@@ -1557,7 +1557,9 @@ def fput(message, *waitingfor)
 
       Script.execution_sleep(0.1)
     end
-    false
+    # once more after the last slice, so a deadline that passed during the
+    # wait stops the resend that follows it
+    interrupted.call
   end
   resends = 0
   # true after 'stand' went out and before its reply came back; the reply
@@ -1642,6 +1644,7 @@ def fput(message, *waitingfor)
         script.downstream_buffer.unshift(string)
         return fail_with.call(:too_many_resends)
       end
+      return fail_with.call(:interrupted) if interrupted.call
 
       standing = false
       clear
@@ -1650,6 +1653,8 @@ def fput(message, *waitingfor)
     elsif standing
       # the reply to 'stand' ("You stand back up.", "You are already
       # standing"): message went unanswered, send it again
+      return fail_with.call(:interrupted) if interrupted.call
+
       standing = false
       clear
       send_command.call(message)

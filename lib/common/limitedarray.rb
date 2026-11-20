@@ -141,9 +141,10 @@ module Lich
       #
       # @param item [Object] the boundary to remove through
       # @param keep [Integer] how many items just before the boundary to keep
-      # @return [Array, nil] the removed items, boundary included, or nil
-      #   (nothing removed) when the boundary is not in the buffer, e.g.
-      #   because it was evicted at capacity
+      # @return [Array, nil] the items up to and including the boundary (with
+      #   keep, this still lists the items put back), or nil (nothing removed)
+      #   when the boundary is not in the buffer, e.g. because it was evicted
+      #   at capacity
       def shift_through(item, keep: 0)
         synchronize do
           index = RAW_INDEX.bind_call(self) { |entry| entry.equal?(item) }

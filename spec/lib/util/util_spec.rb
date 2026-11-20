@@ -97,7 +97,8 @@ RSpec.describe Lich::Util do
         attr_accessor :silent, :want_downstream, :want_downstream_xml
         attr_reader :name
 
-        # The production buffer type, with its capacity of 200.
+        # The production buffer type, at LimitedArray's default capacity of
+        # 200 (script buffers are set to 400).
         attr_reader :downstream_buffer
 
         def initialize
@@ -405,9 +406,9 @@ RSpec.describe Lich::Util do
         expect(frontend.join).not_to include('wait')
       end
 
-      it 'neither captures nor hides a reply that first arrives after the deadline' do
+      it 'neither captures, hides nor removes a reply that first arrives after the deadline' do
         fput_host.pause_for = 0.1 # fput's own poll interval
-        game_answering(reply, threaded: true, delay: 0.06)
+        game_answering(reply + ["A goblin arrives.\r\n"], threaded: true, delay: 0.06)
         result = capture('flip coin', /\S/, quiet: true, timeout: 0.025)
         @game_queue << :stop
         @game_worker.join(1)
@@ -415,14 +416,28 @@ RSpec.describe Lich::Util do
         expect(result).not_to be_complete
         expect(result.lines).to eq([])
         expect(fe_lines).to include('You flip the coin.')
+        expect(script.drain).to eq(['You flip the coin.', prompt.chomp, 'A goblin arrives.'])
       end
 
-      it 'with timeout 0, neither captures nor hides a reply delivered during the send' do
+      it 'with timeout 0, neither captures, hides nor removes a reply delivered during the send' do
         game_answering(reply)
         result = capture('flip coin', /\S/, quiet: true, timeout: 0)
 
         expect(result.status).to eq(:no_start)
         expect(fe_lines).to include('You flip the coin.')
+        expect(script.drain).to eq(['You flip the coin.', prompt.chomp])
+      end
+
+      it 'leaves the restart\'s line count at zero for a reply that ends on markup' do
+        # The refused send's capture ends on its start line with one more
+        # line after it in the same string; the reply to the resend ends on
+        # its prompt, which sets no count of its own.
+        sent = game_answering(["...wait 1 seconds.\r\nA goblin arrives.\r\n"], reply)
+        result = capture('flip coin', /\S/, /wait|<prompt/, usexml: false, timeout: 2)
+
+        expect(sent).to eq(['flip coin', 'flip coin'])
+        expect(result.lines).to eq(['You flip the coin.'])
+        expect(script.drain).to eq([])
       end
 
       it 'resends after a roundtime refusal and captures only the reply to the resend' do
@@ -509,6 +524,43 @@ RSpec.describe Lich::Util do
         expect(result.lines).to eq(['You peer south.', '[Dusty Road]'])
         expect(script.drain).to eq(['A dusty road runs north.', 'Obvious paths: north.'])
       end
+    end
+
+    it 'keeps a reply complete, and what follows it, when a string arrives past the deadline before cleanup' do
+      # The squelched prompt holds the call in quiet's settle wait while a
+      # line arrives past the deadline.
+      stub_const("#{described_class}::CAPTURE_QUIET_SETTLE", 1.0)
+      DownstreamHook.add('spec-other-hook', proc { |line| line.start_with?('<prompt') ? nil : line }, persist: true)
+      allow(described_class).to receive(:fput) do |*_args, **_opts|
+        @game_thread = Thread.new do
+          ["Your flags:\r\n", prompt].each { |raw| deliver(raw) }
+          sleep 0.3
+          deliver("A goblin arrives.\r\n")
+        end
+        true
+      end
+      result = capture('flag', /^Your flags/, quiet: true, timeout: 0.2)
+
+      expect(result).to be_complete
+      expect(script.drain).to eq(['A goblin arrives.'])
+    end
+
+    it 'does not restart a capture that the deadline has abandoned' do
+      allow(described_class).to receive(:fput) do |command, on_send:, **_opts|
+        @game_thread = Thread.new do
+          on_send.call(command)
+          sleep 0.15
+          deliver("A late line.\r\n") # past the deadline: the boundary
+          on_send.call(command) # a send after it must not restart anything
+          ["You flip the coin.\r\n", prompt].each { |raw| deliver(raw) }
+        end
+        @game_thread.join
+        true
+      end
+      result = capture('flip coin', /\S/, timeout: 0.1)
+
+      expect(result.status).to eq(:no_start)
+      expect(script.drain).to eq(['A late line.', 'You flip the coin.', prompt.chomp])
     end
 
     it 'keeps what followed the reply when the buffer evicted the reply at capacity' do

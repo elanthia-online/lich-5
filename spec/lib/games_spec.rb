@@ -3014,7 +3014,9 @@ RSpec.describe Lich::GameBase::Game, '.process_server_string text lines for down
   end
 
   it 'gives the hooks the text lines decoded for the scripts, and none for a string that is not decoded' do
-    described_class.process_server_string(+"You flip the coin.\r\nIt lands heads up.\r\n")
+    # The empty line between is not pushed to script buffers, so it is not
+    # in the hooks' lines either: the two must count alike.
+    described_class.process_server_string(+"You flip the coin.\r\n\r\nIt lands heads up.\r\n")
     allow(described_class).to receive(:process_xml_data)
     described_class.process_server_string(+"Unparsed.\r\n")
 
