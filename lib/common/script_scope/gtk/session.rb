@@ -51,6 +51,14 @@ module Lich
             "#<#{self.class.name} owner=#{diagnostics.display_label(diagnostics.owner_label(@owner)).inspect}>"
           end
 
+          # Serializes as the same opaque summary as inspect, so YAML never walks
+          # the host objects behind it.
+          # @param coder [Psych::Coder] coder receiving the scalar
+          # @return [void]
+          def encode_with(coder)
+            coder.scalar = inspect
+          end
+
           # Runs shadow-state work under the reentrant session monitor.
           # @yield operation requiring consistent widget state
           # @return [Object] block result

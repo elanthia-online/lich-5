@@ -3,6 +3,7 @@
 require_relative '../../spec_helper'
 require_relative '../../support/webui_shim_bindings'
 require 'pp'
+require 'yaml'
 require 'tmpdir'
 require_relative '../../../lib/common/script_scope'
 
@@ -27,7 +28,7 @@ RSpec.describe 'session credential inspection boundary' do
 
   # Every text form a script can obtain from a value by echoing or printing it.
   def renderings(value)
-    [value.inspect, value.to_s, PP.pp(value, +''), "#{value}", format('%p', value)]
+    [value.inspect, value.to_s, PP.pp(value, +''), "#{value}", format('%p', value), YAML.dump(value)]
   end
 
   # Size of a fresh label's rendering, which embeds its session summary.

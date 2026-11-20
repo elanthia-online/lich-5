@@ -125,6 +125,14 @@ module Lich
         "#<#{self.class.name} host=#{host.inspect} port=#{port.inspect} running=#{running_locked?}>"
       end
 
+      # Serializes as the same opaque summary as inspect, so YAML never walks
+      # the host objects behind it.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
+      end
+
       # Starts or repairs the accept worker while retaining a usable loopback listener.
       # Startup failures stop owned resources before propagating the error.
       # @return [Server] self

@@ -91,6 +91,14 @@ module Lich
         "#<#{self.class.name} owner=#{Diagnostics.display_label(owner_label).inspect}>"
       end
 
+      # Serializes as the same opaque summary as inspect, so YAML never walks
+      # the host objects behind it.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
+      end
+
       # Validates a component and allocates an opaque handle without opening a window.
       # Page roots are marked dirty for later publication; placement is stored separately.
       # @param type [Symbol, String] supported component type

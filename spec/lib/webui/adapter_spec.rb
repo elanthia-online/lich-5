@@ -192,7 +192,7 @@ RSpec.describe Lich::WebUI::Adapter do
 
   it 'exposes the approved adapter operations and an opaque inspect' do
     expect(described_class.public_instance_methods(false)).to contain_exactly(
-      :inspect, :create, :get, :set, :attach, :detach, :bind, :unbind, :destroy, :modal, :schema, :layout_grid, :layout_tabs, :layout_tab_actions, :replace_child, :set_overlay_pass_through, :monitor_geometry, :focus, :place, :present
+      :inspect, :encode_with, :create, :get, :set, :attach, :detach, :bind, :unbind, :destroy, :modal, :schema, :layout_grid, :layout_tabs, :layout_tab_actions, :replace_child, :set_overlay_pass_through, :monitor_geometry, :focus, :place, :present
     )
   end
 
